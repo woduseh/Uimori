@@ -6,6 +6,15 @@ export const messages = {
   'recent.unknown': { ko: '날짜 없음', en: 'Undated', ja: '日付なし', zh: '无日期' },
   'recent.copyChat': { ko: '채팅 복사', en: 'Copy chat', ja: 'チャットをコピー', zh: '复制聊天' },
   'recent.copyingChat': { ko: '복사 중', en: 'Copying', ja: 'コピー中', zh: '正在复制' },
+  'recent.pinChat': { ko: '상단 고정', en: 'Pin to top', ja: '上部に固定', zh: '置顶' },
+  'recent.unpinChat': { ko: '고정 해제', en: 'Unpin', ja: '固定を解除', zh: '取消置顶' },
+  'recent.pinned': { ko: '고정됨', en: 'Pinned', ja: '固定済み', zh: '已置顶' },
+  'recent.pinFailed': {
+    ko: '채팅 고정을 바꾸지 못했어요.',
+    en: 'Could not change the chat pin.',
+    ja: 'チャットの固定を変更できませんでした。',
+    zh: '无法更改聊天置顶。',
+  },
   'recent.copyFailed': {
     ko: '채팅 복사 여부를 확인하지 못했어요.',
     en: 'Could not confirm whether the chat was copied.',

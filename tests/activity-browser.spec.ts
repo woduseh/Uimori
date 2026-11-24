@@ -793,7 +793,12 @@ test('ACTUI17 sidebar copies a nonselected chat and an empty chat immediately wh
     const trigger = row.locator('.action-menu > summary');
     const actions = row.locator('.action-menu-body');
     await trigger.click();
-    await expect(actions.getByRole('button')).toHaveText(['채팅 복사', '제목 변경', '채팅 삭제']);
+    await expect(actions.getByRole('button')).toHaveText([
+      '채팅 복사',
+      '제목 변경',
+      '상단 고정',
+      '채팅 삭제',
+    ]);
     await page.screenshot({
       path: info.outputPath(`recent-chat-menu-${width}.png`),
       animations: 'disabled',

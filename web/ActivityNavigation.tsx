@@ -5,6 +5,7 @@ import { DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import { useState } from 'react';
 import { ActivitySection } from './ActivitySection.js';
 import { IconButton } from './IconButton.js';
+import { PinnedChats } from './PinnedChats.js';
 import { navigationTimeLabel } from './navigation-time.js';
 import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
 import type { Chat } from '../core/types.js';
@@ -99,6 +100,16 @@ export function ActivityNavigation({
   };
   return (
     <nav className="activity-navigation" aria-label={t('helpers.m262')}>
+      <PinnedChats
+        chats={chats}
+        library={library}
+        selected={selected}
+        onSelect={onSelect}
+        onCopyChat={onCopyChat}
+        copyingChats={copyingChats}
+        onChatsChanged={onChatsChanged}
+        onError={onError}
+      />
       <ActivitySection
         id="unread"
         label={t('helpers.m263')}

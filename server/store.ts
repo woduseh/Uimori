@@ -47,7 +47,7 @@ import { HttpError, text } from './request-validation.js';
 import { StoryStore } from './story-store.js';
 import { StoryGuideStore } from './story-guide-store.js';
 import { OutlineStore } from './outline-store.js';
-import { ChatOrganizationStore } from './chat-organization.js';
+import { CHAT_PIN_PREFIX, ChatOrganizationStore } from './chat-organization.js';
 import { LibraryOrganizationStore } from './library-organization.js';
 import { initMaintenance } from './maintenance.js';
 import { ContextStore } from './context-store.js';
@@ -102,7 +102,8 @@ const CHAT_SELECT = `SELECT c.*,
   COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision,
   MAX(c.created_at, COALESCE((SELECT MAX(r.created_at) FROM runs r WHERE r.chat_id=c.id), c.created_at)) AS last_activity_at,
   o.bot_id AS organization_bot_id, o.folder_id AS organization_folder_id,
-  o.revision AS organization_revision, o.sort_position AS organization_sort_position
+  o.revision AS organization_revision, o.sort_position AS organization_sort_position,
+  (SELECT value FROM app_metadata WHERE key='${CHAT_PIN_PREFIX}' || c.id) AS pinned_at
   FROM chats c LEFT JOIN chat_organization o ON o.chat_id=c.id`;
 const json = (value: unknown) => JSON.stringify(value);
 const parse = (value: any) => (value === null ? null : JSON.parse(String(value)));
@@ -279,6 +280,7 @@ export class Store {
       createdAt: row.created_at,
       lastActivityAt: row.last_activity_at ?? row.created_at,
       ...organization,
+      ...(row.pinned_at ? { pinnedAt: row.pinned_at } : {}),
     };
   }
   chat(id: string): Chat {

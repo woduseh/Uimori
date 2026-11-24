@@ -303,3 +303,12 @@
   font-size: var(--font-small);
   text-align: center;
 }
+.pinned-chats {
+  display: grid;
+  min-width: 0;
+}
+.bot-navigation-scroll > .pinned-chats {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: var(--hairline) solid var(--line);
+}

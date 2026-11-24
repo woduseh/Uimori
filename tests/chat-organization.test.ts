@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { forkChat } from '../server/chat-fork.js';
+import { captureChatCopy } from '../server/chat-copy.js';
 import type { Content } from '../core/product.js';
 import { createApp } from '../server/app.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
@@ -388,4 +389,74 @@ test('one package can own a chat and serve as a persona through explicit attachm
   expect(() =>
     store.organization.assertBotAttachments(chat.id, [{ ...ref(content), role: 'persona' }])
   ).toThrow('owning bot');
+});
+
+test('chat pins are idempotent, ordered by pin time, dropped on deletion and never carried into copies', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'Uimori organization '));
+  const app = await createApp({
+    dbPath: join(directory, 'pins.sqlite'),
+    buildId: 'organization-fixture',
+    testMode: true,
+  });
+  owned.push({ directory });
+  try {
+    const bot = app.store.product.content({
+      kind: 'bot',
+      title: 'Pin bot',
+      description: 'Synthetic',
+      text: 'Synthetic',
+      loading: 'pinned',
+      relatedIds: [],
+    }) as Content;
+    const [first, second, third] = ['First', 'Second', 'Third'].map((title) =>
+      app.store.createChat(title, { botId: bot.id })
+    );
+    const pin = (id: string, payload: object) =>
+      app.inject({ method: 'PUT', url: `/api/chats/${id}/pin`, payload });
+    const pinned = () =>
+      (app.store.chats() as { id: string; pinnedAt?: string }[])
+        .filter((chat) => chat.pinnedAt)
+        .sort((a, b) => b.pinnedAt!.localeCompare(a.pinnedAt!))
+        .map((chat) => chat.id);
+    const firstPin = await pin(first.id, { pinned: true });
+    expect(firstPin.statusCode).toBe(200);
+    const pinnedAt = firstPin.json().pinnedAt;
+    expect(typeof pinnedAt).toBe('string');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect((await pin(second.id, { pinned: true })).statusCode).toBe(200);
+    expect((await pin(first.id, { pinned: true })).json().pinnedAt).toBe(pinnedAt);
+    expect(pinned()).toEqual([second.id, first.id]);
+    const listed = (await app.inject({ method: 'GET', url: '/api/chats' })).json();
+    expect(listed.find((chat: { id: string }) => chat.id === first.id).pinnedAt).toBe(pinnedAt);
+    expect(listed.find((chat: { id: string }) => chat.id === third.id)).not.toHaveProperty(
+      'pinnedAt'
+    );
+    for (const payload of [{}, { pinned: 'yes' }, { pinned: true, order: 1 }, []])
+      expect((await pin(third.id, payload)).statusCode).toBe(400);
+    expect((await pin('missing-chat', { pinned: true })).statusCode).toBe(404);
+
+    const copy = forkChat(app.store, first.id, { fromRevision: null, idempotencyKey: 'pin-copy' });
+    expect(copy).not.toHaveProperty('pinnedAt');
+    expect(JSON.stringify(captureChatCopy(app.store, first.id))).not.toContain(pinnedAt);
+    expect(pinned()).toEqual([second.id, first.id]);
+
+    const unpinned = await pin(second.id, { pinned: false });
+    expect(unpinned.statusCode).toBe(200);
+    expect(unpinned.json()).not.toHaveProperty('pinnedAt');
+    expect((await pin(second.id, { pinned: false })).statusCode).toBe(200);
+    expect(pinned()).toEqual([first.id]);
+
+    expect(
+      (await app.inject({ method: 'DELETE', url: `/api/chats/${first.id}`, payload: {} }))
+        .statusCode
+    ).toBe(200);
+    expect(pinned()).toEqual([]);
+    expect(
+      app.store.db
+        .prepare("SELECT COUNT(*) AS count FROM app_metadata WHERE key LIKE 'chat-pin:%'")
+        .get()
+    ).toEqual({ count: 0 });
+  } finally {
+    await app.close();
+  }
 });

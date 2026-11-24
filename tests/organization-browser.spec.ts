@@ -268,7 +268,12 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
     await row.hover();
     await row.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
     const actions = row.locator('.action-menu-body');
-    await expect(actions.getByRole('button')).toHaveText(['채팅 복사', '제목 변경', '채팅 삭제']);
+    await expect(actions.getByRole('button')).toHaveText([
+      '채팅 복사',
+      '제목 변경',
+      '상단 고정',
+      '채팅 삭제',
+    ]);
     await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
     const menu = page.getByRole('dialog', { name: '채팅 제목 변경', exact: true });
     const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });
@@ -637,3 +642,74 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
     await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).toBeVisible();
   });
 }
+
+test('PIN01 chats pinned from either menu lead both sidebar tabs in pin order, survive a reload and unpin', async ({
+  page,
+  request,
+}, info) => {
+  const created = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title: `고정 실험 봇 ${Date.now()}`,
+      description: 'Synthetic',
+      text: 'Synthetic',
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const bot = (await created.json()) as Content;
+  const chats: Chat[] = [];
+  for (const title of ['첫 고정 채팅', '두 번째 고정 채팅', '고정하지 않을 채팅']) {
+    const response = await request.post('/api/chats', { data: { title, botId: bot.id } });
+    expect(response.ok()).toBe(true);
+    chats.push((await response.json()) as Chat);
+  }
+  const [first, second, plain] = chats;
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${plain.id}`);
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  const pinnedSection = nav.locator('[data-activity-section="pinned"]');
+  const pinnedRows = pinnedSection.locator('[data-pinned-chat-id]');
+  await expect(pinnedSection).toHaveCount(0);
+
+  const branch = nav.locator(`[data-bot-id="${bot.id}"]`);
+  const treeRow = branch.locator(`.bot-chat-item[data-chat-id="${first.id}"]`);
+  await treeRow.hover();
+  await treeRow.getByLabel(`${first.title} 채팅 메뉴`, { exact: true }).click();
+  await treeRow.getByRole('button', { name: '상단 고정', exact: true }).click();
+  await expect(pinnedRows).toHaveCount(1);
+  await expect(branch.locator(`.bot-chat-item[data-chat-id="${first.id}"]`)).toHaveCount(1);
+
+  await nav.getByRole('tab', { name: /^활동/u }).click();
+  const recentRow = nav.locator(`.activity-nav-chat-row[data-chat-id="${second.id}"]`);
+  await recentRow.hover();
+  await recentRow.getByLabel(`${second.title} 채팅 메뉴`, { exact: true }).click();
+  await recentRow.getByRole('button', { name: '상단 고정', exact: true }).click();
+  await expect(pinnedRows).toHaveCount(2);
+  await expect(pinnedRows.locator('strong')).toHaveText([second.title, first.title]);
+  await expect(nav.locator(`.activity-nav-chat-row[data-chat-id="${second.id}"]`)).toHaveCount(1);
+  await page.screenshot({ path: info.outputPath('pinned-activity.png') });
+
+  await page.reload();
+  const restored = page.getByTestId('bot-navigation').filter({ visible: true });
+  await restored.getByRole('tab', { name: '봇', exact: true }).click();
+  const restoredRows = restored.locator('[data-activity-section="pinned"] [data-pinned-chat-id]');
+  await expect(restoredRows.locator('strong')).toHaveText([second.title, first.title]);
+  await page.screenshot({ path: info.outputPath('pinned-bots.png') });
+  await restoredRows.filter({ hasText: first.title }).locator('.activity-nav-link').click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(first.id);
+
+  const pinnedSecond = restoredRows.filter({ hasText: second.title });
+  await pinnedSecond.hover();
+  await pinnedSecond.getByLabel(`${second.title} 채팅 메뉴`, { exact: true }).click();
+  await pinnedSecond.getByRole('button', { name: '고정 해제', exact: true }).click();
+  await expect(restoredRows.locator('strong')).toHaveText([first.title]);
+  const remaining = restoredRows.first();
+  await remaining.hover();
+  await remaining.getByLabel(`${first.title} 채팅 메뉴`, { exact: true }).click();
+  await remaining.getByRole('button', { name: '고정 해제', exact: true }).click();
+  await expect(restored.locator('[data-activity-section="pinned"]')).toHaveCount(0);
+  const listed = (await (await request.get('/api/chats')).json()) as Chat[];
+  expect(listed.filter((chat) => chat.pinnedAt)).toEqual([]);
+});

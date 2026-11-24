@@ -30,6 +30,7 @@ import { chatActivitySummaries } from './chat-activity-summaries.js';
 import { useActivityFeed } from './useActivityFeed.js';
 import { ActivityNavigation } from './ActivityNavigation.js';
 import { NavigationModeTabs } from './NavigationModeTabs.js';
+import { PinnedChats } from './PinnedChats.js';
 import { LibraryFolderCover, LibraryFolderCoverDialog } from './LibraryFolderCover.js';
 import { contentPortraitUrl } from './content-portrait.js';
 import './bot-tree-navigation.css';
@@ -645,6 +646,18 @@ export const BotNavigation = memo(function BotNavigation(
                 onAcknowledge={(items) => void activityFeed.acknowledge(items)}
                 onInspect={activityFeed.inspect}
                 onRetry={() => void activityFeed.refresh()}
+              />
+            )}
+            {view.mode === 'bots' && (
+              <PinnedChats
+                chats={chats}
+                library={library}
+                selected={destination === 'story' ? selected : ''}
+                onSelect={onSelect}
+                onCopyChat={props.onCopyChat}
+                copyingChats={props.copyingChats}
+                onChatsChanged={props.onChatsChanged}
+                onError={onError}
               />
             )}
             {view.mode === 'bots' && (

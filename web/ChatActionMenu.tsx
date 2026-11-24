@@ -1,12 +1,12 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import { Copy, LoaderCircle } from 'lucide-react';
+import { Copy, LoaderCircle, PinOff } from 'lucide-react';
 import type { Chat } from '../core/types.js';
 import { ActionMenu } from './ActionMenu.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { SaveButton } from './SaveButton.js';
-import { CloseIcon, EditIcon } from './ui-icons.js';
+import { CloseIcon, EditIcon, PinIcon } from './ui-icons.js';
 import { api } from './api.js';
 
 type ChatActions = {
@@ -36,6 +36,21 @@ export function ChatActionMenu({
     }
     onRename();
   }
+  const [pinning, setPinning] = useState(false);
+  async function togglePin(event: MouseEvent<HTMLButtonElement>) {
+    const menu = event.currentTarget.closest('details');
+    if (pinning) return;
+    setPinning(true);
+    try {
+      await api(`/chats/${encodeURIComponent(chat.id)}/pin`, { pinned: !chat.pinnedAt }, 'PUT');
+      if (menu) menu.open = false;
+      await onChatsChanged();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : retainedMessage('recent.pinFailed'));
+    } finally {
+      setPinning(false);
+    }
+  }
   return (
     <ActionMenu label={t('transfer.d013', { v0: chat.title || t('helpers.m260') })} viewport>
       <div className="action-menu-group">
@@ -52,6 +67,14 @@ export function ChatActionMenu({
         <button type="button" onClick={rename}>
           <EditIcon size={18} aria-hidden="true" />
           {t('transfer.m239')}
+        </button>
+        <button type="button" disabled={pinning} onClick={togglePin}>
+          {chat.pinnedAt ? (
+            <PinOff size={18} aria-hidden="true" />
+          ) : (
+            <PinIcon size={18} aria-hidden="true" />
+          )}
+          {t(chat.pinnedAt ? 'recent.unpinChat' : 'recent.pinChat')}
         </button>
       </div>
       <div className="action-menu-group">

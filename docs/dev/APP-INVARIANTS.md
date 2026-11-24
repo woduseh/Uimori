@@ -19,6 +19,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
   - `source-title:<sourceId>`: Optional scene names.
   - `illustration-presentation:<sourceId>`: Representative/display selection and translation placement for paragraph illustrations.
   - `helper-read:v1:<conversationId>`: Last seen task-result event sequence for a helper conversation (requires no DB migration).
+  - `chat-pin:<chatId>` (`CHAT_PIN_PREFIX`): ISO time the chat was pinned, returned as `Chat.pinnedAt` and deleted with the chat. It is keyed by chat ID and outside the copied chat state, so copies, backups and imports start unpinned; pinning an already pinned chat keeps its time (`tests/chat-organization.test.ts`).
 
 ## Deletion, unused-data reclamation and helper cleanup
 

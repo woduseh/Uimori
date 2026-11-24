@@ -4,9 +4,10 @@ import { t, useI18n, formatNumber } from './i18n.js';
 import './activity-navigation.css';
 import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 
-type ActivitySectionId = 'unread' | 'running' | 'recent';
+type ActivitySectionId = 'pinned' | 'unread' | 'running' | 'recent';
 const sectionStorageKey = 'uimori:activity-sections:v1';
 const initialExpanded: Record<ActivitySectionId, boolean> = {
+  pinned: true,
   unread: true,
   running: true,
   recent: true,

@@ -1,4 +1,4 @@
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { HttpError, boolean, fields, number, record, text } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '../core/product.js';
@@ -14,6 +14,7 @@ export type ChatOrganization = {
   sortPosition: number;
 };
 type Row = Record<string, any>;
+export const CHAT_PIN_PREFIX = 'chat-pin:';
 
 export class ChatOrganizationStore {
   readonly store: Store;
@@ -271,6 +272,23 @@ export class ChatOrganizationStore {
       return this.store.chat(chatId);
     });
   }
+  pin(chatId: string, value: unknown) {
+    const b = record(value);
+    fields(b, ['pinned']);
+    const pinned = boolean(b.pinned);
+    return this.store.transaction(() => {
+      const prior = this.store.chat(chatId);
+      if (!!prior.pinnedAt === pinned) return prior;
+      if (pinned)
+        this.store.db
+          .prepare('INSERT INTO app_metadata(key,value) VALUES(?,?)')
+          .run(CHAT_PIN_PREFIX + chatId, new Date().toISOString());
+      else
+        this.store.db.prepare('DELETE FROM app_metadata WHERE key=?').run(CHAT_PIN_PREFIX + chatId);
+      this.store.event(chatId, 'organization.updated', chatId);
+      return this.store.chat(chatId);
+    });
+  }
   assertBotAttachments(
     chatId: string,
     packageAttachments?: Array<ContentRef & { role: 'bot' | 'persona' | 'module' }>
@@ -315,6 +333,11 @@ export function chatOrganizationRoutes(
       return result;
     }
   );
+  app.put<{ Params: { id: string } }>('/api/chats/:id/pin', async (request) => {
+    const chat = org.pin(request.params.id, request.body);
+    publish(chat.id);
+    return chat;
+  });
   app.patch<{ Params: { id: string } }>('/api/chats/:id/organization', async (request) => {
     const chat = org.move(request.params.id, request.body);
     publish(chat.id);

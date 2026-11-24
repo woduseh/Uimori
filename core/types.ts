@@ -18,6 +18,7 @@ export type Chat = {
   folderId?: string | null;
   organizationRevision?: number;
   sortPosition?: number;
+  pinnedAt?: string;
 };
 export type Resource = {
   loreFolder?: { id: string; name: string };
