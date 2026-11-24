@@ -204,14 +204,14 @@ export function RunTaskDetails({
   revision,
   refresh,
   onError,
-  children,
+  resultActions,
 }: {
   run: ReaderRun;
   jobs: RunJob[];
   revision: number;
   refresh: () => Promise<void>;
   onError: (message: string) => void;
-  children?: ReactNode;
+  resultActions?: ReactNode;
 }) {
   useI18n();
   const authored = run.packageStart?.mode === 'authored';
@@ -230,17 +230,22 @@ export function RunTaskDetails({
   );
   return (
     <div className="run-task-details task-history-sections">
-      {(partial || cancelledStream || children) && (
+      {(partial || cancelledStream || resultActions) && (
         <TaskHistorySection
           title={t('visuals.historyResult')}
           actions={
-            partial && (
-              <CopyTextButton
-                text={() => run.partialText!}
-                label={t('visuals.m282')}
-                copiedLabel={t('visuals.m281')}
-                onFailure={() => onError(uiMessage('visuals.m280'))}
-              />
+            (partial || resultActions) && (
+              <>
+                {partial && (
+                  <CopyTextButton
+                    text={() => run.partialText!}
+                    label={t('visuals.m282')}
+                    copiedLabel={t('visuals.m281')}
+                    onFailure={() => onError(uiMessage('visuals.m280'))}
+                  />
+                )}
+                {resultActions}
+              </>
             )
           }
         >
@@ -255,7 +260,6 @@ export function RunTaskDetails({
               <StreamingResponse taskKind="main" taskId={run.id} taskStatus={run.status} settled />
             </PartialResponse>
           )}
-          {children}
         </TaskHistorySection>
       )}
       {(!authored || hasJobs) && (

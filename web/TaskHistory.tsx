@@ -168,7 +168,7 @@ export function TaskHistoryRow({
   meta = [],
   notice,
   actions,
-  initiallyExpanded = false,
+  focused = false,
   dataProps,
   children,
 }: {
@@ -178,16 +178,16 @@ export function TaskHistoryRow({
   meta?: { key: string; value: ReactNode }[];
   notice?: ReactNode;
   actions?: ReactNode;
-  initiallyExpanded?: boolean;
+  focused?: boolean;
   dataProps?: Record<string, string>;
   children: ReactNode;
 }) {
   useI18n();
   const id = useId();
-  const [expanded, setExpanded] = useState(initiallyExpanded);
+  const [expanded, setExpanded] = useState(focused);
   useEffect(() => {
-    if (initiallyExpanded) setExpanded(true);
-  }, [initiallyExpanded]);
+    setExpanded(focused);
+  }, [focused]);
   const shownMeta = meta.filter((item) => item.value);
   return (
     <article className={`task-history-row task-history-row-${tone}`} {...dataProps}>

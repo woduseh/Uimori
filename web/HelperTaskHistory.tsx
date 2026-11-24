@@ -259,7 +259,7 @@ export function HelperTaskHistory({
                 tone={tone(task)}
                 statusLabel={labels[task.status] ?? task.status}
                 request={task.request}
-                initiallyExpanded={task.id === focusedTaskId}
+                focused={task.id === focusedTaskId}
                 dataProps={{ 'data-testid': 'helper-task-record', 'data-task-id': task.id }}
                 meta={[
                   { key: 'model', value: task.modelTitle || null },

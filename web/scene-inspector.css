@@ -1,5 +1,6 @@
 .scene-inspector {
   display: grid;
+  gap: 8px;
   min-width: 0;
   font-size: var(--font-small);
   line-height: 1.55;
@@ -10,7 +11,6 @@
   margin: 0;
 }
 .scene-inspector > * + * {
-  margin-top: 8px;
   padding-top: 8px;
   border-top: var(--hairline) solid var(--line);
 }
@@ -75,7 +75,7 @@
 }
 .scene-inspector-partial {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 .scene-inspector-partial-head {
   display: flex;
@@ -141,7 +141,7 @@
 .scene-job-detail {
   display: grid;
   justify-items: start;
-  gap: 6px;
+  gap: 4px;
   margin-top: 4px;
   padding-inline-start: 20px;
 }
@@ -181,7 +181,6 @@
   background: var(--surface);
 }
 .scene-inspector > .scene-raw {
-  margin-top: 8px;
   padding-top: 0;
   border-top: 0;
 }

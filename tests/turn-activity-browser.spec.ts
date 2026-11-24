@@ -629,6 +629,8 @@ for (const width of [360, MOBILE_WIDTH]) {
       'aria-expanded',
       'true'
     );
+    await dialog.getByRole('button', { name: '전체 작업 보기', exact: true }).click();
+    await expect(dialog.locator('.task-history-toggle')).toHaveAttribute('aria-expanded', 'false');
     expect(state.writes).toEqual([expect.stringContaining(`/api/jobs/${failedId}/retry`)]);
   });
 }

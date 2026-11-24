@@ -243,7 +243,7 @@ export function TasksPanel({
                 tone={tone(run)}
                 statusLabel={labels[run.status] ?? run.status}
                 request={run.request}
-                initiallyExpanded={run.id === inspectedRun}
+                focused={run.id === inspectedRun}
                 dataProps={{ 'data-testid': 'run', 'data-run-id': run.id }}
                 meta={[
                   { key: 'model', value: run.modelTitle },
@@ -298,9 +298,8 @@ export function TasksPanel({
                   revision={detail.reader.cursor}
                   refresh={refresh}
                   onError={state.setError}
-                >
-                  {run.sourceRevision && (
-                    <div className="form-actions">
+                  resultActions={
+                    run.sourceRevision && (
                       <button
                         type="button"
                         className="secondary"
@@ -313,9 +312,9 @@ export function TasksPanel({
                       >
                         {t('chatsettings.m12')}
                       </button>
-                    </div>
-                  )}
-                </RunTaskDetails>
+                    )
+                  }
+                />
               </TaskHistoryRow>
             );
           })}

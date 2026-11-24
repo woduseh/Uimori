@@ -61,6 +61,7 @@
 .scene-receipt {
   display: grid;
   grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr);
+  align-items: baseline;
   gap: 4px 16px;
   margin: 0;
 }
@@ -102,10 +103,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 8px;
+  gap: 4px 8px;
 }
 .scene-receipt-expand {
   min-height: 24px;
+  margin-block: calc((1lh - 24px) / 2);
   padding: 0 4px;
   gap: 2px;
   border: 0;
@@ -125,6 +127,9 @@
   gap: 8px;
   min-width: 0;
 }
+.scene-receipt-lore-detail > .request-lore-groups {
+  margin-block: 0;
+}
 .scene-receipt-lore-detail pre {
   max-width: 100%;
   overflow: auto;
@@ -140,6 +145,12 @@
   .scene-receipt-body .scene-receipt > div {
     display: grid;
     padding-block: 4px;
+  }
+  .scene-receipt-body .scene-receipt > div:first-child {
+    padding-top: 0;
+  }
+  .scene-receipt-body .scene-receipt > div:last-child {
+    padding-bottom: 0;
   }
   .scene-receipt-body .scene-receipt > div + div {
     border-top: var(--hairline) solid var(--line);

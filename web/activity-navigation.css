@@ -307,6 +307,17 @@
   display: grid;
   min-width: 0;
 }
+.pinned-chats .activity-nav-link {
+  gap: 6px;
+  padding-inline-start: 24px;
+}
+.activity-nav-link > .pinned-chat-avatar {
+  --content-avatar-size: 24px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--font-body);
+  font-weight: 400;
+}
 .bot-navigation-scroll > .pinned-chats {
   margin-bottom: 12px;
   padding-bottom: 8px;

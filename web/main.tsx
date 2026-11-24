@@ -1861,17 +1861,6 @@ function App() {
                           </button>
                         </>
                       )}
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={(event) => {
-                          fromChatMenu(event);
-                          openChatSettings('guide');
-                        }}
-                      >
-                        <BookOpen size={18} aria-hidden="true" />
-                        {t('main.m063')}
-                      </button>
                       {s.detail && (
                         <button
                           type="button"
@@ -1885,6 +1874,17 @@ function App() {
                           {t('main.m007')}
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={(event) => {
+                          fromChatMenu(event);
+                          openChatSettings('guide');
+                        }}
+                      >
+                        <BookOpen size={18} aria-hidden="true" />
+                        {t('main.m063')}
+                      </button>
                       <button
                         type="button"
                         className="secondary"
@@ -2425,7 +2425,7 @@ function App() {
                                     }
                                   }}
                                   onDetails={() => inspect(run.id)}
-                                  onHistory={() => setPanel('tasks')}
+                                  onHistory={() => inspect('')}
                                 />
                               )}
                             </div>
