@@ -1,5 +1,5 @@
 import { existsSync, globSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, dirname, resolve, sep } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -7,8 +7,10 @@ const sourcePath =
   /^(?:\.agents|\.github|core|deploy|docs|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
 const internalGuidePath =
   /^(?:\.agents|\.github|core|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
-const developerGuideHeading = /^#{2,6}\s+(?:구현 참고|기술 명세|개발자)(?:\s|\(|$)/u;
-const guideApiRoute = /^(?:(?:GET|POST|PUT|PATCH|DELETE)\s+)?(\/api\/\S+)$/u;
+const developerGuideHeading =
+  /^#{2,6}\s+(?:(?:구현 참고|기술 명세|개발자)|\S.*\s구현 참고)(?:\s|\(|$)/u;
+const guideApiRoute =
+  /^(?:(?:GET|POST|PUT|PATCH|DELETE)(?:\/(?:GET|POST|PUT|PATCH|DELETE))*\s+)?(\/api\/\S+)$/u;
 const operatorGuideApiRoutes = new Map([
   ['AUTOMATIC-BACKUPS.md', new Set(['/api/backup'])],
   ['SELF-HOST.md', new Set(['/api/maintenance', '/api/session'])],
@@ -100,6 +102,12 @@ export function documentationErrors(directory = root) {
         !anchorsIn(target).has(decodeURIComponent(fragment))
       )
         broken.push(`${file}: ${match[1]} (no heading has the anchor #${fragment})`);
+      if (
+        path &&
+        dirname(file) === docsRoot &&
+        internalGuidePath.test(`${relative(directory, target).split(sep).join('/')}/`)
+      )
+        broken.push(`${file}: ${match[1]} (user guide must not link to internal source paths)`);
     }
     if (file.startsWith(releaseNotes)) continue;
     if (dirname(file) === docsRoot) broken.push(...userGuidePurityErrors(file, content));
