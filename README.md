@@ -9,9 +9,9 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 - Edit source text and translations directly, and copy a chat into an independent copy.
 - Keep story memory and backups.
 
-> **Current version `v0.16.0` · DB schema 15**
+> **Current version `v0.16.1` · DB schema 15**
 >
-> Story UI gains a **Status** tab in the desktop side panel that shows the status windows as of the scene being read. A Story UI block that failed to convert now shows its error, and fixing it in the source editor and saving turns it into a screen. The helper can write Story UI blocks and show them in its answers, and checks the user guides when asked about app features. See the [release notes](docs/releases/v0.16.0.md) and [update guide](docs/UPDATES.md).
+> The user guides the helper reads now carry usage only. Source paths, test names, internal API routes and implementation sections moved to `docs/dev/`, which the helper does not read, and the guides are about 30% shorter. Screens and generation behavior are unchanged. See the [release notes](docs/releases/v0.16.1.md) and [update guide](docs/UPDATES.md).
 
 > [!NOTE]
 > The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
@@ -20,11 +20,11 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 **Requirements**: Node **26.13.0 or later 26.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
 
-1. Check that the `v0.16.0` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
+1. Check that the `v0.16.1` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
 2. Get the source and start the app.
 
    ```powershell
-   git clone --branch v0.16.0 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.16.1 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev

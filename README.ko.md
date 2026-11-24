@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.16.0` · DB 스키마 15**
+> **현재 버전 `v0.16.1` · DB 스키마 15**
 >
-> 이야기 UI에 지금 읽는 장면 시점의 상태창을 보여 주는 **현황** 탭이 데스크톱 사이드 패널에 생겼어요. 변환하지 못한 화면 블록은 오류를 보여 주고, 원문 편집에서 고쳐 저장하면 바로 화면으로 바뀌어요. 도우미는 이야기 UI 블록을 쓰고 답변에 보여 줄 수 있으며, 앱 기능을 물으면 사용 설명서를 확인하고 답해요. [릴리스 노트](docs/releases/v0.16.0.md) · [업데이트 안내](docs/UPDATES.md)
+> 도우미가 읽는 사용 설명서에 사용법만 남겼어요. 소스 경로, 테스트 이름, 내부 API 주소, 구현 참고 섹션은 도우미가 읽지 않는 `docs/dev/`로 옮겼고, 설명서 분량이 약 30% 줄었어요. 화면과 생성 동작은 바뀌지 않아요. [릴리스 노트](docs/releases/v0.16.1.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.16.0` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.16.1` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.16.0 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.16.1 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
