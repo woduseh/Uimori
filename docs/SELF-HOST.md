@@ -103,7 +103,7 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 [Nginx 설정](../deploy/nginx.conf)은 요청의 원래 `Host`와 `Origin`을 그대로 전달해 앱이 `UIMORI_PUBLIC_ORIGIN`과 비교하게 해요. 임의 Host를 허용된 Host로 덮어쓰면 이 검사가 약해져요. SSE용 응답 버퍼링·캐시는 끄고 응답 읽기 간격 제한을 3600초로 설정했어요. Docker DNS를 다시 조회하므로 앱 컨테이너 교체 후 새 주소를 사용해요. [Nginx Host 전달·버퍼링·timeout](https://nginx.org/en/docs/http/ngx_http_proxy_module.html), [DNS resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver)
 
-앱 서버는 이름에 해시가 붙은 `/assets/*` 파일을 1년 `immutable` 캐시로 보내고, 빌드할 때 만든 Brotli·gzip 사본을 브라우저가 지원하는 경우 그대로 보내요. `index.html`, 서비스 워커, 매니페스트는 압축 사본 없이 기존 헤더를 유지해요. 1 KiB 이상인 JSON·텍스트 API 응답은 앱 서버가 Brotli(품질 4)나 gzip으로 압축하고, SSE와 이미지·글꼴·압축 파일은 압축하지 않아요(`server/response-compression.ts`). 보관함, 채팅 목록, 활동, 프롬프트 설정, 글꼴 목록, Reader 응답과 연결의 모델 목록은 로그인이 확인된 요청에만 `ETag`와 `Cache-Control: private, no-cache`를 붙여 바뀌지 않았으면 `304`로 답해요(`server/private-etag.ts`).
+앱 서버는 이름에 해시가 붙은 `/assets/*` 파일을 1년 `immutable` 캐시로 보내고, 빌드할 때 만든 Brotli·gzip 사본을 브라우저가 지원하는 경우 그대로 보내요. `index.html`, 서비스 워커, 매니페스트는 압축 사본 없이 기존 헤더를 유지해요. 1 KiB 이상인 JSON·텍스트 API 응답은 앱 서버가 Brotli(품질 4)나 gzip으로 압축하고, SSE와 이미지·글꼴·압축 파일은 압축하지 않아요. 보관함, 채팅 목록, 활동, 프롬프트 설정, 글꼴 목록, Reader 응답과 연결의 모델 목록은 로그인이 확인된 요청에만 `ETag`와 `Cache-Control: private, no-cache`를 붙여 바뀌지 않았으면 `304`로 답해요.
 
 프록시 요청 본문 한도는 513 MiB예요. staged 업로드와 이미지 포함 `.uimori` archive는 512 MiB, native transfer JSON과 채팅 백업 JSON은 256 MiB까지 받아요. 서버는 base64 방식 Risu 파일의 24 MiB 제한, 원문·번역 직접 저장의 HTTP 본문 8 MiB 제한 등 route별 검사를 계속 적용해요. 프록시 한도를 높여도 이 제한은 바뀌지 않아요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 

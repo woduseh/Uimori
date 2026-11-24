@@ -31,7 +31,7 @@
 2. **NovelAI 연결·잔여량 확인**은 `GET /user/subscription`으로 구독 등급, 잔여 Anlas, V5 사용량 게이지를 읽어요. 이미지는 만들지 않아요. Anlas는 응답의 `trainingStepsLeft.fixedTrainingStepsLeft`(구독분)와 `purchasedTrainingSteps`(구매분)의 합으로 보여줘요. 공식 스키마는 두 필드의 의미를 설명하지 않고 이 해석은 커뮤니티 클라이언트를 따른 것이라, 처음 쓸 때 NovelAI 화면의 잔액과 맞는지 확인해 주세요. V5 게이지는 `usage.percent`를 남은 비율로, `timeUntilNextPercent`를 1%가 회복되기까지 남은 시간으로 보여줘요.
 3. **모델 ID**(기본 `nai-diffusion-5-full`), **프롬프트 모델**, 크기, 스텝, 프롬프트 가이던스, 샘플러를 골라요. 프롬프트 모델이 장면을 읽고 NovelAI용 태그 프롬프트와 제외 프롬프트를 써요.
 4. Opus 구독의 무료 생성은 한 번에 한 장, 28스텝 이하, Normal 크기 조건이에요([구독 안내](https://docs.novelai.net/en/subscription)). 문서가 Normal 크기를 정의하지 않아서, 화면은 28스텝을 넘거나 면적이 1024×1024를 넘으면 Anlas가 소모될 수 있다고 표시해요. V5는 무료 조건이어도 별도의 Opus 사용량 게이지를 써요.
-5. **캐릭터 참조**(Precise Reference)를 켜면 채팅의 **캐릭터 디자인** 참고 이미지를 예약 시점에 고정하고, 프롬프트 모델이 그 컷에 보이는 인물의 참조 번호만 골라 보내요. 참조 1장마다 생성할 때 5 Anlas가 추가되고 Opus 무료 생성에도 붙어요([Precise Reference 안내](https://docs.novelai.net/en/image/precisereference)). 문서상 V4.5 전용이라 다른 모델에서는 켜져 있어도 참조를 고정하지 않아요. 지원 모델 판단은 `core/novelai-settings.ts`의 `novelAISupportsCharacterReference` 하나에 모여 있어요. 그림체 참고 이미지는 보내지 않아요.
+5. **캐릭터 참조**(Precise Reference)를 켜면 채팅의 **캐릭터 디자인** 참고 이미지를 예약 시점에 고정하고, 프롬프트 모델이 그 컷에 보이는 인물의 참조 번호만 골라 보내요. 참조 1장마다 생성할 때 5 Anlas가 추가되고 Opus 무료 생성에도 붙어요([Precise Reference 안내](https://docs.novelai.net/en/image/precisereference)). 문서상 V4.5 전용이라 다른 모델에서는 켜져 있어도 참조를 고정하지 않아요. 그림체 참고 이미지는 보내지 않아요.
 6. NovelAI API 설명은 모든 생성 요청이 사람의 동작으로 시작돼야 한다고 요구해요([API 스키마](https://image.novelai.net/docs/doc.json)). 그래서 NovelAI 작업은 자동 재시도를 0회로 고정해요. 자동 생성은 사용자가 켠 경우에만, 사용자가 보낸 메시지의 응답에서 실행돼요.
 
 ## 자동 생성과 수동 요청
@@ -149,9 +149,9 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 ## 원문 변경·복사 및 생성기별 안내
 
-- **원문 리비전 귀속**: 작업은 `source_revision`과 예약 당시의 `source_hash`에 귀속돼요. 사용자가 나중에 원문을 수정하더라도 완료된 삽화는 요청 당시 원문에 귀속되어 남으며 **수정 전 원문의 삽화**로 표시돼요. 실행 시점에는 예약 hash의 원문을 다시 조회해요 (`sourceAtHash`).
+- **원문 수정 뒤 기존 삽화 표시**: 작업은 예약 당시 원문에 귀속돼요. 사용자가 나중에 원문을 수정하더라도 완료된 삽화는 요청 당시 원문에 귀속되어 남으며 **수정 전 원문의 삽화**로 표시돼요.
 - **채팅 복사와 백업**: 독립 채팅 복사 및 개별 백업은 현재 화면에 표시된 성공 결과, 동일 컷의 변형 그룹, 대표 지정, 검증 가능한 원문/번역 위치만 복원해요. 문단 index와 텍스트 hash를 검증해 새 anchor를 부여하고, 불일치 시 보조 영역으로 이동해요. 미완료 작업이나 실패 기록은 복제하지 않아요.
-- **실패 코드**:
+- **Codex 실패 코드**:
   - `CODEX_IMAGE_USAGE_LIMIT`: 유료 한도 초과 (자동 재요청 안 함)
   - `CODEX_IMAGE_UNAVAILABLE`: 명시적 생성 거부 (자동 재요청 안 함)
   - `CODEX_IMAGE_NOT_GENERATED`: 일반 생성 실패 (재요청 가능)
@@ -164,7 +164,9 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 - **차단 처리**: `ILLUSTRATION_CODEX_CONTENT_BLOCKED` 오류로 기록되며 자동 재시도 및 동일 입력 수동 재시도를 차단해요. 다른 컷의 작업이나 본문·번역 작업, 기존 성공 이미지는 정상적으로 유지돼요.
 - **예외 처리**: 판단 프로바이더 키 미설정, 응답 오류, 8초 시간 초과, 입력 토큰 예산 초과는 `unavailable`로 기록하고 프로바이더의 자체 판단에 맡겨 생성을 계속 진행해요. 판정 호출은 `illustration-content` 사용량으로 귀속돼요.
 
-- **네트워크와 프록시**: `http://`와 `https://`만 허용하며 주소에 인증 정보나 쿼리를 포함할 수 없어요. 프록시 인증이 필요한 경우 **인증 헤더 환경변수**에 지정된 환경변수 값을 읽어 `Authorization` 헤더로 전달해요. 브라우저는 원격 서버에 직접 접근하지 않아요.
-- **실패 진단 코드**: `COMFYUI_PROMPT_REJECTED` (노드 설정 오류), `COMFYUI_EXECUTION_FAILED` (실행 도중 오류), `COMFYUI_SUBMISSION_UNCERTAIN` (접수 불확실, 자동 재제출 금지), `COMFYUI_RESULT_UNAVAILABLE` (접수 후 조회 실패).
-- **실패 코드**: `NOVELAI_TOKEN_MISSING`(토큰 없음, 요청 안 보냄), `NOVELAI_UNAUTHORIZED`(401/403), `NOVELAI_ANLAS_INSUFFICIENT`(402), `NOVELAI_BUSY`(429, 같은 계정의 다른 생성), `NOVELAI_REQUEST_REJECTED`(그 밖의 4xx, 모델 ID·크기 확인), `NOVELAI_UNREACHABLE`(연결 전 실패), `NOVELAI_RESULT_UNCERTAIN`(전송 후 시간 초과·연결 끊김·5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`. 진단에는 HTTP 상태와 최대 300자의 NovelAI 메시지만 남겨요.
-- **불확실한 결과**: NovelAI는 작업 ID를 돌려주지 않아 결과를 다시 조회할 수 없어요. 불확실한 실패도 **다시 요청**은 허용하며, 이때 저장된 프롬프트를 재사용해 이미지 요청만 다시 보내요. 취소하면 연결은 끊지만 NovelAI 쪽 생성은 끝까지 진행될 수 있어요.
+### ComfyUI·NovelAI 프록시 인증과 오류 코드
+
+- **ComfyUI 네트워크와 프록시**: `http://`와 `https://`만 허용하며 주소에 인증 정보나 쿼리를 포함할 수 없어요. 프록시 인증이 필요한 경우 **인증 헤더 환경변수**에 지정된 환경변수 값을 읽어 `Authorization` 헤더로 전달해요. 브라우저는 원격 서버에 직접 접근하지 않아요.
+- **ComfyUI 실패 진단 코드**: `COMFYUI_PROMPT_REJECTED` (노드 설정 오류), `COMFYUI_EXECUTION_FAILED` (실행 도중 오류), `COMFYUI_SUBMISSION_UNCERTAIN` (접수 불확실, 자동 재제출 금지), `COMFYUI_RESULT_UNAVAILABLE` (접수 후 조회 실패).
+- **NovelAI 실패 코드**: `NOVELAI_TOKEN_MISSING`(토큰 없음, 요청 안 보냄), `NOVELAI_UNAUTHORIZED`(401/403), `NOVELAI_ANLAS_INSUFFICIENT`(402), `NOVELAI_BUSY`(429, 같은 계정의 다른 생성), `NOVELAI_REQUEST_REJECTED`(그 밖의 4xx, 모델 ID·크기 확인), `NOVELAI_UNREACHABLE`(연결 전 실패), `NOVELAI_RESULT_UNCERTAIN`(전송 후 시간 초과·연결 끊김·5xx), `NOVELAI_RESPONSE_INVALID`, `NOVELAI_IMAGE_INVALID`. 진단에는 HTTP 상태와 최대 300자의 NovelAI 메시지만 남겨요.
+- **NovelAI 불확실한 결과와 취소**: NovelAI는 작업 ID를 돌려주지 않아 결과를 다시 조회할 수 없어요. 불확실한 실패도 **다시 요청**은 허용하며, 이때 저장된 프롬프트를 재사용해 이미지 요청만 다시 보내요. 취소하면 연결은 끊지만 NovelAI 쪽 생성은 끝까지 진행될 수 있어요.

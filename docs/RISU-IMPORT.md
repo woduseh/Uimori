@@ -57,7 +57,7 @@ Uimori는 Risu 카드의 원문 데이터와 스크립트를 최대한 충실하
 
 ### 폐기 필드 정책 (Deprecated Fields)
 
-RisuToki `deprecated-save-policy.ts` 및 Uimori 정책에 따라 아래 필드는 신규 가져오기와 저장 시 원문에서 제외돼요 (`core/risu-deprecated-fields.ts`):
+RisuToki의 폐기 저장 정책 및 Uimori 정책에 따라 아래 필드는 신규 가져오기와 저장 시 원문에서 제외돼요:
 
 - **카드**: `personality`, `scenario`, `system_prompt`, `nickname`, `source`, `group_only_greetings`, 카드 `extensions.risuai`의 `additionalText`, `license`, `virtualscript`, 모듈의 `cjs`.
 - **프리셋**: `mainPrompt`, `jailbreak`, `globalNote`, `useInstructPrompt`, `instructChatTemplate`, `JinjaTemplate`, `jailbreakToggle`, `chainOfThought`, `promptSettings`의 `sendName`, `sendChatAsSystem`, `postEndInnerFormat`, `assistantPrefill`, `promptTemplate`의 `jailbreak`·`cot` 블록, 종속 설정 `chatAsOriginalOnSystem`.

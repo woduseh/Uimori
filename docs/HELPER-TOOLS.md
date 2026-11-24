@@ -40,9 +40,9 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - [도우미 첨부 파일](HELPER-ATTACHMENTS.md)
 - [삽화와 외형 프로필](ILLUSTRATIONS.md)
 - [원작 참고와 메모](STORY-GUIDE.md)
-- [도구 상세 계약](dev/TOOL-CONTRACTS.md)
 
 ---
+
 ## 도구 동작 세부 안내 (English)
 
 아래는 도우미가 도구를 부르거나 사용자 질문에 답할 때 참고하는 동작 세부 사항과 적용 범위예요.
@@ -62,7 +62,7 @@ Behavior the descriptions leave out:
 - `illustration.cut.read` has no `mode` and always sends the picture at the `full` size.
 - There is no separate cap on how many images a task or a call may read. The context and transport budgets are the limit.
 - Viewed pixels live only in the running task's memory; stored events, attempts and continuation state hold references and metadata. A context compaction shows the pending pictures to the summarizing model once and then releases them.
-- `providerImagePart` in `core/provider-image-reference.ts` decides how each connection type receives the picture. Only a model that `imageInputSupported` knows to be text-only is refused before the read.
+- Each connection type sends the picture in its own provider image format. Only a model known to be text-only is refused before the read.
 
 Outside these operations:
 
@@ -88,11 +88,11 @@ Behavior the response types leave out:
 - An outcome confirms a commit that happened, not the target's current state. For `scene.request` and `scene.translate` it confirms that the work was queued, not that it finished.
 - `usage.toolExecutions` counts recorded `tool.finished` events, so a callback interrupted before it finished is not counted.
 - `usage.latestInputEstimate` is the last stored local estimate. It is not a percentage and says nothing about a native agent's current context.
-- `usage.latestInputParts` splits that estimate into the request parts the runtime measured before sending, and `usage.latestInputExecution` says whether a provider tool loop or a native agent ran it. The composer indicator (`web/HelperContextUsage.tsx`) draws a budget bar only for the provider loop, marks automatic compaction at `HELPER_COMPACTION_INPUT_RATIO` from `core/helper.ts`, the same constant `server/helper-runtime.ts` compacts at, and `HUSAGE01` checks it. For provider-loop conversations, the indicator popover also triggers manual compaction (`POST /api/helper/conversations/:id/compact` → `HelperRuntime.compactConversation`), reusing the helper compaction summary pipeline to publish a `manual` checkpoint (`publishManualHelperContext` in `server/helper-context.ts`) with numeric-only `summary` usage accounting, refusing while a task or compaction is active or on `codex-native` (`HUSAGE02`, `tests/helper-compaction.test.ts`).
+- `usage.latestInputParts` splits that estimate into the request parts the runtime measured before sending, and `usage.latestInputExecution` says whether a provider tool loop or a native agent ran it. The composer indicator draws a budget bar only for the provider loop, marks automatic compaction at 85%, and lets the user trigger manual compaction for provider-loop conversations (refused while a task or compaction is active or on native Codex).
 - A change entry is the net difference between a target's state when the task first touched it and its state after the task's last write to it, however many calls wrote it. It is not the target's current state: a later user edit does not change the entry. A target whose net change is empty has no entry.
 - Library resources, scene originals, translations and titles, the outline and author notes carry a diff. Settings (`chat.options`, `chat.variables`, `chat.storyGuide`, model, theme and global settings) and chat-only lore carry only the action and target. Illustration, scene request and translation request operations record no change entry; their outcome stays in `results`.
 - A resource entry compares the authored native source, images, kind, loading and related items, not the projections regenerated from them, and list items (lore, prompt blocks, translation terms) are aligned by content, so removing one entry does not show every later entry as changed.
-- `location` is data, not display text. `web/helper-change-location.ts` names it in the UI language with the labels the resource editor, the reader and the outline use; the resource sections come from `web/resource-sections.ts`, which the editors also use to open an anchor. Names the user wrote pass through unchanged, and a path the client has no name for is shown as an identifier. An entry recorded with the earlier Korean string keeps it and is shown as stored.
+- `location` is structured data named in the UI language using the editor, reader, and outline section labels. Names the user wrote pass through unchanged, and a path with no display name is shown as an identifier. An entry recorded with an earlier Korean string keeps it and is shown as stored.
 - An entry whose text was removed has `textRemoved` and no `location`, `diff` or `anchor`: `deleted` after the scene or resource was deleted, `expired` outside the retention in [도우미 변경 기록](DELETION.md#도우미-변경-기록). A target the task deleted is listed without an anchor.
 - One response carries at most 200,000 characters of diff text; later diffs come back as omitted for size.
 
@@ -125,15 +125,15 @@ Behavior the types leave out:
 - A confirmation is bound to the conversation, the chat the call acts on, the operation and its exact arguments, revision guards included. A grant is consumed when the confirmed call is dispatched, even if the save then fails, and a replay of the same call identity does not consume it twice.
 - The granted request lists the confirmed calls in `source.confirmedCalls`, because the next task does not see the earlier tool calls and must repeat the arguments exactly.
 - Only a confirmation required by the conversation's latest task can be granted (`CONFIRMATION_UNAVAILABLE` otherwise), so a grant never revives an old request. A retry keeps the grants of the task it retries.
-- A plan-mode request cannot carry a grant (`HELPER_PLAN_CONFIRMATIONS`): plan mode refuses every write, so the grant would be spent on a task that cannot run the call, and the arguments are released as soon as that later task exists. The composer therefore switches to apply mode when the owner confirms a held call, and switching to plan mode removes the pending grants; the card offers the confirmation again (HCONFIRM03 in `tests/helper-browser.spec.ts`).
+- A plan-mode request cannot carry a grant (`HELPER_PLAN_CONFIRMATIONS`): plan mode refuses every write, so the grant would be spent on a task that cannot run the call, and the arguments are released as soon as that later task exists. The composer therefore switches to apply mode when the owner confirms a held call, and switching to plan mode removes the pending grants; the card offers the confirmation again.
 - The same call identity can be held again in a later task, for example after a granted call failed. Each holding task is answered on its own: its `grantedBy` names only a task after it, so an earlier grant neither marks the new hold as granted nor hides it, and the client keys a decline by task and confirmation.
-- By default resource deletion and a `resource.patchMany` over three or more resources are held; the threshold is `HELPER_BULK_CONFIRMATION_RESOURCES`. The setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
+- By default resource deletion and a `resource.patchMany` over three or more resources are held. The confirmation setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
 - The results view does not expose the held call's arguments.
 
 ### Choice question cards and `@` target references
 
-- `helper.ask` (`server/helper-app-tools.ts`, `server/helper-runtime.ts`) is a read-only tool available in both `apply` and `plan` modes. Like confirmations, it never blocks an open provider loop: it records a durable `question.asked` event returned as `question` on `GET /api/helper/tasks/:id/results` (`server/helper-task-results.ts`) and ends the turn cleanly. `web/HelperQuestionCard.tsx` renders clickable options on the latest task and submits the chosen label as the next ordinary user message (`tests/helper-tool-contracts.test.ts`, `HELPASK01`).
-- `@` target references (`GET /api/helper/conversations/:id/references` and `references` on `POST /api/helper/conversations/:id/messages`, implemented in `server/helper-references.ts` and `web/HelperMentionMenu.tsx`) store only `{ kind, id }` pointers in the task snapshot—never mutable titles or prose—and resolve live metadata on read and in `source.referencedTargets`, so deleted scenes and resources drop cleanly (`tests/helper-references.test.ts`, `HELPMENTION01`).
+- `helper.ask` is a read-only tool available in both `apply` and `plan` modes. Like confirmations, it never blocks an open provider loop: it records a durable question event and ends the turn cleanly; the UI renders clickable options on the latest task and submits the chosen label as the next ordinary user message.
+- `@` target references store only `{ kind, id }` pointers in the task snapshot—never mutable titles or prose—and resolve live metadata on read and in `source.referencedTargets`, so deleted scenes and resources drop cleanly.
 
 ### Linux data workspace
 
@@ -166,17 +166,17 @@ Behavior the descriptions leave out:
 Outside these operations:
 
 - The editor target. [자료 편집과 저장 흐름](EDITING.md#자료-편집과-저장-흐름) describes how a saved reference or an unsaved draft is captured at admission, and the target is context, not a permission boundary ([도우미와 과거 가정 장면](USAGE.md#도우미와-과거-가정-장면)). The prompt library card action **도우미에게 묻기** sets a saved reference for the next request without changing the scope of the library conversation; opening a prompt editor, leaving the prompt library or clearing the target removes it.
-- Reader selections. **도우미에게 물어보기** sends the whole selected passage as the task's `selection`, not as a search result. `tests/helper-workspace.test.ts` and `tests/helper-browser.spec.ts` enforce how it is kept whole and reused in later turns.
+- Reader selections. **도우미에게 물어보기** sends the whole selected passage as the task's `selection`, not as a search result, and keeps it whole across later turns.
 
 ### Editing saved scenes
 
 Behavior the descriptions leave out:
 
-- Saving an original runs `compileEditedSourceText` (`server/story-ui-assets.ts`), so the stored text differs from the submitted text when it holds an `<a2ui>` block. The receipt's `expectedTextHash` is the hash of the stored text, and `storyUiFailures` lists the blocks that were saved as written because they did not compile. `scene.restore` passes stored fences through unchanged, and rollback does not compile.
+- Saving an original compiles any `<a2ui>` Story UI blocks before storage, so the stored text differs from the submitted text when it holds an `<a2ui>` block. The receipt's `expectedTextHash` is the hash of the stored text, and `storyUiFailures` lists the blocks that were saved as written because they did not compile. `scene.restore` passes stored fences through unchanged, and rollback does not compile.
 - `scene.read` returns stored text before any CBS display transformation as well as before HTML rendering.
 - A regex `scene.search` ignores zero-width matches.
 - A whole-chat `scene.search` reads only scenes the selected chat owns. `excludedScenes` counts the rest of its ancestry: scenes inherited from a fork parent, and disabled scenes unless `includeDisabled` is set.
-- Translation reads use the same completed-result projection as the Reader (`core/translation-display.ts`), so an earlier completed translation stays readable while a new attempt is pending. The identity of that displayed result is distinct from the latest revision, which is what a save conflict checks.
+- Translation reads use the same completed-result projection as the Reader, so an earlier completed translation stays readable while a new attempt is pending. The identity of that displayed result is distinct from the latest revision, which is what a save conflict checks.
 
 Outside these operations:
 
@@ -209,15 +209,15 @@ Behavior the descriptions leave out:
 - Toggle reconciliation keeps a stored choice index that is still valid, even when reordering the choices changed what it means. `preset.validate` reports such changes against the retained previous save.
 - `preset.validate` does not lint CBS by running the pinned RisuAI evaluator, because that evaluator tolerates some incomplete tags, reparses dynamic expressions and can write variables.
 - `image.update-metadata` targets the content that owns the image. `prompt-workspace` always targets `current`, whatever `id` the call passes, as `resource.save` does.
-- A task's request data carries `source.knownOperations`: the definitions of the operations that earlier tasks of the conversation called, so a follow-up task can call them without another `app.tools` round. The names come from the conversation's `tool.started` events, which outlive the released inputs of a completed task, and the definitions come from the running build, never from a stored result, so a schema of an earlier build is never presented as current. A review task receives only the operations its review allows. Schemas that were looked up but never called are not carried. The selection is fixed when the task starts and sits in the request data, not in the tool list or the contract, so it neither changes between the rounds of a task nor touches the stable prefix; `knownHelperOperations` in `server/helper-app-tools.ts` caps it by count and size, and `tests/helper-round-trips.test.ts` checks the reuse, the prefix and the round counts it logs as `HELPER_ROUND_TRIPS`.
+- A task's request data carries `source.knownOperations`: a bounded set of definitions for operations that earlier tasks of the conversation already called, so a follow-up task can call them without another `app.tools` round. The definitions come from the running build, never from a stored result. A review task receives only the operations its review allows, and schemas that were looked up but never called are not carried. The selection is fixed when the task starts and sits in the request data rather than changing the tool list.
 - The `nextRead` of a `HELPER_READ_TOO_LARGE` result names a provider tool, so the model can invoke it unchanged in the next round: `app.call` with nested `name` and `arguments` for every app operation, including `data.search` and `data.read`, and `data.exec` for shell output.
 
 Outside these operations:
 
-- Complete models. Bounded pages and compact receipts apply to helper reads and results only; UI, backup and export APIs keep returning complete models, and stored chat-lore undo and conflict data stay complete.
+- Complete models. Bounded pages and compact receipts apply to helper reads and results only; UI, backup and export views keep returning complete models, and stored chat-lore undo and conflict data stay complete.
 - Replacing arbitrary objects or a root with `resource.patch`. `set` takes a scalar or an array of scalars, apart from the three whole values its description names.
 - A history of library resources. One previous save is retained per resource, and cloned presets are not kept synchronized; see [도우미를 통한 본문과 자료 편집](EDITING.md#도우미를-통한-본문과-자료-편집).
-- Independent-scene generation and editing. There is no `artifact.generate` operation and no `PATCH /api/helper/artifacts/:id` route; `artifact.read` and `GET /api/helper/artifacts/:id?revision=N` only read saved revisions. A different story direction uses `chat.fork` and then normal chat writing, which `scene.request` can send. Forking does not start generation.
+- Independent-scene generation and editing. There is no `artifact.generate` operation and no artifact editing; `artifact.read` only reads saved revisions. A different story direction uses `chat.fork` and then normal chat writing, which `scene.request` can send. Forking does not start generation.
 - New device-local artifact edit drafts. Drafts saved earlier stay readable and copyable in the artifact card, and they are removed only together with their conversation's local recovery data.
 - Sending a recovered request automatically after a reload.
 
@@ -254,9 +254,9 @@ Behavior the descriptions leave out:
 
 - `source.currentDateUtc` in the helper request is the UTC date on which the task was created, not the date of each model request.
 
-- Gemini 4 helpers on Google AI Studio and Vertex use `web.search` (`server/helper-web-search-tool.ts`) as a read-only provider-facing tool. Each invocation makes a separately recorded and billed search-only `generateContent` request to the **same configured Gemini model and connection**, then returns grounded text and verified source URLs to the helper. The normal helper call keeps its app function tools and does **not** set `webSearch`. This avoids the `generateContent` limitation on combining `googleSearch` with function declarations; unlike the Gemini Interactions API, Uimori's adapter uses `generateContent` (Google Cloud grounding docs, checked 2026-11-23: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/grounding/grounding-with-google-search). Non-Gemini-4 models retain their earlier behavior. `server/helper-runtime.ts` checks the task's existing model-call budget before the search and records the provider attempt through the normal task accounting. The separate request receives only the search query, not the full private conversation or library content. The helper decides when to search, including during read-only review; the tool schema does not impose topic- or length-specific limits.
-- Grounded responses can include Google Search Suggestions. The helper records the provider's exact `searchEntryPoint` separately from the model-visible tool result, and the task results view displays the returned HTML/CSS in a sandboxed iframe, following the existing Story Guide pattern (`web/HelperTaskResults.tsx`). The response's source links are supplied to the helper, while the suggestion markup is retained with the task for the user, not given back to the model.
-- A separate search costs an additional Gemini invocation and any Google Search grounding fee. Lack of a performed search or verified source must not be presented as grounded evidence. Adapter tests do not establish live model/account availability, and Search Suggestion display obligations should be checked for the user's deployment before relying on the feature in production.
+- Gemini 4 helpers on Google AI Studio and Vertex use `web.search` as a read-only provider-facing tool. Each invocation makes a separately recorded and billed search-only request to the **same configured Gemini model and connection**, then returns grounded text and verified source URLs to the helper. The separate request counts against the task's model-call budget and receives only the search query, not the full private conversation or library content. The helper decides when to search, including during read-only review.
+- Grounded responses can include Google Search Suggestions, whose markup is retained with the task for display to the user in a sandboxed iframe while only the source links are returned to the helper.
+- A separate search costs an additional Gemini invocation and any Google Search grounding fee. Lack of a performed search or verified source must not be presented as grounded evidence.
 
 Outside these operations:
 
@@ -303,7 +303,7 @@ Outside these operations:
 
 ### Illustration presets
 
-`illustration-preset.list` and `illustration-preset.guide` are defined in `server/helper-resource-tools.ts`. A preset is read, saved, undone and deleted through the `resource.*` operations with `kind: illustration-preset`, under their revision and receipt contract; presets have no save path of their own. `tests/helper-tool-contracts.test.ts` checks that a helper save neither selects a preset nor generates an image. [Illustrations](ILLUSTRATIONS.md#삽화-프리셋) documents what a preset holds, what stays outside it, when an edit takes effect, selection priority and portability.
+`illustration-preset.list` and `illustration-preset.guide` inspect presets, while reading, saving, undoing and deleting a preset go through the `resource.*` operations with `kind: illustration-preset` under their revision and receipt contract. A helper save neither selects a preset nor generates an image. [Illustrations](ILLUSTRATIONS.md#삽화-프리셋) documents what a preset holds, what stays outside it, when an edit takes effect, selection priority and portability.
 
 ### Bounded composition reads
 
@@ -315,7 +315,7 @@ Behavior the descriptions leave out:
 Outside these operations:
 
 - `coverage` reports what one response returned. It never certifies that a review was complete.
-- `knowledge.search` with `mode: browse` is reachable through the same `app.tools` and `app.call` gateways, including in a read-only review. Its contract is in [Folder navigation](dev/TOOL-CONTRACTS.md#folder-navigation).
+- `knowledge.search` with `mode: browse` is reachable through the same `app.tools` and `app.call` gateways, including in a read-only review. See [폴더를 따라 탐색](LORE-CONTEXT.md#폴더를-따라-탐색).
 
 ### Token budgets and isolated read processes
 
