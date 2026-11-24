@@ -105,6 +105,25 @@ async function panelWidth(page: Page, selector: string) {
   return page.locator(selector).evaluate((node) => Math.round(node.getBoundingClientRect().width));
 }
 
+async function expectTabsAlignedWithHeader(page: Page) {
+  const tabs = (await page.locator('.side-panel-tabs:visible').boundingBox())!;
+  const main = (await header(page).boundingBox())!;
+  expect(Math.abs(tabs.y - main.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(tabs.y + tabs.height - (main.y + main.height))).toBeLessThanOrEqual(1);
+}
+
+async function surfaceOf(page: Page, selector: string) {
+  return page.locator(selector).evaluate((node) => {
+    const probe = document.createElement('div');
+    probe.style.background = 'var(--panel)';
+    document.body.append(probe);
+    const panel = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const style = getComputedStyle(node);
+    return { background: style.backgroundColor, panel, shadow: style.boxShadow };
+  });
+}
+
 test('SIDEPANEL01 outline and writing options share the right panel and keep their unsaved work', async ({
   page,
   request,
@@ -354,6 +373,8 @@ for (const width of [1440, 2560])
             .first()
         ).toBeVisible();
         await expect(page.getByTestId('source')).toBeVisible();
+        await expectTabsAlignedWithHeader(page);
+        expect((await surfaceOf(page, surface)).shadow).toBe('none');
         expect(await panelWidth(page, '.story-workspace')).toBeGreaterThanOrEqual(768);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
@@ -441,5 +462,9 @@ test('SIDEPANEL08 a wide stored panel width stays inside a narrower window as an
     });
     expect(box.left).toBeGreaterThanOrEqual(0);
     expect(box.right).toBeLessThanOrEqual(box.viewport);
+    await expectTabsAlignedWithHeader(page);
+    const surface = await surfaceOf(page, '#helper-panel');
+    expect(surface.background).toBe(surface.panel);
+    expect(surface.shadow).not.toBe('none');
   }
 });

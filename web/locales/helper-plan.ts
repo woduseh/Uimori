@@ -17,6 +17,12 @@ export const messages = {
     ja: '計画のみ',
     zh: '仅计划',
   },
+  'helperPlan.applyShort': {
+    ko: '적용',
+    en: 'Apply',
+    ja: '適用',
+    zh: '应用',
+  },
   'helperPlan.planShort': {
     ko: '계획',
     en: 'Plan',

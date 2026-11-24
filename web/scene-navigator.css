@@ -100,6 +100,19 @@
 .scene-mark:focus-visible .scene-preview {
   display: block;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .scene-preview {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .scene-mark:is(:hover, :focus-visible) .scene-preview {
+      opacity: 0;
+      transform: translate(-4px, -50%);
+    }
+  }
+}
 .scene-latest {
   min-height: 36px;
   width: var(--control-h);

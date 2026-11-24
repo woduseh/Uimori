@@ -36,7 +36,18 @@ import type { RequestPreviewDialog as RequestPreviewDialogPanel } from './Reques
 import type { ManuscriptExportDialog as ManuscriptExportDialogPanel } from './ManuscriptExportDialog.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { IconButton } from './IconButton.js';
-import { PinIcon, CloseIcon, DownIcon, HelperIcon } from './ui-icons.js';
+import {
+  PinIcon,
+  CloseIcon,
+  DownIcon,
+  HelperIcon,
+  NewChatIcon,
+  LibraryIcon,
+  BotIcon,
+  PersonaIcon,
+  ModuleIcon,
+  PromptIcon,
+} from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
@@ -93,7 +104,8 @@ import {
   ArrowUp,
   BookOpen,
   ChevronDown,
-  Download,
+  BookOpenText,
+  DatabaseBackup,
   Eye,
   GitFork,
   ImagePlus,
@@ -1321,8 +1333,20 @@ function App() {
     const library = s.library;
     const story = s.destination === 'story' && !!s.selected && !helperWorkspaceOpen;
     const commands: PaletteEntry[] = [
-      { id: 'new-chat', group: 'commands', label: t('main.m004'), run: () => newStory() },
-      { id: 'library', group: 'commands', label: t('library.library'), run: () => showLibrary() },
+      {
+        id: 'new-chat',
+        group: 'commands',
+        label: t('main.m004'),
+        icon: NewChatIcon,
+        run: () => newStory(),
+      },
+      {
+        id: 'library',
+        group: 'commands',
+        label: t('library.library'),
+        icon: LibraryIcon,
+        run: () => showLibrary(),
+      },
       ...(helperOpen
         ? []
         : [
@@ -1330,6 +1354,7 @@ function App() {
               id: 'helper',
               group: 'commands' as const,
               label: t('main.m027'),
+              icon: HelperIcon,
               run: () => setWorkspacePanel('helper'),
             },
           ]),
@@ -1339,6 +1364,7 @@ function App() {
               id: 'outline',
               group: 'commands' as const,
               label: t('palette.openOutline'),
+              icon: ListTree,
               run: () => openOutlineWorkspace(),
             },
           ]
@@ -1349,6 +1375,7 @@ function App() {
               id: 'focus',
               group: 'commands' as const,
               label: focus ? t('main.m060') : t('main.m071'),
+              icon: focus ? Minimize : Maximize,
               run: () => setFocus(!focus),
             },
           ]
@@ -1369,28 +1396,33 @@ function App() {
     const openResource = (target: HelperTaskResultTarget) => () =>
       void openHelperResult(target).catch((error) => s.setError(error.message));
     const resourceKinds = {
-      bot: t('library.bot'),
-      persona: t('library.persona'),
-      module: t('library.module'),
+      bot: { label: t('library.bot'), icon: BotIcon },
+      persona: { label: t('library.persona'), icon: PersonaIcon },
+      module: { label: t('library.module'), icon: ModuleIcon },
     };
     const resources: PaletteEntry[] = [
-      ...(library?.contents ?? []).map<PaletteEntry>((content) => ({
-        id: `content:${content.id}`,
-        group: 'resources',
-        label: content.title,
-        detail: resourceKinds[libraryCategory(library!, content)],
-        run: openResource({
-          kind: 'content',
-          id: content.id,
-          title: content.title,
-          revision: content.revision,
-        }),
-      })),
+      ...(library?.contents ?? []).map<PaletteEntry>((content) => {
+        const kind = resourceKinds[libraryCategory(library!, content)];
+        return {
+          id: `content:${content.id}`,
+          group: 'resources',
+          label: content.title,
+          detail: kind.label,
+          icon: kind.icon,
+          run: openResource({
+            kind: 'content',
+            id: content.id,
+            title: content.title,
+            revision: content.revision,
+          }),
+        };
+      }),
       ...(library?.promptPresets ?? []).map<PaletteEntry>((preset) => ({
         id: `prompt:${preset.id}`,
         group: 'resources',
         label: preset.title,
         detail: t('library.prompts'),
+        icon: PromptIcon,
         run: openResource({
           kind: 'prompt-preset',
           id: preset.id,
@@ -1403,6 +1435,7 @@ function App() {
       id: `settings:${category.key}`,
       group: 'settings',
       label: category.label,
+      icon: category.icon,
       terms: [category.terms, ...(category.destinations ?? []).map((item) => item.label)].join(' '),
       run: () => {
         setSettingsTab(category.key);
@@ -1837,7 +1870,7 @@ function App() {
                         disabled={!sceneCount}
                         onClick={() => setChatTool({ scope: s.viewKey, kind: 'export' })}
                       >
-                        <Download size={18} aria-hidden="true" />
+                        <BookOpenText size={18} aria-hidden="true" />
                         {t('main.m064')}
                       </button>
                       <button
@@ -1854,7 +1887,7 @@ function App() {
                           ).catch((error: Error) => s.setError(error.message));
                         }}
                       >
-                        <Download size={18} aria-hidden="true" />
+                        <DatabaseBackup size={18} aria-hidden="true" />
                         {t('main.m065')}
                       </button>
                     </div>
@@ -2118,9 +2151,6 @@ function App() {
                               contextSummary={
                                 s.detail!.runs.find((run) => run.id === source.runId)
                                   ?.contextSummary
-                              }
-                              estimatedCost={
-                                s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
                               }
                               packageStart={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.packageStart

@@ -79,12 +79,21 @@ test('SCENEDEL01 cancel preserves all scenes and deleting only the middle keeps 
     await expect(buttons.last()).toHaveText('장면 삭제');
     await expect(actions.getByRole('group', { name: '본문', exact: true })).toBeVisible();
     await expect(actions.getByRole('group', { name: '창작 도구', exact: true })).toBeVisible();
-    if (width === 412)
+    if (width === 412) {
       expect(
         await buttons.evaluateAll((items) =>
           items.every((item) => item.getBoundingClientRect().height >= 48)
         )
       ).toBe(true);
+      await actions.getByRole('button', { name: '더 보기', exact: true }).click();
+      await expect(actions.getByRole('group', { name: '더 보기', exact: true })).toBeVisible();
+      await expect(buttons.last()).toHaveText('장면 삭제');
+      expect(
+        await buttons.evaluateAll((items) =>
+          items.every((item) => item.getBoundingClientRect().height >= 48)
+        )
+      ).toBe(true);
+    }
     await page.screenshot({ path: info.outputPath(`scene-menu-groups-${width}.png`) });
     await source.locator('.action-menu[open] > summary').press('Escape');
   }
@@ -95,7 +104,7 @@ test('SCENEDEL01 cancel preserves all scenes and deleting only the middle keeps 
     dialog.getByRole('radio', { name: '이 장면부터 이후까지 (2개)', exact: true })
   ).not.toBeChecked();
   await expect(dialog).toContainText(
-    '중간 장면 하나만 삭제하면 이후 장면과 현재 카드 변수는 유지돼요.'
+    '중간 장면 하나만 삭제하면 이후 장면과 현재 채팅 변수는 유지돼요.'
   );
   for (const width of [412, 1440]) {
     await page.setViewportSize({ width, height: 900 });

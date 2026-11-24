@@ -457,7 +457,9 @@ export function RunTaskDetails({
       {afterJobs}
       {!authored && (
         <div className="run-input-details">
-          {run.sourceRevision && <SceneUsage usage={run.sceneUsage} />}
+          {run.sourceRevision && (
+            <SceneUsage usage={run.sceneUsage} estimatedCost={run.estimatedCost} />
+          )}
           <LazyDiagnostics<Run>
             path={`/runs/${run.id}`}
             revision={revision}

@@ -15,6 +15,11 @@ Paths below are relative to the repository root. The motion tokens (`--motion-fa
 | Native modal | `web/Dialog.tsx`, `web/style.css` | Fades and rises 8px with its backdrop over `--motion-overlay` through `@starting-style`, ending at `transform: none`; closes immediately. Nothing may keep `transform` or `will-change` on the dialog at rest, because it contains `position: fixed` menus. |
 | Anchored action menu | `web/ActionMenu.tsx`, `web/ui-controls.css` | Fades and moves 4px from its trigger side over `--motion-overlay`; placement is unchanged at rest and dismissal is immediate. |
 | Mobile action sheet | Same menu owners | Rises 16px with a fading scrim over `--motion-overlay` at the `SHEET_MEDIA` breakpoint; dismissal is immediate. |
+| Mobile navigation sheet | `web/main.tsx` (`navigation-dialog`), `web/bot-navigation.css` | The native navigation modal docks left at the narrow layout and slides 16px in from the left edge with the modal backdrop over `--motion-overlay`, ending at `transform: none`; dismissal is immediate. |
+| Composer menu | `web/ComposerMore.tsx`, `web/composer-more.css` | Rises 4px from below over `--motion-overlay`; at the `SHEET_MEDIA` breakpoint it rises 16px with a fading scrim. Closing unmounts it immediately. |
+| Input-language menu | `web/InputTranslation.tsx`, `web/input-translation.css` | Fades and rises 4px above its trigger over `--motion-overlay`; dismissal is immediate. |
+| Icon-button tooltip | `web/IconButton.tsx`, `web/tooltip.css` | The hint popover only fades over `--motion-overlay`, because its placement can flip; hiding is immediate. |
+| Scene preview | `web/SceneNavigator.tsx`, `web/scene-navigator.css` | Fades and moves 4px from the scene mark over `--motion-overlay`, ending at its centring transform; hiding is immediate. |
 | Transient notice | `web/TransientNotice.tsx`, `web/notices.css` | Each notice fades and rises 8px over `--motion-overlay`; removal is immediate. |
 | Button and row hover | `web/style.css`, navigation row styles | Background, border and text colours ease over `--motion-fast`; story UI keeps its own transitions. |
 | On/off switch | `web/BooleanControls.tsx`, `web/boolean-controls.css` | Animates the existing thumb and colors with `--motion-fast`, without bounce or a mount-time entrance. |

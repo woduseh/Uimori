@@ -87,6 +87,13 @@
   border-color: var(--error-line);
   background: var(--error-bg);
 }
+@media (hover: hover) {
+  .danger:hover:not(:disabled) {
+    color: var(--error);
+    border-color: var(--error);
+    background: var(--error-bg);
+  }
+}
 .form-actions [role="status"] {
   margin-right: auto;
   font-size: var(--font-small);

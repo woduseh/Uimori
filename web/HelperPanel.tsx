@@ -25,7 +25,9 @@ import {
   ArrowUp,
   Check,
   Copy,
+  CornerDownRight,
   History,
+  ListEnd,
   Square,
   X,
   Maximize2,
@@ -698,7 +700,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   }, [props.open]);
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
-  const [currentActivityClosed, setCurrentActivityClosed] = useState<string | null>(null);
+  const [liveActivityOpen, setLiveActivityOpen] = useState(
+    () =>
+      readPresentationChoice('uimori:helper-live-activity', ['closed', 'open'], 'closed') === 'open'
+  );
+  const toggleLiveActivity = () => {
+    const next = !liveActivityOpen;
+    setLiveActivityOpen(next);
+    writePresentationSetting('uimori:helper-live-activity', next ? 'open' : 'closed');
+  };
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = (props.modal ?? false) && !props.expanded;
@@ -787,7 +797,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     frozenEditors,
   ]);
   const closeButton = useRef<HTMLButtonElement>(null),
-    input = useRef<HTMLTextAreaElement>(null);
+    input = useRef<HTMLTextAreaElement>(null),
+    inputFocusPending = useRef(false);
   const scroll = useRef<HTMLDivElement>(null),
     content = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<string, { top: number; following: boolean }>());
@@ -1012,8 +1023,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   useEffect(() => {
     if (!props.open) return;
     const prior = document.activeElement as HTMLElement | null;
+    inputFocusPending.current =
+      Boolean(closeButton.current) && matchMedia('(hover: hover) and (pointer: fine)').matches;
     closeButton.current?.focus();
     return () => {
+      inputFocusPending.current = false;
       if (prior?.isConnected && prior.checkVisibility() && !sidePanelTabsShown()) prior.focus();
     };
   }, [props.open]);
@@ -1546,6 +1560,19 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     attachments.busy ||
     !conversation ||
     (!draft.trim() && !attachments.hasAttachments && !outbox);
+  const inputDisabled =
+    props.ready === false || !conversation || !hydrated[scopeKey] || !attachments.ready;
+  useEffect(() => {
+    if (!props.open || inputDisabled || !inputFocusPending.current) return;
+    inputFocusPending.current = false;
+    if (document.activeElement === closeButton.current) input.current?.focus();
+  }, [props.open, inputDisabled]);
+  const steering = Boolean(running && runningSendMode === 'steer' && !attachments.hasAttachments);
+  const submitRequest = () => {
+    if (outbox) setOutboxDecision(outbox);
+    else if (steering && running && draft.trim()) void send(undefined, false, running.id);
+    else void send();
+  };
   return (
     <aside
       ref={panel}
@@ -1643,6 +1670,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             props.onSelectConversation?.();
           }}
         />
+        <IconButton label={t('helpers.m106')} icon={History} onClick={() => setTaskHistory({})} />
         {props.onToggleExpanded && (
           <IconButton
             label={
@@ -2193,6 +2221,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           )}
           <button
             type="button"
+            className="primary"
             onClick={() => {
               if (!outboxDecision) return;
               const request = outboxDecision;
@@ -2213,17 +2242,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               label={activityLabel ?? t(statusLabel[summarized.status] ?? summarized.status)}
               elapsed={<HelperTaskElapsed task={summarized} visible={props.open} />}
               extra={pending.length - 1}
-              expanded={currentActivityClosed !== summarized.id}
-              collapsed={currentActivityClosed === summarized.id}
+              expanded={liveActivityOpen}
+              collapsed={!liveActivityOpen}
               toggleLabel={t('helperConversation.activity')}
               toggleTitle={t('helperConversation.activity')}
-              onToggle={() =>
-                setCurrentActivityClosed((old) => (old === summarized.id ? null : summarized.id))
-              }
+              onToggle={toggleLiveActivity}
               onDetails={() => setTaskHistory({ taskId: summarized.id })}
               testId="helper-current-activity"
             />
-            {currentActivityClosed !== summarized.id && (
+            {liveActivityOpen && (
               <HelperLiveActivity
                 taskId={summarized.id}
                 status={summarized.status}
@@ -2355,46 +2382,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             ))}
           </div>
         )}
-        {running && (
-          <div className="helper-running-mode" data-testid="helper-running-mode">
-            <div
-              className="helper-running-mode-toggle"
-              role="group"
-              aria-label={t('helpers.runningSendModeLabel')}
-              title={t(
-                runningSendMode === 'steer'
-                  ? 'helpers.followUpHintSteer'
-                  : 'helpers.followUpHintQueue',
-                {
-                  sendKey: sendKeyLabel(props.enterSend),
-                  altKey: isApplePlatform() ? 'Option+Enter' : 'Alt+Enter',
-                }
-              )}
-            >
-              <button
-                type="button"
-                className="secondary"
-                aria-pressed={runningSendMode === 'steer'}
-                onClick={() => updateRunningSendMode('steer')}
-              >
-                {t('helpers.followUpSteerBadge')}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                aria-pressed={runningSendMode === 'queue'}
-                onClick={() => updateRunningSendMode('queue')}
-              >
-                {t('helpers.followUpQueueBadge')}
-              </button>
-            </div>
-            {attachments.hasAttachments && (
-              <small className="helper-running-mode-hint">
-                {t('helpers.followUpSteerAttachmentsNote')}
-              </small>
-            )}
-          </div>
-        )}
         {mentionOpen && (
           <HelperMentionMenu
             items={mentionItems}
@@ -2417,9 +2404,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           }}
           onSubmit={(event) => {
             event.preventDefault();
-            if (!hydrated[scopeKey]) return;
-            if (outbox) setOutboxDecision(outbox);
-            else void send();
+            if (hydrated[scopeKey]) submitRequest();
           }}
         >
           <HelperDraftAttachments
@@ -2574,9 +2559,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             enterSend={props.enterSend}
             aria-label={t('helpers.m103')}
             value={draft}
-            disabled={
-              props.ready === false || !conversation || !hydrated[scopeKey] || !attachments.ready
-            }
+            disabled={inputDisabled}
             placeholder={
               compact
                 ? t('helpers.m104')
@@ -2633,17 +2616,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               event.preventDefault();
               if (!busy) void attachments.addFiles(files);
             }}
-            onSend={() => {
-              if (outbox) setOutboxDecision(outbox);
-              else if (
-                running &&
-                runningSendMode === 'steer' &&
-                draft.trim() &&
-                !attachments.hasAttachments
-              )
-                void send(undefined, false, running.id);
-              else void send();
-            }}
+            onSend={submitRequest}
             onAlternateSend={
               running && !outbox
                 ? () => {
@@ -2684,8 +2657,40 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               ) : (
                 <PenLine size={16} aria-hidden="true" />
               )}
-              {mode === 'plan' && <span>{t('helperPlan.planShort')}</span>}
+              <span>{t(mode === 'plan' ? 'helperPlan.planShort' : 'helperPlan.applyShort')}</span>
             </button>
+            {running && (
+              <button
+                type="button"
+                className="model-chip secondary helper-model-chip helper-running-mode"
+                data-mode={steering ? 'steer' : 'queue'}
+                data-testid="helper-running-mode"
+                aria-label={t('helpers.runningSendModeLabel', {
+                  mode: t(steering ? 'helpers.followUpSteerBadge' : 'helpers.followUpQueueBadge'),
+                })}
+                title={
+                  attachments.hasAttachments
+                    ? t('helpers.followUpSteerAttachmentsNote')
+                    : t(steering ? 'helpers.followUpHintSteer' : 'helpers.followUpHintQueue', {
+                        sendKey: sendKeyLabel(props.enterSend),
+                        altKey: isApplePlatform() ? 'Option+Enter' : 'Alt+Enter',
+                      })
+                }
+                disabled={attachments.hasAttachments}
+                onClick={() =>
+                  updateRunningSendMode(runningSendMode === 'steer' ? 'queue' : 'steer')
+                }
+              >
+                {steering ? (
+                  <CornerDownRight size={16} aria-hidden="true" />
+                ) : (
+                  <ListEnd size={16} aria-hidden="true" />
+                )}
+                <span>
+                  {t(steering ? 'helpers.followUpSteerBadge' : 'helpers.followUpQueueBadge')}
+                </span>
+              </button>
+            )}
             {shownUsage && (
               <HelperContextUsage
                 usage={shownUsage}
@@ -2697,65 +2702,45 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 onCancel={() => void compactionRequest('DELETE')}
               />
             )}
-            <IconButton
-              label={t('helpers.m106')}
-              icon={History}
-              onClick={() => setTaskHistory({})}
-            />
-            {running && draft.trim() && !attachments.hasAttachments && (
-              <button
-                type="button"
-                className="secondary helper-steer"
-                data-active-mode={runningSendMode === 'steer' || undefined}
-                disabled={
-                  props.ready === false ||
-                  !hydrated[scopeKey] ||
-                  busy ||
-                  data.loading ||
-                  Boolean(outbox)
-                }
-                title={t('helpers.m107')}
-                onClick={() => void send(undefined, false, running.id)}
-              >
-                {t('helpers.m108')}
-              </button>
-            )}
-            {running && (draft.trim() || attachments.hasAttachments || outbox) && (
-              <button
-                type="submit"
-                className="secondary helper-queue"
-                data-active-mode={
-                  runningSendMode === 'queue' || attachments.hasAttachments || undefined
-                }
-                aria-label={outbox ? t('helpers.m109') : t('helpers.queueRequest')}
-                title={outbox ? t('helpers.m096') : t('helpers.queueRequest')}
-                disabled={submitDisabled}
-              >
-                <ArrowUp size={18} aria-hidden="true" />
-                {!outbox && t('helpers.queueRequest')}
-              </button>
-            )}
           </div>
-          {running ? (
-            <button
-              className="send-button"
-              type="button"
-              aria-label={t('helpers.m031')}
-              onClick={() => void cancel(running)}
-            >
-              <Square size={18} />
-            </button>
-          ) : (
+          <div className="send-actions">
+            {running && (
+              <button
+                className="send-button helper-stop"
+                type="button"
+                aria-label={t('helpers.m031')}
+                title={t('helpers.m031')}
+                onClick={() => void cancel(running)}
+              >
+                <Square size={18} aria-hidden="true" />
+              </button>
+            )}
             <button
               className="send-button"
               type="submit"
-              aria-label={outbox ? t('helpers.m109') : t('helpers.m110')}
-              title={outbox ? t('helpers.m096') : t('helpers.m110')}
+              aria-label={
+                outbox
+                  ? t('helpers.m109')
+                  : !running
+                    ? t('helpers.m110')
+                    : steering
+                      ? t('helpers.m108')
+                      : t('helpers.queueRequest')
+              }
+              title={
+                outbox
+                  ? t('helpers.m096')
+                  : !running
+                    ? t('helpers.m110')
+                    : steering
+                      ? t('helpers.m107')
+                      : t('helpers.queueRequest')
+              }
               disabled={submitDisabled}
             >
-              <ArrowUp size={20} />
+              <ArrowUp size={20} aria-hidden="true" />
             </button>
-          )}
+          </div>
         </ChatComposer>
       </footer>
     </aside>

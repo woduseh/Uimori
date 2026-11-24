@@ -418,17 +418,17 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await expect(menu).toHaveJSProperty('open', true);
     const actions = menu.locator('.action-menu-body');
     await expect(actions.getByRole('button')).toHaveText([
-      '번역 수정',
       '다시 쓰기',
       '도우미에게 물어보기',
       '삽화 생성',
       '이 장면까지 새 채팅으로 분기',
-      '원문 연결 정보',
-      ...(before.attempts?.some((attempt) => attempt.runId === source.runId)
-        ? ['본문 추정 비용']
-        : []),
+      '더 보기',
       '장면 삭제',
     ]);
+    await expect(actions.getByRole('button', { name: '더 보기', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
     const openTriggerBox = (await trigger.boundingBox())!;
     const menuBox = (await actions.boundingBox())!;
     const height = page.viewportSize()!.height;
@@ -466,6 +466,24 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
         expect(box.x + box.width).toBeLessThanOrEqual(compactWidth);
         expect(box.y + box.height).toBeLessThanOrEqual(320);
         if (compactWidth === 600) expect(box.y + box.height).toBeGreaterThanOrEqual(296);
+        const more = actions.getByRole('button', { name: '더 보기', exact: true });
+        if (await more.isVisible()) {
+          await more.click();
+          const collapse = actions.getByRole('button', { name: '접기', exact: true });
+          await expect(collapse).toBeFocused();
+          await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+          await expect(menu).toHaveJSProperty('open', true);
+          await expect(actions.getByRole('button')).toHaveText([
+            '다시 쓰기',
+            '도우미에게 물어보기',
+            '삽화 생성',
+            '이 장면까지 새 채팅으로 분기',
+            '접기',
+            '번역 수정',
+            '원문 연결 정보',
+            '장면 삭제',
+          ]);
+        }
         await trigger.focus();
         for (const item of await actions.getByRole('button').all()) {
           await page.keyboard.press('Tab');
@@ -479,6 +497,10 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     }
 
     await openSourceActions(scene);
+    await expect(actions.getByRole('button', { name: '더 보기', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
     const composer = page.getByLabel('다음 장면 요청', { exact: true });
     if (width <= 600) {
       const sheet = (await actions.boundingBox())!;
@@ -559,9 +581,9 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await expect(scene.getByRole('button', { name: '본문 복사', exact: true })).toBeHidden();
     const opener = await openSourceActions(scene);
     const menu = opener.locator('..');
-    await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true'
+    await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toHaveCount(0);
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).not.toHaveAttribute(
+      'aria-pressed'
     );
     await scene.getByRole('button', { name: '본문 복사', exact: true }).click();
     await expect.poll(() => copied.at(-1)).toBe(source.text);
@@ -584,8 +606,9 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await translationChoice.click();
     await expect(scene.getByTestId('translation-text')).toContainText(translatedText);
     await expect(scene.getByTestId('scene-representation')).toHaveText('번역');
-    await expect(translationChoice).toHaveAttribute('aria-pressed', 'true');
-    await expect(translationChoice.locator('svg')).toHaveClass(/lucide-check/);
+    await expect(menu).toHaveJSProperty('open', true);
+    await expect(translationChoice).toHaveCount(0);
+    await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toBeFocused();
     await page.screenshot({ path: info.outputPath(`past-scene-menu-${width}.png`) });
     await page.keyboard.press('Escape');
     await expect(opener).toBeFocused();
@@ -717,7 +740,7 @@ test('RACOM09 a scene menu stays open when its own toggle shortens the scene and
   expect(clamped.scrollTop).toBe(clamped.max);
   expect(clamped.scrollTop).toBeLessThan(range.scrollTop);
   await expect(menu).toHaveJSProperty('open', true);
-  await expect(translationChoice).toHaveAttribute('aria-pressed', 'true');
+  await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toBeFocused();
 
   await reader.evaluate((node) => {
     node.scrollTop = 0;

@@ -40,10 +40,6 @@
   --dialog-size: 620px;
   overflow-wrap: anywhere;
 }
-.source-cost-value {
-  font-weight: 600;
-}
-
 .selection-revision {
   margin-block: 12px;
   padding: 12px;
@@ -124,4 +120,9 @@
 }
 .request-message.request-context-disabled {
   opacity: 0.55;
+}
+@media (max-width: 600px) {
+  .action-menu[open] .scene-more-actions > button {
+    min-height: 48px;
+  }
 }

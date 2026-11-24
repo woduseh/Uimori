@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { isResourceSaveRequest } from './fixtures/resource-save.js';
@@ -248,24 +248,59 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   await page.goto(`/?chat=${chat.id}`);
   const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   const palette = page.getByRole('dialog', { name: '명령 팔레트', exact: true });
-  const query = palette.getByRole('textbox', { name: '채팅, 서재 자료, 설정, 명령 찾기' });
+  const query = palette.getByRole('combobox', { name: '채팅, 서재 자료, 설정, 명령 찾기' });
+  const options = palette.getByRole('option');
+  const active = palette.locator('[role="option"][aria-selected="true"]');
+  const expectActive = async (option: Locator) => {
+    await expect(option).toHaveAttribute('aria-selected', 'true');
+    await expect(active).toHaveCount(1);
+    await expect(query).toHaveAttribute(
+      'aria-activedescendant',
+      (await option.getAttribute('id'))!
+    );
+    await expect(query).toBeFocused();
+  };
   await composer.click();
 
   await page.keyboard.press('Control+K');
   await expect(palette).toBeVisible();
   await expect(query).toBeFocused();
+  await expect(palette.locator('.dialog-header')).toBeHidden();
+  await expect(options.first()).toHaveAccessibleName('새 채팅');
+  await expectActive(options.first());
   await page.screenshot({ path: test.info().outputPath('palette.png') });
+  await page.keyboard.press('ArrowDown');
+  await expectActive(options.nth(1));
+  await page.keyboard.press('End');
+  await expectActive(options.last());
+  await expect(options.last().locator('kbd')).toHaveText('Ctrl+Shift+F');
+  await page.keyboard.press('ArrowDown');
+  await expectActive(options.first());
+  await page.keyboard.press('ArrowUp');
+  await expectActive(options.last());
+  await page.keyboard.press('Home');
+  await expectActive(options.first());
+  await options.nth(2).hover();
+  await expectActive(options.nth(2));
+  await page.mouse.move(0, 0);
+  await expectActive(options.nth(2));
+  const top = (await palette.boundingBox())!.y;
+  await page.keyboard.type('보라색 우산');
+  await expect(query).toHaveValue('보라색 우산');
+  await expect(options).toHaveCount(1);
+  await expectActive(options.first());
+  expect((await palette.boundingBox())!.y).toBe(top);
   await page.keyboard.press('Escape');
   await expect(palette).toBeHidden();
   await expect(composer).toBeFocused();
 
   await page.keyboard.press('Control+K');
+  await expect(query).toHaveValue('');
   await page.keyboard.type(other.title);
-  const focusedChoice = () =>
-    page.evaluate(() => document.activeElement?.querySelector('span')?.textContent);
-  for (let step = 0; step < 6 && (await focusedChoice()) !== other.title; step++)
+  const activeLabel = () => active.locator('.command-palette-label').textContent();
+  for (let step = 0; step < 6 && (await activeLabel()) !== other.title; step++)
     await page.keyboard.press('ArrowDown');
-  expect(await focusedChoice()).toBe(other.title);
+  expect(await activeLabel()).toBe(other.title);
   await page.keyboard.press('Enter');
   await expect(palette).toBeHidden();
   await expect(page.locator('.header-title h1')).toHaveText(other.title);
@@ -273,8 +308,7 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
 
   await page.keyboard.press('Control+K');
   await page.keyboard.type('데이터 관리');
-  await page.keyboard.press('ArrowDown');
-  await expect(palette.getByRole('button', { name: '데이터 관리', exact: true })).toBeFocused();
+  await expectActive(palette.getByRole('option', { name: '데이터 관리', exact: true }));
   await page.keyboard.press('Enter');
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
   await expect(settings).toBeVisible();
@@ -288,11 +322,10 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
 
   await page.keyboard.press('Control+K');
   await page.keyboard.type('보라색 우산');
-  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('End');
-  await expect(
-    palette.getByRole('button', { name: '원고에서 “보라색 우산” 찾기', exact: true })
-  ).toBeFocused();
+  await expectActive(
+    palette.getByRole('option', { name: '원고에서 “보라색 우산” 찾기', exact: true })
+  );
   await page.keyboard.press('Enter');
   const search = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
   await expect(search.getByRole('searchbox', { name: '전체 채팅 검색', exact: true })).toHaveValue(

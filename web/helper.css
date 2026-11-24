@@ -255,12 +255,9 @@
 .helper-composer .quick-controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   min-width: 0;
-}
-.helper-composer .quick-controls:not(:has(.helper-steer, .helper-queue)) {
-  flex-wrap: nowrap;
 }
 .helper-composer .quick-controls > :not(.helper-model-chip) {
   flex-shrink: 0;
@@ -659,7 +656,10 @@
 .helper-followup-tray {
   display: grid;
   gap: 6px;
+  max-height: min(20dvh, 132px);
   margin-bottom: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .helper-followup-item {
   display: flex;
@@ -705,41 +705,6 @@
   color: var(--muted);
   white-space: nowrap;
 }
-.helper-running-mode {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.helper-running-mode-toggle {
-  display: inline-flex;
-  gap: 4px;
-}
-.helper-running-mode-toggle > button {
-  min-height: 28px;
-  padding: 2px 8px;
-  font-size: var(--font-small);
-}
-.helper-running-mode-toggle > button[aria-pressed="true"] {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-.helper-running-mode-hint {
-  color: var(--muted);
-  font-size: var(--font-small);
-}
-.helper-steer,
-.helper-queue {
-  font-size: var(--font-small);
-  white-space: nowrap;
-}
-.helper-steer[data-active-mode],
-.helper-queue[data-active-mode] {
-  border-color: var(--accent-line);
-  color: var(--accent-text);
-}
 .helper-mention-menu {
   position: absolute;
   inset-inline: 14px;
@@ -754,6 +719,19 @@
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   box-shadow: var(--shadow-float);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .helper-mention-menu {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .helper-mention-menu {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
 .helper-mention-option {
   display: flex;
@@ -812,8 +790,20 @@
 .helper-mention-chip-link:hover {
   border-color: var(--border-hover);
 }
-.helper-composer .helper-request-composer > .send-button {
+.helper-composer .helper-request-composer > :is(.send-button, .send-actions) {
   align-self: end;
+}
+.helper-composer .send-button.helper-stop {
+  border: var(--hairline) solid var(--input-border);
+  background: var(--surface);
+  color: var(--text);
+}
+@media (hover: hover) {
+  .helper-composer .send-button.helper-stop:hover:not(:disabled) {
+    border-color: var(--border-hover);
+    background-color: var(--hover);
+    color: var(--text);
+  }
 }
 
 .helper-response-actions {
@@ -993,16 +983,23 @@
     justify-self: end;
   }
 }
-.helper-composer .helper-mode-chip {
+.helper-composer :is(.helper-mode-chip, .helper-running-mode) {
   gap: 4px;
   min-width: var(--control-h);
   margin: 0;
   padding-inline: 8px;
   flex-shrink: 0;
+  white-space: nowrap;
 }
-.helper-composer .helper-mode-chip[data-mode="plan"] {
+.helper-composer :is(.helper-mode-chip[data-mode="plan"], .helper-running-mode[data-mode="steer"]) {
   background: var(--accent-soft);
   color: var(--text);
+}
+@container helper-composer (max-width: 400px) {
+  .helper-composer .helper-running-mode > span,
+  .helper-composer .quick-controls:has(.helper-running-mode) .helper-mode-chip > span {
+    display: none;
+  }
 }
 .helper-plan {
   display: grid;
@@ -1011,6 +1008,7 @@
   padding: 12px 14px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-panel);
+  background: var(--surface);
 }
 .helper-plan-title {
   display: flex;

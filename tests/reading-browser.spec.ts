@@ -170,6 +170,7 @@ test('READUI01 native source and translation keep text and copies while shared r
     await expect(copy).toBeInViewport();
     await copy.click();
     await expect.poll(() => copied.at(-1)).toBe(sourceText);
+    await expect(source.getByRole('button', { name: '본문 복사됨', exact: true })).toBeVisible();
 
     let settings = await readingDialog(page);
     for (const name of ['대사 줄바꿈', '생각 줄바꿈']) {

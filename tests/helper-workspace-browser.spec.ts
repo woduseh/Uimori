@@ -163,7 +163,7 @@ test('HSPACE11 project creation, drag moves and keyboard ordering survive reload
   await page.screenshot({ path: info.outputPath('helper-tree-order-after-reload.png') });
 });
 
-test('HSPACE13 conversation rows reveal their menu on hover, keyboard focus and touch, and the sort fits one line', async ({
+test('HSPACE13 conversation rows reveal their menu on hover, keyboard focus and touch, the list menu stays shown, and the sort fits one line', async ({
   page,
   browser,
   request,
@@ -196,6 +196,10 @@ test('HSPACE13 conversation rows reveal their menu on hover, keyboard focus and 
   const actions = row.locator('.bot-row-actions');
   await page.mouse.move(1000, 800);
   await expect(actions).toHaveCSS('opacity', '0');
+  await expect(history.locator('.bot-navigation-header > .bot-row-actions')).toHaveCSS(
+    'opacity',
+    '1'
+  );
   await row.hover();
   await expect(actions).toHaveCSS('opacity', '1');
   await page.mouse.move(1000, 800);

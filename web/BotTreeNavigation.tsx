@@ -496,6 +496,7 @@ export const BotNavigation = memo(function BotNavigation(
               : t('transfer.d024', { v0: unreadChats })
           }
           icon={Inbox}
+          className={!props.helperExpanded && unreadChats > 0 ? 'activity-unread' : undefined}
           onClick={() => {
             if (props.helperExpanded) props.onHelperActivity?.();
             else {

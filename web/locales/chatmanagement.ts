@@ -1,6 +1,5 @@
 export const messages = {
   'chatmanage.sceneText': { ko: '본문', en: 'Text', ja: '本文', zh: '正文' },
-  'chatmanage.details': { ko: '정보', en: 'Details', ja: '情報', zh: '信息' },
   'chatmanage.reading': { ko: '읽기', en: 'Reading', ja: '読書', zh: '阅读' },
   'chatmanage.tools': { ko: '창작 도구', en: 'Writing tools', ja: '創作ツール', zh: '创作工具' },
   'chatmanage.copyExport': {
@@ -52,10 +51,10 @@ export const messages = {
     zh: '关联记忆会保留，但不用于生成。可在“记忆与备注”中整理。',
   },
   'chatmanage.variablesHelp': {
-    ko: '중간 장면 하나만 삭제하면 이후 장면과 현재 카드 변수는 유지돼요.',
-    en: 'Deleting one earlier scene keeps later scenes and current card variables.',
-    ja: '途中のシーンだけを削除する場合、以降のシーンと現在のカード変数は保持します。',
-    zh: '仅删除中间场景时，保留后续场景和当前卡片变量。',
+    ko: '중간 장면 하나만 삭제하면 이후 장면과 현재 채팅 변수는 유지돼요.',
+    en: 'Deleting one earlier scene keeps later scenes and current chat variables.',
+    ja: '途中のシーンだけを削除する場合、以降のシーンと現在のチャット変数は保持します。',
+    zh: '仅删除中间场景时，保留后续场景和当前聊天变量。',
   },
   'chatmanage.confirmDelete': {
     ko: '선택한 장면 {count}개 삭제',

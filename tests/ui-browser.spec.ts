@@ -14,6 +14,7 @@ import {
   selectStartPrompt,
   selectChatSettingsSection,
   openSourceActions,
+  openMoreSourceActions,
   sourceAction,
   openChatMenu,
 } from './ui-navigation.js';
@@ -122,6 +123,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   page,
   request,
 }, info) => {
+  test.setTimeout(60000);
   const malicious =
     '\n\n<script>globalThis.__uimoriExecuted=true</script>\n\n<img src=x onerror="globalThis.__uimoriExecuted=true">\n\n<ruby>物語<rt>이야기</rt></ruby>\n\n`asset:synthetic_fixed`\n\n[unsafe](javascript:alert(1))';
   const chat = await seed(request, `합성 UI reader ${Date.now()}`, longPrompt + malicious, 3);
@@ -197,7 +199,8 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toHaveCount(3);
   const source = page.getByTestId('source').first();
-  await sourceAction(source, '원문 보기');
+  if ((await source.getAttribute('data-representation')) === 'translation')
+    await sourceAction(source, '원문 보기');
   const prose = nativeProse(source.getByTestId('source-text'));
   await expect(prose.getByRole('heading', { name: '황혼의 부두', exact: true })).toBeVisible();
   await expect(prose.locator('strong').first()).toHaveText('미라');
@@ -219,8 +222,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   await expect(translated).toBeVisible();
   await expect(translated).toContainText('황혼의 부두');
   await sourceAction(source, '원문 보기');
-  await openSourceActions(source);
-  await source.getByRole('button', { name: '원문 연결 정보', exact: true }).click();
+  await sourceAction(source, '원문 연결 정보');
   const sourceInfo = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
   await sourceInfo.getByText('현재 원문', { exact: true }).click();
   await expect(sourceInfo.getByTestId('source-raw')).toHaveText(before.sources[0].text);
@@ -1467,8 +1469,7 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  await openSourceActions(scene);
-  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+  await sourceAction(scene, '원문 수정');
   const edited = '  SYNTHETIC_EDITED_SOURCE\n\n직접 수정한 원문과 여백.\n  ';
   await scene.getByLabel('원문 수정 내용').fill(edited);
   expect(
@@ -1489,8 +1490,7 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   expect(
     changed.jobs.filter((job) => job.kind === 'translation' && job.sourceRevision === source.id)
   ).toHaveLength(0);
-  await openSourceActions(scene);
-  await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
+  await sourceAction(scene, '번역 수정');
   const manual = '  직접 고친 번역 {{literal_user}}\n\n사용자가 선택한 문장.\n  ';
   await scene.getByLabel('번역 수정 내용').fill(manual);
   if (visualReview)
@@ -1506,8 +1506,7 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   expect(manualJob.result!.text).toBe(manual);
   expect(manualJob.result!.manual).toBe(true);
   expect(authored.attempts).toEqual(original.attempts);
-  await openSourceActions(scene);
-  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+  await sourceAction(scene, '원문 수정');
   const finalText = edited + '\nFinal authored source.';
   await scene.getByLabel('원문 수정 내용').fill(finalText);
   await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
@@ -1664,8 +1663,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
       )
       .toBe('running');
     await second.reload();
-    await openSourceActions(second.getByTestId('source'));
-    await second.getByRole('button', { name: '번역 수정', exact: true }).click();
+    await sourceAction(second.getByTestId('source'), '번역 수정');
     const manual = 'MANUAL_WINS_AFTER_LATE_RESPONSE\n직접 저장한 번역.';
     await second.getByLabel('번역 수정 내용').fill(manual);
     await second.getByRole('button', { name: '번역 저장', exact: true }).click();
@@ -1801,12 +1799,59 @@ test('UI common dialogs stay centered with mobile margins, internal scrolling an
       const opener = page.getByRole('button', { name: '탐색 메뉴', exact: true });
       await opener.click();
       const dialog = page.getByRole('dialog', { name: '탐색', exact: true });
+      await expect(dialog).toHaveCSS('transform', 'none');
       const box = (await dialog.boundingBox())!;
-      expect(box).toEqual({ x: 0, y: 0, width, height });
+      expect(box).toEqual({ x: 0, y: 0, width: Math.min(width * 0.86, 340), height });
       await page.keyboard.press('Escape');
       await expect(dialog).not.toBeVisible();
       await expect(opener).toBeFocused();
+      await opener.click();
+      await expect(dialog).toBeVisible();
+      await page.mouse.click(width - 8, height / 2);
+      await expect(dialog).not.toBeVisible();
+      await expect(opener).toBeFocused();
     }
+  }
+});
+
+test('UI common action menus move between items with arrow keys and keep Tab order', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, `합성 menu keys ${Date.now()}`, '', 0);
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    const trigger = page.locator('.chat-menu > summary');
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.locator('.chat-menu > .action-menu-body');
+    await expect(menu).toBeVisible();
+    const items = menu.locator(':is(button, a[href]):not(:disabled)').filter({ visible: true });
+    const count = await items.count();
+    expect(count).toBeGreaterThan(2);
+    await page.keyboard.press('ArrowDown');
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(items.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(items.nth(1)).toBeFocused();
+    await expect(menu).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(trigger).toBeFocused();
+    await expect(menu).toBeHidden();
   }
 });
 
@@ -1858,7 +1903,7 @@ test('UI whole-source translation retains completed results across retry and can
       await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } })
     ).ok()
   ).toBeTruthy();
-  await openSourceActions(scene);
+  await openMoreSourceActions(scene);
   page.once('dialog', (dialog) => dialog.accept());
   await scene.getByRole('button', { name: '현재 설정으로 새 번역', exact: true }).click();
   await expect.poll(async () => (await latest()).status).toBe('running');

@@ -55,6 +55,7 @@
   --settings-dialog-h: min(820px, calc(var(--app-height, 100dvh) * 0.88));
   --theme-preview-w: 360px;
   --dialog-header-h: 56px;
+  --command-palette-top: min(14vh, 112px);
   --settings-page-padding: 28px;
   --dialog-w: 480px;
   --control-h: 44px;
@@ -202,13 +203,15 @@ button {
 }
 button:disabled {
   --accent: var(--surface);
-  --accent-ink: var(--muted);
-  --accent-text: var(--muted);
+  --accent-ink: var(--text);
+  --accent-text: var(--text);
   --accent-soft: var(--surface);
   --accent-line: var(--line);
-  --error: var(--muted);
+  --error: var(--text);
+  --error-bg: var(--surface);
+  --error-line: var(--line);
   --error-solid: var(--surface);
-  --error-ink: var(--muted);
+  --error-ink: var(--text);
   opacity: 0.5;
   cursor: default;
 }
@@ -793,7 +796,7 @@ input[type="checkbox"] {
   flex-direction: column;
 }
 .workspace-header {
-  min-height: var(--header-h);
+  min-height: calc(var(--header-h) + var(--hairline));
   display: flex;
   align-items: center;
   border-bottom: var(--hairline) solid var(--line);
@@ -902,6 +905,16 @@ input[type="checkbox"] {
 }
 .model-chip > svg {
   flex-shrink: 0;
+}
+.model-chip[aria-haspopup]::after {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+  background: currentColor;
+  mask: var(--chevron) center / 12px 12px no-repeat;
+  rotate: 90deg;
 }
 @media (hover: hover) {
   .model-chip:hover:not(:disabled) {
@@ -1797,6 +1810,9 @@ input[type="checkbox"] {
     font-size: var(--font-small);
     padding: 4px 10px;
   }
+  .model-chip[aria-haspopup]::after {
+    display: none;
+  }
   .header-actions {
     gap: 0;
   }
@@ -1873,10 +1889,12 @@ input[type="checkbox"] {
     --dialog-gap: 16px;
   }
   .app-dialog.navigation-dialog {
+    --navigation-sheet-w: min(86vw, 340px);
     margin: 0;
-    width: 100vw;
-    max-width: 100vw;
+    width: var(--navigation-sheet-w);
+    max-width: var(--navigation-sheet-w);
     border: 0;
+    border-right: var(--hairline) solid var(--line);
     border-radius: 0;
     height: var(--app-height, 100dvh);
     max-height: 100dvh;

@@ -1,6 +1,6 @@
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { selectChatSettingsSection } from './ui-navigation.js';
+import { selectChatSettingsSection, sourceAction } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Request } from '@playwright/test';
@@ -42,8 +42,7 @@ async function sourceDetails(page: Page) {
 }
 async function expectSourceRaw(page: Page, text: string) {
   const source = page.getByTestId('source').first();
-  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '원문 연결 정보', exact: true }).click();
+  await sourceAction(source, '원문 연결 정보');
   const dialog = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
   await dialog.getByText('현재 원문', { exact: true }).click();
   await expect(dialog.getByTestId('source-raw')).toHaveText(text);

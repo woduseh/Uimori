@@ -44,7 +44,8 @@
   flex: none;
 }
 .workspace-running-dot,
-.helper-running::after {
+.helper-running::after,
+.activity-unread::after {
   content: "";
   position: absolute;
   top: 0;
@@ -55,10 +56,12 @@
   background: var(--accent);
   outline: 2px solid var(--panel);
 }
-.helper-running {
+.helper-running,
+.activity-unread {
   position: relative;
 }
-.helper-running::after {
+.helper-running::after,
+.activity-unread::after {
   top: 8px;
   right: 8px;
 }
@@ -200,17 +203,25 @@
 .bot-chat-item:focus-within .bot-row-actions,
 .bot-folder-heading:focus-within .bot-row-actions,
 .bot-tree-folder-heading:focus-within .bot-row-actions,
-.bot-tree-section-heading:focus-within .bot-row-actions {
+.bot-tree-section-heading > .bot-row-actions {
   opacity: 1;
   pointer-events: auto;
+}
+.bot-tree-section-heading > .bot-row-actions > .action-menu > summary {
+  color: var(--muted);
+}
+.bot-tree-section-heading > .bot-row-actions > .action-menu[open] > summary {
+  color: var(--text);
 }
 @media (hover: hover) {
   .bot-chat-item:hover .bot-row-actions,
   .bot-folder-heading:hover .bot-row-actions,
-  .bot-tree-folder-heading:hover .bot-row-actions,
-  .bot-tree-section-heading:hover .bot-row-actions {
+  .bot-tree-folder-heading:hover .bot-row-actions {
     opacity: 1;
     pointer-events: auto;
+  }
+  .bot-tree-section-heading > .bot-row-actions > .action-menu > summary:hover {
+    color: var(--text);
   }
 }
 .bot-navigation .bot-row-actions > .icon-button {
@@ -430,6 +441,15 @@
 }
 .navigation-dialog .bot-navigation {
   min-height: 0;
+}
+@media (max-width: 760px) {
+  @media (prefers-reduced-motion: no-preference) {
+    @starting-style {
+      .app-dialog.navigation-dialog[open] {
+        transform: translateX(-16px);
+      }
+    }
+  }
 }
 .navigation-dialog > .dialog-header > h2 {
   position: absolute;

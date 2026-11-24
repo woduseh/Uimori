@@ -10,7 +10,8 @@
   width: min(var(--panel-w), 100vw);
   height: min(var(--app-height, 100dvh), 100dvh);
   z-index: 32;
-  box-shadow: none;
+  background: var(--panel);
+  box-shadow: var(--shadow-dialog);
 }
 @media (max-width: 760px) {
   .panel-overlay > :is(.helper-panel, .chat-prompt-options, .story-board-panel) {
@@ -25,21 +26,27 @@
   justify-content: space-between;
   gap: 8px;
   flex-shrink: 0;
+  min-height: calc(var(--header-h) + var(--hairline));
   padding: 0 10px 0 16px;
   border-bottom: var(--hairline) solid var(--line);
 }
-.side-panel-tabs > [role="tablist"] {
+.side-panel-tabs > .scroll-strip {
+  align-self: stretch;
+  display: flex;
+}
+.side-panel-tabs [role="tablist"] {
   display: flex;
   gap: 16px;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 .side-panel-tabs [role="tab"] {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
-  padding: 8px 4px;
+  min-height: 0;
+  padding: 0 4px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-block: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--muted);
@@ -58,6 +65,10 @@
 }
 .side-panel-tabs [role="tab"]:focus-visible {
   outline-offset: calc(-1 * var(--focus-ring-width));
+}
+.side-panel-tabs + .helper-header {
+  min-height: 0;
+  padding-block: 0;
 }
 
 .outline-sidecar {

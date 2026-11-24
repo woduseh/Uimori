@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { MoreIcon } from './ui-icons.js';
 import './ui-controls.css';
@@ -144,6 +151,53 @@ export function ActionMenu({
     const dialog = element.closest('dialog');
     return !!dialog && !!ref.current?.contains(dialog);
   };
+  const menuItems = (node: HTMLDetailsElement) =>
+    [
+      ...node.querySelectorAll<HTMLElement>(':scope > .action-menu-body :is(button, a[href])'),
+    ].filter(
+      (item) =>
+        item.closest('details.action-menu') === node &&
+        !insideNestedDialog(item) &&
+        item.tabIndex >= 0 &&
+        !item.matches(':disabled') &&
+        item.checkVisibility({ checkVisibilityCSS: true })
+    );
+  const moveBetweenItems = (event: KeyboardEvent<HTMLDetailsElement>) => {
+    const node = event.currentTarget;
+    const target = event.target as HTMLElement;
+    if (
+      event.nativeEvent.defaultPrevented ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      !node.open
+    )
+      return;
+    if (target.closest('details.action-menu') !== node || insideNestedDialog(target)) return;
+    const items = menuItems(node);
+    if (!items.length) return;
+    const onSummary = target.parentElement === node && target.matches('summary');
+    const index = items.indexOf(target);
+    if (!onSummary && index < 0) return;
+    const last = items.length - 1;
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? last
+          : event.key === 'ArrowDown'
+            ? onSummary || index === last
+              ? 0
+              : index + 1
+            : event.key === 'ArrowUp'
+              ? onSummary || index === 0
+                ? last
+                : index - 1
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    items[next].focus();
+  };
   const closeAfterChoice = () => {
     const node = ref.current;
     if (!node) return;
@@ -157,7 +211,11 @@ export function ActionMenu({
       className={`action-menu${placement === 'top' ? ' action-menu-up' : ''}${viewport ? ' action-menu-viewport' : ''} ${className}`}
       onToggle={(event) => setOpen(event.currentTarget.open)}
       onKeyDown={(event) => {
-        if (event.key !== 'Escape' || !event.currentTarget.open) return;
+        if (event.key !== 'Escape') {
+          moveBetweenItems(event);
+          return;
+        }
+        if (!event.currentTarget.open) return;
         const targetDialog = (event.target as Element).closest('dialog[open]');
         if (targetDialog && targetDialog !== event.currentTarget.closest('dialog[open]')) return;
         event.stopPropagation();

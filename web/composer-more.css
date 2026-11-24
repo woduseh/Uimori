@@ -145,6 +145,30 @@
   color: var(--text);
   font-size: var(--font-small);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .composer-more-panel,
+  .composer-more::before {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .composer-more-panel {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    .composer-more::before {
+      opacity: 0;
+    }
+  }
+}
+@media (max-width: 600px) and (prefers-reduced-motion: no-preference) {
+  @starting-style {
+    .composer-more-panel.composer-more-panel {
+      transform: translateY(16px);
+    }
+  }
+}
 @media (max-width: 600px) {
   .composer-more:has(> .composer-more-panel)::before {
     content: "";

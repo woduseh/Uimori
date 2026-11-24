@@ -264,16 +264,15 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`/?chat=${chat.id}`);
   const source = page.getByTestId('source').first();
-  await expect(
-    source.getByRole('button', { name: '본문 추정 비용', exact: true })
-  ).not.toBeVisible();
   await openSourceActions(source);
-  await source.getByRole('button', { name: '본문 추정 비용', exact: true }).click();
-  const sourceCost = page.getByRole('dialog', { name: '본문 추정 비용', exact: true });
-  await expect(sourceCost.locator('.source-cost-value')).toHaveText(
-    '확인된 금액 합계 $0.004995, 미확인 1회 포함'
+  await expect(source.getByRole('button', { name: /추정 비용/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await source.getByTestId('turn-activity').locator(':scope > summary').click();
+  const sceneUsage = source.getByTestId('scene-usage');
+  await sceneUsage.locator(':scope > summary').click();
+  await expect(sceneUsage.getByTestId('scene-text-cost')).toHaveText(
+    '본문 추정 비용: 확인된 금액 합계 $0.004995, 미확인 1회 포함'
   );
-  await sourceCost.getByRole('button', { name: '본문 추정 비용 닫기' }).click();
   await navigationAction(page, '작업 현황');
   const dialog = page.getByRole('dialog', { name: '작업 현황', exact: true });
   const usage = dialog.getByTestId('usage-inspector');

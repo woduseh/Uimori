@@ -824,13 +824,19 @@ test('HELPSTEER adds instructions to the active task once after a lost acknowled
   });
   await expect(stop).toBeVisible();
   const emptyDraftStop = await stop.boundingBox();
-  await expect(panel.getByRole('button', { name: '다음 요청', exact: true })).toHaveCount(0);
+  const queueSend = panel.getByRole('button', { name: '다음 요청', exact: true });
+  await expect(queueSend).toBeDisabled();
   await panel.getByLabel('도우미에게 요청').fill(instructionText);
   await expect(stop).toHaveCount(1);
   await expect(stop).toBeEnabled();
   expect(await stop.boundingBox()).toEqual(emptyDraftStop);
-  await expect(panel.getByRole('button', { name: '다음 요청', exact: true })).toBeVisible();
-  await expect(panel.getByRole('button', { name: '현재 작업에 추가', exact: true })).toBeVisible();
+  await expect(queueSend).toBeEnabled();
+  const sendMode = panel.getByTestId('helper-running-mode');
+  await expect(sendMode).toHaveAccessibleName('실행 중 전송 방식: 대기 요청');
+  await sendMode.click();
+  await expect(sendMode).toHaveAccessibleName('실행 중 전송 방식: 추가 지시');
+  await expect(queueSend).toHaveCount(0);
+  expect(await stop.boundingBox()).toEqual(emptyDraftStop);
   state.loseNext();
   await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
@@ -862,9 +868,8 @@ test('HELPSTEER adds instructions to the active task once after a lost acknowled
   await expect(instruction.getByRole('status')).toContainText('작업 입력에 반영');
 
   await panel.getByLabel('도우미에게 요청').fill('그다음 첫 메시지를 검토해 주세요');
-  const send = panel.getByRole('button', { name: '다음 요청', exact: true });
-  await expect(send).toHaveText('다음 요청');
-  await send.click();
+  await panel.getByTestId('helper-running-mode').click();
+  await panel.getByRole('button', { name: '다음 요청', exact: true }).click();
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
   expect(state.posts).toHaveLength(2);
   expect(state.current().tasks).toHaveLength(2);
@@ -889,12 +894,9 @@ test('HELPFOLLOWUP01 distinguishes pending steers and queued requests with confi
   await input.press('Control+Enter');
   await expect(input).toHaveValue('');
 
-  const modeBar = panel.getByTestId('helper-running-mode');
-  await expect(modeBar).toBeVisible();
-  const steerMode = modeBar.getByRole('button', { name: '추가 지시', exact: true });
-  const queueMode = modeBar.getByRole('button', { name: '대기 요청', exact: true });
-  await expect(queueMode).toHaveAttribute('aria-pressed', 'true');
-  await expect(steerMode).toHaveAttribute('aria-pressed', 'false');
+  const sendMode = panel.getByTestId('helper-running-mode');
+  await expect(sendMode).toBeVisible();
+  await expect(sendMode).toHaveAccessibleName('실행 중 전송 방식: 대기 요청');
 
   await input.fill('중간에 어조만 차분하게 조정해 주세요');
   await input.press('Alt+Enter');
@@ -902,8 +904,8 @@ test('HELPFOLLOWUP01 distinguishes pending steers and queued requests with confi
   await expect.poll(() => state.steerPosts.length).toBe(1);
   expect(state.posts).toHaveLength(1);
 
-  await steerMode.click();
-  await expect(steerMode).toHaveAttribute('aria-pressed', 'true');
+  await sendMode.click();
+  await expect(sendMode).toHaveAccessibleName('실행 중 전송 방식: 추가 지시');
   expect(await page.evaluate(() => localStorage.getItem('uimori:helper-running-send'))).toBe(
     'steer'
   );
@@ -3071,12 +3073,14 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation', async (
   await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   const activity = row.getByTestId('helper-activity-details');
   await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(4);
-  await expect(
-    panel.getByTestId('helper-current-activity').getByRole('button', {
-      name: '진행 과정',
-      exact: true,
-    })
-  ).toHaveAttribute('aria-expanded', 'true');
+  const liveToggle = panel.getByTestId('helper-current-activity').getByRole('button', {
+    name: '진행 과정',
+    exact: true,
+  });
+  await expect(liveToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel.locator('.helper-current-activity-details')).toHaveCount(0);
+  await liveToggle.click();
+  await expect(liveToggle).toHaveAttribute('aria-expanded', 'true');
   await expect(
     panel.locator('.helper-current-activity-details .helper-activity-stages > li')
   ).toHaveCount(4);
@@ -3108,11 +3112,13 @@ test('HELPACTIVITY-READS consecutive reads fold into one row that expands to eac
 }, info) => {
   const chat = await create(request),
     state = await harness(page);
-  for (const [width, height, colorScheme] of [
-    [1440, 900, 'light'],
-    [1440, 900, 'dark'],
-    [412, 915, 'light'],
-  ] as const) {
+  for (const [index, [width, height, colorScheme]] of (
+    [
+      [1440, 900, 'light'],
+      [1440, 900, 'dark'],
+      [412, 915, 'light'],
+    ] as const
+  ).entries()) {
     await page.setViewportSize({ width, height });
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await page.goto(`/?chat=${chat.id}`);
@@ -3142,6 +3148,12 @@ test('HELPACTIVITY-READS consecutive reads fold into one row that expands to eac
         target: { kind: 'content', title: '등대지기 미라' },
       },
     ]);
+    const liveToggle = panel.getByTestId('helper-current-activity').getByRole('button', {
+      name: '진행 과정',
+      exact: true,
+    });
+    await expect(liveToggle).toHaveAttribute('aria-expanded', index ? 'true' : 'false');
+    if (!index) await liveToggle.click();
     const current = panel.locator('.helper-current-activity-details');
     const group = current.locator('.helper-activity-reads');
     await expect(group).toHaveCount(1);
@@ -3205,6 +3217,10 @@ test('HELPACTIVITY-FOLLOW the live list keeps the newest step in view until the 
   state.activity(task, waiting(9));
   const bar = panel.getByTestId('helper-current-activity').locator('.activity-label');
   await expect(bar).toHaveText('모델의 응답을 기다리고 있어요 (9번째 호출)');
+  await panel
+    .getByTestId('helper-current-activity')
+    .getByRole('button', { name: '진행 과정', exact: true })
+    .click();
   const list = panel.locator('.helper-current-activity-details');
   const running = list.locator('.helper-activity-stages > li[data-state="running"]');
   await expect(running).toBeInViewport();

@@ -260,12 +260,6 @@ export function AuthorNotesEditor({
             />
           </label>
           <div className="form-actions full">
-            <SaveButton
-              className="primary"
-              label={draft.originalId ? t('library.saveEditedNote') : t('library.saveNewNote')}
-              aria-busy={busy}
-              disabled={busy || disabled || !draft.text.trim()}
-            />
             <button
               type="button"
               className="secondary"
@@ -278,6 +272,12 @@ export function AuthorNotesEditor({
               <CloseIcon size={18} aria-hidden="true" />
               {t('library.cancelEditing')}
             </button>
+            <SaveButton
+              className="primary"
+              label={draft.originalId ? t('library.saveEditedNote') : t('library.saveNewNote')}
+              aria-busy={busy}
+              disabled={busy || disabled || !draft.text.trim()}
+            />
           </div>
         </form>
       )}

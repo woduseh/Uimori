@@ -55,6 +55,7 @@ for (const width of [MOBILE_WIDTH]) {
     const metadata = source.getByRole('button', { name: '원문 연결 정보', exact: true });
     await expect(metadata).not.toBeVisible();
     await menu.click();
+    await source.getByRole('button', { name: '더 보기', exact: true }).click();
     await metadata.click();
     const dialog = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
     await expect(dialog).toBeVisible();

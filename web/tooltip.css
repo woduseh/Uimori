@@ -21,6 +21,16 @@
   overflow-wrap: anywhere;
   cursor: default;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .ui-tooltip {
+    transition: opacity var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .ui-tooltip:popover-open {
+      opacity: 0;
+    }
+  }
+}
 @position-try --dialog-tooltip-side {
   position-area: inline-start;
   justify-self: end;

@@ -4,7 +4,8 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { CheckIcon, CloseIcon } from './ui-icons.js';
+import { CloseIcon } from './ui-icons.js';
+import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ContextDetail, ContextJob as StoredContextJob } from '../core/context-plan.js';
 import type { AuthorNote } from '../core/notes.js';
@@ -87,6 +88,22 @@ export function ContextPanel({
       detail &&
       (draft.revision !== detail.activeRevision || draft.headRevision !== headRevision)
   );
+  const editing = mode === 'full' && draft !== null;
+  const editTrigger = useRef<HTMLButtonElement>(null);
+  const editorInput = useRef<HTMLTextAreaElement>(null);
+  const focusEditor = useRef(false);
+  const returnFocus = useRef(false);
+  const triggerEnabled = !busy && current;
+  useEffect(() => {
+    if (editing && focusEditor.current) {
+      focusEditor.current = false;
+      editorInput.current?.focus();
+    }
+    if (!editing && returnFocus.current && triggerEnabled && editTrigger.current) {
+      returnFocus.current = false;
+      editTrigger.current.focus();
+    }
+  }, [editing, triggerEnabled]);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -260,7 +277,7 @@ export function ContextPanel({
           />
         ) : (
           <>
-            {summary ? (
+            {editing && !conflict ? null : summary ? (
               <div className="context-summary">
                 {!detail.usable && (
                   <NoticeBanner>
@@ -280,6 +297,70 @@ export function ContextPanel({
             ) : (
               <p className="muted">{t('settings.m282')}</p>
             )}
+            {mode === 'full' && draft && (
+              <form
+                className="context-summary-editor"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  returnFocus.current = true;
+                  void saveSummary();
+                }}
+              >
+                {conflict && (
+                  <NoticeBanner
+                    tone="error"
+                    actions={
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || !current}
+                        onClick={() => {
+                          setDraft({ ...draft, revision: detail.activeRevision, headRevision });
+                          setError('');
+                        }}
+                      >
+                        {t('settings.m304')}
+                      </button>
+                    }
+                  >
+                    {t('settings.m305')}
+                  </NoticeBanner>
+                )}
+                <label>
+                  {t('settings.m306')}
+                  <textarea
+                    ref={editorInput}
+                    rows={8}
+                    required
+                    maxLength={CONTEXT_SUMMARY_MAX_CHARS}
+                    value={draft.text}
+                    disabled={busy}
+                    onChange={(event) => setDraft({ ...draft, text: event.target.value })}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      returnFocus.current = true;
+                      setDraft(null);
+                      setError('');
+                    }}
+                  >
+                    <CloseIcon size={18} aria-hidden="true" />
+                    {t('settings.m308')}
+                  </button>
+                  <SaveButton
+                    className="primary"
+                    label={t('settings.m307')}
+                    aria-busy={busy}
+                    disabled={busy || conflict || !current || !draft.text.trim()}
+                  />
+                </div>
+              </form>
+            )}
             {!current && <LoadingState presentation="inline" label={t('settings.m283')} />}
             <details className="context-priorities">
               <summary>{t('settings.m284')}</summary>
@@ -298,10 +379,12 @@ export function ContextPanel({
             <div className="form-actions">
               {mode === 'full' && !draft && (
                 <button
+                  ref={editTrigger}
                   type="button"
                   className="secondary"
-                  disabled={busy || !current}
+                  disabled={!triggerEnabled}
                   onClick={() => {
+                    focusEditor.current = true;
                     setDraft({ text: summary, revision: detail.activeRevision, headRevision });
                     setError('');
                     setMessage('');
@@ -367,68 +450,6 @@ export function ContextPanel({
                   )}
                 </div>
               )
-            )}
-            {mode === 'full' && draft && (
-              <form
-                className="context-summary-editor"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void saveSummary();
-                }}
-              >
-                {conflict && (
-                  <NoticeBanner
-                    tone="error"
-                    actions={
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy || !current}
-                        onClick={() => {
-                          setDraft({ ...draft, revision: detail.activeRevision, headRevision });
-                          setError('');
-                        }}
-                      >
-                        {t('settings.m304')}
-                      </button>
-                    }
-                  >
-                    {t('settings.m305')}
-                  </NoticeBanner>
-                )}
-                <label>
-                  {t('settings.m306')}
-                  <textarea
-                    rows={8}
-                    required
-                    maxLength={CONTEXT_SUMMARY_MAX_CHARS}
-                    value={draft.text}
-                    disabled={busy}
-                    onChange={(event) => setDraft({ ...draft, text: event.target.value })}
-                  />
-                </label>
-                <div className="form-actions">
-                  <button
-                    className="primary"
-                    disabled={busy || conflict || !current || !draft.text.trim()}
-                  >
-                    <CheckIcon size={18} aria-hidden="true" />
-                    {t('settings.m307')}{' '}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setDraft(null);
-                      setError('');
-                    }}
-                  >
-                    <CloseIcon size={18} aria-hidden="true" />
-                    {t('settings.m308')}
-                  </button>
-                </div>
-              </form>
             )}
           </>
         )}

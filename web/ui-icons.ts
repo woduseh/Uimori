@@ -28,6 +28,8 @@ export {
   Download as DownloadIcon,
   Upload as UploadIcon,
   BookText as LoreIcon,
+  BookMarked as CanonIcon,
+  NotebookPen as MemoryIcon,
   Image as ImagesIcon,
   SlidersHorizontal as OptionsIcon,
   Eye as DisplayIcon,

@@ -1890,10 +1890,10 @@ export const messages = {
     zh: '补充指令与排队请求',
   },
   'helpers.runningSendModeLabel': {
-    ko: '실행 중 전송 방식',
-    en: 'Sending mode while running',
-    ja: '実行中の送信方法',
-    zh: '运行中发送方式',
+    ko: '실행 중 전송 방식: {mode}',
+    en: 'Sending mode while running: {mode}',
+    ja: '実行中の送信方法：{mode}',
+    zh: '运行中发送方式：{mode}',
   },
   'helpers.followUpSteerBadge': {
     ko: '추가 지시',

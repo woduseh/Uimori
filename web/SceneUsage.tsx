@@ -2,18 +2,33 @@ import { t, useI18n, formatNumber } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SceneUsageDetail, SceneUsageReceipt } from '../core/scene-usage.js';
+import type { ReaderRun } from '../core/types.js';
 import { api } from './api.js';
+import { formatUsd } from './pricing-display.js';
 import { RequestLoreEntries } from './RequestLoreEntries.js';
 import './scene-usage.css';
 
 const amount = (value: number | null) =>
   value === null ? t('reader.unknown') : formatNumber(value);
 
+function textCost(estimate: NonNullable<ReaderRun['estimatedCost']>) {
+  if (estimate.usd !== null && estimate.unknownCount === 0) return formatUsd(estimate.usd);
+  return t('reader.knownSubtotalValueIncludesValueUnpricedCalls', {
+    v0:
+      estimate.subtotalUsd === 0 && estimate.unknownCount === estimate.attemptCount
+        ? t('reader.unknown')
+        : formatUsd(estimate.subtotalUsd),
+    v1: estimate.unknownCount,
+  });
+}
+
 export function SceneUsage({
   usage,
+  estimatedCost,
   compact = false,
 }: {
   usage?: SceneUsageReceipt;
+  estimatedCost?: ReaderRun['estimatedCost'];
   compact?: boolean;
 }) {
   useI18n();
@@ -78,6 +93,11 @@ export function SceneUsage({
       </summary>
       <div className="scene-usage-body">
         {compact && <p>{totals}</p>}
+        {estimatedCost && estimatedCost.attemptCount > 0 && (
+          <p data-testid="scene-text-cost">
+            {t('reader.estimatedTextCostValue', { v0: textCost(estimatedCost) })}
+          </p>
+        )}
         {receipt ? (
           <dl className="scene-receipt">
             <dt>{t('reader.model')}</dt>

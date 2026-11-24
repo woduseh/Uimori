@@ -1,5 +1,6 @@
 import { useI18n } from './i18n.js';
 import { IconButton } from './IconButton.js';
+import { ScrollStrip } from './ScrollStrip.js';
 import { CloseIcon } from './ui-icons.js';
 import type { SidePanelTab } from './side-panel.js';
 
@@ -45,7 +46,7 @@ export function SidePanelTabs({
   };
   return (
     <div className="side-panel-tabs">
-      <div
+      <ScrollStrip
         role="tablist"
         aria-label={t('workspace.sidePanel')}
         onKeyDown={(event) => {
@@ -75,7 +76,7 @@ export function SidePanelTabs({
             {labels[tab]}
           </button>
         ))}
-      </div>
+      </ScrollStrip>
       <IconButton label={closeLabel} icon={CloseIcon} onClick={onClose} />
     </div>
   );

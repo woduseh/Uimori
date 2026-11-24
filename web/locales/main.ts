@@ -504,10 +504,10 @@ export const messages = {
     zh: '导出稿件',
   },
   'main.m065': {
-    ko: '채팅 백업 내보내기',
-    en: 'Export chat backup',
-    ja: 'チャットのバックアップを書き出す',
-    zh: '导出聊天备份',
+    ko: '채팅 백업 받기',
+    en: 'Download chat backup',
+    ja: 'チャットのバックアップを取得',
+    zh: '下载聊天备份',
   },
   'main.m066': {
     ko: '원문, 자료, 이미지, 실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요',

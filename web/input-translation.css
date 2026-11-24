@@ -63,6 +63,19 @@
   background: var(--panel);
   box-shadow: var(--shadow-float);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .input-translation-language-menu {
+    transition:
+      opacity var(--motion-overlay) var(--motion-ease-out),
+      transform var(--motion-overlay) var(--motion-ease-out);
+  }
+  @starting-style {
+    .input-translation-language-mobile[open] > .input-translation-language-menu {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+}
 .input-translation-language-menu > button {
   display: flex;
   align-items: center;

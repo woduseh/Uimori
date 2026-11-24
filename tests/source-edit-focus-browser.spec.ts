@@ -1,6 +1,6 @@
 import { MOBILE_WIDTH, MOBILE_HEIGHT } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { openSourceActions } from './ui-navigation.js';
+import { openMoreSourceActions } from './ui-navigation.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -195,7 +195,7 @@ for (const [label, viewport] of [
     expect(after.runs).toEqual(before.runs);
     expect(after.attempts).toEqual(before.attempts);
 
-    const opener = await openSourceActions(scene);
+    const opener = await openMoreSourceActions(scene);
     await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
     const translation = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
     await expect(translation).toBeFocused();

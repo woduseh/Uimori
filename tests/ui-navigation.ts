@@ -95,9 +95,25 @@ export async function openSourceActions(source: Locator) {
     await menu.click();
   return menu;
 }
+export async function openMoreSourceActions(source: Locator) {
+  const menu = await openSourceActions(source);
+  const more = menu
+    .locator('..')
+    .locator(':scope > .action-menu-body')
+    .getByRole('button', { name: '더 보기', exact: true });
+  if (await more.isVisible()) await more.click();
+  await expect(
+    menu
+      .locator('..')
+      .locator(':scope > .action-menu-body')
+      .getByRole('button', { name: '접기', exact: true })
+  ).toHaveAttribute('aria-expanded', 'true');
+  return menu;
+}
 export async function sourceAction(source: Locator, name: string) {
   const button = source.getByRole('button', { name, exact: true });
   if (!(await button.isVisible())) await openSourceActions(source);
+  if (!(await button.isVisible())) await openMoreSourceActions(source);
   await button.click();
 }
 export async function openPromptActions(editor: Locator) {

@@ -41,3 +41,25 @@ test('Codex turn-wide input remains usage accounting rather than request occupan
   expect(html).toContain('aria-label="컨텍스트 한도 대비 추정 입력"');
   expect(html).not.toContain('aria-label="컨텍스트 한도 대비 입력"');
 });
+
+test('the run text cost keeps a known subtotal apart from unpriced calls', () => {
+  const usage = { inputTokens: 10, outputTokens: 5, context };
+  const cost = (estimatedCost: {
+    usd: number | null;
+    subtotalUsd: number;
+    unknownCount: number;
+    attemptCount: number;
+  }) => renderToStaticMarkup(createElement(SceneUsage, { usage, estimatedCost }));
+  expect(cost({ usd: 0.0025, subtotalUsd: 0.0025, unknownCount: 0, attemptCount: 1 })).toContain(
+    '본문 추정 비용: $0.0025'
+  );
+  expect(cost({ usd: null, subtotalUsd: 0.004995, unknownCount: 1, attemptCount: 2 })).toContain(
+    '본문 추정 비용: 확인된 금액 합계 $0.004995, 미확인 1회 포함'
+  );
+  expect(cost({ usd: null, subtotalUsd: 0, unknownCount: 1, attemptCount: 1 })).toContain(
+    '확인된 금액 합계 미확인, 미확인 1회 포함'
+  );
+  expect(cost({ usd: 0, subtotalUsd: 0, unknownCount: 0, attemptCount: 0 })).not.toContain(
+    '본문 추정 비용'
+  );
+});

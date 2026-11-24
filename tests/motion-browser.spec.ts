@@ -74,7 +74,7 @@ for (const [width, motion] of [
           node instanceof HTMLElement &&
           !event.pseudoElement &&
           event.propertyName === 'opacity' &&
-          node.matches('.app-dialog, .action-menu-body')
+          node.matches('.app-dialog, .action-menu-body, .composer-more-panel')
         )
           node.dataset.entrances = String(Number(node.dataset.entrances ?? 0) + 1);
       });
@@ -103,6 +103,19 @@ for (const [width, motion] of [
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
     await expect(trigger).toBeFocused();
+
+    const more = page.getByRole('button', { name: '입력창 더보기', exact: true });
+    await more.click();
+    const composerMenu = page.locator('.composer-more-panel');
+    await expect(composerMenu).toBeVisible();
+    await entered(composerMenu, motion);
+    const composerBox = (await composerMenu.boundingBox())!;
+    expect(composerBox.x).toBeGreaterThanOrEqual(0);
+    expect(composerBox.x + composerBox.width).toBeLessThanOrEqual(width);
+    expect(composerBox.y).toBeGreaterThanOrEqual(0);
+    await page.keyboard.press('Escape');
+    await expect(composerMenu).toHaveCount(0);
+    await expect(more).toBeFocused();
 
     const openReading = async () => {
       const actions = await openChatMenu(page);

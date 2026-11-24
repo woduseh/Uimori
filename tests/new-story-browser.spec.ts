@@ -5,7 +5,7 @@ import { nativeContent } from './fixtures/native-content.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, openMoreSourceActions, sourceAction } from './ui-navigation.js';
 import { visibleNavigation } from './ui-navigation.js';
 
 test('NSUI09 a deleted default discovered after library refresh requires an explicit persona choice', async ({
@@ -951,8 +951,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await expect(source).not.toContainText('실행 확인');
   const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   await draft.fill('시작문을 바꿔도 남겨 둘 다음 장면 초안');
-  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
+  await sourceAction(source, '첫 메시지 바꾸기');
   const picker = page.getByRole('dialog', { name: '첫 메시지 바꾸기', exact: true });
   await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
   await picker.getByLabel('첫 메시지 선택').selectOption('start-1');
@@ -986,14 +985,12 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await expect(source.getByRole('heading', { name: '새벽의 정원' })).toBeVisible();
   await expect(draft).toHaveValue('시작문을 바꿔도 남겨 둘 다음 장면 초안');
   await expect(source.getByTestId('turn-activity')).toHaveCount(0);
-  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
+  await sourceAction(source, '첫 메시지 바꾸기');
   await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-1');
   await page.keyboard.press('Escape');
   await expect(picker).toBeHidden();
   await expect(source.getByLabel('장면 작업 메뉴', { exact: true })).toBeFocused();
-  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '번역 수정', exact: true }).click();
+  await sourceAction(source, '번역 수정');
   await page.getByLabel('번역 수정 내용').fill('The garden stirred in the dawn light.');
   await page.getByRole('button', { name: '번역 저장', exact: true }).click();
   await expect(source.getByTestId('translation-text')).toContainText(
@@ -1009,7 +1006,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   expect(mainRequests).toEqual([]);
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   await expect.poll(async () => (await readActive()).reader.total).toBe(2);
-  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+  await openMoreSourceActions(source);
   await expect(source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true })).toHaveCount(
     0
   );
@@ -1076,8 +1073,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
       exact: true,
     });
     const openPicker = async () => {
-      await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-      await source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
+      await sourceAction(source, '첫 메시지 바꾸기');
       await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
     };
     await openPicker();

@@ -233,6 +233,18 @@ export const messages = {
     ja: '本文をコピー',
     zh: '复制正文',
   },
+  'reader.textCopied': {
+    ko: '본문 복사됨',
+    en: 'Text copied',
+    ja: '本文をコピーしました',
+    zh: '正文已复制',
+  },
+  'reader.textCopiedNotice': {
+    ko: '본문을 복사했어요.',
+    en: 'Text copied.',
+    ja: '本文をコピーしました。',
+    zh: '已复制正文。',
+  },
   'reader.sceneValue': {
     ko: '장면 {v0}',
     en: 'Scene {v0}',
@@ -250,6 +262,12 @@ export const messages = {
     en: 'Scene actions',
     ja: 'シーン操作',
     zh: '场景操作',
+  },
+  'reader.moreSceneActions': {
+    ko: '더 보기',
+    en: 'More',
+    ja: 'その他',
+    zh: '更多',
   },
   'reader.changeOpeningMessage': {
     ko: '첫 메시지 바꾸기',
@@ -347,11 +365,11 @@ export const messages = {
     ja: 'タスクの詳細',
     zh: '任务详情',
   },
-  'reader.estimatedTextCost': {
-    ko: '본문 추정 비용',
-    en: 'Estimated text cost',
-    ja: '本文の推定費用',
-    zh: '正文估算费用',
+  'reader.estimatedTextCostValue': {
+    ko: '본문 추정 비용: {v0}',
+    en: 'Estimated text cost: {v0}',
+    ja: '本文の推定費用：{v0}',
+    zh: '正文估算费用：{v0}',
   },
   'reader.requestToUseForGeneration': {
     ko: '생성에 사용할 요청',
@@ -1506,10 +1524,10 @@ export const messages = {
     zh: '记忆与上下文',
   },
   'reader.manageStoryEventsWithSummariesAndConditionsForFuture': {
-    ko: '이야기에서 일어난 일은 요약으로, 이후 요청에서도 지킬 조건은 메모와 정정으로 관리해요. 카드 변수는 봇의 원본 스크립트가 관리해요.',
-    en: 'Manage story events with summaries, and conditions for future requests with notes and corrections. Card variables are managed by the bot’s original scripts.',
-    ja: '物語で起きた出来事は要約で、今後のリクエストでも守る条件はメモと訂正で管理します。カード変数はボットの元スクリプトが管理します。',
-    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。卡片变量由机器人的原始脚本管理。',
+    ko: '이야기에서 일어난 일은 요약으로, 이후 요청에서도 지킬 조건은 메모와 정정으로 관리해요. 채팅 변수는 봇의 원본 스크립트가 관리해요.',
+    en: 'Manage story events with summaries, and conditions for future requests with notes and corrections. Chat variables are managed by the bot’s original scripts.',
+    ja: '物語で起きた出来事は要約で、今後のリクエストでも守る条件はメモと訂正で管理します。チャット変数はボットの元スクリプトが管理します。',
+    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。聊天变量由机器人的原始脚本管理。',
   },
   'reader.enterABookmarkName': {
     ko: '책갈피 이름을 입력해 주세요.',

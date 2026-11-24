@@ -1,10 +1,20 @@
 .app-dialog.command-palette-dialog {
   --dialog-size: 640px;
+  --dialog-max-height: calc(
+    var(--app-height, 100dvh) -
+    var(--command-palette-top) -
+    var(--dialog-gap)
+  );
+  margin: var(--command-palette-top) auto auto;
+}
+.command-palette-dialog > .dialog-header {
+  display: none;
 }
 .command-palette-dialog > .dialog-body {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
-  padding: 16px 24px 24px;
+  padding: 16px;
 }
 .command-palette-field {
   position: relative;
@@ -25,16 +35,17 @@
 }
 .command-palette-results {
   display: grid;
+  align-content: start;
   gap: 12px;
+  min-height: 0;
   max-height: min(60vh, 520px);
   overflow-y: auto;
 }
-.command-palette-results > section {
+.command-palette-results > [role="group"] {
   display: grid;
   min-width: 0;
 }
-.command-palette-results h3 {
-  margin: 0;
+.command-palette-heading {
   padding: 4px 12px;
   color: var(--muted);
   font-size: var(--font-small);
@@ -42,24 +53,45 @@
 }
 .command-palette-choice {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr);
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
-  width: 100%;
   min-width: 0;
-  min-height: 42px;
+  min-height: var(--control-h);
   padding: 8px 12px;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  white-space: normal;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  cursor: pointer;
 }
-.command-palette-choice > span,
-.command-palette-choice > small {
+.command-palette-choice[aria-selected="true"] {
+  background: var(--hover);
+}
+.command-palette-icon {
+  display: flex;
+  color: var(--muted);
+}
+.command-palette-choice > :is(.command-palette-label, small) {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .command-palette-choice > small {
-  justify-self: end;
+  max-width: 24ch;
   color: var(--muted);
+  text-align: end;
+}
+.command-palette-choice > kbd {
+  padding: 0 6px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: var(--font-small);
+  white-space: nowrap;
+}
+@media (forced-colors: active) {
+  .command-palette-choice[aria-selected="true"] {
+    outline: var(--focus-ring-width) solid Highlight;
+    outline-offset: calc(-1 * var(--focus-ring-width));
+  }
 }

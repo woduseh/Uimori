@@ -1,6 +1,6 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { editLibraryContent, openChatMenu, openSourceActions } from './ui-navigation.js';
+import { editLibraryContent, openChatMenu, sourceAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
@@ -533,8 +533,7 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   expect(rejected.status()).toBe(409);
   await expect(third.getByLabel('다음 장면 요청')).toHaveValue('Other chat draft stays here.');
   expect((await detail(request, other.chat.id)).sources).toEqual(other.sources);
-  await openSourceActions(article(page, source.id));
-  await article(page, source.id).getByRole('button', { name: '번역 수정', exact: true }).click();
+  await sourceAction(article(page, source.id), '번역 수정');
   await page.getByLabel('번역 수정 내용').fill('직접 저장한 합성 번역이에요.');
   await page.getByRole('button', { name: '번역 저장', exact: true }).click();
   await expect(article(page, source.id).getByTestId('translation-text')).toContainText(

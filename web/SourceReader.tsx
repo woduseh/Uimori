@@ -22,6 +22,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -34,7 +35,6 @@ import type { ChatDetail, ImageTarget, Job, ReaderRun, RunReceipt, Source } from
 import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
-import { formatUsd } from './pricing-display.js';
 import { api, ApiError, definiteRejection, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
@@ -56,26 +56,18 @@ import { IconButton } from './IconButton.js';
 import {
   CopyIcon,
   DeleteIcon,
+  DropdownIcon,
   EditIcon,
+  ExpandIcon,
   HelperIcon,
   IllustrationIcon,
   ImagesIcon,
   RefreshIcon,
 } from './ui-icons.js';
-import {
-  Check,
-  Eye,
-  EyeOff,
-  GitFork,
-  Info,
-  Languages,
-  ListRestart,
-  ReceiptText,
-  Save,
-  X,
-} from 'lucide-react';
+import { Check, Eye, EyeOff, GitFork, Info, Languages, ListRestart, Save, X } from 'lucide-react';
 import { Dialog } from './Dialog.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { useTransientNotice } from './TransientNotice.js';
 import { useUnsavedInput } from './unsaved-input.js';
 import { PackageStartPicker, type PackageStartSelection } from './PackageStartPicker.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
@@ -146,7 +138,6 @@ type ReaderProps = {
   onCheckRequest?: () => Promise<boolean>;
   onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
-  estimatedCost?: ReaderRun['estimatedCost'];
   packageStart?: { mode: 'authored'; title: string };
   startSelection?: PackageStartSelection;
   onStartChanged?: () => void;
@@ -283,7 +274,6 @@ function SourceReaderContent({
   onCheckRequest,
   onAskHelper,
   contextSummary,
-  estimatedCost,
   packageStart,
   startSelection,
   onStartChanged,
@@ -589,15 +579,20 @@ function SourceReaderContent({
   };
   const requestPending = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [costOpen, setCostOpen] = useState(false);
-  const openInfo = (button: HTMLButtonElement, kind: 'details' | 'cost') => {
+  const showNotice = useTransientNotice();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const openDetails = (button: HTMLButtonElement) => {
     const menu = button.closest<HTMLDetailsElement>('.action-menu');
     if (menu) {
       menu.open = false;
       menu.querySelector('summary')?.focus({ preventScroll: true });
     }
-    if (kind === 'details') setDetailsOpen(true);
-    else setCostOpen(true);
+    setDetailsOpen(true);
   };
   const [pending, setPending] = useState('');
   const [actionError, setActionError] = useState('');
@@ -821,6 +816,17 @@ function SourceReaderContent({
       setRetryDialog(false);
     });
   const [startPickerOpen, setStartPickerOpen] = useState(false);
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const moreActionsId = useId();
+  const collapseMoreActionsWithMenu = useCallback((button: HTMLButtonElement | null) => {
+    const menu = button?.closest('details');
+    if (!menu) return;
+    const collapse = () => {
+      if (!menu.open) setMoreActionsOpen(false);
+    };
+    menu.addEventListener('toggle', collapse);
+    return () => menu.removeEventListener('toggle', collapse);
+  }, []);
   const [illustrationCount, setIllustrationCount] = useState(1);
   const [illustrationDirection, setIllustrationDirection] = useState('');
   const illustrationRequestKey = useRef('');
@@ -979,6 +985,10 @@ function SourceReaderContent({
   ) : null;
   const activityNode = activity?.({ leading, badges }) || null;
   const canRetranslate = !!translation && !activeJob(translation) && !retryable(translation.status);
+  const rewritable = !!(onRetry || onCheckRequest);
+  const sceneTextActionCount =
+    (latest ? 0 : 2) + (directRepresentation ? 0 : 1) + (rewritable ? 1 : 0);
+  const translationShown = mode === 'translation' && !!validTranslation;
   const retranslate = () => {
     void action('translation', async () => {
       const proceed = await codexWarning.check(
@@ -1050,12 +1060,15 @@ function SourceReaderContent({
     restoreAnchor.current = position;
     await refresh();
   };
-  const copyCurrent = () =>
+  const copyCurrent = (from: 'button' | 'menu') =>
     void action('copy', async () => {
       const text = mode === 'translation' ? (validTranslation?.text ?? '') : source.text;
       if (!navigator.clipboard)
         throw new Error(uiMessage('reader.copyingIsUnavailableInThisBrowser'));
       await navigator.clipboard.writeText(text);
+      if (!mounted.current) return;
+      if (from === 'menu') showNotice(uiMessage('reader.textCopiedNotice'));
+      else setCopied(true);
     });
   return (
     <article
@@ -1347,13 +1360,16 @@ function SourceReaderContent({
           {latest && (
             <>
               <IconButton
-                label={t('reader.copyText')}
-                icon={CopyIcon}
+                label={copied ? t('reader.textCopied') : t('reader.copyText')}
+                icon={copied ? Check : CopyIcon}
                 size={18}
                 className="scene-action"
                 disabled={!!editor || !!pending}
-                onClick={copyCurrent}
+                onClick={() => copyCurrent('button')}
               />
+              <span className="sr-only" role="status">
+                {copied ? t('reader.textCopiedNotice') : ''}
+              </span>
               <IconButton
                 label={editorLabel(mode)}
                 icon={EditIcon}
@@ -1389,152 +1405,83 @@ function SourceReaderContent({
             }}
           />
           <ActionMenu label={t('reader.sceneActions')} placement="top" viewport>
-            <div className="action-menu-group" role="group" aria-label={t('chatmanage.sceneText')}>
-              <span className="action-menu-heading">{t('chatmanage.sceneText')}</span>
-              {!latest && (
-                <>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={!!editor || !!pending}
-                    onClick={copyCurrent}
-                  >
-                    <CopyIcon size={18} aria-hidden="true" />
-                    {t('reader.copyText')}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={!!editor || !!pending}
-                    onClick={(event) => openEditor(mode, event.currentTarget)}
-                  >
-                    <EditIcon size={18} aria-hidden="true" />
-                    {editorLabel(mode)}
-                  </button>
-                  {!directRepresentation && (
-                    <>
-                      <button
-                        type="button"
-                        className="secondary"
-                        aria-pressed={
-                          validTranslation || (translation && activeJob(translation))
-                            ? mode === 'translation'
-                            : undefined
-                        }
-                        disabled={!!editor || !!pending}
-                        onClick={(event) => {
-                          if (!validTranslation && !(translation && activeJob(translation))) {
-                            const menu = event.currentTarget.closest('details');
-                            if (menu) {
-                              menu.open = false;
-                              menu.querySelector('summary')?.focus({ preventScroll: true });
-                            }
-                          }
-                          viewTranslation();
-                        }}
-                      >
-                        {mode === 'translation' ? (
-                          <Check size={18} aria-hidden="true" />
-                        ) : (
-                          <Languages size={18} aria-hidden="true" />
-                        )}
-                        {translationActionLabel}
-                      </button>
-                      {showToggle && (
-                        <button
-                          type="button"
-                          className="secondary"
-                          aria-pressed={mode === 'original'}
-                          disabled={!!editor || !!pending}
-                          onClick={() => switchMode('original')}
-                        >
-                          {mode === 'original' ? (
-                            <Check size={18} aria-hidden="true" />
-                          ) : (
-                            <Eye size={18} aria-hidden="true" />
-                          )}
-                          {t('reader.viewOriginal')}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-              <button
-                type="button"
-                className="secondary"
-                disabled={!!editor || !!pending}
-                onClick={(event) => openEditor(otherEditor, event.currentTarget)}
+            {sceneTextActionCount > 0 && (
+              <div
+                className="action-menu-group"
+                role="group"
+                aria-label={t('chatmanage.sceneText')}
               >
-                <EditIcon size={18} aria-hidden="true" />
-                {editorLabel(otherEditor)}
-              </button>
-              {(onRetry || onCheckRequest) && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!!editor || !!pending || (retryDisabled && !onCheckRequest)}
-                  onClick={() => {
-                    openRewrite();
-                  }}
-                >
-                  <RefreshIcon size={18} aria-hidden="true" />
-                  {t('reader.rewrite')}
-                </button>
-              )}
-              {canRetranslate && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!!pending || !!editor}
-                  onClick={retranslate}
-                >
-                  <Languages size={18} aria-hidden="true" />
-                  {t('reader.newTranslationWithCurrentSettings')}
-                </button>
-              )}
-              {startSelection && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!!editor || !!pending || retryDisabled}
-                  onClick={(event) => {
-                    const menu = event.currentTarget.closest('details');
-                    if (menu) {
-                      menu.open = false;
-                      menu.querySelector('summary')?.focus({ preventScroll: true });
-                    }
-                    setStartPickerOpen(true);
-                  }}
-                >
-                  <ListRestart size={18} aria-hidden="true" />
-                  {t('reader.changeOpeningMessage')}
-                </button>
-              )}
-              {(packageStart?.mode === 'authored' || (!request && !requestImages?.length)) && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!!editor || !!pending || retryDisabled}
-                  onClick={() =>
-                    void action('scene-context', async () => {
-                      await saveSceneContext({ sceneEnabled: !sceneEnabled });
-                    })
-                  }
-                >
-                  {sceneEnabled ? (
-                    <EyeOff size={18} aria-hidden="true" />
-                  ) : (
-                    <Eye size={18} aria-hidden="true" />
-                  )}
-                  {sceneEnabled
-                    ? t('reader.excludeSceneFromContext')
-                    : t('reader.includeSceneInContext')}
-                </button>
-              )}
-            </div>
+                {sceneTextActionCount > 1 && (
+                  <span className="action-menu-heading">{t('chatmanage.sceneText')}</span>
+                )}
+                {!latest && (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!!editor || !!pending}
+                      onClick={() => copyCurrent('menu')}
+                    >
+                      <CopyIcon size={18} aria-hidden="true" />
+                      {t('reader.copyText')}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!!editor || !!pending}
+                      onClick={(event) => openEditor(mode, event.currentTarget)}
+                    >
+                      <EditIcon size={18} aria-hidden="true" />
+                      {editorLabel(mode)}
+                    </button>
+                  </>
+                )}
+                {!directRepresentation && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    data-keep-open=""
+                    disabled={!!editor || !!pending}
+                    onClick={(event) => {
+                      if (translationShown) {
+                        switchMode('original');
+                        return;
+                      }
+                      if (!validTranslation && !(translation && activeJob(translation))) {
+                        const menu = event.currentTarget.closest('details');
+                        if (menu) {
+                          menu.open = false;
+                          menu.querySelector('summary')?.focus({ preventScroll: true });
+                        }
+                      }
+                      viewTranslation();
+                    }}
+                  >
+                    {translationShown ? (
+                      <Eye size={18} aria-hidden="true" />
+                    ) : (
+                      <Languages size={18} aria-hidden="true" />
+                    )}
+                    {translationShown ? t('reader.viewOriginal') : translationActionLabel}
+                  </button>
+                )}
+                {rewritable && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!!editor || !!pending || (retryDisabled && !onCheckRequest)}
+                    onClick={() => {
+                      openRewrite();
+                    }}
+                  >
+                    <RefreshIcon size={18} aria-hidden="true" />
+                    {t('reader.rewrite')}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="action-menu-group" role="group" aria-label={t('chatmanage.tools')}>
-              <span className="action-menu-heading">{t('chatmanage.tools')}</span>
+              {onAskHelper && <span className="action-menu-heading">{t('chatmanage.tools')}</span>}
               {onAskHelper && (
                 <button
                   type="button"
@@ -1546,36 +1493,6 @@ function SourceReaderContent({
                 >
                   <HelperIcon size={18} aria-hidden="true" />
                   {t('reader.askTheHelper')}
-                </button>
-              )}
-              {imageOwner && (
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!!editor || !!pending || !imageTarget || (!!image && activeJob(image))}
-                  onClick={() =>
-                    void action('images', async () => {
-                      await api(`/sources/${source.id}/images`, {
-                        target: mode,
-                        expectedSourceHash: source.hash,
-                        expectedRevision: latestImageJob?.revision ?? 0,
-                        ...(imageTarget?.mode === 'translation'
-                          ? {
-                              expectedTranslationJobId: imageTarget.translationJobId,
-                              expectedTranslationRevision: imageTarget.translationRevision,
-                            }
-                          : {}),
-                      });
-                      await refresh();
-                    })
-                  }
-                >
-                  <ImagesIcon size={18} aria-hidden="true" />
-                  {pending === 'images' || (image && activeJob(image))
-                    ? t('reader.placingImages')
-                    : image?.status === 'completed'
-                      ? t('reader.placeImagesAgain')
-                      : t('reader.placeImagesAutomatically')}
                 </button>
               )}
               <button
@@ -1626,25 +1543,130 @@ function SourceReaderContent({
                   : t('reader.copyThroughThisSceneToANewChat')}
               </button>
             </div>
-            <div className="action-menu-group" role="group" aria-label={t('chatmanage.details')}>
-              <span className="action-menu-heading">{t('chatmanage.details')}</span>
+            <div className="action-menu-group">
               <button
+                ref={collapseMoreActionsWithMenu}
                 type="button"
                 className="secondary"
-                onClick={(event) => openInfo(event.currentTarget, 'details')}
+                data-keep-open=""
+                aria-expanded={moreActionsOpen}
+                aria-controls={moreActionsId}
+                onClick={() => setMoreActionsOpen((open) => !open)}
               >
-                <Info size={18} aria-hidden="true" />
-                {activityNode ? t('reader.originalLinkageDetails') : t('reader.taskDetails')}
+                {moreActionsOpen ? (
+                  <DropdownIcon size={18} aria-hidden="true" />
+                ) : (
+                  <ExpandIcon size={18} aria-hidden="true" />
+                )}
+                {moreActionsOpen ? t('reader.collapse') : t('reader.moreSceneActions')}
               </button>
-              {estimatedCost && estimatedCost.attemptCount > 0 && (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={(event) => openInfo(event.currentTarget, 'cost')}
+              {moreActionsOpen && (
+                <div
+                  id={moreActionsId}
+                  className="action-menu-group scene-more-actions"
+                  role="group"
+                  aria-label={t('reader.moreSceneActions')}
                 >
-                  <ReceiptText size={18} aria-hidden="true" />
-                  {t('reader.estimatedTextCost')}
-                </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!!editor || !!pending}
+                    onClick={(event) => openEditor(otherEditor, event.currentTarget)}
+                  >
+                    <EditIcon size={18} aria-hidden="true" />
+                    {editorLabel(otherEditor)}
+                  </button>
+                  {canRetranslate && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!!pending || !!editor}
+                      onClick={retranslate}
+                    >
+                      <Languages size={18} aria-hidden="true" />
+                      {t('reader.newTranslationWithCurrentSettings')}
+                    </button>
+                  )}
+                  {startSelection && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!!editor || !!pending || retryDisabled}
+                      onClick={(event) => {
+                        const menu = event.currentTarget.closest('details');
+                        if (menu) {
+                          menu.open = false;
+                          menu.querySelector('summary')?.focus({ preventScroll: true });
+                        }
+                        setStartPickerOpen(true);
+                      }}
+                    >
+                      <ListRestart size={18} aria-hidden="true" />
+                      {t('reader.changeOpeningMessage')}
+                    </button>
+                  )}
+                  {(packageStart?.mode === 'authored' || (!request && !requestImages?.length)) && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!!editor || !!pending || retryDisabled}
+                      onClick={() =>
+                        void action('scene-context', async () => {
+                          await saveSceneContext({ sceneEnabled: !sceneEnabled });
+                        })
+                      }
+                    >
+                      {sceneEnabled ? (
+                        <EyeOff size={18} aria-hidden="true" />
+                      ) : (
+                        <Eye size={18} aria-hidden="true" />
+                      )}
+                      {sceneEnabled
+                        ? t('reader.excludeSceneFromContext')
+                        : t('reader.includeSceneInContext')}
+                    </button>
+                  )}
+                  {imageOwner && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={
+                        !!editor || !!pending || !imageTarget || (!!image && activeJob(image))
+                      }
+                      onClick={() =>
+                        void action('images', async () => {
+                          await api(`/sources/${source.id}/images`, {
+                            target: mode,
+                            expectedSourceHash: source.hash,
+                            expectedRevision: latestImageJob?.revision ?? 0,
+                            ...(imageTarget?.mode === 'translation'
+                              ? {
+                                  expectedTranslationJobId: imageTarget.translationJobId,
+                                  expectedTranslationRevision: imageTarget.translationRevision,
+                                }
+                              : {}),
+                          });
+                          await refresh();
+                        })
+                      }
+                    >
+                      <ImagesIcon size={18} aria-hidden="true" />
+                      {pending === 'images' || (image && activeJob(image))
+                        ? t('reader.placingImages')
+                        : image?.status === 'completed'
+                          ? t('reader.placeImagesAgain')
+                          : t('reader.placeImagesAutomatically')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={(event) => openDetails(event.currentTarget)}
+                  >
+                    <Info size={18} aria-hidden="true" />
+                    {activityNode ? t('reader.originalLinkageDetails') : t('reader.taskDetails')}
+                  </button>
+                </div>
               )}
             </div>
             {onDeleteScene && (
@@ -1721,14 +1743,19 @@ function SourceReaderContent({
                 {t('reader.close')}
               </button>
               {onCheckRequest ? (
-                <button type="button" disabled={!!pending} onClick={() => rewrite('copy')}>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={!!pending}
+                  onClick={() => rewrite('copy')}
+                >
                   {t('reader.checkPreviousRequest')}
                 </button>
               ) : (
                 <>
                   <button
                     type="button"
-                    className="secondary"
+                    className={retryCanReplace ? 'secondary' : 'primary'}
                     disabled={
                       !!pending || retryDisabled || (!rewriteText.trim() && !requestImages?.length)
                     }
@@ -1739,6 +1766,7 @@ function SourceReaderContent({
                   </button>
                   <button
                     type="button"
+                    className={retryCanReplace ? 'primary' : 'secondary'}
                     disabled={
                       !!pending ||
                       retryDisabled ||
@@ -1814,6 +1842,7 @@ function SourceReaderContent({
               </button>
               <button
                 type="button"
+                className="primary"
                 disabled={pending === 'illustrate'}
                 onClick={() =>
                   void action('illustrate', async () => {
@@ -1873,27 +1902,6 @@ function SourceReaderContent({
             )}
           </Dialog>
         </div>
-        {estimatedCost && estimatedCost.attemptCount > 0 && (
-          <Dialog
-            open={costOpen}
-            onClose={() => setCostOpen(false)}
-            title={t('reader.estimatedTextCost')}
-            className="source-info-dialog"
-          >
-            <p className="source-cost-value">
-              {estimatedCost.usd !== null && estimatedCost.unknownCount === 0
-                ? formatUsd(estimatedCost.usd)
-                : t('reader.knownSubtotalValueIncludesValueUnpricedCalls', {
-                    v0:
-                      estimatedCost.subtotalUsd === 0 &&
-                      estimatedCost.unknownCount === estimatedCost.attemptCount
-                        ? t('reader.unknown')
-                        : formatUsd(estimatedCost.subtotalUsd),
-                    v1: estimatedCost.unknownCount,
-                  })}
-            </p>
-          </Dialog>
-        )}
         {actionError && (
           <p className="error source-action-error" role="alert">
             {translateMessage(actionError)}
