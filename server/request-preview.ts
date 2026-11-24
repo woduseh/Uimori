@@ -20,7 +20,7 @@ import {
   contextSourcesMatch,
   withContextProjection,
 } from './context-planning.js';
-import { CONTEXT_COMPACTION_TRIGGER_RATIO } from './context-compaction.js';
+import { CONTEXT_COMPACTION_TRIGGER_RATIO } from '../core/context-compaction.js';
 import { loreSelectionPending } from './lore-selection.js';
 import { buildMainProviderRequest, measureProviderRequest } from './main-request.js';
 import { promptWorkspace } from './prompt-workspace.js';

@@ -24,14 +24,37 @@
 }
 .turn-activity-lead {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  margin-inline: -6px;
+  padding: 2px 6px;
+  border-radius: var(--radius-control);
+}
+.turn-activity > summary:hover > .turn-activity-lead {
+  background: var(--hover);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .turn-activity-lead {
+    transition: background-color var(--motion-fast) var(--motion-ease-out);
+  }
 }
 .turn-activity-lead .folio {
   color: var(--text);
+}
+.turn-activity-chevron {
+  flex-shrink: 0;
+  margin-inline-start: -4px;
+  color: var(--faint);
+  opacity: 0.55;
+}
+.turn-activity > summary:is(:hover, :focus-visible) .turn-activity-chevron {
+  opacity: 1;
+}
+.turn-activity[open] > summary .turn-activity-chevron {
+  transform: rotate(180deg);
 }
 .turn-status {
   display: inline-flex;
@@ -57,17 +80,12 @@
   border-radius: var(--radius-panel);
   overflow-wrap: anywhere;
 }
-.turn-activity-body .task-heading {
-  margin-top: 0.9rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.turn-activity-body:has(> .scene-inspector) {
+  background: var(--panel);
 }
 .turn-activity-body pre {
   max-width: 100%;
   overflow: auto;
-}
-.turn-activity-body .form-actions {
-  flex-wrap: wrap;
 }
 .turn-activity-body button {
   max-width: 100%;

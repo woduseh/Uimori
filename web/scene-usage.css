@@ -8,22 +8,64 @@
 .scene-usage summary {
   cursor: pointer;
 }
-.scene-usage p {
-  margin-block: 6px;
-}
 .scene-usage-body {
   padding: 2px 14px 14px;
 }
-.scene-usage meter {
+.scene-usage-body > p {
+  margin-block: 6px;
+}
+.scene-receipt-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.scene-receipt-body p {
+  margin: 0;
+}
+.scene-context {
+  display: grid;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.scene-context-bar {
+  position: relative;
+  height: 4px;
+  border-radius: var(--radius-small);
+  background: var(--surface-active);
+  overflow: hidden;
+}
+.scene-context-bar > span {
   display: block;
-  width: min(100%, 24rem);
-  accent-color: var(--accent);
+  width: calc(var(--usage-share) * 100%);
+  height: 100%;
+  background: var(--accent);
+}
+.scene-context-bar::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--usage-threshold) * 100%);
+  width: 2px;
+  background: var(--text);
+}
+.scene-context-bar[data-level="near"] > span {
+  background: var(--warning);
+}
+.scene-context-bar[data-level="over"] > span {
+  background: var(--error);
 }
 .scene-receipt {
   display: grid;
   grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr);
-  gap: 8px 16px;
-  margin-block: 10px;
+  gap: 4px 16px;
+  margin: 0;
+}
+.scene-receipt > div {
+  display: contents;
 }
 .scene-receipt dt {
   color: var(--muted);
@@ -33,16 +75,76 @@
   margin: 0;
   color: var(--text);
 }
+.scene-receipt-body .scene-receipt dd {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.scene-receipt-body .scene-receipt dd small {
+  color: var(--muted);
+  font-size: inherit;
+}
+.scene-receipt-body .scene-receipt dd > .context-summary {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
 .scene-receipt-model-id {
   display: block;
   color: var(--muted);
+}
+.scene-receipt-lore-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 8px;
+}
+.scene-receipt-expand {
+  min-height: 24px;
+  padding: 0 4px;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: var(--font-small);
+  box-shadow: none;
+}
+.scene-receipt-expand[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.scene-receipt-pending {
+  min-height: calc(2lh + 4px);
+}
+.scene-receipt-lore-detail {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.scene-receipt-lore-detail pre {
+  max-width: 100%;
+  overflow: auto;
 }
 @media (max-width: 600px) {
   .scene-usage-body {
     padding-inline: 12px;
   }
-  .scene-receipt {
-    grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr);
-    gap: 8px 12px;
+  .scene-receipt-body .scene-receipt {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .scene-receipt-body .scene-receipt > div {
+    display: grid;
+    padding-block: 4px;
+  }
+  .scene-receipt-body .scene-receipt > div + div {
+    border-top: var(--hairline) solid var(--line);
+  }
+  .scene-receipt-body .scene-receipt dt {
+    max-width: none;
   }
 }

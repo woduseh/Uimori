@@ -256,6 +256,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 - **Phase derivation (`runPhase`)**: Derives **컨텍스트 정리** → **로어 선별** → **원작 참고** → **본문 작성** from the saved execution snapshot under the same conditions as the run executor, exposed on `reader.runs[].phase` and updated via existing `run.context.updated` (no new event type). Retries with a saved original-work reference may display **본문 작성** while re-checking.
 - **Scoped activity split**: `reader.activity` keeps its active/last-30 contract unchanged while historical page tasks use `reader.responseActivity` metadata so viewing older scenes never re-emits stale failure notifications.
+- **Context bar marker (`CONTEXT_COMPACTION_TRIGGER_RATIO`)**: The scene inspector's context bar marks the main-chat compaction ratio from `core/context-compaction.ts`, the same constant the server compares before summarizing earlier scenes. The helper's `HELPER_COMPACTION_INPUT_RATIO` is a separate policy and never drives this marker.
 - **Verification**: `tests/turn-activity-browser.spec.ts` uses the shared viewports in [browser-viewports.json](../../fixtures/browser-viewports.json); runner commands live in [DEVELOPMENT](DEVELOPMENT.md#verification).
 
 ## PWA, activity feed, Web Push and auto-translation language detection

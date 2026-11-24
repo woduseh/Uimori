@@ -2266,6 +2266,7 @@ function App() {
                                       revision={s.detail!.reader.cursor}
                                       refresh={() => s.refresh(s.selected)}
                                       onError={s.setError}
+                                      onInspect={inspect}
                                     />
                                   )
                                 );
@@ -2333,6 +2334,7 @@ function App() {
                                 revision={s.detail!.reader.cursor}
                                 refresh={() => s.refresh(s.selected)}
                                 onError={s.setError}
+                                onInspect={inspect}
                               />
                               <ResponseDisplay
                                 storyUiStyle={s.detail!.chat.settings.storyUiStyle}

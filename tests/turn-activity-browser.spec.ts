@@ -142,40 +142,159 @@ async function harness(
   };
 }
 
-test('TURNUI01 independent response panels, lazy inspector and reload persistence', async ({
+test('TURNUI01 independent response panels, flat inspector, lazy raw record and reload persistence', async ({
   page,
   request,
 }, info) => {
   const seeded = await seed(request, 2);
+  const run = seeded.runs[0]!;
+  const source = seeded.sources.find((item) => item.runId === run.id)!;
+  const attemptId = `inspector-${run.id}`;
+  const sceneReads: string[] = [];
+  await page.route(`**/api/attempts/${attemptId}/scene-detail`, async (route) => {
+    sceneReads.push(route.request().url());
+    await route.fulfill({
+      json: {
+        cache: { readTokens: 98000, writeTokens: 1200 },
+        lore: {
+          status: 'complete',
+          selection: { total: 40, evaluated: 12, selected: 3 },
+          entries: ['항구', '등대', '편지', '미라'].map((title, index) => ({
+            id: `lore-${index}`,
+            title,
+            via: index ? 'selected' : 'pinned',
+            delivery: 'full',
+          })),
+        },
+      } satisfies SceneUsageDetail,
+    });
+  });
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  const state = await harness(page, seeded.chat.id);
+  const state = await harness(page, seeded.chat.id, (body) => {
+    body.runs = body.runs.map((item) =>
+      item.id === run.id
+        ? {
+            ...item,
+            modelTitle: '장면 작가 모델',
+            estimatedCost: { usd: 0.4123, subtotalUsd: 0.4123, unknownCount: 0, attemptCount: 1 },
+            contextSummary: {
+              status: 'ready',
+              inputTokenLimit: 272000,
+              estimatedInputTokens: 120000,
+              compactedSources: 6,
+              summaryCalls: 1,
+              error: null,
+            },
+            sceneUsage: {
+              attemptId,
+              inputTokens: 122557,
+              outputTokens: 19898,
+              inputScope: 'request',
+              context: { estimatedInputTokens: 120000, inputTokenLimit: 272000 },
+              receipt: {
+                version: 1,
+                model: { modelId: 'scene-writer-1', title: '장면 작가 모델' },
+                prompt: { id: 'prompt', revision: 1, title: '기본 서술 프리셋' },
+                persona: { id: 'persona', revision: 1, title: null, name: '미라' },
+                summary: { status: 'included', coveredSources: 6 },
+              },
+            },
+          }
+        : item
+    );
+    body.jobs = [
+      {
+        id: `inspector-translation-${source.id}`,
+        chatId: seeded.chat.id,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        kind: 'translation',
+        status: 'completed',
+        attempt: 1,
+        error: null,
+        result: { mock: false, sourceRevision: source.id, sourceHash: source.hash, text: '번역' },
+        revision: 1,
+      },
+    ];
+  });
   const panels = page.getByTestId('source').getByTestId('turn-activity');
   await expect(panels).toHaveCount(2);
   const first = panels.nth(0);
   const second = panels.nth(1);
   await expect(first).not.toHaveAttribute('open');
   await expect(second).not.toHaveAttribute('open');
-  await expect(first.locator(':scope > summary')).toContainText('본문 완료');
-  await first.locator(':scope > summary').click();
+  const summary = first.locator(':scope > summary');
+  await expect(summary).toContainText('본문 완료');
+  const chevron = summary.locator('.turn-activity-chevron');
+  const restingOpacity = Number(await chevron.evaluate((node) => getComputedStyle(node).opacity));
+  await summary.hover();
+  await expect
+    .poll(() => chevron.evaluate((node) => Number(getComputedStyle(node).opacity)))
+    .toBeGreaterThan(restingOpacity);
+  const before = (await summary.boundingBox())!.y;
+  await summary.click();
   await expect(first).toHaveAttribute('open', '');
   await expect(second).not.toHaveAttribute('open');
+  expect(Math.abs((await summary.boundingBox())!.y - before)).toBeLessThan(1);
+  const inspector = first.getByTestId('scene-inspector');
+  await expect(inspector.locator('.task-status-badge')).toHaveText('완료');
+  await expect(inspector.locator('.task-status-badge')).toHaveAttribute('data-tone', 'done');
+  const receipt = inspector.getByTestId('scene-receipt');
+  await expect(receipt).toBeVisible();
+  await expect(inspector.locator('.scene-inspector-head')).toContainText('장면 작가 모델');
+  await expect(inspector.locator('.scene-inspector-numbers')).toContainText('$0.4123');
+  await expect(inspector.locator('.scene-inspector-numbers')).toContainText('입력 122.56K');
+  await expect(inspector.locator('.scene-inspector-numbers')).toContainText('출력 19.9K');
+  await expect(receipt).toContainText('컨텍스트 45.1% (122,557 / 272,000)');
+  await expect(receipt.locator('dt')).toHaveText([
+    '프롬프트',
+    '페르소나',
+    '대화 요약',
+    '캐시',
+    '로어',
+  ]);
+  await expect(receipt.locator('[data-row="lore"] dd')).toContainText('4건 포함');
+  await expect(receipt.locator('[data-row="cache"] dd')).toHaveText('읽기 98,000 / 쓰기 1,200');
+  expect(sceneReads).toHaveLength(1);
+  const translation = inspector.getByTestId('job-translation');
+  await expect(translation).toContainText('한국어 번역');
+  await expect(translation.getByRole('button')).toHaveCount(0);
+  await expect(inspector.locator('details, .job, .inspector')).toHaveCount(0);
+  await expect(
+    inspector.getByRole('button', { name: '작업 현황에서 보기', exact: true })
+  ).toBeVisible();
+  const body = first.locator('.turn-activity-body');
+  if (visualReview)
+    await first.screenshot({ path: info.outputPath('turn-activity-inspector-desktop.png') });
+  expect((await body.boundingBox())!.height).toBeLessThanOrEqual(290);
   expect(state.runReads).toEqual([]);
   await second.scrollIntoViewIfNeeded();
   await expect(second).toBeInViewport();
   await second.locator(':scope > summary').click();
   await expect(first).toHaveAttribute('open', '');
   await expect(second).toHaveAttribute('open', '');
-  await first.getByText('실행 확인', { exact: true }).click();
-  await expect(first.locator('pre').last()).toContainText('snapshot');
+  const raw = inspector.getByRole('button', { name: '원본 기록', exact: true });
+  await raw.click();
+  await expect(raw).toHaveAttribute('aria-pressed', 'true');
+  await expect(inspector.getByTestId('scene-raw-record').locator('pre')).toContainText('snapshot');
+  await expect(inspector.getByRole('button', { name: 'JSON 복사', exact: true })).toBeVisible();
   expect(state.runReads).toHaveLength(1);
-  await first.getByText('실행 확인', { exact: true }).click();
-  await expect(first.getByRole('textbox')).toHaveCount(0);
-  await first.locator(':scope > summary').click();
+  await raw.click();
+  await expect(inspector.getByTestId('scene-raw-record')).toHaveCount(0);
+  await summary.click();
   await page.reload();
   await expect(first).not.toHaveAttribute('open');
   await expect(second).toHaveAttribute('open', '');
   await second.scrollIntoViewIfNeeded();
-  if (visualReview) await page.screenshot({ path: info.outputPath('turn-activity-desktop.png') });
+  if (visualReview) {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await second.screenshot({
+        path: info.outputPath(`turn-activity-desktop-${colorScheme}.png`),
+      });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
@@ -289,10 +408,8 @@ for (const width of [MOBILE_WIDTH]) {
     await usage.locator(':scope > summary').click();
     await expect(usage.getByText(/요청 1,234, 응답 87 토큰/)).toBeVisible();
     await expect(usage.getByText(/컨텍스트 사용량 1.9%/)).toBeVisible();
-    await expect(
-      usage.getByText('입력 1,234 / 컨텍스트 한도 65,536', { exact: true })
-    ).toBeVisible();
-    await expect(usage.getByText('캐시 읽기 123 / 쓰기 45 토큰', { exact: true })).toBeVisible();
+    await expect(usage.getByText('컨텍스트 1.9% (1,234 / 65,536)', { exact: true })).toBeVisible();
+    await expect(usage.locator('[data-row="cache"] dd')).toHaveText('읽기 123 / 쓰기 45');
     expect(sceneReads).toHaveLength(1);
     await expect(sections.locator('.task-history-raw')).toHaveCount(0);
     await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
@@ -379,6 +496,20 @@ for (const width of [MOBILE_WIDTH]) {
       '토큰',
       '추정 비용',
     ]);
+    await expect(panel.locator('.task-history-summary dd').nth(1)).toHaveText('미확인');
+    const lines = await panel
+      .locator(`[data-run-id="${run.id}-running"] .task-history-row-actions`)
+      .evaluate((row) => {
+        const right = row.getBoundingClientRect().right;
+        const ends = new Map<number, number>();
+        for (const button of row.querySelectorAll(':scope > button')) {
+          const box = button.getBoundingClientRect();
+          ends.set(Math.round(box.top), Math.max(ends.get(Math.round(box.top)) ?? 0, box.right));
+        }
+        return [...ends.values()].map((end) => Math.abs(right - end) <= 2);
+      });
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.every(Boolean)).toBe(true);
     expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
       true
     );
@@ -389,6 +520,116 @@ for (const width of [MOBILE_WIDTH]) {
     expect(state.runReads).toHaveLength(2);
     expect(state.writes).toEqual([]);
     expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+  });
+}
+
+for (const width of [360, MOBILE_WIDTH]) {
+  test(`TURNUI06 inspector keeps a failed translation recoverable in place and opens its task record at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const seeded = await seed(request);
+    const run = seeded.runs[0]!;
+    const source = seeded.sources[0]!;
+    const failedId = `inspector-failed-translation-${source.id}`;
+    const retries: string[] = [];
+    await page.route(`**/api/jobs/${failedId}/retry`, async (route) => {
+      retries.push(route.request().method());
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.setViewportSize({ width, height: 844 });
+    const state = await harness(page, seeded.chat.id, (body) => {
+      body.runs = body.runs.map((item) =>
+        item.id === run.id
+          ? {
+              ...item,
+              modelTitle: '아주 긴 이름을 가진 합성 장면 작가 모델 프리셋',
+              sceneUsage: {
+                inputTokens: 98765,
+                outputTokens: 4321,
+                context: { estimatedInputTokens: 98765, inputTokenLimit: 131072 },
+                receipt: {
+                  version: 1,
+                  model: { modelId: 'synthetic-writer-with-a-long-id', title: '합성 작가' },
+                  prompt: {
+                    id: 'prompt',
+                    revision: 1,
+                    title: '아주 긴 한국어 프롬프트 프리셋 이름',
+                  },
+                  persona: null,
+                  summary: { status: 'absent', coveredSources: 0 },
+                },
+              },
+            }
+          : item
+      );
+      const job = {
+        chatId: seeded.chat.id,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        attempt: 1,
+        result: null,
+        revision: 1,
+      };
+      body.jobs = [
+        {
+          ...job,
+          id: failedId,
+          kind: 'translation',
+          status: 'failed',
+          error: 'AUXILIARY_PROVIDER_HTTP_401',
+        },
+        {
+          ...job,
+          id: `inspector-image-${source.id}`,
+          kind: 'image',
+          status: 'completed',
+          error: null,
+          imageTarget: { mode: 'original', textHash: source.hash },
+        },
+      ];
+    });
+    const panel = page.getByTestId('source').getByTestId('turn-activity');
+    await expect(panel.locator(':scope > summary')).toContainText('번역 실패');
+    await panel.locator(':scope > summary').click();
+    const inspector = panel.getByTestId('scene-inspector');
+    const translation = inspector.getByTestId('job-translation');
+    await expect(translation).toHaveAttribute('data-tone', 'issue');
+    await expect(translation.getByRole('alert')).toContainText('AUXILIARY_PROVIDER_HTTP_401');
+    const image = inspector.getByTestId('job-image');
+    await expect(image).toContainText('원문 이미지 배치');
+    await expect(image.getByRole('button')).toHaveCount(0);
+    await expect(inspector.locator('details, .job')).toHaveCount(0);
+    expect(
+      await inspector.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    const terms = inspector.locator('.scene-receipt dt');
+    const first = (await terms.first().boundingBox())!;
+    const value = (await inspector.locator('.scene-receipt dd').first().boundingBox())!;
+    expect(value.y).toBeGreaterThan(first.y + first.height - 1);
+    if (visualReview)
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await panel.screenshot({
+          path: info.outputPath(`turn-inspector-${width}-${colorScheme}.png`),
+        });
+      }
+    await translation
+      .getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
+      .click();
+    await expect.poll(() => retries).toEqual(['POST']);
+    await inspector.getByRole('button', { name: '작업 현황에서 보기', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '작업 현황', exact: true });
+    await expect(dialog.getByTestId('run')).toHaveCount(1);
+    const task = dialog.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
+    await expect(task.getByRole('button', { name: '접기', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    expect(state.writes).toEqual([expect.stringContaining(`/api/jobs/${failedId}/retry`)]);
   });
 }
 
@@ -487,9 +728,12 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel).not.toHaveAttribute('open');
   await panel.locator(':scope > summary').click();
   await expect(panel.getByTestId('job-status')).toHaveCount(0);
-  await expect(panel.getByRole('region', { name: '이 응답의 삽화 작업' })).toContainText(
-    /장면 선택.*실패/s
-  );
+  await expect(panel.getByTestId('job-illustration')).toContainText(/장면 선택.*실패/s);
+  const failedTranslation = panel.getByTestId('job-translation');
+  await expect(failedTranslation.getByRole('alert')).toContainText('보조 작업을 완료하지 못했어요');
+  await expect(
+    failedTranslation.getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
+  ).toBeVisible();
   await state.set(project('completed'));
   await expect(panel.locator(':scope > summary')).not.toContainText('실패');
   await expect(panel.locator(':scope > summary')).not.toContainText('이전 자료의 결과');

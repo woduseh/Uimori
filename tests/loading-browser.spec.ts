@@ -770,7 +770,7 @@ test('LOADUI05 context summary status shows in mobile reader and run details wit
   await expect(ready).toHaveText('앞선 원문 12개 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회');
   await ready.scrollIntoViewIfNeeded();
   if (visualReview) await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
-  await expect(activity.locator('.run-task-details').getByTestId('context-summary')).toHaveText(
+  await expect(activity.getByTestId('scene-receipt').getByTestId('context-summary')).toHaveText(
     '앞선 원문 12개 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회'
   );
 

@@ -223,7 +223,7 @@ const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditabl
 const retryable = (status: string) =>
   ['failed', 'cancelled', 'partial', 'interrupted'].includes(status);
 const activeJob = (job: Job) => job.status === 'queued' || job.status === 'running';
-const jobTitle = (job: Job) =>
+export const jobTitle = (job: Job) =>
   job.kind === 'translation'
     ? t('reader.koreanTranslation')
     : job.kind === 'status'
@@ -2185,7 +2185,7 @@ function TextEditor({
   );
 }
 
-function JobActions({
+export function JobActions({
   job,
   refresh,
   onError,
@@ -2270,6 +2270,19 @@ function JobActions({
   );
 }
 
+export const jobPayloadRecord = (value: Job & { input?: unknown }) =>
+  JSON.stringify(
+    {
+      jobId: value.id,
+      sourceRevision: value.sourceRevision,
+      sourceHash: value.sourceHash,
+      error: auxiliaryErrorDiagnostic(value.error).code,
+      input: value.input,
+    },
+    null,
+    2
+  );
+
 export function JobCard({
   job,
   refresh,
@@ -2311,27 +2324,13 @@ export function JobCard({
         revision={`${job.status}:${job.attempt}:${job.revision}`}
         title={t('reader.actualAuxiliaryTaskInputAndTools')}
       >
-        {(value) => (
-          <pre>
-            {JSON.stringify(
-              {
-                jobId: value.id,
-                sourceRevision: value.sourceRevision,
-                sourceHash: value.sourceHash,
-                error: auxiliaryErrorDiagnostic(value.error).code,
-                input: value.input,
-              },
-              null,
-              2
-            )}
-          </pre>
-        )}
+        {(value) => <pre>{jobPayloadRecord(value)}</pre>}
       </LazyDiagnostics>
     </section>
   );
 }
 
-function AuxiliaryError({ error }: { error: string }) {
+export function AuxiliaryError({ error }: { error: string }) {
   useI18n();
   const diagnostic = auxiliaryErrorDiagnostic(error);
   return (

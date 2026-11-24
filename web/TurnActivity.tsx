@@ -1,11 +1,10 @@
 import { t, useI18n } from './i18n.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
-import { RunTaskDetails } from './RunTaskDetails.js';
+import { SceneInspector } from './SceneInspector.js';
 import { labels } from './api.js';
 import { ELAPSED_LABEL_REFRESH_MS, elapsedLabel } from './ActivityStatus.js';
 import type { Illustration } from '../core/illustration.js';
-import { IllustrationActivity } from './IllustrationActivity.js';
 import { illustrationProgress } from './illustration-progress.js';
 import { TurnStatus } from './TurnStatus.js';
 import { readOptionalStorage } from './optional-storage.js';
@@ -36,7 +35,7 @@ type Props = {
   revision: number;
   refresh: () => Promise<void>;
   onError: (message: string) => void;
-  children?: ReactNode;
+  onInspect?: (runId: string) => void;
   leading?: ReactNode;
   badges?: ReactNode;
 };
@@ -56,7 +55,7 @@ function TurnActivityContent({
   revision,
   refresh,
   onError,
-  children,
+  onInspect,
   leading,
   badges,
 }: Props) {
@@ -177,34 +176,17 @@ function TurnActivityContent({
       onOpenChange={setOpen}
       dataProps={{ 'data-testid': 'turn-activity', 'data-run-id': run.id }}
     >
-      <>
-        {!connected && (
-          <p className="connection-notice" role="status">
-            {t('helpers.m254')}
-          </p>
-        )}
-        <RunTaskDetails
-          run={run}
-          jobs={currentJobs}
-          inlineJobs={currentJobs}
-          afterJobs={
-            source && (
-              <IllustrationActivity
-                items={illustrations}
-                sourceId={source.id}
-                sourceHash={source.hash}
-                refresh={refresh}
-                onError={onError}
-              />
-            )
-          }
-          revision={visibleRevision.current}
-          refresh={refresh}
-          onError={onError}
-        >
-          {children}
-        </RunTaskDetails>
-      </>
+      <SceneInspector
+        run={run}
+        source={source}
+        jobs={currentJobs}
+        illustrations={illustrations}
+        connected={connected}
+        revision={visibleRevision.current}
+        refresh={refresh}
+        onError={onError}
+        onInspect={onInspect}
+      />
     </TurnStatus>
   );
 }

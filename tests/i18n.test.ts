@@ -28,13 +28,13 @@ async function loadedI18n() {
 describe('UI locale presentation boundary', () => {
   test('renders a grouped summary count from the actual scene receipt in every language', async () => {
     const { setLocale } = await loadedI18n();
-    const { SceneUsage } = await import('../web/SceneUsage.js');
+    const { SceneReceipt } = await import('../web/SceneUsage.js');
     const { createElement } = await import('react');
     const { renderToStaticMarkup } = await import('react-dom/server');
     for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
       setLocale(locale);
       const html = renderToStaticMarkup(
-        createElement(SceneUsage, {
+        createElement(SceneReceipt, {
           usage: {
             inputTokens: null,
             outputTokens: null,

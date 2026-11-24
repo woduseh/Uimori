@@ -1,0 +1,211 @@
+.scene-inspector {
+  display: grid;
+  min-width: 0;
+  font-size: var(--font-small);
+  line-height: 1.55;
+  color: var(--muted);
+}
+.scene-inspector > * {
+  min-width: 0;
+  margin: 0;
+}
+.scene-inspector > * + * {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: var(--hairline) solid var(--line);
+}
+.scene-inspector > .connection-notice + * {
+  padding-top: 0;
+  border-top: 0;
+}
+.scene-inspector-region {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.scene-inspector-region > :is(p, .context-summary) {
+  margin: 0;
+}
+.scene-inspector-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.scene-inspector-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.scene-inspector-title strong {
+  color: var(--text);
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+.scene-inspector-numbers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  margin-inline-start: auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.scene-inspector-numbers > span + span::before {
+  content: "·" / "";
+  margin-inline-end: 6px;
+  color: var(--faint);
+}
+.scene-inspector
+  :is(
+    .scene-inspector-head,
+    .scene-inspector-tools,
+    .scene-job-actions,
+    .scene-job-detail,
+    .scene-raw-head,
+    .scene-inspector-partial-head
+  )
+  > button {
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: var(--font-small);
+}
+.scene-inspector-partial {
+  display: grid;
+  gap: 6px;
+}
+.scene-inspector-partial-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.scene-inspector-partial-head > p {
+  margin: 0;
+  color: var(--text);
+}
+.scene-inspector pre {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--font-small);
+  color: var(--muted);
+}
+.scene-jobs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 0;
+  list-style: none;
+}
+.scene-job {
+  min-width: 0;
+}
+.scene-job[data-expanded] {
+  flex-basis: 100%;
+}
+.scene-job-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--text);
+}
+.scene-job-line > svg {
+  flex-shrink: 0;
+  color: var(--faint);
+}
+.scene-job[data-tone="done"] .scene-job-line > svg {
+  color: var(--success);
+}
+.scene-job[data-tone="running"] .scene-job-line > svg {
+  color: var(--accent-text);
+}
+.scene-job[data-tone="issue"] .scene-job-line,
+.scene-job[data-tone="issue"] .scene-job-line > svg {
+  color: var(--error);
+}
+.scene-job-state {
+  color: var(--muted);
+}
+.scene-job[data-tone="issue"] .scene-job-state {
+  color: var(--error);
+  font-weight: 600;
+}
+.scene-job-detail {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin-top: 4px;
+  padding-inline-start: 20px;
+}
+.scene-job-detail > .error {
+  display: grid;
+  gap: 2px;
+}
+.scene-job-detail > .error p {
+  margin: 0;
+}
+.scene-job-detail > .error:lang(ko) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.scene-job-detail .illustration-phases {
+  margin: 0;
+}
+.scene-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.scene-job-actions:empty {
+  display: none;
+}
+.scene-inspector-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.scene-inspector-raw-toggle {
+  margin-inline-start: auto;
+}
+.scene-inspector-raw-toggle[aria-pressed="true"] {
+  background: var(--surface);
+}
+.scene-inspector > .scene-raw {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+.scene-raw {
+  display: grid;
+  gap: 8px;
+}
+.scene-raw-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.scene-raw-tabs {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.scene-raw-usage .illustration-phases {
+  margin: 6px 0;
+}
+@media (max-width: 600px) {
+  .scene-inspector-numbers {
+    margin-inline-start: 0;
+    flex-basis: 100%;
+  }
+}

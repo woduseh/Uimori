@@ -297,7 +297,6 @@ export function TasksPanel({
                   revision={detail.reader.cursor}
                   refresh={refresh}
                   onError={state.setError}
-                  presentation="sections"
                 >
                   {run.sourceRevision && (
                     <div className="form-actions">
@@ -347,20 +346,19 @@ function runTotals(runs: ReaderRun[]) {
     partial: estimates.some((item) => item.usd === null),
     empty: !estimates.length || estimates.every((item) => item.usd === null && !item.subtotalUsd),
   };
+  const input = sumTaskHistoryValues(runs.map((run) => run.usage.inputTokens));
+  const output = sumTaskHistoryValues(runs.map((run) => run.usage.outputTokens));
   return [
     { label: t('chatsettings.taskHistoryCount'), value: formatNumber(runs.length) },
     {
       label: t('chatsettings.taskHistoryTokens'),
-      value: t('chatsettings.taskHistoryTokenValue', {
-        input: taskHistoryTotalLabel(
-          sumTaskHistoryValues(runs.map((run) => run.usage.inputTokens)),
-          formatNumber
-        ),
-        output: taskHistoryTotalLabel(
-          sumTaskHistoryValues(runs.map((run) => run.usage.outputTokens)),
-          formatNumber
-        ),
-      }),
+      value:
+        input.empty && output.empty
+          ? t('visualpanels.unknown')
+          : t('chatsettings.taskHistoryTokenValue', {
+              input: taskHistoryTotalLabel(input, formatNumber),
+              output: taskHistoryTotalLabel(output, formatNumber),
+            }),
     },
     { label: t('chatsettings.taskHistoryCost'), value: taskHistoryTotalLabel(cost, formatUsd) },
   ];

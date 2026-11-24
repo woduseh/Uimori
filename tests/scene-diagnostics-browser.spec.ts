@@ -221,17 +221,19 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/?chat=${chat.id}`);
       const activity = page.getByTestId('turn-activity');
-      const usage = page.getByTestId('scene-usage');
+      const inspector = page.getByTestId('scene-inspector');
+      const usage = page.getByTestId('scene-receipt');
       await expect(activity).toBeVisible();
       await expect(activity).not.toHaveAttribute('open', '');
       await expect(usage).toHaveCount(0);
-      await activity.locator(':scope > summary').click();
-      await expect(activity.getByTestId('scene-usage')).toBeVisible();
-      await expect(usage).toContainText('요청 1,234, 응답 87 토큰');
-      await expect(usage.locator(':scope > summary')).toContainText('컨텍스트 사용량 1.9%');
       expect(detailRequests).toHaveLength(0);
-      await usage.locator(':scope > summary').click();
-      await expect(usage).toContainText('포함된 로어: 기록 1개');
+      await activity.locator(':scope > summary').click();
+      await expect(usage).toBeVisible();
+      await expect(inspector.locator('.scene-inspector-numbers')).toContainText('입력 1,234');
+      await expect(inspector.locator('.scene-inspector-numbers')).toContainText('출력 87');
+      await expect(usage).toContainText('컨텍스트 1.9% (1,234 / 65,536)');
+      const loreValue = usage.locator('[data-row="lore"] dd');
+      await expect(loreValue).toContainText('1건 포함');
       if (width === 360) {
         await page.evaluate(() => {
           localStorage.setItem('uimori:ui-language', 'en');
@@ -239,32 +241,30 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
             new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'en' })
           );
         });
-        await expect(usage.getByText('Included lore: 1 record', { exact: true })).toBeVisible();
+        await expect(loreValue).toContainText('1 entry included');
         await page.evaluate(() => {
           localStorage.setItem('uimori:ui-language', 'ko');
           window.dispatchEvent(
             new StorageEvent('storage', { key: 'uimori:ui-language', newValue: 'ko' })
           );
         });
-        await expect(usage).toContainText('포함된 로어: 기록 1개');
+        await expect(loreValue).toContainText('1건 포함');
       }
       await expect(usage).not.toContainText('자동 선별');
       expect(detailRequests).toHaveLength(1);
-      await expect(usage).toContainText(/Scene diagnostics writer\s*scene-diagnostics-writer/);
-      await expect(usage).not.toContainText('오늘 바꾼 모델 이름');
+      const head = inspector.locator('.scene-inspector-head');
+      await expect(head).toContainText(/Scene diagnostics writer\s*scene-diagnostics-writer/);
+      await expect(head).not.toContainText('오늘 바꾼 모델 이름');
       await expect(
         usage.locator('.scene-receipt dt').filter({ hasText: '프롬프트' })
       ).toBeVisible();
       await expect(usage).toContainText('Synthetic scene diagnostics prompt');
       await expect(usage).toContainText('호출 당시 미라');
+      await expect(usage.locator('.request-lore-group')).toHaveCount(0);
+      await usage.getByRole('button', { name: '목록 보기', exact: true }).click();
       await expect(
         usage.locator('.request-lore-group').filter({ hasText: loreTitle })
       ).toContainText('고정 자료');
-      await expect(usage).toContainText('입력 1,234 / 컨텍스트 한도 65,536');
-      await expect(usage.getByRole('meter', { name: '컨텍스트 한도 대비 입력' })).toHaveAttribute(
-        'value',
-        '1234'
-      );
       await page.screenshot({ path: info.outputPath(`scene-usage-known-${width}.png`) });
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
       await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
@@ -332,15 +332,15 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       });
       await page.reload();
       await activity.locator(':scope > summary').click();
-      await usage.locator(':scope > summary').click();
       await expect(usage).toContainText('자동 선별, 대상 1,234, 판단 30, 선택 2, 실패 1건');
+      await usage.getByRole('button', { name: '목록 보기', exact: true }).click();
       const selectionSummary = usage.getByText('자동 선별, 대상 1,234, 판단 30, 선택 2, 실패 1건');
       await selectionSummary.scrollIntoViewIfNeeded();
       await expect(selectionSummary).toBeVisible();
       await expect(
         usage.locator('.request-lore-group').filter({ hasText: loreTitle })
       ).toContainText('고정 자료');
-      await expect(usage.locator('.scene-receipt dd').first()).toHaveText(
+      await expect(inspector.locator('.scene-inspector-head strong')).toHaveText(
         'scene-diagnostics-writer'
       );
       const rows = usage.locator('.request-lore-entries > li');
@@ -381,7 +381,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
       ).toBe(true);
-      await usage.locator(':scope > summary').scrollIntoViewIfNeeded();
+      await usage.scrollIntoViewIfNeeded();
       await page.screenshot({ path: info.outputPath(`scene-selection-coverage-${width}.png`) });
       const lorePath = `**/api/chats/${chat.id}/last-scene-lore`;
       await page.route(lorePath, async (route) => {

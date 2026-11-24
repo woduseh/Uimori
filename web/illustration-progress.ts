@@ -75,5 +75,5 @@ export function illustrationProgress(items: Illustration[]) {
       : unresolved
         ? t('visuals.m258', { v0: unresolved })
         : t('visuals.m259');
-  return { phases, status, summary, unresolved };
+  return { phases, status, summary, unresolved, completed, total: renders.length };
 }

@@ -268,9 +268,10 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await expect(source.getByRole('button', { name: /추정 비용/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await source.getByTestId('turn-activity').locator(':scope > summary').click();
-  const sceneUsage = source.getByTestId('scene-usage');
-  await sceneUsage.locator(':scope > summary').click();
-  await expect(sceneUsage.getByTestId('scene-text-cost')).toHaveText(
+  const textCost = source.getByTestId('scene-inspector').getByTestId('scene-text-cost');
+  await expect(textCost).toHaveAttribute('title', '확인된 금액 합계 $0.004995, 미확인 1회 포함');
+  await expect(textCost.locator('[aria-hidden="true"]')).toHaveText('$0.004995 이상');
+  await expect(textCost.locator('.sr-only')).toHaveText(
     '본문 추정 비용: 확인된 금액 합계 $0.004995, 미확인 1회 포함'
   );
   await navigationAction(page, '작업 현황');

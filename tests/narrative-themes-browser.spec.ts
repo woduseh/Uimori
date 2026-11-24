@@ -339,18 +339,18 @@ for (const [layout, width, mode] of readerCases) {
       expect(manuscript!.y + manuscript!.height).toBeLessThanOrEqual(composer!.y + 1);
       const activityDisclosure = scene.getByTestId('turn-activity').locator(':scope > summary');
       await activityDisclosure.click();
-      const usage = scene.getByTestId('scene-usage');
-      const disclosure = usage.locator('summary').first();
-      await disclosure.click();
-      await expect(usage).toHaveAttribute('open', '');
+      const usage = scene.getByTestId('scene-inspector');
+      const raw = usage.getByRole('button', { name: '원본 기록', exact: true });
+      await raw.click();
+      await expect(usage.getByTestId('scene-raw-record').locator('pre')).toBeVisible();
       const actions = scene.locator('[data-uimori-part="actions"]');
       await actions.scrollIntoViewIfNeeded();
       await expect(actions).toBeInViewport();
       const actionsBox = (await actions.boundingBox())!;
       expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(composer!.y + 1);
       await page.screenshot({ path: info.outputPath(`${layout}-${mode}-usage-expanded.png`) });
-      await disclosure.click();
-      await expect(usage).not.toHaveAttribute('open', '');
+      await raw.click();
+      await expect(usage.getByTestId('scene-raw-record')).toHaveCount(0);
       await activityDisclosure.click();
       await reader.evaluate((node) => {
         node.scrollTop = 0;

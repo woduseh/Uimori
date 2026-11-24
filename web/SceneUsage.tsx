@@ -1,80 +1,257 @@
 import { t, useI18n, formatNumber } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { useEffect, useState } from 'react';
+import { useId, useState, type CSSProperties, type ReactNode } from 'react';
 import type { SceneUsageDetail, SceneUsageReceipt } from '../core/scene-usage.js';
 import type { ReaderRun } from '../core/types.js';
-import { api } from './api.js';
-import { formatUsd } from './pricing-display.js';
+import { CONTEXT_COMPACTION_TRIGGER_RATIO } from '../core/context-compaction.js';
+import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { RequestLoreEntries } from './RequestLoreEntries.js';
+import { DropdownIcon } from './ui-icons.js';
+import { useApiRecord } from './useApiRecord.js';
 import './scene-usage.css';
 
 const amount = (value: number | null) =>
   value === null ? t('reader.unknown') : formatNumber(value);
 
-function textCost(estimate: NonNullable<ReaderRun['estimatedCost']>) {
-  if (estimate.usd !== null && estimate.unknownCount === 0) return formatUsd(estimate.usd);
-  return t('reader.knownSubtotalValueIncludesValueUnpricedCalls', {
-    v0:
-      estimate.subtotalUsd === 0 && estimate.unknownCount === estimate.attemptCount
-        ? t('reader.unknown')
-        : formatUsd(estimate.subtotalUsd),
-    v1: estimate.unknownCount,
-  });
+function sceneContext(usage: SceneUsageReceipt) {
+  const context = usage.context;
+  if (!context) return null;
+  const actual = usage.inputScope !== 'turn' ? usage.inputTokens : null;
+  const input = actual ?? context.estimatedInputTokens;
+  return { input, limit: context.inputTokenLimit, estimated: actual === null };
 }
 
-export function SceneUsage({
-  usage,
-  estimatedCost,
-  compact = false,
-}: {
-  usage?: SceneUsageReceipt;
-  estimatedCost?: ReaderRun['estimatedCost'];
-  compact?: boolean;
-}) {
-  useI18n();
-  const [open, setOpen] = useState(false);
-  const [detail, setDetail] = useState<{ id: string; value: SceneUsageDetail } | null>(null);
-  const [failedId, setFailedId] = useState<string | null>(null);
-  const attemptId = usage?.attemptId;
-  useEffect(() => {
-    if (!open || !attemptId || detail?.id === attemptId) return;
-    const controller = new AbortController();
-    setFailedId(null);
-    void api<SceneUsageDetail>(
-      `/attempts/${encodeURIComponent(attemptId)}/scene-detail`,
-      undefined,
-      'GET',
-      controller.signal
-    ).then(
-      (value) => {
-        if (!controller.signal.aborted) setDetail({ id: attemptId, value });
-      },
-      () => {
-        if (!controller.signal.aborted) setFailedId(attemptId);
-      }
-    );
-    return () => controller.abort();
-  }, [open, attemptId, detail?.id]);
-  const recordedDetail = detail && detail.id === attemptId ? detail.value : null;
-  const receipt = usage?.receipt;
-  const context = usage?.context;
-  const actualInput = usage?.inputScope !== 'turn' ? (usage?.inputTokens ?? null) : null;
-  const contextTokens = actualInput ?? context?.estimatedInputTokens ?? null;
-  const percent =
-    context && contextTokens !== null ? (contextTokens / context.inputTokenLimit) * 100 : null;
-  const totals = (
+function sceneTokenTotals(usage: SceneUsageReceipt) {
+  const context = sceneContext(usage);
+  return (
     <>
       {t('reader.tokenTotals', {
-        input: amount(usage?.inputTokens ?? null),
-        output: amount(usage?.outputTokens ?? null),
+        input: amount(usage.inputTokens),
+        output: amount(usage.outputTokens),
       })}
-      {percent !== null &&
+      {context &&
         t('reader.contextPercent', {
-          estimated: actualInput === null,
-          percent: formatNumber(percent, { maximumFractionDigits: 1 }),
+          estimated: context.estimated,
+          percent: formatNumber((context.input / context.limit) * 100, {
+            maximumFractionDigits: 1,
+          }),
         })}
     </>
   );
+}
+
+function SceneContextBar({ usage }: { usage: SceneUsageReceipt }) {
+  const context = sceneContext(usage);
+  if (!context) return null;
+  const share = context.input / context.limit;
+  return (
+    <div className="scene-context">
+      <p>
+        {t('reader.inspectorContext', {
+          estimated: context.estimated,
+          percent: formatNumber(share * 100, { maximumFractionDigits: 1 }),
+          input: formatNumber(context.input),
+          limit: formatNumber(context.limit),
+        })}
+      </p>
+      <div
+        className="scene-context-bar"
+        data-level={
+          share >= 1 ? 'over' : share >= CONTEXT_COMPACTION_TRIGGER_RATIO ? 'near' : undefined
+        }
+        title={t('reader.contextCompactionMark')}
+        aria-hidden="true"
+        style={
+          {
+            '--usage-share': Math.min(share, 1),
+            '--usage-threshold': CONTEXT_COMPACTION_TRIGGER_RATIO,
+          } as CSSProperties
+        }
+      >
+        <span />
+      </div>
+      {usage.context?.tokenizerFallback && (
+        <p role="status">{t('reader.theSelectedTokenizerCouldNotBeLoadedAGeneral')}</p>
+      )}
+    </div>
+  );
+}
+
+function summaryText(summary: NonNullable<NonNullable<SceneUsageReceipt['receipt']>['summary']>) {
+  if (summary.status === 'included')
+    return t('reader.confirmedInclusionOfValueSummarizedScenes', { v0: summary.coveredSources });
+  return summary.status === 'absent'
+    ? t('reader.notUsed')
+    : t('reader.inclusionInTheRequestIsUnknown');
+}
+
+function useSceneUsageDetail(attemptId: string | undefined) {
+  const record = useApiRecord<SceneUsageDetail>(
+    `/attempts/${encodeURIComponent(attemptId ?? '')}/scene-detail`,
+    0,
+    !!attemptId
+  );
+  return attemptId ? record : null;
+}
+
+export function SceneReceipt({
+  usage,
+  contextSummary,
+  model = false,
+  loreDetails,
+  onLoreToggle,
+}: {
+  usage?: SceneUsageReceipt;
+  contextSummary?: ReaderRun['contextSummary'];
+  model?: boolean;
+  loreDetails?: ReactNode;
+  onLoreToggle?: (open: boolean) => void;
+}) {
+  useI18n();
+  const id = useId();
+  const [loreOpen, setLoreOpen] = useState(false);
+  const detail = useSceneUsageDetail(usage?.attemptId);
+  const receipt = usage?.receipt;
+  const lore = detail?.value?.lore;
+  const cache = detail?.value?.cache;
+  const summary =
+    contextSummary?.status === 'ready' ? (
+      <ContextSummaryStatus summary={contextSummary} />
+    ) : receipt?.summary ? (
+      summaryText(receipt.summary)
+    ) : null;
+  const rows: { key: string; label: string; value: ReactNode }[] = [
+    ...(model && receipt
+      ? [
+          {
+            key: 'model',
+            label: t('reader.model'),
+            value: (
+              <>
+                <span>{receipt.model.title}</span>
+                {receipt.model.title.trim() !== receipt.model.modelId.trim() && (
+                  <small className="scene-receipt-model-id">{receipt.model.modelId}</small>
+                )}
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(receipt?.prompt
+      ? [{ key: 'prompt', label: t('reader.prompt'), value: receipt.prompt.title }]
+      : []),
+    ...(receipt
+      ? [
+          {
+            key: 'persona',
+            label: t('reader.persona'),
+            value: receipt.persona
+              ? (receipt.persona.name ?? receipt.persona.title ?? receipt.persona.id)
+              : t('reader.noneSelected'),
+          },
+        ]
+      : []),
+    ...(summary
+      ? [{ key: 'summary', label: t('reader.conversationSummary'), value: summary }]
+      : []),
+    ...(cache
+      ? [
+          {
+            key: 'cache',
+            label: t('reader.cache'),
+            value: t('reader.inspectorCache', {
+              read: amount(cache.readTokens),
+              write: amount(cache.writeTokens),
+            }),
+          },
+        ]
+      : []),
+    ...(lore
+      ? [
+          {
+            key: 'lore',
+            label: t('reader.lore'),
+            value: (
+              <>
+                <span className="scene-receipt-lore-line">
+                  <span>
+                    {lore.entries.length
+                      ? t('reader.loreIncluded', { count: lore.entries.length })
+                      : t('reader.loreNone')}
+                  </span>
+                  {lore.selection && (
+                    <small>
+                      {t('reader.loreSelectionTotals', {
+                        total: amount(lore.selection.total),
+                        evaluated: amount(lore.selection.evaluated),
+                        selected: amount(lore.selection.selected),
+                        failed: lore.selection.failed ?? 0,
+                      })}
+                    </small>
+                  )}
+                  {(lore.entries.length > 0 || loreDetails !== undefined) && (
+                    <button
+                      type="button"
+                      className="scene-receipt-expand"
+                      aria-expanded={loreOpen}
+                      aria-controls={`${id}-lore`}
+                      onClick={() => {
+                        setLoreOpen(!loreOpen);
+                        onLoreToggle?.(!loreOpen);
+                      }}
+                    >
+                      <DropdownIcon size={14} aria-hidden="true" />
+                      {loreOpen ? t('reader.loreHideEntries') : t('reader.loreShowEntries')}
+                    </button>
+                  )}
+                </span>
+              </>
+            ),
+          },
+        ]
+      : []),
+  ];
+  return (
+    <div className="scene-receipt-body" data-testid="scene-receipt">
+      {usage && <SceneContextBar usage={usage} />}
+      {rows.length > 0 && (
+        <dl className="scene-receipt">
+          {rows.map((row) => (
+            <div key={row.key} data-row={row.key}>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {detail && !detail.value && (
+        <div className="scene-receipt-pending">
+          <LoadingState
+            presentation="inline"
+            loading={!detail.error}
+            error={detail.error}
+            errorLabel={t('reader.couldNotLoadCacheAndLoreRecords')}
+            label={t('reader.loadingCacheAndLoreRecords')}
+            onRetry={detail.retry}
+          />
+        </div>
+      )}
+      {lore && loreOpen && (
+        <div id={`${id}-lore`} className="scene-receipt-lore-detail">
+          {lore.entries.length > 0 && <RequestLoreEntries entries={lore.entries} />}
+          {lore.status === 'partial' && (
+            <p>{t('visualpanels.inclusionMayBeUncertainForMaterialProcessed')}</p>
+          )}
+          {loreDetails}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
+  useI18n();
+  const [open, setOpen] = useState(false);
   return (
     <details
       className="scene-usage"
@@ -82,131 +259,20 @@ export function SceneUsage({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>
-        {compact ? (
-          t('reader.thisGeneration')
-        ) : (
-          <span className="ui-meta-row">
-            <span>{t('reader.thisGeneration')}</span>
-            <span>{totals}</span>
-          </span>
-        )}
+        <span className="ui-meta-row">
+          <span>{t('reader.thisGeneration')}</span>
+          {usage && <span>{sceneTokenTotals(usage)}</span>}
+        </span>
       </summary>
-      <div className="scene-usage-body">
-        {compact && <p>{totals}</p>}
-        {estimatedCost && estimatedCost.attemptCount > 0 && (
-          <p data-testid="scene-text-cost">
-            {t('reader.estimatedTextCostValue', { v0: textCost(estimatedCost) })}
-          </p>
-        )}
-        {receipt ? (
-          <dl className="scene-receipt">
-            <dt>{t('reader.model')}</dt>
-            <dd>
-              <span>{receipt.model.title}</span>
-              {receipt.model.title.trim() !== receipt.model.modelId.trim() && (
-                <small className="scene-receipt-model-id">{receipt.model.modelId}</small>
-              )}
-            </dd>
-            <dt>{t('reader.prompt')}</dt>
-            <dd>{receipt.prompt?.title ?? t('reader.noSelectionRecord')}</dd>
-            <dt>{t('reader.persona')}</dt>
-            <dd>
-              {receipt.persona
-                ? (receipt.persona.name ?? receipt.persona.title ?? receipt.persona.id)
-                : t('reader.noneSelected')}
-            </dd>
-            <dt>{t('reader.conversationSummary')}</dt>
-            <dd>
-              {receipt.summary
-                ? receipt.summary.status === 'included'
-                  ? t('reader.confirmedInclusionOfValueSummarizedScenes', {
-                      v0: receipt.summary.coveredSources,
-                    })
-                  : receipt.summary.status === 'absent'
-                    ? t('reader.notUsed')
-                    : t('reader.inclusionInTheRequestIsUnknown')
-                : t('reader.noRecord')}
-            </dd>
-          </dl>
-        ) : usage ? (
-          <p>{t('reader.noModelPromptPersonaOrSummaryRecordForThis')}</p>
-        ) : null}
-        {context ? (
-          <>
-            <p>
-              {t('reader.contextInput', {
-                estimated: actualInput === null,
-                input: amount(contextTokens),
-                limit: amount(context.inputTokenLimit),
-              })}
-            </p>
-            <meter
-              aria-label={
-                actualInput === null
-                  ? t('reader.estimatedInputRelativeToContextLimit')
-                  : t('reader.inputRelativeToContextLimit')
-              }
-              min={0}
-              max={context.inputTokenLimit}
-              value={Math.min(contextTokens!, context.inputTokenLimit)}
-            />
-          </>
-        ) : (
-          <p>{t('reader.contextUsageCannotBeShownBecauseThisCallHas')}</p>
-        )}
-        {attemptId &&
-          (recordedDetail ? (
-            <>
-              <p>
-                {recordedDetail.cache
-                  ? t('reader.cacheReadValueWriteValueTokens', {
-                      v0: amount(recordedDetail.cache.readTokens),
-                      v1: amount(recordedDetail.cache.writeTokens),
-                    })
-                  : t('reader.noCacheUsageRecord')}
-              </p>
-              <p>
-                {t('reader.sentLoreRecord', {
-                  record: recordedDetail.lore
-                    ? recordedDetail.lore.entries.length
-                      ? t('reader.valueRecords', {
-                          v0: recordedDetail.lore.entries.length,
-                        })
-                      : t('reader.noRecordOfTextInclusion')
-                    : t('reader.noRecord'),
-                })}
-              </p>
-              {recordedDetail.lore?.selection && (
-                <p>
-                  {t('reader.loreSelectionTotals', {
-                    total: amount(recordedDetail.lore.selection.total),
-                    evaluated: amount(recordedDetail.lore.selection.evaluated),
-                    selected: amount(recordedDetail.lore.selection.selected),
-                    failed: recordedDetail.lore.selection.failed ?? 0,
-                  })}
-                </p>
-              )}
-              {!!recordedDetail.lore?.entries.length && (
-                <RequestLoreEntries entries={recordedDetail.lore.entries} />
-              )}
-              {recordedDetail.lore?.status === 'partial' && (
-                <p>{t('visualpanels.inclusionMayBeUncertainForMaterialProcessed')}</p>
-              )}
-            </>
-          ) : open ? (
-            <LoadingState
-              presentation="inline"
-              loading={failedId !== attemptId}
-              error={failedId === attemptId ? t('reader.reopenToRetry') : ''}
-              errorLabel={t('reader.couldNotLoadCacheAndLoreRecords')}
-              label={t('reader.loadingCacheAndLoreRecords')}
-            />
-          ) : null)}
-        {usage && context?.tokenizerFallback && (
-          <p role="status">{t('reader.theSelectedTokenizerCouldNotBeLoadedAGeneral')}</p>
-        )}
-        {!usage && <p>{t('reader.noCallRecordUsageIsNotEstimatedForImported')}</p>}
-      </div>
+      {open && (
+        <div className="scene-usage-body">
+          {usage ? (
+            <SceneReceipt usage={usage} model />
+          ) : (
+            <p>{t('reader.noCallRecordUsageIsNotEstimatedForImported')}</p>
+          )}
+        </div>
+      )}
     </details>
   );
 }

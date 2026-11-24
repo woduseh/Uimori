@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { contextBudgetForModel, validateContextBudget } from '../core/context-budget.js';
 import type { ContextPlan } from '../core/context-plan.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { CONTEXT_COMPACTION_TRIGGER_RATIO } from '../core/context-compaction.js';
 import { CONTEXT_SUMMARY_SEMANTICS, contextSummaryPolicy } from '../core/context-summary-policy.js';
 import { sourceSceneScope } from '../core/source-history.js';
 import { generationFromModel } from '../core/model-capabilities.js';
@@ -56,7 +57,6 @@ const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 function fail(code: string): never {
   throw new Error(code);
 }
-export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.85;
 const TARGET_RATIO = 0.75,
   SUMMARY_INPUT_RATIO = 0.85;
 const SUMMARY_CONTRACT = `Write working memory for the next fiction-writing turn in the conversation's language. Merge previousSummary and the supplied fragments in order, including fragments of the same exchange. Focus on the current situation, relationships, motivations, explicit user constraints, active commitments and unresolved threads.

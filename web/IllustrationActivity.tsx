@@ -3,7 +3,6 @@ import { useRef, useState } from 'react';
 import type { Usage } from '../core/types.js';
 import type { Illustration, IllustrationUsageReport } from '../core/illustration.js';
 import { api, labels } from './api.js';
-import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { illustrationProgress, illustrationTaskNames } from './illustration-progress.js';
 import './illustrations.css';
 
@@ -64,7 +63,7 @@ export function IllustrationPlacementButton({
   );
 }
 
-export function IllustrationActivity({
+export function IllustrationPhases({
   items,
   sourceId,
   sourceHash,
@@ -78,19 +77,9 @@ export function IllustrationActivity({
   onError: (message: string) => void;
 }) {
   useI18n();
-  if (!items.length) return null;
   const progress = illustrationProgress(items);
-  const revision = items.map((item) => `${item.id}:${item.status}:${item.updatedAt}`).join('|');
   return (
-    <section className="job illustration-job" aria-label={t('visuals.m171')}>
-      <h3>
-        {t('visuals.m098')}{' '}
-        <small>
-          {progress.status === 'partial'
-            ? t('visuals.m172')
-            : translateMessage(labels[progress.status] ?? progress.status)}
-        </small>
-      </h3>
+    <>
       <dl className="illustration-phases">
         {progress.phases.map((phase) => (
           <div key={phase.task}>
@@ -117,28 +106,33 @@ export function IllustrationActivity({
           onError={onError}
         />
       )}
-      <LazyDiagnostics<IllustrationUsageReport>
-        path={`/sources/${sourceId}/illustration-usage`}
-        revision={revision}
-        title={t('visuals.m174')}
-      >
-        {(report) => (
-          <>
-            <IllustrationUsageLine usage={report.total} />
-            <dl className="illustration-phases">
-              {progress.phases.map(({ task }) => (
-                <div key={task}>
-                  <dt>{illustrationTaskNames[task]}</dt>
-                  <dd>
-                    <IllustrationUsageLine usage={report.stages[task]} />
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <small>{t('visuals.m175')}</small>
-          </>
-        )}
-      </LazyDiagnostics>
-    </section>
+    </>
+  );
+}
+
+export function IllustrationUsageReportView({
+  report,
+  items,
+}: {
+  report: IllustrationUsageReport;
+  items: Illustration[];
+}) {
+  useI18n();
+  const progress = illustrationProgress(items);
+  return (
+    <>
+      <IllustrationUsageLine usage={report.total} />
+      <dl className="illustration-phases">
+        {progress.phases.map(({ task }) => (
+          <div key={task}>
+            <dt>{illustrationTaskNames[task]}</dt>
+            <dd>
+              <IllustrationUsageLine usage={report.stages[task]} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <small className="illustration-usage-note">{t('visuals.m175')}</small>
+    </>
   );
 }

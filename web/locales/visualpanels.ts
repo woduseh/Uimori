@@ -35,12 +35,6 @@ export const messages = {
     ja: '項目ID',
     zh: '条目 ID',
   },
-  'visualpanels.rawExecutionRecord': {
-    ko: '실행 원본 기록',
-    en: 'Raw execution record',
-    ja: '実行の元記録',
-    zh: '执行原始记录',
-  },
   'visualpanels.background': {
     ko: '바탕',
     en: 'Background',

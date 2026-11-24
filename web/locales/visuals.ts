@@ -991,12 +991,6 @@ export const messages = {
     ja: '翻訳位置を再対応',
     zh: '重新匹配译文位置',
   },
-  'visuals.m171': {
-    ko: '이 응답의 삽화 작업',
-    en: 'Illustration jobs for this response',
-    ja: 'この応答の挿絵作業',
-    zh: '此回复的插图任务',
-  },
   'visuals.m172': {
     ko: '위치 확인 필요',
     en: 'Placement needs review',
@@ -1008,12 +1002,6 @@ export const messages = {
     en: 'Some positions unset',
     ja: '一部未指定',
     zh: '部分位置未指定',
-  },
-  'visuals.m174': {
-    ko: '삽화 호출과 토큰',
-    en: 'Illustration calls and tokens',
-    ja: '挿絵の呼び出しとトークン',
-    zh: '插图调用与 token',
   },
   'visuals.m175': {
     ko: '삽화 작업의 누적 사용량이에요. 다시 그리기와 위치 재연결, 사전 판단도 포함해요. ComfyUI 그림 생성은 모델 토큰에 포함하지 않아요.',
@@ -1543,18 +1531,6 @@ export const messages = {
     ja: 'ロア{v0}件選択、文字数{v1} / 予算{v2}、除外{v3}',
     zh: '已选设定 {v0} 项，字符 {v1} / 预算 {v2}，排除 {v3}',
   },
-  'visuals.m276': {
-    ko: '원문 {v0}',
-    en: 'Original {v0}',
-    ja: '原文 {v0}',
-    zh: '原文 {v0}',
-  },
-  'visuals.m277': {
-    ko: 'Scripted mock (모의 생성)',
-    en: 'Scripted mock (simulated generation)',
-    ja: 'Scripted mock（模擬生成）',
-    zh: 'Scripted mock（模拟生成）',
-  },
   'visuals.m278': {
     ko: '모델이 생성을 거절했어요.',
     en: 'The model refused to generate.',
@@ -1596,12 +1572,6 @@ export const messages = {
     en: '{v0}, {v1}, Manage job',
     ja: '{v0}、{v1}、作業管理',
     zh: '{v0}，{v1}，管理任务',
-  },
-  'visuals.m285': {
-    ko: '실행 확인',
-    en: 'Run details',
-    ja: '実行を確認',
-    zh: '查看运行',
   },
   'visuals.blur': {
     ko: '배경 흐림: {value}px',

@@ -33,7 +33,9 @@ for (const width of [412]) {
     const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
     await composer.fill('이 요청 초안은 그대로 남겨요.');
     await page.getByTestId('turn-activity').last().locator(':scope > summary').click();
-    await expect(page.getByTestId('scene-usage').last()).toContainText('요청 미확인');
+    await expect(page.getByTestId('scene-inspector').last()).toContainText(
+      '이 장면의 호출 기록이 없어요.'
+    );
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
     const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });

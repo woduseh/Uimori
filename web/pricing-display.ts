@@ -25,6 +25,28 @@ export const formatUsd = (value: number | null | undefined) =>
       ? '< $0.00000001'
       : `$${formatNumber(value, { maximumFractionDigits: 8 })}`;
 
+export function sceneCostLabels(
+  estimate:
+    | { usd: number | null; subtotalUsd: number; unknownCount: number; attemptCount: number }
+    | undefined
+) {
+  if (!estimate?.attemptCount) return null;
+  if (estimate.usd !== null && estimate.unknownCount === 0) {
+    const value = formatUsd(estimate.usd);
+    return { short: value, full: value };
+  }
+  const full = t('reader.knownSubtotalValueIncludesValueUnpricedCalls', {
+    v0:
+      estimate.subtotalUsd === 0 && estimate.unknownCount === estimate.attemptCount
+        ? t('reader.unknown')
+        : formatUsd(estimate.subtotalUsd),
+    v1: estimate.unknownCount,
+  });
+  return estimate.subtotalUsd > 0
+    ? { short: t('reader.inspectorCostAtLeast', { value: formatUsd(estimate.subtotalUsd) }), full }
+    : null;
+}
+
 const estimateNotes: Record<string, string> = {
   get PRICING_UNAVAILABLE() {
     return t('providers.m517');

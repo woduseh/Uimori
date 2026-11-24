@@ -1,6 +1,13 @@
 import { t, useI18n } from './i18n.js';
 import { useState, type ReactNode } from 'react';
-import { DoneIcon, IssueIcon, RunningIcon, StopIcon, UncertainIcon } from './ui-icons.js';
+import {
+  DoneIcon,
+  DropdownIcon,
+  IssueIcon,
+  RunningIcon,
+  StopIcon,
+  UncertainIcon,
+} from './ui-icons.js';
 import './turn-activity.css';
 import './activity-status.css';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
@@ -59,6 +66,7 @@ export function TurnStatus({
       </span>
       {elapsed && <small>{elapsed}</small>}
       {badges}
+      <DropdownIcon size={14} aria-hidden="true" className="turn-activity-chevron" />
     </span>
   );
   const persist = (next: boolean) => {

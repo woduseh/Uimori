@@ -417,7 +417,7 @@
   font-variant-numeric: tabular-nums;
 }
 .illustration-usage:lang(ko),
-.illustration-job .inspector > small:lang(ko) {
+.illustration-usage-note:lang(ko) {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }

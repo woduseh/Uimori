@@ -1300,9 +1300,11 @@ test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnec
     expect(actual.top).toBeGreaterThanOrEqual(actual.previousBottom!);
   }
   await activity.locator(':scope > summary').click();
-  const progress = activity.getByRole('region', { name: '이 응답의 삽화 작업' });
-  await expect(progress).toContainText('3/3컷 완료');
-  await progress.getByText('삽화 호출과 토큰', { exact: true }).click();
+  const inspector = activity.getByTestId('scene-inspector');
+  await expect(inspector.getByTestId('job-illustration')).toContainText('삽화 3/3');
+  await inspector.getByRole('button', { name: '원본 기록', exact: true }).click();
+  const progress = inspector.getByTestId('scene-raw-record');
+  await progress.getByRole('button', { name: '삽화', exact: true }).click();
   await expect(progress).toContainText('모델 요청 0회');
   await expect(progress).toContainText('미확인');
   await activity.scrollIntoViewIfNeeded();

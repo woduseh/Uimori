@@ -281,6 +281,10 @@
   .task-history-detail {
     padding: 12px;
   }
+  .task-history-row-actions > button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 .task-history-meta > span:empty {
   display: none;
