@@ -1,21 +1,3 @@
-.prompt-library-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-inline-start: auto;
-}
-.prompt-library-actions + .library-create {
-  margin-inline-start: 0;
-}
-.prompt-library-actions > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  margin: 0;
-}
 .app-dialog.prompt-templates-dialog {
   --dialog-size: 640px;
 }
@@ -66,31 +48,6 @@
 .prompt-templates-error > p {
   color: var(--error);
   overflow-wrap: anywhere;
-}
-
-@media (max-width: 760px) {
-  .prompt-library .library-toolbar > .prompt-library-actions {
-    order: 0;
-    flex: none;
-    flex-basis: auto;
-    flex-wrap: nowrap;
-    gap: 2px;
-    margin-inline-start: auto;
-  }
-  .prompt-library .prompt-library-actions > button,
-  .prompt-library .library-toolbar > .library-create {
-    width: var(--control-h);
-    min-width: var(--control-h);
-    height: var(--control-h);
-    min-height: var(--control-h);
-    padding: 0;
-  }
-  .prompt-library .library-toolbar > .library-create {
-    margin-inline-start: 0;
-  }
-  .prompt-library .library-toolbar > .library-create > span {
-    display: none;
-  }
 }
 
 @media (max-width: 520px) {

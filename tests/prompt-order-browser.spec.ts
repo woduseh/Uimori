@@ -85,10 +85,7 @@ for (const width of [MOBILE_WIDTH]) {
     await page.goto('/');
     await navigationAction(page, '프롬프트');
     const panel = page.getByTestId('prompt-library');
-    const options = panel.getByLabel('목록 관리', { exact: true });
-    await options.click();
     await panel.getByLabel('프롬프트 정렬', { exact: true }).selectOption('manual');
-    await page.keyboard.press('Escape');
     const item = (id: string) => panel.locator(`[data-library-item-id="${id}"]`);
     const displayedIds = () =>
       panel
@@ -104,11 +101,8 @@ for (const width of [MOBILE_WIDTH]) {
     await expect.poll(displayedIds).toEqual([ids[1], ids[0], ids[2]]);
     await navigationAction(page, '봇');
     const libraryPanel = page.getByTestId('library-panel');
-    const libraryOptions = libraryPanel.getByLabel('목록 관리', { exact: true });
-    await libraryOptions.click();
     await libraryPanel.getByLabel('자료 정렬', { exact: true }).selectOption('name-desc');
     await libraryPanel.getByLabel('자료 정렬', { exact: true }).selectOption('manual');
-    await page.keyboard.press('Escape');
     const botItem = libraryPanel.locator(`[data-library-item-id="${botIds[1]}"]`);
     await botItem.getByLabel(`${bots[1].title} 메뉴`, { exact: true }).click();
     await botItem.getByRole('button', { name: '위로 이동', exact: true }).click();
@@ -123,9 +117,7 @@ for (const width of [MOBILE_WIDTH]) {
     await page.reload();
     await navigationAction(page, '프롬프트');
     await expect.poll(displayedIds).toEqual([ids[1], ids[0], ids[2]]);
-    await options.click();
     await expect(panel.getByLabel('프롬프트 정렬', { exact: true })).toHaveValue('manual');
-    await page.keyboard.press('Escape');
     if (width > 600) {
       await panel
         .locator(`[data-folder-id="${folderIds[1]}"]`)
@@ -154,7 +146,7 @@ for (const width of [MOBILE_WIDTH]) {
         async () => (await readOrganization()).items.find((entry) => entry.id === ids[1])?.folderId
       )
       .toBe(folderIds[0]);
-    await panel.getByRole('button', { name: `${prefix} Folder A 폴더 열기`, exact: true }).click();
+    await panel.locator(`[data-folder-id="${folderIds[0]}"]`).getByRole('button').click();
     await expect.poll(displayedIds).toEqual([ids[1]]);
     const stored = await request.get(`/api/prompt-presets/${ids[1]}`);
     expect(stored.ok()).toBe(true);
@@ -162,7 +154,7 @@ for (const width of [MOBILE_WIDTH]) {
     await page.screenshot({ path: test.info().outputPath(`prompt-manual-order-${width}.png`) });
     await page.reload();
     await navigationAction(page, '프롬프트');
-    await panel.getByRole('button', { name: `${prefix} Folder A 폴더 열기`, exact: true }).click();
+    await panel.locator(`[data-folder-id="${folderIds[0]}"]`).getByRole('button').click();
     await expect.poll(displayedIds).toEqual([ids[1]]);
   });
 }

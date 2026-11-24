@@ -8,6 +8,7 @@ type Props = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & 
   label: string;
   icon: LucideIcon;
   size?: number;
+  text?: string;
 };
 
 export function IconButton({
@@ -17,6 +18,7 @@ export function IconButton({
   className = '',
   title = label,
   type = 'button',
+  text,
   ...props
 }: Props) {
   useI18n();
@@ -27,10 +29,11 @@ export function IconButton({
       {...props}
       {...(tooltip ? { interestfor: tooltipId } : {})}
       type={type}
-      className={`icon-button ui-icon-button ${className}`}
+      className={`icon-button ui-icon-button${text ? ' ui-icon-text-button' : ''} ${className}`}
       aria-label={translateMessage(label)}
     >
       <Icon size={size} aria-hidden="true" />
+      {text && <span className="ui-icon-button-text">{text}</span>}
       {tooltip && (
         <span
           id={tooltipId}

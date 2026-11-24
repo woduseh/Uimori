@@ -147,6 +147,7 @@ export function RisuPresetImport({
       {showTrigger && (
         <IconButton
           label={t('transfer.m068')}
+          text={t('library.import')}
           className="secondary"
           icon={UploadIcon}
           onClick={() => {

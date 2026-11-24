@@ -4,44 +4,67 @@ import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { ScrollStrip } from './ScrollStrip.js';
+import { TransientNotice } from './TransientNotice.js';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AddIcon,
   BackIcon,
+  CheckIcon,
   CopyIcon,
   DownIcon,
   UpIcon,
   EditIcon,
   HelperIcon,
   MoveIcon,
-  OptionsIcon,
   PromptIcon,
   SearchIcon,
   SelectIcon,
   SettingsIcon,
+  SortIcon,
+  TemplateIcon,
 } from './ui-icons.js';
-import type { Library, PromptPreset, PromptPresetSummary, PromptRole } from '../core/product.js';
+import type {
+  Library,
+  PromptPreset,
+  PromptPresetSummary,
+  PromptRole,
+  PromptWorkspace,
+} from '../core/product.js';
 import type { ResourceSaveResult } from '../core/resource-editing.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
-import { libraryFolderOf } from '../core/library-organization.js';
 import { api, ApiError } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { RisuPresetImport } from './RisuPresetImport.js';
 import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
+import { usePromptWorkspace } from './usePromptWorkspace.js';
 import {
   discardActiveEditor,
   saveActiveEditor,
   ResourceEditorLeaveWarning,
 } from './resource-editor.js';
 import {
-  LibraryFolders,
+  LibraryFolderChips,
+  LibraryFolderSection,
   LibraryItemMenu,
   LibraryMoveDialog,
+  sortedFolders,
+  useCollapsedFolders,
+  useLibraryFolderEditor,
+  useLibraryItemDrag,
   useLibraryOrganization,
   type FolderFilter,
 } from './LibraryFolders.js';
+import {
+  librarySections,
+  libraryPlacements,
+  neighbourTarget,
+  placementOf,
+  reorderManually,
+  sortLibraryItems,
+} from './library-list.js';
 import './library.css';
 import {
   saveLibrarySort,
@@ -64,6 +87,13 @@ function savedPromptOrder(): string[] {
   if (Array.isArray(value)) return value.filter((id): id is string => typeof id === 'string');
   return [];
 }
+
+const promptRoleTabs = [
+  { id: 'all', titleKey: 'prompts.uiAllRoles' },
+  { id: 'main', titleKey: 'prompts.uiWriting' },
+  { id: 'translation', titleKey: 'prompts.uiTranslation' },
+] as const;
+type PromptRoleFilter = (typeof promptRoleTabs)[number]['id'];
 
 export function PromptLibrary({
   library,
@@ -95,14 +125,9 @@ export function PromptLibrary({
   const { t, locale } = useI18n();
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [query, setQuery] = useState('');
-  const [role, setRole] = useState<'all' | PromptRole>('all');
+  const [role, setRole] = useState<PromptRoleFilter>('all');
   const [sort, setSort] = useState<PromptSort>(savedPromptSort);
   const [manualOrder, setManualOrder] = useState(savedPromptOrder);
-  const draggedItem = useRef<string | null>(null);
-  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ kind: 'item' | 'folder'; id: string } | null>(
-    null
-  );
   const [editing, setEditing] = useState<{ preset: PromptPreset | null; role: PromptRole } | null>(
     null
   );
@@ -139,6 +164,9 @@ export function PromptLibrary({
   const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
+  const selectionExit = useRef<HTMLButtonElement>(null);
+  const selectionStart = useRef<HTMLButtonElement>(null);
+  const wasSelecting = useRef(false);
   const organizer = useLibraryOrganization(library, reload, onError);
   const mutation = useRef(false);
   const [mutating, setMutating] = useState(false);
@@ -147,9 +175,62 @@ export function PromptLibrary({
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const createdPresetFocus = useRef<string | null>(null);
   const editorHeading = useRef<HTMLHeadingElement>(null);
-  const organized = library
-    ? { ...library, organization: organizer.organization ?? library.organization }
-    : null;
+  const { workspace, refresh: refreshWorkspace } = usePromptWorkspace();
+  const [applyingDefault, setApplyingDefault] = useState(false);
+  const [defaultNotice, setDefaultNotice] = useState('');
+  const organization = organizer.organization ?? library?.organization ?? null;
+  const placements = libraryPlacements(organization);
+  const folderOf = (id: string) =>
+    placementOf(placements, { kind: 'prompt-preset', id })?.folderId ?? null;
+  const presets = library?.promptPresets ?? [];
+  const folders = sortedFolders(organization, 'prompts');
+  const counts: Record<string, number> = {};
+  for (const preset of presets) {
+    const key = folderOf(preset.id);
+    if (key !== null) counts[key] = (counts[key] ?? 0) + 1;
+  }
+  const searching = !!query.trim();
+  const sectioned = folder === 'all' && !searching;
+  const loweredQuery = query.toLocaleLowerCase();
+  const ordered = sortLibraryItems(
+    presets.filter(
+      (item) =>
+        (folder === 'all' || folderOf(item.id) === folder) &&
+        (role === 'all' || item.role === role) &&
+        item.title.toLocaleLowerCase().includes(loweredQuery)
+    ),
+    sort,
+    manualOrder,
+    locale
+  );
+  const collapsedFolders = useCollapsedFolders(organization);
+  const isCollapsed = (folderId: string) => collapsedFolders.collapsed.includes(folderId);
+  const sections = sectioned
+    ? librarySections(ordered, folders, (item) => folderOf(item.id))
+    : [{ folder: null, items: ordered }];
+  const visible = sections
+    .filter((section) => !section.folder || !isCollapsed(section.folder.id))
+    .flatMap((section) => section.items);
+  const visibleKey = visible.map((item) => item.id).join('\n');
+  const listOf = (id: string) =>
+    sections.find((section) => section.items.some((item) => item.id === id))?.items ?? [];
+  const categoryEmpty = !!library && presets.length === 0 && !query;
+  const folderEditor = useLibraryFolderEditor({
+    category: 'prompts',
+    organizer,
+    reload,
+    onError,
+  });
+  const itemDrag = useLibraryItemDrag({
+    kind: 'prompt-preset',
+    category: 'prompts',
+    organizer,
+    folderOf,
+    manual: sort === 'manual',
+    sectioned,
+    disabled: selecting || busy,
+    onReorder: moveManualItem,
+  });
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -168,9 +249,13 @@ export function PromptLibrary({
     return () => cancelAnimationFrame(frame);
   }, [editing]);
   useEffect(() => {
+    if (selecting) selectionExit.current?.focus();
+    else if (wasSelecting.current) selectionStart.current?.focus();
+    wasSelecting.current = selecting;
+  }, [selecting]);
+  useEffect(() => {
     if (
       folder !== 'all' &&
-      folder !== 'unclassified' &&
       organizer.organization &&
       !organizer.organization.folders.some(
         (item) => item.id === folder && item.category === 'prompts'
@@ -179,131 +264,49 @@ export function PromptLibrary({
       setFolder('all');
   }, [folder, organizer.organization]);
   useEffect(() => {
-    const currentLibrary = library
-      ? { ...library, organization: organizer.organization ?? library.organization }
-      : null;
-    const available = new Set(
-      library?.promptPresets
-        ?.filter((item) => {
-          const folderId = libraryFolderOf(currentLibrary!, { kind: 'prompt-preset', id: item.id });
-          return (
-            folder === 'all' ||
-            (folder === 'unclassified' ? folderId === null : folderId === folder)
-          );
-        })
-        .map((item) => item.id) ?? []
+    const shown = new Set(visibleKey.split('\n'));
+    setSelection((current) =>
+      current.every((id) => shown.has(id)) ? current : current.filter((id) => shown.has(id))
     );
-    setSelection((current) => current.filter((id) => available.has(id)));
+  }, [visibleKey]);
+  useEffect(() => {
+    const available = new Set(library?.promptPresets?.map((item) => item.id));
     setMoving((current) => (current?.some((item) => !available.has(item.id)) ? null : current));
-  }, [library, organizer.organization, folder]);
-  const presets = library?.promptPresets ?? [];
-  const counts: Record<string, number> = { all: presets.length };
-  for (const preset of presets) {
-    const key =
-      libraryFolderOf(organized!, { kind: 'prompt-preset', id: preset.id }) ?? 'unclassified';
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  const filtered = presets
-    .filter((item) => {
-      const folderId = libraryFolderOf(organized!, { kind: 'prompt-preset', id: item.id });
-      return (
-        (folder === 'all' ||
-          (folder === 'unclassified' ? folderId === null : folderId === folder)) &&
-        (role === 'all' || item.role === role) &&
-        item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-      );
-    })
-    .sort((a, b) => {
-      if (sort !== 'manual')
-        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, locale);
-      const aIndex = manualOrder.indexOf(a.id);
-      const bIndex = manualOrder.indexOf(b.id);
-      return (
-        (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
-          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) || a.title.localeCompare(b.title, locale)
-      );
-    });
-  const folders =
-    organizer.organization?.folders.filter((item) => item.category === 'prompts') ?? [];
-  const showFolders = folder === 'all' && !query.trim() && !selecting;
-  const categoryEmpty = !!library && presets.length === 0 && !query;
+  }, [library]);
   function changeSort(next: PromptSort) {
     setSort(next);
     saveLibrarySort('prompts', next);
   }
+  function changeFolder(next: FolderFilter) {
+    setFolder(next);
+    setSelection([]);
+  }
   function moveManualItem(id: string, beforeId: string | null) {
-    const available = new Set(presets.map((item) => item.id));
-    const ordered = [
-      ...manualOrder.filter((itemId) => available.has(itemId)),
-      ...presets
-        .filter((item) => !manualOrder.includes(item.id))
-        .sort((a, b) => a.title.localeCompare(b.title, locale))
-        .map((item) => item.id),
-    ].filter((itemId) => itemId !== id);
-    const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
-    ordered.splice(index < 0 ? ordered.length : index, 0, id);
-    setManualOrder(ordered);
-    saveLibraryManualOrder('prompts', ordered);
+    const next = reorderManually(presets, manualOrder, locale, id, beforeId);
+    setManualOrder(next);
+    saveLibraryManualOrder('prompts', next);
   }
-  function moveByOffset(id: string, offset: number) {
-    const index = filtered.findIndex((item) => item.id === id);
-    const target = filtered[index + offset];
-    if (target) moveManualItem(id, offset < 0 ? target.id : (filtered[index + 2]?.id ?? null));
+  function moveByOffset(id: string, offset: -1 | 1) {
+    const beforeId = neighbourTarget(listOf(id), id, offset);
+    if (beforeId !== undefined) moveManualItem(id, beforeId);
   }
-  function clearDragging() {
-    draggedItem.current = null;
-    setDraggedItemId(null);
-    setDropTarget(null);
-  }
-  function startDragging(id: string, event: DragEvent<HTMLElement>) {
-    if (
-      selecting ||
-      organizer.busy ||
-      busy ||
-      (event.target as HTMLElement).closest('.action-menu')
-    ) {
-      event.preventDefault();
-      return;
+  async function applyAsDefault(item: PromptPresetSummary) {
+    if (!workspace || applyingDefault) return;
+    setApplyingDefault(true);
+    setDefaultNotice('');
+    try {
+      await api<PromptWorkspace>('/prompt-workspace/apply', {
+        expectedRevision: workspace.revision,
+        role: item.role,
+        presetId: item.id,
+      });
+      setDefaultNotice(uiMessage('prompts.defaultChanged', { role: item.role, name: item.title }));
+    } catch (error) {
+      onError((error as Error).message);
+      await refreshWorkspace().catch(() => {});
+    } finally {
+      setApplyingDefault(false);
     }
-    draggedItem.current = id;
-    setDraggedItemId(id);
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', id);
-  }
-  function dragOverItem(id: string, event: DragEvent<HTMLElement>) {
-    if (sort !== 'manual' || !draggedItem.current || draggedItem.current === id) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTarget({ kind: 'item', id });
-  }
-  function dropOnItem(id: string, event: DragEvent<HTMLElement>) {
-    const source = draggedItem.current;
-    if (sort !== 'manual' || !source || source === id) return;
-    event.preventDefault();
-    moveManualItem(source, id);
-    clearDragging();
-  }
-  function dragOverFolder(id: string, event: DragEvent<HTMLElement>) {
-    if (!draggedItem.current) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTarget({ kind: 'folder', id });
-  }
-  function dragLeaveFolder(id: string, event: DragEvent<HTMLElement>) {
-    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    setDropTarget((current) => (current?.kind === 'folder' && current.id === id ? null : current));
-  }
-  async function dropOnFolder(folderId: string, event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    const id = draggedItem.current;
-    clearDragging();
-    if (!id || !organized || libraryFolderOf(organized, { kind: 'prompt-preset', id }) === folderId)
-      return;
-    await organizer.mutate('/library/organization/move', {
-      items: [{ kind: 'prompt-preset', id }],
-      category: 'prompts',
-      folderId,
-    });
   }
   function cancelOpening() {
     if (!opening.current) return;
@@ -347,6 +350,9 @@ export function PromptLibrary({
   function close() {
     changeEditing(null);
   }
+  function createPreset() {
+    changeEditing({ preset: null, role: role === 'translation' ? role : 'main' });
+  }
   // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves the editor.
   useEffect(() => {
     if (externalList.current === listRequest) return;
@@ -359,7 +365,7 @@ export function PromptLibrary({
     created: boolean,
     creationOrganizationRevision?: number | null
   ) {
-    if (!created || folder === 'all' || folder === 'unclassified') return;
+    if (!created || folder === 'all') return;
     if (creationOrganizationRevision === null)
       throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
     const revision =
@@ -478,6 +484,178 @@ export function PromptLibrary({
       setMutating(false);
     }
   }
+  function renderItem(item: PromptPresetSummary) {
+    const isDefault = workspace?.[item.role].presetId === item.id;
+    const badgeId = `prompt-default-${item.id}`;
+    return (
+      <article
+        className="library-list-item"
+        key={item.id}
+        data-library-item-id={item.id}
+        data-selected={selecting && selection.includes(item.id) ? 'true' : undefined}
+        {...itemDrag.item(item.id)}
+      >
+        {selecting && (
+          <label className="library-select-check">
+            <span className="sr-only">{t('prompts.selectNamed', { name: item.title })}</span>
+            <SelectionCheckbox
+              aria-label={t('prompts.selectNamed', { name: item.title })}
+              checked={selection.includes(item.id)}
+              onChange={(event) =>
+                setSelection((current) =>
+                  event.target.checked
+                    ? [...current, item.id]
+                    : current.filter((id) => id !== item.id)
+                )
+              }
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          className="library-open-content"
+          aria-label={t('prompts.editNamed', { name: item.title })}
+          aria-describedby={isDefault ? badgeId : undefined}
+          disabled={busy}
+          onClick={() => void editPreset(item)}
+        >
+          <span className="library-prompt-icon" aria-hidden="true">
+            <PromptIcon size={20} />
+          </span>
+          <span className="library-item-copy">
+            <strong>{item.title}</strong>
+            {isDefault ? (
+              <span className="library-item-badges">
+                <span id={badgeId} className="library-default-badge">
+                  {item.role === 'main'
+                    ? t('prompts.defaultWriting')
+                    : t('prompts.defaultTranslation')}
+                </span>
+              </span>
+            ) : (
+              <span>
+                {item.role === 'main' ? t('prompts.uiWriting') : t('prompts.uiTranslation')}
+              </span>
+            )}
+          </span>
+        </button>
+        {!selecting && (
+          <LibraryItemMenu title={t('prompts.menuNamed', { name: item.title })}>
+            <div className="action-menu-group">
+              {workspace && !isDefault && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={applyingDefault}
+                  onClick={() => void applyAsDefault(item)}
+                >
+                  <CheckIcon size={18} aria-hidden="true" />
+                  {t('prompts.useAsDefault')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => void editPreset(item)}
+              >
+                <EditIcon size={18} aria-hidden="true" />
+                {t('prompts.uiEdit2')}
+              </button>
+              <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
+                <HelperIcon size={18} aria-hidden="true" />
+                {t('prompts.uiAskHelper')}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => void clone(item)}
+              >
+                <CopyIcon size={18} aria-hidden="true" />
+                {t('prompts.uiDuplicate')}
+              </button>
+            </div>
+            <div className="action-menu-group">
+              <button
+                type="button"
+                className="secondary"
+                disabled={organizer.busy}
+                onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
+              >
+                <MoveIcon size={18} aria-hidden="true" />
+                {t('prompts.uiMoveToFolder')}
+              </button>
+              {sort === 'manual' && (
+                <>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={listOf(item.id)[0]?.id === item.id}
+                    onClick={() => moveByOffset(item.id, -1)}
+                  >
+                    <UpIcon size={18} aria-hidden="true" />
+                    {t('prompts.uiMoveUp')}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={listOf(item.id).at(-1)?.id === item.id}
+                    onClick={() => moveByOffset(item.id, 1)}
+                  >
+                    <DownIcon size={18} aria-hidden="true" />
+                    {t('prompts.uiMoveDown')}
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="action-menu-group">
+              <DeleteButton
+                path={`/prompt-presets/${encodeURIComponent(item.id)}`}
+                revision={item.revision}
+                title={item.title}
+                onDeleted={reload}
+                onError={onError}
+              />
+            </div>
+          </LibraryItemMenu>
+        )}
+      </article>
+    );
+  }
+  function renderItems(items: PromptPresetSummary[]) {
+    return <div className="library-list">{items.map(renderItem)}</div>;
+  }
+  const selectedFolder = folders.find((item) => item.id === folder);
+  const emptyState = !ordered.length && !(sectioned && folders.length && role === 'all') && (
+    <div className="library-empty">
+      <h2>
+        {searching || role !== 'all'
+          ? t('prompts.uiNoMatchingPrompts')
+          : selectedFolder
+            ? t('library.thisFolderIsEmpty')
+            : t('prompts.uiNoPromptsYet')}
+      </h2>
+      <div className="library-empty-actions">
+        {searching && (
+          <button type="button" className="secondary" onClick={() => setQuery('')}>
+            {t('prompts.clearSearch')}
+          </button>
+        )}
+        {folder !== 'all' && (
+          <button type="button" className="secondary" onClick={() => changeFolder('all')}>
+            {t('prompts.uiSearchAll')}
+          </button>
+        )}
+        {!searching && (
+          <button type="button" onClick={createPreset}>
+            <AddIcon size={20} aria-hidden="true" />
+            {t('prompts.uiNewPrompt')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
   return (
     <section
       className={`library-page prompt-library${editing ? ' library-page-editing' : ''}`}
@@ -487,6 +665,43 @@ export function PromptLibrary({
       <header className="library-heading" hidden={!!editing}>
         {headerLeading}
         <h1>{t('prompts.uiPrompts')}</h1>
+        {library && (
+          <div className="library-heading-actions">
+            <IconButton
+              icon={SettingsIcon}
+              size={18}
+              className="secondary"
+              label={t('prompts.defaultPromptSettings')}
+              text={t('prompts.defaultPromptSettings')}
+              onClick={onOpenCurrentPrompts}
+            />
+            <IconButton
+              icon={TemplateIcon}
+              size={18}
+              className="secondary"
+              label={t('prompts.templates')}
+              text={t('prompts.templates')}
+              disabled={busy || organizer.busy}
+              onClick={() => setTemplatesOpen(true)}
+            />
+            <RisuPresetImport
+              showTrigger
+              reload={reload}
+              onImported={(preset) => {
+                createdPresetFocus.current = preset.id;
+                changeEditing({ preset, role: preset.role });
+              }}
+            />
+            <IconButton
+              icon={AddIcon}
+              size={18}
+              className="primary"
+              label={t('prompts.uiNewPrompt')}
+              text={t('prompts.uiNewPrompt')}
+              onClick={createPreset}
+            />
+          </div>
+        )}
         {headerTrailing}
       </header>
       <PromptTemplatesDialog
@@ -548,6 +763,8 @@ export function PromptLibrary({
           setSelecting(false);
         }}
       />
+      {folderEditor.dialogs}
+      <TransientNotice message={defaultNotice} />
       {!library ? (
         <LoadingState presentation="region" label={t('prompts.uiLoadingPrompts')} />
       ) : editing ? (
@@ -581,343 +798,226 @@ export function PromptLibrary({
           />
         </div>
       ) : (
-        <div className="library-workspace">
-          <div className="library-workspace-content">
-            <div className="library-toolbar">
-              {!selecting && (
-                <LibraryFolders
-                  presentation="breadcrumb"
-                  category="prompts"
-                  organizer={organizer}
-                  value={folder}
-                  onChange={(next) => {
-                    setFolder(next);
-                    setSelection([]);
-                  }}
-                  counts={counts}
-                  reload={reload}
-                  onError={onError}
-                />
-              )}
-              {selecting ? (
-                <div
-                  className="library-bulk-toolbar"
-                  role="group"
-                  aria-label={t('prompts.uiPromptSelectionActions')}
-                >
-                  <span role="status">
-                    {t('prompts.selectedCount', { count: selection.length })}
-                  </span>
-                  <button
-                    type="button"
-                    className="secondary"
-                    aria-label={t('prompts.uiSelectAllDisplayedPrompts')}
-                    onClick={() => setSelection(filtered.map((item) => item.id))}
-                  >
-                    <SelectIcon size={18} aria-hidden="true" />
-                    <span>{t('prompts.uiSelectAll')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t('prompts.uiMoveSelectedPrompts')}
-                    disabled={!selection.length || organizer.busy}
-                    onClick={() =>
-                      setMoving(selection.map((id) => ({ kind: 'prompt-preset', id })))
-                    }
-                  >
-                    <MoveIcon size={18} aria-hidden="true" />
-                    <span>{t('prompts.uiMove')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      setSelecting(false);
-                      setSelection([]);
-                    }}
-                  >
-                    {t('prompts.uiDone')}
-                  </button>
-                </div>
-              ) : (
-                !categoryEmpty && (
-                  <>
-                    <label className="library-search-field">
-                      <SearchIcon size={20} aria-hidden="true" />
-                      <span className="sr-only">{t('prompts.uiSearchPrompts')}</span>
-                      <input
-                        type="search"
-                        aria-label={t('prompts.uiSearchPrompts')}
-                        placeholder={t('prompts.uiSearchByName')}
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                      />
-                    </label>
-                    <LibraryItemMenu
-                      title={t('prompts.uiManageList')}
-                      className="library-list-options"
-                      icon={OptionsIcon}
+        <>
+          <ScrollStrip
+            className="library-tabs"
+            role="tablist"
+            aria-label={t('prompts.uiFilterPromptRoles')}
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const index = promptRoleTabs.findIndex((item) => item.id === role);
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? promptRoleTabs.length - 1
+                    : (index + (event.key === 'ArrowRight' ? 1 : -1) + promptRoleTabs.length) %
+                      promptRoleTabs.length;
+              setRole(promptRoleTabs[next].id);
+              (event.currentTarget.querySelectorAll('button')[next] as HTMLButtonElement).focus();
+            }}
+          >
+            {promptRoleTabs.map((item) => (
+              <button
+                type="button"
+                role="tab"
+                id={`prompt-role-tab-${item.id}`}
+                aria-controls="prompt-results"
+                aria-selected={role === item.id}
+                tabIndex={role === item.id ? 0 : -1}
+                className="secondary"
+                key={item.id}
+                onClick={() => setRole(item.id)}
+              >
+                {t(item.titleKey)}
+              </button>
+            ))}
+          </ScrollStrip>
+          <div className="library-workspace">
+            <div className="library-workspace-content">
+              {(selecting || !categoryEmpty) && (
+                <div className="library-toolbar">
+                  {selecting ? (
+                    <div
+                      className="library-bulk-toolbar"
+                      role="group"
+                      aria-label={t('prompts.uiPromptSelectionActions')}
                     >
-                      <div className="library-list-options-body">
-                        <label>
-                          {t('prompts.uiRole')}
-                          <select
-                            aria-label={t('prompts.uiFilterPromptRoles')}
-                            value={role}
-                            onChange={(event) => setRole(event.target.value as typeof role)}
-                          >
-                            <option value="all">{t('prompts.uiAllRoles')}</option>
-                            <option value="main">{t('prompts.uiWriting')}</option>
-                            <option value="translation">{t('prompts.uiTranslation')}</option>
-                          </select>
-                        </label>
-                        <label>
-                          {t('prompts.uiSort')}
-                          <select
-                            aria-label={t('prompts.uiSortPrompts')}
-                            value={sort}
-                            onChange={(event) => changeSort(event.target.value as PromptSort)}
-                          >
-                            <option value="name">{t('prompts.uiNameAscending')}</option>
-                            <option value="name-desc">{t('prompts.uiNameDescending')}</option>
-                            <option value="manual">{t('prompts.uiManualOrder')}</option>
-                          </select>
-                        </label>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => {
-                            setSelecting(true);
-                            setSelection([]);
-                          }}
-                        >
-                          <SelectIcon size={18} aria-hidden="true" />
-                          {t('prompts.uiSelect')}
-                        </button>
-                      </div>
-                    </LibraryItemMenu>
-                  </>
-                )
-              )}
-              {!selecting && library && (
-                <div className="prompt-library-actions">
-                  <RisuPresetImport
-                    showTrigger
-                    reload={reload}
-                    onImported={(preset) => {
-                      createdPresetFocus.current = preset.id;
-                      changeEditing({ preset, role: preset.role });
-                    }}
-                  />
-                  <IconButton
-                    icon={SettingsIcon}
-                    size={18}
-                    label={t('prompts.uiCurrentPromptSettings')}
-                    onClick={onOpenCurrentPrompts}
-                  />
-                  <IconButton
-                    icon={PromptIcon}
-                    size={18}
-                    label={t('prompts.uiBuiltInPrompts')}
-                    disabled={busy || organizer.busy}
-                    onClick={() => setTemplatesOpen(true)}
-                  />
-                </div>
-              )}
-              {!selecting && (
-                <button
-                  type="button"
-                  className={`library-create ui-icon-button${categoryEmpty ? ' secondary' : ' primary'}`}
-                  aria-label={t('prompts.uiNewPrompt')}
-                  title={t('prompts.uiNewPrompt')}
-                  disabled={!library}
-                  onClick={() =>
-                    changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
-                  }
-                >
-                  <AddIcon size={18} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            {!!query && !selecting && (
-              <p className="library-result-count muted" role="status">
-                {t('prompts.searchCount', { count: filtered.length })}
-              </p>
-            )}
-            {showFolders && folders.length > 0 && (
-              <section className="library-folder-section" aria-label={t('prompts.uiFolderList')}>
-                <h2>{t('prompts.uiFolders')}</h2>
-                <LibraryFolders
-                  presentation="cards"
-                  draggedItemId={draggedItemId}
-                  dropFolderId={dropTarget?.kind === 'folder' ? dropTarget.id : null}
-                  onFolderDragOver={dragOverFolder}
-                  onFolderDragLeave={dragLeaveFolder}
-                  onFolderDrop={(id, event) => void dropOnFolder(id, event)}
-                  category="prompts"
-                  organizer={organizer}
-                  value={folder}
-                  onChange={(next) => {
-                    setFolder(next);
-                    setSelection([]);
-                  }}
-                  counts={counts}
-                  reload={reload}
-                  onError={onError}
-                />
-              </section>
-            )}
-
-            <div className="library-list">
-              {filtered.map((item) => (
-                <article
-                  className="library-list-item"
-                  key={item.id}
-                  data-library-item-id={item.id}
-                  data-dragging={draggedItemId === item.id ? 'true' : undefined}
-                  data-drop-target={
-                    dropTarget?.kind === 'item' && dropTarget.id === item.id ? 'true' : undefined
-                  }
-                  draggable={!selecting && !organizer.busy && !busy}
-                  onDragStart={(event) => startDragging(item.id, event)}
-                  onDragEnd={clearDragging}
-                  onDragOver={(event) => dragOverItem(item.id, event)}
-                  onDrop={(event) => dropOnItem(item.id, event)}
-                >
-                  {selecting && (
-                    <label className="library-select-check">
-                      <span className="sr-only">
-                        {t('prompts.selectNamed', { name: item.title })}
+                      <span role="status">
+                        {t('prompts.selectedCount', { count: selection.length })}
                       </span>
-                      <SelectionCheckbox
-                        aria-label={t('prompts.selectNamed', { name: item.title })}
-                        checked={selection.includes(item.id)}
-                        onChange={(event) =>
-                          setSelection((current) =>
-                            event.target.checked
-                              ? [...current, item.id]
-                              : current.filter((id) => id !== item.id)
-                          )
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-label={t('prompts.uiSelectAllDisplayedPrompts')}
+                        onClick={() => setSelection(visible.map((item) => item.id))}
+                      >
+                        <SelectIcon size={18} aria-hidden="true" />
+                        <span>{t('prompts.uiSelectAll')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('prompts.uiMoveSelectedPrompts')}
+                        disabled={!selection.length || organizer.busy}
+                        onClick={() =>
+                          setMoving(selection.map((id) => ({ kind: 'prompt-preset', id })))
                         }
-                      />
-                    </label>
-                  )}
-                  <button
-                    type="button"
-                    className="library-open-content"
-                    aria-label={t('prompts.editNamed', { name: item.title })}
-                    disabled={busy}
-                    onClick={() => void editPreset(item)}
-                  >
-                    <span className="library-prompt-icon" aria-hidden="true">
-                      <PromptIcon size={20} />
-                    </span>
-                    <span className="library-item-copy">
-                      <strong>{item.title}</strong>
-                      <span>
-                        {item.role === 'main' ? t('prompts.uiWriting') : t('prompts.uiTranslation')}
-                      </span>
-                    </span>
-                  </button>
-                  <LibraryItemMenu title={t('prompts.menuNamed', { name: item.title })}>
-                    <div className="action-menu-group">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => void editPreset(item)}
-                      >
-                        <EditIcon size={18} aria-hidden="true" />
-                        {t('prompts.uiEdit2')}
-                      </button>
-                      <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
-                        <HelperIcon size={18} aria-hidden="true" />
-                        {t('prompts.uiAskHelper')}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => void clone(item)}
-                      >
-                        <CopyIcon size={18} aria-hidden="true" />
-                        {t('prompts.uiDuplicate')}
-                      </button>
-                    </div>
-                    <div className="action-menu-group">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={organizer.busy}
-                        onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
                       >
                         <MoveIcon size={18} aria-hidden="true" />
-                        {t('prompts.uiMoveToFolder')}
+                        <span>{t('prompts.uiMove')}</span>
                       </button>
-                      {sort === 'manual' && (
-                        <>
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={filtered[0]?.id === item.id}
-                            onClick={() => moveByOffset(item.id, -1)}
-                          >
-                            <UpIcon size={18} aria-hidden="true" />
-                            {t('prompts.uiMoveUp')}
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={filtered.at(-1)?.id === item.id}
-                            onClick={() => moveByOffset(item.id, 1)}
-                          >
-                            <DownIcon size={18} aria-hidden="true" />
-                            {t('prompts.uiMoveDown')}
-                          </button>
-                        </>
-                      )}
+                      <button
+                        type="button"
+                        className="secondary"
+                        ref={selectionExit}
+                        onClick={() => {
+                          setSelecting(false);
+                          setSelection([]);
+                        }}
+                      >
+                        {t('prompts.uiDone')}
+                      </button>
                     </div>
-                    <div className="action-menu-group">
-                      <DeleteButton
-                        path={`/prompt-presets/${encodeURIComponent(item.id)}`}
-                        revision={item.revision}
-                        title={item.title}
-                        onDeleted={reload}
-                        onError={onError}
+                  ) : (
+                    <>
+                      <label className="library-search-field">
+                        <SearchIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">{t('prompts.uiSearchPrompts')}</span>
+                        <input
+                          type="search"
+                          aria-label={t('prompts.uiSearchPrompts')}
+                          placeholder={t('prompts.uiSearchByName')}
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                        />
+                      </label>
+                      <label className="library-sort-field">
+                        <SortIcon size={18} aria-hidden="true" />
+                        <select
+                          aria-label={t('prompts.uiSortPrompts')}
+                          value={sort}
+                          onChange={(event) => changeSort(event.target.value as PromptSort)}
+                        >
+                          <option value="name">{t('prompts.uiNameAscending')}</option>
+                          <option value="name-desc">{t('prompts.uiNameDescending')}</option>
+                          <option value="manual">{t('prompts.uiManualOrder')}</option>
+                        </select>
+                      </label>
+                      <IconButton
+                        ref={selectionStart}
+                        icon={SelectIcon}
+                        size={18}
+                        className="secondary"
+                        label={t('prompts.uiSelect')}
+                        onClick={() => {
+                          setSelecting(true);
+                          setSelection([]);
+                        }}
                       />
-                    </div>
-                  </LibraryItemMenu>
-                </article>
-              ))}
-            </div>
-            {!filtered.length && (
-              <div className="library-empty">
-                <h2>{query ? t('prompts.uiNoMatchingPrompts') : t('prompts.uiNoPromptsYet')}</h2>
-                {query.trim() && (
-                  <button type="button" className="secondary" onClick={() => setQuery('')}>
-                    {t('prompts.clearSearch')}
-                  </button>
-                )}
-                {folder !== 'all' && (
-                  <button type="button" className="secondary" onClick={() => setFolder('all')}>
-                    {t('prompts.uiSearchAll')}
-                  </button>
-                )}
-                {!query.trim() && (
-                  <button
-                    type="button"
-                    className="library-create"
-                    onClick={() =>
-                      changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+                    </>
+                  )}
+                </div>
+              )}
+              {!selecting && (
+                <LibraryFolderChips
+                  category="prompts"
+                  organizer={organizer}
+                  value={folder}
+                  onChange={changeFolder}
+                  counts={counts}
+                  total={presets.length}
+                  editor={folderEditor}
+                  itemDrag={itemDrag}
+                />
+              )}
+              {searching && !selecting && (
+                <p className="library-result-count muted" role="status">
+                  {t('prompts.searchCount', { count: ordered.length })}
+                </p>
+              )}
+              <div
+                id="prompt-results"
+                role="tabpanel"
+                aria-labelledby={`prompt-role-tab-${role}`}
+                className="library-results"
+              >
+                {selectedFolder ? (
+                  <LibraryFolderSection
+                    folder={selectedFolder}
+                    title={selectedFolder.title}
+                    count={counts[selectedFolder.id] ?? 0}
+                    menu={
+                      !selecting && (
+                        <LibraryItemMenu
+                          title={t('library.folderMenu', { v0: selectedFolder.title })}
+                        >
+                          {folderEditor.folderActions(selectedFolder)}
+                        </LibraryItemMenu>
+                      )
                     }
                   >
-                    {t('prompts.uiNewPrompt')}
-                  </button>
+                    {ordered.length > 0 && renderItems(ordered)}
+                    {emptyState}
+                  </LibraryFolderSection>
+                ) : sectioned && folders.length ? (
+                  <>
+                    {sections.map(({ folder: sectionFolder, items }) =>
+                      sectionFolder ? (
+                        (role === 'all' || items.length > 0) && (
+                          <LibraryFolderSection
+                            key={sectionFolder.id}
+                            folder={sectionFolder}
+                            title={sectionFolder.title}
+                            count={items.length}
+                            collapsed={isCollapsed(sectionFolder.id)}
+                            onToggle={() => collapsedFolders.toggle(sectionFolder.id)}
+                            menu={
+                              !selecting && (
+                                <LibraryItemMenu
+                                  title={t('library.folderMenu', { v0: sectionFolder.title })}
+                                >
+                                  {folderEditor.folderActions(sectionFolder)}
+                                </LibraryItemMenu>
+                              )
+                            }
+                            drop={itemDrag.folder(sectionFolder.id)}
+                          >
+                            {items.length ? (
+                              renderItems(items)
+                            ) : (
+                              <p className="library-section-empty muted">
+                                {t('library.thisFolderIsEmpty')}
+                              </p>
+                            )}
+                          </LibraryFolderSection>
+                        )
+                      ) : (
+                        <LibraryFolderSection
+                          key="unfiled"
+                          folder={null}
+                          title={t('library.uncategorizedRole', {
+                            role: t('library.prompts'),
+                          })}
+                          count={items.length}
+                          drop={itemDrag.folder(null)}
+                        >
+                          {renderItems(items)}
+                        </LibraryFolderSection>
+                      )
+                    )}
+                    {emptyState}
+                  </>
+                ) : (
+                  <>
+                    {ordered.length > 0 && renderItems(ordered)}
+                    {emptyState}
+                  </>
                 )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </section>
   );

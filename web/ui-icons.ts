@@ -49,6 +49,8 @@ export {
   Undo2 as UndoIcon,
   RotateCcw as ResetIcon,
   GripVertical as DragHandleIcon,
+  ArrowUpDown as SortIcon,
+  LayoutTemplate as TemplateIcon,
   Pin as PinIcon,
   ExternalLink as ExternalLinkIcon,
   Power as PowerIcon,

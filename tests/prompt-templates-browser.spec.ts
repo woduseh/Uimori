@@ -46,7 +46,11 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   const panel = page.getByTestId('prompt-library');
-  await panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true }).click();
+  await panel
+    .locator('.library-folder-chip-slot')
+    .filter({ hasText: folder.title })
+    .getByRole('button')
+    .click();
   for (const [width, id, title, role] of [
     [MOBILE_WIDTH, 'pheme-novel', 'Phēmē 소설', 'main'],
     [DESKTOP_WIDTH, 'hermeneia', 'Hermēneía', 'translation'],
@@ -55,8 +59,8 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     if (width === MOBILE_WIDTH) {
       const actions = [
         panel.getByRole('button', { name: '프롬프트 가져오기', exact: true }),
-        panel.getByRole('button', { name: '현재 프롬프트 설정', exact: true }),
-        panel.getByRole('button', { name: '기본 프롬프트', exact: true }),
+        panel.getByRole('button', { name: '기본 프롬프트 설정', exact: true }),
+        panel.getByRole('button', { name: '템플릿', exact: true }),
         panel.getByRole('button', { name: '새 프롬프트', exact: true }).first(),
       ];
       const search = panel.getByRole('searchbox', { name: '프롬프트 검색', exact: true });
@@ -75,8 +79,8 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
           .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
       ).toBe(true);
     }
-    await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '기본 프롬프트', exact: true });
+    await panel.getByRole('button', { name: '템플릿', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '템플릿', exact: true });
     await expect(dialog).toBeVisible();
     const bounds = (await dialog.boundingBox())!;
     const gap = width === MOBILE_WIDTH ? 16 : 24;
@@ -113,9 +117,9 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
       const shortBounds = (await dialog.boundingBox())!;
       expect(shortBounds.y).toBeGreaterThanOrEqual(16);
       expect(shortBounds.y + shortBounds.height).toBeLessThanOrEqual(304);
-      await expect(
-        dialog.getByRole('button', { name: '기본 프롬프트 닫기', exact: true })
-      ).toBeInViewport({ ratio: 1 });
+      await expect(dialog.getByRole('button', { name: '템플릿 닫기', exact: true })).toBeInViewport(
+        { ratio: 1 }
+      );
       await page.screenshot({ path: info.outputPath('prompt-templates-mobile-short.png') });
       await body.evaluate((node) => {
         node.scrollTop = 0;
@@ -235,9 +239,9 @@ test('BPTUI02 template retry, dialog focus and duplicate clicks preserve a singl
     await page.goto('/');
     await navigationAction(page, '프롬프트');
     const panel = page.getByTestId('prompt-library');
-    const opener = panel.getByRole('button', { name: '기본 프롬프트', exact: true });
+    const opener = panel.getByRole('button', { name: '템플릿', exact: true });
     await opener.click();
-    const dialog = page.getByRole('dialog', { name: '기본 프롬프트', exact: true });
+    const dialog = page.getByRole('dialog', { name: '템플릿', exact: true });
     await expect(dialog.getByRole('alert')).toContainText('기본 프롬프트를 불러오지 못했어요');
     await dialog.getByRole('button', { name: '다시 불러오기', exact: true }).click();
     await expect(dialog.getByRole('listitem')).toHaveCount(3);
@@ -327,15 +331,19 @@ for (const action of ['save', 'clone', 'add'] as const) {
     await page.goto('/');
     await navigationAction(page, '프롬프트');
     const panel = page.getByTestId('prompt-library');
-    await panel.getByRole('button', { name: `${folderTitle} 폴더 열기`, exact: true }).click();
+    await panel
+      .locator('.library-folder-chip-slot')
+      .filter({ hasText: folderTitle })
+      .getByRole('button')
+      .click();
     if (action === 'save') {
       await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
       const editor = page.getByTestId('prompt-editor');
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
       await editor.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} saved`);
     } else if (action === 'add') {
-      await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
-      await expect(page.getByRole('dialog', { name: '기본 프롬프트', exact: true })).toBeVisible();
+      await panel.getByRole('button', { name: '템플릿', exact: true }).click();
+      await expect(page.getByRole('dialog', { name: '템플릿', exact: true })).toBeVisible();
     }
     await page.route('**/api/library/organization/move', (route) =>
       route.fulfill({ status: 503, json: { error: 'synthetic placement failure' } })
@@ -363,7 +371,7 @@ for (const action of ['save', 'clone', 'add'] as const) {
       await row.getByRole('button', { name: '복제', exact: true }).click();
     } else {
       await page
-        .getByRole('dialog', { name: '기본 프롬프트', exact: true })
+        .getByRole('dialog', { name: '템플릿', exact: true })
         .getByRole('button', { name: 'Phēmē RP 추가', exact: true })
         .click();
     }
@@ -406,9 +414,13 @@ test('BPTUI04 template placement keeps an independent organization lookup error'
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   const panel = page.getByTestId('prompt-library');
-  await panel.getByRole('button', { name: `${folderTitle} 폴더 열기`, exact: true }).click();
-  await panel.getByRole('button', { name: '기본 프롬프트', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '기본 프롬프트', exact: true });
+  await panel
+    .locator('.library-folder-chip-slot')
+    .filter({ hasText: folderTitle })
+    .getByRole('button')
+    .click();
+  await panel.getByRole('button', { name: '템플릿', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '템플릿', exact: true });
   await expect(dialog.getByRole('button', { name: 'Phēmē RP 추가', exact: true })).toBeVisible();
   await page.route('**/api/library/organization', (route) =>
     route.fulfill({ status: 503, json: { error: 'synthetic organization lookup failure' } })

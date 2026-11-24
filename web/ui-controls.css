@@ -5,6 +5,15 @@
   height: var(--control-h);
   padding: 0;
 }
+.ui-icon-button.ui-icon-text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
 .ui-icon-button svg,
 .action-menu > summary svg {
   flex: none;

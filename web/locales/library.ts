@@ -275,12 +275,6 @@ export const messages = {
     ja: '一覧を管理',
     zh: '管理列表',
   },
-  'library.sort': {
-    ko: '정렬',
-    en: 'Sort',
-    ja: '並べ替え',
-    zh: '排序',
-  },
   'library.resourceSortOrder': {
     ko: '자료 정렬',
     en: 'Resource sort order',
@@ -329,12 +323,6 @@ export const messages = {
     ja: '{v0}を作成',
     zh: '创建{v0}',
   },
-  'library.folderList': {
-    ko: '폴더 목록',
-    en: 'Folder list',
-    ja: 'フォルダー一覧',
-    zh: '文件夹列表',
-  },
   'library.folders': {
     ko: '폴더',
     en: 'Folders',
@@ -370,12 +358,6 @@ export const messages = {
     en: 'This folder is empty',
     ja: 'このフォルダーは空です',
     zh: '此文件夹为空',
-  },
-  'library.noUncategorizedResources': {
-    ko: '미분류 자료가 없어요',
-    en: 'No uncategorized resources',
-    ja: '未分類の資料がありません',
-    zh: '没有未分类资料',
   },
   'library.tryAnotherNameOrDescription': {
     ko: '다른 이름이나 설명으로 찾아보세요.',
@@ -533,35 +515,23 @@ export const messages = {
     ja: '{v0}のフォルダー',
     zh: '{v0}文件夹',
   },
-  'library.openFolder': {
-    ko: '{v0} 폴더 열기',
-    en: 'Open {v0} folder',
-    ja: '{v0}フォルダーを開く',
-    zh: '打开{v0}文件夹',
-  },
-  'library.moveHere': {
-    ko: '여기로 이동',
-    en: 'Move here',
-    ja: 'ここへ移動',
-    zh: '移至此处',
-  },
   'library.folderMenu': {
     ko: '{v0} 폴더 메뉴',
     en: '{v0} folder menu',
     ja: '{v0}フォルダーのメニュー',
     zh: '{v0}文件夹菜单',
   },
-  'library.currentFolder': {
-    ko: '현재 폴더',
-    en: 'Current folder',
-    ja: '現在のフォルダー',
-    zh: '当前文件夹',
-  },
   'library.all': {
     ko: '전체',
     en: 'All',
     ja: 'すべて',
     zh: '全部',
+  },
+  'library.import': {
+    ko: '가져오기',
+    en: 'Import',
+    ja: '取り込む',
+    zh: '导入',
   },
   'library.newFolder': {
     ko: '새 폴더',

@@ -38,18 +38,10 @@ import {
   type ResourceSaveResult,
 } from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type DragEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
-import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
+import { placementCategory } from '../core/library-organization.js';
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
 import { nativeContentDraft, withNativeContentTitle } from './native-content-draft.js';
@@ -73,16 +65,30 @@ import {
   PersonaIcon,
   SearchIcon,
   SelectIcon,
+  SortIcon,
   DownIcon,
   UpIcon,
 } from './ui-icons.js';
 import {
-  LibraryFolders,
+  LibraryFolderChips,
+  LibraryFolderSection,
   LibraryItemMenu,
   LibraryMoveDialog,
+  sortedFolders,
+  useCollapsedFolders,
+  useLibraryFolderEditor,
+  useLibraryItemDrag,
   useLibraryOrganization,
   type FolderFilter,
 } from './LibraryFolders.js';
+import {
+  librarySections,
+  libraryPlacements,
+  neighbourTarget,
+  placementOf,
+  reorderManually,
+  sortLibraryItems,
+} from './library-list.js';
 import './library.css';
 import {
   saveLibrarySort,
@@ -236,12 +242,7 @@ export function LibraryPanel({
   const [editing, setEditing] = useState<{ kind: ContentKind; item: Content | null } | null>(null);
   const [detail, setDetail] = useState<Content | null>(null);
   const [loading, setLoading] = useState(false);
-  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ kind: 'folder' | 'item'; id: string } | null>(
-    null
-  );
   const panelRef = useRef<HTMLElement>(null);
-  const draggedItem = useRef<string | null>(null);
   const selectionExit = useRef<HTMLButtonElement>(null);
   const wasSelecting = useRef(false);
   const opening = useRef(0);
@@ -250,13 +251,71 @@ export function LibraryPanel({
   latestLibrary.current = library;
   const externalTab = useRef(initialTab);
   const organizer = useLibraryOrganization(library, reload, onError);
+  const organization = organizer.organization ?? library?.organization ?? null;
+  const placements = libraryPlacements(organization);
+  const folderOf = (id: string) =>
+    placementOf(placements, { kind: 'content', id })?.folderId ?? null;
+  const categoryOf = (item: Content): PrimaryLibraryTab =>
+    placementCategory(placementOf(placements, { kind: 'content', id: item.id }), item);
+  const categoryItems = library?.contents.filter((item) => categoryOf(item) === tab) ?? [];
+  const folders = sortedFolders(organization, tab);
+  const counts: Record<string, number> = {};
+  const folderCovers: Record<string, string[]> = {};
+  for (const item of categoryItems) {
+    const key = folderOf(item.id);
+    if (key === null) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+    const portrait = contentPortraitUrl(item);
+    const cover = (folderCovers[key] ??= []);
+    if (portrait && cover.length < 24 && !cover.includes(portrait)) cover.push(portrait);
+  }
+  const sort = sortByTab[tab];
+  const manualOrder = manualOrderByTab[tab];
+  const searching = !!query.trim();
+  const sectioned = folder === 'all' && !searching;
+  const loweredQuery = query.toLocaleLowerCase();
+  const ordered = sortLibraryItems(
+    categoryItems.filter(
+      (item) =>
+        (folder === 'all' || folderOf(item.id) === folder) &&
+        `${item.title} ${item.description}`.toLocaleLowerCase().includes(loweredQuery)
+    ),
+    sort,
+    manualOrder,
+    getLocale()
+  );
+  const collapsedFolders = useCollapsedFolders(organization);
+  const isCollapsed = (folderId: string) => collapsedFolders.collapsed.includes(folderId);
+  const sections = sectioned
+    ? librarySections(ordered, folders, (item) => folderOf(item.id))
+    : [{ folder: null, items: ordered }];
+  const visible = sections
+    .filter((section) => !section.folder || !isCollapsed(section.folder.id))
+    .flatMap((section) => section.items);
+  const visibleKey = visible.map((item) => item.id).join('\n');
+  const listOf = (id: string) =>
+    sections.find((section) => section.items.some((item) => item.id === id))?.items ?? [];
+  const folderEditor = useLibraryFolderEditor({
+    category: tab,
+    organizer,
+    reload,
+    onError,
+    covers: folderCovers,
+  });
+  const itemDrag = useLibraryItemDrag({
+    kind: 'content',
+    category: tab,
+    organizer,
+    folderOf,
+    manual: sort === 'manual',
+    sectioned,
+    disabled: selecting,
+    onReorder: moveManualItem,
+  });
   useLayoutEffect(() => {
     if (detail || editing)
       panelRef.current?.closest<HTMLElement>('.destination-scroll')?.scrollTo({ top: 0 });
   }, [detail, editing]);
-  const organizedLibrary = library
-    ? { ...library, organization: organizer.organization ?? library.organization }
-    : null;
   useEffect(() => {
     if (selecting) selectionExit.current?.focus();
     else if (wasSelecting.current)
@@ -307,40 +366,26 @@ export function LibraryPanel({
   useEffect(() => {
     if (
       folder !== 'all' &&
-      folder !== 'unclassified' &&
       organizer.organization &&
       !organizer.organization.folders.some((item) => item.id === folder && item.category === tab)
     )
       setFolder('all');
   }, [folder, organizer.organization, tab]);
   useEffect(() => {
+    const shown = new Set(visibleKey.split('\n'));
+    setSelectedIds((current) =>
+      current.every((id) => shown.has(id)) ? current : current.filter((id) => shown.has(id))
+    );
+  }, [visibleKey]);
+  useEffect(() => {
     if (!library) {
-      setSelectedIds([]);
       setMoving(null);
       return;
     }
-    const currentLibrary = {
-      ...library,
-      organization: organizer.organization ?? library.organization,
-    };
-    const available = new Set(
-      library.contents
-        .filter((item) => {
-          const folderId = libraryFolderOf(currentLibrary, { kind: 'content', id: item.id });
-          return (
-            libraryCategory(currentLibrary, item) === tab &&
-            ((folder === 'all' && (!!query.trim() || folderId === null)) ||
-              (folder === 'unclassified' ? folderId === null : folderId === folder))
-          );
-        })
-        .map((item) => item.id)
-    );
-    setSelectedIds((current) => current.filter((id) => available.has(id)));
+    const available = new Set(library.contents.map((item) => item.id));
     setMoving((current) => (current?.some((item) => !available.has(item.id)) ? null : current));
-    setDetail((current) =>
-      current && !library.contents.some((item) => item.id === current.id) ? null : current
-    );
-  }, [library, organizer.organization, tab, folder, query]);
+    setDetail((current) => (current && !available.has(current.id) ? null : current));
+  }, [library]);
   function cancelOpening() {
     opening.current++;
     setLoading(false);
@@ -376,7 +421,7 @@ export function LibraryPanel({
     cloned = false,
     creationOrganizationRevision?: number | null
   ) {
-    const folderId = folder === 'all' || folder === 'unclassified' ? null : folder;
+    const folderId = folder === 'all' ? null : folder;
     if ((!cloned && item.kind !== tab) || (folderId === null && item.kind === tab)) return;
     if (creationOrganizationRevision === null)
       throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
@@ -475,43 +520,6 @@ export function LibraryPanel({
     setDetail(null);
     setEditing({ kind: tab, item: null });
   }
-  const categoryItems =
-    organizedLibrary?.contents.filter((item) => libraryCategory(organizedLibrary, item) === tab) ??
-    [];
-  const counts: Record<string, number> = { all: categoryItems.length };
-  const folderCovers: Record<string, string[]> = {};
-  for (const item of categoryItems) {
-    const key =
-      libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id }) ?? 'unclassified';
-    counts[key] = (counts[key] ?? 0) + 1;
-    const portrait = contentPortraitUrl(item);
-    const cover = (folderCovers[key] ??= []);
-    if (portrait && cover.length < 24 && !cover.includes(portrait)) cover.push(portrait);
-  }
-  const sort = sortByTab[tab];
-  const manualOrder = manualOrderByTab[tab];
-  const filtered = categoryItems
-    .filter((item) => {
-      const folderId = libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id });
-      return (
-        ((folder === 'all' && (!!query.trim() || folderId === null)) ||
-          (folder === 'unclassified' ? folderId === null : folderId === folder)) &&
-        `${item.title} ${item.description}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-      );
-    })
-    .sort((a, b) => {
-      if (sort !== 'manual')
-        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, getLocale());
-      const aIndex = manualOrder.indexOf(a.id);
-      const bIndex = manualOrder.indexOf(b.id);
-      return (
-        (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
-          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) ||
-        a.title.localeCompare(b.title, getLocale())
-      );
-    });
-  const folders = organizer.organization?.folders.filter((item) => item.category === tab) ?? [];
-  const showFolders = folder === 'all' && !query.trim() && !selecting;
   function changeFolder(next: FolderFilter) {
     setFolder(next);
     setQuery('');
@@ -523,9 +531,6 @@ export function LibraryPanel({
     );
   }
   const categoryEmpty = !!library && categoryItems.length === 0 && !query;
-  const emptyState =
-    filtered.length === 0 &&
-    !((folder === 'all' || folder === 'unclassified') && !query.trim() && categoryItems.length > 0);
   function setView(mode: ViewMode) {
     const next = { ...views, [tab]: mode };
     setViews(next);
@@ -536,85 +541,14 @@ export function LibraryPanel({
     setSortByTab(next);
     saveLibrarySort(tab, mode);
   }
-  function saveManualOrder(ids: string[]) {
-    const next = { ...manualOrderByTab, [tab]: ids };
-    setManualOrderByTab(next);
-    saveLibraryManualOrder(tab, ids);
-  }
-  function orderedCategoryIds() {
-    const ids = new Set(categoryItems.map((item) => item.id));
-    return [
-      ...manualOrder.filter((id) => ids.has(id)),
-      ...categoryItems
-        .filter((item) => !manualOrder.includes(item.id))
-        .sort((a, b) => a.title.localeCompare(b.title, getLocale()))
-        .map((item) => item.id),
-    ];
-  }
   function moveManualItem(id: string, beforeId: string | null) {
-    const ordered = orderedCategoryIds().filter((itemId) => itemId !== id);
-    const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
-    ordered.splice(index < 0 ? ordered.length : index, 0, id);
-    saveManualOrder(ordered);
+    const next = reorderManually(categoryItems, manualOrder, getLocale(), id, beforeId);
+    setManualOrderByTab({ ...manualOrderByTab, [tab]: next });
+    saveLibraryManualOrder(tab, next);
   }
-  function moveManualByOffset(item: Content, offset: number) {
-    const index = filtered.findIndex((entry) => entry.id === item.id);
-    const target = filtered[index + offset];
-    if (!target) return;
-    if (offset < 0) moveManualItem(item.id, target.id);
-    else moveManualItem(item.id, filtered[index + 2]?.id ?? null);
-  }
-  function startDragging(item: Content, event: DragEvent<HTMLElement>) {
-    if (selecting || organizer.busy) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', item.id);
-    draggedItem.current = item.id;
-    setDraggedItemId(item.id);
-  }
-  function clearDragging() {
-    draggedItem.current = null;
-    setDraggedItemId(null);
-    setDropTarget(null);
-  }
-  function dragOverItem(item: Content, event: DragEvent<HTMLElement>) {
-    const id = draggedItem.current;
-    if (sort !== 'manual' || !id || id === item.id) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTarget({ kind: 'item', id: item.id });
-  }
-  function dropOnItem(item: Content, event: DragEvent<HTMLElement>) {
-    const id = draggedItem.current;
-    if (sort !== 'manual' || !id || id === item.id) return;
-    event.preventDefault();
-    moveManualItem(id, item.id);
-    clearDragging();
-  }
-  function dragOverFolder(folderId: string, event: DragEvent<HTMLElement>) {
-    if (!draggedItem.current) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTarget({ kind: 'folder', id: folderId });
-  }
-  function dragLeaveFolder(folderId: string, event: DragEvent<HTMLElement>) {
-    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    setDropTarget((current) =>
-      current?.kind === 'folder' && current.id === folderId ? null : current
-    );
-  }
-  async function dropOnFolder(folderId: string, event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    const id = draggedItem.current;
-    clearDragging();
-    if (!id || libraryFolderOf(organizedLibrary!, { kind: 'content', id }) === folderId) return;
-    await organizer.mutate('/library/organization/move', {
-      items: [{ kind: 'content', id }],
-      category: tab,
-      folderId,
-    });
+  function moveManualByOffset(item: Content, offset: -1 | 1) {
+    const beforeId = neighbourTarget(listOf(item.id), item.id, offset);
+    if (beforeId !== undefined) moveManualItem(item.id, beforeId);
   }
   function setCardRatio(ratio: CardRatio) {
     const next = { ...cardRatioByTab, [tab]: ratio };
@@ -622,7 +556,7 @@ export function LibraryPanel({
     writeOptionalStorage('local', 'uimori-library-card-ratios', JSON.stringify(next));
   }
   function itemMenu(item: Content) {
-    const manualIndex = filtered.findIndex((entry) => entry.id === item.id);
+    const list = listOf(item.id);
     return (
       <LibraryItemMenu title={t('library.menu', { v0: item.title })}>
         <div className="action-menu-group">
@@ -671,7 +605,7 @@ export function LibraryPanel({
               <button
                 type="button"
                 className="secondary"
-                disabled={manualIndex === 0}
+                disabled={list[0]?.id === item.id}
                 onClick={() => moveManualByOffset(item, -1)}
               >
                 <UpIcon size={18} aria-hidden="true" />
@@ -680,7 +614,7 @@ export function LibraryPanel({
               <button
                 type="button"
                 className="secondary"
-                disabled={manualIndex === filtered.length - 1}
+                disabled={list.at(-1)?.id === item.id}
                 onClick={() => moveManualByOffset(item, 1)}
               >
                 <DownIcon size={18} aria-hidden="true" />
@@ -704,21 +638,119 @@ export function LibraryPanel({
       </LibraryItemMenu>
     );
   }
-  const detailRole: PrimaryLibraryTab = detail
-    ? organizedLibrary
-      ? libraryCategory(organizedLibrary, detail)
-      : detail.kind === 'persona'
-        ? 'persona'
-        : detail.kind === 'module'
-          ? 'module'
-          : 'bot'
-    : tab;
-  const detailFolderId =
-    detail && organizedLibrary
-      ? libraryFolderOf(organizedLibrary, { kind: 'content', id: detail.id })
-      : null;
+  function renderItem(item: Content) {
+    return (
+      <article
+        className={
+          views[tab] === 'cards' ? 'library-card library-portrait-card' : 'library-list-item'
+        }
+        key={item.id}
+        data-library-item-id={item.id}
+        data-has-portrait={item.kind === 'module' ? undefined : !!contentPortraitUrl(item)}
+        data-selected={selecting && selectedIds.includes(item.id) ? 'true' : undefined}
+        data-selecting={selecting ? 'true' : undefined}
+        {...itemDrag.item(item.id)}
+      >
+        {selecting && (
+          <label className="library-select-check">
+            <span className="sr-only">{t('library.select2', { v0: item.title })}</span>
+            <SelectionCheckbox
+              aria-label={t('library.select2', { v0: item.title })}
+              checked={selectedIds.includes(item.id)}
+              onChange={(event) =>
+                setSelectedIds((current) =>
+                  event.target.checked
+                    ? [...current, item.id]
+                    : current.filter((id) => id !== item.id)
+                )
+              }
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          className="library-open-content"
+          aria-label={t('library.detailAction', {
+            title: item.title,
+            action: selecting ? 'select' : 'detail',
+          })}
+          aria-pressed={selecting ? selectedIds.includes(item.id) : undefined}
+          onClick={() => (selecting ? toggleSelection(item.id) : void openContent(item))}
+          disabled={loading}
+        >
+          <ContentAvatar content={item} className="library-item-avatar" />
+          <span className="library-item-copy">
+            <strong title={item.title}>{item.title}</strong>
+            {item.description && <span>{item.description}</span>}
+            {searching && folder === 'all' && (
+              <small className="library-result-folder">
+                {folders.find((entry) => entry.id === folderOf(item.id))?.title ??
+                  t('library.uncategorized')}
+              </small>
+            )}
+          </span>
+        </button>
+        {!selecting && tab === 'bot' && (onUseContent || onStartStory) && (
+          <button
+            type="button"
+            className="secondary library-start-chat"
+            disabled={loading}
+            aria-label={t('library.newChatWith', { v0: item.title })}
+            onClick={() => void openContent(item, 'bot')}
+          >
+            <NewChatIcon size={20} aria-hidden="true" />
+            <span>{t('library.newChat')}</span>
+          </button>
+        )}
+        {!selecting && itemMenu(item)}
+      </article>
+    );
+  }
+  function renderItems(items: Content[]) {
+    return (
+      <div
+        className={views[tab] === 'cards' ? 'library-cards library-portrait-cards' : 'library-list'}
+        data-card-ratio={views[tab] === 'cards' ? cardRatioByTab[tab] : undefined}
+      >
+        {items.map(renderItem)}
+      </div>
+    );
+  }
+  const selectedFolder = folders.find((item) => item.id === folder);
+  const emptyHeading = searching
+    ? t('library.noMatchingResources')
+    : selectedFolder
+      ? t('library.thisFolderIsEmpty')
+      : !folders.length && !categoryItems.length
+        ? t('library.noRegisteredResourcesYet')
+        : '';
+  const emptyState = !ordered.length && !!emptyHeading && (
+    <div className="library-empty">
+      <h2>{emptyHeading}</h2>
+      <div className="library-empty-actions">
+        {query && (
+          <button type="button" className="secondary" onClick={() => setQuery('')}>
+            {t('library.clearSearch')}
+          </button>
+        )}
+        {folder !== 'all' && (
+          <button type="button" className="secondary" onClick={() => changeFolder('all')}>
+            {t('library.showAll')}
+          </button>
+        )}
+        {!query && (
+          <button type="button" onClick={openNew}>
+            <AddIcon size={20} aria-hidden="true" />
+            {t('library.create', { v0: t(contentLabelKeys[tab]) })}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+  const detailRole: PrimaryLibraryTab = detail ? categoryOf(detail) : tab;
+  const detailFolderId = detail ? folderOf(detail.id) : null;
   const detailFolder = detailFolderId
-    ? organizer.organization?.folders.find((item) => item.id === detailFolderId)?.title
+    ? organization?.folders.find((item) => item.id === detailFolderId)?.title
     : undefined;
   const detailCounts = detail?.package
     ? [
@@ -738,6 +770,7 @@ export function LibraryPanel({
         : t('library.addAs', { v0: title });
   const roleActionIcon = (id: PrimaryLibraryTab) =>
     id === 'bot' ? NewChatIcon : id === 'persona' ? PersonaIcon : ModuleIcon;
+  const newLabel = t('library.new', { v0: t(contentLabelKeys[tab]) });
   return (
     <section
       ref={panelRef}
@@ -748,6 +781,23 @@ export function LibraryPanel({
       <header className="library-heading" hidden={!!editing}>
         {headerLeading}
         <h1>{t('library.library')}</h1>
+        {library && !detail && (
+          <div className="library-heading-actions">
+            <RisuImport
+              defaultKind={tab === 'bot' ? '' : tab}
+              reload={reload}
+              onContinueChat={onContinueChat}
+            />
+            <IconButton
+              className="primary"
+              icon={AddIcon}
+              size={18}
+              label={newLabel}
+              text={newLabel}
+              onClick={openNew}
+            />
+          </div>
+        )}
         {headerTrailing}
       </header>
       <Dialog
@@ -796,6 +846,7 @@ export function LibraryPanel({
           setSelecting(false);
         }}
       />
+      {folderEditor.dialogs}
       {loading && (
         <LoadingState presentation="inline" label={t('library.loadingResourceContent')} />
       )}
@@ -918,11 +969,7 @@ export function LibraryPanel({
             <div>
               <h2>{detail.title}</h2>
               <small className="ui-meta-row">
-                <span>
-                  {organizedLibrary
-                    ? t(contentLabelKeys[libraryCategory(organizedLibrary, detail)])
-                    : t(contentLabelKeys[detail.kind])}
-                </span>
+                <span>{t(contentLabelKeys[detailRole])}</span>
                 {detailFolder && <span>{detailFolder}</span>}
               </small>
               {detail.description && <p>{detail.description}</p>}
@@ -1002,331 +1049,235 @@ export function LibraryPanel({
           </ScrollStrip>
           <div className="library-workspace">
             <div className="library-workspace-content">
-              <div className="library-toolbar">
-                {!selecting && (
-                  <LibraryFolders
-                    presentation="breadcrumb"
-                    category={tab}
-                    organizer={organizer}
-                    value={folder}
-                    onChange={changeFolder}
-                    counts={counts}
-                    reload={reload}
-                    onError={onError}
-                  />
-                )}
-                {selecting ? (
-                  <div
-                    className="library-bulk-toolbar"
-                    role="group"
-                    aria-label={t('library.resourceSelectionActions')}
-                  >
-                    <span role="status">
-                      {t('library.selectedCount', { count: selectedIds.length })}
-                    </span>
-                    <button
-                      type="button"
-                      className="secondary"
-                      aria-label={t('library.selectAllVisibleResources')}
-                      onClick={() => setSelectedIds(filtered.map((item) => item.id))}
+              {(selecting || !categoryEmpty) && (
+                <div className="library-toolbar">
+                  {selecting ? (
+                    <div
+                      className="library-bulk-toolbar"
+                      role="group"
+                      aria-label={t('library.resourceSelectionActions')}
                     >
-                      <SelectIcon size={18} aria-hidden="true" />
-                      <span>{t('library.selectAll')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={t('library.moveSelectedResources')}
-                      disabled={!selectedIds.length || organizer.busy}
-                      onClick={() => setMoving(selectedIds.map((id) => ({ kind: 'content', id })))}
-                    >
-                      <MoveIcon size={18} aria-hidden="true" />
-                      <span>{t('library.move')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      ref={selectionExit}
-                      onClick={() => {
-                        setSelectedIds([]);
-                        setSelecting(false);
-                      }}
-                    >
-                      {t('library.done')}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {!categoryEmpty && (
-                      <>
-                        <label className="library-search-field">
-                          <SearchIcon size={20} aria-hidden="true" />
-                          <span className="sr-only">{t('library.searchLibrary')}</span>
-                          <input
-                            type="search"
-                            aria-label={t('library.searchLibrary')}
-                            placeholder={t('library.searchByNameOrDescription')}
-                            value={query}
-                            onChange={(event) => setQuery(event.target.value)}
-                          />
-                        </label>
-                        <div
-                          className="library-view-buttons"
-                          role="group"
-                          aria-label={t('library.resourceView')}
+                      <span role="status">
+                        {t('library.selectedCount', { count: selectedIds.length })}
+                      </span>
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-label={t('library.selectAllVisibleResources')}
+                        onClick={() => setSelectedIds(visible.map((item) => item.id))}
+                      >
+                        <SelectIcon size={18} aria-hidden="true" />
+                        <span>{t('library.selectAll')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t('library.moveSelectedResources')}
+                        disabled={!selectedIds.length || organizer.busy}
+                        onClick={() =>
+                          setMoving(selectedIds.map((id) => ({ kind: 'content', id })))
+                        }
+                      >
+                        <MoveIcon size={18} aria-hidden="true" />
+                        <span>{t('library.move')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        ref={selectionExit}
+                        onClick={() => {
+                          setSelectedIds([]);
+                          setSelecting(false);
+                        }}
+                      >
+                        {t('library.done')}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <label className="library-search-field">
+                        <SearchIcon size={20} aria-hidden="true" />
+                        <span className="sr-only">{t('library.searchLibrary')}</span>
+                        <input
+                          type="search"
+                          aria-label={t('library.searchLibrary')}
+                          placeholder={t('library.searchByNameOrDescription')}
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                        />
+                      </label>
+                      <label className="library-sort-field">
+                        <SortIcon size={18} aria-hidden="true" />
+                        <select
+                          aria-label={t('library.resourceSortOrder')}
+                          value={sort}
+                          onChange={(event) => setSort(event.target.value as SortMode)}
                         >
-                          <IconButton
-                            icon={CardsIcon}
-                            size={18}
-                            label={t('library.cards')}
-                            title={t('library.cardView')}
-                            className="secondary"
-                            aria-pressed={views[tab] === 'cards'}
-                            onClick={() => setView('cards')}
-                          />
-                          <IconButton
-                            icon={ListIcon}
-                            size={18}
-                            label={t('library.list')}
-                            title={t('library.listView')}
-                            className="secondary"
-                            aria-pressed={views[tab] === 'list'}
-                            onClick={() => setView('list')}
-                          />
-                        </div>
-                        <LibraryItemMenu
-                          title={t('library.manageList')}
-                          className="library-list-options"
-                          icon={OptionsIcon}
-                        >
-                          <div className="library-list-options-body">
-                            <label>
-                              {t('library.sort')}
-                              <select
-                                aria-label={t('library.resourceSortOrder')}
-                                value={sort}
-                                onChange={(event) => setSort(event.target.value as SortMode)}
+                          <option value="name">{t('library.nameAscending')}</option>
+                          <option value="name-desc">{t('library.nameDescending')}</option>
+                          <option value="manual">{t('library.manualOrder')}</option>
+                        </select>
+                      </label>
+                      <div
+                        className="library-view-buttons"
+                        role="group"
+                        aria-label={t('library.resourceView')}
+                      >
+                        <IconButton
+                          icon={CardsIcon}
+                          size={18}
+                          label={t('library.cards')}
+                          title={t('library.cardView')}
+                          className="secondary"
+                          aria-pressed={views[tab] === 'cards'}
+                          onClick={() => setView('cards')}
+                        />
+                        <IconButton
+                          icon={ListIcon}
+                          size={18}
+                          label={t('library.list')}
+                          title={t('library.listView')}
+                          className="secondary"
+                          aria-pressed={views[tab] === 'list'}
+                          onClick={() => setView('list')}
+                        />
+                      </div>
+                      <LibraryItemMenu
+                        title={t('library.manageList')}
+                        className="library-list-options"
+                        icon={OptionsIcon}
+                      >
+                        <div className="library-list-options-body">
+                          {views[tab] === 'cards' && (
+                            <div className="library-card-ratio">
+                              <span>{t('library.cardAspectRatio')}</span>
+                              <div
+                                className="library-ratio-buttons"
+                                role="group"
+                                aria-label={t('library.cardAspectRatio')}
                               >
-                                <option value="name">{t('library.nameAscending')}</option>
-                                <option value="name-desc">{t('library.nameDescending')}</option>
-                                <option value="manual">{t('library.manualOrder')}</option>
-                              </select>
-                            </label>
-                            {views[tab] === 'cards' && (
-                              <div className="library-card-ratio">
-                                <span>{t('library.cardAspectRatio')}</span>
-                                <div
-                                  className="library-ratio-buttons"
-                                  role="group"
-                                  aria-label={t('library.cardAspectRatio')}
-                                >
-                                  {cardRatios.map((ratio) => (
-                                    <button
-                                      type="button"
-                                      className="secondary"
-                                      key={ratio}
-                                      aria-label={t('library.cardAspectRatio2', { v0: ratio })}
-                                      aria-pressed={cardRatioByTab[tab] === ratio}
-                                      onClick={() => setCardRatio(ratio)}
-                                    >
-                                      {ratio}
-                                    </button>
-                                  ))}
-                                </div>
+                                {cardRatios.map((ratio) => (
+                                  <button
+                                    type="button"
+                                    className="secondary"
+                                    key={ratio}
+                                    aria-label={t('library.cardAspectRatio2', { v0: ratio })}
+                                    aria-pressed={cardRatioByTab[tab] === ratio}
+                                    onClick={() => setCardRatio(ratio)}
+                                  >
+                                    {ratio}
+                                  </button>
+                                ))}
                               </div>
-                            )}
-                            <button
-                              type="button"
-                              className="secondary"
-                              onClick={() => {
-                                setSelecting(true);
-                                setSelectedIds([]);
-                              }}
-                            >
-                              <SelectIcon size={18} aria-hidden="true" />
-                              {t('library.select')}
-                            </button>
-                          </div>
-                        </LibraryItemMenu>
-                      </>
-                    )}
-                    <RisuImport
-                      defaultKind={tab === 'bot' ? '' : tab}
-                      reload={reload}
-                      onContinueChat={onContinueChat}
-                    />
-                  </>
-                )}
-                {!selecting && !(emptyState && !query) && (
-                  <button
-                    type="button"
-                    className="library-create primary ui-icon-button"
-                    aria-label={t('library.create', { v0: t(contentLabelKeys[tab]) })}
-                    title={t('library.create', { v0: t(contentLabelKeys[tab]) })}
-                    onClick={openNew}
-                    disabled={!library}
-                  >
-                    <AddIcon size={18} aria-hidden="true" />
-                  </button>
-                )}
-              </div>
-              {!!query && !selecting && (
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => {
+                              setSelecting(true);
+                              setSelectedIds([]);
+                            }}
+                          >
+                            <SelectIcon size={18} aria-hidden="true" />
+                            {t('library.select')}
+                          </button>
+                        </div>
+                      </LibraryItemMenu>
+                    </>
+                  )}
+                </div>
+              )}
+              {!selecting && (
+                <LibraryFolderChips
+                  category={tab}
+                  organizer={organizer}
+                  value={folder}
+                  onChange={changeFolder}
+                  counts={counts}
+                  total={categoryItems.length}
+                  editor={folderEditor}
+                  itemDrag={itemDrag}
+                />
+              )}
+              {searching && !selecting && (
                 <p className="library-result-count muted" role="status">
-                  {t('library.resultCount', { count: filtered.length })}
+                  {t('library.resultCount', { count: ordered.length })}
                 </p>
-              )}
-              {showFolders && folders.length > 0 && (
-                <section className="library-folder-section" aria-label={t('library.folderList')}>
-                  <h2>{t('library.folders')}</h2>
-                  <LibraryFolders
-                    presentation="cards"
-                    view={views[tab]}
-                    category={tab}
-                    organizer={organizer}
-                    value={folder}
-                    onChange={changeFolder}
-                    counts={counts}
-                    covers={folderCovers}
-                    reload={reload}
-                    onError={onError}
-                    draggedItemId={draggedItemId}
-                    dropFolderId={dropTarget?.kind === 'folder' ? dropTarget.id : null}
-                    onFolderDragOver={dragOverFolder}
-                    onFolderDragLeave={dragLeaveFolder}
-                    onFolderDrop={(folderId, event) => void dropOnFolder(folderId, event)}
-                  />
-                </section>
-              )}
-              {folder === 'all' && !query.trim() && folders.length > 0 && filtered.length > 0 && (
-                <h2 className="library-section-title">
-                  {t('library.uncategorizedRole', { role: t(contentLabelKeys[tab]) })}
-                </h2>
               )}
               <div
                 id="library-results"
                 role="tabpanel"
                 aria-labelledby={`library-tab-${tab}`}
-                className={
-                  views[tab] === 'cards' ? 'library-cards library-portrait-cards' : 'library-list'
-                }
-                data-card-ratio={views[tab] === 'cards' ? cardRatioByTab[tab] : undefined}
+                className="library-results"
               >
-                {filtered.map((item) => (
-                  <article
-                    className={
-                      views[tab] === 'cards'
-                        ? 'library-card library-portrait-card'
-                        : 'library-list-item'
-                    }
-                    key={item.id}
-                    data-library-item-id={item.id}
-                    data-has-portrait={
-                      item.kind === 'module' ? undefined : !!contentPortraitUrl(item)
-                    }
-                    data-selected={selecting && selectedIds.includes(item.id) ? 'true' : undefined}
-                    data-selecting={selecting ? 'true' : undefined}
-                    data-dragging={draggedItemId === item.id ? 'true' : undefined}
-                    data-drop-target={
-                      dropTarget?.kind === 'item' && dropTarget.id === item.id ? 'true' : undefined
-                    }
-                    draggable={!selecting && !organizer.busy}
-                    onDragStart={(event) => startDragging(item, event)}
-                    onDragEnd={clearDragging}
-                    onDragOver={(event) => dragOverItem(item, event)}
-                    onDrop={(event) => dropOnItem(item, event)}
-                  >
-                    {selecting && (
-                      <label className="library-select-check">
-                        <span className="sr-only">{t('library.select2', { v0: item.title })}</span>
-                        <SelectionCheckbox
-                          aria-label={t('library.select2', { v0: item.title })}
-                          checked={selectedIds.includes(item.id)}
-                          onChange={(event) =>
-                            setSelectedIds((current) =>
-                              event.target.checked
-                                ? [...current, item.id]
-                                : current.filter((id) => id !== item.id)
-                            )
-                          }
-                        />
-                      </label>
-                    )}
-                    <button
-                      type="button"
-                      className="library-open-content"
-                      aria-label={t('library.detailAction', {
-                        title: item.title,
-                        action: selecting ? 'select' : 'detail',
-                      })}
-                      aria-pressed={selecting ? selectedIds.includes(item.id) : undefined}
-                      onClick={() =>
-                        selecting ? toggleSelection(item.id) : void openContent(item)
-                      }
-                      disabled={loading}
-                    >
-                      <ContentAvatar content={item} className="library-item-avatar" />
-                      <span className="library-item-copy">
-                        <strong title={item.title}>{item.title}</strong>
-                        {item.description && <span>{item.description}</span>}
-                        {!!query.trim() && folder === 'all' && (
-                          <small className="library-result-folder">
-                            {folders.find(
-                              (entry) =>
-                                entry.id ===
-                                libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id })
-                            )?.title ?? t('library.uncategorized')}
-                          </small>
-                        )}
-                      </span>
-                    </button>
-                    {!selecting && tab === 'bot' && (onUseContent || onStartStory) && (
-                      <button
-                        type="button"
-                        className="secondary library-start-chat"
-                        disabled={loading}
-                        aria-label={t('library.newChatWith', { v0: item.title })}
-                        onClick={() => void openContent(item, 'bot')}
-                      >
-                        <NewChatIcon size={20} aria-hidden="true" />
-                        <span>{t('library.newChat')}</span>
-                      </button>
-                    )}
-                    {!selecting && itemMenu(item)}
-                  </article>
-                ))}
-                {emptyState && (
-                  <div className="library-empty">
-                    <h2>
-                      {query
-                        ? t('library.noMatchingResources')
-                        : folder !== 'all'
-                          ? t('library.thisFolderIsEmpty')
-                          : folders.length > 0
-                            ? t('library.noUncategorizedResources')
-                            : t('library.noRegisteredResourcesYet')}
-                    </h2>
-                    <div className="library-empty-actions">
-                      {query && (
-                        <button type="button" className="secondary" onClick={() => setQuery('')}>
-                          {t('library.clearSearch')}
-                        </button>
-                      )}
-                      {folder !== 'all' && (
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => changeFolder('all')}
+                {selectedFolder ? (
+                  <LibraryFolderSection
+                    folder={selectedFolder}
+                    title={selectedFolder.title}
+                    count={counts[selectedFolder.id] ?? 0}
+                    covers={folderCovers[selectedFolder.id]}
+                    menu={
+                      !selecting && (
+                        <LibraryItemMenu
+                          title={t('library.folderMenu', { v0: selectedFolder.title })}
                         >
-                          {t('library.showAll')}
-                        </button>
-                      )}
-                      {!query && (
-                        <button type="button" onClick={openNew}>
-                          <AddIcon size={20} aria-hidden="true" />
-                          {t('library.create', { v0: t(contentLabelKeys[tab]) })}
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                          {folderEditor.folderActions(selectedFolder)}
+                        </LibraryItemMenu>
+                      )
+                    }
+                  >
+                    {ordered.length > 0 && renderItems(ordered)}
+                    {emptyState}
+                  </LibraryFolderSection>
+                ) : sectioned && folders.length ? (
+                  sections.map(({ folder: sectionFolder, items }) =>
+                    sectionFolder ? (
+                      <LibraryFolderSection
+                        key={sectionFolder.id}
+                        folder={sectionFolder}
+                        title={sectionFolder.title}
+                        count={items.length}
+                        covers={folderCovers[sectionFolder.id]}
+                        collapsed={isCollapsed(sectionFolder.id)}
+                        onToggle={() => collapsedFolders.toggle(sectionFolder.id)}
+                        menu={
+                          !selecting && (
+                            <LibraryItemMenu
+                              title={t('library.folderMenu', { v0: sectionFolder.title })}
+                            >
+                              {folderEditor.folderActions(sectionFolder)}
+                            </LibraryItemMenu>
+                          )
+                        }
+                        drop={itemDrag.folder(sectionFolder.id)}
+                      >
+                        {items.length ? (
+                          renderItems(items)
+                        ) : (
+                          <p className="library-section-empty muted">
+                            {t('library.thisFolderIsEmpty')}
+                          </p>
+                        )}
+                      </LibraryFolderSection>
+                    ) : (
+                      <LibraryFolderSection
+                        key="unfiled"
+                        folder={null}
+                        title={t('library.uncategorizedRole', {
+                          role: t(contentLabelKeys[tab]),
+                        })}
+                        count={items.length}
+                        drop={itemDrag.folder(null)}
+                      >
+                        {renderItems(items)}
+                      </LibraryFolderSection>
+                    )
+                  )
+                ) : (
+                  <>
+                    {ordered.length > 0 && renderItems(ordered)}
+                    {emptyState}
+                  </>
                 )}
               </div>
             </div>

@@ -19,11 +19,17 @@ export type LibraryOrganization = {
   items: LibraryPlacement[];
 };
 export const libraryItemKey = (item: LibraryItemKey) => `${item.kind}:${item.id}`;
-export function libraryCategory(library: Library, content: Content): Content['kind'] {
-  const placement = library.organization?.items.find(
-    (item) => item.kind === 'content' && item.id === content.id
-  );
+export function placementCategory(
+  placement: LibraryPlacement | undefined,
+  content: Content
+): Content['kind'] {
   return placement && placement.category !== 'prompts' ? placement.category : content.kind;
+}
+export function libraryCategory(library: Library, content: Content): Content['kind'] {
+  return placementCategory(
+    library.organization?.items.find((item) => item.kind === 'content' && item.id === content.id),
+    content
+  );
 }
 export function libraryFolderOf(library: Library, item: LibraryItemKey): string | null {
   return (

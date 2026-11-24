@@ -4,13 +4,6 @@
 .library-workspace-content {
   min-width: 0;
 }
-.library-folders {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
 .library-folder-review {
   border: var(--hairline) solid var(--border);
   border-radius: var(--radius-control);
@@ -73,41 +66,6 @@
 .library-folder-form {
   display: grid;
   gap: 16px;
-}
-.library-folder-card[draggable="true"] {
-  position: relative;
-}
-.library-folder-card[draggable="true"] .library-folder-open {
-  cursor: grab;
-}
-.library-folder-card[data-drop-position]::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: var(--hairline);
-  border-radius: var(--radius-small);
-  background: var(--accent);
-}
-.library-folder-card[data-drop-position="before"]::after {
-  left: -6px;
-}
-.library-folder-card[data-drop-position="after"]::after {
-  right: -6px;
-}
-.library-folder-grid[data-view="list"] .library-folder-card[data-drop-position]::after {
-  left: 0;
-  right: 0;
-  width: auto;
-  height: var(--hairline);
-  bottom: auto;
-}
-.library-folder-grid[data-view="list"] .library-folder-card[data-drop-position="before"]::after {
-  top: -5px;
-}
-.library-folder-grid[data-view="list"] .library-folder-card[data-drop-position="after"]::after {
-  top: auto;
-  bottom: -5px;
 }
 .library-folder-form input,
 .library-folder-form select {

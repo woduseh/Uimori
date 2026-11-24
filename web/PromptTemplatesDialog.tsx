@@ -82,7 +82,7 @@ export function PromptTemplatesDialog({
   return (
     <Dialog
       open={open}
-      title={t('prompts.uiBuiltInPrompts')}
+      title={t('prompts.templates')}
       className="prompt-templates-dialog"
       onClose={onClose}
     >

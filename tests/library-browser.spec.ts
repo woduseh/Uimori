@@ -40,7 +40,7 @@ async function organization(request: APIRequestContext) {
   return response.json() as Promise<LibraryOrganization>;
 }
 async function createFolder(page: Page, panel: Locator, title: string) {
-  await expect(panel.locator('.library-folders')).toBeVisible();
+  await expect(panel.locator('.library-folder-bar')).toBeVisible();
   await panel.getByRole('button', { name: '새 폴더', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 폴더', exact: true });
   await dialog.getByLabel('폴더 이름', { exact: true }).fill(title);
@@ -53,7 +53,7 @@ async function createFolder(page: Page, panel: Locator, title: string) {
 }
 async function revealFolderActions(panel: Locator, title: string) {
   const summary = panel
-    .locator('.library-folders')
+    .locator('.library-section-heading')
     .getByLabel(`${title} 폴더 메뉴`, { exact: true });
   if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await summary.click();
@@ -63,13 +63,15 @@ async function revealListOptions(panel: Locator) {
   if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await summary.click();
 }
+function folderChip(panel: Locator, title: string) {
+  return title === '전체'
+    ? panel.locator('.library-folder-bar').getByRole('button', { name: /^전체 \d+$/ })
+    : panel.locator('.library-folder-chip-slot').filter({ hasText: title }).getByRole('button');
+}
 async function chooseFolder(panel: Locator, title: string) {
-  await panel
-    .getByRole('navigation', { name: '현재 폴더', exact: true })
-    .getByRole('button', { name: '전체', exact: true })
-    .click();
-  if (title !== '전체')
-    await panel.getByRole('button', { name: `${title} 폴더 열기`, exact: true }).click();
+  const chip = folderChip(panel, title);
+  await chip.click();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
 }
 async function moveItems(
   page: Page,
@@ -130,7 +132,7 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   const targetFolder = panel.locator(`[data-folder-id="${folder.id}"]`);
   const targetBox = (await targetFolder.boundingBox())!;
   await panel.locator(`[data-folder-id="${otherFolder.id}"]`).dragTo(targetFolder, {
-    targetPosition: { x: 4, y: targetBox.height - 4 },
+    targetPosition: { x: targetBox.width - 4, y: 4 },
   });
   await expect
     .poll(async () => {
@@ -145,7 +147,7 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   await expect
     .poll(() =>
       panel
-        .locator('.library-folder-card')
+        .locator('.library-folder-chip-slot')
         .evaluateAll(
           (nodes, expected) =>
             nodes
@@ -485,8 +487,10 @@ test('LIBUI10 the library root keeps its create action when every resource is in
     await navigationAction(page, '서재');
     const panel = page.getByTestId('library-panel');
     await panel.getByRole('tab', { name: '페르소나', exact: true }).click();
-    await expect(panel.getByRole('button', { name: `${prefix} folder 폴더 열기` })).toBeVisible();
-    const create = panel.getByRole('button', { name: '페르소나 만들기', exact: true });
+    await expect(panel.locator(`[data-folder-section="${folder.id}"]`)).toContainText(
+      `${prefix} persona`
+    );
+    const create = panel.getByRole('button', { name: '새 페르소나', exact: true });
     await expect(create).toHaveCount(1);
     await create.click();
     await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
@@ -836,14 +840,15 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
     await panel.getByRole('button', { name: '목록', exact: true }).click();
     await expect(
-      panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
+      panel
+        .locator(`[data-folder-section="${folder.id}"]`)
+        .getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
     ).toBeVisible();
     await expect(
-      panel.getByRole('button', { name: `${loose.title} 상세 보기`, exact: true })
+      panel
+        .locator('[data-folder-section=""]')
+        .getByRole('button', { name: `${loose.title} 상세 보기`, exact: true })
     ).toBeVisible();
-    await expect(
-      panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
-    ).toHaveCount(0);
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-overview-${width}.png`) });
     await search.fill(prefix);
@@ -927,9 +932,7 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   let panel = page.getByTestId('library-panel');
-  await revealListOptions(panel);
   await panel.getByLabel('자료 정렬', { exact: true }).selectOption('manual');
-  await page.keyboard.press('Escape');
 
   const item = (id: string) => panel.locator(`[data-library-item-id="${id}"]`);
   await item(beta.id).dragTo(item(alpha.id));
@@ -947,9 +950,7 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
 
   await page.reload();
   panel = page.getByTestId('library-panel');
-  await revealListOptions(panel);
   await expect(panel.getByLabel('자료 정렬', { exact: true })).toHaveValue('manual');
-  await page.keyboard.press('Escape');
   const afterReload = await panel
     .locator('[data-library-item-id]')
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-library-item-id')));
@@ -966,25 +967,25 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
         (await organization(request)).items.find((entry) => entry.id === beta.id)?.folderId
     )
     .toBe(folder.id);
-  await expect(panel.locator(`[data-library-item-id="${beta.id}"]`)).toHaveCount(0);
+  const section = panel.locator(`[data-folder-section="${folder.id}"]`);
+  await expect(section.locator(`[data-library-item-id="${beta.id}"]`)).toBeVisible();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('library-folder-drop-desktop.png') });
-  await item(alpha.id).dragTo(panel.locator(`[data-folder-id="${folder.id}"]`));
-  await expect
-    .poll(
-      async () =>
-        (await organization(request)).items.find((entry) => entry.id === alpha.id)?.folderId
-    )
-    .toBe(folder.id);
-  await expect(panel.locator('[data-library-item-id]')).toHaveCount(0);
+  await panel.getByLabel('자료 정렬', { exact: true }).selectOption('name');
+  await panel.getByRole('button', { name: '목록', exact: true }).click();
+  const folderOf = async (id: string) =>
+    (await organization(request)).items.find((entry) => entry.id === id)?.folderId;
+  await item(beta.id).dragTo(panel.locator('[data-folder-section=""] .library-section-heading'));
+  await expect.poll(() => folderOf(beta.id)).toBeNull();
+  for (const id of [alpha.id, beta.id]) {
+    await item(id).dragTo(section.locator('.library-section-heading'));
+    await expect.poll(() => folderOf(id)).toBe(folder.id);
+  }
+  await expect(section.locator('[data-library-item-id]')).toHaveCount(2);
+  await expect(panel.locator('[data-folder-section=""]')).toHaveCount(0);
   await expect(panel.locator('.library-empty')).toHaveCount(0);
-  await expect(
-    panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
-  ).toBeVisible();
   await page.reload();
-  await expect(
-    panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
-  ).toBeVisible();
+  await expect(section.locator('[data-library-item-id]')).toHaveCount(2);
   await expect(panel.locator('.library-empty')).toHaveCount(0);
 });
 
@@ -1049,3 +1050,122 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
     release();
   }
 });
+
+test('LIBUI11 all shows every resource in folder sections, chips filter and collapsed folders persist', async ({
+  page,
+  request,
+}, info) => {
+  const prefix = `LIBUI11 ${crypto.randomUUID()}`;
+  const loose = await createContent(request, `${prefix} Loose`);
+  const filed = await createContent(request, `${prefix} Filed`);
+  const created = await request.post('/api/library/folders', {
+    data: {
+      expectedRevision: (await organization(request)).revision,
+      category: 'bot',
+      title: `${prefix} Folder`,
+    },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const folder = ((await created.json()) as LibraryOrganization).folders.find(
+    (entry) => entry.title === `${prefix} Folder`
+  )!;
+  const moved = await request.post('/api/library/organization/move', {
+    data: {
+      expectedRevision: (await organization(request)).revision,
+      items: [{ kind: 'content', id: filed.id }],
+      category: 'bot',
+      folderId: folder.id,
+    },
+  });
+  expect(moved.ok(), await moved.text()).toBe(true);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  const section = panel.locator(`[data-folder-section="${folder.id}"]`);
+  const open = (item: Content) =>
+    panel.getByRole('button', { name: `${item.title} 상세 보기`, exact: true });
+  await expect(section.getByRole('button', { name: `${filed.title} 상세 보기` })).toBeVisible();
+  await expect(
+    panel
+      .locator('[data-folder-section=""]')
+      .getByRole('button', { name: `${loose.title} 상세 보기` })
+  ).toBeVisible();
+  await expect(folderChip(panel, '전체')).toHaveAttribute('aria-pressed', 'true');
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('library-sections-desktop.png') });
+
+  await chooseFolder(panel, folder.title);
+  await expect(open(filed)).toBeVisible();
+  await expect(open(loose)).toHaveCount(0);
+  await expect(panel.locator('[data-folder-section]')).toHaveCount(1);
+  await chooseFolder(panel, '전체');
+  await expect(open(loose)).toBeVisible();
+
+  const toggle = section.getByRole('button', { name: new RegExp(`^${prefix} Folder`) });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(open(filed)).toHaveCount(0);
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(open(filed)).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('uimori:library-collapsed-folders'))).toBe(
+    JSON.stringify([folder.id])
+  );
+  await chooseFolder(panel, folder.title);
+  await expect(open(filed)).toBeVisible();
+  await chooseFolder(panel, '전체');
+  await toggle.click();
+  await expect(open(filed)).toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem('uimori:library-collapsed-folders'))
+  ).toBeNull();
+});
+
+for (const width of [MOBILE_WIDTH, 1440] as const) {
+  test(`LIBUI12 the library and prompt lists share their top rows at ${width}px`, async ({
+    page,
+    request,
+  }) => {
+    const prefix = `LIBUI12 ${width} ${crypto.randomUUID()}`;
+    await createContent(request, `${prefix} bot`);
+    const prompt = await request.post('/api/prompt-presets', {
+      data: {
+        title: `${prefix} prompt`,
+        role: 'main',
+        program: createDefaultRisuPrompt('Synthetic instructions', 'main'),
+      },
+    });
+    expect(prompt.ok(), await prompt.text()).toBe(true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const library = page.getByTestId('library-panel');
+    const position = async (search: Locator, tabs: Locator) => {
+      await expect(search).toBeVisible();
+      const [searchBox, tabsBox] = await Promise.all([search.boundingBox(), tabs.boundingBox()]);
+      return { search: Math.round(searchBox!.y), tabs: Math.round(tabsBox!.y) };
+    };
+    const libraryRows = await position(
+      library.getByRole('searchbox', { name: '서재 검색', exact: true }),
+      library.getByRole('tablist', { name: '서재 분류', exact: true })
+    );
+    for (const name of ['자료 가져오기', '새 봇'])
+      await expect(library.getByRole('button', { name, exact: true })).toBeInViewport();
+    await expect(library.getByLabel('자료 정렬', { exact: true })).toBeVisible();
+    await navigationAction(page, '프롬프트');
+    const prompts = page.getByTestId('prompt-library');
+    const promptRows = await position(
+      prompts.getByRole('searchbox', { name: '프롬프트 검색', exact: true }),
+      prompts.getByRole('tablist', { name: '프롬프트 역할 필터', exact: true })
+    );
+    expect(promptRows).toEqual(libraryRows);
+    await expect(prompts.getByRole('tab')).toHaveText(['전체', '창작', '번역']);
+    const visibleText = await prompts
+      .locator('.library-heading-actions .ui-icon-button-text')
+      .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).display !== 'none'));
+    expect(visibleText.every((shown) => shown === width > 760)).toBe(true);
+    for (const panel of [prompts]) {
+      expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    }
+  });
+}

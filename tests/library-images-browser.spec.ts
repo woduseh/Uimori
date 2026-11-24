@@ -561,7 +561,7 @@ test('LIBCOVER a folder cover follows its resources until an image is chosen or 
     (await organization()).folders.find((folder) => folder.id === folderId)!.coverImageHash;
 
   const library = await openLibrary(page, 'bot');
-  const card = library.locator(`[data-folder-id="${folderId}"]`);
+  const card = library.locator(`[data-folder-section="${folderId}"]`);
   const cardCover = card.locator('.library-folder-cover img');
   await expect(cardCover).toHaveAttribute('src', thumbnail(portrait.hash));
   const treeCover = page

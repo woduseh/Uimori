@@ -178,7 +178,7 @@ export async function editLibraryContent(page: Page, title: string) {
 export async function createLibraryContent(page: Page) {
   await page
     .getByTestId('library-panel')
-    .getByRole('button', { name: /^(새로 만들기|봇 만들기|페르소나 만들기|모듈 만들기)$/ })
+    .getByRole('button', { name: /^(새 봇|새 페르소나|새 모듈)$/ })
     .click();
 }
 export async function revealLibraryEditor(page: Page) {

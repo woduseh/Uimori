@@ -281,6 +281,42 @@ export const messages = {
     ja: '新しいプロンプト',
     zh: '新提示词',
   },
+  'prompts.defaultPromptSettings': {
+    ko: '기본 프롬프트 설정',
+    en: 'Default prompt settings',
+    ja: '既定のプロンプト設定',
+    zh: '默认提示词设置',
+  },
+  'prompts.templates': {
+    ko: '템플릿',
+    en: 'Templates',
+    ja: 'テンプレート',
+    zh: '模板',
+  },
+  'prompts.defaultWriting': {
+    ko: '기본 창작',
+    en: 'Default writing',
+    ja: '既定の創作',
+    zh: '默认创作',
+  },
+  'prompts.defaultTranslation': {
+    ko: '기본 번역',
+    en: 'Default translation',
+    ja: '既定の翻訳',
+    zh: '默认翻译',
+  },
+  'prompts.useAsDefault': {
+    ko: '기본으로 사용',
+    en: 'Use as default',
+    ja: '既定にする',
+    zh: '设为默认',
+  },
+  'prompts.defaultChanged': {
+    ko: '{role, select, translation {{name} 프롬프트를 기본 번역으로 정했어요.} other {{name} 프롬프트를 기본 창작으로 정했어요.}}',
+    en: '{role, select, translation {{name} is now the default translation prompt.} other {{name} is now the default writing prompt.}}',
+    ja: '{role, select, translation {{name}を既定の翻訳プロンプトにしました。} other {{name}を既定の創作プロンプトにしました。}}',
+    zh: '{role, select, translation {已将{name}设为默认翻译提示词。} other {已将{name}设为默认创作提示词。}}',
+  },
   'prompts.userPromptTitle': {
     ko: '{role, select, main {창작} other {번역}} 사용자 프롬프트',
     en: '{role, select, main {Writing} other {Translation}} user prompt',
@@ -359,12 +395,6 @@ export const messages = {
     ja: '名前で検索',
     zh: '按名称搜索',
   },
-  'prompts.uiManageList': {
-    ko: '목록 관리',
-    en: 'Manage list',
-    ja: '一覧を管理',
-    zh: '管理列表',
-  },
   'prompts.uiFilterPromptRoles': {
     ko: '프롬프트 역할 필터',
     en: 'Filter prompt roles',
@@ -372,16 +402,10 @@ export const messages = {
     zh: '筛选提示词角色',
   },
   'prompts.uiAllRoles': {
-    ko: '모든 역할',
-    en: 'All roles',
-    ja: 'すべての役割',
-    zh: '所有角色',
-  },
-  'prompts.uiSort': {
-    ko: '정렬',
-    en: 'Sort',
-    ja: '並べ替え',
-    zh: '排序',
+    ko: '전체',
+    en: 'All',
+    ja: 'すべて',
+    zh: '全部',
   },
   'prompts.uiSortPrompts': {
     ko: '프롬프트 정렬',
@@ -418,24 +442,6 @@ export const messages = {
     en: 'Current prompt settings',
     ja: '現在のプロンプト設定',
     zh: '当前提示词设置',
-  },
-  'prompts.uiBuiltInPrompts': {
-    ko: '기본 프롬프트',
-    en: 'Built-in prompts',
-    ja: '標準プロンプト',
-    zh: '内置提示词',
-  },
-  'prompts.uiFolderList': {
-    ko: '폴더 목록',
-    en: 'Folder list',
-    ja: 'フォルダー一覧',
-    zh: '文件夹列表',
-  },
-  'prompts.uiFolders': {
-    ko: '폴더',
-    en: 'Folders',
-    ja: 'フォルダー',
-    zh: '文件夹',
   },
   'prompts.uiAllPrompts': {
     ko: '전체 프롬프트',
