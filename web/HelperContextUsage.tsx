@@ -21,6 +21,35 @@ const parts: (keyof HelperInputParts)[] = [
   'toolResults',
 ];
 
+type Segment = { part: keyof HelperInputParts | 'other'; tokens: number };
+
+function UsageBar({
+  segments,
+  scale,
+  threshold,
+}: {
+  segments: Segment[];
+  scale: number;
+  threshold: number;
+}) {
+  return (
+    <span
+      className="helper-context-usage-bar"
+      aria-hidden="true"
+      style={{ '--usage-threshold': threshold / scale } as CSSProperties}
+    >
+      {segments.map(({ part, tokens }) => (
+        <span
+          key={part}
+          className="helper-context-usage-segment"
+          data-part={part}
+          style={{ '--part-share': tokens / scale } as CSSProperties}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function HelperContextUsage({
   usage,
   context,
@@ -47,10 +76,11 @@ export function HelperContextUsage({
   const native = usage.latestInputExecution === 'codex-native';
   const reported = usage.latestInputTokens ?? null;
   const measured = native ? null : usage.latestInputEstimate;
-  const estimate =
-    measured !== null && compacted
-      ? Math.max(compacted.afterTokens, measured - compacted.beforeTokens + compacted.afterTokens)
-      : measured;
+  const afterCompaction = (amount: number) =>
+    compacted
+      ? Math.max(compacted.afterTokens, amount - compacted.beforeTokens + compacted.afterTokens)
+      : amount;
+  const estimate = measured === null ? null : afterCompaction(measured);
   const limit = native ? null : (usage.latestInputLimit ?? null);
   const share = estimate !== null && limit ? estimate / limit : null;
   const threshold = limit ? Math.floor(limit * HELPER_COMPACTION_INPUT_RATIO) : null;
@@ -62,6 +92,21 @@ export function HelperContextUsage({
         : share >= HELPER_COMPACTION_INPUT_RATIO
           ? 'near'
           : undefined;
+  const rows = parts.map((part) => {
+    const amount = usage.latestInputParts?.[part] ?? null;
+    return {
+      part,
+      tokens: part === 'history' && amount !== null ? afterCompaction(amount) : amount,
+    };
+  });
+  const known = rows.flatMap((row) => (row.tokens === null ? [] : [row.tokens]));
+  const other =
+    estimate === null ? null : Math.max(0, estimate - known.reduce((sum, value) => sum + value, 0));
+  const segments: Segment[] = [
+    ...rows.flatMap(({ part, tokens }) => (tokens ? [{ part, tokens }] : [])),
+    ...(other ? [{ part: 'other' as const, tokens: other }] : []),
+  ];
+  const scale = limit && estimate !== null ? Math.max(limit, estimate) : null;
   const unknown = estimate === null && !(native && reported !== null);
   const text =
     estimate !== null
@@ -87,11 +132,27 @@ export function HelperContextUsage({
   }`;
   const value = (amount: number | null | undefined) =>
     amount == null ? t('helperResults.unknown') : formatNumber(amount);
+  const percent = (amount: number | null) =>
+    amount === null || !limit
+      ? ''
+      : formatNumber(amount / limit, { style: 'percent', maximumFractionDigits: 1 });
   const failureText = compactError
     ? translateMessage(compactError)
     : failure
       ? t(`errors.${failure}`)
       : '';
+  const row = (name: string, amount: string, part?: string, shareText = '', className?: string) => (
+    <tr key={name} className={className}>
+      <th scope="row">
+        <span className="helper-context-usage-name">
+          <span className="helper-context-usage-key" data-part={part} aria-hidden="true" />
+          {name}
+        </span>
+      </th>
+      <td>{amount}</td>
+      {limit !== null && <td>{shareText}</td>}
+    </tr>
+  );
   return (
     <ActionMenu
       className="helper-context-usage"
@@ -115,83 +176,99 @@ export function HelperContextUsage({
             )}
             <span className="helper-context-usage-text">{text}</span>
             {shortText && <span className="helper-context-usage-short">{shortText}</span>}
-            {share !== null && (
-              <span
-                className="helper-context-usage-bar"
-                aria-hidden="true"
-                style={
-                  {
-                    '--usage-share': Math.min(1, share),
-                    '--usage-threshold': HELPER_COMPACTION_INPUT_RATIO,
-                  } as CSSProperties
-                }
-              />
+            {scale !== null && threshold !== null && (
+              <UsageBar segments={segments} scale={scale} threshold={threshold} />
             )}
           </span>
         )
       }
     >
       <div className="helper-context-usage-body">
-        <strong>{t('helperUsage.label')}</strong>
-        <dl>
+        <div className="helper-context-usage-head">
+          <strong>{t('helperUsage.label')}</strong>
+          {estimate !== null && (
+            <span className="helper-context-usage-headline">
+              <span>
+                {limit
+                  ? t('helperUsage.headline', {
+                      input: usageCompact(estimate),
+                      limit: usageCompact(limit),
+                    })
+                  : t('helperUsage.headlineNoLimit', { input: usageCompact(estimate) })}
+              </span>
+              {share !== null && (
+                <span className="helper-context-usage-percent" data-level={level}>
+                  {percent(estimate)}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+        {scale !== null && threshold !== null && (
+          <UsageBar segments={segments} scale={scale} threshold={threshold} />
+        )}
+        <table className="helper-context-usage-table" aria-label={t('helperUsage.label')}>
+          <thead className="sr-only">
+            <tr>
+              <th scope="col">{t('helperUsage.columnPart')}</th>
+              <th scope="col">{t('helperUsage.columnTokens')}</th>
+              {limit !== null && <th scope="col">{t('helperUsage.columnShare')}</th>}
+            </tr>
+          </thead>
           {native ? (
-            <div className="helper-context-usage-row">
-              <dt>{t('helperUsage.reported')}</dt>
-              <dd>{value(reported)}</dd>
-            </div>
+            <tbody>{row(t('helperUsage.reported'), value(reported))}</tbody>
           ) : (
             <>
-              {compacted ? (
-                <>
-                  <div className="helper-context-usage-row">
-                    <dt>{t('helperUsage.beforeCompaction')}</dt>
-                    <dd>{formatNumber(compacted.beforeTokens)}</dd>
-                  </div>
-                  <div className="helper-context-usage-row">
-                    <dt>{t('helperUsage.afterCompaction')}</dt>
-                    <dd>{formatNumber(compacted.afterTokens)}</dd>
-                  </div>
-                </>
-              ) : (
-                parts.map((part) => (
-                  <div key={part} className="helper-context-usage-row">
-                    <dt>{t(`helperUsage.${part}`)}</dt>
-                    <dd>{value(usage.latestInputParts?.[part])}</dd>
-                  </div>
-                ))
-              )}
-              <div className="helper-context-usage-row helper-context-usage-total">
-                <dt>{t('helperUsage.total')}</dt>
-                <dd>{value(estimate)}</dd>
-              </div>
-              <div className="helper-context-usage-row">
-                <dt>{t('helperUsage.limit')}</dt>
-                <dd>{value(limit)}</dd>
-              </div>
-              {threshold !== null && (
-                <div className="helper-context-usage-row">
-                  <dt>{t('helperUsage.threshold')}</dt>
-                  <dd>{formatNumber(threshold)}</dd>
-                </div>
-              )}
-              {context && context.compactedMessages > 0 && (
-                <div className="helper-context-usage-row">
-                  <dt>{t('helperUsage.compacted')}</dt>
-                  <dd>{t('helperUsage.compactedCount', { count: context.compactedMessages })}</dd>
-                </div>
-              )}
+              <tbody>
+                {rows.map(({ part, tokens }) =>
+                  row(t(`helperUsage.${part}`), value(tokens), part, percent(tokens))
+                )}
+                {other !== null &&
+                  other > 0 &&
+                  known.length > 0 &&
+                  row(t('helperUsage.other'), formatNumber(other), 'other', percent(other))}
+              </tbody>
+              <tbody>
+                {row(
+                  t('helperUsage.total'),
+                  value(estimate),
+                  undefined,
+                  percent(estimate),
+                  'helper-context-usage-total'
+                )}
+                {limit !== null &&
+                  estimate !== null &&
+                  row(
+                    t('helperUsage.free'),
+                    formatNumber(Math.max(0, limit - estimate)),
+                    'free',
+                    percent(Math.max(0, limit - estimate))
+                  )}
+                {(limit === null || estimate === null) && row(t('helperUsage.limit'), value(limit))}
+                {threshold !== null &&
+                  row(
+                    t('helperUsage.threshold'),
+                    formatNumber(threshold),
+                    'threshold',
+                    percent(threshold)
+                  )}
+                {compacted &&
+                  row(t('helperUsage.beforeCompaction'), formatNumber(compacted.beforeTokens))}
+                {compacted &&
+                  row(t('helperUsage.afterCompaction'), formatNumber(compacted.afterTokens))}
+                {context &&
+                  context.compactedMessages > 0 &&
+                  row(
+                    t('helperUsage.compacted'),
+                    t('helperUsage.compactedCount', { count: context.compactedMessages })
+                  )}
+              </tbody>
             </>
           )}
-        </dl>
-        <p>
-          {t(
-            native
-              ? 'helperUsage.nativeNote'
-              : compacted
-                ? 'helperUsage.compactedNote'
-                : 'helperUsage.estimateNote'
-          )}
-        </p>
+        </table>
+        {(native || compacted) && (
+          <p>{t(native ? 'helperUsage.nativeNote' : 'helperUsage.compactedNote')}</p>
+        )}
         {!native && onCompact && (
           <div className="helper-context-usage-actions">
             <button

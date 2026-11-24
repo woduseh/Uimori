@@ -1457,21 +1457,40 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
       '컨텍스트 사용량: 추정 240,000 / 예산 272,000 토큰'
     );
     await expect(meter.locator('[data-level="near"]')).toHaveCount(1);
+    const parts = ['instructions', 'toolSchemas', 'history', 'source', 'other'];
+    await expect(meter.locator('.helper-context-usage-segment')).toHaveCount(parts.length);
     await meter.click();
     const body = helper.locator('.helper-context-usage-body').filter({ visible: true });
-    for (const [label, value] of [
-      ['지시문', '6,100'],
-      ['도구 설명', '14,200'],
-      ['대화', '180,000'],
-      ['원문과 자료', '30,000'],
-      ['도구 결과', '미확인'],
-      ['합계 (추정)', '240,000'],
-      ['입력 예산', '272,000'],
-      ['자동 정리 기준', '231,200'],
+    await expect(body.locator('.helper-context-usage-headline')).toHaveText(
+      '약 240K / 272K 토큰88.2%'
+    );
+    const bar = body.locator('.helper-context-usage-bar');
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      await bar
+        .locator('.helper-context-usage-segment')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-part')))
+    ).toEqual(parts);
+    const table = body.getByRole('table', { name: '컨텍스트 사용량' });
+    for (const [label, value, share] of [
+      ['지시문', '6,100', '2.2%'],
+      ['도구 설명', '14,200', '5.2%'],
+      ['대화', '180,000', '66.2%'],
+      ['원문과 자료', '30,000', '11%'],
+      ['도구 결과', '미확인', ''],
+      ['기타', '9,700', '3.6%'],
+      ['합계 (추정)', '240,000', '88.2%'],
+      ['남은 여유', '32,000', '11.8%'],
+      ['자동 정리 기준', '231,200', '85%'],
     ])
       await expect(
-        body.locator('.helper-context-usage-row').filter({ hasText: label }).locator('dd')
-      ).toHaveText(value);
+        table
+          .getByRole('row')
+          .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
+          .getByRole('cell')
+      ).toHaveText([value, share]);
+    await expect(table.getByRole('rowheader', { name: '입력 예산' })).toHaveCount(0);
+    await expect(body).not.toContainText('이 기기에서 센 추정치');
     await page.screenshot({ path: info.outputPath(`context-usage-${width}-${colorScheme}.png`) });
     await page.keyboard.press('Escape');
   }
@@ -1502,6 +1521,19 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
   const native = page.locator('#helper-panel .helper-context-usage > summary');
   await expect(native).not.toContainText('약');
   await expect(native.locator('.helper-context-usage-bar')).toHaveCount(0);
+  await native.click();
+  const nativeBody = page
+    .locator('#helper-panel .helper-context-usage-body')
+    .filter({ visible: true });
+  await expect(nativeBody.locator('.helper-context-usage-bar')).toHaveCount(0);
+  await expect(
+    nativeBody
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: '마지막 보고 입력', exact: true }) })
+      .getByRole('cell')
+  ).toHaveText(['90,040']);
+  await expect(nativeBody).toContainText('Codex가 컨텍스트를 직접 관리해요.');
+  await page.keyboard.press('Escape');
   usage.latestInputExecution = 'provider-tool-loop';
   usage.latestInputTokens = null;
   usage.latestInputEstimate = null;
@@ -1624,9 +1656,15 @@ test('HUSAGE02 the context usage popover manually compacts the helper conversati
         hasText: '대화 메시지 2개를 정리했어요. 다음 요청부터 요약본을 이어 써요.',
       })
     ).toBeVisible();
-    await expect(
-      body.locator('.helper-context-usage-row', { hasText: '정리된 대화' }).locator('dd')
-    ).toHaveText('메시지 2개');
+    const row = (label: string) =>
+      body
+        .getByRole('row')
+        .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
+        .getByRole('cell');
+    await expect(row('정리된 대화')).toHaveText(['메시지 2개', '']);
+    await expect(row('정리 전 대화')).toHaveCount(2);
+    await expect(row('정리 후 요약')).toHaveCount(2);
+    await expect(body).toContainText('정리 결과를 반영한 추정치예요.');
     await expect(body).toContainText('지금까지의 대화가 이미 정리돼 있어요.');
     await expect(compactButton).toBeDisabled();
     await page.screenshot({ path: info.outputPath('manual-compact-after.png') });
