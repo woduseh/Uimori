@@ -8,7 +8,15 @@ import { documentationErrors } from './check-documentation.mjs';
 function withDocumentation(files, check) {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-doc-links-'));
   try {
-    for (const child of ['docs/releases', 'scripts', 'tests', 'server'])
+    for (const child of [
+      'docs/dev',
+      'docs/releases',
+      'fixtures',
+      'runner',
+      'scripts',
+      'tests',
+      'server',
+    ])
       mkdirSync(join(directory, child), { recursive: true });
     const write = (entries) => {
       for (const [file, content] of Object.entries(entries))
@@ -56,7 +64,7 @@ test('anchors must name a heading as GitHub renders it', () => {
     {
       'README.md': [
         '[korean](docs/GUIDE.md#새-채팅-생성-기본값)',
-        '[punctuation](docs/GUIDE.md#기술-명세-english)',
+        '[punctuation](docs/GUIDE.md#상세-안내-english)',
         '[code](docs/GUIDE.md#the-read_tools-contract)',
         '[repeated](docs/GUIDE.md#limits-1)',
         '[renamed](docs/GUIDE.md#old-heading)',
@@ -65,7 +73,7 @@ test('anchors must name a heading as GitHub renders it', () => {
       ].join('\n'),
       'docs/GUIDE.md': [
         '## 새 채팅 생성 기본값',
-        '## 기술 명세 (English)',
+        '## 상세 안내 (English)',
         '### The `read_tools` contract',
         '## Limits',
         '## Limits',
@@ -90,7 +98,7 @@ test('anchors must name a heading as GitHub renders it', () => {
 test('source paths in inline code must exist outside release notes', () => {
   withDocumentation(
     {
-      'docs/GUIDE.md': [
+      'docs/dev/SPEC.md': [
         'Entry points: `server/app.ts`, `server/`, `server/*-routes.ts`, `server/{app,store}.ts`.',
         'Add `tests/<feature>.test.ts` next to the others; run `npm test -- tests/gone.test.ts`.',
         'Removed: `server/gone.ts`, `server/*-gone.ts`, `scripts/<name>.sh`.',
@@ -103,11 +111,56 @@ test('source paths in inline code must exist outside release notes', () => {
       'tests/reading.test.ts': '',
     },
     (directory) => {
-      const guide = join(directory, 'docs/GUIDE.md');
+      const spec = join(directory, 'docs/dev/SPEC.md');
       assert.deepEqual(documentationErrors(directory), [
-        `${guide}: \`server/gone.ts\` (no file or directory matches this path)`,
-        `${guide}: \`server/*-gone.ts\` (no file or directory matches this path)`,
-        `${guide}: \`scripts/<name>.sh\` (no file or directory matches this path)`,
+        `${spec}: \`server/gone.ts\` (no file or directory matches this path)`,
+        `${spec}: \`server/*-gone.ts\` (no file or directory matches this path)`,
+        `${spec}: \`scripts/<name>.sh\` (no file or directory matches this path)`,
+      ]);
+    }
+  );
+});
+
+test('user guides directly under docs forbid developer headings, internal paths, and internal API routes', () => {
+  withDocumentation(
+    {
+      'docs/USER.md': [
+        '# 사용자 안내',
+        '## 구현 참고',
+        '### 기술 명세 (English)',
+        '### 개발자 참고',
+        'Paths: `server/app.ts`, `runner/uimori.mjs`, `fixtures/sample.json`, `tests/reading.test.ts`.',
+        'Routes: `POST /api/chats/:id/context`, `/api/helper/tasks/:id/results?limit=10`.',
+        'Allowed placeholder: `/api/...`.',
+        '```sh',
+        '## 구현 참고',
+        '`server/app.ts`',
+        '`POST /api/internal`',
+        '```',
+      ].join('\n'),
+      'docs/SELF-HOST.md': 'Operator route: `GET /api/maintenance` and `/api/session`.',
+      'docs/dev/SPEC.md': [
+        '## 구현 참고',
+        '### 기술 명세 (English)',
+        'Internal: `server/app.ts`, `runner/uimori.mjs`, `fixtures/sample.json`, `POST /api/chats/:id/context`.',
+      ].join('\n'),
+      'server/app.ts': '',
+      'runner/uimori.mjs': '',
+      'fixtures/sample.json': '',
+      'tests/reading.test.ts': '',
+    },
+    (directory) => {
+      const user = join(directory, 'docs/USER.md');
+      assert.deepEqual(documentationErrors(directory), [
+        `${user}: user guide must not contain developer heading "## 구현 참고"`,
+        `${user}: user guide must not contain developer heading "### 기술 명세 (English)"`,
+        `${user}: user guide must not contain developer heading "### 개발자 참고"`,
+        `${user}: \`server/app.ts\` (user guide must not reference internal source paths)`,
+        `${user}: \`runner/uimori.mjs\` (user guide must not reference internal source paths)`,
+        `${user}: \`fixtures/sample.json\` (user guide must not reference internal source paths)`,
+        `${user}: \`tests/reading.test.ts\` (user guide must not reference internal source paths)`,
+        `${user}: \`POST /api/chats/:id/context\` (user guide must not document internal API routes)`,
+        `${user}: \`/api/helper/tasks/:id/results?limit=10\` (user guide must not document internal API routes)`,
       ]);
     }
   );
