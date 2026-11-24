@@ -1635,6 +1635,10 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
       .click();
     expect((await data(request, chat.id)).sources[0].text).toBe(winner);
     await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: '편집 취소', exact: true })
+      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+      .click();
     expect(
       await page.evaluate(
         (id) => sessionStorage.getItem(`uimori:text-draft:${id}:original`),

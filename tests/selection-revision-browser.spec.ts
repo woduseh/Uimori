@@ -175,6 +175,10 @@ for (const width of [360]) {
       await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeHidden();
     await expectReachable(cancel);
     await cancel.click();
+    await page
+      .getByRole('alertdialog', { name: '편집 취소', exact: true })
+      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+      .click();
     await expect(field).toHaveCount(0);
     await expect(navigation).toBeVisible();
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(revised);

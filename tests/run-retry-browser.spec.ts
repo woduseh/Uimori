@@ -50,6 +50,10 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   await inline.fill('수정 중인 요청');
   await expect(input).toHaveValue('보존할 초안');
   await page.getByRole('button', { name: '요청 편집 취소' }).click();
+  await page
+    .getByRole('alertdialog', { name: '요청 편집 취소', exact: true })
+    .getByRole('button', { name: '초안 버리고 닫기', exact: true })
+    .click();
   await expect(failureCard).toBeVisible();
   await expect(input).toHaveValue('보존할 초안');
   if (visualReview) await page.screenshot({ path: info.outputPath('retry-mobile.png') });

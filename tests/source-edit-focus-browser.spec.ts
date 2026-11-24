@@ -171,6 +171,7 @@ for (const [label, viewport] of [
     await insideReader(field);
     await field.fill('A second cancelled synthetic edit.');
     await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await discard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(field).toHaveCount(0);
     await expect(trigger).toBeFocused();
     await insideReader(trigger);
@@ -393,19 +394,16 @@ for (const [width, height, mode] of [[320, 640, 'dark']] as const) {
       await field.fill(`${translation}\n\nA temporary revision.`);
       if (visualReview && action === 'Escape')
         await page.screenshot({ path: info.outputPath(`cinematic-editor-${width}.png`) });
-      if (action === 'Escape') {
-        await page.keyboard.press('Escape');
+      if (action === 'save')
+        await scene.getByRole('button', { name: '번역 저장', exact: true }).click();
+      else {
+        if (action === 'Escape') await page.keyboard.press('Escape');
+        else await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
         await page
           .getByRole('alertdialog', { name: '편집 취소', exact: true })
           .getByRole('button', { name: '초안 버리고 닫기', exact: true })
           .click();
-      } else
-        await scene
-          .getByRole('button', {
-            name: action === 'cancel' ? '편집 취소' : '번역 저장',
-            exact: true,
-          })
-          .click();
+      }
       await expect(field).toHaveCount(0);
       await expect(trigger).toBeFocused();
       await insideReader(trigger);
