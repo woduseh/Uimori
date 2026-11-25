@@ -722,6 +722,16 @@ export function analyzeCbs(
   };
 }
 
+export function lineFeedRange(text: string, range: CbsRange): CbsRange {
+  const shift = (offset: number) => {
+    let pairs = 0;
+    for (let at = text.indexOf('\r\n'); at >= 0 && at < offset; at = text.indexOf('\r\n', at + 2))
+      pairs++;
+    return offset - pairs;
+  };
+  return { from: shift(range.from), to: shift(range.to) };
+}
+
 export function cbsMatchingRanges(
   analysis: CbsAnalysis,
   position: number

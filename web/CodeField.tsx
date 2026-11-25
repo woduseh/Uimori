@@ -7,7 +7,7 @@ import {
   useRef,
   type RefObject,
 } from 'react';
-import type { CbsRange } from '../core/cbs-analysis.js';
+import { lineFeedRange, type CbsRange } from '../core/cbs-analysis.js';
 import { PanelErrorBoundary } from './deferredPanel.js';
 import { CODE_FIELD_REVEAL } from './code-field-reveal.js';
 import './code-field.css';
@@ -55,11 +55,13 @@ export function PlainCodeField({
   ...aria
 }: CodeFieldProps & { handoff?: RefObject<CodeFieldHandoff> }) {
   const field = useRef<HTMLTextAreaElement>(null);
+  const source = useRef(value);
+  source.current = value;
   useEffect(() => {
     const element = field.current;
     if (!element) return;
     const reveal = (event: Event) => {
-      const { from, to } = (event as CustomEvent<CbsRange>).detail;
+      const { from, to } = lineFeedRange(source.current, (event as CustomEvent<CbsRange>).detail);
       element.focus();
       element.setSelectionRange(from, to);
     };

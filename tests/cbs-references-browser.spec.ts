@@ -204,6 +204,32 @@ test('CBSREF03 preset toggles show their uses and jump to the block', async ({ p
   await expect(definitions.getByLabel('pace 기본값', { exact: true })).toBeVisible();
 });
 
+test('CBSREF04 a jump into CRLF text selects the name, not a shifted range', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: DESKTOP_HEIGHT });
+  const title = `CBSREF04 ${randomUUID().slice(0, 8)}`;
+  const firstMessage = 'one\r\ntwo\r\nthree\r\n{{getvar::mood}} end';
+  await seedBot(request, title, {
+    first_mes: firstMessage,
+    extensions: { risuai: { defaultVariables: 'mood=calm' } },
+  });
+  await openBot(page, title, '변수와 토글 초기값');
+  const references = page.getByRole('region', { name: '변수와 토글 사용처', exact: true });
+  const mood = references.locator('details', {
+    has: page.locator('code', { hasText: /^mood$/u }),
+  });
+  await mood.locator('summary').click();
+  await mood.getByRole('button').filter({ hasText: '기본 첫 메시지' }).click();
+  const field = page.getByRole('textbox', { name: '기본 첫 메시지', exact: true });
+  await expect(field).toBeFocused();
+  await expectCodeFieldValue(field, firstMessage);
+  await expect
+    .poll(() => field.evaluate(() => document.getSelection()?.toString() ?? ''))
+    .toBe('mood');
+});
+
 async function openPreview(page: Page, title: string) {
   await openBot(page, title, '첫 메시지');
   const field = page.getByRole('textbox', { name: '기본 첫 메시지', exact: true });

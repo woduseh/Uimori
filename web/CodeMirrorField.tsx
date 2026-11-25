@@ -40,6 +40,7 @@ import {
   analyzeCbs,
   cbsMatchingRanges,
   cbsVariableFunctionScope,
+  lineFeedRange,
   type CbsAnalysis,
   type CbsDiagnostic,
   type CbsFunctionCatalog,
@@ -577,7 +578,10 @@ function Editor({
       const editor = view.current;
       if (!editor) return;
       const length = editor.state.doc.length;
-      const { from, to } = (event as CustomEvent<CbsRange>).detail;
+      const { from, to } = lineFeedRange(
+        editor.state.sliceDoc(),
+        (event as CustomEvent<CbsRange>).detail
+      );
       editor.focus();
       editor.dispatch({
         selection: { anchor: Math.min(from, length), head: Math.min(to, length) },

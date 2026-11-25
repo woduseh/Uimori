@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import {
   analyzeCbs,
   cbsMatchingRanges,
+  lineFeedRange,
   normalizeCbsFunctionName,
   type CbsAnalysis,
   type CbsDiagnosticCode,
@@ -148,6 +149,15 @@ describe('references', () => {
     expect(analysis.references[0]).toMatchObject({ name: ' My Name ', scope: 'chat' });
   });
 
+  test('CRLF ranges convert to editor offsets that count each line break once', () => {
+    const text = 'one\r\ntwo\r\n{{getvar::hp}}\r\nend';
+    const reference = analyzeCbs(text).references[0]!;
+    expect(slice(text, reference)).toBe('hp');
+    const editorText = text.replaceAll('\r\n', '\n');
+    expect(slice(editorText, lineFeedRange(text, reference))).toBe('hp');
+    expect(lineFeedRange(text, { from: 4, to: 5 })).toEqual({ from: 3, to: 4 });
+    expect(lineFeedRange('a\nb', { from: 2, to: 3 })).toEqual({ from: 2, to: 3 });
+  });
 });
 
 describe('diagnostics', () => {
