@@ -696,14 +696,24 @@ test('task result usage preserves reported native token detail, unknown internal
     attempts: [
       {
         id: attempt,
+        kind: 'helper',
+        owner: 'helper',
+        sceneRunId: null,
         purpose: 'helper',
+        modelId: f.model.modelId,
         status: 'completed',
+        startedAt: expect.any(String),
+        elapsedMs: expect.any(Number),
+        firstByteMs: null,
         inputTokens: 10,
         outputTokens: 4,
         costUsd: null,
+        estimatedUsd: null,
+        estimatedSubtotalUsd: 0,
         cachedInputTokens: 6,
         reasoningTokens: 2,
         internalModelCalls: null,
+        tools: [{ name: 'unreported-tool', resultChars: null, elapsedMs: null, failed: false }],
       },
     ],
     toolExecutions: 1,
@@ -1293,7 +1303,7 @@ test('public helper task pages preserve summaries and receipts without loading r
     });
     expect(page.statusCode).toBe(200);
     expect(page.json()).toEqual(expected);
-    expect(queries.mock.calls.length).toBeLessThanOrEqual(3);
+    expect(queries.mock.calls.length).toBeLessThanOrEqual(4);
     expect(returnedRows).toHaveLength(50);
     expect(returnedRows.every((row) => !('snapshot' in row))).toBe(true);
     expect(JSON.stringify(returnedRows)).not.toContain(largeHistory);

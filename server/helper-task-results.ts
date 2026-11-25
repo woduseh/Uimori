@@ -5,8 +5,8 @@ import type {
   HelperTaskResult,
   HelperTaskResultsView,
 } from '../core/helper.js';
-import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { helperTraceCalls } from './task-trace.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readHelperChanges, recordHelperAction } from './helper-changes.js';
@@ -63,40 +63,12 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
       SELECT 1 FROM helper_events e WHERE e.task_id=o.task_id AND e.kind='operation.result'
       AND json_extract(e.data,'$.receiptId')=o.id)`)
     .get(taskId);
-  const attemptRows = store.db
-    .prepare(`SELECT a.id,h.purpose,a.status,a.input_tokens,a.output_tokens,a.cost_usd,
-      json_extract(a.request,'$.protocol') AS protocol,a.raw_usage
+  const attempts = helperTraceCalls(store, taskId);
+  const latest = store.db
+    .prepare(`SELECT a.input_tokens,a.raw_usage,json_extract(a.request,'$.protocol') AS protocol
       FROM helper_task_attempts h JOIN attempts a ON a.id=h.attempt_id
-      WHERE h.task_id=? ORDER BY a.rowid`)
-    .all(taskId);
-  const attempts = attemptRows.map((row) => {
-    const raw = row.raw_usage ? JSON.parse(String(row.raw_usage)) : null;
-    const details = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    const nativeUsage = details.tokenUsage?.[details.tokenUsageBasis === 'last' ? 'last' : 'total'];
-    const inputTokens = tokens(row.input_tokens),
-      outputTokens = tokens(row.output_tokens);
-    return {
-      id: String(row.id),
-      purpose: String(row.purpose),
-      status: String(row.status),
-      inputTokens,
-      outputTokens,
-      costUsd: numeric(row.cost_usd),
-      cachedInputTokens:
-        providerCacheUsage(row.protocol, raw)?.readTokens ??
-        tokens(nativeUsage?.cachedInputTokens) ??
-        (inputTokens === 0 ? 0 : null),
-      reasoningTokens:
-        tokens(
-          details.output_tokens_details?.reasoning_tokens ??
-            details.completion_tokens_details?.reasoning_tokens ??
-            details.thoughtsTokenCount ??
-            nativeUsage?.reasoningOutputTokens
-        ) ?? (outputTokens === 0 ? 0 : null),
-      internalModelCalls: tokens(details.modelCalls),
-    };
-  });
-  const latest = attemptRows.findLast((row) => row.purpose === 'helper');
+      WHERE h.task_id=? AND h.purpose='helper' ORDER BY a.rowid DESC LIMIT 1`)
+    .get(taskId);
   const latestRaw = latest?.raw_usage ? JSON.parse(String(latest.raw_usage)) : null;
   const latestInputTokens =
     latest?.protocol === 'codex-app-server-v1'

@@ -4,6 +4,7 @@ import type { Store } from './store.js';
 import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import { sceneRequestLore } from './request-lore.js';
 import type { SceneUsageDetail } from '../core/scene-usage.js';
+import { chatTraceCalls } from './task-trace.js';
 
 export function readerRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string } }>('/api/attempts/:id/scene-detail', async (request) => {
@@ -30,18 +31,9 @@ export function readerRoutes(app: FastifyInstance, store: Store) {
         : { attemptId: null, lore: null }),
     };
   });
-  app.get<{ Params: { id: string } }>('/api/chats/:id/attempts', async (request) => {
-    store.chat(request.params.id);
-    const rows = store.db
-      .prepare(
-        `SELECT id,run_id AS runId,job_id AS jobId,role,connection_id AS connectionId,model_id AS modelId,status,input_tokens AS inputTokens,output_tokens AS outputTokens,cost_usd AS costUsd,price_revision AS priceRevision,error,json_extract(response,'$.estimatedCost') AS estimateJson FROM attempts WHERE chat_id=? ORDER BY rowid`
-      )
-      .all(request.params.id);
-    return rows.map(({ estimateJson, ...row }) => ({
-      ...row,
-      ...(typeof estimateJson === 'string' ? { estimatedCost: JSON.parse(estimateJson) } : {}),
-    }));
-  });
+  app.get<{ Params: { id: string } }>('/api/chats/:id/attempts', async (request) =>
+    chatTraceCalls(store, request.params.id)
+  );
   app.get<{ Params: { id: string } }>('/api/attempts/:id', async (request) => {
     const row = store.db
       .prepare(

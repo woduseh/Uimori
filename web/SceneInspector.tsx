@@ -300,10 +300,12 @@ export function SceneInspector({
   );
   const loreDetails: ReactNode = record.value ? (
     <>
-      <LoreContextDiagnostics
-        snapshot={record.value.snapshot.loreContext}
-        reset={record.value.snapshot.loreContextReset}
-      />
+      {record.value.snapshot.loreContext && (
+        <LoreContextDiagnostics
+          snapshot={record.value.snapshot.loreContext}
+          reset={record.value.snapshot.loreContextReset}
+        />
+      )}
       <LoreSelectionStatus snapshot={record.value.snapshot} />
     </>
   ) : (

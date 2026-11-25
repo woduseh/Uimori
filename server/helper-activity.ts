@@ -54,6 +54,8 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
         length(json_extract(data,'$.text'))>1000 AS text_truncated,
         json_extract(data,'$.applied') AS applied,
         json_extract(data,'$.callId') AS call_id,
+        CASE WHEN kind IN ('attempt.finished','tool.finished') THEN json_extract(data,'$.elapsedMs') END AS elapsed_ms,
+        CASE WHEN kind='tool.finished' THEN json_extract(data,'$.providedResultChars') END AS result_chars,
         CASE WHEN kind='tool.started' THEN json_extract(data,'$.target') END AS target,
         CASE WHEN kind='provider.retry' THEN data END AS retry
        FROM helper_events WHERE conversation_id=? AND task_id=?
@@ -62,6 +64,8 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
     )
     .all(task.conversation_id, taskId, activityLimit + 1);
   const string = (value: unknown) => (typeof value === 'string' ? value : undefined);
+  const measure = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
   return {
     taskId,
     status: task.status as HelperStatus,
@@ -91,6 +95,8 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
           textTruncated: row.text_truncated ? true : undefined,
           applied: row.applied == null ? undefined : Boolean(row.applied),
           callId: string(row.call_id),
+          elapsedMs: measure(row.elapsed_ms),
+          resultChars: measure(row.result_chars),
           target: resolveTarget(store, row.target),
           retry:
             typeof row.retry === 'string'

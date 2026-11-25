@@ -11,6 +11,9 @@ const read = 'helpers.m199';
 const sceneEdit = 'helpers.activitySceneEdit';
 const illustrationDraw = 'helpers.activityIllustrationDraw';
 const illustrationEdit = 'helpers.activityIllustrationEdit';
+const modelSettings = 'taskTrace.toolModelSettings';
+const appearance = 'taskTrace.toolAppearance';
+const codeCheck = 'taskTrace.toolCodeCheck';
 const toolKinds: Record<string, string> = {
   'resource.patch': change,
   'resource.patchMany': change,
@@ -25,6 +28,40 @@ const toolKinds: Record<string, string> = {
   'context.edit': change,
   'chat.rename': change,
   'chat.fork': change,
+  'chat.bookmark': change,
+  'chat.organize': change,
+  'chat.lore': change,
+  'chat.guide.update': change,
+  'chat.profile.update': change,
+  'chat.variables.update': change,
+  'library.organize': change,
+  'scene.context.update': change,
+  'options.fix': change,
+  'options.oneoff': change,
+  'illustration-preset.select': change,
+  'model.register': modelSettings,
+  'model.delete': modelSettings,
+  'model.parameters.update': modelSettings,
+  'model.pricing.update': modelSettings,
+  'model.pricing.backfill': modelSettings,
+  'vertex.location.update': modelSettings,
+  'font.register': appearance,
+  'font.delete': appearance,
+  'font.select': appearance,
+  'palette.save': appearance,
+  'palette.delete': appearance,
+  'theme.select': appearance,
+  'code.cbs': codeCheck,
+  'code.diagnose': codeCheck,
+  'code.preview': codeCheck,
+  'code.references': codeCheck,
+  'code.regex': codeCheck,
+  'preset.validate': codeCheck,
+  'web.search': 'taskTrace.toolWebSearch',
+  'helper.ask': 'taskTrace.toolAsk',
+  'task.cancel': 'taskTrace.toolTaskControl',
+  'task.retry': 'taskTrace.toolTaskControl',
+  'app.call': 'helpers.m200',
   'context.compact': 'helpers.m197',
   'artifact.generate': 'helpers.m198',
   'scene.patch': sceneEdit,
@@ -39,10 +76,12 @@ const toolKinds: Record<string, string> = {
   'illustration.cut.delete': illustrationEdit,
   'illustration.cuts.place': illustrationEdit,
   'illustration.profiles.save': illustrationEdit,
+  'illustration.continuity.save': illustrationEdit,
+  'illustration.references.save': illustrationEdit,
   'data.exec': 'helpers.activityShell',
 };
-function toolKind(name = '') {
-  return toolKinds[name] ?? (isHelperReadTool(name) ? read : 'helpers.m200');
+export function helperToolKind(name = ''): string | undefined {
+  return toolKinds[name] ?? (isHelperReadTool(name) ? read : undefined);
 }
 function targetLabel(target: HelperActivityEvent['target']) {
   if (!target) return undefined;
@@ -81,6 +120,10 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
   const attempts = new Map<string, Stage>();
   const tools = new Map<string, Stage>();
   let retryWait: Stage | undefined;
+  const modelCalls = activity.events.filter(
+    (event) => event.kind === 'attempt.started' && attemptKind(event.purpose) === modelCall
+  ).length;
+  let call = Math.max(0, activity.helperCalls - modelCalls);
   for (const event of activity.events) {
     if (retryWait) {
       retryWait.state = 'recorded';
@@ -91,6 +134,7 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
       if (stage) {
         stage.events.push(event);
         stage.state = finishedAttemptState(event.status);
+        if (event.elapsedMs !== undefined) stage.elapsedMs = event.elapsedMs;
         continue;
       }
     }
@@ -102,14 +146,17 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
           event.error || event.denied || ['failed', 'refused'].includes(event.status ?? '')
             ? 'issue'
             : 'completed';
+        stage.elapsedMs = event.elapsedMs;
+        stage.resultChars = event.resultChars;
         continue;
       }
     }
+    const tool = event.kind === 'tool.finished' || event.kind === 'tool.started';
     const kind =
       event.kind === 'attempt.started'
         ? attemptKind(event.purpose)
-        : event.kind === 'tool.finished' || event.kind === 'tool.started'
-          ? toolKind(event.name)
+        : tool
+          ? (helperToolKind(event.name) ?? 'helpers.m200')
           : event.kind === 'context.compaction'
             ? 'helpers.m197'
             : event.kind === 'progress'
@@ -129,12 +176,22 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
             : event.kind === 'tool.finished'
               ? 'completed'
               : 'recorded';
+    const numbered = event.kind === 'attempt.started' && kind === modelCall ? ++call : undefined;
     const stage: Stage = {
       id: event.seq,
       kind,
-      label: t(kind),
+      label:
+        tool && event.name && !helperToolKind(event.name)
+          ? event.name
+          : numbered
+            ? t('taskTrace.modelCall', { count: numbered })
+            : t(kind),
       target: targetLabel(event.target),
       ...(event.target ? { subject: event.target } : {}),
+      ...(tool && event.name ? { tool: event.name } : {}),
+      ...(numbered ? { call: numbered } : {}),
+      ...(event.elapsedMs !== undefined ? { elapsedMs: event.elapsedMs } : {}),
+      ...(event.resultChars !== undefined ? { resultChars: event.resultChars } : {}),
       state,
       events: [event],
     };

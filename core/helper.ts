@@ -227,6 +227,7 @@ export type HelperTask = {
   completedEffects?: { count: number; labels: string[] };
   resumable?: true;
   instructions?: HelperInstruction[];
+  estimatedCost?: import('./task-trace.js').TraceCostTotal;
 };
 export type HelperMessage = {
   images?: import('./request-images.js').RequestImage[];
@@ -284,6 +285,8 @@ export type HelperTaskResultTarget = {
   after?: string | number | boolean | null;
   beforeLabel?: string | null;
   afterLabel?: string | null;
+  beforeRates?: import('./pricing-types.js').TokenRates | null;
+  afterRates?: import('./pricing-types.js').TokenRates | null;
 };
 export type HelperTaskResult = {
   eventSeq: number;
@@ -387,17 +390,7 @@ export type HelperRollbackView = {
   blocked: 'task-active' | null;
   units: HelperRollbackUnit[];
 };
-export type HelperTaskAttemptUsage = {
-  id: string;
-  purpose: string;
-  status: string;
-  inputTokens: number | null;
-  outputTokens: number | null;
-  costUsd: number | null;
-  cachedInputTokens: number | null;
-  reasoningTokens: number | null;
-  internalModelCalls: number | null;
-};
+export type HelperTaskAttemptUsage = import('./task-trace.js').TraceCall;
 export type HelperQuestionOption = {
   label: string;
   description?: string;

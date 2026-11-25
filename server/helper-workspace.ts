@@ -1,4 +1,5 @@
 import { detachAttemptUsage, helperUsageKind } from './usage-accounting.js';
+import { helperTaskCosts } from './task-trace.js';
 import { releaseCompletedHelperInputs } from './execution-retention.js';
 import { resolveHelperReferences } from './helper-references.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -740,11 +741,14 @@ export class HelperWorkspace {
         FROM page LEFT JOIN stopped ON stopped.task_id=page.id ORDER BY page.task_order DESC`
       )
       .all(...args) as Row[];
-    const instructions = this.readInstructions(rows.map((row) => String(row.id)));
+    const ids = rows.map((row) => String(row.id));
+    const instructions = this.readInstructions(ids);
+    const costs = helperTaskCosts(this.store, ids);
     return rows.map((row) => ({
       ...taskData(row),
       modelTitle: row.model_title as string,
       instructions: instructions.get(String(row.id)) ?? [],
+      ...(costs.has(String(row.id)) ? { estimatedCost: costs.get(String(row.id)) } : {}),
     }));
   }
   private readInstructions(taskIds: string[]) {

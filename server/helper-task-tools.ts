@@ -4,7 +4,7 @@ import type { IllustrationDiagnostic, IllustrationJobInput } from '../core/illus
 import type { HelperTask } from '../core/helper.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { providerCacheUsage } from '../core/provider-cache-usage.js';
+import { attemptUsageDetails } from './task-trace.js';
 
 const id: Json = {
   type: 'string',
@@ -349,25 +349,15 @@ function recordedDiagnostics(
   const attemptItems = attemptRows.map((item) => {
     const { rawUsage, protocol, ...projection } = item;
     const raw = rawUsage ? object(JSON.parse(String(rawUsage))) : {};
-    const nativeTokens = object(
-      raw.tokenUsageBasis === 'last' || raw.tokenUsageBasis === 'total'
-        ? object(raw.tokenUsage)[raw.tokenUsageBasis]
-        : undefined
-    );
+    const { cachedInputTokens, reasoningTokens } = attemptUsageDetails(protocol, raw);
     return {
       ...projection,
       errorCode:
         typeof item.errorCode === 'string' && /^[A-Z][A-Z0-9_]{1,95}$/u.test(item.errorCode)
           ? item.errorCode
           : null,
-      cachedInputTokens:
-        providerCacheUsage(protocol, raw)?.readTokens ?? tokenCount(nativeTokens.cachedInputTokens),
-      reasoningTokens: tokenCount(
-        object(raw.output_tokens_details).reasoning_tokens ??
-          object(raw.completion_tokens_details).reasoning_tokens ??
-          raw.thoughtsTokenCount ??
-          nativeTokens.reasoningOutputTokens
-      ),
+      cachedInputTokens,
+      reasoningTokens,
       nativeActivity: nativeActivitySummary(raw),
     };
   });

@@ -359,6 +359,8 @@ export function applyHelperSettingsMutation(
               title: after.title,
               revision: after.revision,
               setting: 'model.pricing',
+              beforeRates: before.pricing?.mode === 'manual' ? before.pricing.rates : null,
+              afterRates: after.pricing?.mode === 'manual' ? after.pricing.rates : null,
             },
           ],
     });

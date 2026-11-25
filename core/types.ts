@@ -271,12 +271,8 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   retryOf?: string | null;
   supersededBy?: string | null;
   readerDismissed?: boolean;
-  estimatedCost?: {
-    usd: number | null;
-    subtotalUsd: number;
-    unknownCount: number;
-    attemptCount: number;
-  };
+  estimatedCost?: import('./task-trace.js').TraceCostTotal;
+  sceneCost?: import('./task-trace.js').TraceCostTotal;
   snapshot: Pick<RunSnapshot, 'loreContextReset' | 'requestImages' | 'replacement'>;
   contextSummary?: {
     status: 'pending' | 'ready' | 'failed';

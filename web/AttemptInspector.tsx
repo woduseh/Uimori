@@ -1,9 +1,6 @@
 import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
-import { LazyDiagnostics } from './LazyDiagnostics.js';
-import { labels } from './api.js';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import type { Attempt } from '../core/product.js';
-import type { Run } from '../core/types.js';
 import type { RequestLore } from '../core/request-lore.js';
 import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import { formatUsd, pricingRateLabels, pricingNote } from './pricing-display.js';
@@ -12,20 +9,6 @@ import { CopyTextButton } from './TaskHistory.js';
 import './model-pricing.css';
 import './lore-context.css';
 
-const roleLabels: Record<string, string> = {
-  main: '본문',
-  translation: '번역',
-  status: '이전 보조 작업',
-  image: '이미지 배치',
-  script: '카드 스크립트',
-  context: '컨텍스트 압축',
-  helper: '도우미',
-  title: '채팅 제목',
-  illustration: '삽화',
-};
-type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
-const tokens = (value: number | null) =>
-  value === null ? t('visualpanels.unknown') : t('visualpanels.vPluralOneOther', { v0: value });
 function attemptRawText(attempt: Attempt) {
   return JSON.stringify(
     {
@@ -74,30 +57,15 @@ function AttemptRaw({ attempt }: { attempt: Attempt }) {
     </div>
   );
 }
-const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens' | 'costUsd') =>
-  attempts.length === 0 || attempts.some((attempt) => attempt[field] === null)
-    ? null
-    : attempts.reduce((sum, attempt) => sum + (attempt[field] ?? 0), 0);
 
-function estimatedTotal(attempts: AttemptSummary[]): string {
-  if (!attempts.length) return t('visualpanels.unknown');
-  const complete = attempts.every(
-    (attempt) => attempt.estimatedCost?.status === 'estimated' && attempt.estimatedCost.usd !== null
-  );
-  if (complete)
-    return formatUsd(attempts.reduce((sum, attempt) => sum + attempt.estimatedCost!.usd!, 0));
-  const known = attempts.filter((attempt) =>
-    attempt.estimatedCost?.lines.some((line) => line.usd !== null)
-  );
-  if (!known.length) return t('visualpanels.unknown');
-  const subtotal = known.reduce((sum, attempt) => sum + attempt.estimatedCost!.subtotalUsd, 0);
-  const incomplete = attempts.filter(
-    (attempt) => attempt.estimatedCost?.status !== 'estimated' || attempt.estimatedCost.usd === null
-  ).length;
-  return t('visualpanels.knownSubtotalIncludesUnknownItemsInCalls', {
-    v0: formatUsd(subtotal),
-    v1: incomplete,
-  });
+function estimateText(estimate: Attempt['estimatedCost']) {
+  if (estimate?.status === 'estimated' && estimate.usd !== null) return formatUsd(estimate.usd);
+  if (estimate && estimate.subtotalUsd > 0)
+    return t('visualpanels.knownSubtotalIncludesUnknownItemsInCalls', {
+      v0: formatUsd(estimate.subtotalUsd),
+      v1: 1,
+    });
+  return t('visualpanels.unknown');
 }
 
 function AttemptPricing({ attempt }: { attempt: Attempt }) {
@@ -105,9 +73,11 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
   const estimate = attempt.estimatedCost;
   return (
     <section className="attempt-pricing" aria-label={t('visualpanels.estimatedCallCost')}>
-      <p>{t('visualpanels.providerReportedCost', { v0: formatUsd(attempt.costUsd) })}</p>
+      {attempt.costUsd !== null && (
+        <p>{t('visualpanels.providerReportedCost', { v0: formatUsd(attempt.costUsd) })}</p>
+      )}
       <p>
-        <strong>{t('visualpanels.estimatedCost', { v0: estimatedTotal([attempt]) })}</strong>
+        <strong>{t('visualpanels.estimatedCost', { v0: estimateText(estimate) })}</strong>
       </p>
       {attempt.pricingSnapshot ? (
         <>
@@ -126,11 +96,9 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
                   : t('visualpanels.officialPrice')}
             </span>
             {attempt.pricingSnapshot.sourceUrl && (
-              <>
-                <a href={attempt.pricingSnapshot.sourceUrl} target="_blank" rel="noreferrer">
-                  {t('visualpanels.priceSource')}
-                </a>
-              </>
+              <a href={attempt.pricingSnapshot.sourceUrl} target="_blank" rel="noreferrer">
+                {t('visualpanels.priceSource')}
+              </a>
             )}
           </p>
           {attempt.pricingSnapshot.notes.length > 0 && (
@@ -154,40 +122,38 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
           })}
         </small>
       )}
-      {estimate && (
-        <>
-          <div className="table-scroll">
-            <table aria-label={t('visualpanels.callCostEstimateBreakdown')}>
-              <thead>
-                <tr>
-                  <th>{t('visualpanels.item')}</th>
-                  <th>{t('visualpanels.providerTokens')}</th>
-                  <th>{t('visualpanels.usdMillionTokens')}</th>
-                  <th>{t('visualpanels.estimatedCost2')}</th>
+      {estimate && estimate.lines.length > 0 && (
+        <div className="table-scroll">
+          <table aria-label={t('visualpanels.callCostEstimateBreakdown')}>
+            <thead>
+              <tr>
+                <th>{t('visualpanels.item')}</th>
+                <th>{t('visualpanels.providerTokens')}</th>
+                <th>{t('visualpanels.usdMillionTokens')}</th>
+                <th>{t('visualpanels.estimatedCost2')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {estimate.lines.map((line) => (
+                <tr key={line.kind}>
+                  <th>{translateMessage(pricingRateLabels[line.kind])}</th>
+                  <td>
+                    {line.tokens === null ? t('visualpanels.unknown') : formatNumber(line.tokens)}
+                  </td>
+                  <td>{formatUsd(line.rate)}</td>
+                  <td>{formatUsd(line.usd)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {estimate.lines.map((line) => (
-                  <tr key={line.kind}>
-                    <th>{translateMessage(pricingRateLabels[line.kind])}</th>
-                    <td>
-                      {line.tokens === null ? t('visualpanels.unknown') : formatNumber(line.tokens)}
-                    </td>
-                    <td>{formatUsd(line.rate)}</td>
-                    <td>{formatUsd(line.usd)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {estimate.notes.length > 0 && (
-            <ul className="model-pricing-notes">
-              {estimate.notes.map((note, index) => (
-                <li key={`${index}:${note}`}>{pricingNote(note)}</li>
               ))}
-            </ul>
-          )}
-        </>
+            </tbody>
+          </table>
+        </div>
+      )}
+      {estimate && estimate.notes.length > 0 && (
+        <ul className="model-pricing-notes">
+          {estimate.notes.map((note, index) => (
+            <li key={`${index}:${note}`}>{pricingNote(note)}</li>
+          ))}
+        </ul>
       )}
     </section>
   );
@@ -271,250 +237,16 @@ export function RequestLoreView({
   );
 }
 
-export function AttemptInspector({
-  chatId,
-  revision,
-  runs,
-}: {
-  chatId: string;
-  revision: number;
-  runs: Pick<Run, 'status'>[];
-}) {
+export function AttemptDetail({ attempt, label }: { attempt: Attempt; label: string }) {
   useI18n();
-  return (
-    <div className="usage-inspector" data-testid="usage-inspector">
-      <LazyDiagnostics<AttemptSummary[]>
-        path={`/chats/${chatId}/attempts`}
-        revision={revision}
-        title={
-          <>
-            {t('visualpanels.callsAndCostsAcrossAllRoles')}{' '}
-            <small>{t('visualpanels.includesCandidatesAuxiliaryTasksAndRetries')}</small>
-          </>
-        }
-      >
-        {(attempts) => <AttemptTable attempts={attempts} runs={runs} revision={revision} />}
-      </LazyDiagnostics>
-    </div>
-  );
-}
-
-function AttemptTable({
-  attempts,
-  runs,
-  revision,
-}: {
-  attempts: AttemptSummary[];
-  runs: Pick<Run, 'status'>[];
-  revision: number;
-}) {
-  useI18n();
-  const totals = {
-    input: total(attempts, 'inputTokens'),
-    output: total(attempts, 'outputTokens'),
-    cost: total(attempts, 'costUsd'),
-  };
-  return (
-    <div>
-      <p>
-        {t('visualpanels.sendAttemptsInputOutputTokensProviderReported', {
-          v0: attempts.length,
-          v1: totals.input === null ? t('visualpanels.unknown') : formatNumber(totals.input),
-          v2: totals.output === null ? t('visualpanels.unknown') : formatNumber(totals.output),
-          v3: totals.cost === null ? t('visualpanels.unknown') : formatUsd(totals.cost),
-        })}
-      </p>
-      <p>
-        <strong>{t('visualpanels.estimatedCost', { v0: estimatedTotal(attempts) })}</strong>
-      </p>
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{t('visualpanels.role')}</th>
-              <th>{t('visualpanels.sendAttempts')}</th>
-              <th>{t('visualpanels.inputTokens')}</th>
-              <th>{t('visualpanels.outputTokens')}</th>
-              <th>{t('visualpanels.providerReportedCost2')}</th>
-              <th>{t('visualpanels.estimatedCost2')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.keys(roleLabels)
-              .filter((role) => attempts.some((attempt) => String(attempt.role) === role))
-              .map((role) => {
-                const selected = attempts.filter((attempt) => attempt.role === role);
-                const cost = total(selected, 'costUsd');
-                return (
-                  <tr key={role}>
-                    <th>{translateMessage(roleLabels[role])}</th>
-                    <td>{formatNumber(selected.length)}</td>
-                    <td>
-                      {total(selected, 'inputTokens') === null
-                        ? t('visualpanels.unknown')
-                        : formatNumber(total(selected, 'inputTokens')!)}
-                    </td>
-                    <td>
-                      {total(selected, 'outputTokens') === null
-                        ? t('visualpanels.unknown')
-                        : formatNumber(total(selected, 'outputTokens')!)}
-                    </td>
-                    <td>{cost === null ? t('visualpanels.unknown') : formatUsd(cost)}</td>
-                    <td>{estimatedTotal(selected)}</td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
-      </div>
-      <p className="muted">
-        {t('visualpanels.retainedGenerationsCompletedRefusedPartial', {
-          v0: runs.length,
-          v1: runs.filter((run) => run.status === 'completed').length,
-          v2: runs.filter((run) => run.status === 'refused').length,
-          v3: runs.filter((run) => run.status === 'partial').length,
-        })}
-      </p>
-      <AttemptList attempts={attempts} revision={revision} />
-    </div>
-  );
-}
-
-export function RunAttempts({
-  chatId,
-  runId,
-  revision,
-}: {
-  chatId: string;
-  runId: string;
-  revision: number;
-}) {
-  useI18n();
-  return (
-    <LazyDiagnostics<AttemptSummary[]>
-      path={`/chats/${chatId}/attempts`}
-      revision={revision}
-      disclosure={false}
-      title={t('visualpanels.attemptList')}
-    >
-      {(attempts) => {
-        const owned = attempts.filter((attempt) => attempt.runId === runId);
-        return owned.length ? (
-          <AttemptList attempts={owned} revision={revision} />
-        ) : (
-          <p className="muted">{t('visualpanels.noAttemptsForTask')}</p>
-        );
-      }}
-    </LazyDiagnostics>
-  );
-}
-
-function AttemptList({ attempts, revision }: { attempts: AttemptSummary[]; revision: number }) {
-  useI18n();
-  const id = useId();
-  const [selected, setSelected] = useState<string | null>(null);
-  const current = attempts.find((attempt) => attempt.id === selected) ?? null;
-  return (
-    <div className="attempt-list">
-      <div className="table-scroll">
-        <table aria-label={t('visualpanels.attemptList')}>
-          <thead>
-            <tr>
-              <th>{t('visualpanels.role')}</th>
-              <th>{t('visualpanels.attemptModel')}</th>
-              <th>{t('visualpanels.attemptStatus')}</th>
-              <th>{t('visualpanels.inputTokens')}</th>
-              <th>{t('visualpanels.outputTokens')}</th>
-              <th>{t('visualpanels.estimatedCost2')}</th>
-              <th>
-                <span className="sr-only">{t('visualpanels.attemptDetail')}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {attempts.map((summary) => {
-              const open = summary.id === current?.id;
-              return (
-                <tr key={summary.id} data-attempt-id={summary.id}>
-                  <th>{translateMessage(roleLabels[summary.role] ?? summary.role)}</th>
-                  <td data-label={t('visualpanels.attemptModel')}>{summary.modelId}</td>
-                  <td data-label={t('visualpanels.attemptStatus')}>
-                    {labels[summary.status] ?? summary.status}
-                  </td>
-                  <td data-label={t('visualpanels.inputTokens')}>{tokens(summary.inputTokens)}</td>
-                  <td data-label={t('visualpanels.outputTokens')}>
-                    {tokens(summary.outputTokens)}
-                  </td>
-                  <td data-label={t('visualpanels.estimatedCost2')}>{estimatedTotal([summary])}</td>
-                  <td className="attempt-list-action">
-                    <button
-                      type="button"
-                      className="secondary"
-                      aria-expanded={open}
-                      aria-controls={`${id}-detail`}
-                      onClick={() => setSelected(open ? null : summary.id)}
-                    >
-                      {open
-                        ? t('visualpanels.attemptDetailHide')
-                        : t('visualpanels.attemptDetailShow')}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div id={`${id}-detail`} className="attempt-detail" hidden={!current}>
-        {current && (
-          <LazyDiagnostics<Attempt>
-            key={current.id}
-            path={`/attempts/${current.id}`}
-            revision={revision}
-            disclosure={false}
-            title={t('visualpanels.attemptDetail')}
-          >
-            {(attempt) => <AttemptDetail attempt={attempt} />}
-          </LazyDiagnostics>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AttemptDetail({ attempt }: { attempt: Attempt }) {
-  useI18n();
+  const lore = (attempt.request as { requestLore?: RequestLore } | null)?.requestLore;
   return (
     <section
       className="attempt-detail-body"
-      aria-label={t('visualpanels.attemptDetailFor', {
-        role: translateMessage(roleLabels[attempt.role] ?? attempt.role),
-        model: attempt.modelId,
-      })}
+      aria-label={t('visualpanels.attemptDetailFor', { role: label, model: attempt.modelId })}
     >
-      <dl
-        className="model-pricing-rates attempt-usage"
-        aria-label={t('visualpanels.callTokenUsage')}
-      >
-        <div>
-          <dt>{t('visualpanels.inputTokens')}</dt>
-          <dd>{tokens(attempt.inputTokens)}</dd>
-        </div>
-        <div>
-          <dt>{t('visualpanels.outputTokens')}</dt>
-          <dd>{tokens(attempt.outputTokens)}</dd>
-        </div>
-      </dl>
-      <p>
-        {t('visualpanels.priceRevision', {
-          v0: attempt.runId ? `Run ${attempt.runId}` : `Job ${attempt.storyJobId ?? attempt.jobId}`,
-          v1: attempt.priceRevision ?? t('visualpanels.unknown'),
-        })}
-      </p>
       <CacheUsage attempt={attempt} />
-      <RequestLoreView
-        lore={(attempt.request as { requestLore?: RequestLore } | null)?.requestLore}
-      />
+      {lore && <RequestLoreView lore={lore} />}
       <AttemptPricing attempt={attempt} />
       <AttemptRaw attempt={attempt} />
     </section>

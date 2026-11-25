@@ -1,19 +1,23 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
-import { LoadingState } from './LoadingState.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
 import { mainJudgmentError } from './main-judgment-error.js';
-import { SceneUsage } from './SceneUsage.js';
+import { SceneReceipt } from './SceneUsage.js';
 import { PartialResponse, StreamingResponse } from './StreamingResponse.js';
 import { CopyTextButton, TaskHistorySection } from './TaskHistory.js';
-import { RunAttempts } from './AttemptInspector.js';
-import { formatUsd } from './pricing-display.js';
+import {
+  TraceCallTable,
+  TraceFooter,
+  TraceLoading,
+  TraceSummary,
+  useChatTrace,
+} from './TaskTrace.js';
 import { useApiRecord } from './useApiRecord.js';
 import './run-task-details.css';
 
@@ -112,13 +116,11 @@ export function RunCancelButton({
 }
 
 function RunJobs({
-  run,
   jobs,
   revision,
   refresh,
   onError,
 }: {
-  run: ReaderRun;
   jobs: RunJob[];
   revision: number;
   refresh: () => Promise<void>;
@@ -127,55 +129,26 @@ function RunJobs({
   useI18n();
   return (
     <>
-      {jobs
-        .filter((job) => run.sourceRevision && job.sourceRevision === run.sourceRevision)
-        .map((job) => (
-          <LazyDiagnostics<Job>
-            key={job.id}
-            path={`/jobs/${job.id}`}
-            revision={revision}
-            disclosure={false}
-            title={t('visuals.m284', {
-              v0: {
-                translation: t('visuals.translation'),
-                image: t('visuals.image'),
-                status: t('visuals.legacyJob'),
-              }[job.kind],
-              v1: translateMessage(labels[job.status]),
-            })}
-          >
-            {(full) => <JobCard job={full} refresh={refresh} onError={onError} hideText />}
-          </LazyDiagnostics>
-        ))}
+      {jobs.map((job) => (
+        <LazyDiagnostics<Job>
+          key={job.id}
+          path={`/jobs/${job.id}`}
+          revision={revision}
+          disclosure={false}
+          title={t('visuals.m284', {
+            v0: {
+              translation: t('visuals.translation'),
+              image: t('visuals.image'),
+              status: t('visuals.legacyJob'),
+            }[job.kind],
+            v1: translateMessage(labels[job.status]),
+          })}
+        >
+          {(full) => <JobCard job={full} refresh={refresh} onError={onError} hideText />}
+        </LazyDiagnostics>
+      ))}
     </>
   );
-}
-
-const usageAmount = (value: number | null) =>
-  value == null ? t('visuals.m165') : formatNumber(value);
-
-function runUsageText(run: Pick<Run, 'id' | 'usage'>) {
-  return t('visuals.runUsage', {
-    id: run.id,
-    calls: formatNumber(run.usage.modelCalls),
-    input: usageAmount(run.usage.inputTokens),
-    output: usageAmount(run.usage.outputTokens),
-    cost:
-      run.usage.costUsd == null
-        ? t('visuals.m165')
-        : formatNumber(run.usage.costUsd, { style: 'currency', currency: 'USD' }),
-  });
-}
-
-function runEstimatedCost(estimate: ReaderRun['estimatedCost']) {
-  if (!estimate) return null;
-  if (estimate.usd !== null) return formatUsd(estimate.usd);
-  if (estimate.subtotalUsd > 0)
-    return t('visualpanels.knownSubtotalIncludesUnknownItemsInCalls', {
-      v0: formatUsd(estimate.subtotalUsd),
-      v1: estimate.unknownCount,
-    });
-  return t('visualpanels.unknown');
 }
 
 export const rawRunRecord = (full: Run) =>
@@ -185,67 +158,48 @@ export const rawRunRecord = (full: Run) =>
     2
   );
 
-function RunRecordLoading({ error, retry }: { error: string; retry: () => void }) {
-  useI18n();
-  return (
-    <LoadingState
-      presentation="inline"
-      loading={!error}
-      error={error}
-      label={t('shared.loadingDetails')}
-      onRetry={retry}
-    />
-  );
-}
-
 export function RunTaskDetails({
   run,
   jobs,
   revision,
   refresh,
   onError,
-  resultActions,
 }: {
   run: ReaderRun;
   jobs: RunJob[];
   revision: number;
   refresh: () => Promise<void>;
   onError: (message: string) => void;
-  resultActions?: ReactNode;
 }) {
   useI18n();
   const authored = run.packageStart?.mode === 'authored';
   const record = useApiRecord<Run>(`/runs/${run.id}`, revision, !authored);
-  const [rawOpen, setRawOpen] = useState(false);
+  const trace = useChatTrace(run.chatId, revision);
+  const calls = trace.value?.filter((call) => call.sceneRunId === run.id) ?? [];
   const settled = !['queued', 'running'].includes(run.status);
   const partial = !authored && settled && run.partialText;
   const cancelledStream =
     !authored && run.status === 'cancelled' && !run.partialText && !run.sourceRevision;
-  const estimated = runEstimatedCost(run.estimatedCost);
-  const hasJobs = jobs.some(
-    (job) => run.sourceRevision && job.sourceRevision === run.sourceRevision
+  const pendingJobs = jobs.filter(
+    (job) =>
+      run.sourceRevision &&
+      job.sourceRevision === run.sourceRevision &&
+      (job.status !== 'completed' || !!job.error)
   );
-  const runJobs = (
-    <RunJobs run={run} jobs={jobs} revision={revision} refresh={refresh} onError={onError} />
-  );
+  const snapshot = record.value?.snapshot;
   return (
     <div className="run-task-details task-history-sections">
-      {(partial || cancelledStream || resultActions) && (
+      {(partial || cancelledStream) && (
         <TaskHistorySection
           title={t('visuals.historyResult')}
           actions={
-            (partial || resultActions) && (
-              <>
-                {partial && (
-                  <CopyTextButton
-                    text={() => run.partialText!}
-                    label={t('visuals.m282')}
-                    copiedLabel={t('visuals.m281')}
-                    onFailure={() => onError(uiMessage('visuals.m280'))}
-                  />
-                )}
-                {resultActions}
-              </>
+            partial && (
+              <CopyTextButton
+                text={() => run.partialText!}
+                label={t('visuals.m282')}
+                copiedLabel={t('visuals.m281')}
+                onFailure={() => onError(uiMessage('visuals.m280'))}
+              />
             )
           }
         >
@@ -262,64 +216,44 @@ export function RunTaskDetails({
           )}
         </TaskHistorySection>
       )}
-      {(!authored || hasJobs) && (
-        <TaskHistorySection title={t('visuals.historySteps')}>
-          {!authored && run.contextSummary?.status === 'ready' && (
-            <ContextSummaryStatus summary={run.contextSummary} />
+      {(!authored || calls.length > 0) && (
+        <TaskHistorySection title={t('visuals.historyCalls')}>
+          {trace.value ? (
+            <TraceSummary calls={calls} groups />
+          ) : (
+            <TraceLoading error={trace.error} retry={trace.retry} />
           )}
-          {runJobs}
           {!authored &&
-            (record.value ? (
-              <>
-                <LoreContextDiagnostics
-                  snapshot={record.value.snapshot.loreContext}
-                  reset={record.value.snapshot.loreContextReset}
-                />
-                <LoreSelectionStatus snapshot={record.value.snapshot} />
-              </>
+            (run.sceneUsage ? (
+              <SceneReceipt usage={run.sceneUsage} contextSummary={run.contextSummary} />
             ) : (
-              <RunRecordLoading error={record.error} retry={record.retry} />
+              run.contextSummary?.status === 'ready' && (
+                <ContextSummaryStatus summary={run.contextSummary} />
+              )
             ))}
         </TaskHistorySection>
       )}
-      {!authored && (
-        <TaskHistorySection title={t('visuals.historyCalls')}>
-          <p>{runUsageText(run)}</p>
-          {estimated && <p>{t('visualpanels.estimatedCost', { v0: estimated })}</p>}
-          {run.sourceRevision && <SceneUsage usage={run.sceneUsage} />}
-          <RunAttempts chatId={run.chatId} runId={run.id} revision={revision} />
+      {(calls.length > 0 || pendingJobs.length > 0 || snapshot?.loreContext) && (
+        <TaskHistorySection title={t('taskTrace.flow')}>
+          {calls.length > 0 && (
+            <TraceCallTable calls={calls} revision={revision} label={t('taskTrace.flow')} />
+          )}
+          <RunJobs jobs={pendingJobs} revision={revision} refresh={refresh} onError={onError} />
+          {snapshot?.loreContext && (
+            <LoreContextDiagnostics
+              snapshot={snapshot.loreContext}
+              reset={snapshot.loreContextReset}
+            />
+          )}
+          {snapshot && <LoreSelectionStatus snapshot={snapshot} />}
         </TaskHistorySection>
       )}
       {!authored && (
-        <TaskHistorySection
-          title={t('visuals.historyRaw')}
-          actions={
-            record.value && (
-              <>
-                <button
-                  type="button"
-                  className="secondary"
-                  aria-expanded={rawOpen}
-                  onClick={() => setRawOpen((old) => !old)}
-                >
-                  {rawOpen ? t('visuals.historyRawHide') : t('visuals.historyRawShow')}
-                </button>
-                <CopyTextButton
-                  text={() => rawRunRecord(record.value!)}
-                  label={t('visuals.historyCopy')}
-                  copiedLabel={t('visuals.historyCopied')}
-                  onFailure={() => onError(uiMessage('visuals.historyCopyFailed'))}
-                />
-              </>
-            )
-          }
-        >
-          {record.value ? (
-            rawOpen && <pre className="task-history-raw">{rawRunRecord(record.value)}</pre>
-          ) : (
-            <RunRecordLoading error={record.error} retry={record.retry} />
-          )}
-        </TaskHistorySection>
+        <TraceFooter
+          id={run.id}
+          raw={record.value ? () => rawRunRecord(record.value!) : undefined}
+          onCopyFailed={() => onError(uiMessage('visuals.historyCopyFailed'))}
+        />
       )}
     </div>
   );

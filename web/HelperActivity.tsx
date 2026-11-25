@@ -14,6 +14,7 @@ import {
 } from './helper-activity-groups.js';
 import { requestFileError } from './request-file-errors.js';
 import { TaskHistoryTimeline, type TaskHistoryStep } from './TaskHistory.js';
+import { formatDurationMs } from './task-trace.js';
 import { statusGlyph, type StatusTone } from './TurnStatus.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
@@ -309,13 +310,28 @@ const stateTones: Record<HelperActivityState, StatusTone> = {
   recorded: 'done',
 };
 
+const routineOutcomes = new Set(['completed', 'tool_calls']);
+
 function stageNotes(stage: HelperActivityStage) {
   return stage.events.flatMap((event) => {
-    const outcome = event.kind.startsWith('tool.') ? undefined : recordOutcome(stage, event);
+    const outcome =
+      event.kind.startsWith('tool.') ||
+      (event.kind === 'attempt.finished' && routineOutcomes.has(event.status ?? ''))
+        ? undefined
+        : recordOutcome(stage, event);
     const applied =
       event.applied === undefined ? undefined : t(event.applied ? 'helpers.m124' : 'helpers.m125');
     return [outcome, applied].filter((note): note is string => !!note);
   });
+}
+
+function stageMeasures(stage: HelperActivityStage) {
+  return [
+    stage.resultChars === undefined
+      ? undefined
+      : t('taskTrace.resultChars', { count: stage.resultChars }),
+    stage.elapsedMs === undefined ? undefined : formatDurationMs(stage.elapsedMs),
+  ];
 }
 
 function stageStep(stage: HelperActivityStage): TaskHistoryStep {
@@ -326,8 +342,10 @@ function stageStep(stage: HelperActivityStage): TaskHistoryStep {
     stateLabel: t(stateLabels[stage.state]),
     label: stage.label,
     meta: [
+      stage.tool && stage.tool !== stage.label ? <code key="tool">{stage.tool}</code> : undefined,
       stage.target,
       toolCount > 1 ? t('helperConversation.executions', { count: toolCount }) : undefined,
+      ...stageMeasures(stage),
       ...stageNotes(stage),
     ],
     children: stage.events.map((event) =>
@@ -348,6 +366,8 @@ function stageStep(stage: HelperActivityStage): TaskHistoryStep {
 
 function readsStep(row: Extract<HelperActivityRow, { kind: 'reads' }>): TaskHistoryStep {
   const targets = [...new Set(row.stages.flatMap((stage) => (stage.target ? [stage.target] : [])))];
+  const tools = [...new Set(row.stages.flatMap((stage) => (stage.tool ? [stage.tool] : [])))];
+  const elapsed = row.stages.reduce((total, stage) => total + (stage.elapsedMs ?? 0), 0);
   return {
     key: `reads:${row.id}`,
     tone: stateTones[row.state],
@@ -363,9 +383,13 @@ function readsStep(row: Extract<HelperActivityRow, { kind: 'reads' }>): TaskHist
       row.summary.lookups > 0
         ? t('helpers.activityReadLookups', { count: row.summary.lookups })
         : undefined,
+      elapsed > 0 ? formatDurationMs(elapsed) : undefined,
     ],
-    children: targets.length > 0 && (
+    children: (targets.length > 0 || tools.length > 0) && (
       <p className="ui-meta-row task-history-step-text">
+        {tools.map((tool) => (
+          <code key={`tool:${tool}`}>{tool}</code>
+        ))}
         {targets.map((target) => (
           <span key={target}>{target}</span>
         ))}

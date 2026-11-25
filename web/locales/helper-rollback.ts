@@ -204,10 +204,23 @@ export const messages = {
     zh: '已经撤销。',
   },
   'helperRollback.uncovered': {
-    ko: '설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요.',
-    en: 'Changes to settings, chat-only lore and scene names are not rolled back.',
-    ja: '設定、チャット専用ロア、シーン名の変更は元に戻す対象ではありません。',
-    zh: '设置、聊天专用设定和场景名称的更改不在撤销范围内。',
+    ko: '{kinds} 변경은 되돌리기 대상이 아니에요.',
+    en: 'Changes to {kinds} are not rolled back.',
+    ja: '{kinds}の変更は元に戻す対象ではありません。',
+    zh: '{kinds}的更改不在撤销范围内。',
+  },
+  'helperRollback.kindSettings': { ko: '설정', en: 'settings', ja: '設定', zh: '设置' },
+  'helperRollback.kindChatLore': {
+    ko: '채팅 전용 로어',
+    en: 'chat-only lore',
+    ja: 'チャット専用ロア',
+    zh: '聊天专用设定',
+  },
+  'helperRollback.kindSceneTitle': {
+    ko: '장면 이름',
+    en: 'scene names',
+    ja: 'シーン名',
+    zh: '场景名称',
   },
   'helperRollback.outline': {
     ko: '플롯',

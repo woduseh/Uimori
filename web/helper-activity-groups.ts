@@ -7,6 +7,10 @@ export type HelperActivityStage = {
   label: string;
   target?: string;
   subject?: HelperActivityTarget;
+  tool?: string;
+  call?: number;
+  elapsedMs?: number;
+  resultChars?: number;
   state: HelperActivityState;
   events: HelperActivityEvent[];
 };
@@ -21,7 +25,16 @@ export type HelperActivityRow =
       stages: HelperActivityStage[];
     };
 
-const readTools = new Set(['scene.versions', 'scene.lore', 'scene.regex']);
+const readTools = new Set([
+  'scene.versions',
+  'scene.lore',
+  'scene.regex',
+  'resource.readMany',
+  'chat.preview',
+  'skills.load',
+  'db.query',
+  'vertex.location.compare',
+]);
 
 export function isHelperReadTool(name = '') {
   return readTools.has(name) || /\.(read|list|search|inspect|guide|tools)$/u.test(name);

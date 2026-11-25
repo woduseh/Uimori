@@ -16,7 +16,6 @@ import {
 import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import {
-  CopyTextButton,
   matchesTaskHistoryFilter,
   sumTaskHistoryValues,
   TaskHistoryDuration,
@@ -29,8 +28,12 @@ import {
   taskStatusTone,
   type TaskHistoryFilter,
 } from './TaskHistory.js';
-import { usageCompact, usageUsd } from './usage-display.js';
+import { usageCompact } from './usage-display.js';
 import type { HelperTaskView } from './useHelperConversation.js';
+import type { TraceCostTotal } from '../core/task-trace.js';
+import { formatUsdSummary } from './pricing-display.js';
+import { traceCostSummary } from './task-trace.js';
+import { TraceCallTable, TraceDisclosure, TraceFooter } from './TaskTrace.js';
 
 type ResultActions = {
   onOpenTarget?: (target: HelperTaskResultTarget) => void | Promise<void>;
@@ -67,16 +70,35 @@ function helperTaskTotals(tasks: HelperTaskView[], partial: boolean) {
       }),
     },
     {
-      label: t('helperResults.cost'),
+      label: t('chatsettings.taskHistoryCost'),
       value: taskHistoryTotalLabel(
         sumTaskHistoryValues(
-          tasks.map((task) => task.usage.costUsd),
-          partial
+          tasks.flatMap((task) => {
+            const cost = taskCost(task);
+            if (!cost) return [];
+            return [cost.usd ?? (cost.subtotalUsd > 0 ? cost.subtotalUsd : null)];
+          }),
+          partial ||
+            tasks.some((task) => {
+              const cost = taskCost(task);
+              return !!cost && cost.usd === null && cost.subtotalUsd > 0;
+            })
         ),
-        usageUsd
+        formatUsdSummary
       ),
     },
   ];
+}
+
+function taskCost(task: HelperTaskView): TraceCostTotal | null {
+  if (task.estimatedCost) return task.estimatedCost.attemptCount ? task.estimatedCost : null;
+  if (!task.usage.modelCalls) return null;
+  return {
+    usd: task.usage.costUsd,
+    subtotalUsd: task.usage.costUsd ?? 0,
+    unknownCount: task.usage.costUsd === null ? task.usage.modelCalls : 0,
+    attemptCount: task.usage.modelCalls,
+  };
 }
 
 function HelperTaskHistoryDetail({
@@ -93,10 +115,10 @@ function HelperTaskHistoryDetail({
   const results = useHelperTaskResults(task.id, task.status, visible);
   const own = useHelperActivity(task.id, task.status, visible && !activity);
   const steps = activity ?? own;
-  const [rawOpen, setRawOpen] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const data = results.data;
   const raw = () => JSON.stringify({ task, results: data, activity: steps.data }, null, 2);
+  const calls = data?.usage.attempts ?? [];
   return (
     <div className="task-history-sections">
       <TaskHistorySection title={t('helpers.historyChanges')}>
@@ -131,9 +153,6 @@ function HelperTaskHistoryDetail({
           onRetry={results.retry}
         />
       </TaskHistorySection>
-      <TaskHistorySection title={t('visuals.historySteps')}>
-        <HelperActivityTimeline status={task.status} source={steps} />
-      </TaskHistorySection>
       <TaskHistorySection title={t('visuals.historyCalls')}>
         {data ? (
           <HelperTaskUsageRecord usage={data.usage} />
@@ -148,30 +167,19 @@ function HelperTaskHistoryDetail({
           </p>
         )}
       </TaskHistorySection>
-      <TaskHistorySection
-        title={t('visuals.historyRaw')}
-        actions={
-          <>
-            <button
-              type="button"
-              className="secondary"
-              aria-expanded={rawOpen}
-              onClick={() => setRawOpen((old) => !old)}
-            >
-              {rawOpen ? t('visuals.historyRawHide') : t('visuals.historyRawShow')}
-            </button>
-            <CopyTextButton
-              text={raw}
-              label={t('visuals.historyCopy')}
-              copiedLabel={t('visuals.historyCopied')}
-              onFailure={() => setCopyFailed(true)}
-            />
-          </>
-        }
-      >
-        {copyFailed && <p className="error">{t('visuals.historyCopyFailed')}</p>}
-        {rawOpen && <pre className="task-history-raw">{raw()}</pre>}
+      <TaskHistorySection title={t('taskTrace.flow')}>
+        <HelperActivityTimeline status={task.status} source={steps} />
+        {calls.length > 0 && (
+          <TraceDisclosure
+            title={t('taskTrace.callsCount', { count: calls.length })}
+            testId="helper-call-list"
+          >
+            <TraceCallTable calls={calls} revision={task.updatedAt} label={t('taskTrace.calls')} />
+          </TraceDisclosure>
+        )}
       </TaskHistorySection>
+      {copyFailed && <p className="error">{t('visuals.historyCopyFailed')}</p>}
+      <TraceFooter id={task.id} raw={raw} onCopyFailed={() => setCopyFailed(true)} />
     </div>
   );
 }
@@ -251,8 +259,8 @@ export function HelperTaskHistory({
                     v0: task.usage.inputTokens + task.usage.outputTokens,
                   })
                 : null;
-            const cost =
-              calls > 0 && task.usage.costUsd != null ? usageUsd(task.usage.costUsd) : null;
+            const estimate = taskCost(task);
+            const cost = estimate ? traceCostSummary(estimate) : null;
             return (
               <TaskHistoryRow
                 key={task.id}

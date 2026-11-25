@@ -25,7 +25,7 @@ export const formatUsd = (value: number | null | undefined) =>
       ? '< $0.00000001'
       : `$${formatNumber(value, { maximumFractionDigits: 8 })}`;
 
-const formatUsdSummary = (value: number) =>
+export const formatUsdSummary = (value: number) =>
   value > 0 && value < 0.001
     ? '< $0.001'
     : `$${formatNumber(

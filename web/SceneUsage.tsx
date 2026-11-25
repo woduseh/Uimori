@@ -33,25 +33,6 @@ function sceneContext(usage: SceneUsageReceipt) {
   return { input, limit: context.inputTokenLimit, estimated: actual === null };
 }
 
-function sceneTokenTotals(usage: SceneUsageReceipt) {
-  const context = sceneContext(usage);
-  return (
-    <>
-      {t('reader.tokenTotals', {
-        input: amount(usage.inputTokens),
-        output: amount(usage.outputTokens),
-      })}
-      {context &&
-        t('reader.contextPercent', {
-          estimated: context.estimated,
-          percent: formatNumber((context.input / context.limit) * 100, {
-            maximumFractionDigits: 1,
-          }),
-        })}
-    </>
-  );
-}
-
 const contextParts: Record<MainContextPart, { label: () => string; tone: ContextTone }> = {
   prompt: { label: () => t('reader.prompt'), tone: 'instructions' },
   botDescription: { label: () => t('reader.contextBotDescription'), tone: 'description' },
@@ -363,33 +344,5 @@ export function SceneReceipt({
         </div>
       )}
     </div>
-  );
-}
-
-export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
-  useI18n();
-  const [open, setOpen] = useState(false);
-  return (
-    <details
-      className="scene-usage"
-      data-testid="scene-usage"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>
-        <span className="ui-meta-row">
-          <span>{t('reader.thisGeneration')}</span>
-          {usage && <span>{sceneTokenTotals(usage)}</span>}
-        </span>
-      </summary>
-      {open && (
-        <div className="scene-usage-body">
-          {usage ? (
-            <SceneReceipt usage={usage} model />
-          ) : (
-            <p>{t('reader.noCallRecordUsageIsNotEstimatedForImported')}</p>
-          )}
-        </div>
-      )}
-    </details>
   );
 }

@@ -123,7 +123,7 @@ test('completed run inspection is compact and retry returns the forked chat and 
 
 test.each([
   { basis: 'last', inputTokens: 50, cachedInputTokens: 30, reasoningTokens: 2 },
-  { basis: undefined, inputTokens: 50, cachedInputTokens: null, reasoningTokens: null },
+  { basis: undefined, inputTokens: 500, cachedInputTokens: 300, reasoningTokens: 20 },
 ])('native attempt details follow the recorded token basis $basis', (expected) => {
   const f = fixture();
   const chat = createFixtureChat(f.store, '네이티브 사용량');

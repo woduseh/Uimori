@@ -5,7 +5,6 @@ import {
   Clock3,
   FileText,
   Image,
-  Info,
   Languages,
   Palette,
   PenLine,
@@ -15,7 +14,6 @@ import {
   HELPER_COMPACTION_INPUT_RATIO,
   type HelperChange,
   type HelperStatus,
-  type HelperTaskAttemptUsage,
   type HelperTaskResultTarget,
   type HelperTaskResultsView,
 } from '../core/helper.js';
@@ -35,44 +33,18 @@ import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { ContextBar, ContextLegend, ContextTable } from './ContextBreakdown.js';
 import { helperInputBreakdown } from './HelperContextUsage.js';
 import { formatNumber, t, useI18n } from './i18n.js';
-import { IconButton } from './IconButton.js';
 import { DropdownIcon } from './ui-icons.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { usageCompact, usageUsd } from './usage-display.js';
+import { usageCompact } from './usage-display.js';
+import { formatUsd } from './pricing-display.js';
+import { TraceSummary, traceUsageTotals } from './TaskTrace.js';
 import { StoryUiThemePreview } from './StoryBoardPanel.js';
 import { ThemeContext } from './ThemeContext.js';
 import './helper-task-results.css';
 import './scene-usage.css';
 import './run-task-details.css';
 import { useRetryableEffect } from './useRetryableEffect.js';
-
-type RecordedAmount = { value: number; reported: number; unknown: number };
-const usageFields = [
-  'inputTokens',
-  'outputTokens',
-  'cachedInputTokens',
-  'reasoningTokens',
-  'costUsd',
-  'internalModelCalls',
-] as const;
-
-export function helperTaskUsageTotals(attempts: HelperTaskAttemptUsage[]) {
-  return Object.fromEntries(
-    usageFields.map((field) => {
-      const amount: RecordedAmount = { value: 0, reported: 0, unknown: 0 };
-      for (const attempt of attempts) {
-        const value = attempt[field];
-        if (value === null) amount.unknown++;
-        else {
-          amount.value += value;
-          amount.reported++;
-        }
-      }
-      return [field, amount];
-    })
-  ) as Record<(typeof usageFields)[number], RecordedAmount>;
-}
 
 const targetIcons = {
   content: BookOpen,
@@ -226,6 +198,13 @@ function settingValue(
   return typeof value === 'number' ? formatNumber(value) : value;
 }
 
+function ratesValue(rates: HelperTaskResultTarget['afterRates']) {
+  if (!rates) return t('taskTrace.catalogRates');
+  const rate = (value: number | null) =>
+    value === null ? t('visualpanels.unknown') : formatUsd(value);
+  return t('taskTrace.rates', { input: rate(rates.input), output: rate(rates.output) });
+}
+
 function ResultTarget({
   target,
   operation,
@@ -277,7 +256,14 @@ function ResultTarget({
         <span>{title}</span>
         {subtitle && <small>{subtitle}</small>}
       </span>
-      {!deleted && target.before !== undefined && target.after !== undefined ? (
+      {!deleted && target.beforeRates !== undefined && target.afterRates !== undefined ? (
+        <span className="helper-result-values">
+          <span>{ratesValue(target.beforeRates)}</span>
+          <span aria-hidden="true">→</span>
+          <span className="sr-only">{t('helperResults.changedTo')}</span>
+          <span>{ratesValue(target.afterRates)}</span>
+        </span>
+      ) : !deleted && target.before !== undefined && target.after !== undefined ? (
         <span className="helper-result-values">
           <span>{settingValue(target.before, target.beforeLabel, target.setting)}</span>
           <span aria-hidden="true">→</span>
@@ -329,46 +315,8 @@ function ResultTarget({
   );
 }
 
-function UsageAmount({ amount }: { amount: RecordedAmount }) {
-  return (
-    <>
-      <span>
-        {amount.reported === 0 && amount.unknown > 0
-          ? t('helperResults.unknown')
-          : formatNumber(amount.value)}
-      </span>
-      {amount.unknown > 0 && amount.reported > 0 && (
-        <small>{t('helperResults.missingRequests', { count: formatNumber(amount.unknown) })}</small>
-      )}
-    </>
-  );
-}
-
-function UsageShare({
-  label,
-  part,
-  whole,
-}: {
-  label: 'helperResults.cachedShare' | 'helperResults.reasoningShare';
-  part: RecordedAmount;
-  whole: RecordedAmount;
-}) {
-  if (part.reported === 0 || part.value === 0) return null;
-  return (
-    <small>
-      {t(label, {
-        count: formatNumber(part.value),
-        share: formatNumber(whole.value > 0 ? part.value / whole.value : 0, {
-          style: 'percent',
-          maximumFractionDigits: 0,
-        }),
-      })}
-    </small>
-  );
-}
-
 function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
-  const totals = helperTaskUsageTotals(usage.attempts);
+  const totals = traceUsageTotals(usage.attempts);
   const inputEstimate = usage.latestInputEstimate;
   const lastInput = usage.latestInputTokens ?? null;
   const outputUnknown = totals.outputTokens.reported === 0 && totals.outputTokens.unknown > 0;
@@ -496,87 +444,10 @@ function TaskContext({ usage }: { usage: HelperTaskResultsView['usage'] }) {
 
 export function HelperTaskUsageRecord({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   useI18n();
-  const totals = helperTaskUsageTotals(usage.attempts);
-  const repeatedInput =
-    usage.attempts.length > 1 ||
-    totals.internalModelCalls.value > 1 ||
-    totals.cachedInputTokens.value > 0;
-  const cost = totals.costUsd;
   return (
     <div className="helper-usage-record">
       <TaskContext usage={usage} />
-      <dl className="helper-usage-rows">
-        <div data-row="calls">
-          <dt>{t('helperResults.runs')}</dt>
-          <dd>
-            <span>
-              {t('helperResults.modelCalls', { count: formatNumber(usage.attempts.length) })}
-            </span>
-            {usage.toolExecutions > 0 && (
-              <span>
-                {t('helperResults.toolSummary', { count: formatNumber(usage.toolExecutions) })}
-              </span>
-            )}
-            {totals.internalModelCalls.reported > 0 && (
-              <span>
-                {t('helperResults.internalCallsShort', {
-                  count: formatNumber(totals.internalModelCalls.value),
-                })}
-              </span>
-            )}
-          </dd>
-        </div>
-        <div data-row="input">
-          <dt>
-            <span>{t('helperResults.cumulativeInput')}</span>
-            {repeatedInput && (
-              <IconButton
-                className="helper-usage-help"
-                icon={Info}
-                size={14}
-                label={t('helperResults.cumulativeHelp')}
-                title={t('helperResults.cumulativeExplanation')}
-              />
-            )}
-          </dt>
-          <dd>
-            <UsageAmount amount={totals.inputTokens} />
-            <UsageShare
-              label="helperResults.cachedShare"
-              part={totals.cachedInputTokens}
-              whole={totals.inputTokens}
-            />
-          </dd>
-        </div>
-        <div data-row="output">
-          <dt>{t('helperResults.cumulativeOutput')}</dt>
-          <dd>
-            <UsageAmount amount={totals.outputTokens} />
-            <UsageShare
-              label="helperResults.reasoningShare"
-              part={totals.reasoningTokens}
-              whole={totals.outputTokens}
-            />
-          </dd>
-        </div>
-        {cost.reported > 0 && (
-          <div data-row="cost">
-            <dt>{t('helperResults.costShort')}</dt>
-            <dd>
-              <span>
-                {cost.unknown > 0
-                  ? t('reader.inspectorCostAtLeast', { value: usageUsd(cost.value) })
-                  : usageUsd(cost.value)}
-              </span>
-              {cost.unknown > 0 && (
-                <small>
-                  {t('helperResults.missingRequests', { count: formatNumber(cost.unknown) })}
-                </small>
-              )}
-            </dd>
-          </div>
-        )}
-      </dl>
+      <TraceSummary calls={usage.attempts} toolExecutions={usage.toolExecutions} />
     </div>
   );
 }

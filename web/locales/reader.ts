@@ -851,12 +851,6 @@ export const messages = {
     ja: '名前を保存',
     zh: '保存名称',
   },
-  'reader.thisGeneration': {
-    ko: '이번 생성',
-    en: 'This generation',
-    ja: '今回の生成',
-    zh: '本次生成',
-  },
   'reader.model': {
     ko: '모델',
     en: 'Model',
@@ -1774,18 +1768,6 @@ export const messages = {
     en: '{opening, select, true {Edit opening message name} other {Edit scene {number} name}}',
     ja: '{opening, select, true {最初のメッセージの名前を編集} other {シーン {number}の名前を編集}}',
     zh: '{opening, select, true {编辑首条消息名称} other {编辑场景{number}名称}}',
-  },
-  'reader.tokenTotals': {
-    ko: '요청 {input}, 응답 {output} 토큰',
-    en: 'Request {input}, response {output} tokens',
-    ja: '入力 {input}、出力 {output}トークン',
-    zh: '请求{input}，回复{output} token',
-  },
-  'reader.contextPercent': {
-    ko: ', 컨텍스트 사용량 {estimated, select, true {약 {percent}%} other {{percent}%}}',
-    en: ', context usage {estimated, select, true {about {percent}%} other {{percent}%}}',
-    ja: '、コンテキスト使用量 {estimated, select, true {約{percent}%} other {{percent}%}}',
-    zh: '，上下文使用量{estimated, select, true {约{percent}%} other {{percent}%}}',
   },
   'reader.loreSelectionTotals': {
     ko: '자동 선별, 대상 {total}, 판단 {evaluated}, 선택 {selected}{failed, plural, =0 {} other {, 실패 #건}}',

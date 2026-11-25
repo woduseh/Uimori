@@ -13,6 +13,8 @@ export type HelperActivityEvent = {
   textTruncated?: boolean;
   applied?: boolean;
   callId?: string;
+  elapsedMs?: number;
+  resultChars?: number;
   target?: HelperActivityTarget;
   retry?: HelperProviderRetry;
 };

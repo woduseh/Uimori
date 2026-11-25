@@ -1639,12 +1639,6 @@ export const messages = {
     ja: '{date}、{cost}{calls, plural, =0 {} other {、#回}}{unknown, plural, =0 {} other {、未確認#回}}{partial, plural, =0 {} other {、部分推定#回}}',
     zh: '{date}，{cost}{calls, plural, =0 {} other {，#次}}{unknown, plural, =0 {} other {，未知#次}}{partial, plural, =0 {} other {，部分估算#次}}',
   },
-  'visuals.runUsage': {
-    ko: 'Run {id}, 실행 요청 {calls}회, 입력 {input} / 출력 {output} 토큰, 비용 {cost}',
-    en: 'Run {id}, Requests {calls}, Input {input} / Output {output} tokens, Cost {cost}',
-    ja: 'Run {id}、実行リクエスト{calls}回、入力{input} / 出力{output}トークン、費用{cost}',
-    zh: 'Run {id}，运行请求{calls}次，输入{input} / 输出{output} token，费用{cost}',
-  },
   'visuals.translation': {
     ko: '번역',
     en: 'Translation',
@@ -1897,12 +1891,6 @@ export const messages = {
     ja: '結果',
     zh: '结果',
   },
-  'visuals.historySteps': {
-    ko: '단계',
-    en: 'Steps',
-    ja: 'ステップ',
-    zh: '步骤',
-  },
   'visuals.historyCalls': {
     ko: '호출과 비용',
     en: 'Calls and cost',
@@ -1914,18 +1902,6 @@ export const messages = {
     en: 'Raw record',
     ja: '元の記録',
     zh: '原始记录',
-  },
-  'visuals.historyRawShow': {
-    ko: '원본 보기',
-    en: 'Show raw record',
-    ja: '元の記録を表示',
-    zh: '显示原始记录',
-  },
-  'visuals.historyRawHide': {
-    ko: '원본 숨기기',
-    en: 'Hide raw record',
-    ja: '元の記録を隠す',
-    zh: '隐藏原始记录',
   },
   'visuals.historyCopy': {
     ko: '복사',

@@ -51,13 +51,15 @@ import {
   type SettingsGroup,
 } from './settings-categories.js';
 import { HelperIcon, BackIcon, LibraryIcon } from './ui-icons.js';
+import { GitFork } from 'lucide-react';
 import type { Job, ReaderRun } from '../core/types.js';
 import type { StoryState } from './useStory.js';
 import { api, labels } from './api.js';
 import { ConnectionEditor, type ProviderDetailRequest } from './ProviderManagement.js';
 import { backFromSettingsDetail, openSettingsDetail, SettingsDetail } from './SettingsDetail.js';
 import { ArchivePanel } from './ArchivePanel.js';
-import { AttemptInspector } from './AttemptInspector.js';
+import { ChatUsage } from './TaskTrace.js';
+import { traceCostSummary } from './task-trace.js';
 import { RunCancelButton, RunNotices, RunTaskDetails } from './RunTaskDetails.js';
 import {
   matchesTaskHistoryFilter,
@@ -72,7 +74,7 @@ import {
   type TaskHistoryFilter,
   type TaskHistoryTotal,
 } from './TaskHistory.js';
-import { formatUsd } from './pricing-display.js';
+import { formatUsdSummary } from './pricing-display.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { storageKeys } from './storage-keys.js';
 
@@ -235,7 +237,7 @@ export function TasksPanel({
                     v0: run.usage.inputTokens + run.usage.outputTokens,
                   })
                 : null;
-            const cost = run.estimatedCost?.usd != null ? formatUsd(run.estimatedCost.usd) : null;
+            const cost = run.sceneCost ? traceCostSummary(run.sceneCost) : null;
             const failed = !!run.error || ['failed', 'interrupted', 'partial'].includes(run.status);
             return (
               <TaskHistoryRow
@@ -289,17 +291,7 @@ export function TasksPanel({
                         {t('chatsettings.m11')}
                       </button>
                     )}
-                  </>
-                }
-              >
-                <RunTaskDetails
-                  run={run}
-                  jobs={jobs ?? []}
-                  revision={detail.reader.cursor}
-                  refresh={refresh}
-                  onError={state.setError}
-                  resultActions={
-                    run.sourceRevision && (
+                    {run.sourceRevision && (
                       <button
                         type="button"
                         className="secondary"
@@ -310,10 +302,19 @@ export function TasksPanel({
                           });
                         }}
                       >
+                        <GitFork size={18} aria-hidden="true" />
                         {t('chatsettings.m12')}
                       </button>
-                    )
-                  }
+                    )}
+                  </>
+                }
+              >
+                <RunTaskDetails
+                  run={run}
+                  jobs={jobs ?? []}
+                  revision={detail.reader.cursor}
+                  refresh={refresh}
+                  onError={state.setError}
                 />
               </TaskHistoryRow>
             );
@@ -327,20 +328,15 @@ export function TasksPanel({
         label={t('chatsettings.m13')}
         errorLabel={t('chatsettings.m14')}
       />
-      {allRuns && (
-        <AttemptInspector
-          key={detail.chat.id}
-          chatId={detail.chat.id}
-          revision={detail.reader.cursor}
-          runs={allRuns}
-        />
+      {allRuns && allRuns.length > 0 && (
+        <ChatUsage key={detail.chat.id} chatId={detail.chat.id} revision={detail.reader.cursor} />
       )}
     </section>
   );
 }
 
 function runTotals(runs: ReaderRun[]) {
-  const estimates = runs.flatMap((run) => (run.estimatedCost ? [run.estimatedCost] : []));
+  const estimates = runs.flatMap((run) => (run.sceneCost ? [run.sceneCost] : []));
   const cost: TaskHistoryTotal = {
     amount: estimates.reduce((total, item) => total + (item.usd ?? item.subtotalUsd), 0),
     partial: estimates.some((item) => item.usd === null),
@@ -360,7 +356,10 @@ function runTotals(runs: ReaderRun[]) {
               output: taskHistoryTotalLabel(output, formatNumber),
             }),
     },
-    { label: t('chatsettings.taskHistoryCost'), value: taskHistoryTotalLabel(cost, formatUsd) },
+    {
+      label: t('chatsettings.taskHistoryCost'),
+      value: taskHistoryTotalLabel(cost, formatUsdSummary),
+    },
   ];
 }
 

@@ -15,6 +15,7 @@ import { readStoredRunSnapshot } from './run-projections.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
 import { type SceneContextRow, sceneContextFromRow } from './scene-context.js';
+import { sceneCosts } from './task-trace.js';
 
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
   const row = store.db
@@ -165,24 +166,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
       } as SceneUsageReceipt,
     ])
   );
-  const runCosts = new Map(
-    (
-      store.db
-        .prepare(`SELECT run_id AS runId,COUNT(*) AS attemptCount,
-    SUM(CASE WHEN json_extract(response,'$.estimatedCost.status')='estimated' AND json_type(response,'$.estimatedCost.usd') IN ('integer','real') THEN 0 ELSE 1 END) AS unknownCount,
-    SUM(COALESCE(json_extract(response,'$.estimatedCost.usd'),json_extract(response,'$.estimatedCost.subtotalUsd'),0)) AS subtotalUsd
-    FROM attempts WHERE chat_id=? AND run_id IS NOT NULL AND job_id IS NULL AND role!='title' ${scope ? 'AND run_id IN (SELECT value FROM json_each(?))' : ''} GROUP BY run_id`)
-        .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as {
-        runId: string;
-        attemptCount: number;
-        unknownCount: number;
-        subtotalUsd: number;
-      }[]
-    ).map(({ runId, ...cost }) => [
-      runId,
-      { ...cost, usd: cost.unknownCount ? null : cost.subtotalUsd },
-    ])
-  );
+  const costs = sceneCosts(store, id, scope);
   const runs = (
     store.db
       .prepare(`SELECT id,chat_id AS chatId,parent_revision AS parentRevision,status,request,source_revision AS sourceRevision,error,usage,created_at AS createdAt,updated_at AS updatedAt,
@@ -221,7 +205,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     canRejudge: !!row.canRejudge,
     readerDismissed: !!row.readerDismissed,
     executionMode: row.executionMode ?? undefined,
-    estimatedCost: runCosts.get(row.id),
+    ...costs.get(row.id),
     sceneUsage: sceneUsage.get(row.id),
     snapshot: {
       ...JSON.parse(row.snapshot),
@@ -232,7 +216,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     usage: row.usage
       ? JSON.parse(row.usage)
       : {
-          modelCalls: runCosts.get(row.id)?.attemptCount ?? 0,
+          modelCalls: costs.get(row.id)?.estimatedCost.attemptCount ?? 0,
           inputTokens: null,
           outputTokens: null,
           costUsd: null,

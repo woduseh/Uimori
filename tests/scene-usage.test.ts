@@ -1,22 +1,19 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
-import { SceneReceipt, SceneUsage } from '../web/SceneUsage.js';
+import { SceneReceipt } from '../web/SceneUsage.js';
 import { sceneCostLabels } from '../web/pricing-display.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
 
 const context = { estimatedInputTokens: 2048, inputTokenLimit: 8192 };
 const receipt = (usage: SceneUsageReceipt) =>
   renderToStaticMarkup(createElement(SceneReceipt, { usage }));
-const summary = (usage: SceneUsageReceipt) =>
-  renderToStaticMarkup(createElement(SceneUsage, { usage }));
 
 test.each([0, 4096])(
   'provider input %s takes precedence over the local admission estimate',
   (inputTokens) => {
     const usage = { inputTokens, outputTokens: 100, inputScope: 'request' as const, context };
     const percent = inputTokens === 0 ? 0 : 50;
-    expect(summary(usage)).toContain(`컨텍스트 사용량 ${percent}%`);
     expect(receipt(usage)).toContain(
       `컨텍스트 ${percent}% (${inputTokens.toLocaleString('ko-KR')} / 8,192)`
     );
@@ -30,16 +27,12 @@ test('an unreported input uses its retained local estimate and retains its fallb
     outputTokens: 100,
     context: { ...context, tokenizer: 'claude-legacy' as const, tokenizerFallback: true },
   };
-  expect(summary(usage)).toContain('요청 미확인');
-  expect(summary(usage)).toContain('컨텍스트 사용량 약 25%');
   expect(receipt(usage)).toContain('컨텍스트 약 25% (2,048 / 8,192)');
   expect(receipt(usage)).toContain('일반 로컬 추정치를 사용했어요');
 });
 
 test('Codex turn-wide input remains usage accounting rather than request occupancy', () => {
   const usage = { inputTokens: 50000, outputTokens: 100, inputScope: 'turn' as const, context };
-  expect(summary(usage)).toContain('요청 50,000');
-  expect(summary(usage)).toContain('컨텍스트 사용량 약 25%');
   expect(receipt(usage)).toContain('컨텍스트 약 25% (2,048 / 8,192)');
 });
 

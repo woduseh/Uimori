@@ -4,7 +4,7 @@ import type { HelperChange, HelperRollbackUnit, HelperRollbackView } from '../co
 import { api, definiteRejection } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
-import { t, translateMessage } from './i18n.js';
+import { getIntlLocale, t, translateMessage } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -25,6 +25,28 @@ const coveredChange = (change: HelperChange) =>
   (change.domain === 'scene' && !change.targetId.endsWith(':title'));
 
 export const rollbackCovers = (changes: readonly HelperChange[]) => changes.some(coveredChange);
+
+const uncoveredKindLabels = {
+  settings: 'helperRollback.kindSettings',
+  'chat-lore': 'helperRollback.kindChatLore',
+  'scene-title': 'helperRollback.kindSceneTitle',
+} as const;
+
+export function uncoveredKinds(changes: readonly HelperChange[]) {
+  const kinds = new Set(
+    changes
+      .filter((change) => !coveredChange(change))
+      .map((change) =>
+        change.domain === 'scene' ? 'scene-title' : (change.domain as 'settings' | 'chat-lore')
+      )
+  );
+  const labels = (['settings', 'chat-lore', 'scene-title'] as const)
+    .filter((kind) => kinds.has(kind))
+    .map((kind) => t(uncoveredKindLabels[kind]));
+  return labels.length
+    ? new Intl.ListFormat(getIntlLocale(), { type: 'conjunction' }).format(labels)
+    : null;
+}
 
 const restorable = (unit: HelperRollbackUnit) => unit.status === 'restorable';
 const unsaved = (unit: HelperRollbackUnit) => !!unit.touches && hasUnsavedInput(unit.touches);
@@ -263,7 +285,7 @@ export function useHelperRollback({
   }
 
   const chosen = plan && preview ? selection(preview, plan) : null;
-  const uncovered = changes.some((change) => !coveredChange(change));
+  const uncovered = uncoveredKinds(changes);
   const imageNotice = chosen?.restore.some(
     (unit) => unit.touches?.domain === 'scene' && unit.touches.fields.includes('translation')
   );
@@ -338,7 +360,9 @@ export function useHelperRollback({
   ) : null;
   const footer = (
     <>
-      {uncovered && <p className="helper-result-note">{t('helperRollback.uncovered')}</p>}
+      {uncovered && (
+        <p className="helper-result-note">{t('helperRollback.uncovered', { kinds: uncovered })}</p>
+      )}
       {!reviewing && (taskAction || taskActive) && (
         <div className="helper-rollback-row">
           {taskAction}

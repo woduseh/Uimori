@@ -7,23 +7,30 @@ import type {
   HelperTaskResultsView,
 } from '../core/helper.js';
 import { diffText } from '../core/text-diff.js';
-import {
-  HelperTaskResultItems,
-  HelperTaskUsageRecord,
-  helperTaskUsageTotals,
-} from '../web/HelperTaskResults.js';
+import { HelperTaskResultItems, HelperTaskUsageRecord } from '../web/HelperTaskResults.js';
+import { traceUsageTotals as helperTaskUsageTotals } from '../web/TaskTrace.js';
 import { helperChangeLocationParts } from '../web/helper-change-location.js';
 
 const attempt = (overrides: Partial<HelperTaskAttemptUsage>): HelperTaskAttemptUsage => ({
   id: 'execution',
+  kind: 'helper',
+  owner: 'helper',
+  sceneRunId: null,
   purpose: 'helper',
+  modelId: 'fixture-helper',
   status: 'completed',
+  startedAt: null,
+  elapsedMs: null,
+  firstByteMs: null,
   inputTokens: null,
   outputTokens: null,
   cachedInputTokens: null,
   reasoningTokens: null,
-  costUsd: null,
   internalModelCalls: null,
+  costUsd: null,
+  estimatedUsd: null,
+  estimatedSubtotalUsd: 0,
+  tools: [],
   ...overrides,
 });
 
@@ -139,8 +146,20 @@ test('a partly priced task reads as a lower bound with its unpriced calls', () =
     attempts: [attempt({ inputTokens: 10, outputTokens: 5, costUsd: 0.02 }), attempt({})],
   });
   expect(html).toContain('data-row="cost"');
-  expect(html).toContain('US$0.02 이상');
+  expect(html).toContain('$0.02 이상');
   expect(html).toContain('미확인 1회');
+});
+
+test('the summary prices a call by its reported cost before its estimate and keeps three digits', () => {
+  const html = record({
+    attempts: [
+      attempt({ inputTokens: 10, outputTokens: 5, costUsd: 0.012345, estimatedUsd: 0.5 }),
+      attempt({ inputTokens: 10, outputTokens: 5, estimatedUsd: 0.0004321 }),
+    ],
+  });
+  expect(html).toContain('<dt>추정 비용</dt>');
+  expect(html).toContain('$0.0128');
+  expect(html).not.toContain('이상');
 });
 
 test('the latest request context shows its parts against the budget', () => {

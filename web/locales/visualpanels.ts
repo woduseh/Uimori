@@ -1043,12 +1043,6 @@ export const messages = {
     ja: 'アシスタント',
     zh: '助手',
   },
-  'visualpanels.chatTitle': {
-    ko: '채팅 제목',
-    en: 'Chat title',
-    ja: 'チャットタイトル',
-    zh: '聊天标题',
-  },
   'visualpanels.illustration': {
     ko: '삽화',
     en: 'Illustration',
@@ -1247,77 +1241,17 @@ export const messages = {
     ja: '含まれたか未確認、{v0, number}件',
     zh: '是否包含尚未确认，{v0, number}条',
   },
-  'visualpanels.callsAndCostsAcrossAllRoles': {
-    ko: '전체 역할의 호출과 비용',
-    en: 'Calls and costs across all roles',
-    ja: '全役割の呼び出しと費用',
-    zh: '所有角色的调用与费用',
-  },
-  'visualpanels.includesCandidatesAuxiliaryTasksAndRetries': {
-    ko: '후보, 보조 작업, 재시도 포함',
-    en: 'Includes candidates, auxiliary tasks and retries',
-    ja: '候補、補助作業、再試行を含む',
-    zh: '包含候选、辅助任务及重试',
-  },
-  'visualpanels.sendAttemptsInputOutputTokensProviderReported': {
-    ko: '전송 시도 {v0, number}회, 입력 {v1} / 출력 {v2} 토큰, 프로바이더 보고 비용 {v3}',
-    en: '{v0, plural, one {# send attempt} other {# send attempts}}, Input {v1} / Output {v2} tokens, Provider-reported cost {v3}',
-    ja: '送信試行 {v0, number}回、入力 {v1} / 出力 {v2}トークン、プロバイダー報告費用 {v3}',
-    zh: '发送尝试{v0, number}次，输入{v1} / 输出{v2} token，提供商报告费用{v3}',
-  },
-  'visualpanels.role': {
-    ko: '역할',
-    en: 'Role',
-    ja: '役割',
-    zh: '角色',
-  },
   'visualpanels.sendAttempts': {
     ko: '전송 시도',
     en: 'Send attempts',
     ja: '送信試行',
     zh: '发送尝试',
   },
-  'visualpanels.inputTokens': {
-    ko: '입력 토큰',
-    en: 'Input tokens',
-    ja: '入力トークン',
-    zh: '输入 token',
-  },
-  'visualpanels.outputTokens': {
-    ko: '출력 토큰',
-    en: 'Output tokens',
-    ja: '出力トークン',
-    zh: '输出 token',
-  },
-  'visualpanels.providerReportedCost2': {
-    ko: '프로바이더 보고 비용',
-    en: 'Provider-reported cost',
-    ja: 'プロバイダー報告費用',
-    zh: '提供商报告费用',
-  },
-  'visualpanels.retainedGenerationsCompletedRefusedPartial': {
-    ko: '보관된 본문 생성 기록 {v0, number}개, 완료 {v1, number}개, 거절 {v2, number}개, 부분 생성 {v3, number}개',
-    en: '{v0, plural, one {# retained generation} other {# retained generations}}, Completed {v1, number}, Refused {v2, number}, Partial {v3, number}',
-    ja: '保存済み本文生成 {v0, number}件、完了 {v1, number}件、拒否 {v2, number}件、部分生成 {v3, number}件',
-    zh: '保留的正文生成记录{v0, number}条，完成{v1, number}条，拒绝{v2, number}条，部分生成{v3, number}条',
-  },
   'visualpanels.inputOutput': {
     ko: '입력 {v0}, 출력 {v1}',
     en: 'Input {v0}, Output {v1}',
     ja: '入力 {v0}、出力 {v1}',
     zh: '输入{v0}，输出{v1}',
-  },
-  'visualpanels.callTokenUsage': {
-    ko: '호출 토큰 사용량',
-    en: 'Call token usage',
-    ja: '呼び出しのトークン使用量',
-    zh: '调用 token 用量',
-  },
-  'visualpanels.priceRevision': {
-    ko: '{v0}, 비용 기준 {v1}',
-    en: '{v0}, Price revision {v1}',
-    ja: '{v0}、料金基準 {v1}',
-    zh: '{v0}，费率基准{v1}',
   },
   'visualpanels.calls': {
     ko: '호출',
@@ -1829,24 +1763,6 @@ export const messages = {
     ja: 'リクエストと応答の原文を隠す',
     zh: '隐藏请求和响应原文',
   },
-  'visualpanels.attemptList': {
-    ko: '호출 목록',
-    en: 'Calls',
-    ja: '呼び出し一覧',
-    zh: '调用列表',
-  },
-  'visualpanels.attemptModel': {
-    ko: '모델',
-    en: 'Model',
-    ja: 'モデル',
-    zh: '模型',
-  },
-  'visualpanels.attemptStatus': {
-    ko: '상태',
-    en: 'Status',
-    ja: '状態',
-    zh: '状态',
-  },
   'visualpanels.attemptDetail': {
     ko: '호출 상세',
     en: 'Call details',
@@ -1870,11 +1786,5 @@ export const messages = {
     en: 'Hide',
     ja: '閉じる',
     zh: '收起',
-  },
-  'visualpanels.noAttemptsForTask': {
-    ko: '이 작업의 호출 기록이 없어요.',
-    en: 'No calls recorded for this task.',
-    ja: 'このタスクの呼び出し記録はありません。',
-    zh: '此任务没有调用记录。',
   },
 };
