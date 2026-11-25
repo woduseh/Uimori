@@ -4,6 +4,8 @@ import type { Json, ProviderTool } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
 import { readHelperModel } from './helper-resource-editing.js';
 import { fields, number, text } from './request-validation.js';
+import { KNOWLEDGE_ITEM_TOKENS } from '../core/provider.js';
+import { countTextTokens } from '../core/text-tokens.js';
 
 const paging = {
   offset: { type: 'integer', minimum: 0 },
@@ -88,12 +90,34 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
     role: 'prior-illustration',
     model: item,
   }));
-  const catalog = [...documents, ...prior].map(({ id, revision, title, role }) => ({
-    id,
-    revision,
-    title,
-    role,
-  }));
+  const catalog = [
+    ...documents.map(({ id, revision, title, role, model }) => {
+      const card = model.package.nativeRisu?.card as Record<string, unknown> | undefined;
+      const texts = [
+        ['/package/nativeRisu/card/description', card?.description],
+        ['/text', model.text],
+        ['/description', model.description],
+      ].flatMap(([path, text]) =>
+        typeof text === 'string' && text.trim() ? [{ path: path as string, text }] : []
+      );
+      const unique = texts.filter(
+        (item, index) => texts.findIndex((other) => other.text === item.text) === index
+      );
+      const inline =
+        (role === 'bot' || role === 'persona') &&
+        countTextTokens(unique.map((item) => item.text).join('\n')) <= KNOWLEDGE_ITEM_TOKENS;
+      return {
+        id,
+        revision,
+        title,
+        role,
+        fields: unique.map((item) =>
+          inline ? item : { path: item.path, length: item.text.length }
+        ),
+      };
+    }),
+    ...prior.map(({ id, revision, title, role }) => ({ id, revision, title, role })),
+  ];
   const execute = (name: string, args: Record<string, Json>): Json => {
     if (name === 'illustration.sources.read') {
       fields(args, ['id', 'path', 'offset', 'limit', 'textOffset', 'textLimit']);

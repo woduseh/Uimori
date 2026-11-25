@@ -120,3 +120,36 @@ test('shared cast survives distinct cuts and redraw without changing scene-speci
     )
   ).toEqual({ heroIndex: 0, targets });
 });
+
+test('short bot and persona descriptions arrive in the catalog; long ones and modules list read paths', () => {
+  const short = nativeContent({ description: 'Mira has green eyes.' }, { id: 'bot' });
+  const persona = nativeContent({ description: 'The traveler wears a grey cloak.' }, { id: 'me' });
+  const long = nativeContent({ description: 'Archive. '.repeat(4000) }, { id: 'long' });
+  const module = nativeContent({ description: 'Harbor rules.' }, { id: 'rules' }, 'module');
+  const snapshot = {
+    profile: {
+      packages: [short, persona, long, module],
+      packageAttachments: [
+        { id: 'bot', revision: 1, role: 'bot' },
+        { id: 'me', revision: 1, role: 'persona' },
+        { id: 'long', revision: 1, role: 'bot' },
+        { id: 'rules', revision: 1, role: 'module' },
+      ],
+    },
+  } as RunSnapshot;
+  const { catalog } = illustrationResearch(
+    snapshot,
+    {} as Parameters<typeof illustrationResearch>[1]
+  );
+  const fields = (index: number) => (catalog[index] as { fields: unknown[] }).fields;
+  expect(fields(0)).toContainEqual({
+    path: '/package/nativeRisu/card/description',
+    text: 'Mira has green eyes.',
+  });
+  expect(JSON.stringify(fields(1))).toContain('grey cloak');
+  expect(fields(2)).toContainEqual({
+    path: '/package/nativeRisu/card/description',
+    length: 'Archive. '.repeat(4000).length,
+  });
+  expect(JSON.stringify(fields(3))).not.toContain('Harbor rules.');
+});

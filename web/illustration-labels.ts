@@ -35,6 +35,7 @@ const messages: Record<string, string> = {
   CODEX_IMAGE_NOT_GENERATED: 'visuals.m206',
   CODEX_IMAGE_UNAVAILABLE: 'visuals.m207',
   ILLUSTRATION_PROMPT_TIMEOUT: 'visuals.m208',
+  ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED: 'visuals.promptCallBudgetExhausted',
   CODEX_IMAGE_USAGE_LIMIT: 'visuals.m209',
   CODEX_IMAGE_INVALID_REFERENCE: 'visuals.m210',
   CODEX_IMAGE_TOO_MANY_REFERENCES: 'visuals.m211',

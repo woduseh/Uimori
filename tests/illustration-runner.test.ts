@@ -1440,8 +1440,8 @@ test('a safe Codex retry reuses only its identical successful JEV check', async 
   expect(renders).toBe(2);
 });
 
-test.each(['complete', 'context-limit'] as const)(
-  'illustration research uses frozen native sources over multiple read-only rounds: %s',
+test.each(['complete', 'context-limit', 'budget'] as const)(
+  'illustration research uses frozen native sources over bounded read-only rounds: %s',
   async (mode) => {
     const store = databases.create();
     const description =
@@ -1473,7 +1473,7 @@ test.each(['complete', 'context-limit'] as const)(
           expect(match.excerpt).toContain('emerald eyes');
           readPath = match.path;
         }
-        if (mode === 'complete' && round === 13) {
+        if (mode === 'complete' && round === 2) {
           expect(JSON.stringify(results)).toContain('emerald eyes');
           const anchor = body.input.source.blocks[0][0];
           await writeSse(response, [
@@ -1510,8 +1510,8 @@ test.each(['complete', 'context-limit'] as const)(
                 ? {
                     id: 'resource:0',
                     path: readPath,
-                    textOffset: mode === 'complete' ? description.length - 45 : 0,
-                    textLimit: mode === 'complete' ? 100 : 10000,
+                    textOffset: mode === 'context-limit' ? 0 : description.length - 45,
+                    textLimit: mode === 'context-limit' ? 10000 : 100,
                   }
                 : { query: 'emerald eyes' }
             ),
@@ -1537,7 +1537,7 @@ test.each(['complete', 'context-limit'] as const)(
       modelId: 'fixture-research',
       maxOutputTokens: 512,
       temperature: null,
-      inputTokenLimit: mode === 'complete' ? 32768 : 8192,
+      inputTokenLimit: mode === 'context-limit' ? 8192 : 32768,
     }) as ModelPreset;
     const imageModel = codexModel(store);
     const plan = reserveIllustrationPlan(store, source, 'manual', {
@@ -1577,11 +1577,19 @@ test.each(['complete', 'context-limit'] as const)(
     expect(JSON.stringify(recorded)).not.toContain(description);
     if (mode === 'complete') {
       expect(result, JSON.stringify(observed.finishes)).toMatchObject({ status: 'completed' });
-      expect(provider.requests).toHaveLength(14);
-      expect(recorded).toHaveLength(13);
+      expect(provider.requests).toHaveLength(3);
+      expect(recorded).toHaveLength(2);
       expect(
         illustrationJob(store, queuedIllustrations(store)[0]).input.target?.prompt?.prompt
       ).toContain('emerald eyes');
+    } else if (mode === 'budget') {
+      expect(result).toMatchObject({
+        status: 'failed',
+        code: 'ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED',
+      });
+      expect(provider.requests).toHaveLength(store.chat(chat.id).settings.maxCalls);
+      expect(recorded).toHaveLength(store.chat(chat.id).settings.maxCalls - 1);
+      expect(queuedIllustrations(store)).toEqual([]);
     } else {
       expect(result).toMatchObject({
         status: 'failed',

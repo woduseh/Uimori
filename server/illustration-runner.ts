@@ -306,7 +306,7 @@ export async function runIllustrationJob(
           stable: {
             ...request.stable,
             tools: ILLUSTRATION_RESEARCH_TOOLS,
-            contract: `${request.stable.contract}\nUse the supplied read-only tools to retrieve relevant frozen source passages when age, identity or other defining visual facts are missing. Request independent sources together when useful. Return the requested JSON.`,
+            contract: `${request.stable.contract}\nCatalog fields that carry text are the full frozen bot and persona descriptions; do not read them again. Use the supplied read-only tools only when age, identity or other defining visual facts are still missing: read a listed field path directly, and request independent sources together in one turn. Return the requested JSON.`,
           },
           input: { ...request.input, catalog: research.catalog },
         }
@@ -315,7 +315,7 @@ export async function runIllustrationJob(
     const signal = AbortSignal.any([hooks.signal, AbortSignal.timeout(timeoutMs)]);
     const results: import('../core/transport.js').Json[] = [];
     let opaqueState: ProviderRequest['opaqueState'];
-    while (true) {
+    for (let calls = 1; ; calls++) {
       signal.throwIfAborted();
       const next = {
         ...base,
@@ -335,6 +335,8 @@ export async function runIllustrationJob(
       );
       if (result.status === 'completed') return result.text;
       if (enabled && result.status === 'tool_calls' && result.toolCalls.length) {
+        if (calls >= snapshot.settings.maxCalls)
+          throw new IllustrationError('ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED');
         opaqueState = result.opaqueState ?? undefined;
         for (const call of result.toolCalls) {
           signal.throwIfAborted();

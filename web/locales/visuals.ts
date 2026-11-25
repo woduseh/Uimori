@@ -1537,6 +1537,12 @@ export const messages = {
     ja: '{v0}、{v1}、作業管理',
     zh: '{v0}，{v1}，管理任务',
   },
+  'visuals.promptCallBudgetExhausted': {
+    ko: '프롬프트를 준비하며 자료를 읽다가 모델 호출 횟수 한도에 닿았어요. 다시 요청하거나 채팅 설정에서 모델 호출 횟수를 늘려 주세요.',
+    en: 'The prompt model reached the model call limit while reading sources. Try again or raise the model call limit in chat settings.',
+    ja: 'プロンプトの準備中に資料を読み、モデル呼び出し回数の上限に達しました。もう一度試すか、チャット設定で呼び出し回数を増やしてください。',
+    zh: '准备提示词时读取资料达到了模型调用次数上限。请重试，或在聊天设置中提高模型调用次数。',
+  },
   'visuals.blur': {
     ko: '배경 흐림: {value}px',
     en: 'Background blur: {value}px',
