@@ -1,6 +1,7 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
+import { expectCodeFieldValue } from './code-field.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
@@ -1340,13 +1341,13 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultRisuPrompt(concurrentText, 'main'));
-  await expect(await promptBody(libraryEditor)).toHaveValue(edited);
+  await expectCodeFieldValue(await promptBody(libraryEditor), edited);
   await libraryEditor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
   await expect(review).toBeVisible();
   await expect(review).toContainText(concurrentText);
   await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-  await expect(await promptBody(libraryEditor)).toHaveValue(edited);
+  await expectCodeFieldValue(await promptBody(libraryEditor), edited);
   const stored = await (await request.get(`/api/prompt-presets/${first.id}`)).json();
   expect(stored.revision).toBe(3);
   expect(stored.program).toEqual(createDefaultRisuPrompt(concurrentText, 'main'));

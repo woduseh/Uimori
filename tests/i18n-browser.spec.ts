@@ -8,6 +8,7 @@ import {
   selectChatSettingsSection,
   selectSettingsSection,
 } from './ui-navigation.js';
+import { readCodeFieldValue } from './code-field.js';
 
 test('I18N11 failed illustration-reference saves keep their error identity across language changes', async ({
   page,
@@ -658,7 +659,7 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
       expect(reads).toBe(1);
       await dialog.getByRole('button', { name: '現在の入力を保持', exact: true }).click();
       expect(await field!.evaluate((element) => element.isConnected)).toBe(true);
-      expect(await field!.evaluate((element: HTMLTextAreaElement) => element.value)).toBe(draft);
+      expect(await field!.evaluate(readCodeFieldValue)).toBe(draft);
       const persisted = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
       expect(JSON.stringify(persisted.program)).toContain('Changed elsewhere / 保存済み本文');
       expect(JSON.stringify(persisted.program)).not.toContain(draft);

@@ -81,7 +81,7 @@ for (const viewport of viewports)
       const completion = page.locator('.cm-tooltip-autocomplete');
       await expect(completion.getByRole('option', { name: /^getvar/u })).toBeVisible();
       await capture(page, `autocomplete-${viewport.name}-${theme}`);
-      await page.keyboard.press('Enter');
+      await completion.getByRole('option', { name: /^getvar/u }).click();
       await page.keyboard.type('::mood');
       await expect(completion).toHaveCount(0);
       await expect.poll(() => codeFieldValue(field)).toBe(`${greeting}\n{{getvar::mood`);

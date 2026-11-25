@@ -5,6 +5,7 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
 import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 function latch() {
   let resolve!: () => void;
@@ -69,13 +70,13 @@ test(`DECISION resource conflict review and failed recovery preserve input at ${
   await expect(review).toBeVisible();
   await expect(review).toContainText('Changed elsewhere');
   await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-  await expect(body).toHaveValue('Keep my unsaved instructions');
+  await expectCodeFieldValue(body, 'Keep my unsaved instructions');
   expect(saves).toBe(1);
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   const leave = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
   await expect(leave.getByRole('alert')).toContainText('현재 입력을 복구할 수 없어요');
   await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(body).toHaveValue('Keep my unsaved instructions');
+  await expectCodeFieldValue(body, 'Keep my unsaved instructions');
   const persisted = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
   expect(JSON.stringify(persisted.program)).toContain('Changed elsewhere');
 });
