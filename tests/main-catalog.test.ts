@@ -166,6 +166,23 @@ test('the request contract asks for a read only while the catalog lists a discov
   expect(excerpt.input.catalog).toMatchObject([{ id: 'lore-1' }]);
 });
 
+test('retained lore kept as several pages that cover the whole body counts as delivered', () => {
+  const long = lore(1, { text: 'A long harbor chronicle. '.repeat(40) });
+  const page = (start: number, end: number) => ({
+    ...retained(long),
+    start,
+    end,
+    text: long.text.slice(start, end),
+  });
+  const tools = (entries: ReturnType<typeof retained>[]) =>
+    buildMainProviderRequest(withRetained(snapshot([long]), entries)).request.stable.tools.map(
+      (tool) => tool.name
+    );
+  const middle = Math.floor(long.text.length / 2);
+  expect(tools([page(middle, long.text.length), page(0, middle)])).not.toContain('knowledge.read');
+  expect(tools([page(0, middle), page(middle + 1, long.text.length)])).toContain('knowledge.read');
+});
+
 test('knowledge search points directly to an exact late body match without changing metadata-only hits or scope', () => {
   const phrase = 'Lantern password is amber.';
   const original = 'İ'.repeat(20_000) + '😀'.repeat(10_000) + phrase + ' End of reference.';

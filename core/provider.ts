@@ -16,7 +16,12 @@ import {
   packageContextFromCompiled,
   type ResolvedPackage,
 } from './package-context.js';
-import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lore-context.js';
+import {
+  DEFAULT_LORE_CONTEXT,
+  measureLoreText,
+  retainsLoreBody,
+  type LorePlacement,
+} from './lore-context.js';
 import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
 import type { RisuContentSource } from './risu-native.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
@@ -110,7 +115,7 @@ export function roleResources(
 ) {
   return collectRoleResources(snapshot, compiledPackages(snapshot, role));
 }
-function collectRoleResources(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
+export function collectRoleResources(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
   const resources = snapshot.resources.filter(
     (item) =>
       item.chatId === snapshot.chatId &&
@@ -173,23 +178,20 @@ function writerDeliveredReferences(
   resources: readonly Resource[]
 ): string[] {
   if (snapshot.contextPlan?.status === 'pending') return [];
-  const byId = new Map(resources.map((item) => [item.id, item]));
+  const entries = snapshot.loreContext?.entries ?? [];
+  const retained = new Set(entries.map((entry) => entry.id));
   return [
     ...packages
       .flatMap((pkg) => pkg.selectedLore)
       .filter((item) => !item.nativeRisuPosition && item.text)
       .map((item) => item.id),
-    ...(snapshot.loreContext?.entries ?? [])
-      .filter((entry) => {
-        const resource = byId.get(entry.id);
-        return (
-          resource?.revision === entry.revision &&
-          entry.start === 0 &&
-          entry.end === resource.text.length &&
-          entry.text === resource.text
-        );
-      })
-      .map((entry) => entry.id),
+    ...resources
+      .filter(
+        (resource) =>
+          retained.has(resource.id) &&
+          retainsLoreBody(entries, { ...resource, hash: hash(resource.text) })
+      )
+      .map((resource) => resource.id),
   ];
 }
 export function buildMainInput(

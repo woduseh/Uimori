@@ -16,6 +16,7 @@ import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { captureTranslationReferences } from '../server/translation-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { translationReader } from '../core/translation-context.js';
+import { translationInput } from '../core/auxiliary.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
@@ -532,6 +533,46 @@ test.each(['missing-scene', 'budget'] as const)(
     expect(store.job(job.id).result?.text).toBe('조용히 기다렸다.');
   }
 );
+
+test('translation lists the compiled references its reads execute against, not stale snapshot copies', () => {
+  const store = database();
+  const bot = store.product.content({
+    ...fixtureBotInput('Mira', 'Mira keeps watch.'),
+    package: nativeContent(
+      {
+        name: 'Mira',
+        description: 'Mira keeps watch.',
+        character_book: {
+          entries: [{ keys: ['harbor'], content: 'The harbor key is brass.', comment: 'Key' }],
+        },
+      },
+      { id: 'stale-lore' }
+    ),
+  }) as { id: string };
+  const chat = createFixtureChat(store, 'stale', { botId: bot.id });
+  const target = source(store, chat.id);
+  const fixed = readRunSnapshot(store, target.runId);
+  const lore = fixed.resources.find((item) => item.id.includes(':lore:'))!;
+  lore.title = 'STALE_SNAPSHOT_TITLE';
+  const input = translationInput(
+    { id: target.id, chatId: chat.id, text: target.text, hash: target.hash },
+    {
+      revision: target.id,
+      bot: null,
+      persona: null,
+      references: [],
+      scene: '',
+      previousSources: [],
+      instructionRevision: 'synthetic',
+      modelPresetRevision: 'synthetic',
+    },
+    fixed
+  );
+  expect(input.catalog.map((item) => [item.id, item.title])).toEqual([[lore.id, 'Key']]);
+  expect(
+    executeTool(fixed, call('knowledge.read', { ids: [lore.id] }), undefined, 'translation').denied
+  ).toBe(false);
+});
 
 test('translation searches and reads frozen bot/persona/modules even when absent from the lore catalog', () => {
   const store = database();
