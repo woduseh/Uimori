@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       browser:
-        description: Include the complete synthetic browser regression (3 independent shards)
+        description: Include the complete synthetic browser regression (3 independent shards); a version change runs it without this
         type: boolean
         default: false
 
@@ -16,14 +16,15 @@ permissions:
   actions: read
 
 concurrency:
-  group: quality-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: quality-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
+      full_browser: ${{ steps.changes.outputs.full_browser }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,6 +36,7 @@ jobs:
         run: node scripts/ci-changes.mjs
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          UIMORI_BROWSER_INPUT: ${{ inputs.browser }}
 
   static:
     needs: changes
@@ -183,7 +185,7 @@ jobs:
   browser-full:
     name: browser-full (${{ matrix.shard }}/3)
     needs: changes
-    if: github.event_name == 'workflow_dispatch' && inputs.browser
+    if: needs.changes.outputs.full_browser == 'true'
     runs-on: windows-latest
     # Includes browser installation and serial long-reader cases on hosted Windows.
     timeout-minutes: 35
@@ -246,7 +248,7 @@ jobs:
         env:
           UIMORI_CI_NEEDS: ${{ toJSON(needs) }}
           UIMORI_DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
-          UIMORI_FULL_BROWSER: ${{ github.event_name == 'workflow_dispatch' && inputs.browser }}
+          UIMORI_FULL_BROWSER: ${{ needs.changes.outputs.full_browser }}
       - uses: actions/download-artifact@v8
         if: needs.changes.outputs.docs_only != 'true'
         with:
@@ -257,11 +259,11 @@ jobs:
         if: needs.changes.outputs.docs_only != 'true'
         run: node scripts/ci-summary.mjs vitest output/collected
       - uses: actions/download-artifact@v8
-        if: github.event_name == 'workflow_dispatch' && inputs.browser
+        if: needs.changes.outputs.full_browser == 'true'
         with:
           pattern: ci-browser-*
           path: output/collected
           merge-multiple: true
       - name: Verify complete browser collection
-        if: github.event_name == 'workflow_dispatch' && inputs.browser
+        if: needs.changes.outputs.full_browser == 'true'
         run: node scripts/ci-summary.mjs browser output/collected
