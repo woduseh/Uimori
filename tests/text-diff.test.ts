@@ -3,6 +3,8 @@ import {
   TEXT_DIFF_LIMITS,
   applyTextDiff,
   diffText,
+  intralineDiff,
+  pairChangedLines,
   rewriteAsBlocks,
   type TextDiff,
 } from '../core/text-diff.js';
@@ -168,4 +170,47 @@ test('applying the hunks of random edits reproduces the edited text', () => {
       if (before === after) expect(diff.hunks).toEqual([]);
     }
   }
+});
+
+test('intraline emphasis marks only the changed words of a paired line', () => {
+  const found = intralineDiff('  <span>날씨: 맑음</span>', '  <span>날씨: 흐림</span>');
+  expect(found?.before.filter((segment) => segment.op !== 'equal').map((s) => s.text)).toEqual([
+    '맑음',
+  ]);
+  expect(found?.after.filter((segment) => segment.op !== 'equal').map((s) => s.text)).toEqual([
+    '흐림',
+  ]);
+  expect(found?.before.map((segment) => segment.text).join('')).toBe('  <span>날씨: 맑음</span>');
+  const spaced = intralineDiff('local hp = max_hp - 10', 'local mp = max_mp - 10');
+  expect(spaced?.after.filter((segment) => segment.op === 'insert').map((s) => s.text)).toEqual([
+    'mp',
+    'max_mp',
+  ]);
+});
+
+test('intraline emphasis steps aside when a line is mostly rewritten', () => {
+  expect(intralineDiff('return a', 'print(b, c)')).toBeNull();
+  expect(intralineDiff('same', 'same')).toBeNull();
+  const now = (() => {
+    let time = 0;
+    return () => (time += 10);
+  })();
+  const slow = intralineDiff('alpha beta gamma delta', 'alpha beta gamma omega', now);
+  expect(slow?.after.filter((segment) => segment.op === 'insert').map((s) => s.text)).toEqual([
+    'omega',
+  ]);
+});
+
+test('changed lines pair by similarity in order and leave unrelated lines unpaired', () => {
+  expect(
+    pairChangedLines(
+      ['  <span>날씨: 맑음</span>', '  <span>체력: 80</span>'],
+      ['  <span>새 줄</span>', '  <span>날씨: 흐림</span>', '  <span>체력: 65</span>']
+    )
+  ).toEqual([
+    [0, 1],
+    [1, 2],
+  ]);
+  expect(pairChangedLines(['alpha beta'], ['totally different words'])).toEqual([]);
+  expect(pairChangedLines([], ['added'])).toEqual([]);
 });

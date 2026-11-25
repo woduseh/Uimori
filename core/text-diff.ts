@@ -379,6 +379,144 @@ export function rewriteAsBlocks(segments: readonly TextDiffSegment[]): TextDiffS
   ];
 }
 
+const INTRALINE_TOKENS = /\s+|[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu;
+const INTRALINE_MAX_EDITS = 200;
+const INTRALINE_TIMEOUT_MS = 5;
+const INTRALINE_MAX_SHARE = 0.7;
+const LINE_PAIR_SIMILARITY = 0.4;
+const LINE_PAIR_WINDOW = 8;
+
+export type IntralineDiff = { before: TextDiffSegment[]; after: TextDiffSegment[] };
+
+function pushSegment(segments: TextDiffSegment[], op: Step, text: string) {
+  if (!text) return;
+  const last = segments.at(-1);
+  if (last?.op === op) last.text += text;
+  else segments.push({ op, text });
+}
+
+function absorbSpaces(segments: readonly TextDiffSegment[]): TextDiffSegment[] {
+  const result: TextDiffSegment[] = [];
+  for (const [index, segment] of segments.entries()) {
+    const between =
+      segment.op === 'equal' &&
+      !/\S/u.test(segment.text) &&
+      segments[index - 1] &&
+      segments[index + 1] &&
+      segments[index - 1]!.op !== 'equal' &&
+      segments[index + 1]!.op !== 'equal';
+    pushSegment(result, between ? segments[index - 1]!.op : segment.op, segment.text);
+  }
+  return result;
+}
+
+function affixDiff(before: string, after: string): IntralineDiff {
+  let prefix = 0;
+  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix])
+    prefix++;
+  if (prefix > 0 && /[\uD800-\uDBFF]/u.test(before[prefix - 1]!)) prefix--;
+  let suffix = 0;
+  while (
+    suffix < before.length - prefix &&
+    suffix < after.length - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  )
+    suffix++;
+  if (suffix > 0 && /[\uDC00-\uDFFF]/u.test(before[before.length - suffix]!)) suffix--;
+  const side = (text: string, op: Step) => {
+    const segments: TextDiffSegment[] = [];
+    pushSegment(segments, 'equal', text.slice(0, prefix));
+    pushSegment(segments, op, text.slice(prefix, text.length - suffix));
+    pushSegment(segments, 'equal', text.slice(text.length - suffix));
+    return segments;
+  };
+  return { before: side(before, 'delete'), after: side(after, 'insert') };
+}
+
+const changedShare = (segments: readonly TextDiffSegment[], length: number) =>
+  length
+    ? segments.reduce(
+        (sum, segment) => sum + (segment.op === 'equal' ? 0 : segment.text.length),
+        0
+      ) / length
+    : 1;
+
+export function intralineDiff(
+  before: string,
+  after: string,
+  now: () => number = () => performance.now()
+): IntralineDiff | null {
+  if (before === after) return null;
+  const a = before.match(INTRALINE_TOKENS) ?? [];
+  const b = after.match(INTRALINE_TOKENS) ?? [];
+  let script: Step[] | null = null;
+  try {
+    script = diffTokens(a, b, INTRALINE_MAX_EDITS, now() + INTRALINE_TIMEOUT_MS, now);
+  } catch (error) {
+    if (!(error instanceof DiffTimeout)) throw error;
+  }
+  let result: IntralineDiff;
+  if (!script) result = affixDiff(before, after);
+  else {
+    const left: TextDiffSegment[] = [];
+    const right: TextDiffSegment[] = [];
+    let x = 0;
+    let y = 0;
+    for (const step of script) {
+      if (step !== 'insert') pushSegment(left, step, a[x++]!);
+      if (step !== 'delete') pushSegment(right, step, b[y++]!);
+    }
+    result = { before: absorbSpaces(left), after: absorbSpaces(right) };
+  }
+  if (
+    changedShare(result.before, before.length) > INTRALINE_MAX_SHARE &&
+    changedShare(result.after, after.length) > INTRALINE_MAX_SHARE
+  )
+    return null;
+  return result;
+}
+
+function lineSimilarity(left: string, right: string): number {
+  const a = left.match(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
+  const b = right.match(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
+  if (!a.length || !b.length) return 0;
+  const counts = new Map<string, number>();
+  for (const token of a) counts.set(token, (counts.get(token) ?? 0) + 1);
+  let shared = 0;
+  for (const token of b) {
+    const count = counts.get(token) ?? 0;
+    if (count > 0) {
+      shared++;
+      counts.set(token, count - 1);
+    }
+  }
+  return (2 * shared) / (a.length + b.length);
+}
+
+export function pairChangedLines(
+  removed: readonly string[],
+  added: readonly string[]
+): [number, number][] {
+  const pairs: [number, number][] = [];
+  let start = 0;
+  for (let index = 0; index < removed.length && start < added.length; index++) {
+    let best = -1;
+    let score = LINE_PAIR_SIMILARITY;
+    for (let candidate = start; candidate < added.length; candidate++) {
+      if (candidate >= start + LINE_PAIR_WINDOW) break;
+      const similarity = lineSimilarity(removed[index]!, added[candidate]!);
+      if (similarity > score) {
+        best = candidate;
+        score = similarity;
+      }
+    }
+    if (best < 0) continue;
+    pairs.push([index, best]);
+    start = best + 1;
+  }
+  return pairs;
+}
+
 export function applyTextDiff(before: string, hunks: readonly TextDiffHunk[]): string {
   let result = '';
   let cursor = 0;
