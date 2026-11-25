@@ -257,7 +257,7 @@ Behavior the descriptions leave out:
 - `source.currentDateUtc` in the helper request is the UTC date on which the task was created, not the date of each model request.
 
 - Gemini 4 helpers on Google AI Studio and Vertex use `web.search` as a read-only provider-facing tool. Each invocation makes a separately recorded and billed search-only request to the **same configured Gemini model and connection**, then returns grounded text and verified source URLs to the helper. The separate request counts against the task's model-call budget and receives only the search query, not the full private conversation or library content. The helper decides when to search, including during read-only review.
-- Grounded responses can include Google Search Suggestions, whose markup is retained with the task for display to the user in a sandboxed iframe while only the source links are returned to the helper.
+- Grounded responses can include Google Search Suggestions. Uimori does not keep or display them; only the source links are returned to the helper and shown to the user.
 - A separate search costs an additional Gemini invocation and any Google Search grounding fee. Lack of a performed search or verified source must not be presented as grounded evidence.
 
 Outside these operations:

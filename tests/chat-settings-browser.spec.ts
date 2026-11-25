@@ -672,10 +672,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     'href',
     'https://example.com/canon'
   );
-  await expect(dialog.getByTitle('Google 검색 제안')).toHaveAttribute(
-    'sandbox',
-    'allow-popups allow-popups-to-escape-sandbox'
-  );
+  await expect(dialog.locator('iframe')).toHaveCount(0);
   await selectChatSettingsSection(page, '기억과 메모');
   const notes = dialog.getByTestId('context-notes');
   if ((await notes.evaluate((node) => node.tagName)) === 'DETAILS')

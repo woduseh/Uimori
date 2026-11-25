@@ -395,7 +395,6 @@ export type HelperTaskResultsView = {
   changes: HelperChange[];
   confirmations: HelperConfirmation[];
   question?: HelperQuestion | null;
-  webSearchSuggestions?: string[];
   unrecordedOperations: number;
   usage: {
     attempts: HelperTaskAttemptUsage[];

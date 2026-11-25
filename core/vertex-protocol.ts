@@ -456,7 +456,7 @@ export class VertexDecoder {
   private readonly groundingChunks: Json[] = [];
   private readonly groundingSupports: Json[] = [];
   private readonly searchQueries = new Set<string>();
-  private searchEntryPoint: string | undefined;
+  private searchSuggested = false;
   private text = '';
   private eventText = '';
   private finishReason: string | null = null;
@@ -553,7 +553,7 @@ export class VertexDecoder {
       typeof metadata.searchEntryPoint.renderedContent === 'string' &&
       metadata.searchEntryPoint.renderedContent.trim()
     )
-      this.searchEntryPoint = metadata.searchEntryPoint.renderedContent;
+      this.searchSuggested = true;
   }
   private searchSources(chunks = this.groundingChunks): ProviderWebSearch['sources'] {
     return webSearchSources(
@@ -703,11 +703,10 @@ export class VertexDecoder {
               performed: !!(
                 this.searchQueries.size ||
                 this.groundingChunks.length ||
-                this.searchEntryPoint
+                this.searchSuggested
               ),
               sources: this.searchSources(),
               ...(this.searchQueries.size ? { queries: [...this.searchQueries] } : {}),
-              ...(this.searchEntryPoint ? { searchEntryPoint: this.searchEntryPoint } : {}),
             },
           }
         : {}),

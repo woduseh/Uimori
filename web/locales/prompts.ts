@@ -1013,12 +1013,6 @@ export const messages = {
     ja: 'ウェブ検索の出典',
     zh: '网络搜索来源',
   },
-  'prompts.uiStoryGuideSearchSuggestions': {
-    ko: 'Google 검색 제안',
-    en: 'Google Search suggestions',
-    ja: 'Google 検索の候補',
-    zh: 'Google 搜索建议',
-  },
   'prompts.uiStoryGuideWebSearchUnsupported': {
     ko: '현재 본문 모델 연결은 웹 검색을 지원하지 않아 참고문 없이 집필했어요.',
     en: 'The current writing model connection does not support web search. Writing continued without a brief.',

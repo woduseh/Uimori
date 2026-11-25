@@ -309,9 +309,6 @@ export async function prepareStoryGuide(
           performed: searched.performed || result.webSearch.performed,
           sources: [...searched.sources, ...result.webSearch.sources],
           queries: [...new Set([...(searched.queries ?? []), ...(result.webSearch.queries ?? [])])],
-          ...(result.webSearch.searchEntryPoint || searched.searchEntryPoint
-            ? { searchEntryPoint: result.webSearch.searchEntryPoint ?? searched.searchEntryPoint }
-            : {}),
         });
       } catch {
         return finish('STORY_GUIDE_WEB_SEARCH_METADATA_TOO_LARGE');

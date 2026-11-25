@@ -126,15 +126,6 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     .get(taskId) as { data: unknown } | undefined;
   const question =
     typeof questionRow?.data === 'string' ? (JSON.parse(questionRow.data) as HelperQuestion) : null;
-  const suggestionRows = store.db
-    .prepare(
-      "SELECT data FROM helper_events WHERE task_id=? AND kind='web.search.suggestions' ORDER BY seq"
-    )
-    .all(taskId);
-  const webSearchSuggestions = suggestionRows.flatMap((row) => {
-    const value = JSON.parse(String(row.data)) as { html?: unknown };
-    return typeof value.html === 'string' && value.html.length <= 65_536 ? [value.html] : [];
-  });
   return {
     taskId,
     status: task.status as HelperStatus,
@@ -142,7 +133,6 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     changes: readHelperChanges(store.db, taskId),
     confirmations: readHelperConfirmations(store, taskId),
     ...(question ? { question } : {}),
-    webSearchSuggestions,
     unrecordedOperations: Number(unknown?.n ?? 0),
     usage: {
       attempts,

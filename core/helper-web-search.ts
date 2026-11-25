@@ -5,7 +5,6 @@ export type ProviderWebSearch = {
   performed: boolean;
   sources: { url: string; title: string }[];
   queries?: string[];
-  searchEntryPoint?: string;
 };
 
 export function webSearchAllowed(request: Pick<ProviderRequest, 'role' | 'input'>): boolean {
@@ -54,7 +53,6 @@ export function boundedWebSearch(value: ProviderWebSearch): ProviderWebSearch {
     sources.some((source) => source.url.length > 8192 || source.title.length > 2000) ||
     (value.queries?.length ?? 0) > 16 ||
     value.queries?.some((query) => query.length > 2000) ||
-    (value.searchEntryPoint?.length ?? 0) > 65_536 ||
     JSON.stringify({ ...value, sources }).length > 98_304
   )
     throw new Error('STORY_GUIDE_WEB_SEARCH_METADATA_TOO_LARGE');
@@ -62,7 +60,6 @@ export function boundedWebSearch(value: ProviderWebSearch): ProviderWebSearch {
     performed: value.performed,
     sources,
     ...(value.queries ? { queries: [...new Set(value.queries)] } : {}),
-    ...(value.searchEntryPoint ? { searchEntryPoint: value.searchEntryPoint } : {}),
   };
 }
 

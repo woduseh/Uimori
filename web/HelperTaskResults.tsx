@@ -40,7 +40,6 @@ import { DropdownIcon } from './ui-icons.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { usageCompact, usageUsd } from './usage-display.js';
-import { SearchSuggestionsFrame } from './SearchSuggestionsFrame.js';
 import { StoryUiThemePreview } from './StoryBoardPanel.js';
 import { ThemeContext } from './ThemeContext.js';
 import './helper-task-results.css';
@@ -719,9 +718,6 @@ export function HelperTaskResults({
             onOpenChange={onOpenChange}
             rollbackUnavailable={rollbackUnavailable}
           />
-          {data.webSearchSuggestions?.map((html, index) => (
-            <SearchSuggestionsFrame key={index} html={html} />
-          ))}
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">
               {t('helperResults.unrecorded', { count: data.unrecordedOperations })}

@@ -14,7 +14,6 @@ import { SaveButton } from './SaveButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { SearchSuggestionsFrame } from './SearchSuggestionsFrame.js';
 import './story-guide.css';
 
 type Props = {
@@ -311,9 +310,6 @@ function StoryGuideEditor({
                       </li>
                     ))}
                   </ul>
-                )}
-                {loaded.brief.webSearch.searchEntryPoint && (
-                  <SearchSuggestionsFrame html={loaded.brief.webSearch.searchEntryPoint} />
                 )}
               </section>
             )}

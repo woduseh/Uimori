@@ -44,7 +44,7 @@ test('saved search provenance deduplicates repeated continuation sources and rej
     sources
   );
   expect(() =>
-    boundedWebSearch({ performed: true, sources, searchEntryPoint: 'x'.repeat(65_537) })
+    boundedWebSearch({ performed: true, sources, queries: ['x'.repeat(2_001)] })
   ).toThrow('STORY_GUIDE_WEB_SEARCH_METADATA_TOO_LARGE');
 });
 

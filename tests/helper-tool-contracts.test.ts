@@ -2131,7 +2131,6 @@ test.each(['google-gemini-v1', 'vertex-gemini-v1'] as const)(
           text: 'Google Search returned the official documentation.',
           webSearch: {
             performed: true,
-            searchEntryPoint: '<a href="https://google.com/search?q=gemini">Google Search</a>',
             sources: [
               {
                 url: 'https://ai.google.dev/gemini-api/docs/google-search',
@@ -2152,8 +2151,5 @@ test.each(['google-gemini-v1', 'vertex-gemini-v1'] as const)(
     });
     const completed = await submit(f, 'Search for the latest public Gemini docs');
     expect(completed.usage.modelCalls).toBe(3);
-    expect(readHelperTaskResults(f.store, completed.id).webSearchSuggestions).toEqual([
-      '<a href="https://google.com/search?q=gemini">Google Search</a>',
-    ]);
   }
 );

@@ -3037,10 +3037,6 @@ export class HelperRuntime {
       if (result.status !== 'completed')
         return { performed: false, sources: [], error: result.error?.code ?? result.status };
       const searched = result.webSearch ? boundedWebSearch(result.webSearch) : undefined;
-      if (searched?.searchEntryPoint)
-        this.workspace.event(task.conversationId, task.id, 'web.search.suggestions', {
-          html: searched.searchEntryPoint,
-        });
       if (!searched?.performed || !searched.sources.length)
         return {
           performed: searched?.performed === true,

@@ -228,7 +228,6 @@ test('google-gemini-v1 accumulates native grounding sources and adds verified in
       { url: 'https://source.example/character', title: '인물 해설' },
     ],
     queries: ['등대지기 원작', '인물 해설'],
-    searchEntryPoint: suggestions,
   });
   expect(bodyObject(result.opaqueState).contents.at(-1).parts).toEqual([{ text: prose }]);
   const untouched = new VertexDecoder(encodeVertex(request(), protocol).context);
