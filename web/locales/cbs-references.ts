@@ -40,7 +40,7 @@ export const messages = {
   'cbsRefs.access.write': { ko: '쓰기', en: 'Write', ja: '書き込み', zh: '写入' },
   'cbsRefs.access.update': { ko: '변경', en: 'Update', ja: '更新', zh: '修改' },
   'cbsRefs.scope.temp': { ko: '임시 변수', en: 'Temporary', ja: '一時変数', zh: '临时变量' },
-  'cbsRefs.scope.global': { ko: '전역 변수', en: 'Global', ja: 'グローバル変数', zh: '全局变量' },
+  'cbsRefs.scope.global': { ko: '글로벌 변수', en: 'Global', ja: 'グローバル変数', zh: '全局变量' },
   'cbsRefs.scope.toggle': { ko: '토글', en: 'Toggle', ja: 'トグル', zh: '开关' },
   'cbsRefs.finding.readWithoutDefault': {
     ko: '기본값 없이 읽음',

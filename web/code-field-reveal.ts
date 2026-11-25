@@ -1,7 +1,7 @@
 import type { CbsRange } from '../core/cbs-analysis.js';
 import { markArrival } from './arrival-mark.js';
 
-export const CODE_FIELD_REVEAL = 'uimori:code-field-reveal';
+export const CODE_FIELD_REVEAL = 'code-field-reveal';
 const FIELD_WAIT_MS = 1000;
 
 export const codeFieldName = (section: string, item: number | null, field: string) =>
