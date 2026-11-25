@@ -41,6 +41,8 @@ Linux shell changes also run `npm test -- tests/main-shell.test.ts tests/helper-
 
 Helper data/gateway changes use `npm test -- tests/helper-data-tools.test.ts tests/helper-data-runtime.test.ts tests/helper-tool-contracts.test.ts tests/helper-resource-editing.test.ts tests/helper-settings-tools.test.ts tests/helper-task-tools.test.ts tests/library-metadata.test.ts tests/helper-compaction.test.ts tests/helper-workspace.test.ts tests/context-compaction.test.ts`. The data tests use real read-only SQLite child processes; runtime tests exercise native Chat encoding/decoding against intercepted synthetic responses, not a paid provider. The manual-compaction regression counts full writer projections rather than enforcing a machine-dependent time threshold. Build before checking compiled child-process or browser execution. [Helper goal evaluation](HELPER-EVALUATION.md) defines the synthetic task oracles and real-model evidence boundary; `npm test -- tests/helper-data-runtime.test.ts --reporter=verbose --silent=false` emits per-case cumulative `HELPER_GOAL_METRICS`, including helper and compaction calls. These fixture metrics are not autonomous model scores.
 
+Helper code-check changes use `npm test -- tests/helper-code-tools.test.ts tests/helper-plan-mode.test.ts tests/helper-discovery.test.ts tests/tool-contract-portability.test.ts tests/app-guides.test.ts`. Their Lua syntax and regex checks run the real Lua and evaluator workers on synthetic resources.
+
 ## Verification runners
 
 Use a build matching the current app source for checks that execute `dist`. Focused tests that import source modules do not need a build.

@@ -80,6 +80,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 | [Library and prompts](docs/LIBRARY.md) · [Deleting items](docs/DELETION.md) | Organizing resources, folders and cover images; where deletion happens and reference protection |
 | [Risu import](docs/RISU-IMPORT.md) | Original `.charx` cards, modules and `.risup` prompts; CBS, Lua, regex and CSS execution and supported scope |
 | [Risu export](docs/RISU-EXPORT.md) | Exporting saved cards, modules and prompts as CHARX, RISUM and RISUP |
+| [Risu Lua API](docs/RISU-LUA-API.md) · [Risu runtime order](docs/RISU-RUNTIME-INTEROP.md) · [Risu preset fields](docs/RISU-PRESET-FIELDS.md) | The Lua trigger functions Uimori provides, when CBS, Lua, triggers and regex run, and the preset fields Uimori keeps |
 | [Reading position and bookmarks](docs/READING-STATE.md) | Per-device resume reading, bookmarks and personal backups |
 | [Manuscript search](docs/MANUSCRIPT-SEARCH.md) | Searching source text, translations and requests, and jumping to scenes |
 | [Scene illustrations](docs/ILLUSTRATIONS.md) | Per-response illustrations via Codex image generation, remote ComfyUI or NovelAI; automatic generation, retries and count limits |

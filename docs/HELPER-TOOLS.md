@@ -15,6 +15,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - **채팅 설정 정리**: 창작 옵션을 이 채팅의 고정값으로 저장하고(`options.fix`), 장면에 이름을 붙이고(`scene.title`), 원작 참고 설정 중 요청한 항목만 바꾸고(`chat.guide.update`), 저장된 모델의 온도·최대 출력·추론 수준 같은 생성 설정을 바꿔요(`model.parameters.read/update`). 모델 생성 설정은 그 모델을 쓰는 모든 채팅에 적용되고, 연결 정보·자격 증명·단가는 그대로 둬요.
 - **모델 등록과 삭제**: 이미 있는 연결에 새 모델을 등록하고(`model.register`), 쓰지 않는 모델을 지워요(`model.delete`). 역할이나 조언자로 지정됐거나 채팅에 고정된 모델은 지우지 않고 어디서 쓰는지 알려 줘요. 연결, 자격 증명, 엔드포인트는 설정 화면에서만 바꿀 수 있어요.
 - **채팅 구성과 정리**: 채팅에 첨부한 페르소나와 모듈, 로어 컨텍스트, Risu 작가 노트를 확인하고 바꿔요(`chat.profile.read/update`). 장면을 작가 모델에게서 숨기거나 그 장면의 요청문을 끄고 고치고(`scene.context.update`), 책갈피를 추가·수정·삭제하고(`chat.bookmark`), 봇별 채팅 폴더와 새 채팅의 기본 페르소나를 정리해요(`chat.organize`). 작가 노트, 요청문, 책갈피를 고치거나 지우면 변경 카드에서 작업 전 글과의 차이를 확인할 수 있어요. 아주 긴 글을 통째로 바꾸면 차이는 생략돼요.
+- **Risu 코드 확인**: 봇·페르소나·모듈·프롬프트 프리셋의 CBS, Lua 트리거, 구조화 트리거, 정규식, 로어 키를 실행하지 않고 검사해요(`code.diagnose`, `code.cbs`). 문법 오류, 없는 이미지 이름, 컴파일되지 않는 정규식, Uimori가 지원하지 않거나 무시하는 로어 지시문·Lua 함수·트리거 효과·프리셋 블록을 필드 경로와 줄·칸 위치로 알려 주고, 변수와 토글을 어디서 읽고 쓰는지 찾아요(`code.references`). 표본 글에 한 단계의 정규식을 차례로 적용해 스크립트마다 바뀐 부분을 보거나(`code.regex`), 첫 메시지를 저장 전 수정안이나 다른 토글 값으로 렌더링해 볼 수 있어요(`code.preview`). 이 확인은 아무것도 저장하지 않고 모델도 부르지 않아요. 도우미는 [Risu Lua 트리거 API](RISU-LUA-API.md), [실행 순서](RISU-RUNTIME-INTEROP.md), [프리셋 필드](RISU-PRESET-FIELDS.md)와 CBS 함수 목록(`CBS-REFERENCE`)을 읽고 Uimori가 지원하는 범위 안에서 코드를 고쳐요.
 - **앱 사용 설명서 읽기**: 도우미는 Uimori의 사용 설명서를 찾아 읽을 수 있어요(`guide.read`). 기능이 있는지, 어디에 있는지, 앱이 스스로 하는 동작이 무엇인지 물으면 설명서를 확인하고 답해요.
 - **이야기 UI 블록**: 장면의 화면 블록을 쓰거나 고칠 때는 본문 모델이 받는 이야기 UI 참고문을 먼저 읽어요. 고친 블록이 변환에 실패하면 쓴 그대로 저장되고, 도우미는 저장 결과에서 사유를 확인해 다시 고칠 수 있어요. 답변 안에서는 장면용 화면을 미리 보여 주거나, 인물 관계도·차트처럼 Markdown으로 그리기 어려운 것을 보여 줄 때만 `<a2ui>` 블록을 써요. 답변의 화면은 읽기 전용이라 버튼 선택을 보내지 않고, 카드 그림(`{{img::이름}}`)은 나오지 않아요. 답변을 복사하면 원문 편집에 붙여 넣을 수 있는 `<a2ui>` 원형이 복사돼요.
 - **실시간 웹 검색과 모델 단가 갱신**: Responses, Anthropic, Codex와 Gemini 4(AIS, Vertex) 환경에서 실시간 웹 검색으로 최신 정보를 찾고 출처 링크를 제공해요. 공식 출처(HTTPS URL 및 확인일)가 확인된 모델과 판단 프로바이더의 토큰 단가도 갱신해요(`model.pricing.update`). 단가는 사용자가 알려 주거나 도우미가 직접 읽은 공식 출처에서만 가져오고, 바뀐 단가는 앞으로의 호출에만 적용돼요. 가격이 없을 때 실행돼 비용이 미확인으로 남은 지난 호출에는 요청하면 지금 가격을 적용해 추정 비용을 채울 수 있어요(`model.pricing.backfill`). 판단 호출도 같은 판단 프로바이더·모델의 단가로 채우며, 이미 가격이 기록된 호출은 그대로 두고 다시 실행해도 바뀌는 것이 없어요.
@@ -42,6 +43,7 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - [도우미 첨부 파일](HELPER-ATTACHMENTS.md)
 - [삽화와 외형 프로필](ILLUSTRATIONS.md)
 - [원작 참고와 메모](STORY-GUIDE.md)
+- [Risu Lua 트리거 API](RISU-LUA-API.md), [Risu 실행 순서](RISU-RUNTIME-INTEROP.md), [Risu 프리셋 필드](RISU-PRESET-FIELDS.md)
 
 ---
 
@@ -245,8 +247,20 @@ What the recorded states mean:
 - Neither a helper answer nor an automatic brief creates a branch ledger.
 - **Risu 작가 노트** is not an event log or proof of what a character knows. [이야기 기억과 컨텍스트·메모](USAGE.md#이야기-기억과-컨텍스트메모) separates it from **메모·정정**.
 
+### Risu code checks
+
+Behavior the descriptions leave out:
+
+- The checks read the saved revision. Unsaved editor input is not checked; save it first.
+- Each check covers the one resource it names. A bot's attached modules, the chat's prompt preset and chat variables can add regex scripts, triggers, toggles or values that the check does not see.
+- `code.regex` and `code.preview` run the same CBS, regex and Lua evaluation that chats use, on a copy, so functions such as `{{random}}` can give a different result on each call.
+- The `lua` section of `code.diagnose` only compiles each chunk. A chunk that compiles can still fail when it runs, for example when it calls a function that does not exist.
+- The compatibility section lists what Uimori refuses or ignores. Something it does not list can still behave differently from RisuAI.
+- Deprecated card and preset fields are not reported: saving already removes them.
+
 ### App guides
 
+- `CBS-REFERENCE` is built from the CBS function list of the running evaluator when the guides are first read after the app starts, so it matches the version that evaluates the code.
 - The guides are Korean prose with English identifiers, and the helper may think in either language. Search therefore matches by section, not by line, falls back to the sections that hold only some of the words, and attaches guidance that an empty or partial result is no evidence that a feature is absent. There is no translation or synonym table: the description tells the model to query with the Korean wording of the user or the interface, and the guide list carries the Korean titles to choose from.
 - The helper contract tells the model to check the guides before it says the app lacks a feature. It exists because a production helper answered that thought summaries were not a feature: its tools and settings showed none, and the display is interface behavior that no tool controls.
 

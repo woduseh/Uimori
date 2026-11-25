@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { HttpError } from './request-validation.js';
 import { storyUiPrompt } from './story-ui.js';
+import { nativeRisuCbsFunctionCatalog } from './risu-native-cbs.js';
 
 const DIRECTORY = fileURLToPath(new URL('../docs/', import.meta.url));
 const PAGE_CHARS = 8000;
@@ -22,12 +23,35 @@ function guides(): AppGuide[] {
       const text = readFileSync(`${DIRECTORY}${name}.md`, 'utf8').replaceAll('\r\n', '\n');
       return { name, title: /^#\s+(.+)$/mu.exec(text)?.[1]?.trim() ?? name, text };
     })
-    .concat({
-      name: 'STORY-UI-REFERENCE',
-      title: 'Story UI block reference',
-      text: ['# Story UI block reference', storyUiPrompt()].join('\n\n'),
-    });
+    .concat(
+      {
+        name: 'STORY-UI-REFERENCE',
+        title: 'Story UI block reference',
+        text: ['# Story UI block reference', storyUiPrompt()].join('\n\n'),
+      },
+      { name: 'CBS-REFERENCE', title: 'CBS function reference', text: cbsReference() }
+    );
   return loaded;
+}
+
+function cbsReference() {
+  const oneLine = (value: string) => value.replace(/\s+/gu, ' ').trim();
+  const entries = nativeRisuCbsFunctionCatalog()
+    .functions.filter((entry) => !entry.internal)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return [
+    '# CBS function reference',
+    "Generated from the CBS functions registered in Uimori's evaluator, the same list that code.cbs and code.diagnose check names against. Each entry gives the name, its aliases and the description that ships with the evaluator. Entries marked handled by the parser, such as blocks (#when, #each), :else, // comments, ? math and asset tags, are processed by the parser or the renderer rather than called as functions. Some functions need what a server evaluation does not have, such as the browser screen size; the evaluator then reports them as unsupported, and code.preview returns those issues. How CBS meets Lua, triggers and regex scripts is in RISU-RUNTIME-INTEROP.",
+    ...entries.map((entry) => {
+      const deprecated = entry.deprecated
+        ? ` — deprecated: ${oneLine(entry.deprecated.message)}${entry.deprecated.replacement && !entry.deprecated.message.includes(entry.deprecated.replacement) ? ` Use \`${entry.deprecated.replacement}\`.` : ''}`
+        : '';
+      const aliases = entry.aliases.length
+        ? ` (also ${entry.aliases.map((alias) => `\`${alias}\``).join(', ')})`
+        : '';
+      return `- \`${entry.name}\`${aliases}${deprecated}${entry.documentationOnly ? ' — handled by the parser' : ''}: ${oneLine(entry.description)}`;
+    }),
+  ].join('\n\n');
 }
 
 export function listAppGuides() {

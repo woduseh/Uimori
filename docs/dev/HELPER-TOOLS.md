@@ -280,6 +280,18 @@ Constraints on changing this behavior:
 - `context.read` returns settings, never a generated brief; prior briefs are not a source of story facts, and neither helper answers nor automatic briefs create a branch ledger.
 - **Risu 작가 노트** is neither an event log nor proof of character knowledge ([이야기 기억과 컨텍스트·메모](../USAGE.md#이야기-기억과-컨텍스트메모)).
 
+## Risu code checks
+
+Findings, positions, bounds, compile-only Lua and constant-derived compatibility rules are enforced by `tests/helper-code-tools.test.ts`. Caller-visible limits live in [Risu code checks](../HELPER-TOOLS.md#risu-code-checks).
+
+Constraints on changing these operations:
+
+- They add no evaluation or analysis path. `code.cbs` and the cbs section use `analyzeCbs` with `nativeRisuCbsFunctionCatalog`; `code.references` uses `indexCbsReferences` over the same reference input as the editors; `code.regex` runs `processNativeRisuText` with `trace`, which records each changing step without altering processing; `code.preview` calls `nativeRisuStartPreview` or `nativeRisuDraftPreview` with `toggleValues`, which only replaces the toggle defaults the preview already passes as `globalVariables`.
+- Every compatibility rule reads the constant or function that the runtime or importer enforces: `RISU_NATIVE_LUA_UNSUPPORTED_FUNCTIONS`, `RISU_NATIVE_LUA_FUNCTIONS` and `RISU_NATIVE_LUA_MODEL_FUNCTIONS` (`server/risu-native-lua.ts`; the first two are parsed from `RISU_NATIVE_LUA_PRELUDE`, the inventory `scripts/risu-lua-diff.mjs` also reads, which is why the prelude stays a static `String.raw` template), the trigger constants and `mixesNativeRisuLua` in `server/risu-native-runtime.ts`, `NATIVE_RISU_REGEX_MODES` and `nativeRisuRegexPlan` in `server/risu-native-render.ts`, `NATIVE_RISU_PRESET_BLOCKS` and `NATIVE_RISU_PRESET_SKIPPED_BLOCKS` in `core/risu-native-preset.ts`, `RISU_PRESET_IGNORED_SETTINGS` in `server/risu-preset-program.ts` and `nativeLoreDecoratorReport` shared with the lore import. A new rule is exported from its owning module and used there; `server/risu-code-diagnosis.ts` never keeps a second list.
+- The Lua syntax check runs a compile-only program through `runNativeRisuLua`, so the worker's memory, time and source limits apply; each chunk is loaded with an empty environment, never called, and the host rejects every call.
+- Deprecated fields are deliberately not reported: the content projection (`normalizeRisuContentSource`) and preset validation and storage (`stripDeprecatedRisuPresetFields`) remove them before a resource is stored, so such a finding could never appear.
+- `CBS-REFERENCE` is a virtual guide generated from `nativeRisuCbsFunctionCatalog` rather than a committed document, so the descriptions that ship with the vendored GPL evaluator stay out of the repository's documents and only the existing adapter imports `third_party/risuai/`.
+
 ## App guides
 
 Listing, search, paging, and virtual-guide sizing are enforced by `tests/app-guides.test.ts`.
@@ -287,6 +299,7 @@ Listing, search, paging, and virtual-guide sizing are enforced by `tests/app-gui
 - Guides are the Markdown files directly under `docs/`, packaged into `dist/docs` on build (read from `docs/` in source mode); they are never copied into the shell workspace (`uimori call guide.read` reads them).
 - Guides mix Korean prose and English identifiers, so search matches by section with partial-word fallback and attaches guidance that empty/partial results never prove a feature is absent; there is intentionally no translation or synonym table.
 - Developer documents live under `docs/dev/` and are excluded from `dist/docs` and `guide.read`; any Markdown file placed directly under `docs/` becomes a user guide.
+- Virtual guide `CBS-REFERENCE` may span several pages; see [Risu code checks](#risu-code-checks).
 - Virtual guide `STORY-UI-REFERENCE` (`storyUiPrompt()`) stays out of `CONTRACT` because it is several times larger and needed only for Story UI work; it must fit within `MAX_PAGE_CHARS` for one `guide.read` call (`tests/app-guides.test.ts`).
 - `CONTRACT` instructs the helper to check guides before saying a feature is absent because a production helper once claimed thought summaries did not exist (UI-only behavior with no tool or setting).
 

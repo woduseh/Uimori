@@ -77,6 +77,7 @@
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
 | [Risu 자료 내보내기](docs/RISU-EXPORT.md) | 저장한 카드·모듈·프롬프트를 CHARX·RISUM·RISUP으로 내보내기 |
+| [Risu Lua API](docs/RISU-LUA-API.md) · [Risu 실행 순서](docs/RISU-RUNTIME-INTEROP.md) · [Risu 프리셋 필드](docs/RISU-PRESET-FIELDS.md) | Uimori가 제공하는 Lua 트리거 함수, CBS·Lua·트리거·정규식이 실행되는 순서, Uimori가 보관하는 프리셋 필드 |
 | [읽기 위치·책갈피](docs/READING-STATE.md) | 기기별 이어 읽기, 책갈피와 개인 백업 |
 | [원고 검색](docs/MANUSCRIPT-SEARCH.md) | 원문·번역·요청의 본문 검색과 장면 이동 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI·NovelAI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |

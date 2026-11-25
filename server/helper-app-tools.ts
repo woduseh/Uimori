@@ -4,6 +4,7 @@ import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { RESOURCE_TOOLS, helperResourceOperation } from './helper-resource-tools.js';
 import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
 import { HELPER_GUIDE_TOOLS } from './helper-guide-tools.js';
+import { HELPER_CODE_TOOLS } from './helper-code-tools.js';
 import {
   HELPER_VERTEX_LOCATION_TOOLS,
   isVertexLocationTool,
@@ -76,6 +77,7 @@ const loreSelector = described(
 const TOOLS: ProviderTool[] = [
   ...HELPER_GUIDE_TOOLS,
   ...RESOURCE_TOOLS,
+  ...HELPER_CODE_TOOLS,
   ...HELPER_PRESENTATION_TOOLS,
   ...HELPER_SETTINGS_TOOLS,
   ...HELPER_VERTEX_LOCATION_TOOLS,
@@ -579,6 +581,7 @@ const readNames = new Set([
   'illustration.scene.read',
   'illustration.cut.read',
   ...HELPER_IMAGE_TOOLS.map((tool) => tool.name),
+  ...HELPER_CODE_TOOLS.map((tool) => tool.name),
   'data.exec',
   ...dataToolNames,
   ...writingReadNames,
@@ -688,6 +691,10 @@ export const HELPER_APP_TOOLS: ProviderTool[] = [
 export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: string])[] = [
   ['data', 'search and read text in the library, chats, editor input and this conversation'],
   ['resource', 'saved bots, personas, modules, prompt presets and themes'],
+  [
+    'code',
+    'check the Risu CBS, Lua, trigger and regex code of bots, modules and prompt presets, trace regex scripts and preview first messages',
+  ],
   [
     'chat',
     'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables, original-work reference settings, attached persona and modules, author note, bookmarks and chat folders of a bot',
@@ -830,6 +837,13 @@ const discoveryTerms: Record<string, string> = {
   'resource.patch':
     'shared library save edit change update modify fix rename character card bot persona module lorebook lore entry greeting system prompt preset 기본 외형 프로필 라이브러리',
   'data.search': 'find grep locate lookup text anywhere across all chats library',
+  'code.cbs': 'syntax template macro braces getvar setvar check lint CBS 문법 검사',
+  'code.references':
+    'where used usage variable toggle unused undefined cross reference 변수 토글 사용처',
+  'code.diagnose':
+    'lint validate check errors problems bugs broken compatibility unsupported Lua trigger regex lore asset 오류 진단 호환',
+  'code.regex': 'regular expression test try replace script stage output display 정규식 테스트',
+  'code.preview': 'render first message greeting how it looks display toggle 첫 메시지 미리보기',
   'scene.search': 'find locate typo phrase manuscript prose',
   'scene.read': 'open view show manuscript prose text',
   'scene.patch': 'fix correct typo edit change manuscript prose rewrite',

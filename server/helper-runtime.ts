@@ -202,6 +202,7 @@ import { helperModelReferences, validateHelperReferences } from './helper-refere
 import { boundedWebSearch, helperWebSearchCapability } from '../core/helper-web-search.js';
 import { GEMINI_HELPER_SEARCH_TOOL, geminiHelperSearchRequest } from './helper-web-search-tool.js';
 import { invokeHelperGuideTool } from './helper-guide-tools.js';
+import { invokeHelperCodeTool, isHelperCodeTool } from './helper-code-tools.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
@@ -287,6 +288,7 @@ Choose and combine the tools suited to the task: app operations, data.exec for w
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
 Before writing, repairing or previewing a Story UI block, read the STORY-UI-REFERENCE guide in one call with limit 20000; it is the writer's own reference. A scene stores each compiled block as a uimori-ui JSON fence whose expression holds the block as written: to change a block, replace the whole fence with an edited <a2ui> block, and check storyUiFailures in the save result for blocks that did not compile. In your reply use Markdown for text and tables; include an <a2ui> block only to preview Story UI content meant for a scene or bot, or to draw what Markdown cannot, such as a relationship graph or a chart. Blocks in your reply render read-only.
+For Risu code in bots, modules and presets (CBS, Lua triggers, regex, toggles), check it with the code.* operations before and after editing, and take what Uimori supports from the guides CBS-REFERENCE, RISU-LUA-API, RISU-RUNTIME-INTEROP and RISU-PRESET-FIELDS rather than from Risu memory.
 For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. Cite web evidence only after a search returns it.
 Your tools are not the whole app: the interface does things by itself that no tool controls. Before saying that Uimori lacks a feature, cannot do something or behaves in a certain way, check guide.read.
 Finish within the remaining host calls given in controls.
@@ -3091,6 +3093,7 @@ export class HelperRuntime {
       };
     }
     if (name === 'guide.read') return invokeHelperGuideTool(args);
+    if (isHelperCodeTool(name)) return invokeHelperCodeTool(this.store, name, args, hooks.signal);
     if (name === 'image.list') return listHelperImages(this.store, args);
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     if (

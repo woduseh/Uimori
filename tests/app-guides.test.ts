@@ -12,7 +12,7 @@ test('the helper lists the user guides under docs/ without docs/dev documents', 
   expect(names).toEqual(expect.arrayContaining(['READING', 'MODEL-PRICING', 'USAGE']));
   for (const developer of ['CODE-MAP', 'DEVELOPMENT', 'UI-PRINCIPLES', 'ORACLE-RELEASE'])
     expect(names).not.toContain(developer);
-  expect(names.length).toBe(directGuideCount + 1);
+  expect(names.length).toBe(directGuideCount + 2);
   expect(guides.every((guide) => guide.title && guide.chars > 0)).toBe(true);
 });
 
