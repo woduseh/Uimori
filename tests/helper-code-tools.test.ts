@@ -71,6 +71,7 @@ test('code.cbs locates diagnostics, blocks and variables in a text or a saved fi
   expect(field.diagnostics.map((item: any) => [item.code, item.line, item.column])).toEqual([
     ['cbs.unclosed-block', 1, 23],
     ['cbs.unknown-function', 1, 54],
+    ['cbs.deprecated-function', 1, 25],
   ]);
   expect(field.blocks).toEqual([{ keyword: '#if', line: 1, column: 23, depth: 0, closed: false }]);
   expect(field.variables).toEqual([
@@ -85,6 +86,18 @@ test('code.cbs locates diagnostics, blocks and variables in a text or a saved fi
     { scope: 'chat', name: 'hp', reads: 0, writes: 1, line: 1 },
     { scope: 'global', name: 'toggle_dark', reads: 1, writes: 0, line: 2, toggle: 'dark' },
   ]);
+  const deprecated = await call(store, 'code.cbs', {
+    text: '{{#if 1}}a{{/if}}\n{{#if_pure 1}}b{{/if_pure}}\n{{#pure}}c{{/pure}}\n{{#when 1}}d{{/when}}',
+  });
+  expect(
+    deprecated.diagnostics.map((item: any) => [item.code, item.name, item.line, item.column])
+  ).toEqual([
+    ['cbs.deprecated-function', '#if', 1, 3],
+    ['cbs.deprecated-function', '#if_pure', 2, 3],
+    ['cbs.deprecated-function', '#pure', 3, 3],
+  ]);
+  for (const item of deprecated.diagnostics)
+    expect(item.message.match(/ instead\./gu), item.message).toHaveLength(1);
   const many = await call(store, 'code.cbs', { text: '{{nosuch}}\n'.repeat(5000) });
   expect(many.totalDiagnostics).toBe(5000);
   expect(many.diagnostics.length).toBeLessThanOrEqual(100);
@@ -206,6 +219,7 @@ test('code.diagnose checks a prompt preset with preset paths', async () => {
   const root = '/program/nativeRisuPreset/preset';
   expect(report.findings.map((item: any) => `${item.code} ${item.path}`)).toEqual([
     `cbs.unclosed-block ${root}/promptTemplate/0/text`,
+    `cbs.deprecated-function ${root}/promptTemplate/0/text`,
     `regex.compile ${root}/regex/0/in`,
     `compat.preset-setting ${root}/promptSettings/utilOverride`,
     `compat.preset-block-skipped ${root}/promptTemplate/1/type`,

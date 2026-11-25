@@ -126,9 +126,15 @@ export function cbsTextFindings(text: string, path: string, analysis = analyzeCb
   }));
   const deprecated = deprecatedFunctions();
   for (const call of analysis.calls) {
-    if (call.kind !== 'call' || call.nameDynamic || call.context === 'inert') continue;
+    if (
+      (call.kind !== 'call' && call.kind !== 'block-open') ||
+      call.nameDynamic ||
+      call.context === 'inert'
+    )
+      continue;
     const entry = deprecated.get(call.normalizedName);
     if (!entry?.deprecated) continue;
+    const { message, replacement } = entry.deprecated;
     findings.push({
       section: 'cbs',
       code: 'cbs.deprecated-function',
@@ -136,7 +142,10 @@ export function cbsTextFindings(text: string, path: string, analysis = analyzeCb
       path,
       ...textPosition(text, call.nameRange.from),
       name: call.name,
-      message: `${entry.deprecated.message}${entry.deprecated.replacement ? ` Use ${entry.deprecated.replacement} instead.` : ''}`,
+      message:
+        replacement && !message.includes(replacement)
+          ? `${message} Use ${replacement} instead.`
+          : message,
     });
   }
   return findings;
