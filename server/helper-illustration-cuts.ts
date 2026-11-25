@@ -1,7 +1,7 @@
 import { splitSource } from '../core/auxiliary.js';
 import { cutsFor } from '../core/illustration-cuts.js';
 import type { Json, ProviderTool } from '../core/transport.js';
-import { prepareHelperImage } from './helper-image-tools.js';
+import { prepareHelperImage, readMode, readModeSchema } from './helper-image-tools.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import {
   illustrationPresentation,
@@ -36,11 +36,11 @@ const guard = {
   expectedPresentationRevision: {
     type: 'integer',
     minimum: 0,
-    description: 'presentationRevision of the scene from illustration.cuts.list.',
+    description: 'presentationRevision of the scene from illustration.cuts.list or cut.read.',
   },
   expectedLatestJobId: {
     ...id,
-    description: 'latestJobId of the cut from illustration.cuts.list.',
+    description: 'latestJobId of the cut from illustration.cuts.list or cut.read.',
   },
 } as const;
 const schema = (properties: Record<string, Json>, required: string[]): Json => ({
@@ -53,7 +53,7 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.scene.read',
     description:
-      'Read the original text of one scene as paragraphs, each with the exact anchor and the scene sourceHash that the illustration operations need. Use it to choose the moment for a new illustration or the paragraph a cut should move to. Paragraphs keep manuscript order and their start and end are UTF-16 offsets in the full scene. Pass anchor to get a short page centred on one known paragraph instead of guessing its index.',
+      'Read the original text of one scene as paragraphs, each with the exact anchor and the scene sourceHash that the illustration operations need. Use it to choose the moment for a new illustration or the paragraph a cut should move to. cuts summarizes the existing illustration cuts of the scene with the ids and guards the cut operations take, so a moment that already has a cut is visible without illustration.cuts.list. Paragraphs keep manuscript order and their start and end are UTF-16 offsets in the full scene. Pass anchor to get a short page centred on one known paragraph instead of guessing its index.',
     inputSchema: schema(
       {
         sourceId: { ...id, description: 'Id of the scene, from chat.read.' },
@@ -93,10 +93,11 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.cut.read',
     description:
-      'Look at one generated illustration variation by its imageId: the picture itself as image input, plus the caption, scene, generator and target that produced it. Use it to compare a picture with the manuscript or with the appearance profiles before judging or redrawing it. Set includeImage to false for the metadata alone, or includePrompt to true to see the stored rendering prompt.',
+      'Look at one generated illustration variation by its imageId: the picture itself as image input, plus the caption, scene, generator and target that produced it, and the targetId, latestJobId, currentSourceHash and presentationRevision that illustration.cut.redraw, revise and delete take. Use it to compare a picture with the manuscript or with the appearance profiles before judging or redrawing it. Start with the default thumbnail and ask for mode=full only when fine detail matters. Set includeImage to false for the metadata alone, or includePrompt to true to see the stored rendering prompt.',
     inputSchema: schema(
       {
         imageId: { ...id, description: 'Id of the image variation, from illustration.cuts.list.' },
+        mode: readModeSchema as Json,
         includeImage: {
           type: 'boolean',
           description: 'Send the picture itself. Default true.',
@@ -180,6 +181,7 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
 ];
 
 type Args = Record<string, unknown>;
+const SCENE_CUTS_MAX = 20;
 function page(args: Args) {
   return {
     offset: args.offset === undefined ? 0 : number(args.offset, 'offset', 0),
@@ -205,11 +207,23 @@ export function readIllustrationScene(store: Store, chatId: string, args: Args) 
     throw new HttpError(400, 'Specify anchor or offset, not both');
   const offset =
     anchorIndex < 0 ? requestedOffset : Math.max(0, anchorIndex - Math.floor(limit / 2));
+  const cuts = listIllustrationCuts(store, chatId, { sourceId: source.id, limit: SCENE_CUTS_MAX });
   return {
     chatId,
     sourceId: source.id,
     sourceHash: source.hash,
     editRevision: source.editRevision ?? 0,
+    presentationRevision: illustrationPresentation(store, source.id)?.revision ?? 0,
+    cuts: cuts.cuts.map((cut) => ({
+      targetId: cut.targetId,
+      latestJobId: cut.latestJobId,
+      status: cut.status,
+      stale: cut.stale,
+      ...('endAnchor' in cut ? { startAnchor: cut.startAnchor, endAnchor: cut.endAnchor } : {}),
+      ...('focus' in cut ? { focus: cut.focus } : {}),
+      imageIds: cut.images.map((image) => image.imageId),
+    })),
+    ...(cuts.nextOffset !== null ? { cutsTotal: cuts.total } : {}),
     offset,
     blocks: all.slice(offset, offset + limit).map((block) =>
       maxChars && block.text.length > maxChars
@@ -316,7 +330,7 @@ export function resolveIllustrationCutImage(store: Store, chatId: string, imageI
 }
 
 export function inspectIllustrationCut(store: Store, chatId: string, args: Args) {
-  fields(args, ['imageId', 'includeImage', 'includePrompt']);
+  fields(args, ['imageId', 'includeImage', 'includePrompt', 'mode']);
   for (const key of ['includeImage', 'includePrompt']) {
     if (args[key] !== undefined && typeof args[key] !== 'boolean')
       throw new HttpError(400, 'Invalid ' + key);
@@ -334,6 +348,9 @@ export function inspectIllustrationCut(store: Store, chatId: string, args: Args)
   return {
     ...image,
     chatId,
+    targetId: row.input.target?.id ?? null,
+    latestJobId: placement?.latestRequestedJobId ?? row.id,
+    presentationRevision: presentation?.revision ?? 0,
     generatedSourceHash: hasRecipe ? image.sourceHash : null,
     sourceHash: projected.sourceHash,
     currentSourceHash: store.source(image.sourceId).hash,
@@ -361,14 +378,16 @@ export async function readIllustrationCutImage(
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
-  const metadata = inspectIllustrationCut(store, chatId, args);
+  const { mode: _mode, ...metadataArgs } = args;
+  const mode = readMode(args);
+  const metadata = inspectIllustrationCut(store, chatId, metadataArgs);
   return prepareHelperImage(
     store,
     metadata.hash,
     metadata.caption || 'Illustration',
     metadata,
     signal,
-    'full'
+    mode
   );
 }
 

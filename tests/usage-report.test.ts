@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
-import { usageReport, usageCsv } from '../server/usage-report.js';
+import { usageReport, usageCsv, usageReportDate } from '../server/usage-report.js';
 import { invokeHelperSettingsTool } from '../server/helper-settings-tools.js';
 import { detachAttemptUsage, helperUsageKind, inferUsageKind } from '../server/usage-accounting.js';
 import { deleteChat } from '../server/chat-deletion.js';
@@ -24,6 +24,18 @@ afterEach(() => {
   }
 });
 const query = { from: '2026-09-27', to: '2026-09-27' };
+
+test('the helper usage date is the report calendar day, not the UTC day', () => {
+  expect(usageReportDate('2026-09-26T16:30:00.000Z')).toEqual({
+    date: '2026-09-27',
+    timeZone: 'Asia/Seoul',
+  });
+  expect(usageReportDate('2026-09-27T14:59:59.000Z').date).toBe('2026-09-27');
+  const store = fixture();
+  expect(usageReport(store, { from: '2026-09-27', to: '2026-09-27' }).timeZone).toBe(
+    usageReportDate('2026-09-27T00:00:00.000Z').timeZone
+  );
+});
 function wire(overrides: Partial<WireRecord> = {}): WireRecord {
   return {
     connectionId: 'recorded-provider',

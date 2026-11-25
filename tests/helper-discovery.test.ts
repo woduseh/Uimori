@@ -42,9 +42,11 @@ test.each([
 
 test('every exact operation name returns one complete schema with its original execution spelling', () => {
   for (const tool of HELPER_APP_TOOLS) {
-    const result = describeHelperTools({ query: tool.name });
+    const story = tool.name.startsWith('story.');
+    const result = describeHelperTools({ query: tool.name }, story);
     expect(result.tools).toHaveLength(1);
     expect(result.tools[0]).toMatchObject(tool);
+    if (story) expect(describeHelperTools({ query: tool.name }).tools).toEqual([]);
   }
   expect(
     describeHelperTools({ query: ' RESOURCE.READMANY ' }).tools.map((tool) => tool.name)

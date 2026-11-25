@@ -15,13 +15,13 @@ import type { Store } from './store.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 type ImageReadMode = 'full' | 'thumbnail';
-const readModeSchema = {
+export const readModeSchema = {
   type: 'string',
   enum: ['full', 'thumbnail'],
   description:
     'thumbnail (default) is at most 512 pixels on the longest side; full is at most 2048 pixels for fine detail.',
 };
-function readMode(args: ReturnType<typeof record>): ImageReadMode {
+export function readMode(args: ReturnType<typeof record>): ImageReadMode {
   if (args.mode === undefined || args.mode === 'thumbnail') return 'thumbnail';
   if (args.mode === 'full') return 'full';
   throw new HttpError(400, 'Invalid image read mode');

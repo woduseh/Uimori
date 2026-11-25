@@ -8,17 +8,17 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 - **읽기 전용 SQL 집계**: `db.query`로 봇 목록, 대화 기록, 장면 번호, 모델 사용량과 도우미 실행 통계를 직접 조회·집계할 수 있어요.
 - **저장된 장면 편집**: 현재 채팅의 저장된 장면에서 문구를 검색(`scene.search`)하고, 변경 전 텍스트와 일치 횟수를 검증해 단일 또는 여러 장면을 수정해요(`scene.patch`, `scene.patchMany`). 원문과 번역문을 동시에 갱신하거나 이전 원문 버전으로 복원(`scene.restore`)할 수도 있어요.
 - **서재 자료 및 프리셋 관리**: 봇·페르소나·모듈의 속성이나 로어북, 프롬프트 템플릿 블록을 수정 번호 기반으로 변경하고(`resource.patch`), 새 사본을 복제(`resource.clone`)하거나 채팅 전용 로어 재정의(`chat.lore`)를 관리해요.
-- **설정·진단과 작업 제어**: 역할별 모델과 프롬프트, 자동 번역과 번역 결과 언어, 새 채팅 기본값(거절 뒤 자동 다시 생성, 로어 컨텍스트 포함), 채팅별 모델·프롬프트 고정, 호출 한도와 이야기 UI 설정을 확인·변경하고(`settings.read/update`), 테마 목록을 확인해요(`theme.list`). 실행 중이거나 완료된 작업의 상태를 진단하고(`task.inspect`), 취소(`task.cancel`)하거나 재시도(`task.retry`)하며, 날짜별 사용량을 집계해요(`usage.read`).
+- **설정·진단과 작업 제어**: 역할별 모델과 프롬프트, 자동 번역과 번역 결과 언어, 새 채팅 기본값(거절 뒤 자동 다시 생성, 로어 컨텍스트 포함), 채팅별 모델·프롬프트 고정, 호출 한도와 이야기 UI 설정을 확인·변경하고(`settings.read/update`, 여러 설정을 한 번에 저장하거나 하나도 저장하지 않음), 테마 목록을 확인해요(`theme.list`). 실행 중이거나 완료된 작업의 상태를 진단하고(`task.inspect`), 취소(`task.cancel`)하거나 재시도(`task.retry`)하며, 날짜별 사용량을 집계해요(`usage.read`).
 - **다음 요청 미리보기와 장면별 로어 확인**: 실제로 보내지 않고 다음 집필 요청을 조립해서, 쓰일 모델·프롬프트·페르소나, 예상 입력 토큰과 한도, 들어갈 로어, 빠진 프롬프트 블록과 이유, 조립된 메시지 본문을 보여줘요(`chat.preview`). 이미 저장된 장면을 쓸 때 작가 모델이 실제로 받은 로어 항목도 확인해요(`scene.lore`). "왜 이 설정을 무시했지?" 같은 질문에 추측 대신 근거로 답할 수 있어요.
 - **다음 장면 요청과 번역 요청**: 사용자가 장면을 써 달라고 하면 입력창에서 보낸 것과 같은 방식으로 다음 장면을 요청하고(`scene.request`), 번역이나 재번역을 요청해요(`scene.translate`). 둘 다 유료 모델 호출이라 명시적으로 요청했을 때만 실행해요. 작업을 예약만 하고 끝날 때까지 기다리지 않으며, 결과는 채팅과 읽기 화면에 나타나요. 이미 진행 중인 요청이 있으면 새로 보내지 않아요.
 - **채팅 변수 확인·수정**: `{{getvar::이름}}`이나 스크립트가 쓰는 Risu 변수의 현재 값, 봇·페르소나·모듈·프롬프트 프리셋의 기본값, 이 채팅에서 바꾼 값인지를 보여주고(`chat.variables.read`), 요청한 변수만 바꾸거나 기본값으로 되돌려요(`chat.variables.update`). 채팅의 요청이 대기 중이거나 실행 중일 때는 바꾸지 않아요.
-- **채팅 설정 정리**: 창작 옵션을 이 채팅의 고정값으로 저장하고(`options.fix`), 장면에 이름을 붙이고(`scene.title`), 원작 참고 설정 중 요청한 항목만 바꾸고(`chat.guide.update`), 저장된 모델의 온도·최대 출력·추론 수준 같은 생성 설정을 바꿔요(`model.parameters.read/update`). 모델 생성 설정은 그 모델을 쓰는 모든 채팅에 적용되고, 연결 정보·자격 증명·단가는 그대로 둬요.
+- **채팅 설정 정리**: 창작 옵션을 이 채팅의 고정값으로 저장하거나 일부 옵션만 고정·해제하고(`options.fix`), 장면에 이름을 붙이고(`scene.title`), 원작 참고 설정 중 요청한 항목만 바꾸고(`chat.guide.update`), 저장된 모델의 온도·최대 출력·추론 수준 같은 생성 설정을 바꿔요(`model.parameters.read/update`). 모델 생성 설정은 그 모델을 쓰는 모든 채팅에 적용되고, 연결 정보·자격 증명·단가는 그대로 둬요.
 - **모델 등록과 삭제**: 이미 있는 연결에 새 모델을 등록하고(`model.register`), 쓰지 않는 모델을 지워요(`model.delete`). 역할이나 조언자로 지정됐거나 채팅에 고정된 모델은 지우지 않고 어디서 쓰는지 알려 줘요. 연결, 자격 증명, 엔드포인트는 설정 화면에서만 바꿀 수 있어요.
-- **채팅 구성과 정리**: 채팅에 첨부한 페르소나와 모듈, 로어 컨텍스트, Risu 작가 노트를 확인하고 바꿔요(`chat.profile.read/update`). 장면을 작가 모델에게서 숨기거나 그 장면의 요청문을 끄고 고치고(`scene.context.update`), 책갈피를 추가·수정·삭제하고(`chat.bookmark`), 봇별 채팅 폴더와 새 채팅의 기본 페르소나를 정리해요(`chat.organize`). 작가 노트, 요청문, 책갈피를 고치거나 지우면 변경 카드에서 작업 전 글과의 차이를 확인할 수 있어요. 아주 긴 글을 통째로 바꾸면 차이는 생략돼요.
+- **채팅 구성과 정리**: 채팅에 첨부한 페르소나와 모듈, 로어 컨텍스트, Risu 작가 노트를 확인하고 바꿔요(`chat.profile.read/update`). 장면을 작가 모델에게서 숨기거나 그 장면의 요청문을 끄고 고치고(`scene.context.update`), 책갈피를 추가·수정·삭제하고(`chat.bookmark`), 봇별 채팅 폴더, 채팅 고정과 새 채팅의 기본 페르소나를 정리해요(`chat.organize`). 서재 폴더를 만들고 이름·순서를 바꾸거나 없애고 자료를 옮겨요(`library.organize`). 폴더를 없애면 안의 자료는 맨 위로 옮겨지고 지워지지 않아요. 작가 노트, 요청문, 책갈피를 고치거나 지우면 변경 카드에서 작업 전 글과의 차이를 확인할 수 있어요. 아주 긴 글을 통째로 바꾸면 차이는 생략돼요.
 - **Risu 코드 확인**: 봇·페르소나·모듈·프롬프트 프리셋의 CBS, Lua 트리거, 구조화 트리거, 정규식, 로어 키를 실행하지 않고 검사해요(`code.diagnose`, `code.cbs`). 문법 오류, 없는 이미지 이름, 컴파일되지 않는 정규식, Uimori가 지원하지 않거나 무시하는 로어 지시문·Lua 함수·트리거 효과·프리셋 블록을 필드 경로와 줄·칸 위치로 알려 주고, 변수와 토글을 어디서 읽고 쓰는지 찾아요(`code.references`). 표본 글에 한 단계의 정규식을 차례로 적용해 스크립트마다 바뀐 부분을 보거나(`code.regex`), 첫 메시지를 저장 전 수정안이나 다른 토글 값으로 렌더링해 볼 수 있어요(`code.preview`). 이 확인은 아무것도 저장하지 않고 모델도 부르지 않아요. 도우미는 [Risu Lua 트리거 API](RISU-LUA-API.md), [실행 순서](RISU-RUNTIME-INTEROP.md), [프리셋 필드](RISU-PRESET-FIELDS.md)와 CBS 함수 목록(`CBS-REFERENCE`)을 읽고 Uimori가 지원하는 범위 안에서 코드를 고쳐요.
 - **앱 사용 설명서 읽기**: 도우미는 Uimori의 사용 설명서를 찾아 읽을 수 있어요(`guide.read`). 기능이 있는지, 어디에 있는지, 앱이 스스로 하는 동작이 무엇인지 물으면 설명서를 확인하고 답해요.
 - **이야기 UI 블록**: 장면의 화면 블록을 쓰거나 고칠 때는 본문 모델이 받는 이야기 UI 참고문을 먼저 읽어요. 고친 블록이 변환에 실패하면 쓴 그대로 저장되고, 도우미는 저장 결과에서 사유를 확인해 다시 고칠 수 있어요. 답변 안에서는 장면용 화면을 미리 보여 주거나, 인물 관계도·차트처럼 Markdown으로 그리기 어려운 것을 보여 줄 때만 `<a2ui>` 블록을 써요. 답변의 화면은 읽기 전용이라 버튼 선택을 보내지 않고, 카드 그림(`{{img::이름}}`)은 나오지 않아요. 답변을 복사하면 원문 편집에 붙여 넣을 수 있는 `<a2ui>` 원형이 복사돼요.
-- **실시간 웹 검색과 모델 단가 갱신**: Responses, Anthropic, Codex와 Gemini 4(AIS, Vertex) 환경에서 실시간 웹 검색으로 최신 정보를 찾고 출처 링크를 제공해요. 공식 출처(HTTPS URL 및 확인일)가 확인된 모델과 판단 프로바이더의 토큰 단가도 갱신해요(`model.pricing.update`). 단가는 사용자가 알려 주거나 도우미가 직접 읽은 공식 출처에서만 가져오고, 바뀐 단가는 앞으로의 호출에만 적용돼요. 가격이 없을 때 실행돼 비용이 미확인으로 남은 지난 호출에는 요청하면 지금 가격을 적용해 추정 비용을 채울 수 있어요(`model.pricing.backfill`). 판단 호출도 같은 판단 프로바이더·모델의 단가로 채우며, 이미 가격이 기록된 호출은 그대로 두고 다시 실행해도 바뀌는 것이 없어요.
+- **실시간 웹 검색과 모델 단가 갱신**: Responses, Anthropic, Codex와 Gemini 4(AIS, Vertex) 환경에서 실시간 웹 검색으로 최신 정보를 찾고 출처 링크를 제공해요. 공식 출처(HTTPS URL 및 확인일)가 확인된 모델과 판단 프로바이더의 토큰 단가도 갱신해요(`model.pricing.update`). 단가는 사용자가 알려 주거나 도우미가 직접 읽은 공식 출처에서만 가져오고, 바뀐 단가는 앞으로의 호출에만 적용돼요. 가격이 없을 때 실행돼 비용이 미확인으로 남은 지난 호출에는 요청하면 지금 가격을 적용해 추정 비용을 채울 수 있어요(`model.pricing.backfill`, 또는 단가를 저장하면서 함께). 판단 호출도 같은 판단 프로바이더·모델의 단가로 채우며, 이미 가격이 기록된 호출은 그대로 두고 다시 실행해도 바뀌는 것이 없어요.
 - **Vertex 위치 관리**: Google Vertex 연결의 현재 위치를 확인하고(`vertex.location.read`), 모델 하나를 여러 위치에 짧게 시험해 응답 시간을 비교하고(`vertex.location.compare`), 사용자가 요청하면 연결의 위치를 바꿔요(`vertex.location.update`).
 - **콘텐츠 이미지와 삽화 도구**: 서재에 저장된 콘텐츠 이미지와 CHARX 에셋을 조회하고(`image.read`), 외형 프로필(`illustration.profiles.*`)과 삽화 컷 생성·재렌더링·배치(`illustration.cut.*`, `illustration.generate`)를 제어해요. 전역, 봇, 채팅별로 쓸 삽화 프리셋도 골라요(`illustration-preset.select`).
 - **Linux 데이터 작업 공간 (`data.exec`)**: Linux runner가 켜져 있으면 격리된 컨테이너에서 bash, ripgrep, jq, Python을 사용해 대규모 검색과 가공을 수행하고 CLI(`uimori call`, `uimori apply`)로 앱 도구를 다뤄요. 채팅을 내보내면 독자 화면의 번역문도 읽기 전용 파일로 함께 받고, 최근 장면의 원문·번역문 반복 표현을 찾는 `tools/repetition.py` 같은 기본 스크립트를 그대로 쓰거나 고쳐 쓸 수 있어요. 셸 호출 시간은 도우미 작업 시간 제한 안에서 원하는 만큼 정할 수 있어요.
@@ -56,6 +56,8 @@ Uimori의 도우미는 대화와 서재에서 창작과 설정을 보조하는 �
 Behavior the descriptions leave out:
 
 - The helper's scope (chat or library) only orders discovery results: it breaks ties between equally ranked candidates and, in a library helper, lists chat operations last in the catalog. It never hides an operation, because a library helper reaches chat operations by passing `chatId`.
+- The frozen story reads `story.search` and `story.read` are listed only in a read-only outline review. Other tasks find scenes with `chat.read`, `scene.search` and `scene.read`, which read the live chat and number only the visible scenes, so one task never sees two numberings of the same story.
+- The helper request data already carries, as of the task start, the chat's title and revisions, its settings, effective main model and prompt, original-work reference state, folder, author notes and the latest scene with the guards a `scene.patch` needs, a reader selection with the same guards, the target intent of a selected outline item, and the date `usage.read` counts as today. The model is told to use these instead of reading them again.
 - A candidate that covers every query word ranks ahead of partial matches, and partial matches stay in the list instead of emptying it.
 - BM25 length normalization is deliberately mild, so a long description of a complex operation is not ranked below a short one for its length alone.
 
@@ -63,7 +65,6 @@ Behavior the descriptions leave out:
 
 Behavior the descriptions leave out:
 
-- `illustration.cut.read` has no `mode` and always sends the picture at the `full` size.
 - There is no separate cap on how many images a task or a call may read. The context and transport budgets are the limit.
 - Viewed pixels live only in the running task's memory; stored events, attempts and continuation state hold references and metadata. A context compaction shows the pending pictures to the summarizing model once and then releases them.
 - Each connection type sends the picture in its own provider image format. Only a model known to be text-only is refused before the read.
@@ -200,7 +201,7 @@ Behavior the descriptions leave out:
 
 Outside these operations:
 
-- Native Codex tool callbacks stay serialized; the concurrent group applies only to the HTTP provider tool loop.
+- Native Codex tool callbacks stay serialized; the concurrent group of adjacent read-only calls applies only to the HTTP provider tool loop.
 
 ### Discovering and executing app operations
 
@@ -213,7 +214,7 @@ Behavior the descriptions leave out:
 - Toggle reconciliation keeps a stored choice index that is still valid, even when reordering the choices changed what it means. `preset.validate` reports such changes against the retained previous save.
 - `preset.validate` does not lint CBS by running the pinned RisuAI evaluator, because that evaluator tolerates some incomplete tags, reparses dynamic expressions and can write variables.
 - `image.update-metadata` targets the content that owns the image. `prompt-workspace` always targets `current`, whatever `id` the call passes, as `resource.save` does.
-- A task's request data carries `source.knownOperations`: a bounded set of definitions for operations that earlier tasks of the conversation already called, so a follow-up task can call them without another `app.tools` round. The definitions come from the running build, never from a stored result. A review task receives only the operations its review allows, and schemas that were looked up but never called are not carried. The selection is fixed when the task starts and sits in the request data rather than changing the tool list.
+- A task's request data carries `source.knownOperations`: a bounded set of definitions for the operations the request points to (a reader selection, an editor target, a selected outline item or `@` targets) and the operations that earlier tasks of the conversation already called, so a task can call them without an `app.tools` round. The definitions come from the running build, never from a stored result. A review or plan task receives only the operations it may run, and schemas that were looked up but never called are not carried. The selection is fixed when the task is admitted and sits in the request data rather than changing the tool list.
 - The `nextRead` of a `HELPER_READ_TOO_LARGE` result names a provider tool, so the model can invoke it unchanged in the next round: `app.call` with nested `name` and `arguments` for every app operation, including `data.search` and `data.read`, and `data.exec` for shell output.
 
 Outside these operations:
@@ -243,7 +244,7 @@ What the recorded states mean:
 
 ### Original-work reference and authored notes
 
-- `context.read` returns the settings, not a generated brief. A previously generated brief is not a source of story facts.
+- `context.read` returns the settings, not a generated brief. A previously generated brief is not a source of story facts. Its `storyGuide` section can be read alone, without the summary and notes.
 - Neither a helper answer nor an automatic brief creates a branch ledger.
 - **Risu 작가 노트** is not an event log or proof of what a character knows. [이야기 기억과 컨텍스트·메모](USAGE.md#이야기-기억과-컨텍스트메모) separates it from **메모·정정**.
 
@@ -268,7 +269,7 @@ Behavior the descriptions leave out:
 
 Behavior the descriptions leave out:
 
-- `source.currentDateUtc` in the helper request is the UTC date on which the task was created, not the date of each model request.
+- `source.currentDateUtc` in the helper request is the UTC date on which the task was created, not the date of each model request. `source.usageDate` is the same moment as a date in the calendar `usage.read` counts in, so "today's cost" asked early in the morning does not land on the previous day.
 
 - Gemini 4 helpers on Google AI Studio and Vertex use `web.search` as a read-only provider-facing tool. Each invocation makes a separately recorded and billed search-only request to the **same configured Gemini model and connection**, then returns grounded text and verified source URLs to the helper. The separate request counts against the task's model-call budget and receives only the search query, not the full private conversation or library content. The helper decides when to search, including during read-only review.
 - Grounded responses can include Google Search Suggestions. Uimori does not keep or display them; only the source links are returned to the helper and shown to the user.

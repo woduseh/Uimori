@@ -192,6 +192,61 @@ test('backfill prices only the calls recorded without a price and marks them as 
   });
 });
 
+test('a price update with backfill prices the earlier unpriced calls in the same save', () => {
+  const { store, model, connection } = fixture();
+  const chat = createFixtureChat(store, 'Backfill with update');
+  const id = store.product.startAttempt(chat.id, null, null, {
+    connectionId: connection.id,
+    modelId: model.modelId,
+    role: 'main',
+    protocol: 'openai-chat-v1',
+    method: 'POST',
+    url: 'https://provider.invalid',
+    headers: {},
+    body: {},
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  });
+  store.product.finishAttempt(id, {
+    status: 'completed',
+    text: 'done',
+    toolCalls: [],
+    refusal: null,
+    error: null,
+    opaqueState: null,
+    usage: {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      costUsd: null,
+      priceRevision: null,
+      raw: {
+        prompt_tokens: 1_000_000,
+        completion_tokens: 0,
+        prompt_tokens_details: { cached_tokens: 0 },
+      },
+    },
+  });
+  expect(
+    call(store, 'model.pricing.update', {
+      modelId: model.id,
+      expectedRevision: model.revision,
+      pricing,
+      backfill: true,
+    })
+  ).toMatchObject({
+    revision: model.revision + 1,
+    backfill: { unpricedCalls: 1, estimatedCalls: 1, addedUsd: 2 },
+  });
+  expect(() =>
+    call(store, 'model.pricing.update', {
+      modelId: model.id,
+      expectedRevision: model.revision + 1,
+      pricing,
+      backfill: 'yes',
+    })
+  ).toThrow('Invalid backfill');
+});
+
 const jevPricing = {
   mode: 'manual',
   rates: { input: 0.042, output: 0, cacheRead: null, cacheWrite: null },

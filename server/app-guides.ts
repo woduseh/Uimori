@@ -10,6 +10,8 @@ const MAX_PAGE_CHARS = 20_000;
 const MAX_MATCHES = 30;
 const PARTIAL_MATCHES = 10;
 const MATCH_CHARS = 400;
+const EXCERPT_MATCHES = 3;
+const EXCERPT_CHARS = 1_200;
 
 type AppGuide = { name: string; title: string; text: string };
 
@@ -111,15 +113,24 @@ export function searchAppGuides(query: string) {
   const partial = !complete.length;
   return {
     query,
-    matches: ranked.slice(0, partial ? PARTIAL_MATCHES : MAX_MATCHES).map((item) => {
+    matches: ranked.slice(0, partial ? PARTIAL_MATCHES : MAX_MATCHES).map((item, rank) => {
       const index = item.lines.findIndex(
         (line, at) => at > 0 && item.matched.some((term) => line.includes(term))
       );
+      const body = item.section.lines.join('\n');
+      const excerpt =
+        rank < EXCERPT_MATCHES
+          ? (() => {
+              let end = Math.min(body.length, EXCERPT_CHARS);
+              if (end < body.length && /[\uD800-\uDBFF]/u.test(body[end - 1]!)) end--;
+              return { text: body.slice(0, end), sectionChars: body.length };
+            })()
+          : { text: item.section.lines[index < 0 ? 0 : index]!.trim().slice(0, MATCH_CHARS) };
       return {
         name: item.section.name,
         section: item.section.section,
         offset: item.section.offset,
-        text: item.section.lines[index < 0 ? 0 : index]!.trim().slice(0, MATCH_CHARS),
+        ...excerpt,
         ...(partial ? { matchedTerms: item.matched } : {}),
       };
     }),

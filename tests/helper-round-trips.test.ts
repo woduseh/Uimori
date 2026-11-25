@@ -13,8 +13,9 @@ import {
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { rollBackHelperTask } from '../server/helper-rollback.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { countTextTokens } from '../core/text-tokens.js';
+import { sourceHash } from '../core/source-history.js';
 import type { Content } from '../core/product.js';
 
 const owned: { store: Store; path: string; work: Promise<void>[]; controller: AbortController }[] =
@@ -309,6 +310,98 @@ test('a task after a rollback keeps one stable prefix and one source across its 
   expect(requestSource(later.bodies[0])).not.toHaveProperty('revertedChanges');
 });
 
+test('a selection edit saves from the seeded schema and source guards without a lookup or read', async () => {
+  let selection: { sourceId: string; sourceHash: string; text: string } | undefined;
+  const f = fixture((body, round) => {
+    const source = requestSource(body);
+    if (round === 0) {
+      expect(source.knownOperations.tools.map((tool: { name: string }) => tool.name)).toEqual([
+        'scene.read',
+        'scene.patch',
+      ]);
+      expect(source.writing.chat).toMatchObject({
+        title: 'Harbor story',
+        titleRevision: expect.any(Number),
+        notesRevision: expect.any(Number),
+        latestScene: { sourceId: selection!.sourceId, sceneNumber: 1, translation: 'none' },
+      });
+      expect(source.usageDate).toEqual({ date: expect.any(String), timeZone: 'Asia/Seoul' });
+      const { chatId: _chatId, ...guards } = source.selection.editTarget;
+      return [
+        appCall('fix', 'scene.patch', {
+          ...guards,
+          changes: [{ oldText: 'teh bell', newText: 'the bell' }],
+        }),
+      ];
+    }
+    expect(toolResult(body, 'fix')).toMatchObject({ changed: true });
+    return 'Fixed the typo.';
+  });
+  const chat = createFixtureChat(f.store, 'Harbor story');
+  const head = f.store.chat(chat.id);
+  const run = f.store.createRun(
+    chat.id,
+    {
+      request: 'Write',
+      expectedRevision: head.headRevision,
+      expectedSettingsRevision: head.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    (c) => ({
+      chatId: chat.id,
+      parentRevision: c.headRevision,
+      settingsRevision: c.settingsRevision,
+      settings: c.settings,
+      request: 'Write',
+      history: f.store.history(c.headRevision),
+      resources: [],
+    })
+  ).run;
+  f.store.startRun(run.id);
+  const text = 'At dusk teh bell rang twice.';
+  const source = f.store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
+  selection = { sourceId: source.id, sourceHash: sourceHash(text), text: 'teh bell' };
+  const conversation = f.runtime.workspace.open({ kind: 'chat', chatId: chat.id });
+  const first = f.bodies.length;
+  const task = f.runtime.enqueue(
+    conversation.id,
+    randomUUID(),
+    'Fix this typo.',
+    undefined,
+    selection
+  );
+  await Promise.all(owned.at(-1)!.work);
+  expect(f.runtime.workspace.task(task.id).status).toBe('completed');
+  const bodies = f.bodies.slice(first);
+  expect(bodies).toHaveLength(2);
+  expect(f.store.source(source.id).text).toBe('At dusk the bell rang twice.');
+  expect(new Set(bodies.map(stablePrefix)).size).toBe(1);
+  expect(new Set(bodies.map((body) => JSON.stringify(requestSource(body)))).size).toBe(1);
+  const stored = f.runtime.workspace.task(task.id).snapshot;
+  expect(stored.seededOperations).toEqual(['scene.read', 'scene.patch']);
+});
+
+test('the contract depends only on the conversation scope, not on what a task carries', async () => {
+  const f = fixture((_body, round) => (round === 0 ? 'Done.' : 'Done.'));
+  await f.run('First library task.');
+  await f.run('Second library task.');
+  const library = f.bodies.map(stablePrefix);
+  expect(new Set(library).size).toBe(1);
+  const system = (body: any) =>
+    body.messages
+      .filter((m: any) => m.role === 'system')
+      .map((m: any) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+      .join('\n');
+  expect(system(f.bodies[0])).not.toContain('author-note');
+  expect(system(f.bodies[0])).not.toContain('uimori apply');
+  expect(system(f.bodies[0])).toContain('source already holds');
+});
+
 test('known operations follow the review allowlist, the count cap and the size cap', () => {
   const names = HELPER_APP_TOOLS.map((tool) => tool.name);
   const all = knownHelperOperations(names, false, Number.MAX_SAFE_INTEGER);
@@ -320,6 +413,10 @@ test('known operations follow the review allowlist, the count cap and the size c
   ).toEqual(['outline.read']);
   const small = HELPER_APP_TOOLS.find((tool) => tool.name === 'settings.read')!;
   expect(
-    knownHelperOperations(['resource.read', 'settings.read'], false, JSON.stringify(small).length)
+    knownHelperOperations(
+      ['resource.read', 'settings.read'],
+      false,
+      countTextTokens(JSON.stringify(small))
+    )
   ).toEqual([small]);
 });

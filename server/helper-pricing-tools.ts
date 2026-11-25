@@ -66,6 +66,10 @@ const rates = schema(
   { input: rate, output: rate, cacheRead: rate, cacheWrite: rate, cacheWrite1h: rate },
   ['input', 'output', 'cacheRead', 'cacheWrite']
 );
+const sameRates = (description: string): Json => ({
+  type: 'object',
+  description: `${description} Same fields as rates.`,
+});
 const context = schema(
   {
     aboveInputTokens: {
@@ -74,7 +78,7 @@ const context = schema(
       maximum: 100000000,
       description: 'Input token count above which these rates apply.',
     },
-    rates,
+    rates: sameRates('Rates above the threshold.'),
   },
   ['aboveInputTokens', 'rates']
 );
@@ -92,7 +96,7 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   {
     name: 'model.pricing.update',
     description:
-      'Change the token prices saved for one model, or with judgment:true for the judgment provider. Read model.pricing.read for expectedRevision and the actual service and protocol, then take rates only from the user or from the official pricing page of that exact service that you actually read; never estimate or guess a price. A manual update requires sourceUrl and checkedAt. Rates are USD per million tokens: null means unknown and 0 means verified free, for example an output price the provider states is free. Record Flex, Batch, cache TTL and long-context rates separately where published, and leave unverified rates unchanged. A judgment target takes only the rates in rateFields, with no Flex, Batch or long-context rates; pricing null removes the price of that one target. This operation does not browse; use web search for the source. Changes apply to future requests and do not affect model options. Past calls keep the prices they were recorded with; model.pricing.backfill fills in the ones that were recorded without any price, only when the user asks for it.',
+      'Change the token prices saved for one model, or with judgment:true for the judgment provider. Read model.pricing.read for expectedRevision and the actual service and protocol, then take rates only from the user or from the official pricing page of that exact service that you actually read; never estimate or guess a price. A manual update requires sourceUrl and checkedAt. Rates are USD per million tokens: null means unknown and 0 means verified free, for example an output price the provider states is free. Record Flex, Batch, cache TTL and long-context rates separately where published, and leave unverified rates unchanged. A judgment target takes only the rates in rateFields, with no Flex, Batch or long-context rates; pricing null removes the price of that one target. This operation does not browse; use web search for the source. Changes apply to future requests and do not affect model options. Past calls keep the prices they were recorded with; backfill:true, or model.pricing.backfill later, fills in the ones that were recorded without any price, only when the user asks for it.',
     inputSchema: schema(
       {
         modelId,
@@ -117,8 +121,8 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
                   rates,
                   'Standard rates in USD per million tokens: input, output, cacheRead, cacheWrite and optional cacheWrite1h. null is unknown, 0 is verified free.'
                 ),
-                flexRates: described(rates, 'Flex tier rates, when published.'),
-                batchRates: described(rates, 'Batch rates, when published.'),
+                flexRates: sameRates('Flex tier rates, when published.'),
+                batchRates: sameRates('Batch rates, when published.'),
                 longContext: described(context, 'Standard rates above a long-context threshold.'),
                 flexLongContext: described(context, 'Flex rates above a long-context threshold.'),
                 batchLongContext: described(context, 'Batch rates above a long-context threshold.'),
@@ -140,6 +144,11 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
             ),
           ],
         },
+        backfill: {
+          type: 'boolean',
+          description:
+            'true also runs model.pricing.backfill with the new price in the same save and returns its counts as backfill. Use it only when the user asks for past unknown costs to be filled in.',
+        },
       },
       ['expectedRevision', 'pricing']
     ),
@@ -151,6 +160,13 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
     inputSchema: schema({ modelId, judgment, judgmentTarget }),
   },
 ];
+
+const backfillFields = (result: Record<string, unknown>) =>
+  Object.fromEntries(
+    ['unpricedCalls', 'estimatedCalls', 'partialCalls', 'stillUnknownCalls', 'addedUsd'].map(
+      (key) => [key, result[key]]
+    )
+  );
 
 const hostname = (endpoint: string) => {
   try {
@@ -167,12 +183,24 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
   const target = ['modelId', 'judgment', 'judgmentTarget'];
   fields(
     args,
-    name === 'model.pricing.update' ? [...target, 'expectedRevision', 'pricing'] : target
+    name === 'model.pricing.update'
+      ? [...target, 'expectedRevision', 'pricing', 'backfill']
+      : target
   );
+  if (args.backfill !== undefined && typeof args.backfill !== 'boolean')
+    throw new HttpError(400, 'Invalid backfill');
   if (args.judgment !== undefined || args.judgmentTarget !== undefined) {
     if (args.judgment !== true || args.modelId !== undefined)
       throw new HttpError(400, 'PRICING_TARGET_INVALID: Give either modelId or judgment:true.');
-    return judgmentPricingTool(store, name, args);
+    const result = judgmentPricingTool(store, name, args) as Record<string, unknown>;
+    return args.backfill === true
+      ? {
+          ...result,
+          backfill: backfillFields(
+            judgmentPricingTool(store, 'model.pricing.backfill', args) as Record<string, unknown>
+          ),
+        }
+      : result;
   }
   const modelId = text(args.modelId, 'saved model ID', 100);
   store.product.assertAvailable('model', modelId);
@@ -197,7 +225,12 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
       expectedRevision
     ) as ModelPreset;
   }
+  const backfill =
+    name === 'model.pricing.update' && args.backfill === true
+      ? backfillUnpricedCalls(store, modelId)
+      : undefined;
   return {
+    ...(backfill ? { backfill } : {}),
     modelId: model.id,
     title: model.title,
     revision: model.revision,

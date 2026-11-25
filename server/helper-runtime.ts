@@ -19,7 +19,7 @@ import {
   helperGatewayTools,
   describeHelperTools,
   knownHelperOperations,
-  HELPER_KNOWN_OPERATION_MAX_CHARS,
+  HELPER_KNOWN_OPERATION_MAX_TOKENS,
 } from './helper-app-tools.js';
 import {
   HELPER_DATA_TOOLS,
@@ -54,7 +54,12 @@ import {
   invokeHelperSettingsTool,
   applyHelperSettingsMutation,
 } from './helper-settings-tools.js';
-import { HELPER_SCENE_TOOLS, invokeHelperSceneTool } from './helper-scene-tools.js';
+import {
+  HELPER_SCENE_TOOLS,
+  helperSceneEditTarget,
+  invokeHelperSceneTool,
+  sceneTranslationState,
+} from './helper-scene-tools.js';
 import { sceneTitle } from './scene-titles.js';
 import {
   HELPER_CHAT_STATE_TOOLS,
@@ -105,6 +110,8 @@ import {
 } from '../core/context-summary-policy.js';
 import { sourceHash } from '../core/source-history.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
+import { helperChatOrientation, seededHelperOperations } from './helper-orientation.js';
+import { usageReportDate } from './usage-report.js';
 import { RisuContentError } from '../core/risu-content.js';
 import { RisuPromptError } from '../core/risu-prompt.js';
 import { readHelperChatLore } from './helper-lore-read.js';
@@ -168,7 +175,15 @@ import {
   readIllustrationScene,
 } from './helper-illustration-cuts.js';
 import { readIllustrationContinuity } from './illustration-continuity.js';
-import { chatTitle, fields, HttpError, number, record, text } from './request-validation.js';
+import {
+  chatTitle,
+  choice,
+  fields,
+  HttpError,
+  number,
+  record,
+  text,
+} from './request-validation.js';
 import type { Store } from './store.js';
 import type { ResponseStreamStore } from './response-stream.js';
 import {
@@ -212,6 +227,16 @@ import { chatGenerationDefaults } from './chat-generation-defaults.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
+const CHAT_READ_REQUEST_TOKENS = 200;
+const CHAT_LORE_BATCH_MAX = 16;
+const SEQUENTIAL_READS = new Set([
+  'data.exec',
+  'helper.ask',
+  'web.search',
+  'image.read',
+  'illustration.image.read',
+  'illustration.cut.read',
+]);
 type HelperImageRead = Awaited<
   ReturnType<
     typeof readHelperImage | typeof readIllustrationHelperImage | typeof readIllustrationCutImage
@@ -283,18 +308,22 @@ const RESUMED_TASK_GUIDANCE =
   'Continue this same request from an earlier task that stopped before it finished. Take the task and constraints from the actual request, configured instructions and explicit author notes. Resume from the host-recorded exchanges; exact successful receipts override stale next-step plans and completed mutations must not be replayed. Finish the remaining work and answer the user. Completion records do not prove the whole request is resolved.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
-const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. The owner undid the changes in source.revertedChanges and declined the held calls in source.declinedCalls: do not make them again unless the request asks for them. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
-Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, such as several independent reads as calls in one response, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
-Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
-For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
-Before writing, repairing or previewing a Story UI block, read the STORY-UI-REFERENCE guide in one call with limit 20000; it is the writer's own reference. A scene stores each compiled block as a uimori-ui JSON fence whose expression holds the block as written: to change a block, replace the whole fence with an edited <a2ui> block, and check storyUiFailures in the save result for blocks that did not compile. In your reply use Markdown for text and tables; include an <a2ui> block only to preview Story UI content meant for a scene or bot, or to draw what Markdown cannot, such as a relationship graph or a chart. Blocks in your reply render read-only.
-For Risu code in bots, modules and presets (CBS, Lua triggers, regex, toggles), check it with the code.* operations before and after editing, and take what Uimori supports from the guides CBS-REFERENCE, RISU-LUA-API, RISU-RUNTIME-INTEROP and RISU-PRESET-FIELDS rather than from Risu memory.
-For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. Cite web evidence only after a search returns it.
-Your tools are not the whole app: the interface does things by itself that no tool controls. Before saying that Uimori lacks a feature, cannot do something or behaves in a certain way, check guide.read.
-Finish within the remaining host calls given in controls.
-${CONTEXT_DERIVED_GUIDANCE}
-${CONTEXT_RETRIEVAL_GUIDANCE}
-Write the final reply for a reader who has not seen your tool calls. Lead with the outcome, say what was saved and what is only proposed, and name any decision or conflict left to the user. Refer to things by their titles rather than internal IDs, revisions or receipts unless the user needs them. Give the detail the request calls for and no more.`;
+export function helperContract(session: { chat: boolean; shell: boolean }) {
+  return [
+    `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. The owner undid the changes in source.revertedChanges and declined the held calls in source.declinedCalls: do not make them again unless the request asks for them. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs.${session.chat ? ` ${AUTHOR_NOTE_GUIDANCE}` : ''}`,
+    `source already holds, as of the task start: ${session.chat ? 'writing (head, packages with the owning bot as role=bot, author notes, and chat: title, revisions, settings, effective main model and prompt, original-work reference, folder and the latest scene with its editTarget), selection with its editTarget, the outline brief, ' : ''}editor, usageDate (today in the calendar usage.read uses) and knownOperations with their schemas. Use these instead of reading them again, and read live state only for what source lacks or after a change.`,
+    `Choose and combine the tools suited to the task: app operations${session.shell ? ', data.exec for workspace search and transformation, or shell workspace files described in INDEX.md' : ''}. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Put independent reads in one response as several calls; the host runs adjacent reads together. Prefer one call that covers several targets over repeated calls: resource.read paths, resource.readMany, data.read refs, resource.patchMany, scene.patchMany, chat.lore patchMany and settings.update updates. Use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.`,
+    `Edit saved targets using their recorded revisions and preserve unrelated fields. ${session.shell ? 'For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts.' : 'Follow the save contract of each operation.'} Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.`,
+    "Before writing, repairing or previewing a Story UI block, read the STORY-UI-REFERENCE guide in one call with limit 20000; it is the writer's own reference. In your reply use Markdown for text and tables; include an <a2ui> block only to preview Story UI content meant for a scene or bot, or to draw what Markdown cannot, such as a relationship graph or a chart. Blocks in your reply render read-only.",
+    'For Risu code in bots, modules and presets (CBS, Lua triggers, regex, toggles), check it with the code.* operations before and after editing, and take what Uimori supports from the guides CBS-REFERENCE, RISU-LUA-API, RISU-RUNTIME-INTEROP and RISU-PRESET-FIELDS rather than from Risu memory.',
+    `${session.chat ? 'For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. ' : ''}Cite web evidence only after a search returns it.`,
+    'Your tools are not the whole app: the interface does things by itself that no tool controls. Before saying that Uimori lacks a feature, cannot do something or behaves in a certain way, check guide.read.',
+    'Finish within the remaining host calls given in controls.',
+    CONTEXT_DERIVED_GUIDANCE,
+    CONTEXT_RETRIEVAL_GUIDANCE,
+    'Write the final reply for a reader who has not seen your tool calls. Lead with the outcome, say what was saved and what is only proposed, and name any decision or conflict left to the user. Refer to things by their titles rather than internal IDs, revisions or receipts unless the user needs them. Give the detail the request calls for and no more.',
+  ].join('\n');
+}
 
 function shellFailed(result: unknown) {
   if (!result || typeof result !== 'object') return false;
@@ -814,10 +843,10 @@ function earlierCalledOperations(store: Store, task: HelperTask): string[] {
 }
 function knownOperationsFor(store: Store, task: HelperTask) {
   return knownHelperOperations(
-    earlierCalledOperations(store, task),
+    [...(task.snapshot.seededOperations ?? []), ...earlierCalledOperations(store, task)],
     task.snapshot.outline?.target.purpose === 'review',
     Math.min(
-      HELPER_KNOWN_OPERATION_MAX_CHARS,
+      HELPER_KNOWN_OPERATION_MAX_TOKENS,
       Math.floor(contextBudgetForModel(task.snapshot.model).inputTokenLimit / 4)
     )
   );
@@ -1226,6 +1255,16 @@ export class HelperRuntime {
       const declinedCalls = retried
         ? retried.declinedCalls
         : resolveHelperDeclines(this.store, conversationId, declined);
+      const writing =
+        scope.kind === 'chat' ? helperWritingSnapshot(this.store, scope.chatId) : undefined;
+      const seededOperations = seededHelperOperations(this.store, {
+        scope,
+        editor,
+        selection,
+        outline,
+        references: validatedReferences,
+        ...(mode === 'plan' ? { mode } : {}),
+      });
       const queued = this.workspace.enqueue(conversationId, requestKey, request, {
         requestFingerprint,
         ...(mode === 'plan' ? { mode } : {}),
@@ -1249,11 +1288,17 @@ export class HelperRuntime {
               contextModel: this.store.product.modelSnapshot(contextModel.id, undefined, false),
             }
           : {}),
-        ...(scope.kind === 'chat'
-          ? { writing: helperWritingSnapshot(this.store, scope.chatId) }
+        ...(writing && scope.kind === 'chat'
+          ? { writing, orientation: helperChatOrientation(this.store, scope.chatId, writing) }
           : {}),
         ...(editor ? { editor } : {}),
-        ...(selection ? { selection } : {}),
+        ...(selection && scope.kind === 'chat'
+          ? {
+              selection,
+              selectionTarget: helperSceneEditTarget(this.store, scope.chatId, selection.sourceId),
+            }
+          : {}),
+        ...(seededOperations.length ? { seededOperations } : {}),
         ...(outline ? { outline, outlineTarget: outline.target } : {}),
         ...(validatedReferences?.length ? { references: validatedReferences } : {}),
         limits: { ...HELPER_TASK_LIMITS },
@@ -1836,8 +1881,19 @@ export class HelperRuntime {
         };
       };
       const isDataRead = (call: ProviderResult['toolCalls'][number]) => {
-        const name = call.name === 'app.call' ? call.arguments.name : call.name;
-        return HELPER_DATA_TOOLS.some((tool) => tool.name === name);
+        const gateway = call.name === 'app.call';
+        const name = gateway ? call.arguments.name : call.name;
+        const inner = gateway ? call.arguments.arguments : call.arguments;
+        return (
+          typeof name === 'string' &&
+          !SEQUENTIAL_READS.has(name) &&
+          helperToolTraits(
+            name,
+            inner && typeof inner === 'object' && !Array.isArray(inner)
+              ? (inner as Record<string, unknown>)
+              : {}
+          ).readOnly
+        );
       };
       const readConcurrency = Math.min(4, availableParallelism());
       for (let index = 0; index < calls.length; ) {
@@ -2391,6 +2447,8 @@ export class HelperRuntime {
     const target = task.snapshot.model;
     const writing = task.snapshot.writing;
     const webSearch = helperWebSearchCapability(target.connection.protocol, target.modelId);
+    const shellTool =
+      !!process.env.UIMORI_SHELL_ROOT && task.snapshot.outline?.target.purpose !== 'review';
     return helperAttachmentPrompt(
       {
         role: 'helper',
@@ -2400,7 +2458,10 @@ export class HelperRuntime {
         ...(webSearch.supported && webSearch.mode !== 'separate' ? { webSearch: true } : {}),
         stable: {
           contract:
-            CONTRACT +
+            helperContract({
+              chat: task.snapshot.scope.kind === 'chat',
+              shell: shellTool,
+            }) +
             (segment > 0
               ? '\n' + CONTEXT_CONTINUATION_GUIDANCE
               : task.snapshot.resume
@@ -2415,9 +2476,7 @@ export class HelperRuntime {
               ? `\nVoice for your replies to the user. It shapes explanations and conversation only; saved drafts, artifacts, lore, notes, summaries, prompts, translations, code and tool arguments keep the style their own task requires:\n${task.snapshot.persona}`
               : ''),
           tools: [
-            ...(process.env.UIMORI_SHELL_ROOT && task.snapshot.outline?.target.purpose !== 'review'
-              ? [HELPER_SHELL_TOOL]
-              : []),
+            ...(shellTool ? [HELPER_SHELL_TOOL] : []),
             ...helperGatewayTools(task.snapshot.outline?.target.purpose === 'review'),
             ...(webSearch.mode === 'separate' ? [GEMINI_HELPER_SEARCH_TOOL] : []),
           ],
@@ -2427,6 +2486,7 @@ export class HelperRuntime {
           source: asJson({
             webSearch,
             currentDateUtc: task.createdAt.slice(0, 10),
+            usageDate: usageReportDate(task.createdAt),
             ...(task.snapshot.confirmations?.length
               ? {
                   confirmedCalls: task.snapshot.confirmations.flatMap((call) =>
@@ -2498,9 +2558,19 @@ export class HelperRuntime {
                   hasUnsavedInput:
                     task.snapshot.editor.source !== 'saved' &&
                     task.snapshot.editor.model !== undefined,
+                  ...(task.snapshot.editor.location
+                    ? { location: task.snapshot.editor.location }
+                    : {}),
                 }
               : null,
-            selection: task.snapshot.selection ?? null,
+            selection: task.snapshot.selection
+              ? {
+                  ...task.snapshot.selection,
+                  ...(task.snapshot.selectionTarget
+                    ? { editTarget: task.snapshot.selectionTarget }
+                    : {}),
+                }
+              : null,
             ...(task.snapshot.references?.length
               ? (() => {
                   const targets = helperModelReferences(
@@ -2533,6 +2603,7 @@ export class HelperRuntime {
                     )?.title,
                   })),
                   resourceCount: writing.resources.length,
+                  ...(task.snapshot.orientation ? { chat: task.snapshot.orientation } : {}),
                   ...(writing.story?.notes ? { notes: modelAuthorNotes(writing.story.notes) } : {}),
                 }
               : null,
@@ -2540,7 +2611,7 @@ export class HelperRuntime {
               ? {
                   knownOperations: {
                     guidance:
-                      'Current descriptions and schemas of app operations that earlier tasks of this conversation called. Call them through app.call without looking them up again with app.tools.',
+                      'Current descriptions and schemas of app operations that this request points to (selection, editor, outline or @ targets) or that earlier tasks of this conversation called. Call them through app.call without looking them up again with app.tools.',
                     tools: knownOperations,
                   },
                 }
@@ -3426,33 +3497,58 @@ export class HelperRuntime {
     }
     if (name === 'chat.read') {
       if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
-      fields(args, ['includePreview', 'offset', 'limit']);
-      if (args.includePreview !== undefined && typeof args.includePreview !== 'boolean')
-        throw new HttpError(400, 'Invalid includePreview');
+      fields(args, ['includePreview', 'includeRequest', 'order', 'offset', 'limit']);
+      for (const key of ['includePreview', 'includeRequest'])
+        if (args[key] !== undefined && typeof args[key] !== 'boolean')
+          throw new HttpError(400, `Invalid ${key}`);
+      const order =
+        args.order === undefined
+          ? 'oldest'
+          : choice(args.order, ['oldest', 'newest'], 'scene order');
       const offset = number(args.offset ?? 0, 'offset', 0);
       const limit = number(args.limit ?? 50, 'limit', 1, 100);
       const chat = this.store.chat(scope.chatId);
       const history = this.store.history(chat.headRevision);
-      let sceneNumber = history
-        .slice(0, offset)
-        .filter((item) => item.sceneContext?.sceneEnabled !== false).length;
-      const messages = history.slice(offset, offset + limit).map((item) => {
+      let visible = 0;
+      const numbered = history.map((item) => {
         const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
-        if (sceneEnabled) sceneNumber++;
-        return {
-          id: item.revision,
-          hash: item.contentHash,
-          sceneNumber: sceneEnabled ? sceneNumber : null,
-          sceneEnabled,
-          requestEnabled: item.sceneContext?.requestEnabled !== false,
-          contextRevision: item.sceneContext?.revision ?? 0,
-          originalLength: item.text.length,
-          ...(sceneTitle(this.store, item.revision)
-            ? { title: sceneTitle(this.store, item.revision) }
-            : {}),
-          ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
-        };
+        if (sceneEnabled) visible++;
+        return { item, sceneEnabled, sceneNumber: sceneEnabled ? visible : null };
       });
+      const ordered = order === 'newest' ? numbered.reverse() : numbered;
+      const request = this.store.db.prepare(
+        'SELECT CASE WHEN COALESCE(sc.request_enabled,1)=0 THEN NULL ELSE COALESCE(sc.request_text,r.request) END AS request FROM sources s JOIN runs r ON r.id=s.run_id LEFT JOIN scene_context sc ON sc.source_id=s.id WHERE s.id=?'
+      );
+      const messages = ordered
+        .slice(offset, offset + limit)
+        .map(({ item, sceneEnabled, sceneNumber }) => {
+          const source = this.store.source(item.revision);
+          const title = sceneTitle(this.store, item.revision);
+          const requestText = args.includeRequest
+            ? (request.get(item.revision)?.request as string | null | undefined)
+            : undefined;
+          return {
+            id: item.revision,
+            hash: item.contentHash,
+            sceneNumber,
+            sceneEnabled,
+            requestEnabled: item.sceneContext?.requestEnabled !== false,
+            contextRevision: item.sceneContext?.revision ?? 0,
+            editRevision: source.editRevision ?? 0,
+            translation: sceneTranslationState(this.store, source),
+            originalLength: item.text.length,
+            ...(title ? { title } : {}),
+            ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
+            ...(args.includeRequest
+              ? {
+                  request:
+                    typeof requestText === 'string'
+                      ? textTokenExcerpt(requestText, CHAT_READ_REQUEST_TOKENS).text
+                      : null,
+                }
+              : {}),
+          };
+        });
       return {
         chat,
         messages,
@@ -3470,6 +3566,49 @@ export class HelperRuntime {
       if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
       if (args.action === 'read') return readHelperChatLore(this.store, scope.chatId, args);
+      if (args.action === 'patchMany') {
+        fields(args, ['action', 'items']);
+        if (
+          !Array.isArray(args.items) ||
+          !args.items.length ||
+          args.items.length > CHAT_LORE_BATCH_MAX
+        )
+          throw new HttpError(400, 'INVALID_LORE_ITEMS');
+        this.workspace.assertRunning(task.id);
+        const items = args.items.map((item: unknown) => record(item));
+        if (new Set(items.map((item) => JSON.stringify(item.selector))).size !== items.length)
+          throw new HttpError(400, 'CHAT_LORE_DUPLICATE_SELECTOR');
+        return this.workspace.operation(
+          task.id,
+          `${task.id}:${operationId}`,
+          { name, args },
+          () => {
+            const expected = items[0]!.expectedRevision;
+            let revision: number | undefined;
+            const saved = items.map((item: Record<string, unknown>, index: number) => {
+              if (item.expectedRevision !== expected)
+                throw new HttpError(
+                  409,
+                  'CHAT_LORE_REVISION_MISMATCH: give every item the same expectedRevision from chat.lore read.'
+                );
+              const prior = service.current(scope.chatId, item.selector);
+              const result = service.patch(
+                scope.chatId,
+                {
+                  ...item,
+                  expectedRevision: revision ?? item.expectedRevision,
+                  operationId: `${operationId}:${index}`,
+                },
+                task.id
+              );
+              revision = result.revision;
+              recordHelperChatLoreChange(this.store, task, scope.chatId, prior, result.entry);
+              return { overrideId: result.entry.id, selector: result.entry.selector };
+            });
+            return { revision, items: saved };
+          }
+        );
+      }
       if (args.action !== 'patch' && args.action !== 'remove')
         throw new HttpError(400, 'INVALID_LORE_ACTION');
       this.workspace.assertRunning(task.id);
@@ -3517,6 +3656,13 @@ export class HelperRuntime {
         if (args.action === 'create-folder')
           return this.store.libraryOrganization.createFolder(args.body);
         if (args.action === 'move') return this.store.libraryOrganization.move(args.body);
+        if (args.action === 'update-folder' || args.action === 'delete-folder') {
+          const { folderId, category: _category, ...body } = record(args.body);
+          const id = text(folderId, 'library folder ID', 100);
+          return args.action === 'delete-folder'
+            ? this.store.libraryOrganization.deleteFolder(id, body)
+            : this.store.libraryOrganization.updateFolder(id, body);
+        }
         throw new HttpError(400, 'INVALID_LIBRARY_ACTION');
       });
     }

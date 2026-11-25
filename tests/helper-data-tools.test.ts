@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { helperHistory } from '../server/helper-context.js';
-import { runDataProcess } from '../server/helper-data-tools.js';
+import { HELPER_DATA_TOOLS, runDataProcess } from '../server/helper-data-tools.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import type { DataOperation, DataRef } from '../server/helper-data-worker.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
@@ -787,7 +787,14 @@ test('current scope retains reservation facts, complete old prose, source roles,
   const result = await f.invoke('data.search', { patterns: ['나이'], limit: 30 });
   expect(result.scope).toBe('current');
   expect(result.chatId).toBe('chat-A');
-  expect(result.items.every((item: any) => item.editTarget === undefined)).toBe(true);
+  expect(
+    result.items.every((item: any) => (item.editTarget !== undefined) === (item.ref.kind === 'bot'))
+  ).toBe(true);
+  expect(result.items.find((i: any) => i.ref.kind === 'bot').editTarget).toMatchObject({
+    kind: 'content',
+    id: b.id,
+    expectedRevision: b.revision,
+  });
   expect(result.items.some((i: any) => i.ref.kind === 'bot' && i.text.includes('27세'))).toBe(true);
   expect(result.items.some((i: any) => i.ref.kind === 'chat' && i.ref.field === '/request')).toBe(
     true
@@ -813,6 +820,9 @@ test('SQL views support schema discovery, aggregate queries, params, JSON and cr
     'agent_usage',
     'agent_helper_inputs',
   ]);
+  const description = HELPER_DATA_TOOLS.find((tool) => tool.name === 'db.query')!.description;
+  for (const view of schema.views)
+    expect(description).toContain(`${view.name}(${view.columns.join(', ')})`);
   const counts = await f.invoke('db.query', {
     sql: `SELECT ${schema.views.map((v: any) => `(SELECT COUNT(*) FROM ${v.name}) ${v.name}`).join(',')}`,
   });

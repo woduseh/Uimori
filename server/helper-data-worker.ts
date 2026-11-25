@@ -511,8 +511,9 @@ function reference(doc: Document, field: string, text: string): DataRef {
   return { ...ref, field, hash: sha(text) };
 }
 function editTarget(doc: Document, field: string, stringValue: boolean) {
-  if (doc.scope !== 'library' || !stringValue) return undefined;
+  if (!stringValue || (doc.scope !== 'library' && doc.scope !== 'current')) return undefined;
   const kind =
+    doc.scope === 'library' &&
     doc.kind === 'prompt' &&
     resourcePathPolicy.presetPaths.some((rule) =>
       rule.endsWith('/') ? field.startsWith(rule) : field === rule

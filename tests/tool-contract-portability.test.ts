@@ -83,12 +83,15 @@ test('the helper gateway lists every available operation under a described area'
   for (const tool of HELPER_APP_TOOLS)
     expect(areas.has(tool.name.slice(0, tool.name.indexOf('.'))), tool.name).toBe(true);
   for (const [area, purpose] of HELPER_OPERATION_AREAS) {
+    if (area === 'story') continue;
     const operations = HELPER_APP_TOOLS.filter((tool) => tool.name.startsWith(`${area}.`)).map(
       (tool) => tool.name.slice(area.length + 1)
     );
     expect(catalog.description).toContain(`${area} (${purpose}): ${operations.join(', ')}`);
   }
+  expect(catalog.description).not.toContain('story (');
   const [review] = helperGatewayTools(true);
   expect(review.description).toContain('outline (plot outline and writing plans): read;');
+  expect(review.description).toContain('story (frozen story history of this task): search, read');
   expect(review.description).not.toContain('patch');
 });

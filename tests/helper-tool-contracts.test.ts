@@ -816,6 +816,45 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
   expect(f.store.product.get('content', f.bot.id)).toEqual(original);
 });
 
+test('chat lore filters the list by text and saves several overrides from list guards in one call', async () => {
+  const f = await fixture();
+  let listed!: HelperLoreRead;
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('found', 'chat.lore', { action: 'read', query: '항구' }),
+        call('none', 'chat.lore', { action: 'read', query: '존재하지 않는 말' })
+      );
+    if (round === 1) {
+      listed = result<HelperLoreRead>(request, 'found');
+      expect(listed.items).toHaveLength(1);
+      expect(result<{ items: unknown[] }>(request, 'none').items).toEqual([]);
+      const text = patchBody(listed, 'Chat-only text');
+      const title = {
+        ...patchBody(listed, 'Chat-only title'),
+        selector: { ...text.selector, field: 'title' },
+        expectedFieldHash: listed.items[0].fieldHashes.title,
+      };
+      return calls(
+        call('mismatch', 'chat.lore', {
+          action: 'patchMany',
+          items: [text, { ...title, expectedRevision: listed.revision + 1 }],
+        }),
+        call('both', 'chat.lore', { action: 'patchMany', items: [text, title] })
+      );
+    }
+    expect(event(request, 'mismatch')).toMatchObject({ denied: true });
+    expect(result(request, 'both')).toMatchObject({ revision: listed.revision + 2 });
+    return structuredClone(success);
+  });
+  await submit(f, '이 채팅에서만 항구 로어의 제목과 본문을 바꿔줘');
+  const state = new ChatOverridesStore(f.store).get(f.chat.id);
+  expect(state.overrides.map((item) => [item.selector.field, item.value]).sort()).toEqual([
+    ['text', 'Chat-only text'],
+    ['title', 'Chat-only title'],
+  ]);
+});
+
 test('long chat lore stays paged through helper reads and saves with original field guards', async () => {
   const authored = 'Long original: ' + '\n"\\💫'.repeat(10_000);
   const f = await fixture('chat', authored);
@@ -1870,7 +1909,9 @@ test('helper reads the selected bot, saves its Story UI theme, and applies it on
       );
     }
     if (round === 3) {
-      themeId = result<{ id: string }>(request, 'save').id;
+      const saved = result<{ id: string; preferencesRevision: number }>(request, 'save');
+      themeId = saved.id;
+      expect(saved.preferencesRevision).toBe(before.revision);
       expect(themePreferences(f.store)).toEqual(before);
       return calls(
         appCall('list', 'theme.list'),
@@ -1962,16 +2003,24 @@ test('helper registers a downloaded font before explicit selection and records b
         })
       );
     if (round === 1) {
-      fontId = result<{ id: string }>(request, 'register-font').id;
+      const registered = result<{ id: string; preferences: { revision: number } }>(
+        request,
+        'register-font'
+      );
+      fontId = registered.id;
       expect(fonts.fontPreferences(f.store)).toEqual(before);
+      expect(registered.preferences).toEqual(before);
       return calls(
         call('select-font', 'app.call', {
           name: 'font.select',
-          arguments: { expectedRevision: before.revision, appFontId: null, readerFontId: fontId },
+          arguments: { expectedRevision: registered.preferences.revision, readerFontId: fontId },
         })
       );
     }
-    expect(result<{ readerFontId: string }>(request, 'select-font').readerFontId).toBe(fontId);
+    expect(result(request, 'select-font')).toMatchObject({
+      readerFontId: fontId,
+      appFontId: before.appFontId,
+    });
     return success;
   });
   const task = await submit(f, 'Register this licensed font and use it for reading');

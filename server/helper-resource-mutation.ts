@@ -9,6 +9,8 @@ import { readResource } from './resource-service.js';
 import type { Store } from './store.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import { recordHelperResourceChange } from './helper-changes.js';
+import { themePreferences } from './themes.js';
+import { illustrationPresetPreferences } from './illustration-presets.js';
 
 type MutationTarget = { kind: ResourceKind; id: string | null };
 
@@ -115,5 +117,19 @@ export function applyHelperResourceMutation(
       task.id,
       targets.map((item) => item.kind)
     );
+  const kind = targets[0]?.kind;
+  if (
+    (name === 'resource.save' || name === 'resource.clone') &&
+    (kind === 'theme' || kind === 'illustration-preset') &&
+    result &&
+    typeof result === 'object'
+  )
+    return {
+      ...result,
+      preferencesRevision:
+        kind === 'theme'
+          ? themePreferences(store).revision
+          : illustrationPresetPreferences(store).revision,
+    };
   return result;
 }

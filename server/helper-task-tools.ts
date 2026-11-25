@@ -29,7 +29,7 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.list',
     description:
-      'Find recent tasks and their ids: writing runs, auxiliary jobs, illustration renders and helper tasks, including queued work that has not reached a provider yet. Use it to see what is running or what failed before task.inspect, task.cancel or task.retry. By default it lists active work in the current chat; a library helper without a chat sees all chats. Each entry has only the kind, id, chat id, status, auxiliary kind and update time.',
+      'Find recent tasks and their ids: writing runs, auxiliary jobs, illustration renders and helper tasks, including queued work that has not reached a provider yet. Use it to see what is running or what failed before task.inspect, task.cancel or task.retry. By default it lists active work in the current chat; a library helper without a chat sees all chats. Each entry has the kind, id, chat id, status, auxiliary kind, the scene it belongs to (sourceId) when it has one, the start of its error, update time, and canCancel, canRetry and retryBlock as task.inspect reports them; task.inspect adds usage, diagnostics and committed effects.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -488,11 +488,12 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
   if (chatId) store.chat(chatId);
   const tasks = store.db
     .prepare(
-      `SELECT kind,id,chatId,status,jobKind,updatedAt FROM (
-      SELECT 'run' AS kind,id,chat_id AS chatId,status,NULL AS jobKind,updated_at AS updatedAt FROM runs
-      UNION ALL SELECT 'job',id,chat_id,status,kind,updated_at FROM jobs WHERE kind!='status'
-      UNION ALL SELECT 'illustration',id,chat_id,status,NULL,updated_at FROM illustration_jobs
-      UNION ALL SELECT 'helper',t.id,c.chat_id,t.status,NULL,t.updated_at
+      `SELECT kind,id,chatId,status,jobKind,sourceId,error,updatedAt FROM (
+      SELECT 'run' AS kind,r.id,r.chat_id AS chatId,r.status,NULL AS jobKind,
+        (SELECT s.id FROM sources s WHERE s.run_id=r.id) AS sourceId,r.error,r.updated_at AS updatedAt FROM runs r
+      UNION ALL SELECT 'job',id,chat_id,status,kind,source_revision,error,updated_at FROM jobs WHERE kind!='status'
+      UNION ALL SELECT 'illustration',id,chat_id,status,NULL,source_revision,error,updated_at FROM illustration_jobs
+      UNION ALL SELECT 'helper',t.id,c.chat_id,t.status,NULL,NULL,t.error,t.updated_at
         FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id
     ) WHERE (? IS NULL OR chatId=?)
       AND (? IS NULL OR kind=?)
@@ -505,9 +506,20 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
     status,
     ...(selectedKind ? { kind: selectedKind } : {}),
     ...(chatId ? { chatId } : {}),
-    tasks,
+    tasks: tasks.map(({ sourceId, error, ...task }): Row => {
+      const view = inspect(store, current.id, task.kind as Kind, String(task.id));
+      return {
+        ...task,
+        ...(sourceId ? { sourceId } : {}),
+        ...(error ? { error: String(error).slice(0, TASK_LIST_ERROR_CHARS) } : {}),
+        canCancel: view.canCancel,
+        canRetry: view.canRetry,
+        ...(view.retryBlock ? { retryBlock: view.retryBlock } : {}),
+      };
+    }),
   };
 }
+const TASK_LIST_ERROR_CHARS = 300;
 
 type CommittedEffect = {
   receiptId: string;

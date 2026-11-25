@@ -421,7 +421,13 @@ test('task.list finds queued work before any provider attempt and scopes to the 
   };
   expect(listed).toMatchObject({ status: 'active', chatId: chat.id });
   expect(listed.tasks).toContainEqual(
-    expect.objectContaining({ id: queued.id, kind: 'run', status: 'queued' })
+    expect.objectContaining({
+      id: queued.id,
+      kind: 'run',
+      status: 'queued',
+      canCancel: true,
+      canRetry: false,
+    })
   );
   expect(listed.tasks.some((task) => task.id === otherQueued.id)).toBe(false);
 });
@@ -520,10 +526,16 @@ test('illustration inspection identifies a refusal stage and shows prepared prom
     },
     'list',
     f.actions
-  ) as unknown as { kind: string; tasks: { kind: string }[] };
+  ) as unknown as {
+    kind: string;
+    tasks: { kind: string; sourceId?: string; error?: string; canRetry: boolean }[];
+  };
   expect(found.kind).toBe('illustration');
   expect(found.tasks).toHaveLength(2);
   expect(found.tasks.every((item) => item.kind === 'illustration')).toBe(true);
+  expect(
+    found.tasks.every((item) => typeof item.sourceId === 'string' && item.canRetry === true)
+  ).toBe(true);
 });
 
 test('failed auxiliary job keeps its kind and usage while retrying through the job owner', () => {

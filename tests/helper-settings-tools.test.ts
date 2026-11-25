@@ -73,11 +73,63 @@ test('settings read shows selected references without prompt bodies or provider 
     global: { revision: number; models: { main: { id: string } } };
     chat: { effective: { mainModel: { id: string } }; pinned: { mainModel: null } };
   };
-  expect(result.global.models.main).toEqual({ id: selected.id });
-  expect(result.chat.effective.mainModel).toEqual({ id: selected.id });
+  const choice = { id: selected.id, title: 'Selected', providerModelId: 'fixture' };
+  expect(result.global.models.main).toEqual(choice);
+  expect(result.chat.effective.mainModel).toEqual(choice);
   expect(result.chat.pinned.mainModel).toBeNull();
   expect(JSON.stringify(result)).not.toContain('nativeRisuPreset');
   expect(JSON.stringify(result)).not.toContain('127.0.0.1');
+});
+
+test('model.list describes saved models without provider catalogs unless asked', () => {
+  const store = database();
+  const saved = model(store, 'Catalog owner');
+  const connection = store.product.get<import('../core/product.js').Connection>(
+    'connection',
+    saved.connectionId
+  );
+  store.product.save(
+    'connection',
+    {
+      ...connection,
+      catalog: Array.from({ length: 250 }, (_, index) => ({
+        id: `vendor/model-${index}`,
+        name: `Vendor model ${index}`,
+        capabilities: {},
+        priceRevision: null,
+      })),
+    },
+    connection.id,
+    connection.revision
+  );
+  type Listed = {
+    models: Record<string, unknown>[];
+    connections: {
+      id: string;
+      catalog?: unknown[];
+      catalogTotal: number;
+      catalogMatches?: number;
+    }[];
+  };
+  const plain = call(store, 'model.list', {}) as Listed;
+  expect(plain.models.find((item) => item.id === saved.id)).toMatchObject({
+    title: 'Catalog owner',
+    protocol: 'fixture-sse-v1',
+    pricing: { mode: 'official', known: false },
+    parameters: { maxOutputTokens: 1024 },
+  });
+  const listed = plain.connections.find((item) => item.id === connection.id)!;
+  expect(listed).toMatchObject({ catalogTotal: 250, revision: expect.any(Number) });
+  expect(listed).not.toHaveProperty('catalog');
+  const full = (call(store, 'model.list', { includeCatalog: true }) as Listed).connections.find(
+    (item) => item.id === connection.id
+  )!;
+  expect(full.catalog).toHaveLength(200);
+  const found = (
+    call(store, 'model.list', { catalogQuery: 'model-24' }) as Listed
+  ).connections.find((item) => item.id === connection.id)!;
+  expect(found).toMatchObject({ catalogMatches: 11, catalogTotal: 250 });
+  expect(found.catalog).toHaveLength(11);
 });
 
 test('helper enables story UI and selects automatic or explicit styles without changing other settings', () => {
@@ -287,7 +339,7 @@ test('chat prompt pin reports the effective prompt and preserves the model pin',
     };
   };
   expect(read.chat.pinned).toEqual({
-    mainModel: { id: selected.id },
+    mainModel: { id: selected.id, title: 'Local', providerModelId: 'fixture' },
     mainPromptPresetId: preset.id,
   });
   expect(read.chat.effective.mainPrompt).toEqual({

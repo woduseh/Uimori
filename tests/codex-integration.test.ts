@@ -461,7 +461,7 @@ test('Codex helper calls app tools within one native turn and persists one setti
         name: 'settings.read',
         arguments: {},
       });
-      expect(after.global.models.main).toEqual({ id: selectedId });
+      expect(after.global.models.main).toMatchObject({ id: selectedId });
       return {
         status: 'completed',
         text: '설정을 적용했어요.',

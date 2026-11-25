@@ -162,8 +162,25 @@ test('inspection addresses the chosen variation; redraw freezes its prompt and r
     generatedFocus: 'a light',
     sourceHash: source.hash,
     caption: 'blue',
+    targetId: list.cuts[0].targetId,
+    latestJobId: list.cuts[0].latestJobId,
+    presentationRevision: list.cuts[0].presentationRevision,
   });
-  const read = await readIllustrationCutImage(store, chat.id, { imageId });
+  expect(readIllustrationScene(store, chat.id, { sourceId: source.id })).toMatchObject({
+    presentationRevision: list.cuts[0].presentationRevision,
+    cuts: [
+      {
+        targetId: list.cuts[0].targetId,
+        latestJobId: list.cuts[0].latestJobId,
+        endAnchor: anchor,
+        imageIds: list.cuts[0].images.map((image) => image.imageId),
+      },
+    ],
+  });
+  const thumbnail = await readIllustrationCutImage(store, chat.id, { imageId });
+  expect(thumbnail.result.transmission).toMatchObject({ mode: 'thumbnail' });
+  const read = await readIllustrationCutImage(store, chat.id, { imageId, mode: 'full' });
+  expect(read.result.transmission).not.toHaveProperty('mode');
   const pixel = await sharp(Buffer.from(read.resolved.base64, 'base64')).raw().toBuffer();
   expect(pixel[2]).toBeGreaterThan(230);
   expect(pixel[0]).toBeLessThan(25);

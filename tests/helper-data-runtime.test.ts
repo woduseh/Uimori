@@ -818,6 +818,67 @@ test('cancelling helper reads drains active work without starting queued reads o
   }
 });
 
+test('adjacent read-only app operations join the concurrent read group while image reads stay sequential', async () => {
+  const f = fixture();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.spyOn(dataTools, 'invokeDataTool').mockImplementation(async () => {
+    await gate;
+    return { items: [] };
+  });
+  const started = () =>
+    f.runtime.workspace
+      .events(f.conversation.id)
+      .filter((event) => event.kind === 'tool.started')
+      .map((event) => (event.data as { callId: string }).callId);
+  provider((wire, round) => {
+    if (round > 0) {
+      expect(
+        wire.messages
+          .filter((item: any) => item.role === 'tool')
+          .map((item: any) => item.tool_call_id)
+      ).toEqual(['search', 'settings', 'folders', 'image', 'after']);
+      expect(toolResult(wire, 'settings')).toHaveProperty('global');
+      return answer('Done.');
+    }
+    return answer(
+      '',
+      [
+        { id: 'search', name: 'data.search', args: { patterns: ['harbor'] } },
+        { id: 'settings', name: 'app.call', args: { name: 'settings.read', arguments: {} } },
+        {
+          id: 'folders',
+          name: 'app.call',
+          args: { name: 'library.organize', arguments: { action: 'read' } },
+        },
+        {
+          id: 'image',
+          name: 'app.call',
+          args: { name: 'image.read', arguments: { contentId: 'missing', imageId: 'missing' } },
+        },
+        { id: 'after', name: 'data.search', args: { patterns: ['after'] } },
+      ],
+      wire
+    );
+  });
+  const running = f.run('Check the settings, the folders and a picture.');
+  try {
+    await vi.waitFor(() => expect(started()).toEqual(['search', 'settings', 'folders']));
+    expect(
+      f.runtime.workspace
+        .events(f.conversation.id)
+        .filter((event) => event.kind === 'tool.finished')
+    ).toHaveLength(0);
+  } finally {
+    release();
+  }
+  const task = await running;
+  expect(task.status, task.error ?? '').toBe('completed');
+  expect(started()).toEqual(['search', 'settings', 'folders', 'image', 'after']);
+});
+
 test('a native two-call fact lookup uses the gateway without a runner, full editor JSON, or duplicate read schemas', async () => {
   const f = fixture();
   const body =
@@ -1515,6 +1576,14 @@ test('an entire selected passage reaches the native helper without keyword retri
       sourceId: source.revision,
       sourceHash,
       text: selectedText,
+      editTarget: {
+        chatId: chat.id,
+        sourceId: source.revision,
+        target: 'original',
+        expectedRevision: 0,
+        expectedSourceHash: sourceHash,
+        expectedTextHash: sourceHash,
+      },
     });
     expect(selection.text).not.toContain('Outside selection');
     return answer(

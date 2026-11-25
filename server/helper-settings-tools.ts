@@ -42,6 +42,9 @@ import type { HelperTask, HelperTaskResultTarget } from '../core/helper.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import { readTheme } from './themes.js';
+import { resolveModelPricing } from '../core/model-pricing.js';
+import { parseVertexEndpoint } from '../core/vertex-location.js';
+import { savedModelParameters } from './helper-model-parameter-tools.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -70,6 +73,24 @@ const settings = [
 ] as const;
 const DEFAULT_REGISTERED_MAX_OUTPUT_TOKENS = 8192;
 const CONNECTION_CATALOG_LIST_MAX = 200;
+const SETTINGS_UPDATE_BATCH_MAX = 20;
+const settingChange: Record<string, Json> = {
+  setting: {
+    type: 'string',
+    enum: [...settings],
+    description: 'The setting to change.',
+  },
+  expectedRevision: {
+    type: 'integer',
+    minimum: 0,
+    description:
+      'Revision from settings.read for the group being changed: global.revision for global.*Model and global.*PromptPreset; autoTranslation.revision for global.autoTranslate and global.translationLanguage; chat.profileRevision for chat.mainModel and chat.mainPromptPreset; chat.settingsRevision for chat.maxCalls, chat.storyUi and chat.storyUiStyle; loreContextDefaults.revision for newChat.loreContext; newChat.revision for the other newChat.* settings.',
+  },
+  value: {
+    type: ['string', 'integer', 'boolean', 'null', 'object'],
+    description: `New value. Model and prompt preset settings take a saved id; a model or a chat's prompt preset takes null to clear the choice, while a global prompt preset cannot be cleared. maxCalls takes an integer from 1 to ${MAX_MAIN_MODEL_CALLS}. storyUi, autoTranslate and autoRefusalRetryEnabled take a boolean. autoRefusalMaxRetries takes an integer. translationLanguage takes the language translations are written in, one of ${WRITTEN_LANGUAGES.join(', ')}: automatic translation skips a scene already written in it, and null translates every scene. storyUiStyle takes auto (follow the bot default or the model choice), ${storyUiStyles.join(', ')}, or theme:<saved theme id> from theme.list. newChat.loreContext takes the complete policy object as settings.read returns it in loreContextDefaults, without revision.`,
+  },
+};
 
 export const HELPER_SETTINGS_MUTATIONS = new Set([
   'settings.update',
@@ -87,13 +108,24 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'model.list',
     description:
-      'List the saved models with their ids, titles, revisions and whether each can currently be selected, and the saved connections with the model ids their catalog offers. Use it to turn a model name the user mentions into a model id for settings.update or model.pricing.read, or to find the connection and provider model id for model.register. Credentials and endpoints are not included.',
-    inputSchema: schema({}),
+      'List the saved models and the saved connections. Each model has its id, title, revision, provider model id, whether it can currently be selected, its protocol, its pricing mode and whether a price is known, and the generation parameters it sets (unset ones use the provider default). Each connection has its id, title, revision, protocol, enabled state, Vertex location where it has one, and catalogTotal. Use it to turn a model name the user mentions into a model id for settings.update, model.pricing.* or model.parameters.*. The provider catalogs of the connections, needed only to pick a providerModelId for model.register, come with includeCatalog or catalogQuery. Credentials and endpoints are not included.',
+    inputSchema: schema({
+      includeCatalog: {
+        type: 'boolean',
+        description: `Add the catalog of each connection, at most ${CONNECTION_CATALOG_LIST_MAX} entries each. Default false.`,
+      },
+      catalogQuery: {
+        type: 'string',
+        maxLength: 200,
+        description:
+          'Add only the catalog entries whose id or name contains this text, with catalogMatches. Implies includeCatalog.',
+      },
+    }),
   },
   {
     name: 'model.register',
     description:
-      'Save a new model on an existing connection so it can be chosen for a role or a chat. providerModelId is the id the provider uses, usually one from the connection catalog in model.list. The model starts with the provider defaults and a maximum output of 8192 tokens unless maxOutputTokens is given; change temperature, reasoning and other generation parameters afterwards with model.parameters.update. Connections, credentials and endpoints are managed in the app settings, not here. Registering a model does not select it; use settings.update for that.',
+      'Save a new model on an existing connection so it can be chosen for a role or a chat. providerModelId is the id the provider uses, usually one from the connection catalog that model.list returns with catalogQuery. The model starts with the provider defaults and a maximum output of 8192 tokens unless maxOutputTokens is given; change temperature, reasoning and other generation parameters afterwards with model.parameters.update. Connections, credentials and endpoints are managed in the app settings, not here. Registering a model does not select it; use settings.update for that.',
     inputSchema: schema(
       {
         connectionId: {
@@ -179,33 +211,33 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'settings.read',
     description:
-      'Read the current settings: which model and prompt preset are used for each role globally, automatic translation of new scenes and its language, the model and prompt preset pinned to the selected chat and the ones actually in effect, the chat call limit, Story UI on/off and style, and the defaults for new chats, including automatic retry after a refusal and the lore context policy. Each group comes with the revision that settings.update needs. Prompt texts and credentials are not included; read a prompt preset with resource.read.',
+      'Read the current settings: which model and prompt preset are used for each role globally, automatic translation of new scenes and its language, the model and prompt preset pinned to the selected chat and the ones actually in effect, the chat call limit, Story UI on/off and style, and the defaults for new chats, including automatic retry after a refusal and the lore context policy. A model choice names the saved model id, title and provider model id. Each group comes with the revision that settings.update needs. Prompt texts and credentials are not included; read a prompt preset with resource.read.',
     inputSchema: schema({}),
   },
   {
     name: 'settings.update',
     description:
-      'Change one setting: the model or prompt preset used for a role, automatic translation, the model or prompt preset pinned to a chat, the call limit of a chat, Story UI on/off and style, or a default for new chats. Read settings.read first for the current value and the matching revision. global.* settings apply to every chat and affect future requests only; work that is already reserved keeps its model and prompt. global.autoTranslate translates each new scene of chats that have no choice of their own, which is a paid model call per scene. chat.* settings apply to the selected chat. newChat.* settings are defaults copied into chats created later and need no selected chat; existing chats, copies and imports keep their own settings. A Story UI default for a whole bot is set with theme.select instead.',
-    inputSchema: schema(
-      {
-        setting: {
-          type: 'string',
-          enum: [...settings],
-          description: 'The one setting to change.',
-        },
-        expectedRevision: {
-          type: 'integer',
-          minimum: 0,
-          description:
-            'Revision from settings.read for the group being changed: global.revision for global.*Model and global.*PromptPreset; autoTranslation.revision for global.autoTranslate and global.translationLanguage; chat.profileRevision for chat.mainModel and chat.mainPromptPreset; chat.settingsRevision for chat.maxCalls, chat.storyUi and chat.storyUiStyle; loreContextDefaults.revision for newChat.loreContext; newChat.revision for the other newChat.* settings.',
-        },
-        value: {
-          type: ['string', 'integer', 'boolean', 'null', 'object'],
-          description: `New value. Model and prompt preset settings take a saved id; a model or a chat's prompt preset takes null to clear the choice, while a global prompt preset cannot be cleared. maxCalls takes an integer from 1 to ${MAX_MAIN_MODEL_CALLS}. storyUi, autoTranslate and autoRefusalRetryEnabled take a boolean. autoRefusalMaxRetries takes an integer. translationLanguage takes the language translations are written in, one of ${WRITTEN_LANGUAGES.join(', ')}: automatic translation skips a scene already written in it, and null translates every scene. storyUiStyle takes auto (follow the bot default or the model choice), ${storyUiStyles.join(', ')}, or theme:<saved theme id> from theme.list. newChat.loreContext takes the complete policy object as settings.read returns it in loreContextDefaults, without revision.`,
+      'Change settings: the model or prompt preset used for a role, automatic translation, the model or prompt preset pinned to a chat, the call limit of a chat, Story UI on/off and style, or a default for new chats. Give setting, expectedRevision and value for one change, or updates for several changes saved together or not at all; updates of the same group take the same revision from settings.read, and the host applies them in order. Read settings.read first for the current values and revisions. global.* settings apply to every chat and affect future requests only; work that is already reserved keeps its model and prompt. global.autoTranslate translates each new scene of chats that have no choice of their own, which is a paid model call per scene. chat.* settings apply to the selected chat. newChat.* settings are defaults copied into chats created later and need no selected chat; existing chats, copies and imports keep their own settings. A Story UI default for a whole bot is set with theme.select instead.',
+    inputSchema: schema({
+      ...settingChange,
+      updates: {
+        type: 'array',
+        minItems: 1,
+        maxItems: SETTINGS_UPDATE_BATCH_MAX,
+        description:
+          'Several changes in place of setting, expectedRevision and value: each item is {setting, expectedRevision, value} as described for those fields.',
+        items: {
+          type: 'object',
+          properties: {
+            setting: { type: 'string', enum: [...settings] },
+            expectedRevision: { type: 'integer', minimum: 0 },
+            value: { type: ['string', 'integer', 'boolean', 'null', 'object'] },
+          },
+          required: ['setting', 'expectedRevision', 'value'],
+          additionalProperties: false,
         },
       },
-      ['setting', 'expectedRevision', 'value']
-    ),
+    }),
   },
   {
     name: 'usage.read',
@@ -233,6 +265,9 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
     ),
   },
 ];
+
+const backfilled = (backfill?: { estimatedCalls: number; partialCalls: number }) =>
+  !!backfill && backfill.estimatedCalls + backfill.partialCalls > 0;
 
 type SettingValue = string | number | boolean | null | Record<string, unknown>;
 const isScalar = (value: SettingValue): value is string | number | boolean | null =>
@@ -315,11 +350,12 @@ export function applyHelperSettingsMutation(
       pricing: unknown;
       estimatedCalls?: number;
       partialCalls?: number;
+      backfill?: { estimatedCalls: number; partialCalls: number };
     };
     const changed =
       name === 'model.pricing.backfill'
         ? (result.estimatedCalls ?? 0) + (result.partialCalls ?? 0) > 0
-        : !isDeepStrictEqual(before.pricing, result.pricing);
+        : !isDeepStrictEqual(before.pricing, result.pricing) || backfilled(result.backfill);
     recordHelperTaskResult(workspace, task, {
       receiptId,
       operation: name,
@@ -341,28 +377,31 @@ export function applyHelperSettingsMutation(
   if (name === 'model.pricing.update') {
     const modelId = text(args.modelId, 'saved model ID', 100);
     const before = store.product.get<ModelPreset>('model', modelId);
-    const result = invokeHelperSettingsTool(store, name, args, chatId);
+    const result = invokeHelperSettingsTool(store, name, args, chatId) as {
+      backfill?: { estimatedCalls: number; partialCalls: number };
+    };
     const after = store.product.get<ModelPreset>('model', modelId);
     recordHelperTaskResult(workspace, task, {
       receiptId,
       operation: name,
       requestedTargets: 1,
-      targets: isDeepStrictEqual(
-        before.pricing ?? { mode: 'official' },
-        after.pricing ?? { mode: 'official' }
-      )
-        ? []
-        : [
-            {
-              kind: 'settings',
-              id: modelId,
-              title: after.title,
-              revision: after.revision,
-              setting: 'model.pricing',
-              beforeRates: before.pricing?.mode === 'manual' ? before.pricing.rates : null,
-              afterRates: after.pricing?.mode === 'manual' ? after.pricing.rates : null,
-            },
-          ],
+      targets:
+        isDeepStrictEqual(
+          before.pricing ?? { mode: 'official' },
+          after.pricing ?? { mode: 'official' }
+        ) && !backfilled(result.backfill)
+          ? []
+          : [
+              {
+                kind: 'settings',
+                id: modelId,
+                title: after.title,
+                revision: after.revision,
+                setting: 'model.pricing',
+                beforeRates: before.pricing?.mode === 'manual' ? before.pricing.rates : null,
+                afterRates: after.pricing?.mode === 'manual' ? after.pricing.rates : null,
+              },
+            ],
     });
     return result;
   }
@@ -484,10 +523,72 @@ export function applyHelperSettingsMutation(
     });
     return result;
   }
+  if (args.updates !== undefined) {
+    fields(args, ['updates']);
+    if (
+      !Array.isArray(args.updates) ||
+      !args.updates.length ||
+      args.updates.length > SETTINGS_UPDATE_BATCH_MAX
+    )
+      throw new HttpError(400, 'INVALID_SETTINGS_UPDATES');
+    const groups = new Map<string, { expected: number; current: number }>();
+    const updates: unknown[] = [];
+    const targets: HelperTaskResultTarget[] = [];
+    for (const raw of args.updates) {
+      const item = record(raw);
+      fields(item, ['setting', 'expectedRevision', 'value']);
+      const setting = text(item.setting, 'setting', 100);
+      const expected = number(item.expectedRevision, 'settings revision', 0);
+      const group = settingGroup(setting);
+      const chained = groups.get(group);
+      if (chained && chained.expected !== expected)
+        throw new HttpError(
+          409,
+          `SETTINGS_REVISION_MISMATCH: give every update of ${setting}'s group the same expectedRevision from settings.read.`
+        );
+      const updated = updateSetting(
+        store,
+        { ...item, setting, expectedRevision: chained ? chained.current : expected },
+        chatId
+      );
+      groups.set(group, { expected, current: updated.result.revision });
+      updates.push(updated.result);
+      targets.push(...updated.targets);
+    }
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: name,
+      requestedTargets: args.updates.length,
+      targets,
+    });
+    return { updates };
+  }
+  const { result, targets } = updateSetting(store, args, chatId);
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: name,
+    requestedTargets: 1,
+    targets,
+  });
+  return result;
+}
+
+function settingGroup(setting: string) {
+  if (autoTranslationSettings.includes(setting)) return 'autoTranslation';
+  if (setting === 'newChat.loreContext') return 'loreContextDefaults';
+  if (setting.startsWith('newChat.')) return 'newChat';
+  if (setting.startsWith('global.')) return 'global';
+  if (setting === 'chat.mainModel' || setting === 'chat.mainPromptPreset') return 'chat.profile';
+  return 'chat.settings';
+}
+
+function updateSetting(store: Store, args: Record<string, unknown>, chatId?: string) {
   const setting = text(args.setting, 'setting', 100);
   const before = settingValue(store, setting, chatId);
   const beforeLabel = selectionLabel(store, setting, before);
-  const result = invokeHelperSettingsTool(store, name, args, chatId) as { revision: number };
+  const result = invokeHelperSettingsTool(store, 'settings.update', args, chatId) as {
+    revision: number;
+  };
   const after = settingValue(store, setting, chatId);
   const targets: HelperTaskResultTarget[] = isDeepStrictEqual(before, after)
     ? []
@@ -511,13 +612,7 @@ export function applyHelperSettingsMutation(
             : {}),
         },
       ];
-  recordHelperTaskResult(workspace, task, {
-    receiptId,
-    operation: name,
-    requestedTargets: 1,
-    targets,
-  });
-  return result;
+  return { result, targets };
 }
 
 export function invokeHelperSettingsTool(
@@ -531,7 +626,14 @@ export function invokeHelperSettingsTool(
     return invokeHelperModelParameterTool(store, name, value);
   const args = record(value);
   if (name === 'model.list') {
-    fields(args, []);
+    fields(args, ['includeCatalog', 'catalogQuery']);
+    if (args.includeCatalog !== undefined && typeof args.includeCatalog !== 'boolean')
+      throw new HttpError(400, 'Invalid includeCatalog');
+    const catalogQuery =
+      args.catalogQuery === undefined
+        ? undefined
+        : text(args.catalogQuery, 'catalog query', 200, true).trim().toLowerCase();
+    const includeCatalog = args.includeCatalog === true || catalogQuery !== undefined;
     const connections = new Map(
       (store.product.all('connection') as Connection[]).map((connection) => [
         connection.id,
@@ -539,25 +641,57 @@ export function invokeHelperSettingsTool(
       ])
     );
     return {
-      models: (store.product.all('model') as ModelPreset[]).map((model) => ({
-        id: model.id,
-        title: model.title,
-        revision: model.revision,
-        connectionId: model.connectionId,
-        providerModelId: model.modelId,
-        selectable:
-          model.enabled !== false && connections.get(model.connectionId)?.enabled === true,
-      })),
-      connections: [...connections.values()].map((connection) => ({
-        id: connection.id,
-        title: connection.title,
-        protocol: connection.protocol,
-        enabled: connection.enabled,
-        catalog: connection.catalog
-          .slice(0, CONNECTION_CATALOG_LIST_MAX)
-          .map((item) => ({ id: item.id, name: item.name })),
-        catalogTotal: connection.catalog.length,
-      })),
+      models: (store.product.all('model') as ModelPreset[]).map((model) => {
+        const connection = connections.get(model.connectionId);
+        return {
+          id: model.id,
+          title: model.title,
+          revision: model.revision,
+          connectionId: model.connectionId,
+          providerModelId: model.modelId,
+          selectable: model.enabled !== false && connection?.enabled === true,
+          ...(connection
+            ? {
+                protocol: connection.protocol,
+                pricing: {
+                  mode: model.pricing?.mode ?? 'official',
+                  known: resolveModelPricing(model, connection) !== undefined,
+                },
+                parameters: savedModelParameters(model, connection.protocol),
+              }
+            : {}),
+        };
+      }),
+      connections: [...connections.values()].map((connection) => {
+        const vertex =
+          connection.protocol === 'vertex-gemini-v1'
+            ? parseVertexEndpoint(connection.endpoint)
+            : null;
+        const catalog = catalogQuery
+          ? connection.catalog.filter(
+              (item) =>
+                item.id.toLowerCase().includes(catalogQuery) ||
+                item.name.toLowerCase().includes(catalogQuery)
+            )
+          : connection.catalog;
+        return {
+          id: connection.id,
+          title: connection.title,
+          revision: connection.revision,
+          protocol: connection.protocol,
+          enabled: connection.enabled,
+          ...(vertex ? { location: vertex.location } : {}),
+          ...(includeCatalog
+            ? {
+                catalog: catalog
+                  .slice(0, CONNECTION_CATALOG_LIST_MAX)
+                  .map((item) => ({ id: item.id, name: item.name })),
+                ...(catalogQuery ? { catalogMatches: catalog.length } : {}),
+              }
+            : {}),
+          catalogTotal: connection.catalog.length,
+        };
+      }),
     };
   }
   if (name === 'model.register') {
@@ -610,8 +744,18 @@ export function invokeHelperSettingsTool(
   if (name === 'settings.read') {
     fields(args, []);
     const global = promptWorkspace(store);
+    const choice = (ref: { id: string } | null | undefined) => {
+      if (!ref) return null;
+      try {
+        const model = store.product.get<ModelPreset>('model', ref.id);
+        return { id: ref.id, title: model.title, providerModelId: model.modelId };
+      } catch (error) {
+        if (!(error instanceof HttpError)) throw error;
+        return { id: ref.id, unavailable: true };
+      }
+    };
     const models = Object.fromEntries(
-      modelRoles.map((role) => [role, workspaceModelRef(global, role)])
+      modelRoles.map((role) => [role, choice(workspaceModelRef(global, role))])
     );
     const result = {
       newChat: chatGenerationDefaults(store.db),
@@ -640,14 +784,14 @@ export function invokeHelperSettingsTool(
         profileRevision: profile.revision,
         settingsRevision: chat.settingsRevision,
         pinned: {
-          mainModel: profile.pinned?.mainModel ?? null,
+          mainModel: choice(profile.pinned?.mainModel),
           mainPromptPresetId: profile.pinned?.mainPromptPresetId ?? null,
         },
         effective: {
           models: Object.fromEntries(
-            modelRoles.map((role) => [role, workspaceModelRef(effective, role)])
+            modelRoles.map((role) => [role, choice(workspaceModelRef(effective, role))])
           ),
-          mainModel: effective.modelRoutes.main,
+          mainModel: choice(effective.modelRoutes.main),
           mainPrompt: {
             title: effective.main.title,
             presetId: effective.pinnedMainPreset?.id ?? effective.main.presetId ?? null,

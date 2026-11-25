@@ -15,6 +15,17 @@ const aggregates = `COUNT(*) AS calls,
   COALESCE(SUM((cost_usd IS NULL OR cost_usd<0) AND NOT COALESCE((estimate_status='estimated' AND estimated_usd>=0) OR (estimate_status='partial' AND estimated_subtotal_usd>=0),0)),0) AS unknownCostCalls,
   COALESCE(SUM(status='running'),0) AS runningCalls`;
 
+const USAGE_TIME_ZONE = 'Asia/Seoul';
+const USAGE_UTC_OFFSET_HOURS = 9;
+const usageOffset = `+${String(USAGE_UTC_OFFSET_HOURS).padStart(2, '0')}:00`;
+
+export function usageReportDate(at: string) {
+  return {
+    date: new Date(Date.parse(at) + USAGE_UTC_OFFSET_HOURS * 3600_000).toISOString().slice(0, 10),
+    timeZone: USAGE_TIME_ZONE,
+  } as const;
+}
+
 function period(value: unknown) {
   const query = record(value);
   fields(query, ['from', 'to', 'group']);
@@ -31,8 +42,8 @@ function period(value: unknown) {
   const from = String(query.from),
     to = String(query.to);
   if (from > to) throw new HttpError(400, '시작일은 종료일보다 늦을 수 없어요.');
-  const after = new Date(`${from}T00:00:00+09:00`).toISOString();
-  const until = new Date(Date.parse(`${to}T00:00:00+09:00`) + 86400_000).toISOString();
+  const after = new Date(`${from}T00:00:00${usageOffset}`).toISOString();
+  const until = new Date(Date.parse(`${to}T00:00:00${usageOffset}`) + 86400_000).toISOString();
   return { from, to, after, until, group: query.group };
 }
 export const USAGE_BREAKDOWNS = ['days', 'models', 'kinds'] as const;
@@ -56,7 +67,7 @@ export function usageReport(
   return {
     from,
     to,
-    timeZone: 'Asia/Seoul',
+    timeZone: USAGE_TIME_ZONE,
     totals: db
       .prepare(`SELECT ${aggregates} FROM attempts WHERE ${predicate}`)
       .get(after, until) as UsageTotals,
@@ -64,7 +75,7 @@ export function usageReport(
       ? {
           days: db
             .prepare(
-              `SELECT date(started_at,'+9 hours') AS day,${aggregates} FROM attempts WHERE ${predicate} GROUP BY day ORDER BY day`
+              `SELECT date(started_at,'+${USAGE_UTC_OFFSET_HOURS} hours') AS day,${aggregates} FROM attempts WHERE ${predicate} GROUP BY day ORDER BY day`
             )
             .all(after, until) as UsageReport['days'],
         }

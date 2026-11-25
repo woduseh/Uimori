@@ -120,16 +120,16 @@ const editProperties = {
 const patchProperties = {
   ...editProperties,
   translation: {
-    ...(schema(editProperties, mutationRequired) as Record<string, Json>),
+    type: 'object',
     description:
-      'Only when target is original: a second complete patch for the translation of the same scene, with its own guards from a translation read. Both save together and the translation stays current.',
-  },
+      'Only when target is original: a second complete patch for the translation of the same scene, with the same fields as this patch (sourceId, target translation, its own guards from a translation read, and text or changes). Both save together and the translation stays current.',
+  } as Json,
 };
 export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
     description:
-      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML and not the frozen history that story.read returns. Find the sourceId with chat.read, scene.search or data.search. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within about 9000 tokens: copy nextRead for the next page, or pass any offset directly, and read every relevant page before replacing a whole scene. The guards are optional on a read: when they are passed, a scene that changed between pages is reported so it can be read again from the start; without them compare textHash across pages. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
+      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML. Find the sourceId with chat.read, scene.search or data.search; a reader selection in source.selection and the latest scene in source.writing.chat.latestScene already carry it with the editTarget guards, so a scene.patch of that text needs no read first. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within about 9000 tokens: copy nextRead for the next page, or pass any offset directly, and read every relevant page before replacing a whole scene. The guards are optional on a read: when they are passed, a scene that changed between pages is reported so it can be read again from the start; without them compare textHash across pages. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
@@ -188,7 +188,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.patch',
     description:
-      'Save an edit to one saved scene: its original text or its translation. Give either text, a complete replacement, or changes, a list of exact literal replacements. Every oldText must occur exactly expectedCount times in the saved text and the matches must not overlap; all changes are checked against the same pre-edit text and then saved together, or nothing is saved. The three guards come from editTarget in scene.read or scene.search, and they reject the save when the scene changed after it was read. Editing an original makes its existing translation outdated unless you also pass translation, a second complete patch for the translation: then both save together and the translation is kept as a current manual translation. There is no regex replace and no unchecked replace-all. For several scenes at once use scene.patchMany. The result is a short saved receipt, not the scene text.',
+      'Save an edit to one saved scene: its original text or its translation. Give either text, a complete replacement, or changes, a list of exact literal replacements. Every oldText must occur exactly expectedCount times in the saved text and the matches must not overlap; all changes are checked against the same pre-edit text and then saved together, or nothing is saved. The three guards come from editTarget in scene.read or scene.search, or from source.selection and source.writing.chat.latestScene, and they reject the save when the scene changed after it was read. A scene stores each compiled Story UI block as a uimori-ui JSON fence whose expression holds the block as written: to change a block, replace the whole fence with an edited <a2ui> block, and check storyUiFailures in the result for blocks that did not compile. Editing an original makes its existing translation outdated unless you also pass translation, a second complete patch for the translation: then both save together and the translation is kept as a current manual translation. There is no regex replace and no unchecked replace-all. For several scenes at once use scene.patchMany. The result is a short saved receipt, not the scene text.',
     inputSchema: schema(patchProperties, mutationRequired),
   },
   {
@@ -296,6 +296,19 @@ function snapshot(
       expectedTextHash: digest(content),
     },
   };
+}
+export function helperSceneEditTarget(store: Store, chatId: string, sourceId: string) {
+  return snapshot(store, chatId, { sourceId }, true).editTarget;
+}
+export function sceneTranslationState(
+  store: Store,
+  source: { id: string; hash: string }
+): 'none' | 'current' | 'stale' | 'pending' {
+  const latest = latestTranslation(store, source.id);
+  if (!latest) return 'none';
+  if (typeof displayTranslationJob(source, latest)?.result?.text === 'string') return 'current';
+  if (latest.sourceHash !== source.hash) return 'stale';
+  return 'pending';
 }
 function checkGuards(
   args: Record<string, unknown>,

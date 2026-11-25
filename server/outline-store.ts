@@ -54,6 +54,7 @@ const HEAD_ANCESTRY = `WITH RECURSIVE history(id) AS (
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
 const REVIEW_SEED_SOURCES = 3;
+const TARGET_INTENT_TOKENS = 3000;
 type OutlineSelection = {
   path: OutlineNode[];
   children: OutlineNode[];
@@ -552,10 +553,18 @@ export class OutlineStore {
       });
       if (overview.kind !== 'nodes') throw new Error('OUTLINE_SEED_INVALID');
       const sources: OutlineHelperContext['sources'] = [];
+      const intent = nodes.find((item) => item.id === target.nodeId)?.intent ?? '';
+      const targetIntent = textTokenExcerpt(
+        intent,
+        Math.min(TARGET_INTENT_TOKENS, Math.floor(inputTokenLimit / 8))
+      );
+      const intentComplete = targetIntent.text.length === intent.length;
       let partial =
         overview.nextOffset !== null ||
         overview.coverage.excludedByDepth > 0 ||
-        overview.nodes.some((item) => item.previewTruncated);
+        overview.nodes.some(
+          (item) => item.previewTruncated && (item.id !== target.nodeId || !intentComplete)
+        );
       if (target.purpose === 'review') {
         const current = outlineIndex(nodes)
           .sources(target.nodeId!)
@@ -596,6 +605,7 @@ export class OutlineStore {
         partial,
         brief: {
           ...overview,
+          targetIntent: { text: targetIntent.text, complete: intentComplete },
           detailRead: outlineNextRead(chatId, { mode: 'detail', nodeId: target.nodeId! }),
           subtreeRead: outlineNextRead(chatId, { mode: 'subtree', nodeId: target.nodeId! }),
         },

@@ -90,6 +90,168 @@ test('options.fix saves chat option values that later reads report as fixed', as
   ]);
 });
 
+test('options.fix set and unset change only the named options and keep the other fixed values', async () => {
+  const { store, chat } = fixture();
+  const options = new ChatOptionsStore(store);
+  const state = options.get(chat.id);
+  const changeable = state.controls!.filter(
+    (item) => item.type === 'boolean' || (item.options?.length ?? 0) > 1
+  );
+  expect(changeable.length).toBeGreaterThanOrEqual(2);
+  const other = (control: (typeof changeable)[number]) =>
+    control.type === 'boolean'
+      ? !control.default
+      : control.options!.find((option) => option.value !== control.default)!.value;
+  const [first, second] = changeable;
+  await runScriptedChatHelper(store, chat.id, [
+    helperCall('both', 'options.fix', {
+      expectedRevision: state.revision,
+      binding: state.binding as unknown as Json,
+      values: { [first!.id]: other(first!), [second!.id]: other(second!) } as Json,
+    }),
+    helperDone,
+  ]);
+  const fixed = options.get(chat.id);
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('unset', 'options.fix', {
+      expectedRevision: fixed.revision,
+      binding: fixed.binding as unknown as Json,
+      unset: [first!.id],
+    }),
+    helperCall('mixed', 'options.fix', {
+      expectedRevision: fixed.revision + 1,
+      binding: fixed.binding as unknown as Json,
+      values: {},
+      set: {},
+    }),
+    helperDone,
+  ]);
+  expect(options.get(chat.id).fixedValues).toEqual({ [second!.id]: other(second!) });
+  expect(run.finished('mixed')).toMatchObject({ denied: true });
+  const read = output(run, 'unset') as { definitions?: unknown; controls?: unknown };
+  expect(read.definitions).toBeDefined();
+  expect(read).not.toHaveProperty('controls');
+});
+
+test('settings.update saves several settings of one group together or none of them', async () => {
+  const { store, chat } = fixture();
+  const revision = store.chat(chat.id).settingsRevision;
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('mismatch', 'settings.update', {
+      updates: [
+        { setting: 'chat.storyUi', expectedRevision: revision, value: true },
+        { setting: 'chat.maxCalls', expectedRevision: revision + 5, value: 3 },
+      ],
+    }),
+    helperCall('invalid', 'settings.update', {
+      updates: [
+        { setting: 'chat.storyUi', expectedRevision: revision, value: true },
+        { setting: 'chat.maxCalls', expectedRevision: revision, value: 0 },
+      ],
+    }),
+    helperCall('batch', 'settings.update', {
+      updates: [
+        { setting: 'chat.storyUi', expectedRevision: revision, value: true },
+        { setting: 'chat.storyUiStyle', expectedRevision: revision, value: 'modern' },
+        { setting: 'chat.maxCalls', expectedRevision: revision, value: 3 },
+      ],
+    }),
+    helperDone,
+  ]);
+  expect(run.finished('mismatch')).toMatchObject({ denied: true });
+  expect(run.finished('invalid')).toMatchObject({ denied: true });
+  expect(store.chat(chat.id).settings).toMatchObject({
+    storyUi: true,
+    storyUiStyle: 'modern',
+    maxCalls: 3,
+  });
+  expect(store.chat(chat.id).settingsRevision).toBe(revision + 3);
+  expect(output(run, 'batch')).toMatchObject({
+    updates: [
+      { setting: 'chat.storyUi', value: true },
+      { setting: 'chat.storyUiStyle', value: 'modern' },
+      { setting: 'chat.maxCalls', revision: revision + 3, value: 3 },
+    ],
+  });
+  expect(run.results).toEqual([
+    expect.objectContaining({ operation: 'settings.update', changedTargets: 3 }),
+  ]);
+});
+
+test('chat.read lists the latest scenes first with request, edit revision and translation state', async () => {
+  const { store, chat } = fixture();
+  const sourceId = chat.headRevision!;
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('read', 'chat.read', { order: 'newest', includeRequest: true, limit: 1 }),
+    helperDone,
+  ]);
+  expect((output(run, 'read') as { messages: unknown[] }).messages).toEqual([
+    expect.objectContaining({
+      id: sourceId,
+      sceneNumber: 1,
+      editRevision: 0,
+      translation: 'none',
+      request: 'Arrive.',
+    }),
+  ]);
+  const source = run.requests[0]!.input.source as {
+    writing: { chat: { latestScene: { sourceId: string } } };
+  };
+  expect(source.writing.chat.latestScene.sourceId).toBe(sourceId);
+});
+
+test('chat.organize pins and unpins a chat of the bot and reports it in the read', async () => {
+  const { store, chat } = fixture();
+  const botId = store.organization.metadata(chat.id)!.botId;
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('pin', 'chat.organize', { action: 'pin', botId, chatId: chat.id, pinned: true }),
+    helperCall('again', 'chat.organize', { action: 'pin', botId, chatId: chat.id, pinned: true }),
+    helperCall('read', 'chat.organize', { action: 'read', botId }),
+    helperDone,
+  ]);
+  expect(store.chat(chat.id).pinnedAt).toBeTruthy();
+  expect(output(run, 'read')).toMatchObject({ chats: [{ id: chat.id, pinned: true }] });
+  expect(run.results.map((item) => item.changedTargets)).toEqual([1, 0]);
+  await runScriptedChatHelper(store, chat.id, [
+    helperCall('unpin', 'chat.organize', { action: 'pin', botId, chatId: chat.id, pinned: false }),
+    helperDone,
+  ]);
+  expect(store.chat(chat.id).pinnedAt).toBeFalsy();
+});
+
+test('library.organize renames and removes a folder without deleting its items', async () => {
+  const { store, chat } = fixture();
+  const bot = store.product.content(fixtureBotInput('Filed bot')) as Content;
+  const created = store.libraryOrganization.createFolder({
+    expectedRevision: store.libraryOrganization.snapshot().revision,
+    category: 'bot',
+    title: 'Old name',
+  });
+  const folderId = created.folders.find((folder) => folder.title === 'Old name')!.id;
+  store.libraryOrganization.move({
+    expectedRevision: store.libraryOrganization.snapshot().revision,
+    category: 'bot',
+    items: [{ kind: 'content', id: bot.id }],
+    folderId,
+  });
+  const revision = store.libraryOrganization.snapshot().revision;
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('rename', 'library.organize', {
+      action: 'update-folder',
+      body: { expectedRevision: revision, category: 'bot', folderId, title: 'New name' },
+    }),
+    helperCall('remove', 'library.organize', {
+      action: 'delete-folder',
+      body: { expectedRevision: revision + 1, category: 'bot', folderId },
+    }),
+    helperDone,
+  ]);
+  expect(run.finished('rename')).toMatchObject({ denied: false });
+  expect(run.finished('remove')).toMatchObject({ denied: false });
+  expect(store.libraryOrganization.snapshot().folders.some((f) => f.id === folderId)).toBe(false);
+  expect(store.product.get<Content>('content', bot.id).title).toBe('Filed bot');
+});
+
 test('scene.title names a scene and refuses a stale expected name', async () => {
   const { store, chat } = fixture();
   const sourceId = chat.headRevision!;

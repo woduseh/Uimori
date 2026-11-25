@@ -377,6 +377,14 @@ test('overview tolerates a card without a character book', () => {
   expect(
     overview.regions.some((region: { path: string }) => region.path === overview.source.lorePath)
   ).toBe(false);
+  const card = overview.regions.find(
+    (region: { path: string }) => region.path === overview.source.path
+  );
+  expect(card.fields).toMatchObject({
+    name: 'No lore'.length,
+    description: String(input.package.nativeRisu.card.description).length,
+    character_book: null,
+  });
 });
 
 test('batched resource paths load one revision and preserve typed fields and local path errors', () => {

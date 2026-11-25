@@ -140,6 +140,23 @@ function descriptor(path: string, value: unknown, exists = true) {
     result.value = value;
   return result;
 }
+function fieldSummary(value: unknown): JsonObject {
+  if (!object(value)) return {};
+  return {
+    fields: Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        typeof item === 'string'
+          ? item.length
+          : Array.isArray(item)
+            ? `array(${item.length})`
+            : object(item)
+              ? `object(${Object.keys(item).length})`
+              : (item as JsonObject[string]),
+      ])
+    ),
+  };
+}
 function sourceFor(content: Content) {
   const native = content.package.nativeRisu;
   if (!native) return null;
@@ -319,9 +336,8 @@ export function readHelperModel(
     );
     if (source) {
       const native = (model as Content).package.nativeRisu;
-      regions.push(
-        descriptor(source.path, source.path.endsWith('/module') ? native.module : native.card)
-      );
+      const document = source.path.endsWith('/module') ? native.module : native.card;
+      regions.push({ ...descriptor(source.path, document), ...fieldSummary(document) });
       try {
         const lore = locate(model, parts(source.lorePath));
         if (lore.exists) regions.push(descriptor(source.lorePath, lore.value));

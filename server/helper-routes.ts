@@ -321,7 +321,13 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       let editor: HelperEditor | undefined;
       if (body.editor !== undefined) {
         const input = record(body.editor);
-        fields(input, ['targetId', 'revision', 'title', 'kind', 'model', 'source']);
+        fields(input, ['targetId', 'revision', 'title', 'kind', 'model', 'source', 'location']);
+        const location = input.location === undefined ? undefined : record(input.location);
+        if (location) {
+          fields(location, ['path', 'label']);
+          if (typeof location.path !== 'string' || !/^(\/|$)/u.test(location.path))
+            throw new HttpError(400, 'Invalid editor location');
+        }
         if (!['content', 'prompt-preset', 'prompt-workspace'].includes(input.kind))
           throw new HttpError(400, 'Invalid editor kind');
         if (input.source !== undefined && !['saved', 'unsaved'].includes(input.source))
@@ -336,6 +342,16 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           title: text(input.title, 'editor title', 200, true),
           kind: input.kind,
           ...(input.source ? { source: input.source } : {}),
+          ...(location
+            ? {
+                location: {
+                  path: text(location.path, 'editor location', 1024, true),
+                  ...(location.label === undefined
+                    ? {}
+                    : { label: text(location.label, 'editor location label', 200, true) }),
+                },
+              }
+            : {}),
           ...(input.model === undefined
             ? {}
             : {

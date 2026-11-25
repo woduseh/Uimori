@@ -200,13 +200,13 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'chat.guide.update',
     description:
-      'Change the original-work reference settings of a chat: whether the automatic reference step runs before writing, the work and edition, the reader position and spoiler limit, supplied reference text, whether canon events are followed, and whether the step may search the web. Read the current settings and revision from storyGuide in context.read. changes names only the settings to change; the others keep their values. It affects later requests only.',
+      'Change the original-work reference settings of a chat: whether the automatic reference step runs before writing, the work and edition, the reader position and spoiler limit, supplied reference text, whether canon events are followed, and whether the step may search the web. source.writing.chat.storyGuide has the revision for the current chat; context.read with sections ["storyGuide"] returns all settings. changes names only the settings to change; the others keep their values. It affects later requests only.',
     inputSchema: schema(
       {
         expectedRevision: {
           type: 'integer',
           minimum: 0,
-          description: 'storyGuide.revision from context.read.',
+          description: 'storyGuide.revision from source.writing.chat or context.read.',
         },
         changes: {
           type: 'object',

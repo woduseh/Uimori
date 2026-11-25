@@ -131,6 +131,7 @@ export type HelperInstruction = {
 };
 export type HelperEditor = EditorContext & {
   source?: 'saved' | 'unsaved';
+  location?: { path: string; label?: string };
 };
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
 export type HelperResourceRef = {
@@ -198,6 +199,9 @@ export type HelperTaskSnapshot = {
   writing?: RunSnapshot;
   editor?: HelperEditor;
   selection?: HelperSelection;
+  selectionTarget?: Record<string, import('./transport.js').Json>;
+  orientation?: Record<string, import('./transport.js').Json>;
+  seededOperations?: string[];
   outline?: import('./outline.js').OutlineHelperContext;
   references?: HelperReferencePointer[];
   history: {

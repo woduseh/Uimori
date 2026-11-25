@@ -188,6 +188,27 @@ test('helper reads decode one active checkpoint as large history grows while the
   expect(f.store.context.current(f.chatId)).toEqual(metadata);
 });
 
+test('context.read returns only the asked sections, always with the revisions, and lists compacted scenes on request', async () => {
+  const f = await fixture();
+  const all = f.read();
+  expect(all.checkpoint!.plan).toHaveProperty('compactedScenes');
+  expect(all.checkpoint!.plan).not.toHaveProperty('compacted');
+  expect(all).toHaveProperty('notes');
+  expect(all).toHaveProperty('storyGuide');
+  const guide = readHelperChatContext(f.store, f.chatId, { sections: ['storyGuide'] });
+  expect(Object.keys(guide).sort()).toEqual(
+    ['activeRevision', 'headRevision', 'notesRevision', 'scopeKey', 'storyGuide'].sort()
+  );
+  const full = readHelperChatContext(f.store, f.chatId, {
+    sections: ['summary'],
+    includeCompacted: true,
+  });
+  expect(full.checkpoint!.plan.compacted).toHaveLength(full.checkpoint!.plan.compactedScenes);
+  expect(() => readHelperChatContext(f.store, f.chatId, { sections: ['prose'] })).toThrow(
+    'Invalid sections'
+  );
+});
+
 test('active-only reads recheck current notes and preserve active checkpoint hash validation', async () => {
   const f = await fixture(),
     before = f.read();

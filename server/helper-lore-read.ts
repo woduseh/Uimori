@@ -6,7 +6,7 @@ import {
   validateChatLoreSelector,
 } from '../core/chat-overrides.js';
 import { ChatOverridesStore } from './chat-overrides.js';
-import { HttpError, number } from './request-validation.js';
+import { HttpError, number, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const MAX_RESULT_TOKENS = 12_000;
@@ -112,6 +112,10 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
     if (!best) throw new HttpError(413, '읽기 결과가 커요. 더 좁은 범위를 지정해 주세요.');
     return page(best);
   }
+  const query =
+    args.query === undefined
+      ? undefined
+      : text(args.query, 'lore query', 200, true).trim().toLowerCase() || undefined;
   const entries = [
     ...current.attachments.flatMap((attachment) =>
       attachment.lore.map((lore) => ({ attachment, lore }))
@@ -126,7 +130,14 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
           )
       )
       .map((override) => ({ override })),
-  ];
+  ].filter((entry) => {
+    if (query === undefined) return true;
+    const texts =
+      'override' in entry
+        ? [entry.override.baseEntry.title, entry.override.value]
+        : [entry.lore.title, entry.lore.description, entry.lore.text];
+    return texts.some((value) => value.toLowerCase().includes(query));
+  });
   const offset = number(args.offset ?? 0, 'lore offset', 0, entries.length);
   const limit = number(args.limit ?? 20, 'lore limit', 1, 50);
   const items: Record<string, unknown>[] = [];

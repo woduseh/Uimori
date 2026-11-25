@@ -508,6 +508,8 @@ const UNCONFIRMED_DELETIONS: Record<string, string> = {
     'a bookmark marks a place in the reader, and its earlier title and note stay in the change record',
   'chat.organize:delete-folder':
     'the chats of the folder move to the top level; no chat is deleted',
+  'library.organize:delete-folder':
+    'the items of the folder move to the top of their category; no library item is deleted',
 };
 
 function operationCases(tool: (typeof HELPER_APP_TOOLS)[number]) {

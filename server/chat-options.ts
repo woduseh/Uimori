@@ -302,8 +302,8 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
   additionalProperties: false,
 });
 const str: Json = { type: 'string' };
-export function helperOptionState({ program, ...state }: ChatOptionState) {
-  return { ...state, definitions: state.controls ?? promptControls(program) };
+export function helperOptionState({ program, controls, ...state }: ChatOptionState) {
+  return { ...state, definitions: controls ?? promptControls(program) };
 }
 const optionValuesInput = (values: string): Json =>
   schema(
@@ -342,10 +342,28 @@ export const helperOptionTools: ProviderTool[] = [
   {
     name: 'options.fix',
     description:
-      "Save the writing option values of a chat, used by every later request of that chat until changed. Use it when the user wants the chat written differently from now on; for one reply use options.oneoff. values replaces the chat's fixed values: an option you leave out is no longer fixed and follows the prompt preset's global value, so copy fixedValues from options.read for the options to keep. An empty object removes every chat-fixed value. Take the option keys, allowed values, binding and revision from options.read.",
-    inputSchema: optionValuesInput(
-      'All option keys to fix for this chat and their values, using the definitions from options.read.'
-    ),
+      "Save the writing option values of a chat, used by every later request of that chat until changed. Use it when the user wants the chat written differently from now on; for one reply use options.oneoff. To change only some options, give set and unset: set fixes those options to the given values and unset returns those options to the prompt preset's global value, keeping every other fixed value. values instead replaces all of the chat's fixed values: an option left out is no longer fixed, and an empty object removes every chat-fixed value. Take the option keys, allowed values, binding and revision from options.read.",
+    inputSchema: (() => {
+      const input = optionValuesInput(
+        'All option keys to fix for this chat and their values, replacing the current fixed values. Omit when using set or unset.'
+      ) as { properties: Record<string, Json>; required: string[] };
+      return {
+        ...input,
+        properties: {
+          ...input.properties,
+          set: {
+            type: 'object',
+            description: 'Option keys to fix and their values; other fixed values stay.',
+          },
+          unset: {
+            type: 'array',
+            items: str,
+            description: 'Option keys to stop fixing; other fixed values stay.',
+          },
+        },
+        required: ['expectedRevision', 'binding'],
+      } as Json;
+    })(),
   },
 ];
 export function invokeHelperOptions(
@@ -364,11 +382,25 @@ export function invokeHelperOptions(
   }
   const workspace = new HelperWorkspace(store);
   workspace.assertRunning(task.id);
-  const body = { ...record(value), operationId };
+  const body: Record<string, unknown> = { ...record(value), operationId };
   if (name === 'options.oneoff')
     return helperOptionState(service.stage(scope.chatId, body, task.id));
   if (name !== 'options.fix') throw new HttpError(400, 'Unknown option tool');
-  const before = service.get(scope.chatId).revision;
+  const current = service.get(scope.chatId);
+  const before = current.revision;
+  if (body.set !== undefined || body.unset !== undefined) {
+    if (body.values !== undefined)
+      throw new HttpError(400, 'Give either values or set/unset, not both');
+    const set = body.set === undefined ? {} : record(body.set);
+    const unset = body.unset === undefined ? [] : body.unset;
+    if (!Array.isArray(unset) || unset.some((id) => typeof id !== 'string'))
+      throw new HttpError(400, 'Invalid unset');
+    const values: Record<string, unknown> = { ...current.fixedValues, ...set };
+    for (const id of unset) delete values[id];
+    delete body.set;
+    delete body.unset;
+    body.values = values;
+  }
   const state = service.fixed(scope.chatId, body, task.id);
   recordHelperTaskResult(workspace, task, {
     receiptId: `${task.id}:${operationId}`,

@@ -20,7 +20,9 @@ import { HELPER_IMAGE_TOOLS } from './helper-image-tools.js';
 import { HELPER_ILLUSTRATION_TOOLS } from './helper-illustration-workflow.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
+import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { HttpError } from './request-validation.js';
+import { countTextTokens } from '../core/text-tokens.js';
 
 const schema = (
   properties: Record<string, Json>,
@@ -57,6 +59,29 @@ const textLimit: Json = {
   maximum: 10000,
   description: 'Maximum text to return, in UTF-16 code units.',
 };
+const HELPER_READ_WORDING: Record<string, [from: string, to: string]> = {
+  'knowledge.search': [
+    'approved for this run when the catalog does not already identify the id you need. Known ids go straight to knowledge.read.',
+    "of this chat's bot, persona and modules as frozen for this task. For live library text and other chats, data.search is the general search.",
+  ],
+  'knowledge.read': [
+    'Ids come from the catalog in the input or from knowledge.search, so a catalog id needs no search first.',
+    'Ids come from knowledge.search.',
+  ],
+  'skills.list': [
+    'Use it when the request may be covered by a guide that the catalog does not already name.',
+    'Use it when the request may be covered by a writing guide.',
+  ],
+  'skills.load': ['from skills.list or the catalog', 'from skills.list'],
+};
+export const HELPER_WRITING_READ_TOOLS: ProviderTool[] = MAIN_READ_TOOLS.map((tool) => {
+  const wording = HELPER_READ_WORDING[tool.name];
+  if (!wording) return tool;
+  if (!tool.description.includes(wording[0]))
+    throw new Error(`HELPER_READ_WORDING_STALE: ${tool.name}`);
+  return { ...tool, description: tool.description.replace(wording[0], wording[1]) };
+});
+const STORY_READ_NAMES = new Set(STORY_READ_TOOLS.map((tool) => tool.name));
 const loreSelector = described(
   schema(
     {
@@ -73,6 +98,22 @@ const loreSelector = described(
     ['id', 'role', 'modulePath', 'loreId', 'field']
   ),
   'One lore field of one entry. Build it from a listed item: id, role and modulePath from item.scope, item.id as loreId, and the field to address.'
+);
+const loreChange = schema(
+  {
+    selector: loreSelector,
+    expectedRevision: revision,
+    expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
+    expectedProfileRevision: integer,
+    expectedPackageRevision: integer,
+    expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+    value: {
+      type: 'string',
+      maxLength: SOURCE_TEXT_MAX_CHARS,
+      description: 'patch: the complete override text for the field.',
+    },
+  },
+  ['selector', 'expectedRevision', 'expectedHeadRevision']
 );
 const TOOLS: ProviderTool[] = [
   ...HELPER_GUIDE_TOOLS,
@@ -153,12 +194,21 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.read',
     description:
-      'Read the scene index of a chat: its current head and, in story order, the id (sourceId), visible sceneNumber, original length, whether the scene and its request are enabled, the contextRevision that scene.context.update needs, and the saved name (title, when it has one) of each scene. Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. includePreview adds the opening of each original, about 60 tokens. Follow nextOffset for more scenes. The text of a scene comes from scene.read.',
+      'Read the scene index of a chat: its current head and, for each scene, the id (sourceId), visible sceneNumber, original length, whether the scene and its request are enabled, the contextRevision that scene.context.update needs, the editRevision of its original, its translation state (none, current, stale after an original edit, or pending), and the saved name (title, when it has one). Use it to find the sourceId of a scene before reading or editing it. Scene numbers count the enabled scenes from 1, starting with any introduction, and a hidden scene has sceneNumber null. order=newest lists the latest scenes first. includePreview adds the opening of each original, about 60 tokens, and includeRequest the user request that produced each scene (null when the request is turned off), about 200 tokens at most. Follow nextOffset for more scenes. The text of a scene comes from scene.read; source.writing.chat.latestScene already describes the latest one.',
     inputSchema: schema({
       chatId: itemId,
+      order: {
+        type: 'string',
+        enum: ['oldest', 'newest'],
+        description: 'oldest (default) is story order; newest starts from the latest scene.',
+      },
       includePreview: {
         type: 'boolean',
         description: 'Add a short preview of each original. Default false.',
+      },
+      includeRequest: {
+        type: 'boolean',
+        description: 'Add the request text of each scene. Default false.',
       },
       offset: described(resultOffset, 'Scene offset. Pass the previous nextOffset.'),
       limit: {
@@ -173,16 +223,25 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.lore',
     description:
-      'Read or change the chat-only lore overrides of a chat: a private version of one lore field (title, description or text) that applies in this chat only and leaves the shared library entry as it is. action=read without selector lists the lore items in pages. action=read with selector returns the shared original and the override of that field in text pages, together with the expected revision and hash values that a change needs. action=patch saves body.value as the override; action=remove deletes the override so the shared original applies again. An item whose original no longer exists is listed with originalMissing and read as original:null, and its override can still be removed. To change the shared entry for every chat, edit the library resource with resource.patch instead.',
+      'Read or change the chat-only lore overrides of a chat: a private version of one lore field (title, description or text) that applies in this chat only and leaves the shared library entry as it is. action=read without selector lists the lore items in pages, optionally only those whose title or text contains query. action=read with selector returns the shared original and the override of that field in text pages. action=patch saves body.value as the override; action=patchMany saves 1-16 overrides together or none; action=remove deletes the override so the shared original applies again. The guards a change needs are already in the list: expectedRevision, expectedHeadRevision and expectedProfileRevision from its top level, and for each item expectedPackageRevision from packageRevision and expectedFieldHash from fieldHashes[field], so read the field itself only when its full text is needed. An item whose original no longer exists is listed with originalMissing and read as original:null, and its override can still be removed. To change the shared entry for every chat, edit the library resource with resource.patch instead.',
     inputSchema: schema(
       {
         action: {
           type: 'string',
-          enum: ['read', 'patch', 'remove'],
+          enum: ['read', 'patch', 'patchMany', 'remove'],
           description:
-            'read lists items or reads one field; patch saves an override; remove deletes it.',
+            'read lists items or reads one field; patch saves an override; patchMany saves several; remove deletes one.',
         },
-        selector: loreSelector,
+        selector: {
+          type: 'object',
+          description:
+            'read: the one lore field to read, in the same form as body.selector. Omit to list items.',
+        },
+        query: {
+          type: 'string',
+          maxLength: 200,
+          description: 'read without selector: only items whose title or text contains this.',
+        },
         offset: resultOffset,
         limit: {
           type: 'integer',
@@ -193,24 +252,17 @@ const TOOLS: ProviderTool[] = [
         textOffset,
         textLimit,
         body: described(
-          schema(
-            {
-              selector: loreSelector,
-              expectedRevision: revision,
-              expectedHeadRevision: { type: ['string', 'null'], maxLength: 100 },
-              expectedProfileRevision: integer,
-              expectedPackageRevision: integer,
-              expectedFieldHash: { type: 'string', pattern: '^[a-f0-9]{64}$' },
-              value: {
-                type: 'string',
-                maxLength: SOURCE_TEXT_MAX_CHARS,
-                description: 'patch: the complete override text for the field.',
-              },
-            },
-            ['selector', 'expectedRevision', 'expectedHeadRevision']
-          ),
-          'patch and remove: the selector plus the expected* values copied from the read of that selector, and value for patch.'
+          loreChange,
+          'patch and remove: the change, with the selector and the expected* guards, and value for patch.'
         ),
+        items: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 16,
+          description:
+            'patchMany: one change per field, each with the fields of body and a value; all take the same expectedRevision and the host applies them in order.',
+          items: { type: 'object', description: 'One change with the fields of body.' },
+        },
       },
       ['action']
     ),
@@ -244,14 +296,14 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.rename',
     description:
-      'Change the title of a chat. expectedRevision is the titleRevision of that chat, which chat.list returns.',
+      'Change the title of a chat. expectedRevision is the titleRevision of that chat: source.writing.chat has it for the current chat, and chat.list for any chat.',
     inputSchema: schema(
       {
         title: described(str, 'The new chat title.'),
         expectedRevision: {
           type: 'integer',
           minimum: 0,
-          description: 'titleRevision of the chat from chat.list.',
+          description: 'titleRevision from source.writing.chat or chat.list.',
         },
       },
       ['title', 'expectedRevision']
@@ -275,13 +327,13 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'library.organize',
     description:
-      'Organize the library into folders: read the folder tree, create a folder, or move bots, personas, modules and prompt presets into a folder. action=read returns the folders and the revision. create-folder and move need body with that revision as expectedRevision: create-folder takes body.category and body.title, and move takes body.items, body.category and body.folderId, where null moves the items to the top of the category.',
+      'Organize the library into folders: read the folder tree, create, rename, reorder or remove a folder, or move bots, personas, modules and prompt presets into a folder. action=read returns the folders and the revision. The other actions need body with that revision as expectedRevision and the category: create-folder takes body.title; move takes body.items and body.folderId, where null moves the items to the top of the category; update-folder takes body.folderId with body.title and/or body.beforeFolderId (null for last); delete-folder takes body.folderId and moves its items to the top of the category, deleting no item.',
     inputSchema: schema(
       {
         action: {
           type: 'string',
-          enum: ['read', 'create-folder', 'move'],
-          description: 'read the folder tree, create a folder, or move items.',
+          enum: ['read', 'create-folder', 'update-folder', 'delete-folder', 'move'],
+          description: 'read the folder tree, change a folder, or move items.',
         },
         body: described(
           schema(
@@ -319,7 +371,13 @@ const TOOLS: ProviderTool[] = [
               folderId: {
                 type: ['string', 'null'],
                 maxLength: 100,
-                description: 'move: the destination folder, or null for the top of the category.',
+                description:
+                  'move: the destination folder, or null for the top of the category. update-folder and delete-folder: the folder to change.',
+              },
+              beforeFolderId: {
+                type: ['string', 'null'],
+                maxLength: 100,
+                description: 'update-folder: place the folder before this one, or null for last.',
               },
             },
             ['expectedRevision', 'category']
@@ -344,8 +402,19 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'context.read',
     description:
-      'Read the conversation summary that stands in for the older scenes of a chat, the scenes it covers, and the current author notes with their notesRevision, together with the activeRevision that context.compact and context.edit need. The summary covers only the scenes listed in checkpoint.plan.compacted. The chat can have newer scenes, so read those with chat.read and story.read before stating the latest situation.',
-    inputSchema: schema({}),
+      'Read the live context state of a chat: the conversation summary that stands in for its older scenes (summary), its author notes (notes), and its original-work reference settings (storyGuide), together with activeRevision for context.compact and context.edit, notesRevision for notes.write and storyGuide.revision for chat.guide.update. sections picks what to return; the revisions always come back. source.writing.chat already holds these revisions and source.writing.notes the notes as of the task start, so read this only for the summary text or after a change. The summary covers only the first checkpoint.plan.compactedScenes scenes; read newer scenes with chat.read and scene.read before stating the latest situation.',
+    inputSchema: schema({
+      sections: {
+        type: 'array',
+        minItems: 1,
+        items: { type: 'string', enum: ['summary', 'notes', 'storyGuide'] },
+        description: 'Parts to return. Default all three.',
+      },
+      includeCompacted: {
+        type: 'boolean',
+        description: 'Add the reference list of the summarized scenes. Default false.',
+      },
+    }),
   },
   {
     name: 'context.compact',
@@ -494,13 +563,16 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'notes.write',
     description:
-      'Save, replace or retire an author note of a chat: a fact, correction or standing instruction from the user that later writing must respect. Take notesRevision from context.read as body.expectedRevision. body.text alone adds a note; with replacesId it replaces that note; replacesId with retired:true and no text retires it. The position in the chat, the source anchor and the attribution to the user are filled in by the app.',
+      'Save, replace or retire an author note of a chat: a fact, correction or standing instruction from the user that later writing must respect. Take notesRevision as body.expectedRevision from source.writing.chat for the current chat, from context.read, or from the previous notes.write result. body.text alone adds a note; with replacesId it replaces that note; replacesId with retired:true and no text retires it. The position in the chat, the source anchor and the attribution to the user are filled in by the app.',
     inputSchema: schema(
       {
         body: described(
           schema(
             {
-              expectedRevision: described(revision, 'notesRevision from context.read.'),
+              expectedRevision: described(
+                revision,
+                'notesRevision from source.writing.chat or context.read.'
+              ),
               text: {
                 type: 'string',
                 minLength: 1,
@@ -671,7 +743,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
 
 export const HELPER_APP_TOOLS: ProviderTool[] = [
   ...TOOLS,
-  ...MAIN_READ_TOOLS,
+  ...HELPER_WRITING_READ_TOOLS,
   ...HELPER_DATA_TOOLS,
 ].map((tool) => {
   if (!chatToolNames.has(tool.name)) return tool;
@@ -697,7 +769,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ],
   [
     'chat',
-    'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables, original-work reference settings, attached persona and modules, author note, bookmarks and chat folders of a bot',
+    'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables, original-work reference settings, attached persona and modules, author note, bookmarks, chat folders and pins of a bot',
   ],
   [
     'scene',
@@ -746,26 +818,27 @@ function operationIndex(tools: readonly ProviderTool[]): string {
 const REVIEW_APP_TOOLS = HELPER_APP_TOOLS.filter(
   (tool) => helperToolTraits(tool.name).reviewAllowed
 );
-const availableAppTools = (review: boolean) => (review ? REVIEW_APP_TOOLS : HELPER_APP_TOOLS);
+const APPLY_APP_TOOLS = HELPER_APP_TOOLS.filter((tool) => !STORY_READ_NAMES.has(tool.name));
+const availableAppTools = (review: boolean) => (review ? REVIEW_APP_TOOLS : APPLY_APP_TOOLS);
 
 export const HELPER_KNOWN_OPERATION_LIMIT = 6;
-export const HELPER_KNOWN_OPERATION_MAX_CHARS = 16_000;
+export const HELPER_KNOWN_OPERATION_MAX_TOKENS = 5_000;
 export function knownHelperOperations(
   names: readonly string[],
   review: boolean,
-  maxChars: number
+  maxTokens: number
 ): ProviderTool[] {
   const allowed = availableAppTools(review);
   const known: ProviderTool[] = [];
-  let chars = 0;
+  let tokens = 0;
   for (const name of names) {
     if (known.length >= HELPER_KNOWN_OPERATION_LIMIT) break;
     const tool = allowed.find((item) => item.name === name);
     if (!tool || known.includes(tool)) continue;
-    const size = JSON.stringify(tool).length;
-    if (chars + size > maxChars) continue;
+    const size = countTextTokens(JSON.stringify(tool));
+    if (tokens + size > maxTokens) continue;
     known.push(tool);
-    chars += size;
+    tokens += size;
   }
   return known;
 }

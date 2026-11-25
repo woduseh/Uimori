@@ -535,7 +535,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       context: async (task, name, args, hooks, operationId) => {
         const scope = task.snapshot.scope;
         if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
-        if (name === 'context.read') return readHelperChatContext(store, scope.chatId);
+        if (name === 'context.read') return readHelperChatContext(store, scope.chatId, args);
         const key = `helper:${task.id}:${operationId}`;
         const base = {
           expectedHeadRevision: task.snapshot.writing!.parentRevision,

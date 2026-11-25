@@ -19,7 +19,7 @@ import type { Usage } from '../core/types.js';
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { pruneContextHistory } from './context-retention.js';
 import { checkpointHash } from './context-store.js';
-import { HttpError } from './request-validation.js';
+import { HttpError, fields, record } from './request-validation.js';
 import type { Store } from './store.js';
 import { helperMessageAttachments } from './helper-attachments.js';
 
@@ -37,36 +37,60 @@ const refs = (history: HelperTaskSnapshot['history']) =>
     ]),
   }));
 
-export function readHelperChatContext(store: Store, chatId: string) {
+const CONTEXT_SECTIONS = ['summary', 'notes', 'storyGuide'] as const;
+export function readHelperChatContext(store: Store, chatId: string, value: unknown = {}) {
+  const args = record(value);
+  fields(args, ['sections', 'includeCompacted']);
+  if (
+    args.sections !== undefined &&
+    (!Array.isArray(args.sections) ||
+      !args.sections.length ||
+      args.sections.some((section) => !CONTEXT_SECTIONS.includes(section)))
+  )
+    throw new HttpError(400, `Invalid sections: use ${CONTEXT_SECTIONS.join(', ')}`);
+  if (args.includeCompacted !== undefined && typeof args.includeCompacted !== 'boolean')
+    throw new HttpError(400, 'Invalid includeCompacted');
+  const sections = new Set<string>(args.sections ?? CONTEXT_SECTIONS);
   const current = store.context.current(chatId),
     checkpoint = current.checkpoint;
   const { revision, config } = store.storyGuide.get(chatId);
   return {
-    storyGuide: { revision, config },
+    ...(sections.has('storyGuide') ? { storyGuide: { revision, config } } : {}),
     scopeKey: current.scopeKey,
     activeRevision: current.activeRevision,
     notesRevision: current.notesRevision,
     headRevision: current.headRevision,
-    checkpoint: checkpoint
+    ...(sections.has('summary')
       ? {
-          id: checkpoint.id,
-          revision: checkpoint.revision,
-          hash: checkpoint.hash,
-          origin: checkpoint.origin,
-          plan: {
-            summary: checkpoint.plan.summary,
-            dependencyKey: checkpoint.plan.dependencyKey,
-            compacted: checkpoint.plan.compacted,
-            recentSourceRevisions: checkpoint.plan.recentSourceRevisions,
-          },
+          checkpoint: checkpoint
+            ? {
+                id: checkpoint.id,
+                revision: checkpoint.revision,
+                hash: checkpoint.hash,
+                origin: checkpoint.origin,
+                plan: {
+                  summary: checkpoint.plan.summary,
+                  dependencyKey: checkpoint.plan.dependencyKey,
+                  compactedScenes: checkpoint.plan.compacted.length,
+                  ...(args.includeCompacted === true
+                    ? { compacted: checkpoint.plan.compacted }
+                    : {}),
+                  recentSourceRevisions: checkpoint.plan.recentSourceRevisions,
+                },
+              }
+            : null,
+          usable: current.usable,
+          invalidReason: current.invalidReason,
         }
-      : null,
-    usable: current.usable,
-    invalidReason: current.invalidReason,
-    notes: store.story.notes.entries({
-      chatId,
-      history: store.history(current.headRevision),
-    }),
+      : {}),
+    ...(sections.has('notes')
+      ? {
+          notes: store.story.notes.entries({
+            chatId,
+            history: store.history(current.headRevision),
+          }),
+        }
+      : {}),
   };
 }
 

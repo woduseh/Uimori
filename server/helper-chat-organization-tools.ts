@@ -13,7 +13,7 @@ export const HELPER_CHAT_ORGANIZATION_TOOLS: ProviderTool[] = [
   {
     name: 'chat.organize',
     description:
-      'Organize the chats of one bot into folders and choose the persona that new chats of that bot start with. action=read returns the bot default persona with its revision, the folders with their revisions and default personas, and each chat of the bot with its folderId and organizationRevision. create-folder takes title and an optional defaultPersona. update-folder takes folderId, expectedRevision, and title or defaultPersona. delete-folder takes folderId and expectedRevision; its chats move to the top level and no chat is deleted. move takes chatId, expectedRevision (the organizationRevision of that chat) and folderId, null for the top level, and optionally beforeChatId to place it before another chat of that folder. set-default-persona takes expectedRevision (the defaults revision) and persona: inherit follows the app, none starts without a persona, or a saved persona id. A folder default persona wins over the bot default for chats created in that folder; existing chats keep their persona.',
+      'Organize the chats of one bot into folders and choose the persona that new chats of that bot start with. action=read returns the bot default persona with its revision, the folders with their revisions and default personas, and each chat of the bot with its folderId, organizationRevision and whether it is pinned. create-folder takes title and an optional defaultPersona. update-folder takes folderId, expectedRevision, and title or defaultPersona. delete-folder takes folderId and expectedRevision; its chats move to the top level and no chat is deleted. move takes chatId, expectedRevision (the organizationRevision of that chat) and folderId, null for the top level, and optionally beforeChatId to place it before another chat of that folder. pin takes chatId and pinned. set-default-persona takes expectedRevision (the defaults revision) and persona: inherit follows the app, none starts without a persona, or a saved persona id. A folder default persona wins over the bot default for chats created in that folder; existing chats keep their persona.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -25,9 +25,14 @@ export const HELPER_CHAT_ORGANIZATION_TOOLS: ProviderTool[] = [
             'update-folder',
             'delete-folder',
             'move',
+            'pin',
             'set-default-persona',
           ],
           description: 'What to do.',
+        },
+        pinned: {
+          type: 'boolean',
+          description: 'pin: true pins the chat to the top of the chat list, false unpins it.',
         },
         botId: { ...(id as object), description: 'The bot whose chats are organized.' },
         folderId: {
@@ -35,7 +40,7 @@ export const HELPER_CHAT_ORGANIZATION_TOOLS: ProviderTool[] = [
           maxLength: 100,
           description: 'Folder id from action=read; null in move means the top level.',
         },
-        chatId: { ...(id as object), description: 'move: the chat to move.' },
+        chatId: { ...(id as object), description: 'move and pin: the chat to move or pin.' },
         beforeChatId: { ...(id as object), description: 'move: place the chat before this one.' },
         expectedRevision: {
           type: 'integer',
@@ -113,11 +118,13 @@ export function readHelperChatOrganization(store: Store, value: unknown) {
     })),
     chats: chatIds.slice(0, CHAT_LIST_MAX).map((chatId) => {
       const metadata = organization.metadata(chatId)!;
+      const chat = store.chat(chatId);
       return {
         id: chatId,
-        title: store.chat(chatId).title,
+        title: chat.title,
         folderId: metadata.folderId,
         organizationRevision: metadata.organizationRevision,
+        pinned: !!chat.pinnedAt,
       };
     }),
     totalChats: chatIds.length,
@@ -209,6 +216,24 @@ export function applyHelperChatOrganization(
         folderId: moved.folderId,
         organizationRevision: moved.organizationRevision,
       };
+    }
+    case 'pin': {
+      fields(args, ['action', 'botId', 'chatId', 'pinned']);
+      const chatId = text(args.chatId, 'chat ID', 100);
+      if (organization.metadata(chatId)?.botId !== botId)
+        throw new HttpError(409, 'CHAT_OF_ANOTHER_BOT: The chat belongs to another bot.');
+      const before = !!store.chat(chatId).pinnedAt;
+      const chat = organization.pin(chatId, { pinned: args.pinned });
+      recordHelperTaskResult(workspace, task, {
+        receiptId,
+        operation: 'chat.organize',
+        requestedTargets: 1,
+        targets:
+          before === !!chat.pinnedAt
+            ? []
+            : [{ kind: 'chat', id: chatId, title: chat.title, revision: chat.titleRevision ?? 0 }],
+      });
+      return { changedChatIds: [chatId], chatId, pinned: !!chat.pinnedAt };
     }
     case 'set-default-persona': {
       fields(args, ['action', 'botId', 'expectedRevision', 'persona']);

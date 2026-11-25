@@ -80,6 +80,15 @@ function supportedParameters(protocol: Connection['protocol']): ParameterKey[] {
   return PARAMETER_KEYS.filter((key) => key === 'maxOutputTokens' || keys.includes(key));
 }
 
+export function savedModelParameters(model: ModelPreset, protocol: Connection['protocol']) {
+  return Object.fromEntries(
+    supportedParameters(protocol).flatMap((key) => {
+      const value = (model as Record<string, unknown>)[key];
+      return value === undefined || value === null ? [] : [[key, value]];
+    })
+  );
+}
+
 function view(store: Store, model: ModelPreset) {
   const connection = store.product.get<Connection>('connection', model.connectionId);
   const supported = supportedParameters(connection.protocol);

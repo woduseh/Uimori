@@ -5,7 +5,14 @@ import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import { fields, record, text, number, HttpError } from './request-validation.js';
-import { fontCatalog, registerFont, selectFonts, deleteFont, downloadFont } from './fonts.js';
+import {
+  fontCatalog,
+  fontPreferences,
+  registerFont,
+  selectFonts,
+  deleteFont,
+  downloadFont,
+} from './fonts.js';
 import {
   paletteCatalog,
   savePalette,
@@ -41,7 +48,7 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'font.register',
-    'Add a font to the app by downloading a web-embeddable font file from a public HTTPS URL. The URL is used once for the download and is not stored with the font. Registering a font makes it available; applying it is a separate step through font.select.',
+    'Add a font to the app by downloading a web-embeddable font file from a public HTTPS URL. The URL is used once for the download and is not stored with the font. Registering a font makes it available; applying it is a separate step through font.select, using the font id and preferences.revision this call returns.',
     {
       title: described(string, 'Display name of the font.'),
       url: described(string, 'Public HTTPS URL of the font file itself, not of a web page.'),
@@ -50,13 +57,19 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'font.select',
-    'Choose the font used across the app and the font used in the reader. Both values are sent every time: repeat the current id from font.list for the one that should stay as it is, and pass null to return one to the default font.',
+    'Choose the font used across the app, the font used in the reader, or both. Omit one to keep its current choice, and pass null to return one to the default font.',
     {
-      expectedRevision: described(revision, 'Revision from font.list.'),
-      appFontId: described(nullable, 'Font id for the app, or null for the default.'),
-      readerFontId: described(nullable, 'Font id for the reader, or null for the default.'),
+      expectedRevision: described(
+        revision,
+        'preferences.revision from font.list or font.register.'
+      ),
+      appFontId: described(nullable, 'Font id for the app, or null for the default. Omit to keep.'),
+      readerFontId: described(
+        nullable,
+        'Font id for the reader, or null for the default. Omit to keep.'
+      ),
     },
-    ['expectedRevision', 'appFontId', 'readerFontId']
+    ['expectedRevision']
   ),
   tool(
     'font.delete',
@@ -70,7 +83,7 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'palette.save',
-    'Create a standalone color palette or update a saved one. The model holds title, description and colors.light and colors.dark, using the color keys described in theme.guide. Omit id and expectedRevision to create; pass both to update. Saving a palette does not apply it: that is theme.select with dimension=palette.',
+    'Create a standalone color palette or update a saved one. The model holds title, description and colors.light and colors.dark, using the color keys described in theme.guide. Omit id and expectedRevision to create; pass both to update. Saving a palette does not apply it: that is theme.select with dimension=palette, taking the preferencesRevision this call returns as expectedRevision.',
     {
       id: described(string, 'Id of the palette to update. Omit to create.'),
       expectedRevision: described(revision, 'Current revision of the palette to update.'),
@@ -92,7 +105,7 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'theme.select',
-    'Apply a theme, a palette or a Story UI theme. The three dimensions are chosen independently. dimension=theme or palette applies at scope global, bot or chat; passing null makes a bot or chat inherit again, or returns the global scope to the default. dimension=storyUi sets the default Story UI theme of one bot (scope=bot, targetId=the bot id), using a saved theme that has storyUi, or null to clear it; a Story UI choice for a single chat is settings.update chat.storyUiStyle instead. Take expectedRevision from theme.list.',
+    'Apply a theme, a palette or a Story UI theme. The three dimensions are chosen independently. dimension=theme or palette applies at scope global, bot or chat; passing null makes a bot or chat inherit again, or returns the global scope to the default. dimension=storyUi sets the default Story UI theme of one bot (scope=bot, targetId=the bot id), using a saved theme that has storyUi, or null to clear it; a Story UI choice for a single chat is settings.update chat.storyUiStyle instead. Take expectedRevision from theme.list, or from preferencesRevision in the result of the resource.save or palette.save that created the theme or palette.',
     {
       scope: {
         type: 'string',
@@ -113,7 +126,10 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
         nullable,
         'For dimension palette: the palette id, or null to inherit or clear.'
       ),
-      expectedRevision: described(revision, 'Preference revision from theme.list.'),
+      expectedRevision: described(
+        revision,
+        'Preference revision from theme.list, or preferencesRevision from the save.'
+      ),
     },
     ['scope', 'dimension', 'expectedRevision']
   ),
@@ -202,14 +218,22 @@ export function invokePresentationTool(
     fields(args, ['title', 'url']);
     if (!bytes) throw new HttpError(400, 'FONT_DOWNLOAD_REQUIRED');
     text(args.url, 'font URL', 4000);
-    return registerFont(store, {
-      title: text(args.title, 'font title', 200),
-      bytes,
-    });
+    return {
+      ...registerFont(store, {
+        title: text(args.title, 'font title', 200),
+        bytes,
+      }),
+      preferences: fontPreferences(store),
+    };
   }
   if (name === 'font.select') {
     fields(args, ['expectedRevision', 'appFontId', 'readerFontId']);
-    return selectFonts(store, args);
+    const current = fontPreferences(store);
+    return selectFonts(store, {
+      expectedRevision: args.expectedRevision,
+      appFontId: args.appFontId === undefined ? current.appFontId : args.appFontId,
+      readerFontId: args.readerFontId === undefined ? current.readerFontId : args.readerFontId,
+    });
   }
   if (name === 'font.delete') {
     fields(args, ['id']);
@@ -217,12 +241,13 @@ export function invokePresentationTool(
   }
   if (name === 'palette.save') {
     fields(args, ['id', 'expectedRevision', 'model']);
-    return savePalette(
+    const saved = savePalette(
       store,
       args.model,
       args.id === undefined ? undefined : text(args.id, 'palette ID', 100),
       args.expectedRevision === undefined ? undefined : number(args.expectedRevision, 'revision', 0)
     );
+    return { ...saved, preferencesRevision: themePreferences(store).revision };
   }
   if (name === 'palette.delete') {
     fields(args, ['id', 'expectedRevision']);

@@ -27,6 +27,12 @@ test('a Korean query finds the section that describes an app behavior and where 
   expect(first).toMatchObject({ name: 'EXECUTION', section: '생각 요약' });
   const page = call({ name: first!.name, offset: first!.offset, limit: 2000 }) as { text: string };
   expect(page.text.startsWith('### 생각 요약')).toBe(true);
+  const excerpt = first as unknown as { text: string; sectionChars: number };
+  expect(excerpt.text.startsWith('### 생각 요약')).toBe(true);
+  expect(page.text.startsWith(excerpt.text.slice(0, Math.min(excerpt.sectionChars, 1200)))).toBe(
+    true
+  );
+  expect(found.matches.slice(3).every((match) => !('sectionChars' in match))).toBe(true);
 });
 
 test('a section that holds the query as a phrase ranks ahead of one that only holds its words', () => {
