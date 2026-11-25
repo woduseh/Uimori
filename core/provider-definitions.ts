@@ -203,7 +203,14 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     credentialRefDefault: 'DEEPSEEK_API_KEY',
     auth: 'bearer',
     catalog: 'remote',
-    optionKeys: ['maxOutputTokens', 'temperature', 'timeoutMs', 'reasoningEffort', 'serviceTier'],
+    optionKeys: [
+      'maxOutputTokens',
+      'temperature',
+      'timeoutMs',
+      'reasoningEffort',
+      'stopSequences',
+      'serviceTier',
+    ],
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'DeepSeek 공식 주소에서 OpenAI Chat Completions 형식을 사용해요.',

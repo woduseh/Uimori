@@ -14,7 +14,8 @@ Developer and agent contract for provider transport encoding, Codex App Server i
 
 ### Per-protocol image and message encoding
 
-- `imageInputSupported` rejects image inputs on direct DeepSeek connections and confirmed text-only models, while returning `null` so custom models with unconfirmed support may still attempt transmission.
+- `imageInputSupported` allows images on a direct DeepSeek connection only for `deepseek-flash`, the one ID the DeepSeek pricing page marks with vision, and rejects every other direct DeepSeek ID (`deepseek-v4-pro` is listed there as not supporting vision) and confirmed text-only models, while returning `null` so custom models with unconfirmed support may still attempt transmission.
+- **DeepSeek message content (`encodeChat`)**: system and assistant content is sent as one string because the Chat Completion reference types it as a string; user content is one string too unless it carries an image, in which case it keeps its text and `image_url` parts.
 - Codex's image generation tool stays disabled on main-story and text turns (`CODEX_RUNTIME_CONFIG` sets `'features.image_generation': false`); user image attachment UI applies to main-story requests, whereas image-placement judgment candidates are configured separately under judgment provider options.
 - **Vercel Chat (`encodeChat`)**: concatenates text parts from prior assistant messages in order into one string before sending.
 - **OpenAI Responses (`encodeResponses`)**: builds manual conversation history (including assistant turns) from `input_text` parts preserving per-part cache breakpoints, and replays provider-returned message, reasoning, and tool-call items with their original format and IDs on follow-up tool rounds.

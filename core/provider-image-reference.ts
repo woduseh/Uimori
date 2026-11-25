@@ -46,8 +46,8 @@ export function requestImages(request: ImageRequest): RequestImage[] {
 
 export function imageInputSupported(protocol: ProviderProtocol, modelId: string): boolean | null {
   if (protocol === 'fixture-sse-v1') return true;
+  if (protocol === 'deepseek-chat-v1') return modelId === 'deepseek-flash';
   if (
-    protocol === 'deepseek-chat-v1' ||
     [
       'deepseek-chat',
       'deepseek-reasoner',
@@ -79,7 +79,11 @@ export function providerImagePart(image: RequestImage, protocol: ProviderProtoco
     return { type: 'image', source: { type: 'base64', media_type: image.mime, data: reference } };
   if (protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1')
     return { inlineData: { mimeType: image.mime, data: reference } };
-  if (protocol === 'openai-chat-v1' || protocol === 'vercel-chat-v1')
+  if (
+    protocol === 'openai-chat-v1' ||
+    protocol === 'vercel-chat-v1' ||
+    protocol === 'deepseek-chat-v1'
+  )
     return { type: 'image_url', image_url: { url: reference, detail: 'auto' } };
   if (protocol === 'codex-app-server-v1' || protocol === 'fixture-sse-v1')
     return { type: 'image', url: reference };

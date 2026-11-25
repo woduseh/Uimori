@@ -135,7 +135,13 @@ export function encodeChat(
 
       // https://api-docs.deepseek.com/api/create-chat-completion/ (2026-11-20): system and
       // assistant message content is documented as a string only.
-      if ((deepseek || message.role === 'assistant') && Array.isArray(message.content))
+      if (
+        Array.isArray(message.content) &&
+        (message.role === 'assistant' ||
+          (deepseek &&
+            (message.role !== 'user' ||
+              message.content.every((part) => object(part) && part.type === 'text'))))
+      )
         message.content = message.content
           .map((part) => {
             if (!object(part) || part.type !== 'text' || typeof part.text !== 'string')

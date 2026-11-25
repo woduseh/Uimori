@@ -116,7 +116,7 @@ const capabilities: readonly ModelCapability[] = [
       maxOutputTokens: 384_000,
       temperature: true,
       topP: false,
-      stopSequences: false,
+      stopSequences: true,
       reasoningEfforts: ['none', 'low', 'high', 'max'],
       defaultReasoningEffort: 'high',
       sources: [

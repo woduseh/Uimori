@@ -474,7 +474,12 @@ test('DeepSeek V4.1 Flash is listed under its API ID with the documented effort 
     temperature: true,
     reasoningEfforts: ['none', 'low', 'high', 'max'],
     defaultReasoningEffort: 'high',
+    stopSequences: true,
   });
+  expect(modelCapability('deepseek-chat-v1', 'deepseek-v4-pro')!.stopSequences).toBe(true);
+  expect(() =>
+    validateModelOptions({ ...base, stopSequences: ['END'] }, 'deepseek-chat-v1')
+  ).not.toThrow();
   expect(modelCapability('deepseek-chat-v1', 'deepseek-v4.1-flash')).toBeUndefined();
   for (const reasoningEffort of ['none', 'low', 'high', 'max'] as const)
     expect(() =>

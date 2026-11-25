@@ -47,12 +47,18 @@ const chunk = (delta: Json, finishReason: string | null = null, usage: Json = nu
 test('DeepSeek uses max_tokens and preserves thinking across tool continuation', () => {
   const input = request();
   input.modelId = 'deepseek-v4-pro';
-  input.generation = { maxOutputTokens: 321, temperature: null, reasoningEffort: 'high' };
+  input.generation = {
+    maxOutputTokens: 321,
+    temperature: null,
+    reasoningEffort: 'high',
+    stopSequences: ['END', '\n\n###'],
+  };
   const encoded = encodeChat(input, 'deepseek-chat-v1');
   expect(record(encoded.body)).toMatchObject({
     max_tokens: 321,
     thinking: { type: 'enabled' },
     reasoning_effort: 'high',
+    stop: ['END', '\n\n###'],
   });
   expect(record(encoded.body)).not.toHaveProperty('max_completion_tokens');
   const decoder = new ChatDecoder(encoded.context);

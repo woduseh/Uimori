@@ -94,7 +94,14 @@ const variants = [
     'vertex-gemini-v1',
     'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',
   ],
+  ['deepseek-chat-v1', 'https://api.deepseek.com/v1'],
 ] as const;
+const visionModel = (protocol: ProviderProtocol) =>
+  protocol.includes('gemini')
+    ? 'gemini-custom'
+    : protocol === 'deepseek-chat-v1'
+      ? 'deepseek-flash'
+      : 'custom-vision-model';
 function encoded(input: ProviderRequest, protocol: ProviderProtocol) {
   if (protocol === 'openai-responses-v1') return encodeResponses(input).body;
   if (protocol === 'anthropic-messages-v1') return encodeAnthropic(input).body;
@@ -110,7 +117,7 @@ describe('authored reference image transmission', () => {
     '%s resolves only at transmission and preserves its original turn',
     async (protocol, endpoint) => {
       const input = request();
-      if (protocol.includes('gemini')) input.modelId = 'gemini-custom';
+      input.modelId = visionModel(protocol);
       let sent: Record<string, any> = {};
       const wires: WireRecord[] = [];
       vi.stubGlobal(
@@ -304,6 +311,8 @@ describe('authored reference image transmission', () => {
 
   test('known text-only models reject images while unknown custom models remain available', () => {
     expect(() => encoded(request(), 'deepseek-chat-v1')).toThrow('IMAGE_INPUT_UNSUPPORTED_MODEL');
+    expect(imageInputSupported('deepseek-chat-v1', 'deepseek-flash')).toBe(true);
+    expect(imageInputSupported('deepseek-chat-v1', 'deepseek-v4-pro')).toBe(false);
     expect(imageInputSupported('vercel-chat-v1', 'deepseek/deepseek-chat')).toBe(false);
     expect(imageInputSupported('vercel-chat-v1', 'custom/deepseek-future-vision')).toBeNull();
   });
@@ -405,6 +414,7 @@ describe('trusted tool images', () => {
     '%s sends bootstrap image references only through native image slots',
     async (protocol) => {
       const input = request();
+      input.modelId = visionModel(protocol);
       input.prompt = undefined;
       input.bootstrap = [
         {
