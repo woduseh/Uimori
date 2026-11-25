@@ -4,6 +4,7 @@ import {
   TEXT_DIFF_LIMITS,
   type TextDiff,
   type TextDiffLimits,
+  type TextDiffMode,
 } from '../core/text-diff.js';
 
 export function sameEditorValue(left: unknown, right: unknown): boolean {
@@ -128,6 +129,7 @@ function idPairs(before: readonly unknown[], after: readonly unknown[]) {
   return {
     pairs,
     moved,
+    equal: [] as [number, number][],
     removed: before.map((_, position) => position).filter((position) => !matched.has(position)),
     added: after.map((_, position) => position).filter((position) => !taken.has(position)),
   };
@@ -138,6 +140,7 @@ function contentPairs(before: readonly unknown[], after: readonly unknown[]) {
   const keysAfter = after.map((item) => JSON.stringify(item ?? null));
   const script = alignSequences(keysBefore, keysAfter);
   const gaps: { removed: number[]; added: number[] }[] = [];
+  const equal: [number, number][] = [];
   if (!script) {
     const shared = Math.min(before.length, after.length);
     gaps.push(
@@ -156,6 +159,7 @@ function contentPairs(before: readonly unknown[], after: readonly unknown[]) {
     let gap: (typeof gaps)[number] | null = null;
     for (const step of script) {
       if (step === 'equal') {
+        equal.push([x, y]);
         x++;
         y++;
         gap = null;
@@ -212,7 +216,7 @@ function contentPairs(before: readonly unknown[], after: readonly unknown[]) {
     added.push(...right);
   }
   const moved = [...movedFrom].map(([to, from]): [number, number] => [from, to]);
-  return { pairs, moved, removed, added };
+  return { pairs, moved, removed, added, equal };
 }
 
 export function editorFieldChanges(before: unknown, after: unknown): EditorFieldChange[] {
@@ -310,8 +314,78 @@ export function editorFieldChanges(before: unknown, after: unknown): EditorField
     .map(({ change: { order: _order, ...change } }) => change);
 }
 
+const keysOf = (path: string) =>
+  path
+    .split('/')
+    .slice(1)
+    .map((key) => key.replaceAll('~1', '/').replaceAll('~0', '~'));
+
+function valueAt(value: unknown, keys: readonly string[]): unknown {
+  let current = value;
+  for (const key of keys) {
+    if (!container(current)) return undefined;
+    current = Array.isArray(current) ? current[Number(key)] : current[key];
+  }
+  return current;
+}
+
+function updateAt(
+  value: unknown,
+  keys: readonly string[],
+  update: (old: unknown) => unknown
+): unknown {
+  if (!keys.length) return update(value);
+  const [key, ...rest] = keys as [string, ...string[]];
+  if (Array.isArray(value)) {
+    const next = [...value];
+    next[Number(key)] = updateAt(value[Number(key)], rest, update);
+    return next;
+  }
+  const source = record(value) ? value : {};
+  const child = updateAt(source[key], rest, update);
+  const next = { ...source, [key]: child };
+  if (child === undefined) delete next[key];
+  return next;
+}
+
+function placement(base: readonly unknown[], list: readonly unknown[], from: number) {
+  const found = idPairs(base, list) ?? contentPairs(base, list);
+  const after = new Map<number, number>([...found.pairs, ...found.moved, ...found.equal]);
+  for (let index = from - 1; index >= 0; index--) {
+    const position = after.get(index);
+    if (position !== undefined) return position + 1;
+  }
+  return 0;
+}
+
+export function revertEditorChange<Model>(model: Model, base: unknown, change: EditorFieldChange) {
+  const keys = keysOf(change.path);
+  if (!change.item || change.field.length || change.kind === 'changed')
+    return updateAt(model, keys, () => change.before) as Model;
+  const listKeys = keys.slice(0, -1);
+  const list = valueAt(model, listKeys);
+  const baseList = valueAt(base, listKeys);
+  const items = Array.isArray(list) ? list : [];
+  const original = Array.isArray(baseList) ? baseList : [];
+  const insert = (target: readonly unknown[], from: number) => {
+    const at = placement(original, target, from);
+    return [...target.slice(0, at), change.before, ...target.slice(at)];
+  };
+  if (change.kind === 'added')
+    return updateAt(model, listKeys, () =>
+      items.filter((_, index) => index !== change.item!.index)
+    ) as Model;
+  if (change.kind === 'removed')
+    return updateAt(model, listKeys, () => insert(items, change.item!.index)) as Model;
+  const from = original.indexOf(change.before);
+  const rest = items.filter((_, index) => index !== change.item!.index);
+  return updateAt(model, listKeys, () =>
+    insert(rest, from >= 0 ? from : change.item!.index)
+  ) as Model;
+}
+
 export type EditorChangeView =
-  | { type: 'text'; diff: TextDiff }
+  | { type: 'text'; diff: TextDiff; before: string; after: string }
   | { type: 'value'; before: unknown; after: unknown }
   | { type: 'summary'; before: number | null; after: number | null }
   | { type: 'none' };
@@ -347,12 +421,16 @@ export function editorChangeView(
     const count = (value: unknown) => (Array.isArray(value) ? value.length : null);
     return { type: 'summary', before: count(before), after: count(after) };
   }
-  const text = (left: string, right: string) => {
-    return {
-      type: 'text' as const,
-      diff: diffText(left, right, CODE_PATH.test(path) ? 'code' : 'prose', limits),
-    };
-  };
+  const text = (
+    left: string,
+    right: string,
+    mode: TextDiffMode = CODE_PATH.test(path) ? 'code' : 'prose'
+  ) => ({
+    type: 'text' as const,
+    diff: diffText(left, right, mode, limits),
+    before: left,
+    after: right,
+  });
   if (item && !change.field.length && kind !== 'changed') {
     const value = kind === 'added' ? after : before;
     const key = ITEM_BODY[item.kind];
@@ -363,5 +441,5 @@ export function editorChangeView(
   if (textual(before) && textual(after))
     return text((before as string | undefined) ?? '', (after as string | undefined) ?? '');
   if (scalar(before) && scalar(after)) return { type: 'value', before, after };
-  return { type: 'text', diff: diffText(json(before), json(after), 'code', limits) };
+  return text(json(before), json(after), 'code');
 }

@@ -1,6 +1,12 @@
 import { expect, test } from 'vitest';
 import { TEXT_DIFF_LIMITS } from '../core/text-diff.js';
-import { editorChangeView, editorFieldChanges, sameEditorValue } from '../web/editor-values.js';
+import {
+  editorChangeView,
+  editorFieldChanges,
+  revertEditorChange,
+  sameEditorValue,
+  type EditorFieldChange,
+} from '../web/editor-values.js';
 
 const card = (card: Record<string, unknown>) => ({ package: { nativeRisu: { card } } });
 const summary = (before: unknown, after: unknown) =>
@@ -168,6 +174,84 @@ test('change views diff text, keep scalars as values, summarize images and repor
   ]);
   const long = 'x'.repeat(TEXT_DIFF_LIMITS.maxInputLength + 1);
   expect(view(card({ description: long }), card({ description: 'short' }))).toEqual([
-    { type: 'text', diff: { mode: 'prose', unit: 'word', omitted: 'size' } },
+    {
+      type: 'text',
+      diff: { mode: 'prose', unit: 'word', omitted: 'size' },
+      before: long,
+      after: 'short',
+    },
   ]);
+});
+
+const revertAll = (base: unknown, model: unknown, pick: (change: EditorFieldChange) => boolean) =>
+  editorFieldChanges(base, model)
+    .filter(pick)
+    .reduce((current, change) => revertEditorChange(current, base, change), model);
+
+test('reverting one change restores that field and leaves the other edits', () => {
+  const base = card({ description: '처음 설명', first_mes: '처음 인사', creator: '' });
+  const model = card({ description: '고친 설명', first_mes: '고친 인사', creator: '' });
+  const reverted = revertAll(base, model, (change) => change.path.endsWith('/description'));
+  expect(reverted).toEqual(card({ description: '처음 설명', first_mes: '고친 인사', creator: '' }));
+  const added = card({ description: '처음 설명', first_mes: '처음 인사', creator: '', extra: 1 });
+  expect(revertAll(base, added, () => true)).toEqual(base);
+  expect(base).toEqual(card({ description: '처음 설명', first_mes: '처음 인사', creator: '' }));
+});
+
+test('reverting list items removes an addition, restores a deletion in place and undoes a move', () => {
+  const list = (entries: unknown[]) => card({ character_book: { entries } });
+  const lore = ['등대', '항구', '숲', '바다'].map((name, id) => ({
+    id,
+    comment: name,
+    content: name,
+  }));
+  const [lighthouse, harbour, forest, sea] = lore;
+  const base = list(lore);
+  const inserted = { id: 9, comment: '새 로어', content: '새 로어' };
+  expect(revertAll(base, list([lighthouse, inserted, harbour, forest, sea]), () => true)).toEqual(
+    base
+  );
+  expect(revertAll(base, list([lighthouse, forest, sea]), () => true)).toEqual(base);
+  expect(revertAll(base, list([harbour, forest, sea, lighthouse]), () => true)).toEqual(base);
+  const edited = list([lighthouse, { ...harbour, content: '안개 낀 항구' }, forest]);
+  const restored = revertAll(base, edited, (change) => change.kind === 'removed');
+  expect(restored).toEqual(
+    list([lighthouse, { ...harbour, content: '안개 낀 항구' }, forest, sea])
+  );
+  const unnamed = (items: string[]) => card({ alternate_greetings: items });
+  expect(revertAll(unnamed(['하나', '둘', '셋']), unnamed(['하나', '셋']), () => true)).toEqual(
+    unnamed(['하나', '둘', '셋'])
+  );
+  expect(revertAll(unnamed(['하나', '둘']), unnamed(['하나', '고친 둘']), () => true)).toEqual(
+    unnamed(['하나', '둘'])
+  );
+});
+
+test('reverting preset blocks, regex scripts and triggers restores each kind', () => {
+  const preset = (promptTemplate: unknown[], regex: unknown[]) => ({
+    program: { nativeRisuPreset: { preset: { promptTemplate, regex } } },
+  });
+  const blocks = [
+    { type: 'plain', text: '시스템', role: 'system' },
+    { type: 'chat', rangeStart: 0 },
+  ];
+  const scripts = [{ comment: '상태창', in: 'a', out: 'b', type: 'editdisplay' }];
+  const base = preset(blocks, scripts);
+  const model = preset(
+    [{ ...blocks[0], text: '고친 시스템' }, blocks[1], { type: 'plain', text: '새 블록' }],
+    [{ ...scripts[0], out: 'c' }]
+  );
+  expect(revertAll(base, model, (change) => change.path.includes('/regex/'))).toEqual(
+    preset(model.program.nativeRisuPreset.preset.promptTemplate, scripts)
+  );
+  expect(revertAll(base, model, () => true)).toEqual(base);
+  const triggers = (items: unknown[]) => card({ extensions: { risuai: { triggerscript: items } } });
+  const trigger = { comment: '시작', type: 'start', effect: [{ type: 'triggerlua', code: 'a()' }] };
+  expect(
+    revertAll(
+      triggers([trigger]),
+      triggers([{ ...trigger, effect: [{ type: 'triggerlua', code: 'b()' }] }]),
+      () => true
+    )
+  ).toEqual(triggers([trigger]));
 });

@@ -45,6 +45,9 @@ import {
 } from './studio-sections.js';
 import { EditorChanges, PreviousVersionAction, RestoredVersionNotice } from './EditorChanges.js';
 import { changedValuePaths } from './editor-values.js';
+import { useCodeFieldBases } from './change-review.js';
+import { CodeFieldBaseContext } from './CodeField.js';
+import type { EditorReveal } from './code-field-reveal.js';
 import {
   editableResource,
   type ContentEditModel,
@@ -1281,6 +1284,10 @@ function ContentEditor({
         ...state.local.unappliedFields,
       ])
     : [];
+  const sectionOf = contentChangeSection(sections);
+  const codeBases = useCodeFieldBases(document.baseModel, value, dirty, sectionOf);
+  const [reveal, setReveal] = useState<EditorReveal | null>(null);
+  const revealEpoch = useRef(0);
   const anchor = useResourceAnchor('content', document.targetId);
   const selected = document.targetId
     ? {
@@ -1410,6 +1417,7 @@ function ContentEditor({
         <EditorStudio
           label={t('native.text_b891876a9a')}
           sections={sections}
+          changed={changes}
           value={section}
           onSelect={selectSection}
           idPrefix={sectionId}
@@ -1461,8 +1469,28 @@ function ContentEditor({
                       commands={commands}
                       changes={changes}
                       current={value}
-                      sectionOf={contentChangeSection(sections)}
-                      onSelect={selectSection}
+                      subject={value.title}
+                      sectionOf={sectionOf}
+                      save={{
+                        run: () => {
+                          if (!titleMissing) return saveContent();
+                          setTitleTouched(true);
+                          return Promise.resolve(false);
+                        },
+                        label: selected ? t('library.saveChanges') : t('library.registerResource'),
+                        disabled: editorUnavailable || portraitBusy || state.creationPending,
+                        error: titleMissing ? t('library.nameRequired') : error,
+                      }}
+                      onReveal={(target) => {
+                        selectSection(target.section);
+                        setReveal({
+                          section: target.section,
+                          item: target.item,
+                          field: target.field,
+                          range: { from: target.offset ?? 0, to: target.offset ?? 0 },
+                          epoch: ++revealEpoch.current,
+                        });
+                      }}
                     />
                   }
                 />
@@ -1510,8 +1538,9 @@ function ContentEditor({
                 <LibraryItemMenu title={t('library.resourceMenu')}>
                   <PreviousVersionAction
                     commands={commands}
+                    subject={value.title}
                     sections={(paths) => contentChanges(sections, paths)}
-                    sectionOf={contentChangeSection(sections)}
+                    sectionOf={sectionOf}
                     authored={authoredContentModel}
                   />
                   {selected && (
@@ -1647,25 +1676,28 @@ function ContentEditor({
             }}
           >
             <fieldset className="editor-fields full" disabled={editorUnavailable}>
-              <RisuNativeFields
-                anchor={anchor}
-                section={section}
-                onSelect={selectSection}
-                idPrefix={sectionId}
-                saved={selected && { id: selected.id, revision: selected.revision }}
-                value={value.package}
-                onChange={(pkg) =>
-                  setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
-                }
-                onPortraitBusy={setPortraitBusy}
-                overview={
-                  <ContentOverviewMeta
-                    category={selected ? category : null}
-                    folder={folder}
-                    counts={sections.filter((item) => !!item.count)}
-                  />
-                }
-              />
+              <CodeFieldBaseContext value={codeBases}>
+                <RisuNativeFields
+                  anchor={anchor}
+                  section={section}
+                  onSelect={selectSection}
+                  idPrefix={sectionId}
+                  saved={selected && { id: selected.id, revision: selected.revision }}
+                  reveal={reveal}
+                  value={value.package}
+                  onChange={(pkg) =>
+                    setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
+                  }
+                  onPortraitBusy={setPortraitBusy}
+                  overview={
+                    <ContentOverviewMeta
+                      category={selected ? category : null}
+                      folder={folder}
+                      counts={sections.filter((item) => !!item.count)}
+                    />
+                  }
+                />
+              </CodeFieldBaseContext>
             </fieldset>
             {error && (
               <p className="error full" role="alert">

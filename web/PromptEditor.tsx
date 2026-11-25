@@ -16,6 +16,9 @@ import { EditorStudio, useStudioSection } from './EditorStudio.js';
 import { presetChangeSection, presetChanges, presetSections } from './studio-sections.js';
 import { EditorChanges, PreviousVersionAction, RestoredVersionNotice } from './EditorChanges.js';
 import { changedValuePaths } from './editor-values.js';
+import { useCodeFieldBases } from './change-review.js';
+import { CodeFieldBaseContext } from './CodeField.js';
+import type { EditorReveal } from './code-field-reveal.js';
 import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useShortcut } from './shortcuts.js';
@@ -139,6 +142,10 @@ export function PromptEditor({
     'blocks',
     !!initialPreset
   );
+  const sectionOf = presetChangeSection(sections);
+  const codeBases = useCodeFieldBases(state.document.baseModel, model, state.dirty, sectionOf);
+  const [reveal, setReveal] = useState<EditorReveal | null>(null);
+  const revealEpoch = useRef(0);
   const anchor = useResourceAnchor('prompt-preset', state.document.targetId);
   const base: PromptPreset | null = state.document.targetId
     ? {
@@ -334,8 +341,9 @@ export function PromptEditor({
           <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
             <PreviousVersionAction
               commands={commands}
+              subject={draft.title}
               sections={(paths) => presetChanges(sections, paths)}
-              sectionOf={presetChangeSection(sections)}
+              sectionOf={sectionOf}
             />
             <div className="action-menu-group">
               <button
@@ -464,6 +472,7 @@ export function PromptEditor({
         <EditorStudio
           label={t('native.text_a8a8b42c1a')}
           sections={sections}
+          changed={changes}
           value={section}
           onSelect={selectSection}
           idPrefix={sectionId}
@@ -503,8 +512,30 @@ export function PromptEditor({
                     commands={commands}
                     changes={changes}
                     current={model}
-                    sectionOf={presetChangeSection(sections)}
-                    onSelect={selectSection}
+                    subject={draft.title}
+                    sectionOf={sectionOf}
+                    save={{
+                      run: () => {
+                        if (titleMissing) {
+                          setTitleTouched(true);
+                          return Promise.resolve(false);
+                        }
+                        return save(!!draft.base);
+                      },
+                      label: t('prompts.uiSavePreset'),
+                      disabled: busy || state.creationPending || !!collaborationIssue,
+                      error: titleMissing ? t('library.nameRequired') : error,
+                    }}
+                    onReveal={(target) => {
+                      selectSection(target.section);
+                      setReveal({
+                        section: target.section,
+                        item: target.item,
+                        field: target.field,
+                        range: { from: target.offset ?? 0, to: target.offset ?? 0 },
+                        epoch: ++revealEpoch.current,
+                      });
+                    }}
                   />
                 }
               />
@@ -525,40 +556,43 @@ export function PromptEditor({
           <fieldset className="prompt-editor-fields" disabled={busy}>
             {initialPreset === undefined && metadata}
             <fieldset className="prompt-composer-frame">
-              <NativeRisuPresetEditor
-                key={`${role}:${session.options.editorKey}`}
-                anchor={anchor}
-                onSelect={selectSection}
-                idPrefix={sectionId}
-                program={draft.program}
-                metadata={initialPreset !== undefined ? metadata : undefined}
-                values={model.values}
-                onValuesChange={(values) => edit({ values })}
-                onChange={(program) =>
-                  edit((current) => ({
-                    ...current,
-                    program,
-                    values: reconcilePromptValues(program, current.values).values,
-                  }))
-                }
-                collaboration={
-                  role === 'main' ? (
-                    <AgentCollaborationEditor
-                      expanded={collaborationExpanded}
-                      onExpandedChange={setCollaborationExpanded}
-                      value={draft.program.collaboration}
-                      controls={promptControls(draft.program)}
-                      models={library.models}
-                      onChange={(collaboration) =>
-                        edit((current) => ({
-                          ...current,
-                          program: { ...current.program, collaboration },
-                        }))
-                      }
-                    />
-                  ) : undefined
-                }
-              />
+              <CodeFieldBaseContext value={codeBases}>
+                <NativeRisuPresetEditor
+                  key={`${role}:${session.options.editorKey}`}
+                  reveal={reveal}
+                  anchor={anchor}
+                  onSelect={selectSection}
+                  idPrefix={sectionId}
+                  program={draft.program}
+                  metadata={initialPreset !== undefined ? metadata : undefined}
+                  values={model.values}
+                  onValuesChange={(values) => edit({ values })}
+                  onChange={(program) =>
+                    edit((current) => ({
+                      ...current,
+                      program,
+                      values: reconcilePromptValues(program, current.values).values,
+                    }))
+                  }
+                  collaboration={
+                    role === 'main' ? (
+                      <AgentCollaborationEditor
+                        expanded={collaborationExpanded}
+                        onExpandedChange={setCollaborationExpanded}
+                        value={draft.program.collaboration}
+                        controls={promptControls(draft.program)}
+                        models={library.models}
+                        onChange={(collaboration) =>
+                          edit((current) => ({
+                            ...current,
+                            program: { ...current.program, collaboration },
+                          }))
+                        }
+                      />
+                    ) : undefined
+                  }
+                />
+              </CodeFieldBaseContext>
             </fieldset>
           </fieldset>
           <TransientNotice message={busy ? '' : status} />

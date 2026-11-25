@@ -49,6 +49,7 @@ import {
   type CbsTokenKind,
 } from '../core/cbs-analysis.js';
 import { CODE_FIELD_REVEAL } from './code-field-reveal.js';
+import { changedLineMarks } from './text-diff-rows.js';
 import { api } from './api.js';
 import { t } from './i18n.js';
 import {
@@ -132,6 +133,74 @@ const analysisScheduler = ViewPlugin.fromClass(
       const { state } = this.view;
       if (!state.field(analysisField).current)
         this.view.dispatch({ effects: analysisReady.of(analyze(state)) });
+    };
+    destroy() {
+      clearTimeout(this.timer);
+    }
+  }
+);
+
+const CHANGE_MARK_DELAY_MS = 300;
+const baseFacet = Facet.define<string | null, string | null>({
+  combine: (values) => values.at(-1) ?? null,
+});
+const changeMarksReady = StateEffect.define<DecorationSet>();
+const changeMarkLines = new Map<string, Decoration>();
+const changeMarkLine = (kind: string) => {
+  let decoration = changeMarkLines.get(kind);
+  if (!decoration) {
+    decoration = Decoration.line({ class: `cm-change-${kind}` });
+    changeMarkLines.set(kind, decoration);
+  }
+  return decoration;
+};
+
+function changeMarks(state: EditorState): DecorationSet {
+  const base = state.facet(baseFacet);
+  if (
+    base === null ||
+    base.length > DEFERRED_ANALYSIS_CHARS ||
+    state.doc.length > DEFERRED_ANALYSIS_CHARS
+  )
+    return Decoration.none;
+  const marks = changedLineMarks(base, state.doc.toString());
+  if (!marks?.length) return Decoration.none;
+  return Decoration.set(
+    marks
+      .filter((mark) => mark.line <= state.doc.lines)
+      .map((mark) => changeMarkLine(mark.kind).range(state.doc.line(mark.line).from)),
+    true
+  );
+}
+
+const changeMarkField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (value, transaction) => {
+    for (const effect of transaction.effects) if (effect.is(changeMarksReady)) return effect.value;
+    return transaction.docChanged ? value.map(transaction.changes) : value;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+const changeMarkScheduler = ViewPlugin.fromClass(
+  class {
+    timer: ReturnType<typeof setTimeout> | undefined;
+    view: EditorView;
+    constructor(view: EditorView) {
+      this.view = view;
+      this.schedule(0);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.startState.facet(baseFacet) !== update.state.facet(baseFacet))
+        this.schedule(CHANGE_MARK_DELAY_MS);
+    }
+    schedule(delay: number) {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(this.run, delay);
+    }
+    run = () => {
+      this.timer = undefined;
+      this.view.dispatch({ effects: changeMarksReady.of(changeMarks(this.view.state)) });
     };
     destroy() {
       clearTimeout(this.timer);
@@ -455,7 +524,20 @@ const editorTheme = EditorView.theme({
     textUnderlineOffset: '3px',
   },
   '.cm-cbs-cursor-diagnostic': { padding: '6px 10px', maxWidth: 'min(320px, calc(100vw - 32px))' },
+  '.cm-line.cm-change-added': changeMark('--success-line', '3px 100%', 'left top'),
+  '.cm-line.cm-change-changed': changeMark('--info-line', '3px 100%', 'left top'),
+  '.cm-line.cm-change-deleted-above': changeMark('--error-line', '8px 3px', 'left top'),
+  '.cm-line.cm-change-deleted-below': changeMark('--error-line', '8px 3px', 'left bottom'),
 });
+
+function changeMark(color: string, size: string, position: string) {
+  return {
+    backgroundImage: `linear-gradient(var(${color}), var(${color}))`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: size,
+    backgroundPosition: position,
+  };
+}
 
 function lineSeparatorOf(value: string): '\n' | '\r\n' | null {
   if (!value.includes('\r')) return '\n';
@@ -539,6 +621,7 @@ function Editor({
   handoff,
   names = null,
   name,
+  base,
   'aria-label': label,
   'aria-describedby': describedBy,
 }: EditorProps) {
@@ -578,9 +661,12 @@ function Editor({
     host: new Compartment(),
     catalog: new Compartment(),
     names: new Compartment(),
+    base: new Compartment(),
   }).current;
   const namesRef = useRef(names);
   namesRef.current = names;
+  const baseRef = useRef(base ?? null);
+  baseRef.current = base ?? null;
   const hostExtension = useRef<Extension>([]);
   const inheritedDisabled = useFieldsetDisabled(host);
   const locked = !!disabled || inheritedDisabled;
@@ -605,6 +691,9 @@ function Editor({
         language === 'lua' ? [] : cbsExtensions,
         compartments.catalog.of(catalogFacet.of(loadedCatalog)),
         compartments.names.of(namesFacet.of(namesRef.current)),
+        compartments.base.of(baseFacet.of(baseRef.current)),
+        changeMarkField,
+        changeMarkScheduler,
         compartments.options.of(editorOptions(settingsRef.current)),
         editorTheme,
         EditorView.updateListener.of((update) => {
@@ -658,6 +747,12 @@ function Editor({
   useEffect(() => {
     view.current?.dispatch({ effects: compartments.names.reconfigure(namesFacet.of(names)) });
   }, [compartments, names]);
+
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: compartments.base.reconfigure(baseFacet.of(base ?? null)),
+    });
+  }, [compartments, base]);
 
   useEffect(() => {
     view.current?.dispatch({

@@ -61,6 +61,10 @@
   --dialog-w: 480px;
   --control-h: 44px;
   --diff-max-h: 320px;
+  --diff-number-w: 40px;
+  --review-dialog-w: min(1440px, 94vw);
+  --review-dialog-h: min(90dvh, calc(var(--app-height, 100dvh) - 48px));
+  --review-rail-w: 272px;
   --font-small: 12px;
   --font-body: 14px;
   --font-heading: 16px;

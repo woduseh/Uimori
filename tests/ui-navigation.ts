@@ -95,9 +95,9 @@ export async function discardEdits(scope: Page | Locator) {
     return;
   }
   await editorChanges(scope).click();
-  await scope
-    .getByRole('dialog', { name: '변경한 편집 영역', exact: true })
-    .getByRole('button', { name: '편집 취소', exact: true })
+  await page
+    .getByRole('dialog', { name: '변경 검토', exact: true })
+    .getByRole('button', { name: '모든 편집 취소', exact: true })
     .click();
 }
 

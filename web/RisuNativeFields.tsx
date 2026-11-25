@@ -44,8 +44,13 @@ import { IconButton } from './IconButton.js';
 import { CbsNamesContext, CodeField } from './CodeField.js';
 import { CbsReferenceList, cbsUseLocator } from './CbsReferenceList.js';
 import { useCbsNames, useContentReferences } from './cbs-reference-index.js';
-import { codeFieldName, revealCodeField } from './code-field-reveal.js';
-import type { CbsVariableUse } from '../core/cbs-references.js';
+import {
+  codeFieldName,
+  revealEditorTarget,
+  type EditorJumpTarget,
+  type EditorReveal,
+} from './code-field-reveal.js';
+import { useStableHandler } from './useStableHandler.js';
 import { CodeIcon, DisplayIcon } from './ui-icons.js';
 import {
   FirstMessageWorkspace,
@@ -96,8 +101,10 @@ export function RisuNativeFields({
   idPrefix: id,
   overview,
   saved = null,
+  reveal = null,
 }: {
   saved?: { id: string; revision: number } | null;
+  reveal?: EditorReveal | null;
   value: RisuContent;
   onChange: (value: RisuContent) => void;
   onDraftChange?: (dirty: boolean) => void;
@@ -139,7 +146,7 @@ export function RisuNativeFields({
   const locate = cbsUseLocator(t, (target) =>
     available.includes(target as Section) ? t(contentSectionLabelKey(target as Section)) : target
   );
-  function jumpTo(use: CbsVariableUse) {
+  function jumpTo(use: EditorJumpTarget) {
     const target = use.section as Section;
     if (!available.includes(target)) return;
     onSelect(target);
@@ -147,14 +154,20 @@ export function RisuNativeFields({
       setJump({ section: target, index: use.item, epoch: --jumpEpoch });
     arrival.current?.abort();
     arrival.current = new AbortController();
-    revealCodeField(
+    revealEditorTarget(
       () => document.getElementById(`${id}-${target}-panel`),
-      codeFieldName(target, use.item, use.field),
-      use.range,
+      use,
       '.native-item-detail, .nl-detail, .native-trigger-editor',
       arrival.current.signal
     );
   }
+  const revealed = useRef(0);
+  const revealTarget = useStableHandler(jumpTo);
+  useEffect(() => {
+    if (!reveal || revealed.current === reveal.epoch) return;
+    revealed.current = reveal.epoch;
+    revealTarget(reveal);
+  }, [reveal, revealTarget]);
   function addDefault(name: string) {
     const current = string(
       standalone ? native.module?.defaultVariables : nativeRisuExtension(native).defaultVariables

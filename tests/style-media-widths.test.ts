@@ -15,6 +15,7 @@ const allowed: Record<number, string> = {
   760: 'narrow layout (web/useCompactLayout.ts)',
   800: 'native editor split narrows its rail',
   900: 'usage cards tighten',
+  959: 'change review offers side-by-side diffs (web/ChangeReview.tsx)',
   1000: 'workspace padding and navigation width tighten',
   1023: 'sidebar becomes the rail',
   1150: 'outline workspace stacks beside a docked helper',

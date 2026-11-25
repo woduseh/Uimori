@@ -32,6 +32,7 @@ export type StudioSection<K extends string> = {
   count?: number;
   group?: string;
   more?: boolean;
+  changed?: boolean;
 };
 
 export type ContentSection =

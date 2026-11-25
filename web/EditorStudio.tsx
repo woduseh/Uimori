@@ -88,7 +88,8 @@ export function EditorStudio<K extends string>({
   header,
   notice,
   label,
-  sections,
+  sections: placed,
+  changed = [],
   value,
   onSelect,
   idPrefix,
@@ -98,6 +99,7 @@ export function EditorStudio<K extends string>({
   notice?: ReactNode;
   label: string;
   sections: readonly StudioSection<K>[];
+  changed?: readonly { id: K }[];
   value: K;
   onSelect: (id: K) => void;
   idPrefix: string;
@@ -130,6 +132,9 @@ export function EditorStudio<K extends string>({
     focusTab.current = null;
     document.getElementById(`${idPrefix}-${value}-tab`)?.focus();
   }, [value, idPrefix]);
+  const sections = placed.map((section) =>
+    changed.some((item) => item.id === section.id) ? { ...section, changed: true } : section
+  );
   const rail = sections.filter((section) => !section.more);
   const more = sections.filter((section) => section.more);
   const studio = useMemo(() => ({ idPrefix, current: value as string }), [idPrefix, value]);
@@ -246,6 +251,7 @@ function StudioSectionPicker<K extends string>({
               <span className="section-navigation-count">{formatNumber(current.count)}</span>
             )}
           </span>
+          {current?.changed && <span className="section-navigation-changed" aria-hidden="true" />}
           <DropdownIcon size={18} aria-hidden="true" />
         </>
       }

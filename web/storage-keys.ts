@@ -69,6 +69,7 @@ export const storageKeys = {
   sceneNavigator: exact('uimori:scene-navigator', local, 'setting'),
   illustrationsCollapsed: exact('uimori:illustrations-collapsed', local, 'setting'),
   firstMessageFont: exact('uimori:first-message-font', local, 'setting'),
+  changeReviewLayout: exact('uimori:change-review-layout', local, 'setting'),
   shortcuts: exact('uimori:shortcuts', local, 'setting'),
   shortcutBindings: exact('uimori:shortcut-bindings', local, 'setting'),
   panelWidth: exact('uimori:panel-width', local, 'setting'),

@@ -44,6 +44,14 @@
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
+.section-navigation-changed {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-inline-start: auto;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .section-navigation-group {
   padding: 20px 12px 4px;
   font-size: var(--font-small);

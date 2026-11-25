@@ -32,8 +32,13 @@ import { IconButton } from './IconButton.js';
 import { CbsNamesContext, CodeField } from './CodeField.js';
 import { cbsUseLocator } from './CbsReferenceList.js';
 import { useCbsNames, usePresetReferences } from './cbs-reference-index.js';
-import { codeFieldName, revealCodeField } from './code-field-reveal.js';
-import type { CbsVariableUse } from '../core/cbs-references.js';
+import {
+  codeFieldName,
+  revealEditorTarget,
+  type EditorJumpTarget,
+  type EditorReveal,
+} from './code-field-reveal.js';
+import { useStableHandler } from './useStableHandler.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
 import './native-editor.css';
@@ -64,7 +69,9 @@ export function NativeRisuPresetEditor({
   anchor = null,
   onSelect,
   idPrefix: id,
+  reveal = null,
 }: {
+  reveal?: EditorReveal | null;
   onSelect: (section: Section) => void;
   idPrefix: string;
   anchor?: ResourceAnchorRequest | null;
@@ -96,7 +103,7 @@ export function NativeRisuPresetEditor({
   const locate = cbsUseLocator(t, (target) =>
     sections.includes(target as Section) ? t(presetSectionLabelKey(target as Section)) : target
   );
-  function jumpTo(use: CbsVariableUse) {
+  function jumpTo(use: EditorJumpTarget) {
     const target = use.section as Section;
     if (!sections.includes(target)) return;
     onSelect(target);
@@ -108,14 +115,20 @@ export function NativeRisuPresetEditor({
       setRegexFocus({ index: use.item, epoch: ++regexJumpEpoch });
     arrival.current?.abort();
     arrival.current = new AbortController();
-    revealCodeField(
+    revealEditorTarget(
       () => document.getElementById(`${id}-${target}-panel`),
-      codeFieldName(target, use.item, use.field),
-      use.range,
+      use,
       '.native-item-detail',
       arrival.current.signal
     );
   }
+  const revealed = useRef(0);
+  const revealTarget = useStableHandler(jumpTo);
+  useEffect(() => {
+    if (!reveal || revealed.current === reveal.epoch) return;
+    revealed.current = reveal.epoch;
+    revealTarget(reveal);
+  }, [reveal, revealTarget]);
   const [pendingParts, setPendingParts] = useBufferedEditorState<string[]>(
     'prompt.native.pendingParts',
     []

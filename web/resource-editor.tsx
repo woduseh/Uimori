@@ -483,7 +483,7 @@ export function ResourceEditorActions({
   return (
     <div className="resource-editor-actions">
       <ResourceEditorStatus value={value} hideSyncError={hideSyncError} showUnsaved={!changes} />
-      {value.state.dirty && changes}
+      {changes}
       {canDiscard && (
         <button
           type="button"

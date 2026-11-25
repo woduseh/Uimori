@@ -12,6 +12,7 @@ type SectionNavigationItem<K extends string> = {
   panelId?: string;
   group?: string;
   count?: number;
+  changed?: boolean;
 };
 
 export function SectionNavigation<K extends string>({
@@ -58,40 +59,55 @@ export function SectionNavigation<K extends string>({
   };
   const content = (
     <>
-      {items.map(({ id, title, icon: Icon, description, panelId, group, count }, index) => (
-        <Fragment key={id}>
-          {group && items[index - 1]?.group !== group && (
-            <span className="section-navigation-group" aria-hidden="true">
-              {group}
-            </span>
-          )}
-          <button
-            type="button"
-            role={compact ? undefined : 'tab'}
-            id={`${idPrefix}-${id}-tab`}
-            aria-controls={panelId ?? `${idPrefix}-${id}-panel`}
-            aria-label={count ? t('shared.sectionCount', { label: title, count }) : title}
-            aria-describedby={description ? `${idPrefix}-${id}-description` : undefined}
-            aria-selected={compact ? undefined : value === id}
-            aria-current={compact && value === id ? 'page' : undefined}
-            tabIndex={compact || value === id ? 0 : -1}
-            onClick={() => onSelect(id)}
-          >
-            {Icon && <Icon size={20} aria-hidden="true" />}
-            <span>
-              <span className="section-navigation-title">
-                {title}
-                {!!count && (
-                  <span className="section-navigation-count" aria-hidden="true">
-                    {formatNumber(count)}
-                  </span>
-                )}
+      {items.map(
+        ({ id, title, icon: Icon, description, panelId, group, count, changed }, index) => (
+          <Fragment key={id}>
+            {group && items[index - 1]?.group !== group && (
+              <span className="section-navigation-group" aria-hidden="true">
+                {group}
               </span>
-              {description && <small id={`${idPrefix}-${id}-description`}>{description}</small>}
-            </span>
-          </button>
-        </Fragment>
-      ))}
+            )}
+            <button
+              type="button"
+              role={compact ? undefined : 'tab'}
+              id={`${idPrefix}-${id}-tab`}
+              aria-controls={panelId ?? `${idPrefix}-${id}-panel`}
+              aria-label={count ? t('shared.sectionCount', { label: title, count }) : title}
+              aria-describedby={
+                [
+                  description ? `${idPrefix}-${id}-description` : '',
+                  changed ? `${idPrefix}-${id}-changed` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
+              aria-selected={compact ? undefined : value === id}
+              aria-current={compact && value === id ? 'page' : undefined}
+              tabIndex={compact || value === id ? 0 : -1}
+              onClick={() => onSelect(id)}
+            >
+              {Icon && <Icon size={20} aria-hidden="true" />}
+              <span>
+                <span className="section-navigation-title">
+                  {title}
+                  {!!count && (
+                    <span className="section-navigation-count" aria-hidden="true">
+                      {formatNumber(count)}
+                    </span>
+                  )}
+                </span>
+                {description && <small id={`${idPrefix}-${id}-description`}>{description}</small>}
+              </span>
+              {changed && <span className="section-navigation-changed" aria-hidden="true" />}
+            </button>
+            {changed && (
+              <span id={`${idPrefix}-${id}-changed`} hidden>
+                {t('shared.sectionChanged')}
+              </span>
+            )}
+          </Fragment>
+        )
+      )}
     </>
   );
   return orientation === 'horizontal' ? (
