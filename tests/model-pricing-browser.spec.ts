@@ -270,7 +270,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await source.getByTestId('turn-activity').locator(':scope > summary').click();
   const textCost = source.getByTestId('scene-inspector').getByTestId('scene-text-cost');
   await expect(textCost).toHaveAttribute('title', '확인된 금액 합계 $0.004995, 미확인 1회 포함');
-  await expect(textCost.locator('[aria-hidden="true"]')).toHaveText('$0.005');
+  await expect(textCost.locator('[aria-hidden="true"]')).toHaveText('$0.005+');
   await expect(textCost.locator('.sr-only')).toHaveText(
     '본문 추정 비용: 확인된 금액 합계 $0.004995, 미확인 1회 포함'
   );
