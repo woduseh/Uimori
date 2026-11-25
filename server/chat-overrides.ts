@@ -131,8 +131,25 @@ export class ChatOverridesStore {
   remove(chatId: string, value: unknown, requestId: string): ChatOverrideResult {
     return this.write('remove', chatId, value, requestId);
   }
+  restore(
+    chatId: string,
+    selector: ChatLoreSelector,
+    prior: ChatLoreOverride | null,
+    operationId: string,
+    requestId: string
+  ): ChatOverrideResult {
+    const body = {
+      selector,
+      expectedRevision: this.revision(chatId),
+      expectedHeadRevision: this.store.chat(chatId).headRevision,
+      operationId,
+    };
+    return prior
+      ? this.write('reinstate', chatId, { ...body, entry: prior }, requestId)
+      : this.remove(chatId, body, requestId);
+  }
   private write(
-    action: 'patch' | 'remove',
+    action: 'patch' | 'remove' | 'reinstate',
     chatId: string,
     value: unknown,
     requestId: string
@@ -145,7 +162,9 @@ export class ChatOverridesStore {
       'operationId',
       ...(action === 'patch'
         ? ['expectedProfileRevision', 'expectedPackageRevision', 'expectedFieldHash', 'value']
-        : []),
+        : action === 'reinstate'
+          ? ['entry']
+          : []),
     ]);
     const selector = validateChatLoreSelector(body.selector),
       expectedRevision = number(body.expectedRevision, 'override revision', 0);
@@ -176,7 +195,20 @@ export class ChatOverridesStore {
           (entry) => chatLoreKey(entry.selector) === chatLoreKey(selector)
         );
       let entry: ChatLoreOverride;
-      if (action === 'remove') {
+      if (action === 'reinstate') {
+        const prior = body.entry as ChatLoreOverride;
+        if (prior.chatId !== chatId || chatLoreKey(prior.selector) !== chatLoreKey(selector))
+          throw new HttpError(400, 'Override outside selector');
+        entry = {
+          ...prior,
+          id: randomUUID(),
+          revision: expectedRevision + 1,
+          retired: false,
+          atSource: chat.headRevision,
+          atHash: scoped.headHash,
+          createdAt: new Date().toISOString(),
+        };
+      } else if (action === 'remove') {
         if (!prior || prior.retired) throw new HttpError(409, '이 연결에 적용한 변경이 없어요.');
         entry = {
           ...prior,

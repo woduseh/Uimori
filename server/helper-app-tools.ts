@@ -708,7 +708,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
   );
   return {
     readOnly,
-    confirmation: helperConfirmationTrait(name, args),
+    confirmation: helperConfirmationTrait(name),
     effect: (conditionalNames.has(name) && args.action === undefined
       ? 'mixed'
       : readOnly

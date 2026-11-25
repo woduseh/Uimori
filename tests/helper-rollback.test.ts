@@ -20,8 +20,12 @@ import {
   helperResourceHash,
   helperStateHash,
   pruneHelperChanges,
+  recordHelperChatLoreChange,
   withHelperChange,
 } from '../server/helper-changes.js';
+import { chatOverrideHash } from '../core/chat-overrides.js';
+import { ChatOverridesStore } from '../server/chat-overrides.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import {
@@ -703,6 +707,98 @@ test('a patch across three resources restores the two nobody touched and reports
     '사용자 수정',
     '다 처음',
   ]);
+});
+
+test('chat-only lore edits and removals roll back to the override the chat had before the task', () => {
+  const f = fixture();
+  const model = fixtureBotInput('로어 봇', '설명');
+  model.package = nativeContent({
+    name: '로어 봇',
+    description: '설명',
+    character_book: {
+      entries: [
+        { keys: ['마을'], comment: '마을', content: '조용한 마을', constant: true },
+        { keys: ['숲'], comment: '숲', content: '깊은 숲', constant: true },
+      ],
+    },
+  });
+  const bot = f.store.product.content(model) as Content;
+  const chat = createFixtureChat(f.store, '로어 채팅', { botId: bot.id });
+  const service = new ChatOverridesStore(f.store);
+  const selector = (loreId: string) => ({
+    id: bot.id,
+    role: 'bot',
+    modulePath: [],
+    loreId,
+    field: 'text',
+  });
+  const guards = () => {
+    const state = service.get(chat.id);
+    return {
+      expectedRevision: state.revision,
+      expectedHeadRevision: state.headRevision,
+      operationId: randomUUID(),
+    };
+  };
+  const patch = (requestId: string, loreId: string, value: string) => {
+    const state = service.get(chat.id);
+    const lore = state.attachments[0]!.lore.find((entry) => entry.id === loreId)!;
+    return {
+      ...guards(),
+      selector: selector(loreId),
+      value,
+      expectedProfileRevision: state.profileRevision,
+      expectedPackageRevision: state.attachments[0]!.packageRevision,
+      expectedFieldHash: chatOverrideHash(lore.text),
+      requestId,
+    };
+  };
+  const write = (task: HelperTask | null, action: 'patch' | 'remove', body: any) => {
+    const { requestId, ...input } = body;
+    const run = () => {
+      const prior = service.current(chat.id, input.selector);
+      const saved = service[action](chat.id, input, requestId);
+      if (task) recordHelperChatLoreChange(f.store, task, chat.id, prior, saved.entry);
+      return saved;
+    };
+    return task
+      ? f.workspace.operation(task.id, `${task.id}:${input.operationId}`, { input }, run)
+      : run();
+  };
+  const [village, forest] = service.get(chat.id).attachments[0]!.lore.map((entry) => entry.id);
+  write(null, 'patch', patch('user', village!, '사용자가 바꾼 마을'));
+  const task = f.begin();
+  write(task, 'remove', { ...guards(), selector: selector(village!), requestId: task.id });
+  write(task, 'patch', patch(task.id, forest!, '도우미가 바꾼 숲'));
+  f.finish(task);
+  const overrides = () =>
+    Object.fromEntries(
+      service.get(chat.id).overrides.map((entry) => [entry.selector.loreId, entry.value])
+    );
+  expect(overrides()).toEqual({ [forest!]: '도우미가 바꾼 숲' });
+  expect(
+    helperRollbackView(f.store, f.workspace, task.id).units.map(({ domain, status, touches }) => [
+      domain,
+      status,
+      touches,
+    ])
+  ).toEqual([
+    ['chat-lore', 'restorable', null],
+    ['chat-lore', 'restorable', null],
+  ]);
+  expect(f.rollBack(task).units.map((unit) => unit.status)).toEqual(['restored', 'restored']);
+  expect(overrides()).toEqual({ [village!]: '사용자가 바꾼 마을' });
+  expect(f.rollBack(task).units.map((unit) => unit.status)).toEqual(['restored', 'restored']);
+  expect(overrides()).toEqual({ [village!]: '사용자가 바꾼 마을' });
+
+  const later = f.begin();
+  write(later, 'remove', { ...guards(), selector: selector(village!), requestId: later.id });
+  f.finish(later);
+  write(null, 'patch', patch('user', village!, '다시 바꾼 마을'));
+  expect(f.rollBack(later).units).toMatchObject([
+    { domain: 'chat-lore', status: 'changed-since', reason: 'changed-after-task' },
+  ]);
+  expect(overrides()).toEqual({ [village!]: '다시 바꾼 마을' });
 });
 
 test('rolling back one target leaves the other targets of the task as they are', () => {

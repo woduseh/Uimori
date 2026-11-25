@@ -107,7 +107,7 @@ function requirement(
     );
     return needs('delete', targets);
   }
-  const confirmation = helperConfirmationTrait(name, args);
+  const confirmation = helperConfirmationTrait(name);
   if (!confirmation) return null;
   if (
     name === 'model.delete' &&

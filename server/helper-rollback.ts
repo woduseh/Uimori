@@ -21,13 +21,16 @@ import {
   authoredView,
   captureHelperTarget,
   contentPackageSettings,
+  helperChatLoreOverride,
   helperResourceHash,
   helperStateHash,
   helperTargetHash,
+  type ChatLoreBaseline,
   type HelperChangeTarget,
   type NoteState,
   type OutlineState,
 } from './helper-changes.js';
+import { ChatOverridesStore } from './chat-overrides.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { HttpError } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
@@ -99,11 +102,19 @@ function target(row: Row): HelperChangeTarget | null {
   return null;
 }
 
+const loreBaseline = (row: Row) => parsed(row) as ChatLoreBaseline;
+
 function currentHash(store: Store, row: Row) {
   if (row.domain === 'resource') {
     const { kind, id } = resourceKey(row);
     return helperResourceHash(kind, readResource(store, kind, id));
   }
+  if (row.domain === 'chat-lore')
+    return helperStateHash(
+      helperChatLoreOverride(
+        new ChatOverridesStore(store).current(row.chat_id!, loreBaseline(row).selector)
+      )
+    );
   return helperTargetHash(target(row)!, captureHelperTarget(store, target(row)!).value);
 }
 
@@ -122,6 +133,7 @@ function covered(unit: Unit) {
     unit.domain === 'resource' ||
     unit.domain === 'outline' ||
     unit.domain === 'notes' ||
+    unit.domain === 'chat-lore' ||
     unit.unit.startsWith('scene:')
   );
 }
@@ -424,6 +436,17 @@ function restoreNotes(store: Store, row: Row, key: string) {
   for (const note of baseline) if (!matched.has(note.id)) write(restored(note));
 }
 
+function restoreChatLore(store: Store, row: Row, key: string, taskId: string) {
+  const baseline = loreBaseline(row);
+  new ChatOverridesStore(store).restore(
+    row.chat_id!,
+    baseline.selector,
+    baseline.override,
+    `rollback:${helperStateHash(key).slice(0, 32)}`,
+    `rollback:${taskId}`
+  );
+}
+
 const REVERTED_REQUEST_CHARS = 160;
 
 export function helperRevertedChanges(
@@ -501,6 +524,7 @@ export function rollBackHelperTask(
           if (unit.domain === 'resource') restoreResource(store, unit.rows[0]!);
           else if (unit.domain === 'outline') restoreOutline(store, unit.rows[0]!, key);
           else if (unit.domain === 'notes') restoreNotes(store, unit.rows[0]!, key);
+          else if (unit.domain === 'chat-lore') restoreChatLore(store, unit.rows[0]!, key, taskId);
           else restoreScene(store, unit, notices);
           store.db
             .prepare(
@@ -523,7 +547,7 @@ export function rollBackHelperTask(
       }
       if (unit.domain === 'resource') resourceKinds.add(resourceKey(unit.rows[0]!).kind);
       if (unit.domain === 'scene') restoredScenes.add(unit.rows[0]!.source_id!);
-      if (unit.domain === 'outline' || unit.domain === 'notes')
+      if (unit.domain === 'outline' || unit.domain === 'notes' || unit.domain === 'chat-lore')
         changedChats.add(unit.rows[0]!.chat_id!);
       return [
         {

@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
-import { chatLoreKey, type ChatLoreOverride } from '../core/chat-overrides.js';
+import {
+  chatLoreKey,
+  type ChatLoreOverride,
+  type ChatLoreSelector,
+} from '../core/chat-overrides.js';
 import type {
   HelperChange,
   HelperChangeAnchor,
@@ -770,7 +774,7 @@ export function recordHelperAction(
   store: Store,
   task: ChangeTask,
   change: {
-    domain: 'settings' | 'chat-lore';
+    domain: 'settings';
     targetId: string;
     chatId: string | null;
     title: string;
@@ -816,20 +820,49 @@ export function recordHelperChatLoreChange(
   prior: ChatLoreOverride | undefined,
   saved: ChatLoreOverride
 ) {
-  recordHelperAction(store, task, {
-    domain: 'chat-lore',
-    targetId: chatLoreKey(saved.selector),
-    chatId,
-    title: store.chat(chatId).title,
-    location: { kind: 'chat-lore' },
-    action: saved.retired ? 'delete' : 'update',
-    anchor: { domain: 'chat-lore', chatId, overrideId: saved.id },
-    value: {
-      before: prior && !prior.retired ? prior.value : saved.baseValue,
-      after: saved.retired ? saved.baseValue : saved.value,
+  const before = prior && !prior.retired ? prior.value : saved.baseValue;
+  const after = saved.retired ? saved.baseValue : saved.value;
+  const title = store.chat(chatId).title;
+  const targetId = chatLoreKey(saved.selector);
+  storeChange(
+    store,
+    task,
+    { domain: 'chat-lore', targetId, chatId },
+    null,
+    {
+      before: {
+        value: before,
+        selector: saved.selector,
+        override: prior && !prior.retired ? prior : null,
+      } satisfies ChatLoreBaseline,
+      beforeHash: helperStateHash(helperChatLoreOverride(prior)),
+      afterHash: helperStateHash(helperChatLoreOverride(saved)),
     },
-  });
+    (baseline) =>
+      (baseline as { value?: unknown } | null)?.value === after
+        ? []
+        : [
+            {
+              domain: 'chat-lore',
+              targetId,
+              title,
+              location: { kind: 'chat-lore' },
+              action: saved.retired ? 'delete' : 'update',
+              diff: null,
+              anchor: { domain: 'chat-lore', chatId, overrideId: saved.id },
+            },
+          ]
+  );
 }
+
+export type ChatLoreBaseline = {
+  value: string;
+  selector: ChatLoreSelector;
+  override: ChatLoreOverride | null;
+};
+
+export const helperChatLoreOverride = (entry: ChatLoreOverride | undefined) =>
+  entry && !entry.retired ? entry.value : null;
 
 function releaseBaselineFiles(db: DatabaseSync, rows: Record<string, unknown>[]) {
   queueImageCleanup(

@@ -497,6 +497,8 @@ test('a plan-mode request cannot carry a confirmation, which stays grantable', a
 });
 
 const UNCONFIRMED_DELETIONS: Record<string, string> = {
+  'chat.lore:remove':
+    'turn rollback brings back the chat-only override the removal retired (tests/helper-rollback.test.ts)',
   'chat.bookmark:delete':
     'a bookmark marks a place in the reader, and its earlier title and note stay in the change record',
   'chat.organize:delete-folder':
@@ -653,6 +655,16 @@ test('an irreversible deletion waits even without paid confirmation and names it
       'chat.lore',
       { action: 'patch', body: {} },
       'r2'
+    )
+  ).toBeNull();
+  expect(
+    helperConfirmationGate(
+      f.store(),
+      workspace,
+      task,
+      'chat.lore',
+      { action: 'remove', body: {} },
+      'r3'
     )
   ).toBeNull();
 });

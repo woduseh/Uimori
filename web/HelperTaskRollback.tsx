@@ -22,13 +22,13 @@ const coveredChange = (change: HelperChange) =>
   change.domain === 'resource' ||
   change.domain === 'outline' ||
   change.domain === 'notes' ||
+  change.domain === 'chat-lore' ||
   (change.domain === 'scene' && !change.targetId.endsWith(':title'));
 
 export const rollbackCovers = (changes: readonly HelperChange[]) => changes.some(coveredChange);
 
 const uncoveredKindLabels = {
   settings: 'helperRollback.kindSettings',
-  'chat-lore': 'helperRollback.kindChatLore',
   'scene-title': 'helperRollback.kindSceneTitle',
 } as const;
 
@@ -36,11 +36,9 @@ export function uncoveredKinds(changes: readonly HelperChange[]) {
   const kinds = new Set(
     changes
       .filter((change) => !coveredChange(change))
-      .map((change) =>
-        change.domain === 'scene' ? 'scene-title' : (change.domain as 'settings' | 'chat-lore')
-      )
+      .map((change) => (change.domain === 'scene' ? 'scene-title' : 'settings'))
   );
-  const labels = (['settings', 'chat-lore', 'scene-title'] as const)
+  const labels = (['settings', 'scene-title'] as const)
     .filter((kind) => kinds.has(kind))
     .map((kind) => t(uncoveredKindLabels[kind]));
   return labels.length
@@ -155,6 +153,7 @@ export function useHelperRollback({
     const title = change?.title ?? unit.title;
     if (unit.domain === 'outline') return `${title}, ${t('helperRollback.outline')}`;
     if (unit.domain === 'notes') return `${title}, ${t('helperRollback.notes')}`;
+    if (unit.domain === 'chat-lore') return `${title}, ${t('helperRollback.kindChatLore')}`;
     if (unit.domain === 'scene' && change?.location && typeof change.location !== 'string') {
       const scene = helperChangeLocationParts(change.location)[0];
       return scene ? `${title}, ${scene.text}` : title;

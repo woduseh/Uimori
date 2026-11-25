@@ -16,11 +16,7 @@ const paidConfirmedNames = new Set([
   'task.retry',
 ]);
 
-export function helperConfirmationTrait(
-  name: string,
-  args: Record<string, unknown>
-): HelperConfirmationTrait | undefined {
-  if (deleteConfirmedNames.has(name) || (name === 'chat.lore' && args.action === 'remove'))
-    return 'delete';
+export function helperConfirmationTrait(name: string): HelperConfirmationTrait | undefined {
+  if (deleteConfirmedNames.has(name)) return 'delete';
   return paidConfirmedNames.has(name) ? 'paid' : undefined;
 }

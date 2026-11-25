@@ -924,7 +924,7 @@ test('long chat lore stays paged through helper reads and saves with original fi
   );
 });
 
-test('helper discovers an override after its shared lore was removed and retires it once confirmed', async () => {
+test('helper discovers an override after its shared lore was removed, retires it at once, and rollback brings it back', async () => {
   const f = await fixture();
   const service = new ChatOverridesStore(f.store);
   const initial = service.get(f.chat.id);
@@ -958,7 +958,6 @@ test('helper discovers an override after its shared lore was removed and retires
   const appCall = (id: string, args: Record<string, unknown>) =>
     call(id, 'app.call', { name: 'chat.lore', arguments: args });
   let removal: Record<string, unknown> = {};
-  let held = '';
   mockSend((request, round) => {
     if (round === 0) return calls(appCall('list', { action: 'read', limit: 1 }));
     if (round === 1) {
@@ -1004,19 +1003,6 @@ test('helper discovers an override after its shared lore was removed and retires
       };
       return calls(appCall('remove', removal));
     }
-    if (round === 3) {
-      const refused = event(request, 'remove');
-      expect(refused).toMatchObject({
-        denied: true,
-        result: {
-          code: 'CONFIRMATION_REQUIRED',
-          confirmation: { operation: 'chat.lore', reason: 'delete' },
-        },
-      });
-      held = (refused.result as { confirmation: { id: string } }).confirmation.id;
-      return structuredClone(success);
-    }
-    if (round === 4) return calls(appCall('remove', removal));
     expect(result(request, 'remove')).toMatchObject({
       revision: saved.revision + 1,
       selector,
@@ -1024,11 +1010,19 @@ test('helper discovers an override after its shared lore was removed and retires
     });
     return structuredClone(success);
   });
-  await submit(f, '원본 로어가 없어진 채팅 전용 변경을 찾아 제거해줘');
-  expect(service.get(f.chat.id).overrides).toHaveLength(1);
-  await submit(f, '확인했어요. 제거해 주세요.', 'completed', randomUUID(), [held]);
+  const task = await submit(f, '원본 로어가 없어진 채팅 전용 변경을 찾아 제거해줘');
   expect(service.get(f.chat.id).overrides).toEqual([]);
   expect(f.store.product.get('content', f.bot.id)).toEqual(shared);
+  const rollback = await f.app.inject({
+    method: 'POST',
+    url: `/api/helper/tasks/${task.id}/rollback`,
+    payload: {},
+  });
+  expect(rollback.json().units).toMatchObject([{ domain: 'chat-lore', status: 'restored' }]);
+  expect(service.get(f.chat.id).overrides).toMatchObject([
+    { selector, value: localText, retired: false },
+  ]);
+  expect(service.get(f.chat.id).conflicts).toMatchObject([{ kind: 'entry-missing' }]);
 });
 
 test('invalid native batch input rolls back with exact failure details and can be corrected in the same helper task', async () => {
