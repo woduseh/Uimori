@@ -225,6 +225,47 @@ for (const behavior of ['looks-up-again', 'reuses-known'] as const)
     expect(new Set(sources).size).toBe(1);
   });
 
+test('a plan task carries only the earlier operations it may run', async () => {
+  let bot: Content | undefined;
+  let planning = false;
+  const f = fixture((body, round) => {
+    if (planning) {
+      expect(
+        requestSource(body).knownOperations.tools.map((tool: { name: string }) => tool.name)
+      ).toEqual(['resource.read']);
+      return 'The plan.';
+    }
+    if (round === 0)
+      return [
+        appCall('read', 'resource.read', { kind: 'content', id: bot!.id }),
+        appCall('patch', 'resource.patch', {
+          kind: 'content',
+          id: bot!.id,
+          expectedRevision: bot!.revision,
+          changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: 'Edited.' }],
+        }),
+      ];
+    return 'Edited.';
+  });
+  bot = f.store.product.content(fixtureBotInput('Harin', 'Name: Harin.')) as Content;
+  await f.run('Edit Harin.');
+  planning = true;
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    randomUUID(),
+    'Plan the next edit.',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true,
+    undefined,
+    { mode: 'plan' }
+  );
+  await Promise.all(owned.at(-1)!.work);
+  expect(f.runtime.workspace.task(task.id).status).toBe('completed');
+});
+
 for (const behavior of ['reads-the-continuation', 'uses-the-following-text'] as const)
   test(`a lookup whose answer follows the excerpt (${behavior})`, async () => {
     const lore =
