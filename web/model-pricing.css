@@ -117,6 +117,9 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.attempt-list tbody tr:last-child :is(td, th) {
+  border-bottom: 0;
+}
 .attempt-list thead th {
   color: var(--muted);
   font-weight: 600;
@@ -148,6 +151,9 @@
     gap: 8px 12px;
     padding-block: 12px;
     border-bottom: var(--hairline) solid var(--line);
+  }
+  .attempt-list tbody tr:last-child {
+    border-bottom: 0;
   }
   .attempt-list tbody :is(th, td) {
     min-width: 0;
