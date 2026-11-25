@@ -644,6 +644,10 @@ p.provider-draft-note:lang(ko),
   min-width: 0;
   border-top: var(--hairline) solid var(--line);
 }
+.provider-stop-sequences[data-model-options="compatibility"][open] {
+  padding-bottom: 16px;
+  border-bottom: var(--hairline) solid var(--line);
+}
 .provider-stop-sequences > summary {
   padding-block: 14px;
   min-height: var(--control-h);

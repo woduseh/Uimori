@@ -226,7 +226,15 @@ test('helper reads and updates judgment prices per target through the role setti
     storedTargets: [],
   });
   const revision = before.revision;
+  const unsuited = store.product.connection({
+    title: 'Messages provider',
+    protocol: 'anthropic-messages-v1',
+    endpoint: 'https://messages.example/v1',
+    credentialRef: 'MESSAGES_KEY_REF',
+    enabled: true,
+  });
   for (const body of [
+    { pricing: jevPricing, judgmentTarget: { ...gatewayTarget, connectionId: unsuited.id } },
     { pricing: { mode: 'manual', rates: jevPricing.rates } },
     { pricing: { ...jevPricing, rates: { ...jevPricing.rates, cacheRead: 0.01 } } },
     { pricing: { mode: 'official' } },

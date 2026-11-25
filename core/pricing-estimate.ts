@@ -149,7 +149,11 @@ function line(
 ): PricingLine {
   const rate = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
   const cost =
-    tokens === 0 ? 0 : tokens === null || rate === null ? null : (tokens / 1_000_000) * rate;
+    tokens === 0 || rate === 0
+      ? 0
+      : tokens === null || rate === null
+        ? null
+        : (tokens / 1_000_000) * rate;
   return { kind, tokens, rate, usd: cost !== null && Number.isFinite(cost) ? cost : null };
 }
 

@@ -220,14 +220,21 @@ const optionalNumberOffered = (sendable: boolean, documented: boolean | undefine
 function SamplingOptions({
   shown,
   stored,
+  session,
   children,
 }: {
   shown: boolean;
   stored: boolean;
+  session: string;
   children: ReactNode;
 }) {
   useI18n();
   const [open, setOpen] = useState(stored);
+  const [opened, setOpened] = useState(session);
+  if (opened !== session) {
+    setOpened(session);
+    setOpen(stored);
+  }
   useEffect(() => {
     if (stored) setOpen(true);
   }, [stored]);
@@ -388,9 +395,11 @@ export function ProviderModelFields({
   onChange,
   connection,
   section,
+  session,
   forcedVertexTier,
 }: {
   section: 'basic' | 'advanced';
+  session: string;
   value: ModelDraft;
   onChange: (value: ModelDraft) => void;
   connection: Connection | undefined;
@@ -740,6 +749,7 @@ export function ProviderModelFields({
             samplingStored
           }
           stored={samplingStored}
+          session={session}
         >
           <OptionalNumber
             label="Temperature"

@@ -209,6 +209,10 @@ test('unknown rate remains unknown; only an explicit zero price is free', () => 
   expect(estimateCost(pricing, responses)).toMatchObject({ status: 'partial', usd: null });
   pricing.rates = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   expect(estimateCost(pricing, responses)).toMatchObject({ status: 'estimated', usd: 0 });
+  expect(estimateCost(pricing, { ...responses, outputTokens: null })).toMatchObject({
+    status: 'estimated',
+    usd: 0,
+  });
   pricing.rates.output = -5;
   expect(value(estimateCost(pricing, responses), 'output')?.rate).toBeNull();
 });

@@ -191,6 +191,7 @@ export function ProviderModelForm({
         </div>
         <ProviderModelFields
           section={modelSection}
+          session={`${editingModel?.id ?? ''}:${modelBaseline}`}
           value={model}
           onChange={onChange}
           connection={chosen}

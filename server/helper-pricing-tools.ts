@@ -7,6 +7,7 @@ import {
 } from '../core/model-pricing.js';
 import {
   DEFAULT_JUDGMENT_SELECTION,
+  isJudgmentConnection,
   judgmentPriceFor,
   judgmentPriceKey,
   judgmentPriceTarget,
@@ -230,7 +231,7 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
     return { judgment: true, ...describe(current.judgmentPricing), ...backfill };
   }
   if (name === 'model.pricing.update') {
-    if (target.connectionId && !describeJudgmentTarget(store, target, undefined).connectionTitle)
+    if (target.connectionId && !pricedConnection(store, target))
       throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
     let pricing: JudgmentPricing | undefined;
     if (args.pricing !== null) {
@@ -263,6 +264,18 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
       return summary;
     }),
   };
+}
+
+function pricedConnection(store: Store, target: JudgmentPriceTarget) {
+  if (target.provider === 'typesafe' || store.product.isHidden('connection', target.connectionId!))
+    return false;
+  try {
+    const connection = store.product.get<Connection>('connection', target.connectionId!);
+    return isJudgmentConnection(target.provider, { ...connection, enabled: true });
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404) return false;
+    throw error;
+  }
 }
 
 function describeJudgmentTarget(
