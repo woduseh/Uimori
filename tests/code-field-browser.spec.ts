@@ -20,7 +20,11 @@ const viewports = [
   { name: 'phone', width: MOBILE_WIDTH, height: 812 },
 ] as const;
 
-async function seedBot(request: APIRequestContext, title: string) {
+async function seedBot(
+  request: APIRequestContext,
+  title: string,
+  card: Record<string, unknown> = {}
+) {
   const response = await request.post('/api/content', {
     data: {
       kind: 'bot',
@@ -29,6 +33,7 @@ async function seedBot(request: APIRequestContext, title: string) {
         name: title,
         description: 'First line\r\nSecond line',
         first_mes: greeting,
+        ...card,
       }),
       loading: 'pinned',
       relatedIds: [],
@@ -109,4 +114,79 @@ test('CODEFIELD02 typed CBS saves exactly and untouched CRLF text keeps its line
   const stored = await (await request.get(`/api/content/${seeded.id}`)).json();
   expect(stored.package.nativeRisu.card.first_mes).toBe(typed);
   expect(stored.package.nativeRisu.card.description).toBe('First line\r\nSecond line');
+});
+
+test('CODEFIELD03 undo history stays with the item it was typed in', async ({ page, request }) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  const title = `CODEFIELD03 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title, { alternate_greetings: ['', ''] });
+  await openGreetings(page, title);
+  const items = page.locator('.native-item-list');
+  const alternate = page.getByRole('textbox', { name: '대체 첫 메시지', exact: true });
+  await items.locator('[data-studio-item="1"]').click();
+  await expect(alternate).toHaveClass(/cm-content/u);
+  await alternate.click();
+  await page.keyboard.type('첫 번째 대체 인사');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await expectCodeFieldValue(alternate, '');
+  await items.locator('[data-studio-item="2"]').click();
+  await expect(items.locator('[data-studio-item="2"]')).toHaveAttribute('aria-current', 'true');
+  await alternate.click();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expectCodeFieldValue(alternate, '');
+  await page.keyboard.type('두 번째');
+  await items.locator('[data-studio-item="1"]').click();
+  await expectCodeFieldValue(alternate, '');
+});
+
+test('CODEFIELD04 a stale value during Hangul composition waits for the composition', async ({
+  page,
+  request,
+}) => {
+  const title = `CODEFIELD04 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title, { first_mes: '인사' });
+  const field = await openGreetings(page, title);
+  await field.click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' 안');
+  await expectCodeFieldValue(field, '인사 안');
+  const protocol = await page.context().newCDPSession(page);
+  await protocol.send('Input.imeSetComposition', {
+    text: 'ㄴ',
+    selectionStart: 1,
+    selectionEnd: 1,
+  });
+  await protocol.send('Input.imeSetComposition', {
+    text: '녀',
+    selectionStart: 1,
+    selectionEnd: 1,
+  });
+  await expect.poll(() => codeFieldValue(field)).toBe('인사 안녀');
+  const composing = await field.evaluate((element) => {
+    const host = element.closest('.code-field')!;
+    const fiberKey = Object.keys(host).find((key) => key.startsWith('__reactFiber$'))!;
+    type Fiber = { return: { memoizedProps: { onChange(value: string): void } } };
+    (host as unknown as Record<string, Fiber>)[fiberKey]!.return.memoizedProps.onChange('인사');
+    type View = { composing: boolean };
+    return (element as unknown as { cmTile: { root: { view: View } } }).cmTile.root.view
+      .composing;
+  });
+  expect(composing).toBe(true);
+  await protocol.send('Input.imeSetComposition', {
+    text: '녕',
+    selectionStart: 1,
+    selectionEnd: 1,
+  });
+  await protocol.send('Input.insertText', { text: '녕' });
+  await expectCodeFieldValue(field, '인사 안녕');
+  await page.keyboard.type('하세요');
+  await expectCodeFieldValue(field, '인사 안녕하세요');
+  const caret = await field.evaluate((element) => {
+    type View = { state: { selection: { main: { head: number } }; doc: { length: number } } };
+    const { state } = (element as unknown as { cmTile: { root: { view: View } } }).cmTile.root
+      .view;
+    return [state.selection.main.head, state.doc.length];
+  });
+  expect(caret[0]).toBe(caret[1]);
 });

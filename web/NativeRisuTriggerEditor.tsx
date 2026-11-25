@@ -49,6 +49,7 @@ export function NativeRisuTriggerEditor({
   );
   const [error, setError] = useState('');
   const [removing, setRemoving] = useState<number | null>(null);
+  const [removals, setRemovals] = useState(0);
   const pending = draft !== null;
   const index = draft?.index ?? Math.min(selected, Math.max(0, value.length - 1));
   const entry = value[index];
@@ -87,6 +88,7 @@ export function NativeRisuTriggerEditor({
   function remove(target: number) {
     setRemoving(null);
     onChange(value.filter((_, i) => i !== target));
+    setRemovals((count) => count + 1);
     setSelected(Math.max(0, target - 1));
   }
   function move(delta: number) {
@@ -207,7 +209,7 @@ export function NativeRisuTriggerEditor({
           {lua && record(entry) ? (
             <>
               {effects.map((effect, effectIndex) => (
-                <label key={effectIndex}>
+                <label key={`${removals}:${effectIndex}`}>
                   {effects.length > 1
                     ? t('native.luaNumber', { number: effectIndex + 1 })
                     : t('native.text_8601ddaaf9')}

@@ -1,5 +1,5 @@
 import { useI18n, formatNumber } from './i18n.js';
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
@@ -49,11 +49,13 @@ export function NativeCollectionEditor({
     position: number;
   } | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
+  const [removals, setRemovals] = useState(0);
   const index = Math.min(selected, Math.max(0, items.length - 1));
   useStudioItem(items[index] ? index : null, items[index]?.title ?? '');
   const remove = (target: number) => {
     setRemoving(null);
     onRemove?.(target);
+    setRemovals((count) => count + 1);
     setSelected(Math.max(0, target - 1));
   };
   const found = items
@@ -213,7 +215,7 @@ export function NativeCollectionEditor({
                 />
               )}
             </div>
-            {children(index)}
+            <Fragment key={removals}>{children(index)}</Fragment>
           </>
         ) : (
           <div className="native-empty">

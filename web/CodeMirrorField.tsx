@@ -466,6 +466,31 @@ function Editor({
   const view = useRef<EditorView | null>(null);
   const initialValue = useRef(value).current;
   const unacknowledged = useRef<string[]>([]);
+  const incoming = useRef({ value, name });
+  incoming.current = { value, name };
+  const documentName = useRef(name);
+  const resetAfterComposition = useRef(false);
+  const syncDocument = useRef((next: { value: string; name: string }) => {
+    const editor = view.current;
+    if (!editor) return;
+    const pending = unacknowledged.current;
+    resetAfterComposition.current = false;
+    if (next.name === documentName.current) {
+      const echo = pending.indexOf(next.value);
+      if (echo >= 0) {
+        pending.splice(0, echo + 1);
+        return;
+      }
+      if (next.value === editor.state.sliceDoc()) return;
+    }
+    if (editor.composing) {
+      resetAfterComposition.current = true;
+      return;
+    }
+    documentName.current = next.name;
+    pending.length = 0;
+    editor.setState(stateFactory.current(next.value));
+  }).current;
   const changeHandler = useRef(onChange);
   changeHandler.current = onChange;
   const compartments = useRef({
@@ -503,10 +528,13 @@ function Editor({
         compartments.options.of(editorOptions(settingsRef.current)),
         editorTheme,
         EditorView.updateListener.of((update) => {
-          if (!update.docChanged) return;
-          const next = update.state.sliceDoc();
-          if (unacknowledged.current.push(next) > 32) unacknowledged.current.shift();
-          changeHandler.current(next);
+          if (update.docChanged) {
+            const next = update.state.sliceDoc();
+            if (unacknowledged.current.push(next) > 32) unacknowledged.current.shift();
+            changeHandler.current(next);
+          }
+          if (resetAfterComposition.current && !update.view.composing)
+            queueMicrotask(() => syncDocument(incoming.current));
         }),
       ],
     })
@@ -545,19 +573,7 @@ function Editor({
     };
   }, [compartments, createState, handoff, initialLanguage, initialValue]);
 
-  useEffect(() => {
-    const editor = view.current;
-    if (!editor) return;
-    const pending = unacknowledged.current;
-    const echo = pending.indexOf(value);
-    if (echo >= 0) {
-      pending.splice(0, echo + 1);
-      return;
-    }
-    if (value === editor.state.sliceDoc()) return;
-    pending.length = 0;
-    editor.setState(createState(value));
-  }, [value, createState]);
+  useEffect(() => syncDocument({ value, name }), [value, name, syncDocument]);
 
   useEffect(() => {
     view.current?.dispatch({ effects: compartments.names.reconfigure(namesFacet.of(names)) });

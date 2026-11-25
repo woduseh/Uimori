@@ -27,7 +27,7 @@ export type CodeFieldProps = {
   placeholder?: string;
   spellCheck?: boolean;
   font?: 'body' | 'mono';
-  name?: string;
+  name: string;
   'aria-label'?: string;
   'aria-describedby'?: string;
 };
