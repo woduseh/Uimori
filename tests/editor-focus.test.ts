@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest';
 import {
   EDITOR_FOCUS_DIAGNOSTICS_MAX,
+  EDITOR_FOCUS_LABEL_MAX_CHARS,
   EDITOR_FOCUS_SELECTION_MAX_CHARS,
+  composeEditorFocus,
   editorFocusDiagnostics,
   editorFocusKey,
   editorFocusSelection,
@@ -87,6 +89,25 @@ test('the request parser accepts the published shape and refuses anything outsid
     expect(() => parseEditorFocus(invalid), JSON.stringify(invalid)).toThrow(
       /^Invalid editor focus/u
     );
+});
+
+test('a composed focus fits the request bounds whatever the item and field are called', () => {
+  const composed = composeEditorFocus(
+    'lore',
+    { index: 3, label: '긴 코멘트'.repeat(80), id: 'toggle_'.repeat(30) },
+    field({ label: '블록 이름'.repeat(80) }),
+    true
+  );
+  expect(composed.item).toEqual({
+    index: 3,
+    label: composed.item!.label,
+  });
+  expect(composed.item!.label).toHaveLength(EDITOR_FOCUS_LABEL_MAX_CHARS);
+  expect(composed.field!.label).toHaveLength(EDITOR_FOCUS_LABEL_MAX_CHARS);
+  expect(parseEditorFocus(structuredClone(composed))).toEqual(composed);
+  expect(
+    composeEditorFocus('lore', { index: 0, label: '등대', id: 'lighthouse' }, undefined, true).item
+  ).toEqual({ index: 0, label: '등대', id: 'lighthouse' });
 });
 
 test('the focus key changes with the item, field, selection and asked diagnostic only', () => {

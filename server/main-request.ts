@@ -12,7 +12,7 @@ import {
 } from '../core/context-summary-policy.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
-import { MAIN_SHELL_TOOL } from '../core/main-shell.js';
+import { mainShellTool } from '../core/main-shell.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
 import { nativeRisuPending } from './risu-native-run.js';
@@ -183,7 +183,7 @@ export function buildMainProviderRequest(
   const knowledge = readTools.includes('knowledge.read');
   if (knowledge) contract += '\n' + CATALOG_READ_GUIDANCE;
   if (shell) {
-    input.tools.push(MAIN_SHELL_TOOL.name);
+    input.tools.push('data.exec');
     if (knowledge)
       contract +=
         '\nUse data.exec when a reference question needs several searches or local processing; read known reference ids directly with knowledge.read.';
@@ -223,7 +223,7 @@ export function buildMainProviderRequest(
     stable: {
       contract,
       tools: [
-        ...(shell ? [structuredClone(MAIN_SHELL_TOOL)] : []),
+        ...(shell ? [mainShellTool(knowledge)] : []),
         ...MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name)).map((tool) =>
           structuredClone(tool)
         ),

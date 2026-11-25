@@ -10,7 +10,7 @@ import {
 import { isGeminiProtocol, modelTimeoutMs } from '../core/product.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { outlineContract } from '../core/outline.js';
-import { buildMainInput, executeTool } from '../core/provider.js';
+import { buildMainInput, executeTool, type MainInput } from '../core/provider.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 import type { StoryGuideBrief } from '../core/story-guide.js';
@@ -22,6 +22,7 @@ import {
   type ProviderRequest,
   type ProviderResult,
 } from '../core/transport.js';
+import { unofferedToolCall } from '../core/tool-outcome.js';
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { measureMainContext } from './context-planning.js';
 import type { MainHooks } from './model-runner.js';
@@ -78,20 +79,12 @@ export function storyGuideReservedTokens(snapshot: RunSnapshot): number {
   return snapshot.storyGuide?.config.enabled ? GUIDE_RESERVE_TOKENS : 0;
 }
 
-function guideRequest(snapshot: RunSnapshot): ProviderRequest {
-  const target = snapshot.profile!.models.main!;
-  const search = snapshot.storyGuide!.config.webSearch === true;
-  const input = buildMainInput(snapshot, [], undefined, {
-    delivery: 'direct',
-    families: search && isGeminiProtocol(target.connection.protocol) ? [] : ['knowledge', 'story'],
-  });
-  const tools = MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name));
-  const characterExamples = nativeCharacterExamples(snapshot);
-  const kept = new Set(input.history.map((entry) => entry.revision));
-  const history = (
+function guideHistory(snapshot: RunSnapshot, kept: MainInput['history']) {
+  const revisions = new Set(kept.map((entry) => entry.revision));
+  return (
     snapshot.nativeRisuExecution?.history ??
     snapshot.logicalHistory ??
-    input.history.map((entry) => ({
+    kept.map((entry) => ({
       role: 'assistant' as const,
       text: entry.text,
       sourceRevision: entry.revision,
@@ -99,13 +92,34 @@ function guideRequest(snapshot: RunSnapshot): ProviderRequest {
     }))
   )
     .filter((message) => !('current' in message && message.current))
-    .filter((message) => !message.sourceRevision || kept.has(message.sourceRevision))
+    .filter((message) => !message.sourceRevision || revisions.has(message.sourceRevision))
     .map(({ role, text, sourceRevision, sourceHash }) => ({
       role,
       text,
       ...(sourceRevision ? { sourceRevision } : {}),
       ...(sourceHash ? { sourceHash } : {}),
     }));
+}
+
+function guideRequest(snapshot: RunSnapshot, reads: boolean): ProviderRequest {
+  const target = snapshot.profile!.models.main!;
+  const search = snapshot.storyGuide!.config.webSearch === true;
+  const input = buildMainInput(snapshot, [], undefined, {
+    delivery: 'direct',
+    families:
+      !reads || (search && isGeminiProtocol(target.connection.protocol))
+        ? []
+        : ['knowledge', 'story'],
+    sentScenes: (kept) =>
+      new Set(
+        guideHistory(snapshot, kept).flatMap((message) =>
+          message.role === 'assistant' && message.sourceRevision ? [message.sourceRevision] : []
+        )
+      ),
+  });
+  const tools = MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name));
+  const characterExamples = nativeCharacterExamples(snapshot);
+  const history = guideHistory(snapshot, input.history);
   return {
     role: 'main',
     ...(search ? { webSearch: true } : {}),
@@ -220,13 +234,19 @@ export async function prepareStoryGuide(
   const searchEnabled = snapshot.storyGuide.config.webSearch === true;
   if (searchEnabled && !storyGuideWebSearchCapability(target.connection.protocol).supported)
     return finish('STORY_GUIDE_WEB_SEARCH_UNSUPPORTED');
+  const availableCalls =
+    snapshot.settings.maxCalls -
+    (hooks.initialUsage?.modelCalls ?? 0) -
+    (options.reserveCalls ?? 0);
   let request: ProviderRequest;
+  let initialFingerprint: string;
   try {
-    request = guideRequest(snapshot);
+    request = guideRequest(snapshot, true);
+    initialFingerprint = fingerprint(snapshot, request);
+    if (availableCalls < 2) request = guideRequest(snapshot, false);
   } catch {
     return finish('STORY_GUIDE_INPUT_UNAVAILABLE');
   }
-  const initialFingerprint = fingerprint(snapshot, request);
   const cached = options.cachedBrief;
   if (
     !searchEnabled &&
@@ -238,10 +258,6 @@ export async function prepareStoryGuide(
       { ...structuredClone(cached), ...(options.runId ? { runId: options.runId } : {}) },
       true
     );
-  const availableCalls =
-    snapshot.settings.maxCalls -
-    (hooks.initialUsage?.modelCalls ?? 0) -
-    (options.reserveCalls ?? 0);
   if (availableCalls < 1) return finish('STORY_GUIDE_CALL_BUDGET_EXHAUSTED');
   const results: ToolEvent[] = [];
   let searched: ProviderWebSearch = { performed: false, sources: [] };
@@ -373,9 +389,9 @@ export async function prepareStoryGuide(
     const ids = new Set<string>();
     if (
       !result.toolCalls.length ||
+      unofferedToolCall(request.stable.tools, result.toolCalls) ||
       result.toolCalls.some((call) => {
-        if (ids.has(call.id) || !request.stable.tools.some((tool) => tool.name === call.name))
-          return true;
+        if (ids.has(call.id)) return true;
         ids.add(call.id);
         return false;
       })

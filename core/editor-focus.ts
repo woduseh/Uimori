@@ -97,6 +97,47 @@ export function editorFocusDiagnostics(text: string, diagnostics: readonly CbsDi
   };
 }
 
+export type EditorFocusFieldReport = EditorFocusField & {
+  selection?: EditorFocusSelection;
+  diagnostics?: EditorFocusDiagnostic[];
+  diagnosticsOmitted?: number;
+};
+
+export function composeEditorFocus(
+  section: string,
+  item: EditorFocusItem | undefined,
+  report: EditorFocusFieldReport | undefined,
+  withSelection: boolean,
+  diagnostic?: EditorFocusDiagnostic
+): EditorFocus {
+  const { selection, diagnostics, diagnosticsOmitted, ...field } = report ?? {};
+  return {
+    section,
+    ...(item
+      ? {
+          item: {
+            index: item.index,
+            label: item.label.slice(0, EDITOR_FOCUS_LABEL_MAX_CHARS),
+            ...(item.id && item.id.length <= EDITOR_FOCUS_NAME_MAX_CHARS ? { id: item.id } : {}),
+          },
+        }
+      : {}),
+    ...(report
+      ? {
+          field: {
+            ...(field as EditorFocusField),
+            label: (field as EditorFocusField).label.slice(0, EDITOR_FOCUS_LABEL_MAX_CHARS),
+          },
+          ...(withSelection && selection ? { selection } : {}),
+          ...(diagnostics?.length
+            ? { diagnostics, ...(diagnosticsOmitted ? { diagnosticsOmitted } : {}) }
+            : {}),
+        }
+      : {}),
+    ...(diagnostic ? { diagnostic } : {}),
+  };
+}
+
 export function editorFocusKey(focus: EditorFocus | null | undefined) {
   if (!focus) return '';
   return JSON.stringify([

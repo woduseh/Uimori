@@ -1,13 +1,12 @@
 import { indexCbsReferences } from '../core/cbs-references.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Content, PromptPreset } from '../core/product.js';
-import { nativeRisuToggleControls } from '../core/risu-native-preset.js';
 import {
-  nativeRisuExtension,
   nativeRisuRegexEntries,
+  nativeRisuSources,
   type RisuContentSource,
 } from '../core/risu-native.js';
-import { nativeToggleVariables } from '../core/risu-effective-controls.js';
+import { declaredToggleVariables } from '../core/risu-effective-controls.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
@@ -520,19 +519,6 @@ function change(before: string, after: string) {
   };
 }
 
-function toggleValues(declaration: unknown, values: Record<string, string>) {
-  const controls = nativeRisuToggleControls(typeof declaration === 'string' ? declaration : '');
-  return nativeToggleVariables(
-    controls,
-    Object.fromEntries(
-      controls.flatMap((control) => {
-        const key = control.nativeKey ?? control.id;
-        return Object.hasOwn(values, key) ? [[control.id, values[key]!]] : [];
-      })
-    )
-  );
-}
-
 async function traceRegex(store: Store, args: Record<string, unknown>, signal?: AbortSignal) {
   fields(args, ['kind', 'id', 'stage', 'text', 'variables', 'toggles', 'userName', 'offset']);
   const loaded = loadTarget(store, args);
@@ -551,21 +537,22 @@ async function traceRegex(store: Store, args: Record<string, unknown>, signal?: 
   let templateDefaultVariables: string | undefined;
   if (loaded.target.kind === 'content') {
     native = loaded.target.native;
-    base = `${loaded.root}${native.module ? '/module/regex' : '/card/extensions/risuai/customScripts'}`;
-    raw = (
-      native.module ? native.module.regex : nativeRisuExtension(native).customScripts
-    ) as unknown[];
-    globals = toggleValues(
-      native.module?.customModuleToggle ?? nativeRisuExtension(native).toggles,
-      toggles
-    );
+    const sources = nativeRisuSources(native);
+    base = `${loaded.root}${sources.regex.path}`;
+    raw = Array.isArray(sources.regex.entries) ? sources.regex.entries : [];
+    globals = declaredToggleVariables(sources.toggles.text, toggles);
   } else {
     const preset = loaded.target.preset;
     const key = preset.regex == null && preset.presetRegex != null ? 'presetRegex' : 'regex';
     raw = Array.isArray(preset[key]) ? (preset[key] as unknown[]) : [];
     base = `${loaded.root}/${key}`;
     native = { version: 1, card: {}, module: { regex: raw }, assets: [], sourceHash: '' };
-    globals = toggleValues(preset.customPromptTemplateToggle, toggles);
+    globals = declaredToggleVariables(
+      typeof preset.customPromptTemplateToggle === 'string'
+        ? preset.customPromptTemplateToggle
+        : '',
+      toggles
+    );
     templateDefaultVariables =
       typeof preset.templateDefaultVariables === 'string' ? preset.templateDefaultVariables : '';
   }
@@ -694,7 +681,7 @@ async function preview(store: Store, args: Record<string, unknown>, signal?: Abo
       rendered.issues,
       regexScript(
         nativeRisuRegexEntries(native),
-        `/package/nativeRisu${native.module ? '/module/regex' : '/card/extensions/risuai/customScripts'}`
+        `/package/nativeRisu${nativeRisuSources(native).regex.path}`
       )
     ),
   };

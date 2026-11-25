@@ -644,6 +644,23 @@ test('the guide offers local reads, the catalog and read wording only while some
   expect(open.stable.contract).toContain('local reads');
   expect(open.stable.contract).toContain(CATALOG_READ_GUIDANCE);
 
+  const cut = await snapshot();
+  expect(cut.nativeRisuExecution?.history).toBeDefined();
+  cut.nativeRisuExecution!.history = cut.nativeRisuExecution!.history.filter(
+    (message) => !(message.role === 'assistant' && message.sourceRevision === 'source-0')
+  );
+  const missing = await request(cut);
+  expect(JSON.stringify(missing.input)).not.toContain('ORIGINAL_OLD_SCENE');
+  expect(missing.stable.tools.map((tool) => tool.name)).toEqual(['story.search', 'story.read']);
+
+  const lastCall = await snapshot();
+  lastCall.resources = [lore];
+  lastCall.settings.maxCalls = 2;
+  const single = await request(lastCall);
+  expect(single.stable.tools).toEqual([]);
+  expect(single.input.catalog).toEqual([]);
+  expect(single.stable.contract).not.toContain('local reads');
+
   const searched = await snapshot();
   searched.resources = [lore];
   searched.storyGuide!.config.webSearch = true;

@@ -118,20 +118,42 @@ export function changeLabel(change: EditorFieldChange): LabelPart[] {
   return [{ text: relative.join('/') || '/', identifier: true }];
 }
 
-const leafText = (value: unknown) => (typeof value === 'string' ? value : null);
+const NATIVE_NAME = /^\/package\/nativeRisu\/(card|module)\/name$/u;
+const NATIVE_NOTES = /^\/package\/nativeRisu\/(card\/creator_notes|module\/description)$/u;
+const NATIVE_BODY = /^\/package\/nativeRisu\/card\/description$/u;
+const NATIVE_GREETINGS = /^\/package\/nativeRisu\/card\/(first_mes|alternate_greetings)(\/|$)/u;
+const NATIVE_LORE = /^\/package\/nativeRisu\/(card\/character_book|module\/lorebook)(\/|$)/u;
+const NATIVE_DEFAULTS =
+  /^\/package\/nativeRisu\/(card\/extensions\/risuai|module)\/defaultVariables(\/|$)/u;
 
-function coveringChange(change: EditorFieldChange, group: readonly EditorFieldChange[]) {
-  if (change.item || leafText(change.after) === null) return null;
-  return (
-    group.find(
-      (other) =>
-        other !== change &&
-        !other.item &&
-        other.path.length > change.path.length &&
-        leafText(other.before) === leafText(change.before) &&
-        leafText(other.after) === leafText(change.after)
-    ) ?? null
-  );
+const CONTENT_MIRRORS: readonly { mirror: string; source: RegExp }[] = [
+  { mirror: '/title', source: NATIVE_NAME },
+  { mirror: '/package/title', source: NATIVE_NAME },
+  { mirror: '/package/identity/name', source: NATIVE_NAME },
+  { mirror: '/description', source: NATIVE_NOTES },
+  { mirror: '/package/description', source: NATIVE_NOTES },
+  { mirror: '/text', source: NATIVE_BODY },
+  { mirror: '/package/body', source: NATIVE_BODY },
+  { mirror: '/package/starts', source: NATIVE_GREETINGS },
+  { mirror: '/package/lore', source: NATIVE_LORE },
+  { mirror: '/package/variableDefaults', source: NATIVE_DEFAULTS },
+];
+
+const mirrorOf = (path: string) =>
+  CONTENT_MIRRORS.find(({ mirror }) => path === mirror || path.startsWith(`${mirror}/`));
+
+function mirrorSources(changes: readonly EditorFieldChange[]) {
+  const sources = new Map<EditorFieldChange, EditorFieldChange>();
+  for (const change of changes) {
+    const rule = mirrorOf(change.path);
+    const source =
+      rule &&
+      changes.find(
+        (other) => other !== change && !mirrorOf(other.path) && rule.source.test(other.path)
+      );
+    if (source) sources.set(change, source);
+  }
+  return sources;
 }
 
 export function reviewSections<K extends string>(
@@ -139,20 +161,20 @@ export function reviewSections<K extends string>(
   changes: readonly EditorFieldChange[],
   sectionOf: (path: string) => K
 ): ReviewSection<K>[] {
+  const sources = mirrorSources(changes);
+  const related = new Map<EditorFieldChange, EditorFieldChange[]>();
   const groups = new Map<K, EditorFieldChange[]>();
   for (const change of changes) {
+    const source = sources.get(change);
+    if (source) {
+      related.set(source, [...(related.get(source) ?? []), change]);
+      continue;
+    }
     const id = sectionOf(change.path);
     groups.set(id, [...(groups.get(id) ?? []), change]);
   }
   return sections.map((section) => {
-    const group = groups.get(section.id) ?? [];
-    const related = new Map<EditorFieldChange, EditorFieldChange[]>();
-    const shown: EditorFieldChange[] = [];
-    for (const change of group) {
-      const cover = coveringChange(change, group);
-      if (cover) related.set(cover, [...(related.get(cover) ?? []), change]);
-      else shown.push(change);
-    }
+    const shown = groups.get(section.id) ?? [];
     const ids = new Set<string>();
     const cards = shown.map((change): ReviewCard<K> => {
       const label = changeLabel(change);
@@ -222,20 +244,41 @@ const isCodeField = (section: string, field: string) =>
   !!CODE_FIELDS[section]?.includes(field) ||
   (section === 'triggers' && /^effect\.\d+$/u.test(field));
 
+const effectCode = (effects: unknown, index: number) => {
+  const effect = Array.isArray(effects) ? effects[index] : undefined;
+  const code =
+    effect && typeof effect === 'object' ? (effect as { code?: unknown }).code : undefined;
+  return typeof code === 'string' ? code : '';
+};
+
+function effectOffset(change: EditorFieldChange, field: string) {
+  const index = Number(field.slice('effect.'.length));
+  const before = effectCode(change.before, index);
+  const after = effectCode(change.after, index);
+  if (before === after) return null;
+  let offset = 0;
+  while (offset < before.length && before[offset] === after[offset]) offset++;
+  return Math.min(offset, after.length);
+}
+
 export function changeTarget<K extends string>(card: ReviewCard<K>): ChangeTarget<K> {
   const { change, section, view } = card;
   if (change.kind === 'removed' && change.item && !change.field.length)
     return { section, item: null, field: null, offset: null };
   const { item, field } = targetField(change);
   const code = isCodeField(section, field);
+  const effect = change.item?.kind === 'triggers' && change.field.join('/') === 'effect';
   return {
     section,
     item,
     field: code ? field : null,
-    offset:
-      code && view.type === 'text' && 'hunks' in view.diff
-        ? firstChangeOffset(view.diff.hunks)
-        : null,
+    offset: !code
+      ? null
+      : effect
+        ? effectOffset(change, field)
+        : view.type === 'text' && 'hunks' in view.diff
+          ? firstChangeOffset(view.diff.hunks)
+          : null,
   };
 }
 
@@ -311,16 +354,13 @@ export function codeFieldBases(
       change.field.length === 1 &&
       change.field[0] === 'effect'
     ) {
-      const old = Array.isArray(change.before) ? change.before : [];
       const effects = Array.isArray(change.after) ? change.after : [];
       effects.forEach((effect, index) => {
-        const code = (value: unknown) =>
-          value && typeof value === 'object' ? (value as { code?: unknown }).code : undefined;
-        if (typeof code(effect) === 'string' && code(effect) !== code(old[index]))
-          bases.set(
-            codeFieldName(section, change.item!.index, `effect.${index}`),
-            typeof code(old[index]) === 'string' ? (code(old[index]) as string) : ''
-          );
+        const code =
+          effect && typeof effect === 'object' ? (effect as { code?: unknown }).code : undefined;
+        const before = effectCode(change.before, index);
+        if (typeof code === 'string' && code !== before)
+          bases.set(codeFieldName(section, change.item!.index, `effect.${index}`), before);
       });
       continue;
     }

@@ -151,7 +151,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
     await name.fill(title);
     await expect(saveState).toHaveText('');
-    await expect(editorChanges(editor)).toHaveAccessibleName('변경 1건');
+    await expect(editorChanges(editor)).toHaveAccessibleName('바뀐 영역 1곳');
     const savedResponse = page.waitForResponse(
       (response) =>
         /\/api\/resources\/save$/.test(response.url()) && response.request().method() === 'POST'

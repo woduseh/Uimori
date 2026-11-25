@@ -79,6 +79,10 @@ test('settings read shows selected references without prompt bodies or provider 
   expect(result.chat.pinned.mainModel).toBeNull();
   expect(JSON.stringify(result)).not.toContain('nativeRisuPreset');
   expect(JSON.stringify(result)).not.toContain('127.0.0.1');
+  store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('model',?)").run(selected.id);
+  const hidden = call(store, 'settings.read', {}, chat.id) as typeof result;
+  expect(hidden.global.models.main).toEqual({ id: selected.id, unavailable: true });
+  expect(hidden.chat.effective.mainModel).toEqual({ id: selected.id, unavailable: true });
 });
 
 test('model.list describes saved models without provider catalogs unless asked', () => {

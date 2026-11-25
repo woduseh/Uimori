@@ -476,20 +476,22 @@ export function intralineDiff(
   return result;
 }
 
-function lineSimilarity(left: string, right: string): number {
-  const a = left.match(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
-  const b = right.match(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu) ?? [];
-  if (!a.length || !b.length) return 0;
+type LineTokens = { counts: Map<string, number>; length: number };
+
+function lineTokens(line: string): LineTokens {
   const counts = new Map<string, number>();
-  for (const token of a) counts.set(token, (counts.get(token) ?? 0) + 1);
-  let shared = 0;
-  for (const token of b) {
-    const count = counts.get(token) ?? 0;
-    if (count > 0) {
-      shared++;
-      counts.set(token, count - 1);
-    }
+  let length = 0;
+  for (const [token] of line.matchAll(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu)) {
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+    length++;
   }
+  return { counts, length };
+}
+
+function lineSimilarity(a: LineTokens, b: LineTokens): number {
+  if (!a.length || !b.length) return 0;
+  let shared = 0;
+  for (const [token, count] of b.counts) shared += Math.min(count, a.counts.get(token) ?? 0);
   return (2 * shared) / (a.length + b.length);
 }
 
@@ -498,13 +500,23 @@ export function pairChangedLines(
   added: readonly string[]
 ): [number, number][] {
   const pairs: [number, number][] = [];
+  const left = new Map<number, LineTokens>();
+  const right = new Map<number, LineTokens>();
+  const tokens = (cache: Map<number, LineTokens>, lines: readonly string[], index: number) => {
+    let found = cache.get(index);
+    if (!found) cache.set(index, (found = lineTokens(lines[index]!)));
+    return found;
+  };
   let start = 0;
   for (let index = 0; index < removed.length && start < added.length; index++) {
     let best = -1;
     let score = LINE_PAIR_SIMILARITY;
     for (let candidate = start; candidate < added.length; candidate++) {
       if (candidate >= start + LINE_PAIR_WINDOW) break;
-      const similarity = lineSimilarity(removed[index]!, added[candidate]!);
+      const similarity = lineSimilarity(
+        tokens(left, removed, index),
+        tokens(right, added, candidate)
+      );
       if (similarity > score) {
         best = candidate;
         score = similarity;

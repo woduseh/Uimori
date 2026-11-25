@@ -16,12 +16,12 @@ import {
   type SetStateAction,
 } from 'react';
 import type { EditorContext, ResourceModel } from '../core/resource-editing.js';
-import type {
-  EditorFocus,
-  EditorFocusDiagnostic,
-  EditorFocusField,
-  EditorFocusItem,
-  EditorFocusSelection,
+import {
+  composeEditorFocus,
+  type EditorFocus,
+  type EditorFocusDiagnostic,
+  type EditorFocusFieldReport,
+  type EditorFocusItem,
 } from '../core/editor-focus.js';
 import { EditorHelperContext, type EditorHelperOpener } from './editor-helper.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
@@ -72,45 +72,17 @@ export type ActiveEditorContext = EditorContext & {
   dirty: boolean;
   location?: EditorLocation;
 };
-export type EditorFieldReport = EditorFocusField & {
-  selection?: EditorFocusSelection;
-  diagnostics?: EditorFocusDiagnostic[];
-  diagnosticsOmitted?: number;
-};
 export type EditorHelperTarget = {
   section: string;
   item?: EditorFocusItem;
-  field?: EditorFieldReport;
+  field?: EditorFocusFieldReport;
   diagnostic?: EditorFocusDiagnostic;
   withSelection?: boolean;
 };
 const locations = new WeakMap<ResourceEditorSession, EditorLocation>();
-const fieldReports = new WeakMap<ResourceEditorSession, EditorFieldReport>();
+const fieldReports = new WeakMap<ResourceEditorSession, EditorFocusFieldReport>();
 const pinnedFocus = new WeakMap<ResourceEditorSession, EditorFocus>();
 const pendingReports = new WeakMap<ResourceEditorSession, () => void>();
-function composeFocus(
-  section: string,
-  item: EditorFocusItem | undefined,
-  report: EditorFieldReport | undefined,
-  withSelection: boolean,
-  diagnostic?: EditorFocusDiagnostic
-): EditorFocus {
-  const { selection, diagnostics, diagnosticsOmitted, ...field } = report ?? {};
-  return {
-    section,
-    ...(item ? { item } : {}),
-    ...(report
-      ? {
-          field: field as EditorFocusField,
-          ...(withSelection && selection ? { selection } : {}),
-          ...(diagnostics?.length
-            ? { diagnostics, ...(diagnosticsOmitted ? { diagnosticsOmitted } : {}) }
-            : {}),
-        }
-      : {}),
-    ...(diagnostic ? { diagnostic } : {}),
-  };
-}
 function targetFocus(session: ResourceEditorSession, target: EditorHelperTarget) {
   const location = locations.get(session);
   const live = fieldReports.get(session);
@@ -124,7 +96,7 @@ function targetFocus(session: ResourceEditorSession, target: EditorHelperTarget)
   const item =
     target.item ??
     (candidate && (!report || report.item === candidate.index) ? candidate : undefined);
-  return composeFocus(
+  return composeEditorFocus(
     target.section,
     item,
     report,
@@ -472,7 +444,7 @@ export function usePublishedEditorField() {
   const session = useContext(EditorContextValue)?.session;
   return useMemo(
     () => ({
-      publish: (report: EditorFieldReport) => {
+      publish: (report: EditorFocusFieldReport) => {
         if (!session) return;
         fieldReports.set(session, report);
         pinnedFocus.delete(session);

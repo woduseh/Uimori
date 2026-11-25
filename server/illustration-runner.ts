@@ -1,5 +1,6 @@
 import { illustrationResearch, ILLUSTRATION_RESEARCH_TOOLS } from './illustration-research.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
+import { unofferedToolCall } from '../core/tool-outcome.js';
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
 import { judgeIllustrationPlacement } from './illustration-placement-judgment.js';
 import type { JudgmentHooks } from './judgment.js';
@@ -298,17 +299,28 @@ export async function runIllustrationJob(
   ) => {
     const connection = authorized ?? (await authorizedConnection(hooks, model));
     const research = illustrationResearch(snapshot, input);
-    const enabled =
-      request.input.controls.purpose !== 'illustration-placement' && research.catalog.length > 0;
-    const base = enabled
+    const maxCalls = store.chat(source.chatId).settings.maxCalls;
+    const researched = request.input.controls.purpose !== 'illustration-placement';
+    const enabled = researched && research.readable && maxCalls > 1;
+    const catalog = researched ? research.catalog(enabled) : [];
+    const base = catalog.length
       ? {
           ...request,
           stable: {
             ...request.stable,
-            tools: ILLUSTRATION_RESEARCH_TOOLS,
-            contract: `${request.stable.contract}\nCatalog fields that carry text are the full frozen bot and persona descriptions; do not read them again. Use the supplied read-only tools only when age, identity or other defining visual facts are still missing: read a listed field path directly, and request independent sources together in one turn. Return the requested JSON.`,
+            ...(enabled ? { tools: ILLUSTRATION_RESEARCH_TOOLS } : {}),
+            contract: [
+              request.stable.contract,
+              'Catalog fields that carry text are given in full. characterNotes holds the bot and persona bodies, excerpted when long; the catalog lists only material outside them.',
+              ...(enabled
+                ? [
+                    'Use the supplied read-only tools only when age, identity or other defining visual facts are still missing: read a listed field path directly, and request independent sources together in one turn.',
+                  ]
+                : []),
+              'Return the requested JSON.',
+            ].join('\n'),
           },
-          input: { ...request.input, catalog: research.catalog },
+          input: { ...request.input, catalog },
         }
       : request;
     const timeoutMs = modelTimeoutMs(model);
@@ -320,6 +332,12 @@ export async function runIllustrationJob(
       const next = {
         ...base,
         ...(opaqueState !== undefined ? { opaqueState } : {}),
+        ...(opaqueState != null && calls >= maxCalls
+          ? {
+              continuationInput:
+                'This is the last model call for this illustration. Do not call tools; return the requested JSON now with the evidence already available.',
+            }
+          : {}),
         input: { ...base.input, ...(results.length ? { results } : {}) },
       };
       const result = await attempt(
@@ -334,8 +352,10 @@ export async function runIllustrationJob(
         (value) => structuredClone(value)
       );
       if (result.status === 'completed') return result.text;
+      if (result.status === 'tool_calls' && unofferedToolCall(base.stable.tools, result.toolCalls))
+        throw new IllustrationError('ILLUSTRATION_PROMPT_UNKNOWN_TOOL');
       if (enabled && result.status === 'tool_calls' && result.toolCalls.length) {
-        if (calls >= snapshot.settings.maxCalls)
+        if (calls >= maxCalls)
           throw new IllustrationError('ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED');
         opaqueState = result.opaqueState ?? undefined;
         for (const call of result.toolCalls) {

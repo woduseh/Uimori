@@ -203,7 +203,7 @@ test('EFRAME02 save is emphasized only with unsaved changes and chat start stays
   await expect(start).toBeInViewport();
   await selectEditorSection(page, '기본 정보');
   await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(`${title} 수정`);
-  await expect(editorChanges(header)).toHaveAccessibleName('변경 1건');
+  await expect(editorChanges(header)).toHaveAccessibleName('바뀐 영역 1곳');
   await expect(save).toBeEnabled();
   await expect(start).toBeDisabled();
   await save.click();

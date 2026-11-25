@@ -846,6 +846,17 @@ describe('Vertex streamed response decoder', () => {
     );
   });
 
+  test('rejects a call to a tool the request did not declare, like the other decoders', () => {
+    const input = request();
+    input.stable.tools = [];
+    const { decoder } = start(input);
+    expect(() => decoder.accept(event([call('unoffered')], 'STOP'))).toThrow('UNKNOWN_TOOL');
+    expect(decoder.snapshot()).toMatchObject({
+      toolCalls: [],
+      error: { code: 'UNKNOWN_TOOL' },
+    });
+  });
+
   test.each([
     { value: { candidates: [{ index: 0 }, { index: 0 }] }, code: 'VERTEX_MULTIPLE_CANDIDATES' },
     { value: event([], 'FUTURE_UNKNOWN_REASON'), code: 'VERTEX_UNKNOWN_FINISH_REASON' },

@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderToolCall } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
-import { toolCorrectionOutcome, toolResultChars } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome, toolResultChars, unofferedToolCall } from '../core/tool-outcome.js';
 import type {
   AgentDefinition,
   AgentConsultationContext,
@@ -395,6 +395,8 @@ export function createAgentCollaboration(
               Array.isArray(call.arguments)
             )
               throw new ProviderContractError('ADVISOR_INVALID_TOOL_ARGUMENTS');
+            if (unofferedToolCall(request.stable.tools, [call]))
+              throw new ProviderContractError('ADVISOR_TOOL_NOT_ALLOWED');
             const event = await readTool(
               { id: call.callId, name: call.name, arguments: call.arguments },
               readSignal
@@ -458,12 +460,12 @@ export function createAgentCollaboration(
               'unavailable',
               result.refusal ?? result.error?.code ?? `ADVISOR_${result.status.toUpperCase()}`
             );
+      if (unofferedToolCall(request.stable.tools, result.toolCalls))
+        return finish('unavailable', 'ADVISOR_TOOL_NOT_ALLOWED');
       const ids = new Set(results.map((event) => event.callId));
       for (const call of result.toolCalls) {
         if (ids.has(call.id)) return finish('unavailable', 'ADVISOR_DUPLICATE_TOOL_ID');
         ids.add(call.id);
-        if (!request.stable.tools.some((tool) => tool.name === call.name))
-          return finish('unavailable', 'ADVISOR_TOOL_NOT_ALLOWED');
       }
       for (const call of result.toolCalls) {
         if (signal.aborted) return finish('cancelled', 'CANCELLED');

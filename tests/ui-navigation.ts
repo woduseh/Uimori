@@ -102,7 +102,7 @@ export async function discardEdits(scope: Page | Locator) {
 }
 
 export function editorChanges(scope: Page | Locator) {
-  return scope.getByRole('button', { name: /^변경 \d+건$/u });
+  return scope.getByRole('button', { name: /^바뀐 영역 \d+곳$/u });
 }
 
 export async function expectEditorSection(scope: Page | Locator, name: string) {

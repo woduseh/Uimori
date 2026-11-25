@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
-import { toolCorrectionOutcome, toolResultChars } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome, toolResultChars, unofferedToolCall } from '../core/tool-outcome.js';
 import { estimateContextTokens, MIN_INPUT_TOKEN_LIMIT } from '../core/context-budget.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import { executeTool, KNOWLEDGE_READ_TOKENS, KNOWLEDGE_READ_MAX_TOKENS } from '../core/provider.js';
@@ -223,11 +223,13 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   );
   const contextReadNames = new Set(MAIN_READ_TOOLS.map((tool) => tool.name));
   const executeCalls = async (
+    offered: ProviderRequest['stable']['tools'],
     result: ProviderResult,
     signal: AbortSignal = hooks.signal,
     native = false,
     prepareShellEvent?: (event: ToolEvent, remainingCalls: ProviderResult['toolCalls']) => ToolEvent
   ): Promise<MainResult | undefined> => {
+    if (unofferedToolCall(offered, result.toolCalls)) return fail('UNKNOWN_TOOL');
     if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
       if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
         return fail('MODEL_CALL_BUDGET_EXHAUSTED');
@@ -643,6 +645,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             throw new ProviderContractError('CODEX_INVALID_TOOL_ARGUMENTS');
           const prior = results.length;
           const terminal = await executeCalls(
+            request.stable.tools,
             {
               status: 'tool_calls',
               text: '',
@@ -724,33 +727,39 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         error: result.refusal ?? result.error?.code ?? null,
         usage,
       };
-    const terminal = await executeCalls(result, hooks.signal, false, (event, remainingCalls) => {
-      const execution = { ...(event.result as Record<string, Json>) };
-      delete execution.output;
-      const limited: ToolEvent = {
-        ...event,
-        denied: true,
-        errorKind: 'recoverable',
-        result: {
-          code: 'TOOL_CONTEXT_LIMIT_EXCEEDED',
-          returned: false,
-          execution,
-          guidance:
-            'The command already ran. Its output was not supplied. Read a smaller range from outputFile, or finish writing with the evidence already available; do not repeat the original command.',
-        },
-      };
-      const pending = remainingCalls.map((call) => ({
-        ...limited,
-        callId: call.id,
-        name: call.name,
-        args: call.arguments,
-      }));
-      const projected = build(undefined, [...results, event, ...pending]).request;
-      return !projected.contextBudget ||
-        measure(projected) <= projected.contextBudget.inputTokenLimit
-        ? event
-        : limited;
-    });
+    const terminal = await executeCalls(
+      request.stable.tools,
+      result,
+      hooks.signal,
+      false,
+      (event, remainingCalls) => {
+        const execution = { ...(event.result as Record<string, Json>) };
+        delete execution.output;
+        const limited: ToolEvent = {
+          ...event,
+          denied: true,
+          errorKind: 'recoverable',
+          result: {
+            code: 'TOOL_CONTEXT_LIMIT_EXCEEDED',
+            returned: false,
+            execution,
+            guidance:
+              'The command already ran. Its output was not supplied. Read a smaller range from outputFile, or finish writing with the evidence already available; do not repeat the original command.',
+          },
+        };
+        const pending = remainingCalls.map((call) => ({
+          ...limited,
+          callId: call.id,
+          name: call.name,
+          args: call.arguments,
+        }));
+        const projected = build(undefined, [...results, event, ...pending]).request;
+        return !projected.contextBudget ||
+          measure(projected) <= projected.contextBudget.inputTokenLimit
+          ? event
+          : limited;
+      }
+    );
     if (terminal) return terminal;
   }
 }

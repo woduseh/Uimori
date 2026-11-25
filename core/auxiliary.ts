@@ -5,7 +5,7 @@ import { TRANSLATION_GUIDE_POLICY, type BotTranslationGuide } from './translatio
 import { imageCatalogPage, type ImageMetadata } from './image-catalog.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_TEXT_MAX_CHARS } from './content-limits.js';
-import { executeTool, resourceCatalog, type ToolAction } from './provider.js';
+import { collectRoleResources, executeTool, resourceCatalog, type ToolAction } from './provider.js';
 import type { TranslationContextMode } from './translation-settings.js';
 import { toolCorrectionOutcome, toolResultChars } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent, ToolEventTiming } from './types.js';
@@ -204,14 +204,10 @@ export function translationInput(
     };
   const compiled = compiledPackages(snapshot, 'translation');
   const packages = packageContextFromCompiled(compiled);
-  const resources = new Map(snapshot.resources.map((item) => [item.id, item]));
-  for (const pack of compiled)
-    for (const resource of pack.resources)
-      if (!resources.has(resource.id)) resources.set(resource.id, resource);
   const previous = new Map(context.previousSources.map((item) => [item.revision, item.text]));
   const access = readAccess(
     {
-      references: [...resources.values()].filter((item) => item.chatId === snapshot.chatId),
+      references: collectRoleResources(snapshot, compiled),
       deliveredReferences: new Set(packages?.pinned.map((item) => item.id)),
       scenes: snapshot.history,
       deliveredScenes: new Set(

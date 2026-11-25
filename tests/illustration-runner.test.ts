@@ -1391,6 +1391,84 @@ test.each(['paragraph', 'none', 'missing-key', 'unavailable'] as const)(
   }
 );
 
+test.each([3, 1])(
+  'illustration research spends the chat call budget current at run time: %i calls',
+  async (maxCalls) => {
+    const store = databases.create();
+    const description = 'Unrelated archive material. '.repeat(1200) + '\nMira has a silver braid.';
+    const bot = store.product.content(fixtureBotInput('Budget Mira', description)) as Content;
+    let chat = createFixtureChat(store, 'Budget scene', { botId: bot.id });
+    const source = completedSource(store, chat.id, 'Mira raises the lantern beside the river.');
+    chat = store.chat(chat.id);
+    store.settings(chat.id, chat.settingsRevision, { ...chat.settings, maxCalls });
+    const bodies: Record<string, any>[] = [];
+    const provider = await loopbackProvider(async (captured, response) => {
+      const body = JSON.parse(captured.body);
+      bodies.push(body);
+      await writeSse(response, [
+        {
+          type: 'tool_delta',
+          index: 0,
+          id: `search-${bodies.length}`,
+          name: 'illustration.sources.search',
+          argumentsDelta: JSON.stringify({ query: 'braid' }),
+        },
+        { type: 'opaque_state', state: `budget-${bodies.length}` },
+        { type: 'done', reason: 'tool_calls' },
+      ]);
+    });
+    cleanups.push(provider.close);
+    const connection = store.product.connection({
+      title: 'Budget fixture',
+      protocol: 'fixture-sse-v1',
+      endpoint: provider.endpoint,
+      enabled: true,
+    }) as Connection;
+    const model = store.product.model({
+      title: 'Budget model',
+      connectionId: connection.id,
+      modelId: 'fixture-budget',
+      maxOutputTokens: 512,
+      temperature: null,
+      inputTokenLimit: 32768,
+    }) as ModelPreset;
+    const imageModel = codexModel(store);
+    const plan = reserveIllustrationPlan(store, source, 'manual', {
+      maxTargets: 1,
+      settings: fixtureSettings({
+        generator: undefined,
+        maxAutoRetries: 0,
+        codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+      }),
+    });
+    const result = await runIllustrationJob(store, plan.id, 'worker', hooks(store).options);
+    expect(bodies).toHaveLength(maxCalls);
+    if (maxCalls === 1) {
+      expect(bodies[0].stable.tools).toEqual([]);
+      expect(result).toMatchObject({ status: 'failed', code: 'ILLUSTRATION_PROMPT_UNKNOWN_TOOL' });
+      return;
+    }
+    expect(bodies.map((body) => body.stable.tools.length)).toEqual([2, 2, 2]);
+    expect(bodies.map((body) => body.continuationInput !== undefined)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+    expect(result).toMatchObject({
+      status: 'failed',
+      code: 'ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED',
+    });
+    store.settings(chat.id, store.chat(chat.id).settingsRevision, {
+      ...store.chat(chat.id).settings,
+      maxCalls: 4,
+    });
+    bodies.length = 0;
+    retryIllustration(store, plan.id);
+    await runIllustrationJob(store, plan.id, 'worker', hooks(store).options);
+    expect(bodies).toHaveLength(4);
+  }
+);
+
 test('a safe Codex retry reuses only its identical successful JEV check', async () => {
   const store = databases.create();
   const { source } = chatWithSource(store);

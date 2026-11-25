@@ -848,8 +848,11 @@ function earlierCalledOperations(store: Store, task: HelperTask): string[] {
     .flatMap((row) => (typeof row.name === 'string' ? [row.name] : []));
 }
 function knownOperationsFor(store: Store, task: HelperTask) {
+  const plan = task.snapshot.mode === 'plan';
   return knownHelperOperations(
-    [...(task.snapshot.seededOperations ?? []), ...earlierCalledOperations(store, task)],
+    [...(task.snapshot.seededOperations ?? []), ...earlierCalledOperations(store, task)].filter(
+      (name) => !plan || helperToolTraits(name).effect !== 'write'
+    ),
     task.snapshot.outline?.target.purpose === 'review',
     Math.min(
       HELPER_KNOWN_OPERATION_MAX_TOKENS,

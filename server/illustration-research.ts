@@ -6,6 +6,8 @@ import { readHelperModel } from './helper-resource-editing.js';
 import { fields, number, text } from './request-validation.js';
 import { KNOWLEDGE_ITEM_TOKENS } from '../core/provider.js';
 import { countTextTokens } from '../core/text-tokens.js';
+import { excerptScene, ILLUSTRATION_EXCERPT_TOKENS } from '../core/illustration.js';
+import { nativeRisuLore, nativeRisuSourcePaths } from '../core/risu-native.js';
 
 const paging = {
   offset: { type: 'integer', minimum: 0 },
@@ -90,33 +92,60 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
     role: 'prior-illustration',
     model: item,
   }));
-  const catalog = [
-    ...documents.map(({ id, revision, title, role, model }) => {
-      const card = model.package.nativeRisu?.card as Record<string, unknown> | undefined;
-      const texts = [
-        ['/package/nativeRisu/card/description', card?.description],
-        ['/text', model.text],
-        ['/description', model.description],
-      ].flatMap(([path, text]) =>
-        typeof text === 'string' && text.trim() ? [{ path: path as string, text }] : []
-      );
-      const unique = texts.filter(
-        (item, index) => texts.findIndex((other) => other.text === item.text) === index
-      );
-      const inline =
-        (role === 'bot' || role === 'persona') &&
-        countTextTokens(unique.map((item) => item.text).join('\n')) <= KNOWLEDGE_ITEM_TOKENS;
-      return {
-        id,
-        revision,
-        title,
-        role,
-        fields: unique.map((item) =>
-          inline ? item : { path: item.path, length: item.text.length }
+  const deliveredBodies = new Set(
+    (['bot', 'persona'] as const).flatMap((role) => {
+      const ref = attachments.find((item) => item.role === role);
+      const body = documents.find(
+        (item) => item.model.package.id === ref?.id && item.model.package.revision === ref?.revision
+      )?.model.text;
+      return body && excerptScene(body, ILLUSTRATION_EXCERPT_TOKENS[role]) === body ? [body] : [];
+    })
+  );
+  const sources = documents.map(({ id, revision, title, role, model }) => {
+    const native = model.package.nativeRisu;
+    const card = native?.card as Record<string, unknown> | undefined;
+    const texts = [
+      ['/package/nativeRisu/card/description', card?.description],
+      ['/text', model.text],
+      ['/description', model.description],
+    ].flatMap(([path, text]) =>
+      typeof text === 'string' && text.trim() && !deliveredBodies.has(text)
+        ? [{ path: path as string, text }]
+        : []
+    );
+    const unique = texts.filter(
+      (item, index) => texts.findIndex((other) => other.text === item.text) === index
+    );
+    const appearance = unique.filter((item) => item.path !== '/description');
+    const inline =
+      (role === 'bot' || role === 'persona') &&
+      countTextTokens(appearance.map((item) => item.text).join('\n')) <= KNOWLEDGE_ITEM_TOKENS;
+    const lore = native ? nativeRisuLore(native).length : 0;
+    return {
+      id,
+      revision,
+      title,
+      role,
+      fields: [
+        ...unique.map((item) =>
+          inline && item.path !== '/description'
+            ? item
+            : { path: item.path, length: item.text.length }
         ),
-      };
+        ...(lore
+          ? [{ path: `/package/nativeRisu${nativeRisuSourcePaths(native!).lore}`, entries: lore }]
+          : []),
+      ],
+    };
+  });
+  const readable =
+    prior.length > 0 || sources.some((item) => item.fields.some((field) => !('text' in field)));
+  const catalog = (reads: boolean): Json[] => [
+    ...sources.flatMap((item) => {
+      const fields = reads ? item.fields : item.fields.filter((field) => 'text' in field);
+      return fields.length ? [{ ...item, fields }] : [];
     }),
-    ...prior.map(({ id, revision, title, role }) => ({ id, revision, title, role })),
+    ...(reads ? prior.map(({ id, revision, title, role }) => ({ id, revision, title, role })) : []),
   ];
   const execute = (name: string, args: Record<string, Json>): Json => {
     if (name === 'illustration.sources.read') {
@@ -175,5 +204,5 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
       nextOffset: offset + limit < matches.length ? offset + limit : null,
     };
   };
-  return { catalog, execute };
+  return { catalog, readable, execute };
 }

@@ -41,7 +41,7 @@ test('research reads native frozen descriptions and lore by exact paths, pages m
   } as Parameters<typeof illustrationResearch>[1];
   const research = illustrationResearch(structuredClone(snapshot), structuredClone(input));
   pkg.nativeRisu.card.description = 'Changed after reservation';
-  expect(research.catalog).toHaveLength(2);
+  expect(research.catalog(true)).toHaveLength(2);
   expect(research.execute('illustration.sources.search', {})).toEqual(
     research.execute('illustration.sources.search', { query: '' })
   );
@@ -137,19 +137,56 @@ test('short bot and persona descriptions arrive in the catalog; long ones and mo
       ],
     },
   } as RunSnapshot;
-  const { catalog } = illustrationResearch(
-    snapshot,
-    {} as Parameters<typeof illustrationResearch>[1]
-  );
-  const fields = (index: number) => (catalog[index] as { fields: unknown[] }).fields;
-  expect(fields(0)).toContainEqual({
-    path: '/package/nativeRisu/card/description',
-    text: 'Mira has green eyes.',
-  });
-  expect(JSON.stringify(fields(1))).toContain('grey cloak');
-  expect(fields(2)).toContainEqual({
+  const research = illustrationResearch(snapshot, {} as Parameters<typeof illustrationResearch>[1]);
+  const catalog = research.catalog(true) as { id: string; fields: unknown[] }[];
+  const fields = (id: string) => catalog.find((item) => item.id === id)?.fields;
+  expect(fields('resource:0')).toBeUndefined();
+  expect(fields('resource:1')).toBeUndefined();
+  expect(fields('resource:2')).toContainEqual({
     path: '/package/nativeRisu/card/description',
     length: 'Archive. '.repeat(4000).length,
   });
-  expect(JSON.stringify(fields(3))).not.toContain('Harbor rules.');
+  expect(JSON.stringify(fields('resource:3'))).not.toContain('Harbor rules.');
+  expect(research.readable).toBe(true);
+});
+
+test('research lists creator notes and lorebooks by path, inlines only what characterNotes lacks, and offers no reads when nothing is left', () => {
+  const bot = nativeContent(
+    {
+      description: 'Mira has green eyes.',
+      creator_notes: 'Creator notes. '.repeat(2000),
+      character_book: { entries: [{ keys: ['Mira'], content: 'Mira carries a compass.' }] },
+    },
+    { id: 'bot' }
+  );
+  const rival = nativeContent({ description: 'Sena has a red scarf.' }, { id: 'rival' });
+  const attach = (...items: { id: string; role: string }[]) =>
+    ({
+      profile: {
+        packages: [bot, rival],
+        packageAttachments: items.map((item) => ({ ...item, revision: 1 })),
+      },
+    }) as RunSnapshot;
+  const both = illustrationResearch(
+    attach({ id: 'bot', role: 'bot' }, { id: 'rival', role: 'bot' }),
+    {} as Parameters<typeof illustrationResearch>[1]
+  );
+  const [main, second] = both.catalog(true) as { fields: Record<string, unknown>[] }[];
+  expect(main.fields).toEqual([
+    { path: '/description', length: expect.any(Number) },
+    { path: '/package/nativeRisu/card/character_book/entries', entries: 1 },
+  ]);
+  expect(JSON.stringify(main.fields)).not.toContain('green eyes');
+  expect(second.fields).toContainEqual({
+    path: '/package/nativeRisu/card/description',
+    text: 'Sena has a red scarf.',
+  });
+  expect(both.catalog(false)).toEqual([{ ...second, fields: second.fields }]);
+
+  const delivered = illustrationResearch(
+    attach({ id: 'rival', role: 'bot' }),
+    {} as Parameters<typeof illustrationResearch>[1]
+  );
+  expect(delivered.readable).toBe(false);
+  expect(delivered.catalog(true)).toEqual([]);
 });

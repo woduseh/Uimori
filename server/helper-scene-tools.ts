@@ -303,12 +303,12 @@ export function helperSceneEditTarget(store: Store, chatId: string, sourceId: st
 export function sceneTranslationState(
   store: Store,
   source: { id: string; hash: string }
-): 'none' | 'current' | 'stale' | 'pending' {
+): 'none' | 'current' | 'stale' | 'pending' | 'failed' {
   const latest = latestTranslation(store, source.id);
   if (!latest) return 'none';
   if (typeof displayTranslationJob(source, latest)?.result?.text === 'string') return 'current';
-  if (latest.sourceHash !== source.hash) return 'stale';
-  return 'pending';
+  if (latest.sourceHash !== source.hash || latest.status === 'stale') return 'stale';
+  return latest.status === 'queued' || latest.status === 'running' ? 'pending' : 'failed';
 }
 function checkGuards(
   args: Record<string, unknown>,
