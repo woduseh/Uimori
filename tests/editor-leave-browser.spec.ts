@@ -137,11 +137,7 @@ for (const { flow, viewport } of flows) {
       await editor.getByText('고급 JSON 편집', { exact: true }).click();
       raw = editor.getByLabel('Risu 정규식 JSON', { exact: true });
     } else {
-      await selectEditorSection(editor, '고급 설정');
-      await editor
-        .getByRole('group', { name: '고급 설정 영역', exact: true })
-        .getByRole('button', { name: 'JSON 소스', exact: true })
-        .click();
+      await selectEditorSection(editor, 'JSON 소스');
       raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
     }
     await raw.fill('[{"unfinished":');

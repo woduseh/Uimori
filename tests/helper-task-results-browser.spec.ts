@@ -1147,7 +1147,7 @@ test('HCHANGE04 change locations follow the UI language and keep authored names'
   const expected = {
     ko: {
       scene: ['장면 3', '원문'],
-      regex: ['고급 설정', 'Lua, 트리거, 정규식'],
+      regex: ['정규식'],
       description: ['기본 정보', '카드 설명'],
       lore: ['로어북', '폭풍의 항구 (Storm)', '로어 본문'],
       storyUi: ['이야기 UI CSS'],
@@ -1155,7 +1155,7 @@ test('HCHANGE04 change locations follow the UI language and keep authored names'
     },
     en: {
       scene: ['Scene 3', 'Original'],
-      regex: ['Advanced settings', 'Lua, triggers and regex'],
+      regex: ['Regex'],
       description: ['Basic information', 'Card description'],
       lore: ['Lorebook', '폭풍의 항구 (Storm)', 'Lore text'],
       storyUi: ['Story UI CSS'],

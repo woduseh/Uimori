@@ -43,12 +43,13 @@ import { CodeIcon } from './ui-icons.js';
 import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
 import { markupPreview } from './markup-preview.js';
 import {
+  availableSections,
   contentSection,
-  contentSections,
+  contentSectionRegistry,
+  isAuthoringPath,
   isStandaloneModule,
-  type ContentAdvancedTab,
   type ContentSection,
-} from './resource-sections.js';
+} from './studio-sections.js';
 import { storageKeys } from './storage-keys.js';
 import './native-editor.css';
 
@@ -61,15 +62,10 @@ const GREETING_FONT_KEY = storageKeys.firstMessageFont;
 const GREETING_FONTS = ['body', 'mono'] as const;
 type SourcePart = 'greetings' | 'lore' | 'regex' | 'triggers' | 'card' | 'module';
 type Section = ContentSection;
-type Advanced = ContentAdvancedTab;
 
-function anchorSection(anchor: ResourceAnchor): {
-  section: Section;
-  advanced?: Advanced;
-  authoring?: true;
-} {
-  if (anchor.section === 'lore') return { section: 'lore' };
-  return contentSection(anchor.path ?? '') ?? { section: 'basic' };
+function anchorSection(anchor: ResourceAnchor): Section {
+  if (anchor.section === 'lore') return 'lore';
+  return contentSection(anchor.path ?? '') ?? 'basic';
 }
 
 export function RisuNativeFields({
@@ -95,42 +91,28 @@ export function RisuNativeFields({
 
   const native = value.nativeRisu;
   const standalone = isStandaloneModule(value);
-  const advancedTabs: { id: Advanced; title: string }[] = [
-    ...(!standalone ? [{ id: 'instructions' as const, title: t('native.text_22a2af3f54') }] : []),
-    { id: 'variables', title: t('native.initialVariablesAndToggles') },
-    ...(!standalone || value.imageHandoff
-      ? [
-          {
-            id: 'display' as const,
-            title: standalone ? t('native.imageInstructions') : t('native.backgroundHtmlCss'),
-          },
-        ]
-      : []),
-    { id: 'scripts', title: t('native.text_f31813202f') },
-    { id: 'modules', title: t('native.text_ae90c98d27') },
-    { id: 'source', title: t('native.sourceJson') },
-  ];
-  const sections = contentSections(value);
+  const available = availableSections(contentSectionRegistry, value);
   const [greetingFont, setGreetingFont] = useState(() =>
     readPresentationChoice(GREETING_FONT_KEY, GREETING_FONTS, 'body')
   );
-  const [advanced, setAdvanced] = useState<Advanced>('instructions');
   const [authoringOpen, setAuthoringOpen] = useState(false);
   const requested = anchor?.anchor ?? null;
   const loreFocus =
-    requested && anchorSection(requested).section === 'lore' && requested.index !== null
+    requested && anchorSection(requested) === 'lore' && requested.index !== null
       ? { index: requested.index, epoch: requested.epoch }
       : null;
   const anchoredSection = (target: ResourceAnchor) => {
-    const wanted = anchorSection(target).section;
-    return sections.some((item) => item.id === wanted) ? wanted : 'basic';
+    const wanted = anchorSection(target);
+    return available.includes(wanted) ? wanted : 'basic';
   };
+  const anchoredAuthoring = (target: ResourceAnchor) =>
+    target.section !== 'lore' && isAuthoringPath(target.path ?? '');
   useAnchorArrival(
     anchor,
     (target) => {
       const section = anchoredSection(target);
       const panel = document.getElementById(`${id}-${section}-panel`);
-      if (section === 'basic' && anchorSection(target).authoring)
+      if (section === 'basic' && anchoredAuthoring(target))
         return panel?.querySelector('.native-authoring') ?? null;
       return section === 'lore' && target.index !== null
         ? (panel?.querySelector('.nl-detail') ?? null)
@@ -138,14 +120,9 @@ export function RisuNativeFields({
     },
     (target) => {
       onSelect(anchoredSection(target));
-      const { advanced, authoring } = anchorSection(target);
-      if (advanced) setAdvanced(advanced);
-      if (authoring) setAuthoringOpen(true);
+      if (anchoredAuthoring(target)) setAuthoringOpen(true);
     }
   );
-  const activeAdvanced = advancedTabs.some((tab) => tab.id === advanced)
-    ? advanced
-    : advancedTabs[0]!.id;
   const [part, setPart] = useState<SourcePart>('lore');
   const [draft, setDraft] = useBufferedEditorState<{ part: SourcePart; text: string } | null>(
     'package.native.source',
@@ -300,7 +277,7 @@ export function RisuNativeFields({
     'data-studio-section': key,
     hidden: section !== key,
   });
-  const rawEditor = section === 'advanced' && activeAdvanced === 'source' && (
+  const rawEditor = section === 'source' && (
     <div className="native-source-editor">
       <p className="muted">
         {t('native.resourceCounts', {
@@ -359,14 +336,7 @@ export function RisuNativeFields({
       {draft && (
         <p className="native-editor-notice" role="status">
           {t('native.text_0b4d698c5c')}{' '}
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              onSelect('advanced');
-              setAdvanced('source');
-            }}
-          >
+          <button type="button" className="ghost" onClick={() => onSelect('source')}>
             {t('native.text_609d8be788')}
           </button>
         </p>
@@ -563,53 +533,31 @@ export function RisuNativeFields({
         <div {...panel('assets')} className="native-section-body">
           <NativeRisuAssetsEditor value={value} onChange={onChange} onBusyChange={setAssetsBusy} />
         </div>
-      </fieldset>
-      <div {...panel('advanced')} className="native-advanced-workspace native-panes">
-        <div className="native-advanced-tabs" role="group" aria-label={t('native.text_2c737ca1dd')}>
-          {advancedTabs.map(({ id: key, title }) => (
-            <button
-              type="button"
-              key={key}
-              aria-label={title}
-              aria-pressed={activeAdvanced === key}
-              onClick={() => {
-                setAdvanced(key);
-                if (key === 'scripts' && !draft) setPart('triggers');
-              }}
-            >
-              <strong>{title}</strong>
-            </button>
-          ))}
-        </div>
-        <fieldset
-          className="native-panel-fields native-advanced-detail"
-          hidden={activeAdvanced === 'scripts' || activeAdvanced === 'source'}
-          disabled={!!draft}
-        >
-          <div hidden={activeAdvanced !== 'instructions'} className="native-form-stack">
-            {!standalone && (
-              <>
-                <label>
-                  {t('native.text_2d2a2c8204')}
-                  <textarea
-                    rows={8}
-                    value={string(native.card.post_history_instructions)}
-                    onChange={(e) => field('post_history_instructions', e.target.value)}
-                  />
-                </label>
-                <label>
-                  {t('native.text_07b2960ad0')}
-                  <textarea
-                    aria-label={t('native.text_07b2960ad0')}
-                    rows={8}
-                    value={string(native.card.mes_example)}
-                    onChange={(e) => field('mes_example', e.target.value)}
-                  />
-                </label>
-              </>
-            )}
+        {!standalone && (
+          <div {...panel('instructions')} className="native-section-body">
+            <div className="native-form-stack">
+              <label>
+                {t('native.text_2d2a2c8204')}
+                <textarea
+                  rows={8}
+                  value={string(native.card.post_history_instructions)}
+                  onChange={(e) => field('post_history_instructions', e.target.value)}
+                />
+              </label>
+              <label>
+                {t('native.text_07b2960ad0')}
+                <textarea
+                  aria-label={t('native.text_07b2960ad0')}
+                  rows={8}
+                  value={string(native.card.mes_example)}
+                  onChange={(e) => field('mes_example', e.target.value)}
+                />
+              </label>
+            </div>
           </div>
-          <div hidden={activeAdvanced !== 'variables'} className="native-form-stack">
+        )}
+        <div {...panel('variables')} className="native-section-body">
+          <div className="native-form-stack">
             <label>
               {t('native.text_0510e453e9')}
               <textarea
@@ -643,80 +591,77 @@ export function RisuNativeFields({
               />
             </label>
           </div>
-          <div hidden={activeAdvanced !== 'display'} className="native-form-stack">
-            {!standalone && (
-              <label>
-                {t('native.text_50262c6215')}
-                <textarea
-                  rows={12}
-                  className="native-main-text"
-                  spellCheck={false}
-                  value={nativeRisuBackground(native)}
-                  onChange={(e) => extension('backgroundHTML', e.target.value)}
-                />
-              </label>
-            )}
-            {value.imageHandoff && (
-              <RisuImageHandoffFields
-                policy={value.imageHandoff}
-                selected={value.imageHandoff.ranges
-                  .filter((range) => range.enabled)
-                  .map((range) => range.id)}
-                onChange={(ids) =>
-                  onChange({
-                    ...value,
-                    imageHandoff: {
-                      ...value.imageHandoff!,
-                      ranges: value.imageHandoff!.ranges.map((range) => ({
-                        ...range,
-                        enabled: ids.includes(range.id),
-                      })),
-                    },
-                  })
-                }
-              />
-            )}
-          </div>
-          <div hidden={activeAdvanced !== 'modules'}>
-            <PackageFeaturesEditor
-              value={value}
-              onChange={onChange}
-              onDirtyChange={setModulesDirty}
-            />
-          </div>
-        </fieldset>
-        <div
-          hidden={activeAdvanced !== 'scripts'}
-          className="native-advanced-detail native-script-editor"
-        >
-          <NativeRisuTriggerEditor
-            value={Array.isArray(triggers) ? triggers : []}
-            draftPath="package.native.triggers"
-            onChange={writeTriggers}
-            prepareSave={(model, entries) => prepareEntries(model, 'triggers', entries)}
-            onPendingChange={setTriggersDirty}
-            disabled={!!draft}
-          />
-          <details className="native-advanced native-script-regex">
-            <summary>{t('native.text_aa2a73abcc')}</summary>
-            <NativeRisuRegexEditor
-              value={Array.isArray(regex) ? regex : []}
-              draftPath="package.native.regex"
-              onChange={writeRegex}
-              prepareSave={(model, entries) => prepareEntries(model, 'regex', entries)}
-              onPendingChange={setRegexDirty}
-              disabled={!!draft}
-            />
-          </details>
         </div>
-        {activeAdvanced === 'source' && (
-          <fieldset
-            className="native-panel-fields native-advanced-detail"
-            disabled={regexDirty || triggersDirty}
-          >
-            {rawEditor}
-          </fieldset>
+        {available.includes('display') && (
+          <div {...panel('display')} className="native-section-body">
+            <div className="native-form-stack">
+              {!standalone && (
+                <label>
+                  {t('native.text_50262c6215')}
+                  <textarea
+                    rows={12}
+                    className="native-main-text"
+                    spellCheck={false}
+                    value={nativeRisuBackground(native)}
+                    onChange={(e) => extension('backgroundHTML', e.target.value)}
+                  />
+                </label>
+              )}
+              {value.imageHandoff && (
+                <RisuImageHandoffFields
+                  policy={value.imageHandoff}
+                  selected={value.imageHandoff.ranges
+                    .filter((range) => range.enabled)
+                    .map((range) => range.id)}
+                  onChange={(ids) =>
+                    onChange({
+                      ...value,
+                      imageHandoff: {
+                        ...value.imageHandoff!,
+                        ranges: value.imageHandoff!.ranges.map((range) => ({
+                          ...range,
+                          enabled: ids.includes(range.id),
+                        })),
+                      },
+                    })
+                  }
+                />
+              )}
+            </div>
+          </div>
         )}
+        <div {...panel('modules')} className="native-section-body">
+          <PackageFeaturesEditor
+            value={value}
+            onChange={onChange}
+            onDirtyChange={setModulesDirty}
+          />
+        </div>
+      </fieldset>
+      <div {...panel('triggers')} className="native-section-body">
+        <NativeRisuTriggerEditor
+          value={Array.isArray(triggers) ? triggers : []}
+          draftPath="package.native.triggers"
+          onChange={writeTriggers}
+          prepareSave={(model, entries) => prepareEntries(model, 'triggers', entries)}
+          onPendingChange={setTriggersDirty}
+          disabled={!!draft}
+        />
+      </div>
+      <div {...panel('regex')} className="native-section-body native-regex-panel">
+        <NativeRisuRegexEditor
+          value={Array.isArray(regex) ? regex : []}
+          draftPath="package.native.regex"
+          onChange={writeRegex}
+          prepareSave={(model, entries) => prepareEntries(model, 'regex', entries)}
+          onPendingChange={setRegexDirty}
+          disabled={!!draft}
+        />
+      </div>
+      <div {...panel('source')} className="native-section-body">
+        <fieldset className="native-panel-fields" disabled={regexDirty || triggersDirty}>
+          {rawEditor}
+        </fieldset>
       </div>
     </div>
   );

@@ -2,7 +2,12 @@ import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
-import { createLibraryContent, editLibraryContent, selectEditorSection } from './ui-navigation.js';
+import {
+  createLibraryContent,
+  editLibraryContent,
+  editorSectionNames,
+  selectEditorSection,
+} from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 
@@ -107,15 +112,13 @@ test('LUSE04 standalone module navigation omits bot-only panes and retains its s
   await panel.getByRole('tab', { name: '모듈', exact: true }).click();
   await panel.getByLabel('서재 검색', { exact: true }).fill(title);
   await editLibraryContent(page, title);
-  await selectEditorSection(panel, '고급 설정');
-  const navigation = panel.getByRole('group', { name: '고급 설정 영역', exact: true });
-  await expect(navigation.getByRole('button', { name: '추가 지침', exact: true })).toHaveCount(0);
-  await expect(
-    navigation.getByRole('button', { name: '배경 HTML과 CSS', exact: true })
-  ).toHaveCount(0);
-  await expect(
-    navigation.getByRole('button', { name: '변수와 토글 초기값', exact: true })
-  ).toHaveAttribute('aria-pressed', 'true');
+  const sections = await editorSectionNames(panel);
+  for (const botOnly of ['첫 메시지', '추가 지침', '배경 HTML과 CSS', '이미지 지침'])
+    expect(sections).not.toContain(botOnly);
+  await selectEditorSection(panel, '변수와 토글 초기값');
+  await expect(panel.getByRole('textbox', { name: '기본 변수', exact: true })).toHaveValue(
+    'place=forest'
+  );
   const retained = (await (await request.get(`/api/content/${saved.id}`)).json()) as Content;
   expect(retained.revision).toBe(saved.revision);
   expect(retained.package?.nativeRisu.module).toMatchObject({

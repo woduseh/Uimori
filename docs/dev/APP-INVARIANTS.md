@@ -111,7 +111,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
 ### Helper change card (`HelperChangeCard`)
 
 - **Combined list and legacy rows**: Entry semantics live in [HELPER-TOOLS](HELPER-TOOLS.md#conversation-history-and-task-results). `results` and `changes` render as one list: result lines hide for resources and scene names with a change record, settings keep their result line and hide the matching change card, and tasks predating change records display result lines as before.
-- **Navigation and arrival marking**: `openHelperChange` dispatches by domain: resources pass section/item anchors to `RisuNativeFields` / `NativeRisuPresetEditor` (cleared on consume), scenes translate `ReaderTarget.changedParagraph` into a block anchor and offset ratio, and arrival marking outlines the block anchor or editor section rather than body characters.
+- **Navigation and arrival marking**: `openHelperChange` dispatches by domain: resources pass section/item anchors to `RisuNativeFields` / `NativeRisuPresetEditor`, which select the studio section whose `owns` matcher in `web/studio-sections.ts` claims the path (cleared on consume), scenes translate `ReaderTarget.changedParagraph` into a block anchor and offset ratio, and arrival marking outlines the block anchor or editor section rather than body characters.
 - **Non-color diff accessibility and verification**: Additions and deletions pair `--success-bg` and `--error-bg` with underline, strikethrough, leading `+`/`−`, and screen-reader labels, capped at `--diff-max-h`. Verified by `HCHANGE01`–`HCHANGE04` in `tests/helper-task-results-browser.spec.ts`.
 
 ### Helper turn rollback

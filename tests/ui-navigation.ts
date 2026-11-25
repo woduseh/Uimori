@@ -105,6 +105,16 @@ export async function expectEditorSection(scope: Page | Locator, name: string) {
     );
 }
 
+export async function editorSectionNames(scope: Page | Locator) {
+  const studio = scope.locator('.editor-studio').first();
+  await expect(studio).toBeVisible();
+  return studio.evaluate((node) =>
+    [...node.querySelectorAll<HTMLButtonElement>('button[id$="-tab"]')].map(
+      (button) => button.getAttribute('aria-label') ?? ''
+    )
+  );
+}
+
 export async function selectEditorSection(scope: Page | Locator, name: string) {
   const tab = editorTab(scope, name);
   const picker = editorSectionPicker(scope);

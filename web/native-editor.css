@@ -234,89 +234,6 @@
   display: grid;
   gap: 24px;
 }
-.native-advanced-workspace {
-  max-width: none;
-  --native-rail-w: 280px;
-  display: grid;
-  grid-template-columns: var(--native-rail-w) minmax(0, 1fr);
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-}
-.native-advanced-workspace > .native-advanced-tabs {
-  grid-column: 1;
-  grid-row: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  padding: 20px 14px 28px 0;
-  border-right: var(--hairline) solid var(--line);
-}
-.native-advanced-workspace > .native-advanced-tabs > button {
-  display: grid;
-  gap: 6px;
-  justify-content: stretch;
-  flex: none;
-  min-height: var(--control-h);
-  padding: 10px 14px;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  white-space: normal;
-}
-.native-advanced-tabs > button[aria-pressed="true"] {
-  background: var(--accent-soft);
-}
-.native-advanced-workspace > .native-advanced-detail {
-  grid-column: 2;
-  grid-row: 1;
-  min-width: 0;
-  width: 100%;
-  padding: 28px 6px 32px 32px;
-  box-sizing: border-box;
-}
-.native-advanced-detail h3 {
-  margin: 0;
-  font-size: var(--font-heading);
-}
-.native-advanced-workspace .native-form-stack,
-.native-advanced-workspace .native-form-stack > label,
-.native-advanced-workspace .native-source-editor {
-  width: 100%;
-  min-width: 0;
-}
-.native-script-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-.native-advanced-workspace .native-regex-editor .native-editor-split {
-  display: block;
-  height: auto;
-  overflow: visible;
-}
-.native-advanced-workspace .native-regex-editor .native-item-list {
-  display: none;
-}
-.native-advanced-workspace .native-regex-editor .native-item-detail {
-  padding: 0;
-  overflow: visible;
-}
-.native-advanced-workspace .native-regex-editor .native-mobile-picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-}
-@media (min-width: 801px) {
-  .native-advanced-workspace > .native-advanced-tabs,
-  .native-advanced-workspace > .native-advanced-detail {
-    overflow-y: auto;
-    scrollbar-width: thin;
-    min-height: 0;
-  }
-}
 @media (max-width: 800px) {
   .native-editor-split {
     --native-rail-w: 190px;
@@ -324,32 +241,6 @@
   }
   .native-item-detail {
     padding-left: 20px;
-  }
-  .native-advanced-workspace {
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    gap: 0;
-  }
-  .native-advanced-workspace > .native-advanced-detail {
-    padding: 24px 6px;
-  }
-  .native-advanced-workspace > .native-advanced-tabs {
-    width: 100%;
-    max-width: 100%;
-    flex-direction: row;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    border-right: 0;
-    border-bottom: var(--hairline) solid var(--line);
-    padding: 12px 0;
-    scrollbar-width: thin;
-  }
-  .native-advanced-workspace > .native-advanced-tabs > button {
-    justify-content: center;
-    min-height: var(--control-h);
-    padding-inline: 12px;
-    white-space: nowrap;
   }
 }
 @media (max-width: 600px) {

@@ -854,8 +854,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await expect(library.getByTestId('package-fields')).toHaveCount(0);
   await selectEditorSection(library, '첫 메시지');
   await library.getByLabel('기본 첫 메시지', { exact: true }).fill('<selector> Edited');
-  await selectEditorSection(library, '고급 설정');
-  await library.getByRole('button', { name: 'JSON 소스', exact: true }).click();
+  await selectEditorSection(library, 'JSON 소스');
   await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
   const save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await expect(save).toBeEnabled();

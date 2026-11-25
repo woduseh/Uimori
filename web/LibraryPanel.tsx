@@ -34,7 +34,7 @@ import {
   useResourceEditor,
   useResourceEditorCommands,
 } from './resource-editor.js';
-import { contentSections } from './resource-sections.js';
+import { contentSections } from './studio-sections.js';
 import {
   editableResource,
   type ContentEditModel,

@@ -1407,7 +1407,7 @@ for (const width of [MOBILE_WIDTH]) {
           const index = titles.indexOf('기본 인물 외형');
           return index > 0 ? titles.slice(index - 1, index + 2) : titles;
         })
-        .toEqual(['번역 지침', '기본 인물 외형', '고급 설정']);
+        .toEqual(['에셋1', '기본 인물 외형', '번역 지침']);
       await selectEditorSection(page, '기본 정보');
       await expect(page.getByRole('button', { name: '인물 추가', exact: true })).toBeHidden();
       await selectEditorSection(page, '기본 인물 외형');

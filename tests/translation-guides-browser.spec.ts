@@ -96,8 +96,7 @@ for (const width of [412]) {
     await discardEdits(page);
     await selectEditorSection(page, '번역 지침');
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveCount(0);
-    await selectEditorSection(page, '고급 설정');
-    await page.getByRole('button', { name: 'JSON 소스', exact: true }).click();
+    await selectEditorSection(page, 'JSON 소스');
     await page.getByLabel('Risu 원문 편집 대상', { exact: true }).selectOption('card');
     const raw = page.getByLabel('Risu 원문 JSON', { exact: true });
     const card = JSON.parse(await raw.inputValue());

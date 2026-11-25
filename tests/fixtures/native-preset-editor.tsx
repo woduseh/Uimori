@@ -7,7 +7,7 @@ import {
 } from '../../core/risu-native-preset.js';
 import type { PromptValue, RisuPrompt } from '../../core/risu-prompt.js';
 import { EditorStudio } from '../../web/EditorStudio.js';
-import { presetSections, type PresetSection } from '../../web/resource-sections.js';
+import { presetSections, type PresetSection } from '../../web/studio-sections.js';
 import { t } from '../../web/i18n.js';
 
 function Studio({

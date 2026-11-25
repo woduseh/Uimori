@@ -3,12 +3,12 @@ import { OUTLINE_LEVELS } from '../core/outline.js';
 import { formatNumber, t } from './i18n.js';
 import {
   contentSection,
+  contentSectionLabelKey,
+  isAuthoringPath,
   presetSection,
+  presetSectionLabelKey,
   promptBlockTypeLabels,
-  type ContentAdvancedTab,
-  type ContentSection,
-  type PresetSection,
-} from './resource-sections.js';
+} from './studio-sections.js';
 
 export type LocationPart = { text: string; identifier?: boolean };
 
@@ -93,30 +93,6 @@ const itemFields: Record<HelperChangeListSection, Record<string, string>> = {
     note: 'library.conditionsOrDescription',
   },
 };
-const contentSections: Record<ContentSection, string> = {
-  basic: 'native.text_eb7f501b0e',
-  greetings: 'native.text_be7723bd53',
-  lore: 'native.text_5ce4911d95',
-  assets: 'native.text_b1a821ee46',
-  translation: 'native.text_ecc580fe68',
-  appearances: 'visuals.defaultAppearances',
-  advanced: 'native.text_772fa878ec',
-};
-const contentAdvancedTabs: Record<ContentAdvancedTab, string> = {
-  instructions: 'native.text_22a2af3f54',
-  variables: 'native.initialVariablesAndToggles',
-  display: 'native.backgroundHtmlCss',
-  scripts: 'native.text_f31813202f',
-  modules: 'native.text_ae90c98d27',
-  source: 'native.sourceJson',
-};
-const presetSections: Record<PresetSection, string> = {
-  blocks: 'native.text_a0a7b7b4e4',
-  options: 'native.text_a1c1f8f5fe',
-  variables: 'native.text_0a13d19d88',
-  regex: 'native.text_fc7e4f6228',
-  collaboration: 'native.text_780d3f6ed3',
-};
 const topLevelFields: Record<string, string> = {
   title: 'visualpanels.name',
   description: 'visualpanels.description',
@@ -140,7 +116,7 @@ function resourceField(path: string[]): LocationPart[] {
   const native = /^\/package\/nativeRisu\/(card|module)\/(name|description)$/u.exec(pointer);
   if (native)
     return [
-      label(contentSections.basic),
+      label(contentSectionLabelKey('basic')),
       label(
         native[2] === 'name'
           ? 'native.text_9aa18e5071'
@@ -157,15 +133,14 @@ function resourceField(path: string[]): LocationPart[] {
   if (pointer.startsWith('/program/nativeRisuPreset/')) {
     const section = presetSection(pointer);
     return section
-      ? [label(presetSections[section])]
-      : [label(presetSections.options), identifier(relative)];
+      ? [label(presetSectionLabelKey(section))]
+      : [label(presetSectionLabelKey('options')), identifier(relative)];
   }
   const found = pointer.startsWith('/package/') ? contentSection(pointer) : null;
   if (!found) return [identifier(relative)];
   return [
-    label(contentSections[found.section]),
-    ...(found.advanced ? [label(contentAdvancedTabs[found.advanced])] : []),
-    ...(found.authoring ? [label('native.text_78def74816')] : []),
+    label(contentSectionLabelKey(found)),
+    ...(isAuthoringPath(pointer) ? [label('native.text_78def74816')] : []),
   ];
 }
 

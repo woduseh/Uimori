@@ -13,7 +13,7 @@ import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { EditorStudio, useStudioSection } from './EditorStudio.js';
-import { presetSections } from './resource-sections.js';
+import { presetSections } from './studio-sections.js';
 import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';

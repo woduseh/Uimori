@@ -140,8 +140,22 @@ for (const [width, height] of [
     await expect(page.getByLabel('편집 영역 선택', { exact: true })).toHaveCount(0);
     await checkFrame(
       page,
-      ['기본 정보', '첫 메시지', '로어북', '에셋', '번역 지침', '고급 설정'],
-      ['첫 메시지', '로어북', '고급 설정']
+      [
+        '기본 정보',
+        '첫 메시지',
+        '로어북',
+        '추가 지침',
+        '에셋',
+        '기본 인물 외형',
+        '번역 지침',
+        '배경 HTML과 CSS',
+        '변수와 토글 초기값',
+        '트리거 / Lua',
+        '정규식',
+        '함께 쓰는 모듈',
+        'JSON 소스',
+      ],
+      ['첫 메시지', '로어북']
     );
     await selectEditorSection(page, '기본 정보');
     await navigationAction(page, '프롬프트');
@@ -689,4 +703,60 @@ test('EFRAME12 an open editor collapses the sidebar without changing the saved c
   await page.getByRole('button', { name: '서재 목록', exact: true }).click();
   await expect(shell).toHaveClass(/sidebar-collapsed/);
   expect(await saved()).toBe('true');
+});
+
+test('EFRAME13 every former advanced section is one rail click away and a source draft still blocks the other panels', async ({
+  page,
+  request,
+}) => {
+  const title = `EFRAME13 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openBot(page, title);
+  const rail = page.getByRole('tablist', { name: '자료 편집 영역', exact: true });
+  await expect(page.getByText('고급 설정', { exact: true })).toHaveCount(0);
+  for (const name of [
+    '추가 지침',
+    '변수와 토글 초기값',
+    '배경 HTML과 CSS',
+    '트리거 / Lua',
+    '정규식',
+    '함께 쓰는 모듈',
+    'JSON 소스',
+  ]) {
+    const tab = editorTab(rail, name);
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    const panel = page.locator(`[id="${await tab.getAttribute('aria-controls')}"]`);
+    await expect(panel).toBeVisible();
+    await expect(page.locator('.editor-studio [role="tabpanel"]:not([hidden])')).toHaveCount(1);
+  }
+  await expect(
+    page.getByRole('complementary', { name: '정규식 목록', exact: true, includeHidden: true })
+  ).toBeHidden();
+  await selectEditorSection(page, '정규식');
+  await expect(page.getByRole('complementary', { name: '정규식 목록', exact: true })).toBeVisible();
+
+  await selectEditorSection(page, 'JSON 소스');
+  const raw = page.getByLabel('Risu 원문 JSON', { exact: true });
+  await raw.fill('{"unfinished":');
+  const notice = page.getByRole('status').filter({ hasText: '적용하지 않은 원문이 있어요.' });
+  await expect(notice).toBeVisible();
+  await selectEditorSection(page, '변수와 토글 초기값');
+  await expect(page.getByRole('textbox', { name: '기본 변수', exact: true })).toBeDisabled();
+  await selectEditorSection(page, '기본 정보');
+  await expect(page.getByLabel('카드 설명', { exact: true })).toBeDisabled();
+  await selectEditorSection(page, '정규식');
+  await expect(
+    page.getByRole('button', { name: '정규식 추가', exact: true }).first()
+  ).toBeDisabled();
+  await selectEditorSection(page, '트리거 / Lua');
+  await expect(page.getByRole('button', { name: '항목 추가', exact: true })).toBeDisabled();
+  await notice.getByRole('button', { name: '원문 확인', exact: true }).click();
+  await expect(editorTab(rail, 'JSON 소스')).toHaveAttribute('aria-selected', 'true');
+  await expect(raw).toHaveValue('{"unfinished":');
+  await page.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await selectEditorSection(page, '변수와 토글 초기값');
+  await expect(page.getByRole('textbox', { name: '기본 변수', exact: true })).toBeEnabled();
 });

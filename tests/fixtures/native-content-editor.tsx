@@ -4,7 +4,7 @@ import type { RisuContent } from '../../core/risu-content.js';
 import { RisuNativeFields } from '../../web/RisuNativeFields.js';
 import { EditorStudio } from '../../web/EditorStudio.js';
 import { t } from '../../web/i18n.js';
-import { contentSections, type ContentSection } from '../../web/resource-sections.js';
+import { contentSections, type ContentSection } from '../../web/studio-sections.js';
 
 export function mount() {
   function Harness() {

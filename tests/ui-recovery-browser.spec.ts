@@ -12,7 +12,12 @@ import {
 } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
+import {
+  editLibraryContent,
+  editorSectionNames,
+  navigationAction,
+  selectEditorSection,
+} from './ui-navigation.js';
 
 async function post<T>(request: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await request.post(path, { data });
@@ -75,21 +80,20 @@ async function editorFits(
   }
 }
 
-async function advancedWorkspaceFits(page: Page, editor: Locator) {
-  const workspace = editor.locator('.native-advanced-workspace');
-  const nav = workspace.getByRole('group', { name: '고급 설정 영역', exact: true });
-  const detail = workspace.locator('.native-advanced-detail:visible');
-  await expect(workspace).toBeVisible();
-  await expect(nav).toBeVisible();
+async function studioSectionFits(page: Page, editor: Locator) {
+  const detail = editor.locator('.editor-studio-canvas [role="tabpanel"]:not([hidden])');
   await expect(detail).toHaveCount(1);
+  await expect(detail).toBeVisible();
   const [pageOverflow, editorOverflow] = await Promise.all([
     page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
     editor.evaluate((node) => node.scrollWidth - node.clientWidth),
   ]);
   expect(Math.max(pageOverflow, editorOverflow)).toBeLessThanOrEqual(1);
   if ((page.viewportSize()?.width ?? 0) >= 1200) {
-    const [navBounds, detailBounds] = await Promise.all([nav.boundingBox(), detail.boundingBox()]);
-    expect(Math.abs(navBounds!.y - detailBounds!.y)).toBeLessThanOrEqual(1);
+    const nav = editor.locator('.editor-studio-rail');
+    const canvas = editor.locator('.editor-studio-canvas');
+    const [navBounds, canvasBounds] = await Promise.all([nav.boundingBox(), canvas.boundingBox()]);
+    expect(Math.abs(navBounds!.y - canvasBounds!.y)).toBeLessThanOrEqual(1);
   }
 }
 
@@ -411,24 +415,24 @@ for (const viewport of viewports) {
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 
-      await selectEditorSection(editor, '고급 설정');
-      const advancedNav = editor.getByRole('group', { name: '고급 설정 영역', exact: true });
+      const sections = await editorSectionNames(editor);
       for (const label of [
         '추가 지침',
         '변수와 토글 초기값',
         '배경 HTML과 CSS',
-        'Lua, 트리거, 정규식',
+        '트리거 / Lua',
+        '정규식',
         '함께 쓰는 모듈',
         'JSON 소스',
       ])
-        await expect(advancedNav.getByRole('button', { name: label, exact: true })).toBeVisible();
+        expect(sections).toContain(label);
 
-      await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
-      await advancedWorkspaceFits(page, editor);
+      await selectEditorSection(editor, '배경 HTML과 CSS');
+      await studioSectionFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-display-${viewport.name}.png`) });
 
-      await advancedNav.getByRole('button', { name: '함께 쓰는 모듈', exact: true }).click();
-      await advancedWorkspaceFits(page, editor);
+      await selectEditorSection(editor, '함께 쓰는 모듈');
+      await studioSectionFits(page, editor);
       const moduleEditor = editor.getByLabel('패키지 모듈과 기능 편집', { exact: true });
       const modulePicker = moduleEditor.getByRole('button', {
         name: '연결할 공통 모듈',
@@ -491,8 +495,8 @@ for (const viewport of viewports) {
       page.off('pageerror', recordPageError);
       expect(moduleDialogErrors).toEqual([]);
 
-      await advancedNav.getByRole('button', { name: 'Lua, 트리거, 정규식', exact: true }).click();
-      await advancedWorkspaceFits(page, editor);
+      await selectEditorSection(editor, '트리거 / Lua');
+      await studioSectionFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`) });
       await editor.getByLabel('트리거 이름', { exact: true }).fill('Edited arrival trigger');
       await editor.getByLabel('Lua 소스', { exact: true }).fill('return "edited"');
@@ -505,22 +509,26 @@ for (const viewport of viewports) {
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
-      await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
-      await advancedWorkspaceFits(page, editor);
-      await advancedNav.getByRole('button', { name: 'Lua, 트리거, 정규식', exact: true }).click();
+      await selectEditorSection(editor, '배경 HTML과 CSS');
+      await studioSectionFits(page, editor);
+      await selectEditorSection(editor, '트리거 / Lua');
       await expect(triggerRaw).toHaveValue(pendingTriggerRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
-      await editor.getByText('정규식 스크립트', { exact: true }).click();
+      await selectEditorSection(editor, '정규식');
       const currentRegex = editor.getByLabel('현재 정규식', { exact: true });
+      const regexList = editor.getByRole('complementary', { name: '정규식 목록', exact: true });
       if (viewport.name === 'desktop') {
+        await expect(regexList).toBeVisible();
+        await expect(currentRegex).toBeHidden();
+      } else {
         await expect(currentRegex).toBeVisible();
         await expect(currentRegex).toHaveJSProperty('tagName', 'SELECT');
       }
       await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited display {{char}}');
-      await advancedWorkspaceFits(page, editor);
+      await studioSectionFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
 
-      await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
+      await selectEditorSection(editor, 'JSON 소스');
       const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
       const pendingRaw = '{"unfinished":';
       await raw.fill(pendingRaw);
@@ -529,9 +537,9 @@ for (const viewport of viewports) {
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
-      await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
-      await advancedWorkspaceFits(page, editor);
-      await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
+      await selectEditorSection(editor, '배경 HTML과 CSS');
+      await studioSectionFits(page, editor);
+      await selectEditorSection(editor, 'JSON 소스');
       await expect(raw).toHaveValue(pendingRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await selectEditorSection(editor, '첫 메시지');

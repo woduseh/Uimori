@@ -113,6 +113,30 @@ export const messages = {
     ja: '変数とトグルの初期値',
     zh: '变量与开关初始值',
   },
+  'native.sectionGroupStory': {
+    ko: '이야기',
+    en: 'Story',
+    ja: '物語',
+    zh: '故事',
+  },
+  'native.sectionGroupPresentation': {
+    ko: '표현과 시각',
+    en: 'Presentation',
+    ja: '表現とビジュアル',
+    zh: '表现与视觉',
+  },
+  'native.sectionGroupBehavior': {
+    ko: '동작과 코드',
+    en: 'Behavior and code',
+    ja: '動作とコード',
+    zh: '行为与代码',
+  },
+  'native.sectionGroupSource': {
+    ko: '원본',
+    en: 'Source',
+    ja: '原本',
+    zh: '原始数据',
+  },
   'native.newChatDefaultVariables': {
     ko: '새 채팅의 기본 변수',
     en: 'Default variables for new chats',
@@ -1673,12 +1697,6 @@ export const messages = {
     ja: '翻訳指示',
     zh: '翻译指引',
   },
-  'native.text_772fa878ec': {
-    ko: '고급 설정',
-    en: 'Advanced settings',
-    ja: '詳細設定',
-    zh: '高级设置',
-  },
   'native.text_78def74816': {
     ko: '제작 정보',
     en: 'Creator information',
@@ -1823,18 +1841,6 @@ export const messages = {
     ja: '資料のバージョン',
     zh: '资料版本',
   },
-  'native.text_2c737ca1dd': {
-    ko: '고급 설정 영역',
-    en: 'Advanced settings area',
-    ja: '詳細設定領域',
-    zh: '高级设置区域',
-  },
-  'native.text_f31813202f': {
-    ko: 'Lua, 트리거, 정규식',
-    en: 'Lua, triggers and regex',
-    ja: 'Lua、トリガー、正規表現',
-    zh: 'Lua、触发器与正则表达式',
-  },
   'native.text_ae90c98d27': {
     ko: '함께 쓰는 모듈',
     en: 'Linked modules',
@@ -1864,12 +1870,6 @@ export const messages = {
     en: 'Background HTML / CSS',
     ja: '背景HTML / CSS',
     zh: '背景HTML / CSS',
-  },
-  'native.text_aa2a73abcc': {
-    ko: '정규식 스크립트',
-    en: 'Regex scripts',
-    ja: '正規表現スクリプト',
-    zh: '正则表达式脚本',
   },
   'native.text_0725ff9528': {
     ko: '이미지 표시 태그는 찾았지만, 다른 지시와 분리할 수 있는 이미지 지시 구간은 찾지 못했어요.',

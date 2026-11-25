@@ -21,7 +21,7 @@ import {
   useUnappliedEditorField,
   useEditorSavePreparation,
 } from './resource-editor.js';
-import { presetSection, promptBlockTypeLabels, type PresetSection } from './resource-sections.js';
+import { presetSection, promptBlockTypeLabels, type PresetSection } from './studio-sections.js';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';

@@ -4,9 +4,8 @@ import { SectionNavigation } from './SectionNavigation.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { DropdownIcon } from './ui-icons.js';
 import { formatNumber, t } from './i18n.js';
+import type { StudioSection } from './studio-sections.js';
 import './editor-studio.css';
-
-export type StudioSection<K extends string> = { id: K; title: string; count?: number };
 
 const rememberedSections = new Map<string, string>();
 
