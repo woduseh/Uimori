@@ -7,7 +7,7 @@ export function SearchSuggestionsFrame({ html }: { html: string }) {
     <iframe
       className="search-suggestions-frame"
       title={t('prompts.uiStoryGuideSearchSuggestions')}
-      srcDoc={html}
+      srcDoc={`<meta name="color-scheme" content="light dark">${html}`}
       sandbox="allow-popups allow-popups-to-escape-sandbox"
       referrerPolicy="no-referrer"
     />
