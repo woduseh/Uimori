@@ -72,6 +72,28 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.editor-studio-header :is(.library-detail-actions, .resource-editor-actions) button {
+  white-space: nowrap;
+}
+@media (min-width: 761px) {
+  .library-page-editing
+    .editor-studio-header
+    > :is(.prompt-editor-heading, .library-detail-heading):has(
+      .resource-editor-status [role="alert"]
+    ) {
+    flex-wrap: wrap;
+  }
+  .editor-studio-header
+    :is(.library-detail-actions, .resource-editor-actions):has(
+      .resource-editor-status [role="alert"]
+    ) {
+    display: contents;
+  }
+  .editor-studio-header .resource-editor-status:has([role="alert"]) {
+    order: 1;
+    flex: 1 0 100%;
+  }
+}
 .editor-studio-header .editor-title-field {
   order: initial;
   width: auto;
