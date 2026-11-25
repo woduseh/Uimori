@@ -11,6 +11,30 @@ export const messages = {
     ja: 'この作業の変更を元に戻す',
     zh: '撤销此任务的更改',
   },
+  'helperRollback.allAction': {
+    ko: '모두 되돌리기',
+    en: 'Roll back all',
+    ja: 'すべて元に戻す',
+    zh: '全部撤销',
+  },
+  'helperRollback.reviewLabel': {
+    ko: '이 작업이 저장한 변경',
+    en: 'Changes this task saved',
+    ja: 'この作業が保存した変更',
+    zh: '此任务保存的更改',
+  },
+  'helperRollback.savedCount': {
+    ko: '변경 {count, number}개를 저장했어요',
+    en: '{count, plural, one {Saved # change} other {Saved # changes}}',
+    ja: '{count, number}件の変更を保存しました',
+    zh: '已保存 {count, number} 项更改',
+  },
+  'helperRollback.restoredCount': {
+    ko: '{count, number}개를 되돌렸어요',
+    en: 'Rolled back {count, number}',
+    ja: '{count, number}件を元に戻しました',
+    zh: '已撤销 {count, number} 项',
+  },
   'helperRollback.title': {
     ko: '도우미 변경 되돌리기',
     en: 'Roll back assistant changes',

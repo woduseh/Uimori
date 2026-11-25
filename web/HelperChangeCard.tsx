@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   BookMarked,
   BookOpen,
@@ -55,13 +55,16 @@ export function HelperChangeCard({
   onOpen,
   rollback,
   outcome,
+  expanded: expandedByDefault = false,
 }: {
   change: HelperChange;
   onOpen?: (change: HelperChange) => Promise<void> | void;
   rollback?: ReactNode;
   outcome?: ReactNode;
+  expanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(expandedByDefault);
+  useEffect(() => setExpanded(expandedByDefault), [expandedByDefault]);
   const [opening, setOpening] = useState(false);
   const [failed, setFailed] = useState(false);
   const pending = useRef(false);

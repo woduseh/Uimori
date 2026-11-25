@@ -79,7 +79,11 @@ import {
 import { HelperArtifactCard } from './HelperArtifactCard.js';
 import { HelperTaskResults } from './HelperTaskResults.js';
 import { HelperPlanCard } from './HelperPlanCard.js';
-import type { HelperConfirmationGrant, HelperConfirmationTarget } from './HelperConfirmations.js';
+import {
+  declinedHelperConfirmations,
+  type HelperConfirmationGrant,
+  type HelperConfirmationTarget,
+} from './HelperConfirmations.js';
 import { HelperContextUsage } from './HelperContextUsage.js';
 import { HelperSummaryDialog, type HelperSummaryDraft } from './HelperSummaryDialog.js';
 import {
@@ -211,6 +215,7 @@ type Outbox = Partial<FrozenHelperAttachments> & {
   references?: HelperReferencePointer[];
   mode?: 'plan';
   confirmations?: string[];
+  declinedConfirmations?: string[];
 };
 const active = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
 const starterKeys: Record<HelperScope['kind'], string[]> = {
@@ -1182,6 +1187,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             ? { confirmations: grants[owner].map((grant) => grant.id) }
             : {}),
         };
+        const declined =
+          !steerTaskId && latestTaskId ? declinedHelperConfirmations(latestTaskId) : [];
+        if (declined.length) request.declinedConfirmations = declined;
       }
       setOutbox(owner, request);
       pendingRequest = request;
@@ -1214,6 +1222,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           ...(request.mode && !request.steerTaskId ? { mode: request.mode } : {}),
           ...(request.confirmations?.length && !request.steerTaskId
             ? { confirmations: request.confirmations }
+            : {}),
+          ...(request.declinedConfirmations?.length && !request.steerTaskId && !request.retryOf
+            ? { declinedConfirmations: request.declinedConfirmations }
             : {}),
         }
       );
@@ -2083,7 +2094,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         onUsage={task.id === latestTaskId ? reportUsage : undefined}
                         onOpenTarget={props.onOpenTarget}
                         onOpenChange={props.onOpenChange}
-                        rollbackUnavailable={pending.length > 0}
+                        rollbackUnavailable={pending.length > 0 || busy}
+                        review={task.id === latestTaskId}
                         confirmation={{
                           nameTarget,
                           pending: grantList.map((grant) => grant.id),
@@ -2221,7 +2233,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               setTaskHistory(null);
             })
           }
-          rollbackUnavailable={pending.length > 0}
+          rollbackUnavailable={pending.length > 0 || busy}
         />
       </Dialog>
       <Dialog

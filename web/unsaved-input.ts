@@ -45,5 +45,9 @@ const subscribe = (listener: () => void) => {
 };
 
 export function useUnsavedInputVersion() {
-  return useSyncExternalStore(subscribe, () => version);
+  return useSyncExternalStore(
+    subscribe,
+    () => version,
+    () => version
+  );
 }

@@ -20,6 +20,7 @@ import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import type { ModelPreset, ModelWorkspace } from '../core/product.js';
 import { messages } from '../web/locales/index.js';
+import { diffText } from '../core/text-diff.js';
 import { longestHelperPollDelay } from '../web/poll-delays.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
@@ -2558,7 +2559,7 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
         results.getByText('설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요.')
       ).toHaveCount(1);
       await expect(results.locator('.helper-rollback-unit')).toHaveCount(2);
-      await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
+      await results.getByRole('button', { name: '모두 되돌리기', exact: true }).click();
       await expect(
         dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
       ).toHaveText(['하린', '등대지기의 밤, 장면 2']);
@@ -2577,7 +2578,7 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
   expect(state.rollbackPosts).toEqual([]);
   const panel = page.locator('#helper-panel');
   const results = panel.getByTestId('helper-task-results');
-  await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
+  await results.getByRole('button', { name: '모두 되돌리기', exact: true }).click();
   await dialog.getByRole('button', { name: '변경 2개 되돌리기', exact: true }).click();
   await expect(dialog).toBeHidden();
   expect(state.rollbackPosts).toEqual([{}]);
@@ -2600,9 +2601,9 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
       await page.goto(`/?chat=${chat.id}`);
       await open(page);
       await expect(restored).toHaveCount(3);
-      await expect(
-        results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true })
-      ).toHaveCount(0);
+      await expect(results.getByRole('button', { name: '모두 되돌리기', exact: true })).toHaveCount(
+        0
+      );
       await page.screenshot({
         path: info.outputPath(`rollback-cards-${width}-${colorScheme}.png`),
       });
@@ -2793,7 +2794,7 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
   await expect(
     results.getByRole('button', { name: `${changedTitle} 되돌리기`, exact: true })
   ).toBeDisabled();
-  await results.getByRole('button', { name: '이 작업의 변경 되돌리기', exact: true }).click();
+  await results.getByRole('button', { name: '모두 되돌리기', exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
   await expect(
     dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
@@ -2816,6 +2817,178 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
   expect(state.rollbackPosts).toHaveLength(2);
   await expect(draft).toHaveValue(original);
   await expect(card.locator('.helper-rollback-status')).toHaveText('되돌렸어요');
+});
+
+const REVIEW_SHOTS = 'output/helper-review';
+
+test('HROLLBACK05 the review strip sits only on the latest finished task and undo all names what it leaves', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 2);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const [later, earlier] = state.current().tasks as [HelperTaskView, HelperTaskView];
+  state.results.set(earlier.id, { changes: [resourceChange('bot-a', '하린')] });
+  state.rollbacks.set(earlier.id, {
+    taskId: earlier.id,
+    blocked: null,
+    units: [resourceUnit('bot-a', '하린')],
+  });
+  state.results.set(later.id, {
+    changes: [
+      {
+        ...resourceChange('bot-c', '등대지기'),
+        diff: diffText(
+          '등대지기는 밤마다 불을 켰다. 바다는 조용했다.',
+          '등대지기는 새벽까지 불을 지켰다. 바다는 조용했다.',
+          'prose'
+        ),
+      },
+    ],
+  });
+  state.rollbacks.set(later.id, {
+    taskId: later.id,
+    blocked: null,
+    units: [resourceUnit('bot-c', '등대지기')],
+  });
+  const card = (task: HelperTaskView) =>
+    page.locator(
+      `#helper-panel .helper-message.assistant[data-task-id="${task.id}"] [data-testid="helper-task-results"]`
+    );
+  const strip = (task: HelperTaskView) => card(task).getByTestId('helper-review-strip');
+  for (const [width, height, colorScheme] of [
+    [1440, 900, 'dark'],
+    [375, 812, 'light'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await open(page);
+    await expect(strip(later)).toContainText('변경 1개를 저장했어요');
+    await expect(strip(earlier)).toHaveCount(0);
+    const only = card(later).getByRole('button', { name: '등대지기 되돌리기', exact: true });
+    await expect(only.locator('.ui-icon-button-text')).toHaveText('되돌리기');
+    await expect(card(later).getByRole('region', { name: /등대지기/ })).toBeVisible();
+    await expect(
+      card(earlier).getByRole('button', { name: '하린 되돌리기' }).locator('.ui-icon-button-text')
+    ).toHaveCount(0);
+    await card(later).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${REVIEW_SHOTS}/strip-one-${width}-${colorScheme}.png` });
+  }
+
+  const fixture = rollbackFixture(later, chat.id);
+  fixture.results.changes![0]!.diff = diffText('하린은 조용했다.', '하린은 웃었다.', 'prose');
+  state.results.set(later.id, fixture.results);
+  state.rollbacks.set(later.id, fixture.rollback);
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  for (const [width, height, colorScheme] of [
+    [1440, 900, 'dark'],
+    [375, 812, 'light'],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await open(page);
+    await expect(strip(later)).toContainText('변경 4개를 저장했어요');
+    await expect(
+      strip(later).getByRole('button', { name: '모두 되돌리기', exact: true })
+    ).toBeVisible();
+    await expect(card(later).locator('.helper-rollback-unit .ui-icon-button-text')).toHaveText([
+      '되돌리기',
+      '되돌리기',
+    ]);
+    await expect(card(later).locator('.helper-change-toggle')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+    ).toBeLessThanOrEqual(0);
+    await card(later).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${REVIEW_SHOTS}/strip-several-${width}-${colorScheme}.png` });
+  }
+
+  await strip(later).getByRole('button', { name: '모두 되돌리기', exact: true }).click();
+  await expect(
+    dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
+  ).toHaveText(['하린', '등대지기의 밤, 장면 2']);
+  const kept = dialog.getByRole('region', { name: '그대로 둘 대상' }).getByRole('listitem');
+  await expect(kept.nth(0)).toContainText('서윤');
+  await expect(kept.nth(0)).toContainText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
+  await page.screenshot({ path: `${REVIEW_SHOTS}/undo-all-preview-375-light.png` });
+  await dialog.getByRole('button', { name: '변경 2개 되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.rollbackPosts).toEqual([{}]);
+  await expect(strip(later)).toContainText('2개를 되돌렸어요');
+  await expect(strip(later).getByRole('button', { name: '모두 되돌리기' })).toHaveCount(0);
+  await expect(
+    card(later).locator('.helper-change', { hasText: '서윤' }).locator('.helper-rollback-status')
+  ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
+  await expect(card(earlier).getByRole('button', { name: '하린 되돌리기' })).toBeEnabled();
+  await card(later).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${REVIEW_SHOTS}/after-undo-all-375-light.png` });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await card(later).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${REVIEW_SHOTS}/after-undo-all-1440-dark.png` });
+});
+
+test('HROLLBACK06 the review strip waits while a task runs and leaves when the next task starts', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const first = state.current().tasks[0]!;
+  const fixture = rollbackFixture(first, chat.id);
+  state.results.set(first.id, fixture.results);
+  state.rollbacks.set(first.id, { ...fixture.rollback, blocked: 'task-active' });
+  await page.reload();
+  const panel = await open(page);
+  const results = panel.locator(
+    `.helper-message.assistant[data-task-id="${first.id}"] [data-testid="helper-task-results"]`
+  );
+  const strip = results.getByTestId('helper-review-strip');
+  const all = strip.getByRole('button', { name: '모두 되돌리기', exact: true });
+  const harin = results.getByRole('button', { name: '하린 되돌리기', exact: true });
+  await expect(all).toBeDisabled();
+  await expect(harin).toBeDisabled();
+  await expect(strip.getByText('도우미 작업이 끝나면 되돌릴 수 있어요.')).toBeVisible();
+  await results.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${REVIEW_SHOTS}/strip-disabled-375-light.png` });
+
+  state.rollbacks.set(first.id, fixture.rollback);
+  await page.reload();
+  await open(page);
+  await expect(all).toBeEnabled();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/helper/conversations/*/messages', async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.fallback();
+  });
+  await panel.getByLabel('도우미에게 요청').fill('다음 작업');
+  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect(all).toBeDisabled();
+  await expect(harin).toBeDisabled();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await results.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${REVIEW_SHOTS}/strip-disabled-sending-1440-dark.png` });
+  release();
+  await expect.poll(() => state.posts.length).toBe(1);
+  await expect(strip).toHaveCount(0);
+  await expect(harin).toBeDisabled();
+  await expect(harin.locator('.ui-icon-button-text')).toHaveCount(0);
+  state.complete(state.current().tasks[0]!);
+  await expect(harin).toBeEnabled();
+  await expect(strip).toHaveCount(0);
+  expect(state.rollbackPosts).toEqual([]);
 });
 
 test('HPLAN01 plan mode sends a plan request, shows a bounded plan and carries it out', async ({

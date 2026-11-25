@@ -592,6 +592,7 @@ export function HelperTaskResultItems({
   onOpenTarget,
   onOpenChange,
   rollbackUnavailable,
+  review = false,
 }: {
   taskId: string;
   status: HelperStatus;
@@ -599,24 +600,30 @@ export function HelperTaskResultItems({
   onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
   onOpenChange?: (change: HelperChange) => Promise<void> | void;
   rollbackUnavailable: boolean;
+  review?: boolean;
 }) {
   useI18n();
   const changes = data.changes.filter(
     (change) => change.domain !== 'settings' || !settingRecorded(change, data.results)
   );
+  const undoable = !active(data.status) && rollbackCovers(data.changes);
   const rollback = useHelperRollback({
     taskId,
     changes: data.changes,
-    enabled: !active(data.status) && rollbackCovers(data.changes),
+    enabled: undoable,
     unavailable: rollbackUnavailable || active(status),
+    review,
   });
+  const expandSingle = review && undoable && changes.length === 1;
   return (
     <>
+      {rollback.strip}
       <ul className="helper-result-list">
         {changes.map((change, index) => (
           <li key={`change:${change.domain}:${change.targetId}:${index}`}>
             <HelperChangeCard
               change={change}
+              expanded={expandSingle}
               onOpen={onOpenChange}
               rollback={rollback.action(change)}
               outcome={rollback.status(change)}
@@ -653,6 +660,7 @@ export function HelperTaskResults({
   onOpenChange,
   onUsage,
   rollbackUnavailable = false,
+  review = false,
   confirmation,
   questionAnswer,
 }: {
@@ -664,6 +672,7 @@ export function HelperTaskResults({
   onOpenChange?: (change: HelperChange) => Promise<void> | void;
   onUsage?: (taskId: string, usage: HelperTaskResultsView['usage']) => void;
   rollbackUnavailable?: boolean;
+  review?: boolean;
   confirmation?: {
     nameTarget: (target: HelperConfirmationTarget) => string;
     pending: readonly string[];
@@ -717,6 +726,7 @@ export function HelperTaskResults({
             onOpenTarget={onOpenTarget}
             onOpenChange={onOpenChange}
             rollbackUnavailable={rollbackUnavailable}
+            review={review}
           />
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">

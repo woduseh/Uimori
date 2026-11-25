@@ -248,6 +248,24 @@ button.helper-result-target:hover {
   align-items: center;
   gap: 6px;
 }
+.helper-review-strip {
+  display: grid;
+  gap: 8px;
+  padding-block: 4px 8px;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.helper-review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0;
+  margin-inline-end: auto;
+  font-weight: 600;
+}
+.helper-review-summary > span + span {
+  color: var(--muted);
+  font-weight: 400;
+}
 .helper-rollback-preview {
   display: grid;
   gap: 12px;

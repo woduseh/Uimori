@@ -66,11 +66,13 @@ export function useHelperRollback({
   changes,
   enabled,
   unavailable,
+  review,
 }: {
   taskId: string;
   changes: readonly HelperChange[];
   enabled: boolean;
   unavailable: boolean;
+  review: boolean;
 }) {
   useUnsavedInputVersion();
   const [view, setView] = useState<HelperRollbackView | null>(null);
@@ -138,6 +140,8 @@ export function useHelperRollback({
     return title;
   };
   const restorableUnits = units.filter(restorable);
+  const restoredCount = units.filter((unit) => unit.status === 'restored').length;
+  const reviewing = review && restorableUnits.length + restoredCount > 0;
 
   async function read(target: (value: HelperRollbackView) => void) {
     const value = await api<HelperRollbackView>(path, undefined, 'GET');
@@ -219,10 +223,12 @@ export function useHelperRollback({
     if (!unit || !restorable(unit) || firstChange.get(unit.unit) !== change.targetId) return null;
     return (
       <IconButton
-        className="helper-change-open helper-rollback-unit"
+        className={`${reviewing ? '' : 'helper-change-open '}helper-rollback-unit`}
         icon={Undo2}
         size={16}
         label={t('helperRollback.unitAction', { title: unitName(unit) })}
+        text={reviewing ? t('helperRollback.confirmUnit') : undefined}
+        title={reviewing ? '' : undefined}
         disabled={blocked || running || unknown || unsaved(unit)}
         onClick={() => open(unit.unit)}
       />
@@ -261,25 +267,22 @@ export function useHelperRollback({
   const imageNotice = chosen?.restore.some(
     (unit) => unit.touches?.domain === 'scene' && unit.touches.fields.includes('translation')
   );
-  const footer = (
+  const taskAction = restorableUnits.length > 1 && (
+    <button
+      type="button"
+      className="secondary"
+      disabled={blocked || running || unknown}
+      onClick={() => open(null)}
+    >
+      <Undo2 size={16} aria-hidden="true" />
+      {t(reviewing ? 'helperRollback.allAction' : 'helperRollback.taskAction')}
+    </button>
+  );
+  const taskActive = blocked && restorableUnits.length > 0 && (
+    <p className="helper-result-note">{t('helperRollback.taskActive')}</p>
+  );
+  const notices = (
     <>
-      {uncovered && <p className="helper-result-note">{t('helperRollback.uncovered')}</p>}
-      {(restorableUnits.length > 1 || (blocked && restorableUnits.length > 0)) && (
-        <div className="helper-rollback-row">
-          {restorableUnits.length > 1 && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={blocked || running || unknown}
-              onClick={() => open(null)}
-            >
-              <Undo2 size={16} aria-hidden="true" />
-              {t('helperRollback.taskAction')}
-            </button>
-          )}
-          {blocked && <p className="helper-result-note">{t('helperRollback.taskActive')}</p>}
-        </div>
-      )}
       {readFailed && (
         <NoticeBanner
           tone="error"
@@ -311,6 +314,38 @@ export function useHelperRollback({
         </NoticeBanner>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+    </>
+  );
+  const strip = reviewing ? (
+    <div
+      className="helper-review-strip"
+      role="group"
+      aria-label={t('helperRollback.reviewLabel')}
+      data-testid="helper-review-strip"
+    >
+      <div className="helper-rollback-row">
+        <p className="helper-review-summary">
+          <span>{t('helperRollback.savedCount', { count: units.length })}</span>
+          {restoredCount > 0 && (
+            <span>{t('helperRollback.restoredCount', { count: restoredCount })}</span>
+          )}
+        </p>
+        {taskAction}
+        {taskActive}
+      </div>
+      {notices}
+    </div>
+  ) : null;
+  const footer = (
+    <>
+      {uncovered && <p className="helper-result-note">{t('helperRollback.uncovered')}</p>}
+      {!reviewing && (taskAction || taskActive) && (
+        <div className="helper-rollback-row">
+          {taskAction}
+          {taskActive}
+        </div>
+      )}
+      {!reviewing && notices}
       <ConfirmDialog
         open={!!plan}
         title={t('helperRollback.title')}
@@ -370,5 +405,5 @@ export function useHelperRollback({
       </ConfirmDialog>
     </>
   );
-  return { action, status, footer };
+  return { action, status, strip, footer };
 }

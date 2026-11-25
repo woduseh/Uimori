@@ -212,6 +212,10 @@ function localKeys(): string[] {
   }
 }
 
+export function localKeysStartingWith(prefix: string): string[] {
+  return localKeys().filter((key) => key.startsWith(prefix));
+}
+
 export function sweepUnregisteredStorage() {
   const namespaces = localStorageNamespaces();
   for (const key of localKeys())

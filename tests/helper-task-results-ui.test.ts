@@ -1,8 +1,17 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
-import type { HelperTaskAttemptUsage, HelperTaskResultsView } from '../core/helper.js';
-import { HelperTaskUsageRecord, helperTaskUsageTotals } from '../web/HelperTaskResults.js';
+import type {
+  HelperChange,
+  HelperTaskAttemptUsage,
+  HelperTaskResultsView,
+} from '../core/helper.js';
+import { diffText } from '../core/text-diff.js';
+import {
+  HelperTaskResultItems,
+  HelperTaskUsageRecord,
+  helperTaskUsageTotals,
+} from '../web/HelperTaskResults.js';
 import { helperChangeLocationParts } from '../web/helper-change-location.js';
 
 const attempt = (overrides: Partial<HelperTaskAttemptUsage>): HelperTaskAttemptUsage => ({
@@ -64,6 +73,43 @@ test('package settings a helper change names read as the editor sections that ho
     '기본 정보',
     '제작 정보',
   ]);
+});
+
+const changed = (targetId: string, title: string): HelperChange => ({
+  domain: 'resource',
+  targetId,
+  title,
+  location: { kind: 'resource-field', path: ['description'] },
+  action: 'update',
+  diff: diffText('등대지기는 잠들었다.', '등대지기는 깨어 있었다.', 'prose'),
+  anchor: null,
+});
+const items = (changes: HelperChange[], review: boolean) =>
+  renderToStaticMarkup(
+    createElement(HelperTaskResultItems, {
+      taskId: 'task',
+      status: 'completed',
+      rollbackUnavailable: false,
+      review,
+      data: {
+        taskId: 'task',
+        status: 'completed',
+        results: [],
+        changes,
+        confirmations: [],
+        unrecordedOperations: 0,
+        usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
+      },
+    })
+  );
+const openDiffs = (html: string) => html.match(/aria-expanded="true"/g)?.length ?? 0;
+
+test('the latest finished task opens the diff of its only change and leaves several closed', () => {
+  const single = items([changed('bot-a', '하린')], true);
+  expect(openDiffs(single)).toBe(1);
+  expect(single).toContain('깨어');
+  expect(openDiffs(items([changed('bot-a', '하린')], false))).toBe(0);
+  expect(openDiffs(items([changed('bot-a', '하린'), changed('bot-b', '서윤')], true))).toBe(0);
 });
 
 const record = (usage: Partial<HelperTaskResultsView['usage']>) =>

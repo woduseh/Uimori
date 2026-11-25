@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Check, ShieldAlert, X } from 'lucide-react';
-import type { HelperConfirmation } from '../core/helper.js';
+import { HELPER_DECLINED_CALLS_LIMIT, type HelperConfirmation } from '../core/helper.js';
 import { t } from './i18n.js';
 import { readOptionalStorage } from './optional-storage.js';
-import { storageKeys, writeRecentStorage } from './storage-keys.js';
+import { localKeysStartingWith, storageKeys, writeRecentStorage } from './storage-keys.js';
 
 export type HelperConfirmationTarget = HelperConfirmation['targets'][number];
 export type HelperConfirmationGrant = { id: string; operation: string; text: string };
@@ -29,6 +29,14 @@ const reasons: Partial<Record<HelperConfirmation['reason'], string>> = {
 };
 const declinedKey = ({ taskId, id }: Pick<HelperConfirmation, 'taskId' | 'id'>) =>
   storageKeys.helperConfirmationDeclined(taskId, id);
+
+export function declinedHelperConfirmations(taskId: string): string[] {
+  const prefix = storageKeys.helperConfirmationDeclined(taskId, '');
+  return localKeysStartingWith(prefix)
+    .map((key) => key.slice(prefix.length))
+    .filter(Boolean)
+    .slice(0, HELPER_DECLINED_CALLS_LIMIT);
+}
 
 export const confirmationOperation = (confirmation: Pick<HelperConfirmation, 'operation'>) =>
   HELPER_CONFIRMATION_OPERATION_LABELS[confirmation.operation]
