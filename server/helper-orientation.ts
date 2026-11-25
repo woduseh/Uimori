@@ -75,8 +75,10 @@ export function seededHelperOperations(
   if (snapshot.selection) add('scene.read', ...(writes ? ['scene.patch'] : []));
   if (snapshot.editor) {
     const unsaved = snapshot.editor.source !== 'saved' && snapshot.editor.model !== undefined;
-    if (unsaved) add('editor.read');
-    if (snapshot.editor.targetId) add('resource.read', ...(writes ? ['resource.patch'] : []));
+    add(
+      unsaved ? 'editor.read' : 'resource.read',
+      ...(writes && !unsaved ? ['resource.patch'] : [])
+    );
   }
   if (snapshot.outline) add('outline.read', ...(writes ? ['outline.write'] : []));
   for (const target of helperModelReferences(store, snapshot.scope, snapshot.references)) {

@@ -412,7 +412,7 @@ describe('a helper save under an unsaved editor draft overwrites neither side', 
     await Promise.all(f.work);
     expect(f.workspace.task(task.id)).toMatchObject({
       status: 'completed',
-      snapshot: { seededOperations: ['editor.read', 'resource.read', 'resource.patch'] },
+      snapshot: { seededOperations: ['editor.read'] },
     });
     expect(description(f.store, resource.id)).toBe('도우미 설명');
     expect(() => userSave(f.store, resource, resource.revision, draft)).toThrow(
