@@ -311,7 +311,7 @@
   gap: 6px;
   padding-inline-start: 24px;
 }
-.activity-nav-link > .pinned-chat-avatar {
+.activity-nav-link > .chat-row-avatar {
   --content-avatar-size: 24px;
   border-radius: var(--radius-control);
   color: var(--muted);
@@ -322,4 +322,15 @@
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: var(--hairline) solid var(--line);
+}
+.activity-nav-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.activity-nav-state > svg {
+  flex: none;
+}
+.activity-nav-state > .activity-nav-warning {
+  color: var(--error);
 }

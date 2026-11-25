@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type DragEvent, type RefObject } from 'react';
-import { ArrowDown, ArrowUp, Check, Folder, MessageCircle, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Folder, Pencil, Trash2 } from 'lucide-react';
 import {
   AddIcon,
   DoneIcon,
@@ -299,7 +299,19 @@ export function HelperNavigation(props: Props) {
           ? RunningIcon
           : ended
             ? endedIcon(session)
-            : MessageCircle;
+            : null;
+    const tone =
+      section === 'running'
+        ? 'activity-spinner'
+        : section === 'unread'
+          ? session.lastTaskStatus === 'failed' || session.lastTaskStatus === 'interrupted'
+            ? 'activity-nav-warning'
+            : session.lastTaskStatus === 'completed'
+              ? 'activity-nav-success'
+              : undefined
+          : ended && session.lastTaskStatus !== 'cancelled'
+            ? 'activity-nav-warning'
+            : undefined;
     const detail =
       section === 'unread' && session.lastTaskStatus
         ? t(resultLabels[session.lastTaskStatus] ?? 'helpers.m263')
@@ -314,30 +326,21 @@ export function HelperNavigation(props: Props) {
         aria-current={selected ? 'page' : undefined}
         onClick={() => props.onSelect(session)}
       >
-        <Icon
-          size={16}
-          aria-hidden="true"
-          className={
-            section === 'running'
-              ? 'activity-spinner'
-              : section === 'unread'
-                ? session.lastTaskStatus === 'failed' || session.lastTaskStatus === 'interrupted'
-                  ? 'activity-nav-warning'
-                  : session.lastTaskStatus === 'completed'
-                    ? 'activity-nav-success'
-                    : undefined
-                : ended && session.lastTaskStatus !== 'cancelled'
-                  ? 'activity-nav-warning'
-                  : undefined
-          }
-        />
+        {Icon && section !== 'recent' && <Icon size={16} aria-hidden="true" className={tone} />}
         <span className="activity-nav-copy">
           <strong>{sessionTitle(session)}</strong>
           <small className="activity-nav-detail">
             {(context || detail) && (
               <span className="ui-meta-row">
                 {context && <span>{context}</span>}
-                {detail && <span>{detail}</span>}
+                {detail && (
+                  <span className={section === 'recent' ? 'activity-nav-state' : undefined}>
+                    {Icon && section === 'recent' && (
+                      <Icon size={14} aria-hidden="true" className={tone} />
+                    )}
+                    {detail}
+                  </span>
+                )}
               </span>
             )}
             <time dateTime={at} title={formatDate(at)}>

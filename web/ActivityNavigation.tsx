@@ -1,9 +1,10 @@
 import { t, useI18n, translateMessage, formatDate, formatNumber } from './i18n.js';
 import { activityStatusLabel } from './ActivityStatus.js';
-import { Check, MessageCircle } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import { useState } from 'react';
 import { ActivitySection } from './ActivitySection.js';
+import { ContentAvatar } from './ContentAvatar.js';
 import { IconButton } from './IconButton.js';
 import { PinnedChats } from './PinnedChats.js';
 import { navigationTimeLabel } from './navigation-time.js';
@@ -48,7 +49,7 @@ export function ActivityNavigation({
 }: Props) {
   useI18n();
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
-  const names = new Map(library?.contents.map((bot) => [bot.id, bot.title]) ?? []);
+  const bots = new Map(library?.contents.map((bot) => [bot.id, bot]) ?? []);
   const chatById = new Map(chats.map((chat) => [chat.id, chat]));
   const grouped = new Map<string, ActivityFeedItem[]>();
   for (const item of feed.items) {
@@ -84,7 +85,7 @@ export function ActivityNavigation({
       (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? '') || b.id.localeCompare(a.id)
   );
   const title = (chat: Chat) => chat.title || t('helpers.m260');
-  const botName = (chat: Chat) => names.get(chat.botId) ?? t('helpers.m261');
+  const botName = (chat: Chat) => bots.get(chat.botId)?.title ?? t('helpers.m261');
   const openItem = (chatId: string, item: ActivityFeedItem) => {
     onInspect(item);
     onSelect(
@@ -234,7 +235,7 @@ export function ActivityNavigation({
                       aria-current={selected === chat.id ? 'page' : undefined}
                       onClick={() => onSelect(chat.id)}
                     >
-                      <MessageCircle size={16} aria-hidden="true" />
+                      <ContentAvatar content={bots.get(chat.botId)} className="chat-row-avatar" />
                       <span className="activity-nav-copy">
                         <strong>{title(chat)}</strong>
                         <small className="activity-nav-detail">

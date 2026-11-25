@@ -52,7 +52,7 @@ export function PinnedChats({
                   aria-current={selected === chat.id ? 'page' : undefined}
                   onClick={() => onSelect(chat.id)}
                 >
-                  <ContentAvatar content={bot} className="pinned-chat-avatar" />
+                  <ContentAvatar content={bot} className="chat-row-avatar" />
                   <span className="activity-nav-copy">
                     <strong>{chat.title || t('helpers.m260')}</strong>
                     <small>{botName}</small>
