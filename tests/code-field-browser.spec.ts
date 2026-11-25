@@ -140,6 +140,30 @@ test('CODEFIELD03 undo history stays with the item it was typed in', async ({ pa
   await expectCodeFieldValue(alternate, '');
 });
 
+test('CODEFIELD05 a large document keeps marks on their text while its analysis catches up', async ({
+  page,
+  request,
+}) => {
+  const title = `CODEFIELD05 ${randomUUID().slice(0, 8)}`;
+  const line = '{{#when::{{getvar::mood}}::is::calm}}<p>{{char}} {{random::a::b}}</p>{{/when}}\n';
+  const large = line.repeat(Math.ceil(80_000 / line.length));
+  await seedBot(request, title, { first_mes: large });
+  const field = await openGreetings(page, title);
+  await expect(field.locator('.cm-cbs-name', { hasText: 'getvar' }).first()).toBeVisible();
+  await field.locator('.cm-line').first().click();
+  await page.keyboard.press('ControlOrMeta+Home');
+  await page.keyboard.type('{{nope ');
+  const braces = () =>
+    field
+      .locator('.cm-cbs-brace')
+      .evaluateAll((items) => [...new Set(items.map((item) => item.textContent))]);
+  expect(await braces()).toEqual(['{{', '}}']);
+  await expect(field.locator('.cm-lintRange-error')).toHaveCount(1);
+  await expect(field.locator('.cm-lintRange-error')).toHaveText('{{');
+  expect(await braces()).toEqual(['{{', '}}']);
+  await expectCodeFieldValue(field, `{{nope ${large}`);
+});
+
 test('CODEFIELD04 a stale value during Hangul composition waits for the composition', async ({
   page,
   request,

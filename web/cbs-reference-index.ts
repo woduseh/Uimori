@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   createCbsReferenceIndexer,
   nativeRisuContentReferenceInput,
@@ -9,10 +9,16 @@ import {
 import type { RisuContentSource } from '../core/risu-native.js';
 import type { CbsNames } from './CodeField.js';
 
+const REFERENCE_INDEX_DELAY_MS = 300;
+
 function useIndex<T>(source: T, input: (source: T) => CbsReferenceInput) {
   const [indexer] = useState(createCbsReferenceIndexer);
-  const deferred = useDeferredValue(source);
-  return useMemo(() => indexer(input(deferred)), [indexer, input, deferred]);
+  const [settled, setSettled] = useState(source);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(source), REFERENCE_INDEX_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [source]);
+  return useMemo(() => indexer(input(settled)), [indexer, input, settled]);
 }
 
 export const useContentReferences = (native: RisuContentSource) =>

@@ -10,6 +10,7 @@ import {
   Compartment,
   EditorState,
   Facet,
+  StateEffect,
   StateField,
   type Extension,
   type Range,
@@ -88,14 +89,55 @@ const analyze = (state: EditorState) =>
     catalog: state.facet(catalogFacet) ?? undefined,
   });
 
-const analysisField = StateField.define<CbsAnalysis>({
-  create: analyze,
-  update: (analysis, transaction) =>
-    transaction.docChanged ||
-    transaction.startState.facet(catalogFacet) !== transaction.state.facet(catalogFacet)
-      ? analyze(transaction.state)
-      : analysis,
+const DEFERRED_ANALYSIS_CHARS = 50_000;
+const DEFERRED_ANALYSIS_DELAY_MS = 300;
+
+type AnalysisState = { analysis: CbsAnalysis; current: boolean };
+const analysisReady = StateEffect.define<CbsAnalysis>();
+
+const analysisField = StateField.define<AnalysisState>({
+  create: (state) => ({ analysis: analyze(state), current: true }),
+  update: (value, transaction) => {
+    if (!transaction.docChanged)
+      for (const effect of transaction.effects)
+        if (effect.is(analysisReady)) return { analysis: effect.value, current: true };
+    const catalogChanged =
+      transaction.startState.facet(catalogFacet) !== transaction.state.facet(catalogFacet);
+    if (!transaction.docChanged && !catalogChanged) return value;
+    if (!catalogChanged && transaction.state.doc.length > DEFERRED_ANALYSIS_CHARS)
+      return value.current ? { analysis: value.analysis, current: false } : value;
+    return { analysis: analyze(transaction.state), current: true };
+  },
 });
+
+const currentAnalysis = (state: EditorState) => {
+  const { analysis, current } = state.field(analysisField);
+  return current ? analysis : null;
+};
+
+const analysisScheduler = ViewPlugin.fromClass(
+  class {
+    timer: ReturnType<typeof setTimeout> | undefined;
+    view: EditorView;
+    constructor(view: EditorView) {
+      this.view = view;
+    }
+    update(update: ViewUpdate) {
+      if (update.state.field(analysisField).current || !update.docChanged) return;
+      clearTimeout(this.timer);
+      this.timer = setTimeout(this.run, DEFERRED_ANALYSIS_DELAY_MS);
+    }
+    run = () => {
+      this.timer = undefined;
+      const { state } = this.view;
+      if (!state.field(analysisField).current)
+        this.view.dispatch({ effects: analysisReady.of(analyze(state)) });
+    };
+    destroy() {
+      clearTimeout(this.timer);
+    }
+  }
+);
 
 const tokenClasses: Partial<Record<CbsTokenKind, string>> = {
   open: 'cm-cbs-brace',
@@ -115,40 +157,61 @@ const mark = (className: string) => {
   return decoration;
 };
 
-function decorate(analysis: CbsAnalysis): DecorationSet {
+function decorateVisible(view: EditorView, analysis: CbsAnalysis): DecorationSet {
+  const { tokens, calls } = analysis;
   const depth = (call: number | null) => {
     let level = 0;
-    for (let parent = call === null ? null : analysis.calls[call]!.parent; parent !== null; ) {
+    for (let parent = call === null ? null : calls[call]!.parent; parent !== null; ) {
       level++;
-      parent = analysis.calls[parent]!.parent;
+      parent = calls[parent]!.parent;
     }
     return level % 3;
   };
   const ranges: Range<Decoration>[] = [];
-  for (const token of analysis.tokens) {
-    const className = tokenClasses[token.kind];
-    if (!className || token.to <= token.from) continue;
-    const braces = token.kind === 'open' || token.kind === 'close';
-    ranges.push(
-      mark(braces ? `${className} cm-cbs-depth-${depth(token.call)}` : className).range(
-        token.from,
-        token.to
-      )
-    );
+  let next = 0;
+  for (const { from, to } of view.visibleRanges) {
+    let low = next;
+    let high = tokens.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (tokens[middle]!.to <= from) low = middle + 1;
+      else high = middle;
+    }
+    for (next = low; next < tokens.length && tokens[next]!.from < to; next++) {
+      const token = tokens[next]!;
+      const className = tokenClasses[token.kind];
+      if (!className || token.to <= token.from) continue;
+      const braces = token.kind === 'open' || token.kind === 'close';
+      ranges.push(
+        mark(braces ? `${className} cm-cbs-depth-${depth(token.call)}` : className).range(
+          token.from,
+          token.to
+        )
+      );
+    }
   }
   return Decoration.set(ranges, true);
 }
 
-const highlightField = StateField.define<DecorationSet>({
-  create: (state) => decorate(state.field(analysisField)),
-  update: (decorations, transaction) => {
-    const analysis = transaction.state.field(analysisField);
-    return analysis === transaction.startState.field(analysisField, false)
-      ? decorations
-      : decorate(analysis);
+const highlightPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      const analysis = currentAnalysis(view.state);
+      this.decorations = analysis ? decorateVisible(view, analysis) : Decoration.none;
+    }
+    update(update: ViewUpdate) {
+      const analysis = currentAnalysis(update.state);
+      if (
+        analysis &&
+        (analysis !== update.startState.field(analysisField).analysis || update.viewportChanged)
+      )
+        this.decorations = decorateVisible(update.view, analysis);
+      else if (update.docChanged) this.decorations = this.decorations.map(update.changes);
+    }
   },
-  provide: (field) => EditorView.decorations.from(field),
-});
+  { decorations: (plugin) => plugin.decorations }
+);
 
 const matchPlugin = ViewPlugin.fromClass(
   class {
@@ -157,13 +220,19 @@ const matchPlugin = ViewPlugin.fromClass(
       this.decorations = this.build(view);
     }
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.focusChanged)
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.focusChanged ||
+        update.startState.field(analysisField) !== update.state.field(analysisField)
+      )
         this.decorations = this.build(update.view);
     }
     build(view: EditorView): DecorationSet {
       const selection = view.state.selection.main;
-      if (!view.hasFocus || !selection.empty) return Decoration.none;
-      const match = cbsMatchingRanges(view.state.field(analysisField), selection.head);
+      const analysis = currentAnalysis(view.state);
+      if (!analysis || !view.hasFocus || !selection.empty) return Decoration.none;
+      const match = cbsMatchingRanges(analysis, selection.head);
       if (!match) return Decoration.none;
       const decoration = mark(match.matched ? 'cm-cbs-match' : 'cm-cbs-unmatched');
       return Decoration.set(
@@ -196,17 +265,27 @@ function diagnosticMessage(diagnostic: CbsDiagnostic) {
 }
 
 const cbsLinter = linter(
-  (view): Diagnostic[] =>
-    view.state.field(analysisField).diagnostics.map((diagnostic) => ({
+  (view): Diagnostic[] => {
+    const analysis = currentAnalysis(view.state);
+    if (!analysis) {
+      const mapped: Diagnostic[] = [];
+      forEachDiagnostic(view.state, (diagnostic, from, to) =>
+        mapped.push({ ...diagnostic, from, to })
+      );
+      return mapped;
+    }
+    return analysis.diagnostics.map((diagnostic) => ({
       from: diagnostic.from,
       to: diagnostic.to,
       severity: diagnostic.severity,
       message: diagnosticMessage(diagnostic),
-    })),
+    }));
+  },
   {
     delay: 400,
     needsRefresh: (update) =>
-      update.startState.field(analysisField) !== update.state.field(analysisField),
+      update.startState.field(analysisField).analysis !==
+      update.state.field(analysisField).analysis,
   }
 );
 
@@ -305,7 +384,8 @@ function cbsCompletions(context: CompletionContext): CompletionResult | null {
 
 const cbsExtensions: Extension = [
   analysisField,
-  highlightField,
+  analysisScheduler,
+  highlightPlugin,
   matchPlugin,
   cbsLinter,
   cursorDiagnostic,
