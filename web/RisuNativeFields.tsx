@@ -95,7 +95,9 @@ export function RisuNativeFields({
   onSelect,
   idPrefix: id,
   overview,
+  saved = null,
 }: {
+  saved?: { id: string; revision: number } | null;
   value: RisuContent;
   onChange: (value: RisuContent) => void;
   onDraftChange?: (dirty: boolean) => void;
@@ -122,7 +124,6 @@ export function RisuNativeFields({
   const [jump, setJump] = useState<Jump | null>(null);
   const [previewShown, togglePreview] = useDraftPreviewShown();
   const compact = useCompactLayout();
-  const previewable = value.revision >= 1;
   const arrival = useRef<AbortController | null>(null);
   const defaultsField = useRef<HTMLTextAreaElement>(null);
   useEffect(() => () => arrival.current?.abort(), []);
@@ -526,7 +527,7 @@ export function RisuNativeFields({
                 isEmpty={(i) => !greetings[i]?.trim()}
                 actions={
                   <>
-                    {previewable && !compact && (
+                    {saved && !compact && (
                       <IconButton
                         label={t('draftPreview.show')}
                         icon={DisplayIcon}
@@ -566,18 +567,18 @@ export function RisuNativeFields({
                       }
                     />
                   );
-                  if (!previewable || section !== 'greetings') return editor;
+                  if (!saved || section !== 'greetings') return editor;
                   return (
                     <FirstMessageWorkspace
                       shown={previewShown}
                       field={editor}
                       preview={
                         <RisuDraftStartPreview
-                          contentId={value.id}
-                          revision={value.revision}
+                          contentId={saved.id}
+                          revision={saved.revision}
                           native={native}
                           text={greetings[i] ?? ''}
-                          surfaceKey={`${value.id}:greeting:${i}`}
+                          surfaceKey={`${saved.id}:greeting:${i}`}
                         />
                       }
                     />

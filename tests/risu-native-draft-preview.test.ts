@@ -25,7 +25,7 @@ async function start(accessToken?: string) {
   return app;
 }
 
-async function importBot(app: App) {
+async function importBot(app: App, risuai: Record<string, unknown> = {}, firstMessage?: string) {
   const source = {
     name: 'draft.json',
     base64: Buffer.from(
@@ -34,8 +34,8 @@ async function importBot(app: App) {
         data: {
           name: 'Draft',
           description: 'Desc',
-          first_mes: 'Saved {{getvar::mood}}',
-          extensions: { risuai: { defaultVariables: 'mood=calm' } },
+          first_mes: firstMessage ?? 'Saved {{getvar::mood}}',
+          extensions: { risuai: { defaultVariables: 'mood=calm', ...risuai } },
         },
       })
     ).toString('base64'),
@@ -92,6 +92,54 @@ test('renders an unsaved draft with its own defaults and leaves the saved conten
     `/api/content/${id}/risu-preview?revision=${content.revision}&startId=start-0`
   );
   expect(previous.json().html).toContain('Saved calm');
+});
+
+test('renders as a new chat would start: the draft name and the toggle defaults', async () => {
+  const app = await start();
+  const { id, content } = await importBot(app);
+  const native = structuredClone(content.package.nativeRisu);
+  native.card.name = 'Renamed draft';
+  native.card.extensions.risuai.toggles = 'rain=Rain\nmood=Mood=select=calm,tense\nnote=Note=text';
+  const text =
+    '{{char}}|{{getglobalvar::toggle_rain}}|{{#when::rain::tis::0}}dry{{/when}}|{{getglobalvar::toggle_mood}}|[{{getglobalvar::toggle_note}}]';
+  const post = (nativeRisu: unknown) =>
+    app.inject({
+      method: 'POST',
+      url: `/api/content/${id}/risu-preview`,
+      payload: { revision: content.revision, nativeRisu, text },
+    });
+  const renamed = await post(native);
+  expect(renamed.statusCode, renamed.body).toBe(200);
+  expect(renamed.json().html).toContain('Renamed draft|0|dry|0|[]');
+  native.card.name = ' ';
+  expect((await post(native)).json().html).toContain(`${content.title}|0|dry|0|[]`);
+
+  const savedApp = await start();
+  const toggled = await importBot(
+    savedApp,
+    { toggles: 'rain=Rain' },
+    '{{getglobalvar::toggle_rain}} {{#when::rain::tis::0}}dry{{/when}}'
+  );
+  const preview = await savedApp.inject(
+    `/api/content/${toggled.id}/risu-preview?revision=${toggled.content.revision}&startId=start-0`
+  );
+  expect(preview.json().html).toContain('0 dry');
+});
+
+test('a dropped request stops instead of returning a result', async () => {
+  const { nativeRisuDraftPreview } = await import('../server/risu-native-preview.js');
+  const app = await start();
+  const { id, content } = await importBot(app);
+  const controller = new AbortController();
+  controller.abort();
+  await expect(
+    nativeRisuDraftPreview(
+      app.store,
+      id,
+      { revision: content.revision, nativeRisu: content.package.nativeRisu, text: 'x' },
+      controller.signal
+    )
+  ).rejects.toThrow();
 });
 
 test('rejects invalid drafts and reports evaluation failures without a server error', async () => {

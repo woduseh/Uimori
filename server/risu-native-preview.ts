@@ -4,6 +4,8 @@ import {
   nativeRisuExtension,
   type RisuContentSource,
 } from '../core/risu-native.js';
+import { nativeRisuToggleControls } from '../core/risu-native-preset.js';
+import { nativeToggleVariables } from '../core/risu-effective-controls.js';
 import type { Content } from '../core/product.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -33,10 +35,18 @@ function savedPackage(store: Store, id: string, revision: unknown) {
   return { content, pkg: content.package as RisuContent };
 }
 
+function toggleDefaults(native: RisuContentSource) {
+  const declaration = native.module?.customModuleToggle ?? nativeRisuExtension(native).toggles;
+  return nativeToggleVariables(
+    nativeRisuToggleControls(typeof declaration === 'string' ? declaration : ''),
+    {}
+  );
+}
+
 async function renderStart(
-  content: Content,
   pkg: RisuContent,
   native: RisuContentSource,
+  charName: string,
   variables: Record<string, string>,
   start: string,
   query: PreviewRequest,
@@ -50,8 +60,9 @@ async function renderStart(
     viewport: readDisplayViewport(query),
     native,
     variables,
+    globalVariables: toggleDefaults(native),
     messages: [],
-    charName: content.title,
+    charName,
     userName: query.userName ? text(query.userName, 'user name', 200) : '사용자',
     assetUrls: Object.fromEntries(
       native.assets.flatMap((asset) => {
@@ -66,14 +77,18 @@ async function renderStart(
       { ...context, event: 'editDisplay', text: start, meta: { index: -1 } },
       { signal }
     );
-    const rendered = await renderNativeRisuMessage({
-      native,
-      text: edited.text ?? start,
-      context: { ...context, variables: edited.variables, messageIndex: -1, displaying: true },
-    });
+    signal?.throwIfAborted();
+    const rendered = await renderNativeRisuMessage(
+      {
+        native,
+        text: edited.text ?? start,
+        context: { ...context, variables: edited.variables, messageIndex: -1, displaying: true },
+      },
+      signal
+    );
     return { ...rendered, issues: [...new Set([...edited.warnings, ...rendered.issues])] };
   } catch (error) {
-    if (error instanceof HttpError) throw error;
+    if (error instanceof HttpError || signal?.aborted) throw error;
     const message = error instanceof Error ? error.message : String(error);
     return { failure: message.slice(0, EVALUATION_MESSAGE_MAX_CHARS) };
   }
@@ -88,9 +103,9 @@ export async function nativeRisuPreview(
   const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
   if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
   const result = await renderStart(
-    content,
     pkg,
     structuredClone(pkg.nativeRisu),
+    content.title,
     structuredClone(pkg.variableDefaults?.values ?? {}),
     start.text,
     query
@@ -124,5 +139,7 @@ export async function nativeRisuDraftPreview(
   } catch {
     throw new HttpError(400, 'RISU_VARIABLE_DEFAULTS_INVALID');
   }
-  return renderStart(content, pkg, native, variables, start, input, signal);
+  const name = native.card.name;
+  const charName = typeof name === 'string' && name.trim() ? name : content.title;
+  return renderStart(pkg, native, charName, variables, start, input, signal);
 }

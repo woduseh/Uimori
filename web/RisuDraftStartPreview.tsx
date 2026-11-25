@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useCompactLayout } from './useCompactLayout.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { api } from './api.js';
 import { translateMessage, useI18n } from './i18n.js';
+import { previewIssueMessage } from './risu-preview-issues.js';
+import { useRetryableEffect } from './useRetryableEffect.js';
 import { LoadingState } from './LoadingState.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { RunningIcon } from './ui-icons.js';
@@ -77,7 +79,7 @@ export function RisuDraftStartPreview({
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState(true);
   const first = useRef(true);
-  useEffect(() => {
+  const retryPreview = useRetryableEffect(() => {
     const controller = new AbortController();
     const delay = first.current ? 0 : DRAFT_PREVIEW_DELAY_MS;
     first.current = false;
@@ -115,6 +117,11 @@ export function RisuDraftStartPreview({
       controller.abort();
     };
   }, [contentId, revision, native, text, viewport]);
+  const retry = () => {
+    first.current = true;
+    setError('');
+    retryPreview();
+  };
   if (!rendered)
     return (
       <section className="risu-draft-preview" aria-label={t('draftPreview.title')}>
@@ -124,6 +131,7 @@ export function RisuDraftStartPreview({
           error={translateMessage(error)}
           errorLabel={t('native.text_78102a76b6')}
           label={t('native.text_f7b0125b0b')}
+          onRetry={retry}
         />
       </section>
     );
@@ -162,7 +170,7 @@ export function RisuDraftStartPreview({
           <summary>{t('native.previewIssues', { count: rendered.issues.length })}</summary>
           <ul>
             {rendered.issues.map((issue) => (
-              <li key={issue}>{translateMessage(issue)}</li>
+              <li key={issue}>{previewIssueMessage(issue)}</li>
             ))}
           </ul>
         </details>

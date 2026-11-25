@@ -1652,6 +1652,7 @@ function ContentEditor({
                 section={section}
                 onSelect={selectSection}
                 idPrefix={sectionId}
+                saved={selected && { id: selected.id, revision: selected.revision }}
                 value={value.package}
                 onChange={(pkg) =>
                   setValue((current) => ({ ...current, title: pkg.title, package: pkg }))

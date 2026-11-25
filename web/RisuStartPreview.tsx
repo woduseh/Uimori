@@ -6,6 +6,7 @@ import { api } from './api.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useWindowViewport } from './window-viewport.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+import { previewIssueMessage } from './risu-preview-issues.js';
 
 export function RisuStartPreview({
   content,
@@ -88,7 +89,11 @@ export function RisuStartPreview({
       {preview.issues.length > 0 && (
         <details>
           <summary>{t('native.previewIssues', { count: preview.issues.length })}</summary>
-          <p>{preview.issues.map((issue) => translateMessage(issue)).join(', ')}</p>
+          <ul>
+            {preview.issues.map((issue) => (
+              <li key={issue}>{previewIssueMessage(issue)}</li>
+            ))}
+          </ul>
         </details>
       )}
     </>

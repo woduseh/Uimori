@@ -5,16 +5,21 @@ import type { Content, PromptPreset } from '../core/product.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { DESKTOP_HEIGHT, MOBILE_HEIGHT, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
+import {
+  createLibraryContent,
+  editLibraryContent,
+  navigationAction,
+  selectEditorSection,
+} from './ui-navigation.js';
 import { codeFieldValue, expectCodeFieldValue } from './code-field.js';
 
 const screenshotDirectory = 'output/editor-studio-5';
 const breakLua =
   "listenEdit('editDisplay', function(id, text) if string.find(text, 'BREAK') then error('deliberate draft failure') end return text end)";
 
-async function capture(page: Page, name: string) {
-  mkdirSync(screenshotDirectory, { recursive: true });
-  await page.screenshot({ path: `${screenshotDirectory}/${name}.png` });
+async function capture(page: Page, name: string, directory = screenshotDirectory) {
+  mkdirSync(directory, { recursive: true });
+  await page.screenshot({ path: `${directory}/${name}.png` });
 }
 
 async function seedBot(request: APIRequestContext, title: string, card: Record<string, unknown>) {
@@ -282,9 +287,14 @@ for (const width of [1440, 1280])
 
     await page.keyboard.type(' {{img::없는그림}}');
     await expect(preview.getByText(/미리보기에서 확인이 필요한 항목/u)).toBeVisible();
+    await preview.getByText(/미리보기에서 확인이 필요한 항목/u).click();
+    await expect(preview.getByRole('listitem')).toHaveText(
+      '없는그림 에셋을 찾지 못해 표시하지 않았어요.'
+    );
     if (width === 1440) {
-      await preview.getByText(/미리보기에서 확인이 필요한 항목/u).click();
-      await capture(page, 'preview-warning');
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await capture(page, 'preview-asset-warning', 'output/editor-studio-6');
+      await page.emulateMedia({ colorScheme: 'light' });
     }
 
     const toggle = page.getByRole('button', { name: '미리보기 표시', exact: true });
@@ -324,4 +334,85 @@ test('PREVIEW02 phone switches between editing and the live preview', async ({ p
     page.getByRole('textbox', { name: '기본 첫 메시지', exact: true }),
     `${previewCard.first_mes} 휴대폰 문장`
   );
+});
+
+test('PREVIEW03 the preview starts like a new chat: draft name and toggle defaults', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: DESKTOP_HEIGHT });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.addInitScript(() => localStorage.setItem('uimori:theme', 'dark'));
+  const title = `PREVIEW03 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title, {
+    first_mes: [
+      '<p>{{#when::rain::tis::1}}창밖에 비가 내려요.{{:else}}창밖이 맑아요.{{/when}}</p>',
+      '<p>{{char}}가 창문을 열어요. 비 토글 값은 {{getglobalvar::toggle_rain}}이에요.</p>',
+    ].join('\n'),
+    extensions: { risuai: { toggles: 'rain=비 오는 날' } },
+  });
+  let failNext = true;
+  await page.route('**/api/content/*/risu-preview', async (route) => {
+    if (route.request().method() === 'POST' && failNext) {
+      failNext = false;
+      await route.fulfill({ status: 503, json: { error: 'Synthetic preview outage' } });
+      return;
+    }
+    await route.fallback();
+  });
+  await openPreview(page, title);
+  const preview = page.getByRole('region', { name: '저장 전 미리보기', exact: true });
+  await preview.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(preview).toContainText('창밖이 맑아요.');
+  await expect(preview).toContainText(`${title}가 창문을 열어요. 비 토글 값은 0이에요.`);
+  const renamed = `${title} 새 이름`;
+  await page.getByTestId('library-panel').getByLabel('봇 이름', { exact: true }).fill(renamed);
+  await expect(preview).toContainText(`${renamed}가 창문을 열어요.`);
+  await capture(page, 'preview-toggle-defaults', 'output/editor-studio-6');
+});
+
+test('PREVIEW04 a new bot previews only once saved, with the saved revision', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: DESKTOP_HEIGHT });
+  const revisions: number[] = [];
+  page.on('request', (item) => {
+    if (item.method() === 'POST' && item.url().includes('/risu-preview'))
+      revisions.push(item.postDataJSON().revision);
+  });
+  await page.goto('/');
+  await createLibraryContent(page);
+  const panel = page.getByTestId('library-panel');
+  const title = `PREVIEW04 ${randomUUID().slice(0, 8)}`;
+  await panel.getByLabel('봇 이름', { exact: true }).fill(title);
+  await selectEditorSection(page, '첫 메시지');
+  const field = page.getByRole('textbox', { name: '기본 첫 메시지', exact: true });
+  await expect(field).toHaveClass(/cm-content/u);
+  await field.click();
+  await page.keyboard.type('{{char}}가 처음 인사해요.');
+  await expect(page.getByRole('button', { name: '미리보기 표시', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '저장 전 미리보기', exact: true })).toHaveCount(0);
+  const saved = page.waitForResponse(
+    (reply) => reply.url().endsWith('/api/resources/save') && reply.request().method() === 'POST'
+  );
+  await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
+  const first = (await (await saved).json()).saved as Content;
+  const preview = page.getByRole('region', { name: '저장 전 미리보기', exact: true });
+  await expect(preview).toContainText(`${title}가 처음 인사해요.`);
+  expect(revisions.length).toBeGreaterThan(0);
+  expect(new Set(revisions)).toEqual(new Set([first.revision]));
+
+  await field.click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' 다시 저장해요.');
+  const resaved = page.waitForResponse(
+    (reply) => reply.url().endsWith('/api/resources/save') && reply.request().method() === 'POST'
+  );
+  await panel.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+  const second = (await (await resaved).json()).saved as Content;
+  expect(second.revision).toBeGreaterThan(first.revision);
+  revisions.length = 0;
+  await field.click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' 저장 뒤 문장');
+  await expect(preview).toContainText('다시 저장해요. 저장 뒤 문장');
+  expect(revisions.at(-1)).toBe(second.revision);
 });

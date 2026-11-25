@@ -182,8 +182,9 @@ export function processNativeRisuTextInWorker(input: NativeRisuTextInput): Nativ
   const issues: string[] = [];
   let text = cbs.parse(input.text, role);
   const scripts = nativeRisuRegex(input.native)
-    .filter((script) => script.type === input.mode)
-    .map((script, index) => {
+    .map((script, index) => ({ script, index }))
+    .filter(({ script }) => script.type === input.mode)
+    .map(({ script, index }) => {
       const actions: string[] = [];
       let order = 0;
       const flag = (script.ableFlag ? script.flag || 'g' : 'g').replace(
@@ -348,12 +349,14 @@ export function renderNativeRisuMessageInWorker(
 }
 
 export function renderNativeRisuMessage(
-  input: NativeRisuRenderInput
+  input: NativeRisuRenderInput,
+  signal?: AbortSignal
 ): Promise<NativeRisuRenderResult> {
   return runNativeRisuWorker(
     new URL('./risu-native-render.js', import.meta.url),
     'renderNativeRisuMessageInWorker',
     input,
-    input.timeoutMs
+    input.timeoutMs,
+    signal
   );
 }
