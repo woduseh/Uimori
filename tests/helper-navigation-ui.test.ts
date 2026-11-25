@@ -237,8 +237,11 @@ describe('helper navigation presentation', () => {
     });
     const activity = render(ended);
     const recent = activity.slice(activity.indexOf('data-activity-section="recent"'));
-    expect(row(recent, 'three')).toContain('<span>실패</span>');
-    expect(row(recent, 'four')).toContain('<span>취소됨</span>');
-    expect(row(recent, 'one')).not.toContain('<span>완료</span>');
+    expect(row(recent, 'three')).toContain('class="activity-nav-state"><svg');
+    expect(row(recent, 'three')).toContain('activity-nav-warning');
+    expect(row(recent, 'three')).toContain('</svg>실패</span>');
+    expect(row(recent, 'four')).toContain('</svg>취소됨</span>');
+    expect(row(recent, 'one')).not.toContain('완료</span>');
+    expect(row(recent, 'one')).not.toContain('<svg');
   });
 });

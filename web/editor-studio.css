@@ -401,6 +401,9 @@
   .library-page-editing .editor-studio-header .resource-editor-discard {
     display: none;
   }
+  .library-page-editing .editor-studio-header .editor-start-chat:disabled {
+    display: none;
+  }
   :is(.native-editor-save, .editor-start-chat) {
     width: var(--control-h);
     min-width: var(--control-h);
