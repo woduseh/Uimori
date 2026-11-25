@@ -191,7 +191,16 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
     sessions.set(token, session);
     focused = token;
     changed();
-    const unsubscribe = session.subscribe(changed);
+    let model = session.snapshot().local.model;
+    const unsubscribe = session.subscribe(() => {
+      const current = session.snapshot().local.model;
+      if (current !== model) {
+        pinnedFocus.delete(session);
+        fieldReports.delete(session);
+        model = current;
+      }
+      changed();
+    });
     const reopening = session.snapshot().ready;
     void session
       .open()
@@ -429,14 +438,12 @@ export function usePublishedEditorLocation(location: EditorLocation) {
   const session = useContext(EditorContextValue)?.session;
   useEffect(() => {
     if (!session) return;
+    const previous = locations.get(session);
     locations.set(session, location);
-    const pinned = pinnedFocus.get(session);
-    if (
-      pinned &&
-      (pinned.section !== location.section ||
-        (location.item && pinned.item && pinned.item.index !== location.item.index))
-    )
+    if (previous && (previous.section !== location.section || previous.item !== location.item)) {
       pinnedFocus.delete(session);
+      fieldReports.delete(session);
+    }
     changed();
   }, [session, location]);
 }

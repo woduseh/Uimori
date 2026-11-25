@@ -164,11 +164,7 @@ function judgmentEstimate(
 ): CostEstimate {
   const notes: string[] = [];
   const input = count(usage.inputTokens);
-  const cached =
-    pricing.protocol === 'openai-decisions-v1' ||
-    pricing.protocol === 'openai-compatible-decisions-v1'
-      ? count(record(raw.input_tokens_details).cached_tokens)
-      : null;
+  const cached = providerCacheUsage(pricing.protocol, raw)?.readTokens ?? null;
   const inconsistent = cached !== null && input !== null && cached > input;
   if (inconsistent) notes.push('INCONSISTENT_INPUT_USAGE');
   const lines =

@@ -1,3 +1,4 @@
+import { luaCodeMask } from '../core/lua-code-mask.js';
 import {
   analyzeCbs,
   normalizeCbsFunctionName,
@@ -149,51 +150,11 @@ export function cbsTextFindings(text: string, path: string, analysis = analyzeCb
   return findings;
 }
 
-function luaCodeMask(code: string): string {
-  const chars = code.split('');
-  let i = 0;
-  const blank = (from: number, to: number) => {
-    for (let k = from; k < to && k < chars.length; k++) if (chars[k] !== '\n') chars[k] = ' ';
-  };
-  const longBracket = (at: number) => /^\[(=*)\[/u.exec(code.slice(at, at + 64));
-  while (i < code.length) {
-    if (code.startsWith('--', i)) {
-      const long = longBracket(i + 2);
-      const end = long
-        ? code.indexOf(`]${long[1]}]`, i + 2 + long[0].length)
-        : code.indexOf('\n', i);
-      const stop = end < 0 ? code.length : long ? end + long[1]!.length + 2 : end;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    const long = code[i] === '[' ? longBracket(i) : null;
-    if (long) {
-      const end = code.indexOf(`]${long[1]}]`, i + long[0].length);
-      const stop = end < 0 ? code.length : end + long[1]!.length + 2;
-      blank(i, stop);
-      i = stop;
-      continue;
-    }
-    if (code[i] === '"' || code[i] === "'") {
-      const quote = code[i];
-      let k = i + 1;
-      while (k < code.length && code[k] !== quote && code[k] !== '\n')
-        k += code[k] === '\\' ? 2 : 1;
-      blank(i, k + 1);
-      i = k + 1;
-      continue;
-    }
-    i++;
-  }
-  return chars.join('');
-}
-
 function luaCalls(code: string, names: readonly string[]) {
   if (!names.length) return [];
   const masked = luaCodeMask(code);
   const pattern = new RegExp(
-    `(?<![\\w.:])(${names
+    `(?<![\\w.:])(?<!\\bfunction\\s+)(${names
       .map((name) =>
         name
           .split('.')
@@ -353,6 +314,18 @@ async function triggerFindings(
           name: string(effect.type),
           message:
             'Uimori does not run this trigger effect; the trigger fails when it reaches the effect.',
+        });
+      else if (
+        (effect.type === 'v2If' || effect.type === 'v2IfAdvanced') &&
+        !RISU_NATIVE_TRIGGER_OPERATORS.includes(string(effect.condition))
+      )
+        findings.push({
+          section: 'compatibility',
+          code: 'compat.trigger-operator',
+          severity: 'error',
+          path: `${effectPath}/condition`,
+          name: string(effect.condition),
+          message: `Uimori supports the condition operators ${RISU_NATIVE_TRIGGER_OPERATORS.join(' ')}.`,
         });
       else if (
         (effect.type === 'setvar' || effect.type === 'v2SetVar') &&
@@ -536,10 +509,16 @@ function assetFindings(
       ),
     },
   });
-  for (const field of fields)
+  for (const field of fields) {
+    const comments = field.text.includes('{{//') ? analyzeCbs(field.text).comments : [];
+    let comment = 0;
     for (const match of field.text.matchAll(NATIVE_RISU_ASSET_TAG)) {
+      while (comment < comments.length && comments[comment]!.to <= match.index) comment++;
+      if (comments[comment] && comments[comment]!.from <= match.index) continue;
       const name = match[2]!.trim();
-      if (!name || /\$\d/u.test(name) || resolve(name)) continue;
+      const capture =
+        field.section === 'regex' && field.field === 'out' && /\$(?:\d|&|<[^>]+>)/u.test(name);
+      if (capture || resolve(name)) continue;
       findings.push({
         section: 'assets',
         code: 'asset.missing',
@@ -551,6 +530,7 @@ function assetFindings(
           'No stored image of this resource has this name, and no name is within the Risu matching distance; the tag is shown as written.',
       });
     }
+  }
 }
 
 function presetBlockFindings(preset: JsonObject, findings: CodeFinding[]) {

@@ -319,7 +319,8 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   const knownRow = table.locator(`tr[data-attempt-id="${known.id}"]`);
   await expect(knownRow.getByRole('rowheader')).toHaveText('본문priced-fixture');
   await expect(knownRow.locator('td').nth(1)).toHaveText('1,500캐시 27%');
-  await expect(knownRow.locator('td').nth(4)).toContainText('$0.125');
+  await expect(knownRow.locator('[data-label="추정 비용"]')).toContainText('$0.004995');
+  await expect(knownRow.locator('[data-label="보고 비용"]')).toHaveText('$0.125');
   const detailButton = knownRow.getByRole('button', { name: '본문 priced-fixture 호출 상세' });
   await expect(detailButton).toHaveAttribute('aria-expanded', 'false');
   await detailButton.click();

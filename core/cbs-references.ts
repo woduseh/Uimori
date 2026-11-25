@@ -1,3 +1,4 @@
+import { luaCodeMask } from './lua-code-mask.js';
 import { analyzeCbs, type CbsRange, type CbsReference } from './cbs-analysis.js';
 import { nativeRisuSources, type RisuContentSource } from './risu-native.js';
 
@@ -87,7 +88,7 @@ function cbsReferences(text: string): FoundReference[] {
 
 function luaReferences(text: string): FoundReference[] {
   const found = cbsReferences(text);
-  for (const match of text.matchAll(luaCall)) {
+  for (const match of luaCodeMask(text).matchAll(luaCall)) {
     const [scope, access, prefix] = luaFunctions[match[1]!]!;
     const start = match.index + match[0].length;
     const literal = luaLiteralArgument.exec(text.slice(start, start + 4096));
@@ -307,11 +308,11 @@ function triggerInput(entries: unknown[], section: string, base: string) {
       field,
       path: `${base}/${item}/${field.replace('.', '/')}/${key}`,
     });
-    const variable = (value: unknown, access: 'read' | 'write', field: string) => {
+    const variable = (value: unknown, access: 'read' | 'write', field: string, key = 'var') => {
       const name = string(value);
       if (!name) return;
       input.direct.push({
-        ...at(field, 'var'),
+        ...at(field, key),
         scope: 'chat',
         name,
         dynamic: name.includes('{{'),
@@ -329,6 +330,15 @@ function triggerInput(entries: unknown[], section: string, base: string) {
       if (effect.type === 'triggerlua')
         input.lua.push({ ...at(`effect.${index}`, 'code'), text: string(effect.code) });
       else {
+        if (effect.type === 'v2If' || effect.type === 'v2IfAdvanced') {
+          for (const key of ['source', 'target'] as const) {
+            const value = effect[key];
+            if (typeof value !== 'string') continue;
+            input.cbs.push({ ...at(`effect.${index}`, key), text: value });
+            if ((effect.type === 'v2If' && key === 'source') || effect[`${key}Type`] === 'var')
+              variable(value, 'read', `effect.${index}`, key);
+          }
+        }
         if (effect.type === 'setvar' || effect.type === 'v2SetVar')
           variable(effect.var, 'write', `effect.${index}`);
         if (typeof effect.value === 'string')

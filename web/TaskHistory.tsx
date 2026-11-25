@@ -140,10 +140,14 @@ export function sumTaskHistoryValues(
   };
 }
 
-export function taskHistoryTotalLabel(value: TaskHistoryTotal, format: (amount: number) => string) {
+export function taskHistoryTotalLabel(
+  value: TaskHistoryTotal,
+  format: (amount: number) => string,
+  formatSubtotal = format
+) {
   if (value.empty) return t('visualpanels.unknown');
   return value.partial
-    ? t('chatsettings.taskHistoryAtLeast', { value: format(value.amount) })
+    ? t('chatsettings.taskHistoryAtLeast', { value: formatSubtotal(value.amount) })
     : format(value.amount);
 }
 

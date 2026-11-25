@@ -216,11 +216,10 @@ export function RunTaskDetails({
           )}
         </TaskHistorySection>
       )}
-      {(!authored || calls.length > 0) && (
+      {(!authored || !trace.value || trace.error || calls.length > 0) && (
         <TaskHistorySection title={t('visuals.historyCalls')}>
-          {trace.value ? (
-            <TraceSummary calls={calls} groups />
-          ) : (
+          {trace.value && <TraceSummary calls={calls} groups />}
+          {(!trace.value || trace.error) && (
             <TraceLoading error={trace.error} retry={trace.retry} />
           )}
           {!authored &&
@@ -247,6 +246,9 @@ export function RunTaskDetails({
           )}
           {snapshot && <LoreSelectionStatus snapshot={snapshot} />}
         </TaskHistorySection>
+      )}
+      {!authored && (!record.value || record.error) && (
+        <TraceLoading error={record.error} retry={record.retry} />
       )}
       {!authored && (
         <TraceFooter

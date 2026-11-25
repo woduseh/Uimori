@@ -477,7 +477,8 @@ export function executeTool(
   action: ToolAction,
   signal?: AbortSignal,
   role: 'main' | 'translation' | 'image' = 'main',
-  budget?: ReadBudget
+  budget?: ReadBudget,
+  offered?: readonly string[]
 ): ToolEvent {
   checkAbort(signal);
   const profile =
@@ -501,21 +502,28 @@ export function executeTool(
   });
   if (!ALLOWED_TOOLS.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
   const { args } = action;
+  const loreOnly =
+    action.name === 'knowledge.search' && offered && !offered.includes('skills.load');
+  const resources = () => {
+    const all = roleResources(snapshot, role);
+    return loreOnly ? all.filter((item) => item.kind !== 'skill') : all;
+  };
   if (action.name === 'knowledge.search' && args.mode === 'browse') {
     let browsers = knowledgeBrowsers.get(snapshot);
     if (!browsers) knowledgeBrowsers.set(snapshot, (browsers = new Map()));
-    let browse = browsers.get(role);
+    const scopeKey = loreOnly ? `${role}:lore` : role;
+    let browse = browsers.get(scopeKey);
     if (!browse) {
-      browse = createKnowledgeBrowser(roleResources(snapshot, role), {
+      browse = createKnowledgeBrowser(resources(), {
         chatId: snapshot.chatId,
         role,
         tokenizer: profile,
       });
-      browsers.set(role, browse);
+      browsers.set(scopeKey, browse);
     }
     return browse(action);
   }
-  const scope = roleResources(snapshot, role);
+  const scope = resources();
   const tokenReadSize = (
     text: string,
     offset: number,

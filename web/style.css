@@ -1689,7 +1689,7 @@ input[type="checkbox"] {
   background: var(--bg);
   color: var(--text);
   box-shadow: var(--shadow-dialog);
-  overflow: hidden;
+  overflow: clip;
 }
 .app-dialog.wide {
   --dialog-size: var(--settings-w);

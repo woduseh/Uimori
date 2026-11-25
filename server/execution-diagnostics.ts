@@ -24,7 +24,7 @@ export function initExecutionDiagnostics(db: DatabaseSync) {
   CREATE INDEX IF NOT EXISTS execution_diagnostics_illustration ON execution_tool_diagnostics(illustration_job_id,seq);`);
 }
 
-type ToolStart = Pick<ToolEvent, 'callId' | 'name' | 'args'>;
+type ToolStart = Pick<ToolEvent, 'callId' | 'name' | 'args'> & { attemptId?: string };
 
 function callHash(callId: string) {
   return createHash('sha256').update(callId).digest('hex');
@@ -37,6 +37,7 @@ export function startToolDiagnostic(
 ) {
   const data = JSON.stringify({
     state: 'started',
+    ...(event.attemptId ? { attemptId: event.attemptId } : {}),
     effect: 'unknown',
     name: /^[a-z0-9_.-]{1,80}$/iu.test(event.name) ? event.name : 'unknown',
     callIdSha256: callHash(event.callId),
@@ -119,6 +120,7 @@ export function recordToolDiagnostic(
   );
   const data = {
     state: 'finished',
+    ...(timing.attemptId ? { attemptId: timing.attemptId } : {}),
     name: /^[a-z0-9_.-]{1,80}$/iu.test(event.name) ? event.name : 'unknown',
     callIdSha256: callHash(event.callId),
     ...argumentDiagnostic(event.name, timing.diagnosticArgs ?? event.args),

@@ -289,6 +289,8 @@ export type HelperTaskResultTarget = {
   after?: string | number | boolean | null;
   beforeLabel?: string | null;
   afterLabel?: string | null;
+  beforePricing?: import('./pricing-types.js').ModelPricing;
+  afterPricing?: import('./pricing-types.js').ModelPricing;
   beforeRates?: import('./pricing-types.js').TokenRates | null;
   afterRates?: import('./pricing-types.js').TokenRates | null;
 };

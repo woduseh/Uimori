@@ -153,6 +153,35 @@ test('code.references filters the index and points every use at a patchable path
   );
 });
 
+test('reference findings follow their variable across pages in a large bot', async () => {
+  const store = fixture();
+  const defaults = Array.from(
+    { length: 1600 },
+    (_, i) => `score${String(i).padStart(4, '0')}=0`
+  ).join('\n');
+  const bot = store.product.content({
+    ...fixtureBotInput('Ledger'),
+    package: nativeContent({
+      name: 'Ledger',
+      extensions: { risuai: { defaultVariables: defaults } },
+    }),
+  }) as Content;
+  const last = await call(store, 'code.references', {
+    kind: 'content',
+    id: bot.id,
+    offset: 1599,
+    limit: 1,
+  });
+  expect(last).toMatchObject({
+    total: 1600,
+    totalFindings: 1600,
+    nextOffset: null,
+    findings: [{ name: 'score1599', code: 'never-read' }],
+    variables: [{ name: 'score1599' }],
+  });
+  expect(countTextTokens(JSON.stringify(last))).toBeLessThanOrEqual(12_000);
+});
+
 test('code.diagnose reports each finding kind of a bot with paths and positions', async () => {
   const store = fixture();
   const bot = saveCodeBot(store);
@@ -209,6 +238,64 @@ test('code.diagnose reports each finding kind of a bot with paths and positions'
   await expect(
     call(store, 'code.diagnose', { kind: 'content', id: bot.id, sections: ['spelling'] })
   ).rejects.toThrow('INVALID_ARGUMENTS');
+});
+
+test('code checks distinguish executable trigger operands, Lua calls and rendered assets', async () => {
+  const store = fixture();
+  const card = {
+    name: 'Static checks',
+    description: '{{// {{img::comment}} }} {{img::real}}',
+    extensions: {
+      risuai: {
+        customScripts: [{ type: 'editdisplay', in: '(x)', out: '{{img::$&}} {{img::$<group>}}' }],
+        triggerscript: [
+          {
+            type: 'start',
+            effect: [
+              {
+                type: 'triggerlua',
+                code: '-- getChatVar(id, "hidden")\nlocal function log() end\ngetChatVar(id, "visible")',
+              },
+            ],
+          },
+          {
+            type: 'start',
+            effect: [
+              { type: 'v2If', source: 'mood', target: 'limit', targetType: 'var', condition: '?' },
+              {
+                type: 'v2IfAdvanced',
+                source: 'plain',
+                sourceType: 'value',
+                target: 'other',
+                targetType: 'var',
+                condition: '=',
+              },
+            ],
+          },
+        ],
+      },
+    },
+  };
+  const bot = store.product.content({
+    ...fixtureBotInput('Static checks'),
+    package: nativeContent(card),
+  }) as Content;
+  const args = { kind: 'content', id: bot.id };
+  const report = await call(store, 'code.diagnose', args);
+  expect(
+    report.findings.filter((f: any) => f.code === 'asset.missing').map((f: any) => f.name)
+  ).toEqual(['real']);
+  expect(report.findings.filter((f: any) => f.code === 'compat.lua-function')).toEqual([]);
+  expect(report.findings.filter((f: any) => f.code === 'compat.trigger-operator')).toMatchObject([
+    { name: '?', path: expect.stringMatching(/effect\/0\/condition$/) },
+  ]);
+  const refs = await call(store, 'code.references', args);
+  expect(refs.variables.map((v: any) => v.name).sort()).toEqual([
+    'limit',
+    'mood',
+    'other',
+    'visible',
+  ]);
 });
 
 test('code.diagnose checks a prompt preset with preset paths', async () => {
@@ -287,6 +374,13 @@ test('code.regex traces each changing script of one stage with runtime CBS', asy
       after: 'HELLO sunny there, smile',
     },
   ]);
+  const defaults = await call(store, 'code.regex', {
+    kind: 'content',
+    id: bot.id,
+    stage: 'editoutput',
+    text: '{{setvar::mood::calm}}{{setvar::mark::new}}',
+  });
+  expect(defaults.changedVariables).toEqual({ mark: 'new' });
   expect(trace.issues).toEqual([
     { code: 'regex.command-unsupported', script: expect.objectContaining({ index: 3 }) },
   ]);
@@ -325,9 +419,40 @@ test('code.preview renders saved and replacement first messages with toggle valu
     ...fixtureBotInput('Preview Bot'),
     package: nativeContent(card, { id: 'preview-bot' }),
   }) as Content;
+  const named = store.product.content({
+    ...fixtureBotInput('Display title'),
+    package: nativeContent({ name: 'Card name', first_mes: '{{char}}' }),
+  }) as Content;
+  const savedName = await call(store, 'code.preview', { id: named.id });
+  expect(savedName.html).toContain('Card name');
+  expect((await call(store, 'code.preview', { id: named.id, text: '{{char}}' })).html).toBe(
+    savedName.html
+  );
   const plain = await call(store, 'code.preview', { id: bot.id });
   expect(plain.html).toContain('plain');
   expect(plain.html).not.toContain('fancy');
+  const emoji = { id: bot.id, text: '🌙!' };
+  const html = (await call(store, 'code.preview', emoji)).html as string;
+  const at = html.indexOf('🌙');
+  expect(await call(store, 'code.preview', { ...emoji, offset: at, limit: 1 })).toMatchObject({
+    html: '🌙',
+    nextOffset: at + 2,
+  });
+  expect(
+    (await call(store, 'code.preview', { id: bot.id, text: '{{img::}}' })).issues
+  ).toContainEqual({
+    code: 'asset.missing',
+    name: '',
+  });
+  const invalidToggles = structuredClone(card);
+  invalidToggles.extensions.risuai.toggles = 'same=A\nsame=B';
+  const invalid = store.product.content({
+    ...fixtureBotInput('Bad toggles'),
+    package: nativeContent(invalidToggles),
+  }) as Content;
+  expect(await call(store, 'code.preview', { id: invalid.id })).toMatchObject({
+    failure: 'RISU_NATIVE_PRESET_TOGGLE_KEY',
+  });
   const fancy = await call(store, 'code.preview', { id: bot.id, toggles: { style: '1' } });
   expect(fancy.html).toContain('fancy');
   expect(fancy.issues).toEqual([

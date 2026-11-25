@@ -205,7 +205,7 @@ function diffMode(path: string, before: unknown, after: unknown): TextDiffMode {
     )
   )
     return 'code';
-  return /^\s*[{[<]/u.test(String(after ?? before)) ? 'code' : 'prose';
+  return 'prose';
 }
 const segments = (path: string) => path.split('/').filter(Boolean).map(decode);
 

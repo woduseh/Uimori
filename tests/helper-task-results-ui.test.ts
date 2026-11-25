@@ -157,7 +157,7 @@ test('the summary prices a call by its reported cost before its estimate and kee
       attempt({ inputTokens: 10, outputTokens: 5, estimatedUsd: 0.0004321 }),
     ],
   });
-  expect(html).toContain('<dt>추정 비용</dt>');
+  expect(html).toContain('<dt>비용</dt>');
   expect(html).toContain('$0.0128');
   expect(html).not.toContain('이상');
 });

@@ -51,10 +51,15 @@ export type ShortcutBindings = Record<ShortcutAction, ShortcutKey>;
 
 export const shortcutActionIds = Object.keys(shortcutActions) as ShortcutAction[];
 
-export function defaultShortcutBindings(): ShortcutBindings {
-  return Object.fromEntries(
+export const isApplePlatform = () =>
+  /^(Mac|iPhone|iPad)/.test(globalThis.navigator?.platform ?? '');
+
+export function defaultShortcutBindings(apple = isApplePlatform()): ShortcutBindings {
+  const defaults = Object.fromEntries(
     shortcutActionIds.map((action) => [action, { ...shortcutActions[action].key }])
   ) as ShortcutBindings;
+  if (apple) defaults['editor.askHelper'] = { code: 'KeyU', mod: true, shift: true };
+  return defaults;
 }
 
 export function normalizeShortcutKey(key: ShortcutKey): ShortcutKey {

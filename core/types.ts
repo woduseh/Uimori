@@ -67,6 +67,7 @@ export type ToolEvent = {
   };
 };
 export type ToolEventTiming = {
+  attemptId?: string;
   elapsedMs?: number;
   finishedAt?: string;
   originalResultChars?: number | null;
@@ -272,6 +273,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   supersededBy?: string | null;
   readerDismissed?: boolean;
   estimatedCost?: import('./task-trace.js').TraceCostTotal;
+  sceneTokens?: import('./task-trace.js').SceneTokens;
   sceneCost?: import('./task-trace.js').TraceCostTotal;
   snapshot: Pick<RunSnapshot, 'loreContextReset' | 'requestImages' | 'replacement'>;
   contextSummary?: {

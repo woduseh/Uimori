@@ -352,7 +352,7 @@ const TOOLS: ProviderTool[] = [
                 type: 'string',
                 minLength: 1,
                 maxLength: 200,
-                description: 'create-folder: name of the new folder. Omit for move.',
+                description: 'create-folder or update-folder: the folder name.',
               },
               items: {
                 type: 'array',
@@ -386,7 +386,7 @@ const TOOLS: ProviderTool[] = [
             },
             ['expectedRevision', 'category']
           ),
-          'Required for create-folder and move.'
+          'Required for every action except read.'
         ),
       },
       ['action'],

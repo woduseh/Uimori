@@ -468,7 +468,15 @@ export async function executeAuxiliary(
         event = local;
         if (event.callId !== action.callId || event.name !== action.name)
           throw new Error('TOOL_CALL_INVALID');
-      } else event = executeTool(fixedScope, action, hooks.signal, 'translation');
+      } else
+        event = executeTool(
+          fixedScope,
+          action,
+          hooks.signal,
+          'translation',
+          undefined,
+          fixedInput.tools
+        );
       const originalResultChars = toolResultChars(event.result);
       event =
         hooks.prepareToolEvent?.(

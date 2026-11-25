@@ -2,8 +2,7 @@ import { t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { api } from './api.js';
-import { useRetryableEffect } from './useRetryableEffect.js';
+import { useApiRecord } from './useApiRecord.js';
 
 export function LazyDiagnostics<T>({
   path,
@@ -24,47 +23,24 @@ export function LazyDiagnostics<T>({
 }) {
   useI18n();
   const [open, setOpen] = useState(initiallyOpen);
-  const [value, setValue] = useState<T | null>(null);
-  const [error, setError] = useState('');
+  const { value, error, retry } = useApiRecord<T>(path, revision, !disclosure || open);
   const expanded = !disclosure || open;
   useEffect(() => {
     setOpen(initiallyOpen);
   }, [initiallyOpen]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Revision updates reload diagnostics at the same path.
-  const retry = useRetryableEffect(() => {
-    if (!expanded) {
-      setValue(null);
-      return;
-    }
-    let active = true;
-    setValue(null);
-    setError('');
-    void api<T>(path)
-      .then((result) => {
-        if (active) setValue(result);
-      })
-      .catch((cause) => {
-        if (active) setError((cause as Error).message);
-      });
-    return () => {
-      active = false;
-    };
-  }, [path, revision, expanded]);
   const content = (
     <>
       {actions && <div className="form-actions">{actions}</div>}
-      {expanded &&
-        (error || value === null ? (
-          <LoadingState
-            presentation="inline"
-            loading={!error}
-            error={error}
-            label={t('shared.loadingDetails')}
-            onRetry={retry}
-          />
-        ) : (
-          children(value)
-        ))}
+      {expanded && (error || value === null) && (
+        <LoadingState
+          presentation="inline"
+          loading={!error}
+          error={error}
+          label={t('shared.loadingDetails')}
+          onRetry={retry}
+        />
+      )}
+      {expanded && value !== null && children(value)}
     </>
   );
   return disclosure ? (

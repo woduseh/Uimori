@@ -56,6 +56,7 @@ async function harness(page: Page, seedCount = 0) {
   const rollbackPosts: { unit?: string }[] = [];
   let onRollback: ((units: HelperRollbackUnit[]) => Promise<void>) | undefined;
   let loseRollback = false;
+  let rollbackFailure = '';
   const posts: {
     requestKey: string;
     text: string;
@@ -410,6 +411,17 @@ async function harness(page: Page, seedCount = 0) {
           (unit) => unit.status === 'restorable' && (!body.unit || unit.unit === body.unit)
         );
         await onRollback?.(selected);
+        if (rollbackFailure) {
+          const error = rollbackFailure;
+          rollbackFailure = '';
+          return route.fulfill({
+            json: {
+              taskId: task.id,
+              blocked: null,
+              units: selected.map((unit) => ({ ...unit, status: 'failed' as const, error })),
+            },
+          });
+        }
         const restored = selected.map((unit) => ({ ...unit, status: 'restored' as const }));
         current.units = current.units.map(
           (unit) => restored.find((item) => item.unit === unit.unit) ?? unit
@@ -517,6 +529,9 @@ async function harness(page: Page, seedCount = 0) {
     },
     loseRollback: () => {
       loseRollback = true;
+    },
+    failRollback: (error: string) => {
+      rollbackFailure = error;
     },
     activity: (task: HelperTaskView, events: HelperActivityEvent[]) => {
       activities.set(task.id, events);
@@ -2060,11 +2075,7 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
     await expect(history.locator('.activity-notification-items')).toHaveCount(0);
     const filters = history.getByRole('group', { name: '작업 상태로 거르기', exact: true });
     await expect(filters.getByRole('button')).toHaveText(['전체 3', '진행 중 0', '오류 2']);
-    await expect(history.locator('.task-history-summary dt')).toHaveText([
-      '작업',
-      '토큰',
-      '추정 비용',
-    ]);
+    await expect(history.locator('.task-history-summary dt')).toHaveText(['작업', '토큰', '비용']);
     const record = history.locator(`[data-task-id="${failed.id}"]`);
     const requestText = record.locator('.task-request');
     await expect(record.locator('.task-status-badge')).toHaveText('실패');
@@ -2620,7 +2631,7 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
     page.getByRole('status').filter({ hasText: '변경 2개를 되돌렸어요.' })
   ).toBeVisible();
   const restored = results.locator('.helper-rollback-status[data-status="restored"]');
-  await expect(restored).toHaveCount(3);
+  await expect(restored).toHaveCount(2);
   await expect(
     results.locator('.helper-change', { hasText: '서윤' }).locator('.helper-rollback-status')
   ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
@@ -2634,7 +2645,7 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await page.goto(`/?chat=${chat.id}`);
       await open(page);
-      await expect(restored).toHaveCount(3);
+      await expect(restored).toHaveCount(2);
       await expect(results.getByRole('button', { name: '모두 되돌리기', exact: true })).toHaveCount(
         0
       );
@@ -2960,6 +2971,150 @@ test('HROLLBACK05 the review strip sits only on the latest finished task and und
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await card(later).scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${REVIEW_SHOTS}/after-undo-all-1440-dark.png` });
+});
+
+test('HROLLBACK07 one row, one button and one mark per rollback unit, with the plot and the notes of one chat kept apart', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const task = state.current().tasks[0]!;
+  const lore = (index: number): HelperChange => ({
+    ...resourceChange('bot-a', '하린'),
+    location: {
+      kind: 'resource-list',
+      path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
+      section: 'lore',
+      item: { name: `로어 ${index}`, index },
+      field: ['content'],
+    },
+  });
+  const chatUnit = (domain: 'outline' | 'notes'): HelperRollbackUnit => ({
+    unit: `${domain}:${chat.id}`,
+    domain,
+    title: '등대지기의 밤',
+    changeTargetIds: [chat.id],
+    status: 'restorable',
+    touches: { domain, chatId: chat.id },
+  });
+  state.results.set(task.id, {
+    changes: [
+      lore(0),
+      lore(1),
+      lore(2),
+      {
+        domain: 'outline',
+        targetId: chat.id,
+        title: '등대지기의 밤',
+        location: { kind: 'outline', level: 'chapter', title: '1장', field: 'intent' },
+        action: 'update',
+        diff: null,
+        anchor: null,
+      },
+      {
+        domain: 'notes',
+        targetId: chat.id,
+        title: '등대지기의 밤',
+        location: { kind: 'note', noteKind: 'note', text: '리아는 등대를 싫어해요.' },
+        action: 'update',
+        diff: null,
+        anchor: null,
+      },
+    ],
+  });
+  state.rollbacks.set(task.id, {
+    taskId: task.id,
+    blocked: null,
+    units: [resourceUnit('bot-a', '하린'), chatUnit('outline'), chatUnit('notes')],
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.reload();
+  const panel = await open(page);
+  const results = panel.getByTestId('helper-task-results');
+  const strip = results.getByTestId('helper-review-strip');
+  await expect(strip).toContainText('변경 3개를 저장했어요');
+  await expect(results.locator('.helper-result-list > li')).toHaveCount(3);
+  await expect(results.locator('.helper-rollback-unit')).toHaveCount(3);
+  await results.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${REVIEW_SHOTS}/units-before-1440-dark.png` });
+  await results
+    .getByRole('button', { name: '등대지기의 밤, 작가 노트 되돌리기', exact: true })
+    .click();
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(state.rollbackPosts).toEqual([{ unit: `notes:${chat.id}` }]);
+  await expect(strip).toContainText('1개를 되돌렸어요');
+  const restored = results.locator('.helper-rollback-status[data-status="restored"]');
+  await expect(restored).toHaveCount(1);
+  await expect(
+    results
+      .locator('.helper-result-list > li', { hasText: '리아는 등대를 싫어해요.' })
+      .locator('.helper-rollback-status[data-status="restored"]')
+  ).toHaveCount(1);
+  await expect(
+    results.getByRole('button', { name: '등대지기의 밤, 플롯 되돌리기', exact: true })
+  ).toBeEnabled();
+  await results.getByRole('button', { name: '하린 되돌리기', exact: true }).click();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(strip).toContainText('2개를 되돌렸어요');
+  await expect(restored).toHaveCount(2);
+  await expect(results.locator('.helper-rollback-unit')).toHaveCount(1);
+  await results.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${REVIEW_SHOTS}/units-after-1440-dark.png` });
+});
+
+test('HROLLBACK08 a failed unit rollback keeps its reason through later refreshes and can be tried again', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  await open(page);
+  const task = state.current().tasks[0]!;
+  state.results.set(task.id, {
+    changes: [resourceChange('bot-a', '하린'), resourceChange('bot-b', '서윤')],
+  });
+  state.rollbacks.set(task.id, {
+    taskId: task.id,
+    blocked: null,
+    units: [resourceUnit('bot-a', '하린'), resourceUnit('bot-b', '서윤')],
+  });
+  await page.reload();
+  const panel = await open(page);
+  const results = panel.getByTestId('helper-task-results');
+  const harin = results.getByRole('button', { name: '하린 되돌리기', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
+  state.failRollback('저장소가 잠겨 있어 되돌리지 못했어요.');
+  await harin.click();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const reason = results
+    .locator('.helper-change', { hasText: '하린' })
+    .locator('.helper-rollback-status[data-status="failed"]');
+  await expect(reason).toHaveText('저장소가 잠겨 있어 되돌리지 못했어요.');
+  const reread = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/helper/tasks/${task.id}/rollback`) &&
+      response.request().method() === 'GET'
+  );
+  state.emit('task.rolled-back');
+  await reread;
+  await expect(reason).toHaveText('저장소가 잠겨 있어 되돌리지 못했어요.');
+  await expect(harin).toBeEnabled();
+  await harin.click();
+  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(reason).toHaveCount(0);
+  await expect(
+    results
+      .locator('.helper-change', { hasText: '하린' })
+      .locator('.helper-rollback-status[data-status="restored"]')
+  ).toBeVisible();
 });
 
 test('HROLLBACK06 the review strip waits while a task runs and leaves when the next task starts', async ({
@@ -3560,6 +3715,18 @@ test('HELPASK01 question cards display selectable options, send the chosen reply
 
   const firstTask = state.current().tasks[0]!;
   state.results.set(firstTask.id, {
+    confirmations: [
+      {
+        id: 'held-scene',
+        taskId: firstTask.id,
+        operation: 'scene.request',
+        reason: 'paid',
+        chatId: chat.id,
+        targets: [{ kind: 'chat', id: chat.id }],
+        grantedBy: null,
+        grantable: true,
+      },
+    ],
     question: {
       id: 'q-1',
       question: '어떤 어조로 고칠까요?',
@@ -3580,9 +3747,13 @@ test('HELPASK01 question cards display selectable options, send the chosen reply
   await expect(card).toContainText('선택지를 누르거나 아래 입력창에 직접 답을 보내세요.');
   await page.screenshot({ path: info.outputPath('helper-question-card.png') });
 
+  await panel.getByRole('button', { name: '다음 장면 요청 거절', exact: true }).click();
   await card.getByRole('button', { name: /서정적으로/ }).click();
   await expect.poll(() => state.posts.length).toBe(2);
-  expect(state.posts[1]!.text).toBe('서정적으로');
+  expect(state.posts[1]).toMatchObject({
+    text: '서정적으로',
+    declinedConfirmations: ['held-scene'],
+  });
   await expect(card).toHaveAttribute('data-state', 'answered');
   await expect(card).toContainText('이후 대화에서 응답했어요.');
   await expect(card.getByRole('button', { name: /담백하게/ })).toBeDisabled();
@@ -3692,6 +3863,37 @@ test('EHELP01 a lore entry asks the helper with its location attached, suggestio
   expect(lastEditorPost(state).editor?.focus).toBeUndefined();
 });
 
+test('EHELP10 an open helper follows the next bot and sends only its selected lore', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const prefix = 'EHELP10 ' + randomUUID().slice(0, 8);
+  const first = await seedEditorBot(request, prefix + ' A');
+  const second = await seedEditorBot(request, prefix + ' B');
+  const state = await harness(page);
+  const editor = await openEditorBot(page, first.title);
+  await openLore(editor, '등대');
+  await editor.getByRole('button', { name: '등대 도우미에게 묻기', exact: true }).click();
+  const panel = page.locator('#helper-panel');
+  const chip = panel.getByTestId('helper-editor-focus');
+  await expect(chip).toContainText('등대');
+  await editor.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(second.title);
+  await editLibraryContent(page, second.title);
+  await expect(panel.locator('.helper-editor-draft')).toContainText(second.title);
+  await openLore(editor, '항구');
+  await editor.getByRole('button', { name: '항구 도우미에게 묻기', exact: true }).click();
+  await expect(chip).toContainText('항구');
+  await suggestionList(panel).getByRole('button').first().click();
+  await panel.getByLabel('도우미에게 요청').press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(lastEditorPost(state).editor).toMatchObject({
+    targetId: second.id,
+    focus: { section: 'lore', item: { index: 1, label: '항구' } },
+  });
+});
+
 test('EHELP02 a CBS diagnostic offers a keyboard-reachable fix request with the diagnostic attached', async ({
   page,
   request,
@@ -3752,6 +3954,11 @@ test('EHELP03 a selection inside a code field asks about just the selected text'
     exact: true,
   });
   await expect(ask).toBeVisible();
+  const scrollbarGap = await ask.evaluate((button) => {
+    const scroller = button.closest('[data-code-field]')!.querySelector('.cm-scroller')!;
+    return button.getBoundingClientRect().left - scroller.getBoundingClientRect().right;
+  });
+  expect(scrollbarGap).toBeGreaterThanOrEqual(0);
   await editorShot(page, 'selection-action-1440-light');
   await ask.click();
   const panel = page.locator('#helper-panel');
@@ -3771,6 +3978,10 @@ test('EHELP03 a selection inside a code field asks about just the selected text'
     field: { field: 'content', item: 0, label: '로어 본문' },
     selection: { from: 0, to: 20, text: '등대는 마을 북쪽 절벽 위에 있어요.' },
   });
+  await openLore(editor, '항구');
+  await expect(ask).toHaveCount(0);
+  await expect(panel.getByTestId('helper-editor-focus')).toContainText('항구');
+  await expect(panel.getByTestId('helper-editor-focus')).not.toContainText('선택 20자');
 });
 
 test('EHELP04 Alt+I asks the helper about the focused field and is listed with the shortcuts', async ({

@@ -486,11 +486,7 @@ for (const width of [MOBILE_WIDTH]) {
     await expect(panel.getByTestId('run')).toHaveCount(1);
     await filters.getByRole('button', { name: /^전체/ }).click();
     await expect(panel.getByTestId('run')).toHaveCount(8);
-    await expect(panel.locator('.task-history-summary dt')).toHaveText([
-      '작업',
-      '토큰',
-      '추정 비용',
-    ]);
+    await expect(panel.locator('.task-history-summary dt')).toHaveText(['작업', '토큰', '비용']);
     await expect(panel.locator('.task-history-summary dd').nth(1)).toHaveText('미확인');
     const lines = await panel
       .locator(`[data-run-id="${run.id}-running"] .task-history-row-actions`)

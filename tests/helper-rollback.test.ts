@@ -816,6 +816,31 @@ test('rolling back one target leaves the other targets of the task as they are',
   expect(() => f.rollBack(task, 'scene:missing')).toThrow('HELPER_ROLLBACK_UNIT_NOT_FOUND');
 });
 
+test('a rollback that restores nothing tells no view that the task was rolled back', () => {
+  const f = fixture();
+  const [first] = f.scenes;
+  const task = f.begin();
+  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
+  f.finish(task);
+  f.store.editSource(first!.id, {
+    text: '사용자가 다시 고친 장면.\n',
+    expectedRevision: f.store.source(first!.id).editRevision ?? 0,
+  });
+  const rolledBack = () =>
+    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'task.rolled-back')
+      .length;
+  expect(f.rollBack(task).units).toMatchObject([{ status: 'changed-since' }]);
+  expect(rolledBack()).toBe(0);
+  f.store.editSource(first!.id, {
+    text: '도우미가 고친 장면.\n',
+    expectedRevision: f.store.source(first!.id).editRevision ?? 0,
+  });
+  expect(f.rollBack(task).units).toMatchObject([{ status: 'restored' }]);
+  expect(rolledBack()).toBe(1);
+  expect(f.rollBack(task).units).toMatchObject([{ status: 'restored' }]);
+  expect(rolledBack()).toBe(1);
+});
+
 type Target = string;
 type World = {
   f: Fixture;
@@ -1372,6 +1397,43 @@ test('the next task is told once what was rolled back, and a retry on Codex keep
   const later = await h.run('그다음 요청');
   expect(later.snapshot.revertedChanges).toBeUndefined();
   expect(h.sources.at(-1)!.source).not.toHaveProperty('revertedChanges');
+});
+
+test('a retry is also told what was rolled back after the failed attempt', async () => {
+  const f = fixture();
+  const [first] = f.scenes;
+  const task = f.begin();
+  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
+  f.finish(task);
+  const h = helperRuns(f.store, f.chat.id);
+  const failed = await h.run('다음 요청', { fail: true });
+  expect(failed.snapshot.revertedChanges).toBeUndefined();
+  expect(f.rollBack(task).units.map((unit) => unit.status)).toEqual(['restored']);
+  const retried = await h.run('다음 요청', { retryOf: failed.id, fail: true });
+  expect(retried.snapshot.revertedChanges?.changes).toEqual([
+    expect.objectContaining({ taskId: task.id, domain: 'scene', targetId: first!.id }),
+  ]);
+  const again = await h.run('다음 요청', { retryOf: retried.id });
+  expect(again.snapshot.revertedChanges).toEqual(retried.snapshot.revertedChanges);
+});
+
+test('a rollback stamped in the same millisecond as the next task is told only once', async () => {
+  const f = fixture();
+  const [first] = f.scenes;
+  const task = f.begin();
+  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
+  f.finish(task);
+  f.rollBack(task);
+  const h = helperRuns(f.store, f.chat.id);
+  const told = await h.run('다음 요청');
+  expect(told.snapshot.revertedChanges?.changes).toHaveLength(1);
+  f.store.db
+    .prepare(
+      'UPDATE helper_changes SET rolled_back_at=(SELECT created_at FROM helper_tasks WHERE id=?) WHERE task_id=?'
+    )
+    .run(told.id, task.id);
+  const later = await h.run('그다음 요청');
+  expect(later.snapshot.revertedChanges).toBeUndefined();
 });
 
 test('the rolled-back list keeps the most recent changes and counts the rest', () => {

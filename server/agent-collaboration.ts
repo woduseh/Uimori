@@ -262,12 +262,18 @@ export function createAgentCollaboration(
     const results: ToolEvent[] = [];
     let opaqueState: Json | undefined;
     const deadline = Date.now() + (hooks.timeoutMs ?? modelTimeoutMs(target));
-    const readTool = async (call: ProviderToolCall, readSignal: AbortSignal) => {
+    const readTool = async (
+      call: ProviderToolCall,
+      readSignal: AbortSignal,
+      attemptId: string | undefined,
+      offered: readonly string[]
+    ) => {
       readSignal.throwIfAborted();
       if (results.some((event) => event.callId === call.id))
         throw new ProviderContractError('ADVISOR_DUPLICATE_TOOL_ID');
       const started = performance.now();
       await hooks.onToolStart?.({
+        attemptId,
         callId: `${callId}:${call.id}`,
         name: 'agents.read',
         args: { agentId: agent.id, tool: call.name, arguments: call.arguments },
@@ -275,7 +281,10 @@ export function createAgentCollaboration(
       const event = executeTool(
         snapshot,
         { callId: call.id, name: call.name, args: call.arguments },
-        readSignal
+        readSignal,
+        'main',
+        undefined,
+        offered
       );
       await hooks.onToolEvent(
         {
@@ -286,6 +295,7 @@ export function createAgentCollaboration(
           denied: event.denied,
         },
         {
+          attemptId,
           elapsedMs: performance.now() - started,
           originalResultChars: toolResultChars(event.result),
         }
@@ -399,7 +409,9 @@ export function createAgentCollaboration(
               throw new ProviderContractError('ADVISOR_TOOL_NOT_ALLOWED');
             const event = await readTool(
               { id: call.callId, name: call.name, arguments: call.arguments },
-              readSignal
+              readSignal,
+              attempt,
+              request.stable.tools.map((tool) => tool.name)
             );
             return { success: !event.denied, text: JSON.stringify(event.result) };
           })
@@ -470,7 +482,12 @@ export function createAgentCollaboration(
       for (const call of result.toolCalls) {
         if (signal.aborted) return finish('cancelled', 'CANCELLED');
         try {
-          await readTool(call, signal);
+          await readTool(
+            call,
+            signal,
+            attempt,
+            request.stable.tools.map((tool) => tool.name)
+          );
         } catch (error) {
           if (error instanceof ProviderContractError) return finish('unavailable', error.code);
           throw error;

@@ -250,12 +250,6 @@ export const messages = {
     ja: 'モデル呼び出し {count, number}',
     zh: '模型调用 {count, number}',
   },
-  'taskTrace.rates': {
-    ko: '입력 {input} / 출력 {output}',
-    en: 'Input {input} / Output {output}',
-    ja: '入力 {input} / 出力 {output}',
-    zh: '输入 {input} / 输出 {output}',
-  },
   'taskTrace.catalogRates': {
     ko: '모델 목록 요금',
     en: 'Model list price',

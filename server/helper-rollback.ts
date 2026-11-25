@@ -451,32 +451,53 @@ const REVERTED_REQUEST_CHARS = 160;
 
 export function helperRevertedChanges(
   store: Store,
-  conversationId: string
-): NonNullable<HelperTaskSnapshot['revertedChanges']> | undefined {
-  const previous = store.db
+  conversationId: string,
+  retryOf?: string,
+  inherited?: HelperTaskSnapshot['revertedChanges']
+): HelperTaskSnapshot['revertedChanges'] {
+  const boundary = store.db
     .prepare(
-      'SELECT created_at FROM helper_tasks WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1'
+      "SELECT seq FROM helper_events WHERE conversation_id=? AND kind='task.queued' " +
+        (retryOf ? 'AND task_id=? ' : '') +
+        'ORDER BY seq DESC LIMIT 1'
     )
-    .get(conversationId);
-  if (!previous) return undefined;
+    .get(...(retryOf ? [conversationId, retryOf] : [conversationId])) as
+    | { seq: number }
+    | undefined;
+  if (!boundary) return inherited;
+  const restored = store.db
+    .prepare(`
+    SELECT e.task_id, json_extract(item.value,'$.unit') AS unit, MIN(e.seq) AS first_restore
+    FROM helper_events e, json_each(e.data,'$.units') item
+    WHERE e.conversation_id=? AND e.kind='task.rolled-back' AND json_extract(item.value,'$.status')='restored'
+      AND e.task_id IN (SELECT task_id FROM helper_events WHERE conversation_id=? AND seq>? AND kind='task.rolled-back')
+    GROUP BY e.task_id,unit HAVING MIN(e.seq)>? ORDER BY first_restore
+  `)
+    .all(conversationId, conversationId, boundary.seq, boundary.seq) as {
+    task_id: string;
+    unit: string;
+    first_restore: number;
+  }[];
+  if (!restored.length) return inherited;
+  const order = new Map(restored.map((row) => [row.task_id + '\n' + row.unit, row.first_restore]));
   const rows = store.db
-    .prepare(
-      `SELECT c.task_id,t.request,c.domain,c.target_id,c.chat_id,c.source_id,c.entries
-       FROM helper_changes c JOIN helper_tasks t ON t.id=c.task_id
-       WHERE t.conversation_id=? AND c.rolled_back_at IS NOT NULL AND c.rolled_back_at>=?
-       ORDER BY c.rolled_back_at,t.rowid,c.position`
-    )
-    .all(conversationId, String(previous.created_at)) as (Pick<
+    .prepare(`
+    SELECT c.task_id,t.request,c.domain,c.target_id,c.chat_id,c.source_id,c.entries
+    FROM helper_changes c JOIN helper_tasks t ON t.id=c.task_id
+    WHERE c.task_id IN (SELECT value FROM json_each(?)) AND c.rolled_back_at IS NOT NULL
+    ORDER BY c.position
+  `)
+    .all(JSON.stringify([...new Set(restored.map((row) => row.task_id))])) as (Pick<
     Row,
     'domain' | 'target_id' | 'chat_id' | 'source_id' | 'entries'
   > & { task_id: string; request: string })[];
   const changes = new Map<string, HelperRevertedChange>();
   for (const row of rows) {
     const key = `${row.task_id}\n${unitKey(row)}`;
-    if (changes.has(key)) continue;
+    if (!order.has(key) || changes.has(key)) continue;
     const resource = row.domain === 'resource' ? resourceKey(row) : null;
     const request = Array.from(row.request);
-    changes.set(key, {
+    const change: HelperRevertedChange = {
       taskId: row.task_id,
       request:
         request.length > REVERTED_REQUEST_CHARS
@@ -486,13 +507,17 @@ export function helperRevertedChanges(
       ...(resource ? { kind: resource.kind } : {}),
       targetId: resource?.id ?? row.source_id ?? row.chat_id ?? row.target_id,
       title: unitTitle(store, entriesOf(row), row),
-    });
+    };
+    changes.set(key, change);
   }
-  if (!changes.size) return undefined;
-  const all = [...changes.values()];
+  if (!changes.size) return inherited;
+  const all = [
+    ...(inherited?.changes ?? []),
+    ...[...changes].sort(([a], [b]) => order.get(a)! - order.get(b)!).map(([, change]) => change),
+  ];
   return {
     changes: all.slice(-HELPER_REVERTED_CHANGES_LIMIT),
-    omitted: Math.max(0, all.length - HELPER_REVERTED_CHANGES_LIMIT),
+    omitted: (inherited?.omitted ?? 0) + Math.max(0, all.length - HELPER_REVERTED_CHANGES_LIMIT),
   };
 }
 
@@ -562,9 +587,10 @@ export function rollBackHelperTask(
         if (kind === 'theme' || kind === 'illustration-preset')
           workspace.event(task.conversationId, taskId, `${kind}.updated`);
     }
-    workspace.event(task.conversationId, taskId, 'task.rolled-back', {
-      units: units.map(({ unit, status }) => ({ unit, status })),
-    });
+    if (resourceKinds.size || restoredScenes.size || changedChats.size)
+      workspace.event(task.conversationId, taskId, 'task.rolled-back', {
+        units: units.map(({ unit, status }) => ({ unit, status })),
+      });
     return { taskId, blocked: null, units };
   });
   for (const sourceId of restoredScenes) effects.sceneUpdated?.(sourceId);

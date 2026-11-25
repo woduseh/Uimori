@@ -44,7 +44,7 @@ export function releaseCompletedJobInputs(db: DatabaseSync, jobId: string): void
 
 export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): void {
   db.prepare(`UPDATE helper_tasks SET snapshot=json_set(json_remove(snapshot,
-    '$.writing','$.outline','$.editor','$.selection','$.contextModel'),'$.history',json('[]'))
+    '$.writing','$.outline','$.editor','$.selection','$.selectionTarget','$.orientation','$.contextModel'),'$.history',json('[]'))
     WHERE id=? AND status='completed'`).run(taskId);
   db.prepare(`UPDATE helper_events SET data=json_object('name',json_extract(data,'$.name'),
     'callId',json_extract(data,'$.callId'),

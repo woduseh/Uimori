@@ -822,7 +822,7 @@ function Editor({
     };
   }, [compartments, createState, handoff, initialLanguage, initialValue]);
 
-  useEffect(() => syncDocument({ value, name }), [value, name, syncDocument]);
+  useLayoutEffect(() => syncDocument({ value, name }), [value, name, syncDocument]);
 
   useEffect(() => {
     view.current?.dispatch({ effects: compartments.names.reconfigure(namesFacet.of(names)) });
@@ -842,7 +842,7 @@ function Editor({
     });
   }, [compartments, locked, readOnly, hint, prose, label, describedBy]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const field = host.current;
     if (!field) return;
     const reveal = (event: Event) => {

@@ -640,11 +640,15 @@ describe('Completed execution payload retention', () => {
         scope: conversation.scope,
         model: store.product.modelSnapshot(model.id),
         history: [{ id: 'old', role: 'assistant', text: 'Prior large conversation.' }],
+        orientation: { title: 'A private chat' },
+        selectionTarget: { sourceId: 'A selected scene' },
         persona: '',
         limits: { totalCalls: 4, helperCalls: 4 },
       });
       expect(workspace.start(task.id, 'owner')).toBe(true);
       workspace.finish(task.id, 'owner', 1, status, 'Saved answer', null);
+      for (const key of ['orientation', 'selectionTarget'] as const)
+        expect(workspace.task(task.id).snapshot[key] === undefined).toBe(status === 'completed');
       expect(workspace.task(task.id).snapshot.history).toHaveLength(status === 'completed' ? 0 : 1);
       expect(
         store.db

@@ -46,6 +46,8 @@ export function uncoveredKinds(changes: readonly HelperChange[]) {
     : null;
 }
 
+const unitOwns = (unit: HelperRollbackUnit, change: HelperChange) =>
+  unit.domain === change.domain && unit.changeTargetIds.includes(change.targetId);
 const restorable = (unit: HelperRollbackUnit) => unit.status === 'restorable';
 const unsaved = (unit: HelperRollbackUnit) =>
   !!unit.touches && unit.touches.domain !== 'resource' && hasUnsavedInput(unit.touches);
@@ -105,6 +107,7 @@ export function useHelperRollback({
   const [unknown, setUnknown] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [failures, setFailures] = useState<Record<string, string>>({});
   const notify = useTransientNotice();
   const alive = useRef(true);
   const lock = useRef(false);
@@ -142,15 +145,15 @@ export function useHelperRollback({
   }, [unavailable]);
   const units = enabled ? (view?.units ?? []) : [];
   const blocked = unavailable || view?.blocked === 'task-active';
-  const unitFor = (change: HelperChange) =>
-    units.find((unit) => unit.changeTargetIds.includes(change.targetId));
-  const firstChange = new Map<string, string>();
+  const unitFor = (change: HelperChange) => units.find((unit) => unitOwns(unit, change));
+  const firstChange = new Map<string, HelperChange>();
   for (const change of changes) {
     const unit = unitFor(change);
-    if (unit && !firstChange.has(unit.unit)) firstChange.set(unit.unit, change.targetId);
+    if (unit && !firstChange.has(unit.unit)) firstChange.set(unit.unit, change);
   }
+  const shownUnits = units.filter((unit) => firstChange.has(unit.unit));
   const unitName = (unit: HelperRollbackUnit) => {
-    const change = changes.find((item) => unit.changeTargetIds.includes(item.targetId));
+    const change = firstChange.get(unit.unit);
     const title = change?.title ?? unit.title;
     if (unit.domain === 'outline') return `${title}, ${t('helperRollback.outline')}`;
     if (unit.domain === 'notes') return `${title}, ${t('helperRollback.notes')}`;
@@ -161,8 +164,8 @@ export function useHelperRollback({
     }
     return title;
   };
-  const restorableUnits = units.filter(restorable);
-  const restoredCount = units.filter((unit) => unit.status === 'restored').length;
+  const restorableUnits = shownUnits.filter(restorable);
+  const restoredCount = shownUnits.filter((unit) => unit.status === 'restored').length;
   const reviewing = review && restorableUnits.length + restoredCount > 0;
 
   async function read(target: (value: HelperRollbackView) => void) {
@@ -202,6 +205,11 @@ export function useHelperRollback({
     setRunning(true);
     setError('');
     setUnknown(false);
+    setFailures((old) =>
+      Object.fromEntries(
+        Object.entries(old).filter(([unit]) => !chosen.restore.some((item) => item.unit === unit))
+      )
+    );
     const bodies =
       plan.unit === null && chosen.every
         ? [{}]
@@ -221,7 +229,14 @@ export function useHelperRollback({
       refreshRestored(results);
       lock.current = false;
       if (alive.current) {
-        if (results.length) setView((old) => merge(old, results));
+        const failed = results.filter((unit) => unit.status === 'failed');
+        if (failed.length)
+          setFailures((old) => ({
+            ...old,
+            ...Object.fromEntries(failed.map((unit) => [unit.unit, unit.error ?? ''])),
+          }));
+        const settled = results.filter((unit) => unit.status !== 'failed');
+        if (settled.length) setView((old) => merge(old, settled));
         setRunning(false);
         setPlan(null);
       }
@@ -242,7 +257,7 @@ export function useHelperRollback({
 
   function action(change: HelperChange): ReactNode {
     const unit = unitFor(change);
-    if (!unit || !restorable(unit) || firstChange.get(unit.unit) !== change.targetId) return null;
+    if (!unit || !restorable(unit) || firstChange.get(unit.unit) !== change) return null;
     return (
       <IconButton
         className={`${reviewing ? '' : 'helper-change-open '}helper-rollback-unit`}
@@ -258,7 +273,7 @@ export function useHelperRollback({
   }
   function status(change: HelperChange): ReactNode {
     const unit = unitFor(change);
-    if (!unit) return null;
+    if (!unit || firstChange.get(unit.unit) !== change) return null;
     if (unit.status === 'restored')
       return (
         <p className="helper-result-note helper-rollback-status" data-status="restored">
@@ -270,15 +285,18 @@ export function useHelperRollback({
           </span>
         </p>
       );
-    const text = restorable(unit)
-      ? unsaved(unit)
+    const failure = restorable(unit) ? failures[unit.unit] : undefined;
+    const shown: HelperRollbackUnit =
+      failure === undefined ? unit : { ...unit, status: 'failed', error: failure || undefined };
+    const text = restorable(shown)
+      ? unsaved(shown)
         ? t('helperRollback.unsaved')
         : ''
-      : (unit.status === 'text-removed' && change.textRemoved) || unit.reason === 'other-domain'
+      : (shown.status === 'text-removed' && change.textRemoved) || shown.reason === 'other-domain'
         ? ''
-        : reasonText(unit);
+        : reasonText(shown);
     return text ? (
-      <p className="helper-result-note helper-rollback-status" data-status={unit.status}>
+      <p className="helper-result-note helper-rollback-status" data-status={shown.status}>
         {text}
       </p>
     ) : null;
@@ -347,7 +365,7 @@ export function useHelperRollback({
     >
       <div className="helper-rollback-row">
         <p className="helper-review-summary">
-          <span>{t('helperRollback.savedCount', { count: units.length })}</span>
+          <span>{t('helperRollback.savedCount', { count: shownUnits.length })}</span>
           {restoredCount > 0 && (
             <span>{t('helperRollback.restoredCount', { count: restoredCount })}</span>
           )}
@@ -429,5 +447,11 @@ export function useHelperRollback({
       </ConfirmDialog>
     </>
   );
-  return { action, status, strip, footer };
+  return {
+    unitKey: (change: HelperChange) => unitFor(change)?.unit ?? null,
+    action,
+    status,
+    strip,
+    footer,
+  };
 }

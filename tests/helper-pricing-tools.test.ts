@@ -1,3 +1,8 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { HelperWorkspace } from '../server/helper-workspace.js';
+import { readHelperTaskResults } from '../server/helper-task-results.js';
+import { HelperTaskResultItems } from '../web/HelperTaskResults.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,7 +10,10 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import type { ModelPreset } from '../core/product.js';
 import type { WireRecord } from '../core/transport.js';
-import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
+import {
+  applyHelperSettingsMutation,
+  invokeHelperSettingsTool as call,
+} from '../server/helper-settings-tools.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { modelWorkspace } from '../server/prompt-workspace.js';
@@ -476,4 +484,51 @@ test('judgment backfill prices only the unpriced judgment calls of the matching 
     addedUsd: 0,
   });
   expect(estimate(unpricedJev)).toMatchObject({ status: 'estimated', usd: 0.042 });
+});
+
+test('a pricing receipt shows the changed batch and Flex cache rates when base rates stay fixed', () => {
+  const { store, model } = fixture();
+  const workspace = new HelperWorkspace(store);
+  const conversation = workspace.open({ kind: 'library', workId: 'pricing' });
+  const task = workspace.enqueue(conversation.id, 'pricing', '요금 변경', {
+    scope: conversation.scope,
+    model: store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    limits: { totalCalls: 24, helperCalls: 12 },
+  });
+  workspace.start(task.id, 'pricing-test');
+  const base = { ...pricing, flexRates: pricing.rates, batchRates: pricing.rates };
+  call(store, 'model.pricing.update', {
+    modelId: model.id,
+    expectedRevision: model.revision,
+    pricing: base,
+  });
+  const args = {
+    modelId: model.id,
+    expectedRevision: model.revision + 1,
+    pricing: {
+      ...base,
+      flexRates: { ...pricing.rates, cacheRead: 0.25 },
+      batchRates: { ...pricing.rates, output: 4 },
+    },
+  };
+  const receiptId = `${task.id}:price`;
+  workspace.operation(task.id, receiptId, args, () =>
+    applyHelperSettingsMutation(store, workspace, task, receiptId, 'model.pricing.update', args)
+  );
+  const data = readHelperTaskResults(store, task.id);
+  expect(data.results[0]?.targets[0]?.setting).toBe('model.pricing');
+  const receipt = renderToStaticMarkup(
+    createElement(HelperTaskResultItems, {
+      taskId: task.id,
+      status: 'completed',
+      data,
+      rollbackUnavailable: true,
+    })
+  );
+  expect(receipt).toContain('Flex 캐시 읽기');
+  expect(receipt).toContain('$0.25');
+  expect(receipt).toContain('Batch 출력');
+  expect(receipt).toContain('$4');
 });

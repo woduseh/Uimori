@@ -25,15 +25,16 @@ export const formatUsd = (value: number | null | undefined) =>
       ? '< $0.00000001'
       : `$${formatNumber(value, { maximumFractionDigits: 8 })}`;
 
+export const formatUsdSubtotal = (value: number) =>
+  `$${formatNumber(
+    value,
+    value >= 1
+      ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+      : { maximumSignificantDigits: 3 }
+  )}`;
+
 export const formatUsdSummary = (value: number) =>
-  value > 0 && value < 0.001
-    ? '< $0.001'
-    : `$${formatNumber(
-        value,
-        value >= 1
-          ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-          : { maximumSignificantDigits: 3 }
-      )}`;
+  value > 0 && value < 0.001 ? '< $0.001' : formatUsdSubtotal(value);
 
 export function sceneCostLabels(
   estimate:
@@ -52,7 +53,7 @@ export function sceneCostLabels(
     v1: estimate.unknownCount,
   });
   return estimate.subtotalUsd > 0
-    ? { short: `${formatUsdSummary(estimate.subtotalUsd)}+`, full }
+    ? { short: `${formatUsdSubtotal(estimate.subtotalUsd)}+`, full }
     : null;
 }
 

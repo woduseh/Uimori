@@ -1,3 +1,4 @@
+import { splitsSurrogatePair, textPageEnd } from '../core/text-pages.js';
 import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { Json, ProviderTool } from '../core/transport.js';
@@ -322,15 +323,6 @@ function checkGuards(
   if (rev !== expected.expectedRevision || sourceHash !== expected.expectedSourceHash)
     throw new HttpError(409, 'Scene changed; read the current scene again');
 }
-function splitsPair(content: string, index: number) {
-  return (
-    index > 0 &&
-    index < content.length &&
-    /[\uD800-\uDBFF]/u.test(content[index - 1]!) &&
-    /[\uDC00-\uDFFF]/u.test(content[index]!)
-  );
-}
-
 function page(
   content: string,
   args: Record<string, unknown>,
@@ -350,13 +342,12 @@ function page(
   if (args.expectedTextHash !== undefined && args.expectedTextHash !== textHash)
     throw new HttpError(409, 'Scene text changed; restart paging');
   if (offset > content.length) throw new HttpError(400, 'Text offset exceeds scene length');
-  if (splitsPair(content, offset))
+  if (splitsSurrogatePair(content, offset))
     throw new HttpError(400, 'Text offset splits a Unicode character');
-  let end = Math.min(offset + limit, content.length);
-  if (splitsPair(content, end)) end = end === offset + 1 ? end + 1 : end - 1;
+  let end = textPageEnd(content, offset, limit);
   while (countTextTokens(JSON.stringify(content.slice(offset, end))) > 9_000) {
     end = offset + Math.floor((end - offset) / 2);
-    if (splitsPair(content, end)) end--;
+    if (splitsSurrogatePair(content, end)) end--;
   }
   const nextOffset = end < content.length ? end : null;
   return {
@@ -420,8 +411,8 @@ function sceneSearch(current: ReturnType<typeof snapshot>, args: Record<string, 
         const end = start + pattern.length;
         let beforeStart = Math.max(0, start - context);
         let afterEnd = Math.min(content.length, end + context);
-        if (splitsPair(content, beforeStart)) beforeStart--;
-        if (splitsPair(content, afterEnd)) afterEnd++;
+        if (splitsSurrogatePair(content, beforeStart)) beforeStart--;
+        if (splitsSurrogatePair(content, afterEnd)) afterEnd++;
         matches.push({
           patternIndex,
           start,
@@ -527,8 +518,8 @@ function searchChatScenes(store: Store, chatId: string, args: Record<string, unk
           const end = start + pattern.length;
           let beforeStart = Math.max(0, start - context);
           let afterEnd = Math.min(content.length, end + context);
-          if (splitsPair(content, beforeStart)) beforeStart--;
-          if (splitsPair(content, afterEnd)) afterEnd++;
+          if (splitsSurrogatePair(content, beforeStart)) beforeStart--;
+          if (splitsSurrogatePair(content, afterEnd)) afterEnd++;
           matches.push({
             editTarget: current.editTarget,
             patternIndex,

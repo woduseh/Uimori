@@ -1,5 +1,6 @@
 import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import {
+  CHAT_LORE_FIELDS,
   chatAttachmentKey,
   chatLoreKey,
   chatOverrideHash,
@@ -116,26 +117,35 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
     args.query === undefined
       ? undefined
       : text(args.query, 'lore query', 200, true).trim().toLowerCase() || undefined;
+  const bySelector = new Map(
+    current.overrides.map((override) => [chatLoreKey(override.selector), override])
+  );
+  const attached = current.attachments.flatMap((attachment) =>
+    attachment.lore.map((lore) => {
+      const overrides = CHAT_LORE_FIELDS.flatMap((field) => {
+        const key = chatLoreKey({ ...attachment.scope, loreId: lore.id, field });
+        const override = bySelector.get(key);
+        if (!override) return [];
+        bySelector.delete(key);
+        return [override];
+      });
+      return { attachment, lore, overrides };
+    })
+  );
   const entries = [
-    ...current.attachments.flatMap((attachment) =>
-      attachment.lore.map((lore) => ({ attachment, lore }))
-    ),
-    ...current.overrides
-      .filter(
-        (override) =>
-          !current.attachments.some(
-            (attachment) =>
-              chatAttachmentKey(attachment.scope) === chatAttachmentKey(override.selector) &&
-              attachment.lore.some((lore) => lore.id === override.selector.loreId)
-          )
-      )
-      .map((override) => ({ override })),
+    ...attached,
+    ...Array.from(bySelector.values(), (override) => ({ override })),
   ].filter((entry) => {
     if (query === undefined) return true;
     const texts =
       'override' in entry
         ? [entry.override.baseEntry.title, entry.override.value]
-        : [entry.lore.title, entry.lore.description, entry.lore.text];
+        : [
+            entry.lore.title,
+            entry.lore.description,
+            entry.lore.text,
+            ...entry.overrides.map((override) => override.value),
+          ];
     return texts.some((value) => value.toLowerCase().includes(query));
   });
   const offset = number(args.offset ?? 0, 'lore offset', 0, entries.length);
@@ -164,20 +174,13 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
       });
     } else {
       const { attachment, lore } = entry;
-      const scopeKey = chatAttachmentKey(attachment.scope);
-      const overrides = current.overrides
-        .filter(
-          (override) =>
-            override.selector.loreId === lore.id &&
-            chatAttachmentKey(override.selector) === scopeKey
-        )
-        .map((override) => ({
-          field: override.selector.field,
-          id: override.id,
-          conflicts: current.conflicts
-            .filter((item) => item.overrideId === override.id)
-            .map((item) => item.kind),
-        }));
+      const overrides = entry.overrides.map((override) => ({
+        field: override.selector.field,
+        id: override.id,
+        conflicts: current.conflicts
+          .filter((item) => item.overrideId === override.id)
+          .map((item) => item.kind),
+      }));
       items.push({
         scope: attachment.scope,
         packageId: attachment.packageId,

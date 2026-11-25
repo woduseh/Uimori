@@ -61,7 +61,7 @@ export type MainHooks = {
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
   onToolStart?: (
-    event: Pick<ToolEvent, 'callId' | 'name' | 'args'>,
+    event: Pick<ToolEvent, 'callId' | 'name' | 'args'> & { attemptId?: string },
     origin?: 'story-guide'
   ) => void | Promise<void>;
   onToolEvent: (event: ToolEvent, timing?: ToolEventTiming) => void | Promise<void>;
@@ -134,11 +134,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   const readTokens = (event: ToolEvent) => estimateContextTokens(event, fixed.contextPlan?.budget);
   const executeMainTool = async (
     action: Parameters<typeof executeTool>[1],
+    offered: readonly string[],
     signal: AbortSignal = hooks.signal
   ) => {
     if (action.name === 'data.exec' && hooks.executeShell)
       return hooks.executeShell(fixed, action, signal);
-    let event = executeTool(fixed, action, signal);
+    let event = executeTool(fixed, action, signal, 'main', undefined, offered);
     if (
       !event.denied &&
       action.name === 'knowledge.read' &&
@@ -395,7 +396,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       } else
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
-          : await executeMainTool(action, signal);
+          : await executeMainTool(
+              action,
+              offered.map((tool) => tool.name),
+              signal
+            );
       const originalResultChars = toolResultChars(event.result);
       if (!saved && event.name === 'data.exec' && !event.denied)
         event = prepareShellEvent?.(event, result.toolCalls.slice(callIndex + 1)) ?? event;

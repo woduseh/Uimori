@@ -6,6 +6,7 @@ import {
   type ChatTraceCall,
   type TraceCall,
   type TraceCallOwner,
+  type SceneTokens,
   type TraceCostTotal,
   type TraceToolCall,
 } from '../core/task-trace.js';
@@ -31,6 +32,7 @@ export function attemptUsageDetails(protocol: unknown, raw: unknown) {
       providerCacheUsage(protocol, raw)?.readTokens ?? tokenCount(native.cachedInputTokens),
     reasoningTokens: tokenCount(
       object(details.output_tokens_details).reasoning_tokens ??
+        object(details.output_tokens_details).thinking_tokens ??
         object(details.completion_tokens_details).reasoning_tokens ??
         details.thoughtsTokenCount ??
         native.reasoningOutputTokens
@@ -90,20 +92,21 @@ export function traceCall(
   };
 }
 
-const sceneScope = `WITH scope(attempt_id,scene_run_id,owner,rank) AS (
-    SELECT a.id,a.run_id,'run',0 FROM attempts a WHERE a.chat_id=?1 AND a.run_id IS NOT NULL
+const sceneScope = `WITH scope(attempt_id,scene_run_id,owner,rank,illustration_job_id) AS (
+    SELECT a.id,a.run_id,'run',0,NULL FROM attempts a WHERE a.chat_id=?1 AND a.run_id IS NOT NULL
     UNION ALL
-    SELECT a.id,s.run_id,'job',1 FROM attempts a JOIN jobs j ON j.id=a.job_id
+    SELECT a.id,s.run_id,'job',1,NULL FROM attempts a JOIN jobs j ON j.id=a.job_id
       JOIN sources s ON s.id=j.source_revision WHERE a.chat_id=?1 AND a.run_id IS NULL
     UNION ALL
-    SELECT e.value,s.run_id,'illustration',2 FROM illustration_jobs i JOIN sources s ON s.id=i.source_revision,
+    SELECT e.value,s.run_id,'illustration',2,i.id FROM illustration_jobs i JOIN sources s ON s.id=i.source_revision,
       json_each(i.diagnostic,'$.attempts') e
       WHERE i.chat_id=?1 AND json_valid(i.diagnostic) AND json_type(i.diagnostic,'$.attempts')='array'
   ), owned AS (
-    SELECT attempt_id,scene_run_id,owner,MIN(rank) AS rank FROM scope GROUP BY attempt_id
+    SELECT attempt_id,scene_run_id,owner,illustration_job_id,MIN(rank) AS rank FROM scope GROUP BY attempt_id
   )`;
 
 const diagnosticKinds: Record<string, string> = {
+  illustration: 'image',
   writer: 'writing',
   advisor: 'advisor',
   'story-guide': 'story-guide',
@@ -111,36 +114,62 @@ const diagnosticKinds: Record<string, string> = {
 };
 
 function toolCall(data: Row): TraceToolCall {
+  const shell = object(data.shell);
   return {
     name: typeof data.name === 'string' ? data.name : 'unknown',
     resultChars: tokenCount(data.providedResultChars),
     elapsedMs: amount(data.elapsedMs),
-    failed: data.denied === true || typeof data.errorKind === 'string',
+    failed:
+      data.status === 'failed' ||
+      (typeof shell.exitCode === 'number' && shell.exitCode !== 0) ||
+      shell.timedOut === true ||
+      typeof shell.signal === 'string' ||
+      data.denied === true ||
+      typeof data.errorKind === 'string',
   };
 }
 
 function executionTools(store: Store, chatId: string, rows: Row[]) {
   const diagnostics = store.db
-    .prepare(`SELECT d.run_id,d.job_id,d.origin,d.data FROM execution_tool_diagnostics d
+    .prepare(`SELECT d.run_id,d.job_id,d.illustration_job_id,d.origin,d.data FROM execution_tool_diagnostics d
       WHERE d.run_id IN (SELECT id FROM runs WHERE chat_id=?1)
         OR d.job_id IN (SELECT id FROM jobs WHERE chat_id=?1)
+        OR d.illustration_job_id IN (SELECT id FROM illustration_jobs WHERE chat_id=?1)
       ORDER BY d.seq`)
     .all(chatId) as Row[];
+  const attemptsByOwner = new Map<unknown, Row[]>();
+  for (const row of rows) {
+    const owner = row.run_id ?? row.job_id ?? row.illustration_job_id;
+    if (!owner) continue;
+    const owned = attemptsByOwner.get(owner) ?? [];
+    owned.push(row);
+    attemptsByOwner.set(owner, owned);
+  }
   const assigned = new Map<string, TraceToolCall[]>();
   for (const diagnostic of diagnostics) {
     const data = object(JSON.parse(String(diagnostic.data)));
     const at = text(data.startedAt) ?? text(data.finishedAt);
     const usageKind = diagnosticKinds[String(diagnostic.origin)];
     if (!at || !usageKind) continue;
-    const owner = diagnostic.run_id ?? diagnostic.job_id;
-    const column = diagnostic.run_id ? 'run_id' : 'job_id';
-    const attempt = rows.findLast(
+    const column = diagnostic.run_id
+      ? 'run_id'
+      : diagnostic.job_id
+        ? 'job_id'
+        : 'illustration_job_id';
+    const owner = diagnostic[column];
+    const candidates = (attemptsByOwner.get(owner) ?? []).filter(
       (row) =>
         row[column] === owner &&
         row.usage_kind === usageKind &&
         typeof row.started_at === 'string' &&
         row.started_at <= at
     );
+    const attempt =
+      typeof data.attemptId === 'string'
+        ? candidates.find((row) => row.id === data.attemptId)
+        : diagnostic.origin === 'advisor' && candidates.length > 1
+          ? undefined
+          : candidates.at(-1);
     if (!attempt) continue;
     const list = assigned.get(String(attempt.id)) ?? [];
     list.push(toolCall(data));
@@ -153,7 +182,7 @@ export function chatTraceCalls(store: Store, chatId: string): ChatTraceCall[] {
   store.chat(chatId);
   const rows = store.db
     .prepare(`${sceneScope}
-      SELECT ${TRACE_ATTEMPT_COLUMNS},${TRACE_DETAIL_COLUMNS},o.scene_run_id,o.owner
+      SELECT ${TRACE_ATTEMPT_COLUMNS},${TRACE_DETAIL_COLUMNS},o.scene_run_id,o.owner,o.illustration_job_id
       FROM attempts a LEFT JOIN owned o ON o.attempt_id=a.id WHERE a.chat_id=?1 ORDER BY a.rowid`)
     .all(chatId) as Row[];
   const tools = executionTools(store, chatId, rows);
@@ -173,7 +202,18 @@ export function chatTraceCalls(store: Store, chatId: string): ChatTraceCall[] {
   }));
 }
 
-export type SceneCosts = { estimatedCost: TraceCostTotal; sceneCost: TraceCostTotal };
+export type SceneCosts = {
+  estimatedCost: TraceCostTotal;
+  sceneCost: TraceCostTotal;
+  sceneTokens: SceneTokens;
+};
+
+function sumReportedTokens(calls: TraceCall[], field: 'inputTokens' | 'outputTokens') {
+  return calls.reduce<number | null>(
+    (total, call) => (call[field] === null ? total : (total ?? 0) + call[field]),
+    null
+  );
+}
 
 export function sceneCosts(store: Store, chatId: string, runIds?: string[]) {
   const rows = store.db
@@ -194,6 +234,12 @@ export function sceneCosts(store: Store, chatId: string, runIds?: string[]) {
       {
         estimatedCost: sumTraceCosts(calls.filter((call) => traceCostGroup(call) === 'writing')),
         sceneCost: sumTraceCosts(calls),
+        sceneTokens: {
+          inputTokens: sumReportedTokens(calls, 'inputTokens'),
+          outputTokens: sumReportedTokens(calls, 'outputTokens'),
+          inputPartial: calls.some((call) => call.inputTokens === null),
+          outputPartial: calls.some((call) => call.outputTokens === null),
+        },
       },
     ])
   );

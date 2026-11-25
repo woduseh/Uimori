@@ -7,6 +7,8 @@ import {
   type RisuContentSource,
 } from '../core/risu-native.js';
 import { declaredToggleVariables } from '../core/risu-effective-controls.js';
+import { nativeRisuVariableDefaults } from './risu-native-cbs.js';
+import { clipText, splitsSurrogatePair, textPageEnd } from '../core/text-pages.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
@@ -35,6 +37,8 @@ const USES_CAP = 20;
 const EXCERPT_CHARS = 160;
 const STEP_CONTEXT = 120;
 const PAGE_CHARS = 8000;
+const NAME_CHARS = 200;
+const VALUE_CHARS = 1000;
 
 const resourceKind: Json = {
   type: 'string',
@@ -83,7 +87,7 @@ export const HELPER_CODE_TOOLS: ProviderTool[] = [
   {
     name: 'code.references',
     description:
-      "List where a saved bot, persona, module or prompt preset reads and writes its Risu variables and toggles: CBS getvar/setvar and their relatives, {{? $name}} math, #when conditions, Lua getChatVar/setChatVar/getState/setState/getGlobalVar calls, structured trigger variables, default variables and toggle declarations. Use it before renaming or removing a variable or toggle, or to explain where a value comes from. Each use has the resource.patch path of its field with line and column. findings point out a variable read without a default or write, a variable written but never read, a declared toggle that is never read and a toggle read but never declared; certain:false means names built at runtime could explain it. Only this one resource is indexed: a bot's attached modules, the prompt preset and chat state can still provide a value. Page variables with offset and limit.",
+      "List where a saved bot, persona, module or prompt preset reads and writes its Risu variables and toggles: CBS getvar/setvar and their relatives, {{? $name}} math, #when conditions, Lua getChatVar/setChatVar/getState/setState/getGlobalVar calls, structured trigger variables, default variables and toggle declarations. Use it before renaming or removing a variable or toggle, or to explain where a value comes from. Each use has the resource.patch path of its field with line and column. findings point out a variable read without a default or write, a variable written but never read, a declared toggle that is never read and a toggle read but never declared; certain:false means names built at runtime could explain it. Only this one resource is indexed: a bot's attached modules, the prompt preset and chat state can still provide a value. Page variables and their findings together with offset and limit.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -114,7 +118,7 @@ export const HELPER_CODE_TOOLS: ProviderTool[] = [
   },
   {
     name: 'code.diagnose',
-    description: `Check everything about a saved bot, persona, module or prompt preset that can be checked without running it, before or after editing its code. Sections: cbs (syntax, unknown and deprecated functions in every CBS field), assets (asset tags such as {{img::name}} that match no stored image), regex (scripts that are malformed or whose pattern does not compile), triggers (structure Uimori refuses to run), lore (empty or repeated key fragments and keyless entries, relevant when the resource is also used in Risu), lua (Lua syntax errors, compiled without running), and compatibility (things Uimori ignores or does not support: lore directives, Lua functions, trigger conditions and effects, regex types and commands, preset blocks and deprecated fields). A preset has only cbs, regex and compatibility; its toggle declarations are checked by preset.validate. Each finding has a section, code, severity, the resource.patch path of the field, line and column where known, and a message. Page with offset and limit. A clean report does not prove that the code does what it should; check behaviour with code.preview and code.regex.`,
+    description: `Check everything about a saved bot, persona, module or prompt preset that can be checked without running it, before or after editing its code. Sections: cbs (syntax, unknown and deprecated functions in every CBS field), assets (asset tags such as {{img::name}} that match no stored image), regex (scripts that are malformed or whose pattern does not compile), triggers (structure Uimori refuses to run), lore (empty or repeated key fragments and keyless entries, relevant when the resource is also used in Risu), lua (Lua syntax errors, compiled without running), and compatibility (things Uimori ignores or does not support: lore directives, Lua functions, trigger conditions and effects, regex types and commands, and preset blocks). A preset has only cbs, regex and compatibility; its toggle declarations are checked by preset.validate. Each finding has a section, code, severity, the resource.patch path of the field, line and column where known, and a message. Page with offset and limit. A clean report does not prove that the code does what it should; check behaviour with code.preview and code.regex.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -281,6 +285,8 @@ function pointer(root: unknown, path: string): unknown {
   return value;
 }
 
+const clipped = (value: string) => clipText(value, NAME_CHARS);
+
 function excerpt(source: string, line: number) {
   const value = source.split('\n')[line - 1] ?? '';
   return value.length > EXCERPT_CHARS ? `${value.slice(0, EXCERPT_CHARS - 1)}…` : value;
@@ -410,13 +416,16 @@ function references(store: Store, args: Record<string, unknown>) {
   const selected = index.variables.filter((entry) => matches(entry.scope, entry.name));
   const start = args.offset === undefined ? 0 : number(args.offset, 'offset', 0, selected.length);
   let limit = args.limit === undefined ? 20 : number(args.limit, 'limit', 1, 50);
+  let usesCap = USES_CAP;
   const located = (path: string, from: number) => {
     const field = pointer(loaded.document, path);
     return typeof field === 'string' ? textPosition(field, from) : {};
   };
+  const findings = index.findings.filter((finding) => matches(finding.scope, finding.name));
   return bounded(
     () => {
       const page = selected.slice(start, start + limit);
+      const pageNames = new Set(page.map((entry) => `${entry.scope}:${entry.name}`));
       return {
         kind: loaded.kind,
         id: loaded.id,
@@ -424,26 +433,34 @@ function references(store: Store, args: Record<string, unknown>) {
         total: selected.length,
         variables: page.map((entry) => ({
           scope: entry.scope,
-          name: entry.name,
-          ...(entry.toggle === null ? {} : { toggle: entry.toggle }),
+          name: clipped(entry.name),
+          ...(entry.toggle === null ? {} : { toggle: clipped(entry.toggle) }),
           reads: entry.reads,
           writes: entry.writes,
           defined: entry.defined,
           totalUses: entry.uses.length,
-          uses: entry.uses.slice(0, USES_CAP).map((use) => ({
+          uses: entry.uses.slice(0, usesCap).map((use) => ({
             path: `${loaded.root}${use.path}`,
             ...located(use.path, use.range.from),
             access: use.access,
             origin: use.origin,
-            ...(use.label ? { label: use.label } : {}),
+            ...(use.label ? { label: clipped(use.label) } : {}),
           })),
         })),
-        findings: index.findings.filter((finding) => matches(finding.scope, finding.name)),
+        totalFindings: findings.length,
+        findings: findings
+          .filter((finding) => pageNames.has(`${finding.scope}:${finding.name}`))
+          .map((finding) => ({ ...finding, name: clipped(finding.name) })),
         dynamic: index.dynamic,
         nextOffset: start + page.length < selected.length ? start + page.length : null,
       };
     },
-    () => (limit > 1 ? ((limit = Math.ceil(limit / 2)), true) : false)
+    () => {
+      if (limit > 1) limit = Math.ceil(limit / 2);
+      else if (usesCap > 1) usesCap = Math.ceil(usesCap / 2);
+      else return false;
+      return true;
+    }
   );
 }
 
@@ -558,21 +575,24 @@ async function traceRegex(store: Store, args: Record<string, unknown>, signal?: 
   }
   const entries = nativeRisuRegexEntries(native);
   const card = native.card;
-  const result = await processNativeRisuText({
-    native,
-    text: sample,
-    mode: stage,
-    trace: true,
-    context: {
-      variables,
-      globalVariables: globals,
-      messages: [],
-      charName: typeof card.name === 'string' && card.name ? card.name : loaded.title,
-      userName,
-      displaying: stage === 'editdisplay',
-      ...(templateDefaultVariables === undefined ? {} : { templateDefaultVariables }),
+  const result = await processNativeRisuText(
+    {
+      native,
+      text: sample,
+      mode: stage,
+      trace: true,
+      context: {
+        variables,
+        globalVariables: globals,
+        messages: [],
+        charName: typeof card.name === 'string' && card.name ? card.name : loaded.title,
+        userName,
+        displaying: stage === 'editdisplay',
+        ...(templateDefaultVariables === undefined ? {} : { templateDefaultVariables }),
+      },
     },
-  });
+    signal
+  );
   signal?.throwIfAborted();
   const script = regexScript(entries, base);
   const steps = (result.steps ?? []).map((step) => ({
@@ -580,12 +600,19 @@ async function traceRegex(store: Store, args: Record<string, unknown>, signal?: 
     ...change(step.before, step.after),
   }));
   const issues = evaluatorIssues(result.issues, script);
-  const changed = Object.fromEntries(
-    Object.entries(result.variables).filter(([key, value]) => variables[key] !== value)
+  const defaults = nativeRisuVariableDefaults(
+    nativeRisuSources(native).defaultVariables.text,
+    templateDefaultVariables
+  );
+  const original = { ...defaults, ...variables };
+  const changed = Object.entries(result.variables).filter(
+    ([key, value]) => !Object.hasOwn(original, key) || original[key] !== value
   );
   const start = args.offset === undefined ? 0 : number(args.offset, 'offset', 0, steps.length);
   let limit = 20;
   let output = 4000;
+  let listCap = LIST_CAP;
+  let valueChars = VALUE_CHARS;
   return bounded(
     () => {
       const page = steps.slice(start, start + limit);
@@ -599,17 +626,24 @@ async function traceRegex(store: Store, args: Record<string, unknown>, signal?: 
         steps: page,
         ...(result.stepsTruncated ? { stepsTruncated: true } : {}),
         nextOffset: start + page.length < steps.length ? start + page.length : null,
-        issues,
+        totalIssues: issues.length,
+        issues: issues.slice(0, listCap),
         result: {
           length: result.text.length,
-          text: result.text.length > output ? `${result.text.slice(0, output)}…` : result.text,
+          text: clipText(result.text, output),
         },
-        changedVariables: changed,
+        totalChangedVariables: changed.length,
+        changedVariables: Object.fromEntries(
+          changed.slice(0, listCap).map(([key, value]) => [key, clipText(value, valueChars)])
+        ),
       };
     },
     () => {
       if (limit > 1) limit = Math.ceil(limit / 2);
       else if (output > 200) output = Math.floor(output / 2);
+      else if (listCap > 1) listCap = Math.ceil(listCap / 2);
+      else if (valueChars > 100) valueChars = Math.floor(valueChars / 2);
+      else if (listCap > 0) listCap = 0;
       else return false;
       return true;
     }
@@ -669,8 +703,9 @@ async function preview(store: Store, args: Record<string, unknown>, signal?: Abo
   const html = rendered.html;
   const start = args.offset === undefined ? 0 : number(args.offset, 'offset', 0, html.length);
   const limit = args.limit === undefined ? PAGE_CHARS : number(args.limit, 'limit', 1, 20_000);
-  let end = Math.min(html.length, start + limit);
-  if (end < html.length && /[\uD800-\uDBFF]/u.test(html[end - 1]!)) end--;
+  if (splitsSurrogatePair(html, start))
+    throw new HttpError(400, 'Text offset splits a Unicode character');
+  const end = textPageEnd(html, start, limit);
   return {
     ...base,
     html: html.slice(start, end),
@@ -692,15 +727,19 @@ function regexScript(entries: ReturnType<typeof nativeRisuRegexEntries>, base: s
     const entry = entries[index];
     const comment = entry && typeof entry.script.comment === 'string' ? entry.script.comment : '';
     return entry
-      ? { index: entry.index, path: `${base}/${entry.index}`, ...(comment ? { comment } : {}) }
+      ? {
+          index: entry.index,
+          path: `${base}/${entry.index}`,
+          ...(comment ? { comment: clipped(comment) } : {}),
+        }
       : { index };
   };
 }
 
 function evaluatorIssues(issues: string[], script: ReturnType<typeof regexScript>) {
   return issues.map((issue) => {
-    const found = /^(regex|regex-command|asset):(.+)$/u.exec(issue);
-    if (found?.[1] === 'asset') return { code: 'asset.missing', name: found[2] };
+    const found = /^(regex|regex-command|asset):(.*)$/u.exec(issue);
+    if (found?.[1] === 'asset') return { code: 'asset.missing', name: clipped(found[2]!) };
     return found && /^\d+$/u.test(found[2]!)
       ? {
           code: found[1] === 'regex' ? 'regex.failed' : 'regex.command-unsupported',
@@ -708,7 +747,7 @@ function evaluatorIssues(issues: string[], script: ReturnType<typeof regexScript
         }
       : /^[A-Z][A-Z0-9_]*$/u.test(issue)
         ? { code: issue }
-        : { code: 'cbs.unsupported', name: issue };
+        : { code: 'cbs.unsupported', name: clipped(issue) };
   });
 }
 

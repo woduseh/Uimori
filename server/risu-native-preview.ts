@@ -1,11 +1,10 @@
 import {
   assertRisuContentSource,
   nativeRisuAssetNameResolver,
-  nativeRisuExtension,
+  nativeRisuSources,
   type RisuContentSource,
 } from '../core/risu-native.js';
-import { nativeRisuToggleControls } from '../core/risu-native-preset.js';
-import { nativeToggleVariables } from '../core/risu-effective-controls.js';
+import { declaredToggleVariables } from '../core/risu-effective-controls.js';
 import type { Content } from '../core/product.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -35,25 +34,12 @@ function savedPackage(store: Store, id: string, revision: unknown) {
   return { content, pkg: content.package as RisuContent };
 }
 
-function toggleVariables(native: RisuContentSource, values: Record<string, string>) {
-  const declaration = native.module?.customModuleToggle ?? nativeRisuExtension(native).toggles;
-  const controls = nativeRisuToggleControls(typeof declaration === 'string' ? declaration : '');
-  return nativeToggleVariables(
-    controls,
-    Object.fromEntries(
-      controls.flatMap((control) => {
-        const key = control.nativeKey ?? control.id;
-        return Object.hasOwn(values, key) ? [[control.id, values[key]!]] : [];
-      })
-    )
-  );
-}
 export type NativeRisuPreviewOptions = { toggleValues?: Record<string, string> };
 
 async function renderStart(
+  content: Content,
   pkg: RisuContent,
   native: RisuContentSource,
-  charName: string,
   variables: Record<string, string>,
   start: string,
   query: PreviewRequest,
@@ -64,23 +50,29 @@ async function renderStart(
   const blobHashes = new Map<string, string>();
   for (const image of pkg.images ?? [])
     if (!blobHashes.has(image.id)) blobHashes.set(image.id, image.blobHash);
-  const context = {
-    viewport: readDisplayViewport(query),
-    native,
-    variables,
-    globalVariables: toggleVariables(native, options.toggleValues ?? {}),
-    messages: [],
-    charName,
-    userName: query.userName ? text(query.userName, 'user name', 200) : '사용자',
-    assetUrls: Object.fromEntries(
-      native.assets.flatMap((asset) => {
-        const blobHash = blobHashes.get(asset.imageId);
-        const url = blobHash !== undefined && `/api/package-image-blobs/${blobHash}`;
-        return url ? assetNames(asset).map((name) => [name, url]) : [];
-      })
-    ),
-  };
+  const name = native.card.name;
+  const userName = query.userName ? text(query.userName, 'user name', 200) : '사용자';
+  const viewport = readDisplayViewport(query);
   try {
+    const context = {
+      viewport,
+      native,
+      variables,
+      globalVariables: declaredToggleVariables(
+        nativeRisuSources(native).toggles.text,
+        options.toggleValues ?? {}
+      ),
+      messages: [],
+      charName: typeof name === 'string' && name.trim() ? name : content.title,
+      userName,
+      assetUrls: Object.fromEntries(
+        native.assets.flatMap((asset) => {
+          const blobHash = blobHashes.get(asset.imageId);
+          const url = blobHash !== undefined && `/api/package-image-blobs/${blobHash}`;
+          return url ? assetNames(asset).map((name) => [name, url]) : [];
+        })
+      ),
+    };
     const edited = await executeRisuNative(
       { ...context, event: 'editDisplay', text: start, meta: { index: -1 } },
       { signal }
@@ -113,9 +105,9 @@ export async function nativeRisuStartPreview(
   const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
   if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
   return renderStart(
+    content,
     pkg,
     structuredClone(pkg.nativeRisu),
-    content.title,
     structuredClone(pkg.variableDefaults?.values ?? {}),
     start.text,
     query,
@@ -156,11 +148,9 @@ export async function nativeRisuDraftPreview(
   const native = structuredClone(input.nativeRisu);
   let variables: Record<string, string> = {};
   try {
-    variables = { ...importRisuVariableDefaults(nativeRisuExtension(native).defaultVariables) };
+    variables = { ...importRisuVariableDefaults(nativeRisuSources(native).defaultVariables.text) };
   } catch {
     throw new HttpError(400, 'RISU_VARIABLE_DEFAULTS_INVALID');
   }
-  const name = native.card.name;
-  const charName = typeof name === 'string' && name.trim() ? name : content.title;
-  return renderStart(pkg, native, charName, variables, start, input, signal, options);
+  return renderStart(content, pkg, native, variables, start, input, signal, options);
 }

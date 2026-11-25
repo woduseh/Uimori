@@ -70,6 +70,15 @@ button.helper-result-target:hover {
   margin-inline-start: auto;
   overflow-wrap: anywhere;
 }
+.helper-result-pricing {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 60%;
+}
+.helper-result-pricing > .helper-result-values {
+  max-width: none;
+}
 .helper-result-note {
   display: flex;
   align-items: center;

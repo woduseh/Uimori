@@ -197,6 +197,26 @@ test('several edits of one scene and one resource in a task leave one net change
   expect(f.changes(task).map((change) => change.domain)).toEqual(['resource']);
 });
 
+test('a resource description beginning with a bracket remains a prose change', () => {
+  const f = fixture();
+  const bot = f.store.product.content(fixtureBotInput('기록 봇', '[등대] 처음 설명이에요.'));
+  const task = f.begin();
+  f.resource(task, 'resource.patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    changes: [
+      {
+        op: 'replaceText',
+        path: '/package/nativeRisu/card/description',
+        oldText: '처음',
+        newText: '다음',
+      },
+    ],
+  });
+  expect(hunksOf(f.changes(task)[0]!).mode).toBe('prose');
+});
+
 test('lore entries, scene titles and created resources get their own entries', () => {
   const f = fixture();
   const bot = f.store.product.content(fixtureBotInput('로어 봇', '설명'));

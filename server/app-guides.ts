@@ -1,3 +1,4 @@
+import { splitsSurrogatePair, textPageEnd } from '../core/text-pages.js';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { HttpError } from './request-validation.js';
@@ -143,12 +144,16 @@ export function readAppGuide(name: string, offset = 0, limit = PAGE_CHARS) {
   const wanted = name.replace(/\.md$/iu, '').toUpperCase();
   const guide = guides().find((item) => item.name === wanted);
   if (!guide) throw new HttpError(404, `GUIDE_NOT_FOUND: ${name}. List the guides without a name.`);
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset > guide.text.length)
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > guide.text.length ||
+    splitsSurrogatePair(guide.text, offset)
+  )
     throw new HttpError(400, 'GUIDE_OFFSET_INVALID');
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE_CHARS)
     throw new HttpError(400, 'GUIDE_LIMIT_INVALID');
-  let end = Math.min(guide.text.length, offset + limit);
-  if (end < guide.text.length && /[\uD800-\uDBFF]/u.test(guide.text[end - 1]!)) end--;
+  const end = textPageEnd(guide.text, offset, limit);
   return {
     name: guide.name,
     title: guide.title,

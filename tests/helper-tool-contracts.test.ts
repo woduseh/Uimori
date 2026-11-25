@@ -474,6 +474,22 @@ test('targeted story reads and forks use the selected chat ancestry without chan
   expect(fork.headRevision).not.toBe(source.id);
   expect(f.store.history(fork.headRevision).map((item) => item.text)).toEqual([source.text]);
   expect(f.store.chat(f.chat.id).headRevision).toBeNull();
+  const scene = f.store.source(fork.headRevision!);
+  const conversation = f.workspace.open({ kind: 'chat', chatId: fork.id });
+  mockSend(() => structuredClone(success));
+  for (const selection of [
+    undefined,
+    { sourceId: scene.id, sourceHash: scene.hash, text: scene.text },
+  ]) {
+    const response = await f.app.inject({
+      method: 'POST',
+      url: '/api/helper/conversations/' + conversation.id + '/messages',
+      payload: { requestKey: randomUUID(), text: 'Describe the opening.', selection },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const task = response.json<HelperTask>();
+    await vi.waitFor(() => expect(f.workspace.task(task.id).status).toBe('completed'));
+  }
 });
 
 test('conditional reads remain distinct from writes and the narrower outline review tool set', () => {
@@ -836,6 +852,13 @@ test('chat lore filters the list by text and saves several overrides from list g
         expectedFieldHash: listed.items[0].fieldHashes.title,
       };
       return calls(
+        call('duplicate', 'chat.lore', {
+          action: 'patchMany',
+          items: [
+            text,
+            { ...text, selector: Object.fromEntries(Object.entries(text.selector).reverse()) },
+          ],
+        }),
         call('mismatch', 'chat.lore', {
           action: 'patchMany',
           items: [text, { ...title, expectedRevision: listed.revision + 1 }],
@@ -843,8 +866,18 @@ test('chat lore filters the list by text and saves several overrides from list g
         call('both', 'chat.lore', { action: 'patchMany', items: [text, title] })
       );
     }
-    expect(event(request, 'mismatch')).toMatchObject({ denied: true });
-    expect(result(request, 'both')).toMatchObject({ revision: listed.revision + 2 });
+    if (round === 2) {
+      expect(event(request, 'duplicate')).toMatchObject({
+        denied: true,
+        result: { error: 'CHAT_LORE_DUPLICATE_SELECTOR' },
+      });
+      expect(event(request, 'mismatch')).toMatchObject({ denied: true });
+      expect(result(request, 'both')).toMatchObject({ revision: listed.revision + 2 });
+      return calls(
+        call('override-search', 'chat.lore', { action: 'read', query: 'Chat-only text' })
+      );
+    }
+    expect(result<HelperLoreRead>(request, 'override-search').items).toHaveLength(1);
     return structuredClone(success);
   });
   await submit(f, '이 채팅에서만 항구 로어의 제목과 본문을 바꿔줘');

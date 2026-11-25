@@ -14,10 +14,15 @@ import { GEMINI_HELPER_SEARCH_TOOL } from '../server/helper-web-search-tool.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { readerRuns } from '../server/reader.js';
 import { Store } from '../server/store.js';
-import { chatTraceCalls, helperTaskCosts, helperTraceCalls } from '../server/task-trace.js';
+import {
+  attemptUsageDetails,
+  chatTraceCalls,
+  helperTaskCosts,
+  helperTraceCalls,
+} from '../server/task-trace.js';
 import { helperActivityStages, helperToolKind } from '../web/helper-activity.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { completedSource } from './fixtures/illustration.js';
+import { completedSource, fixtureSettings, reserveIllustration } from './fixtures/illustration.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 
 const wire = (role: string, extra: Partial<WireRecord> = {}) =>
@@ -273,6 +278,20 @@ test('the scene summary is the sum of its rows and the text cost keeps the run c
     const { chat, run, ids } = sceneWithCalls(store);
     const listed = readerRuns(store, chat.id).find((item) => item.id === run.id)!;
     const rows = chatTraceCalls(store, chat.id).filter((call) => call.sceneRunId === run.id);
+    expect(listed.sceneTokens).toEqual({
+      inputTokens: 57500,
+      outputTokens: 6619,
+      inputPartial: false,
+      outputPartial: false,
+    });
+    store.db.prepare('UPDATE attempts SET input_tokens=NULL WHERE id=?').run(ids.translation);
+    expect(
+      readerRuns(store, chat.id).find((item) => item.id === run.id)?.sceneTokens
+    ).toMatchObject({
+      inputTokens: 53500,
+      inputPartial: true,
+      outputPartial: false,
+    });
     expect(listed.sceneCost).toEqual(sumTraceCosts(rows));
     expect(listed.sceneCost).toMatchObject({ usd: null, unknownCount: 1, attemptCount: 6 });
     expect(listed.sceneCost?.subtotalUsd).toBeCloseTo(0.12 + 0.2 + 0.0007 + 0.0002 + 0.03, 10);
@@ -357,11 +376,18 @@ test('a helper task prices each call by its reported cost before its estimate', 
       elapsedMs: 35,
       denied: false,
     });
+    workspace.event(conversation.id, task.id, 'tool.finished', {
+      name: 'data.exec',
+      denied: false,
+      status: 'failed',
+      shell: { exitCode: 1 },
+    });
     const costs = helperTaskCosts(store, [task.id]).get(task.id)!;
     expect(costs).toMatchObject({ unknownCount: 0, attemptCount: 2 });
     expect(costs.usd).toBeCloseTo(0.012, 10);
     expect(helperTraceCalls(store, task.id)[0].tools).toEqual([
       { name: 'model.pricing.update', resultChars: 240, elapsedMs: 35, failed: false },
+      { name: 'data.exec', resultChars: null, elapsedMs: null, failed: true },
     ]);
     expect(workspace.taskSummary(task.id)?.estimatedCost).toEqual(costs);
   } finally {
@@ -415,4 +441,65 @@ test('the helper timeline numbers model calls and names the tool that ran', () =
     elapsedMs: 35,
     resultChars: 240,
   });
+});
+
+test('trace reads reported thinking and decision-cache tokens', () => {
+  expect(
+    attemptUsageDetails('anthropic-messages-v1', { output_tokens_details: { thinking_tokens: 6 } })
+      .reasoningTokens
+  ).toBe(6);
+  for (const protocol of ['openai-decisions-v1', 'openai-compatible-decisions-v1'])
+    expect(
+      attemptUsageDetails(protocol, { input_tokens_details: { cached_tokens: 130 } })
+        .cachedInputTokens
+    ).toBe(130);
+});
+
+test('research tools belong to their illustration job and concurrent advisor reads keep their own attempt', () => {
+  const { store, close } = fixture();
+  try {
+    const chat = createFixtureChat(store, 'illustration trace');
+    const source = completedSource(store, chat.id);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings(),
+      testMode: true,
+    });
+    const startedAt = '2026-11-25T12:00:00.000Z';
+    const call = (role: string, owner: { runId?: string }) =>
+      attempt(store, chat.id, owner, wire(role), result('tool_calls', { input: 12, output: 3 }), {
+        usd: 0,
+        startedAt,
+      });
+    const image = call('illustration', {});
+    store.db
+      .prepare('UPDATE illustration_jobs SET diagnostic=? WHERE id=?')
+      .run(JSON.stringify({ attempts: [image] }), job.id);
+    store.db
+      .prepare(
+        'INSERT INTO execution_tool_diagnostics(illustration_job_id,origin,data) VALUES(?,?,?)'
+      )
+      .run(
+        job.id,
+        'illustration',
+        JSON.stringify({ name: 'illustration.sources.search', startedAt })
+      );
+    const advisors = [call('main', { runId: source.runId }), call('main', { runId: source.runId })];
+    for (const id of advisors)
+      store.db.prepare("UPDATE attempts SET usage_kind='advisor' WHERE id=?").run(id);
+    for (const id of advisors)
+      store.db
+        .prepare('INSERT INTO execution_tool_diagnostics(run_id,origin,data) VALUES(?,?,?)')
+        .run(
+          source.runId,
+          'advisor',
+          JSON.stringify({ name: 'agents.read', attemptId: id, startedAt })
+        );
+    const calls = chatTraceCalls(store, chat.id);
+    expect(calls.find((item) => item.id === image)?.tools.map((tool) => tool.name)).toEqual([
+      'illustration.sources.search',
+    ]);
+    for (const id of advisors) expect(calls.find((item) => item.id === id)?.tools).toHaveLength(1);
+  } finally {
+    close();
+  }
 });

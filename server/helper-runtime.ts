@@ -224,6 +224,7 @@ import { boundedWebSearch, helperWebSearchCapability } from '../core/helper-web-
 import { GEMINI_HELPER_SEARCH_TOOL, geminiHelperSearchRequest } from './helper-web-search-tool.js';
 import { invokeHelperGuideTool } from './helper-guide-tools.js';
 import { invokeHelperCodeTool, isHelperCodeTool } from './helper-code-tools.js';
+import { chatLoreKey, validateChatLoreSelector } from '../core/chat-overrides.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
@@ -1260,9 +1261,12 @@ export class HelperRuntime {
       const confirmedCalls =
         inherited ?? resolveHelperConfirmations(this.store, conversationId, confirmations);
       const retried = retryOf ? this.workspace.task(retryOf).snapshot : undefined;
-      const revertedChanges = retried
-        ? retried.revertedChanges
-        : helperRevertedChanges(this.store, conversationId);
+      const revertedChanges = helperRevertedChanges(
+        this.store,
+        conversationId,
+        retryOf,
+        retried?.revertedChanges
+      );
       const declinedCalls = retried
         ? retried.declinedCalls
         : resolveHelperDeclines(this.store, conversationId, declined);
@@ -3610,7 +3614,10 @@ export class HelperRuntime {
           throw new HttpError(400, 'INVALID_LORE_ITEMS');
         this.workspace.assertRunning(task.id);
         const items = args.items.map((item: unknown) => record(item));
-        if (new Set(items.map((item) => JSON.stringify(item.selector))).size !== items.length)
+        if (
+          new Set(items.map((item) => chatLoreKey(validateChatLoreSelector(item.selector))))
+            .size !== items.length
+        )
           throw new HttpError(400, 'CHAT_LORE_DUPLICATE_SELECTOR');
         return this.workspace.operation(
           task.id,
@@ -3691,11 +3698,12 @@ export class HelperRuntime {
           return this.store.libraryOrganization.createFolder(args.body);
         if (args.action === 'move') return this.store.libraryOrganization.move(args.body);
         if (args.action === 'update-folder' || args.action === 'delete-folder') {
-          const { folderId, category: _category, ...body } = record(args.body);
+          const { folderId, category, ...body } = record(args.body);
+          const expectedCategory = text(category, 'library category', 20);
           const id = text(folderId, 'library folder ID', 100);
           return args.action === 'delete-folder'
-            ? this.store.libraryOrganization.deleteFolder(id, body)
-            : this.store.libraryOrganization.updateFolder(id, body);
+            ? this.store.libraryOrganization.deleteFolder(id, body, expectedCategory)
+            : this.store.libraryOrganization.updateFolder(id, body, expectedCategory);
         }
         throw new HttpError(400, 'INVALID_LIBRARY_ACTION');
       });

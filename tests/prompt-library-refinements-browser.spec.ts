@@ -54,14 +54,13 @@ test('PLR04 an explicit prompt-card question pins the intended helper resource',
   await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toHaveCount(0);
 
   await helper.getByRole('button', { name: '도우미 닫기' }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await menu.click();
   await menu.locator('..').getByRole('button', { name: '도우미에게 묻기' }).click();
   await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toBeVisible();
-  await helper.getByRole('button', { name: '도우미 닫기' }).click();
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
   const draftTitle = `${title} unsaved`;
   await page.getByLabel('프롬프트 이름', { exact: true }).fill(draftTitle);
-  await page.getByRole('button', { name: '도우미 열기', exact: true }).click();
   await expect(helper.getByText(`편집 중: ${draftTitle}`, { exact: true })).toBeVisible();
   await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toHaveCount(0);
 

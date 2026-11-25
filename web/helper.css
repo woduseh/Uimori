@@ -867,9 +867,9 @@
     > :is(.helper-messages, .helper-composer) {
     flex: 1 1 0;
   }
-  .helper-thread-empty:has(> .helper-start:only-child) {
-    justify-content: flex-end;
-  }
+}
+.helper-thread-empty:has(> .helper-start:only-child) {
+  justify-content: flex-end;
 }
 .helper-start {
   display: grid;

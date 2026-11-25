@@ -477,9 +477,8 @@ describe('server main runner through the actual loopback adapter', () => {
     ).toEqual(['lore-1']);
     const observed = runnerHooks(server.origin);
     const result = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
-    expect(result.error).toBe('READ_TOOL_DENIED');
-    expect(observed.tools).toMatchObject([{ denied: true, name: 'unapproved', args: {} }]);
-    expect(JSON.stringify(observed.tools)).not.toContain('PRIVATE_ARGUMENT');
+    expect(result).toMatchObject({ status: 'error', error: 'UNKNOWN_TOOL' });
+    expect(observed.tools).toEqual([]);
     expect(server.requests).toHaveLength(1);
   });
 

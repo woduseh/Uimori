@@ -110,7 +110,7 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
           )}
         </>
       ) : (
-        estimate?.status !== 'estimated' && (
+        (!estimate || estimate.status === 'unavailable') && (
           <p className="muted">{t('visualpanels.noPriceWasFixedForThisCall')}</p>
         )
       )}

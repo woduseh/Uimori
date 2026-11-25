@@ -1124,8 +1124,8 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
           {
             functionCall: {
               id: 'first-read',
-              name: 'resource.read',
-              args: { kind: 'content', id: 'read-evidence' },
+              name: 'app.call',
+              args: { name: 'resource.read', arguments: { kind: 'content', id: 'read-evidence' } },
             },
             thoughtSignature: 'READ_SIGNATURE',
           },
@@ -1135,8 +1135,8 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
           {
             functionCall: {
               id: 'write',
-              name: 'resource.save',
-              args: { expectedRevision: 1 },
+              name: 'app.call',
+              args: { name: 'resource.save', arguments: { expectedRevision: 1 } },
             },
             thoughtSignature: 'WRITE_SIGNATURE',
           },
@@ -1147,8 +1147,8 @@ test('unhelpful helper compaction preserves actual Vertex signatures, results an
           {
             functionCall: {
               id: 'new-read',
-              name: 'resource.read',
-              args: { kind: 'content', id: 'read-evidence' },
+              name: 'app.call',
+              args: { name: 'resource.read', arguments: { kind: 'content', id: 'read-evidence' } },
             },
             thoughtSignature: 'NEW_READ_SIGNATURE',
           },
@@ -1198,8 +1198,11 @@ test('a Vertex signature far larger than the input limit neither compacts the ta
             {
               functionCall: {
                 id: 'signed-read',
-                name: 'resource.read',
-                args: { kind: 'content', id: 'read-evidence' },
+                name: 'app.call',
+                args: {
+                  name: 'resource.read',
+                  arguments: { kind: 'content', id: 'read-evidence' },
+                },
               },
               thoughtSignature: signature,
             },

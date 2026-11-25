@@ -75,6 +75,7 @@ import {
   type ResponseDisplayMode,
 } from './presentation-settings.js';
 import {
+  captureActiveEditorContext,
   discardActiveEditor,
   getActiveEditorContext,
   saveActiveEditor,
@@ -1304,7 +1305,17 @@ function App() {
   }, []);
   const askEditorHelper = useStableHandler((focus: EditorFocus) => {
     const scope = helperPanelScope;
+    let snapshot: ReturnType<typeof captureActiveEditorContext>;
+    try {
+      snapshot = captureActiveEditorContext();
+    } catch (cause) {
+      s.setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
+      return;
+    }
+    if (!snapshot) return;
+    setHelperResource(null);
     setHelperHandoff({
+      snapshot,
       kind: 'editor',
       epoch: ++helperHandoffEpoch.current,
       key: crypto.randomUUID(),

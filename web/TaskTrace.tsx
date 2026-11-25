@@ -3,7 +3,6 @@ import { Info } from 'lucide-react';
 import {
   sumTraceCosts,
   TRACE_CALL_KINDS,
-  traceCallCost,
   traceCostGroup,
   type ChatTraceCall,
   type TraceCall,
@@ -16,7 +15,7 @@ import { IconButton } from './IconButton.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoadingState } from './LoadingState.js';
 import { useApiRecord } from './useApiRecord.js';
-import { formatUsd, formatUsdSummary } from './pricing-display.js';
+import { formatUsd, formatUsdSubtotal, formatUsdSummary } from './pricing-display.js';
 import { CopyTextButton } from './TaskHistory.js';
 import {
   formatDurationMs,
@@ -57,13 +56,19 @@ export function traceUsageTotals(calls: readonly TraceCall[]) {
   ) as Record<(typeof usageFields)[number], RecordedAmount>;
 }
 
-function UsageAmount({ amount }: { amount: RecordedAmount }) {
+function UsageAmount({
+  amount,
+  format = formatNumber,
+}: {
+  amount: RecordedAmount;
+  format?: (value: number) => string;
+}) {
   return (
     <>
       <span>
         {amount.reported === 0 && amount.unknown > 0
           ? t('helperResults.unknown')
-          : formatNumber(amount.value)}
+          : format(amount.value)}
       </span>
       {amount.unknown > 0 && amount.reported > 0 && (
         <small>{t('helperResults.missingRequests', { count: formatNumber(amount.unknown) })}</small>
@@ -81,7 +86,7 @@ function UsageShare({
   part: RecordedAmount;
   whole: RecordedAmount;
 }) {
-  if (part.reported === 0 || part.value === 0) return null;
+  if (part.reported === 0 || part.value === 0 || whole.value === 0) return null;
   return (
     <small>
       {t(label, { count: formatNumber(part.value), share: formatShare(part.value, whole.value) })}
@@ -115,8 +120,8 @@ export function TraceSummary({
     ? costGroups.flatMap((group) => {
         const selected = calls.filter((call) => traceCostGroup(call) === group);
         const total = sumTraceCosts(selected);
-        return selected.length && total.subtotalUsd > 0
-          ? [{ group, label: traceCostSummary(total)! }]
+        return selected.length
+          ? [{ group, label: traceCostSummary(total) ?? t('visualpanels.unknown') }]
           : [];
       })
     : [];
@@ -185,11 +190,13 @@ export function TraceSummary({
           />
         </dd>
       </div>
-      {costLabel && (
+      {(costLabel || (groups && parts.length > 1)) && (
         <div data-row="cost">
-          <dt>{t('taskTrace.cost')}</dt>
+          <dt>{t(totals.costUsd.reported ? 'chatsettings.taskHistoryCost' : 'taskTrace.cost')}</dt>
           <dd>
-            <span title={formatUsd(cost.usd ?? cost.subtotalUsd)}>{costLabel}</span>
+            <span title={costLabel ? formatUsd(cost.usd ?? cost.subtotalUsd) : undefined}>
+              {costLabel ?? t('visualpanels.unknown')}
+            </span>
             {cost.unknownCount > 0 && (
               <small>
                 {t('helperResults.missingRequests', { count: formatNumber(cost.unknownCount) })}
@@ -226,14 +233,18 @@ function Absent() {
 }
 
 function CallCost({ call, whole }: { call: TraceCall; whole: number }) {
-  const cost = traceCallCost(call);
+  const cost = { usd: call.estimatedUsd, known: call.estimatedUsd ?? call.estimatedSubtotalUsd };
   const share = whole > 0 ? cost.known / whole : 0;
   return (
     <>
       {cost.usd !== null ? (
         <span>{formatUsd(cost.usd)}</span>
       ) : cost.known > 0 ? (
-        <span>{t('reader.inspectorCostAtLeast', { value: formatUsd(cost.known) })}</span>
+        <span>
+          {t('reader.inspectorCostAtLeast', {
+            value: cost.known < 0.00000001 ? formatUsdSubtotal(cost.known) : formatUsd(cost.known),
+          })}
+        </span>
       ) : (
         <Absent />
       )}
@@ -287,7 +298,10 @@ export function TraceCallTable({
   const [open, setOpen] = useState<string | null>(null);
   const reported = calls.some((call) => call.costUsd !== null);
   const timed = calls.some((call) => call.elapsedMs !== null);
-  const whole = sumTraceCosts(calls).subtotalUsd;
+  const whole = calls.reduce(
+    (sum, call) => sum + (call.estimatedUsd ?? call.estimatedSubtotalUsd),
+    0
+  );
   const columns = 6 + Number(reported) + Number(timed);
   return (
     <div className="trace-calls">
@@ -350,6 +364,7 @@ export function TraceCallTable({
                             data-failed={tool.failed || undefined}
                           >
                             <code>{tool.name}</code>
+                            {tool.failed && <span>{traceStatusLabel('error')}</span>}
                             {tool.resultChars !== null && (
                               <span>{t('taskTrace.resultChars', { count: tool.resultChars })}</span>
                             )}
@@ -528,10 +543,11 @@ export function TraceLoading({ error, retry }: { error: string; retry: () => voi
 
 function ChatUsageBody({ chatId, revision }: { chatId: string; revision: number }) {
   const trace = useChatTrace(chatId, revision);
-  return trace.value ? (
-    <ChatUsageTotals calls={trace.value} revision={revision} />
-  ) : (
-    <TraceLoading error={trace.error} retry={trace.retry} />
+  return (
+    <>
+      {(!trace.value || trace.error) && <TraceLoading error={trace.error} retry={trace.retry} />}
+      {trace.value && <ChatUsageTotals calls={trace.value} revision={revision} />}
+    </>
   );
 }
 
@@ -558,10 +574,7 @@ export function ChatUsageTotals({
     return selected.length ? [{ kind, selected }] : [];
   });
   const reported = calls.some((call) => call.costUsd !== null);
-  const total = (values: (number | null)[]) =>
-    values.some((value) => value === null)
-      ? null
-      : values.reduce<number>((sum, value) => sum + value!, 0);
+  if (!calls.length) return <TraceSummary calls={calls} />;
   return (
     <div className="trace-chat-usage">
       <TraceSummary calls={calls} />
@@ -593,10 +606,10 @@ export function ChatUsageTotals({
             </thead>
             <tbody>
               {kinds.map(({ kind, selected }) => {
-                const input = total(selected.map((call) => call.inputTokens));
-                const output = total(selected.map((call) => call.outputTokens));
-                const cost = traceCostSummary(sumTraceCosts(selected));
-                const reportedCost = total(selected.map((call) => call.costUsd));
+                const totals = traceUsageTotals(selected);
+                const cost = traceCostSummary(
+                  sumTraceCosts(selected.map((call) => ({ ...call, costUsd: null })))
+                );
                 return (
                   <tr key={kind} data-kind={kind}>
                     <th scope="row">{traceKindLabel(kind)}</th>
@@ -604,17 +617,20 @@ export function ChatUsageTotals({
                       {formatNumber(selected.length)}
                     </td>
                     <td data-label={t('taskTrace.columnInput')} className="trace-number">
-                      {input === null ? <Absent /> : formatNumber(input)}
+                      <UsageAmount amount={totals.inputTokens} />
                     </td>
                     <td data-label={t('taskTrace.columnOutput')} className="trace-number">
-                      {output === null ? <Absent /> : formatNumber(output)}
+                      <UsageAmount amount={totals.outputTokens} />
                     </td>
                     <td data-label={t('taskTrace.cost')} className="trace-number">
                       {cost ?? <Absent />}
                     </td>
                     {reported && (
                       <td data-label={t('taskTrace.columnReported')} className="trace-number">
-                        {reportedCost === null ? <Absent /> : formatUsdSummary(reportedCost)}
+                        <UsageAmount
+                          amount={totals.costUsd}
+                          format={totals.costUsd.unknown ? formatUsdSubtotal : formatUsdSummary}
+                        />
                       </td>
                     )}
                   </tr>

@@ -150,6 +150,7 @@ test('before advisors run in order with scoped reads, selected models and explic
     expect.arrayContaining([
       expect.objectContaining({
         origin: 'advisor',
+        attemptId: expect.any(String),
         name: 'agents.read',
         state: 'finished',
         elapsedMs: expect.any(Number),

@@ -408,7 +408,10 @@ export async function prepareStoryGuide(
         const event = executeTool(
           snapshot,
           { callId: call.id, name: call.name, args: call.arguments },
-          hooks.signal
+          hooks.signal,
+          'main',
+          undefined,
+          request.stable.tools.map((tool) => tool.name)
         );
         results.push(event);
         await hooks.onToolDiagnostic?.(

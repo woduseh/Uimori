@@ -247,6 +247,7 @@ test('TRACE02 a call expands in place under its row and the chat-wide totals sta
   for (const [width, scheme] of [
     [1440, 'dark'],
     [1440, 'light'],
+    [640, 'light'],
     [390, 'light'],
     [360, 'dark'],
   ] as const) {
@@ -271,11 +272,12 @@ test('TRACE02 a call expands in place under its row and the chat-wide totals sta
         .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
     ).toBe(true);
     await detailRow.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+    expect(await panel.evaluate((node) => node.scrollTop)).toBe(0);
     await shot(page, `scene-record-${width}-${scheme}`);
     const chatUsage = panel.getByTestId('usage-inspector');
     await expect(chatUsage).not.toHaveAttribute('open');
     await expect(chatUsage.locator(':scope > summary')).toHaveText('이 채팅 전체 누적 사용량');
-    if (width === 1440 && scheme === 'dark') {
+    if ((width === 1440 && scheme === 'dark') || width === 390) {
       await chatUsage.locator(':scope > summary').click();
       await expect(
         chatUsage.getByRole('heading', { name: '장면에 속하지 않은 호출 (1회)' })
@@ -283,7 +285,13 @@ test('TRACE02 a call expands in place under its row and the chat-wide totals sta
       const outside = chatUsage.getByRole('table', { name: '장면에 속하지 않은 호출 (1회)' });
       await expect(outside.getByRole('rowheader')).toHaveText([/^입력 번역/]);
       await chatUsage.scrollIntoViewIfNeeded();
-      await shot(page, 'chat-wide-1440-dark');
+      if (width === 390) {
+        const sends = chatUsage.locator('.trace-totals td').first();
+        expect(
+          await sends.evaluate((node) => getComputedStyle(node, '::before').content)
+        ).toContain('전송 시도');
+      }
+      await shot(page, `chat-wide-${width}-${scheme}`);
     }
   }
   if (named) {
@@ -299,11 +307,12 @@ test('TRACE02 a call expands in place under its row and the chat-wide totals sta
     expect(selected.ok(), await selected.text()).toBe(true);
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 1440, height: 1000 });
-    const { record } = await openRecord(page, chat.id, run.id);
+    const { panel, record } = await openRecord(page, chat.id, run.id);
     await record
       .locator('tr[data-attempt-id="trace-writing-1"]')
       .getByRole('button', { name: /호출 상세/ })
       .click();
+    expect(await panel.evaluate((node) => node.scrollTop)).toBe(0);
     await shot(page, `scene-record-1440-theme-${named.id.replace(/[^a-z0-9-]+/giu, '-')}`);
   }
 });
@@ -314,16 +323,72 @@ test('TRACE03 the scene list totals use the scene scope of each run', async ({ p
   await page.route(`**/api/chats/${chat.id}/reader-runs`, async (route) => {
     const response = await route.fetch();
     const runs = (await response.json()) as ReaderRun[];
-    for (const item of runs)
-      if (item.id === run.id)
-        item.sceneCost = { usd: 0.2951, subtotalUsd: 0.2951, unknownCount: 0, attemptCount: 6 };
+    for (const item of runs) {
+      if (item.id !== run.id) continue;
+      item.sceneCost = { usd: 0.2951, subtotalUsd: 0.2951, unknownCount: 0, attemptCount: 6 };
+      item.sceneTokens = {
+        inputTokens: 58010,
+        outputTokens: 6525,
+        inputPartial: false,
+        outputPartial: true,
+      };
+    }
     await route.fulfill({ response, json: runs });
   });
   await page.goto(`/?chat=${chat.id}`);
   await navigationAction(page, '작업 현황');
   const panel = page.getByRole('dialog', { name: '작업 현황', exact: true });
+  await expect(panel.locator('.task-history-summary dd').nth(1)).toHaveText(
+    '입력 58,010 / 출력 6,525+'
+  );
+  await expect(panel.locator(`[data-run-id="${run.id}"] .task-history-meta`)).toContainText(
+    '64,535 토큰+'
+  );
   await expect(panel.locator('.task-history-summary dd').nth(2)).toHaveText('$0.295');
   await expect(panel.locator(`[data-run-id="${run.id}"] .task-history-meta`)).toContainText(
     '$0.295'
   );
+});
+
+test('TRACE04 mixed role usage keeps known amounts and scene record fetch failures can be retried', async ({
+  page,
+  request,
+}) => {
+  const { chat, run } = await seed(request);
+  let blocked = true;
+  await page.route(`**/api/runs/${run.id}`, (route) =>
+    blocked
+      ? route.fulfill({ status: 503, json: { error: 'Record unavailable' } })
+      : route.continue()
+  );
+  const calls = [
+    call(run.id, 'known', {
+      kind: 'writing',
+      inputTokens: 80,
+      outputTokens: 12,
+      costUsd: 0.125,
+      estimatedUsd: 0.03,
+    }),
+    call(run.id, 'missing', {
+      kind: 'writing',
+      tools: [{ name: 'data.exec', failed: true, elapsedMs: 1, resultChars: 0 }],
+    }),
+    call(run.id, 'free', { kind: 'chat-title', estimatedUsd: 0 }),
+    call(run.id, 'unpriced', { kind: 'scene-translation', owner: 'job' }),
+  ];
+  await page.route(`**/api/chats/${chat.id}/attempts`, (route) => route.fulfill({ json: calls }));
+  const { panel, record } = await openRecord(page, chat.id, run.id);
+  await expect(record.getByRole('button', { name: '다시 불러오기' })).toBeVisible();
+  blocked = false;
+  await record.getByRole('button', { name: '다시 불러오기' }).click();
+  await expect(record.getByRole('button', { name: '원본 JSON 보기' })).toBeVisible();
+  await expect(record.locator('.trace-tools')).toContainText('오류');
+  await expect(record.locator('.trace-summary-parts')).toContainText('번역 미확인');
+  await expect(record.locator('.trace-summary-parts')).toContainText('채팅 제목 $0');
+  const usage = panel.getByTestId('usage-inspector');
+  await usage.locator('summary').click();
+  const row = usage.locator('.trace-totals tr[data-kind="writing"]');
+  await expect(row.locator('[data-label="입력"]')).toHaveText('80미확인 1회');
+  await expect(row.locator('[data-label="보고 비용"]')).toHaveText('$0.125미확인 1회');
+  await expect(row.locator('[data-label="추정 비용"]')).toHaveText('$0.03+');
 });

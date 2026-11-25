@@ -225,6 +225,11 @@ test('LEAVE multiple prompt roles stay open without saving only the current role
   page.on('request', (value) => {
     if (isResourceSaveRequest(value)) saves.push(value.url());
   });
+  await page.getByRole('button', { name: '도우미 열기', exact: true }).click();
+  const helper = page.locator('#helper-panel');
+  await helper.getByRole('button', { name: '편집 중인 자료 저장', exact: true }).click();
+  await expect(helper.getByText(/다른 역할이나 프리셋에도 미저장 초안이 있어요/u)).toBeVisible();
+  await helper.getByRole('button', { name: '도우미 닫기', exact: true }).click();
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   const guard = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
   await guard.getByRole('button', { name: '저장하고 이동', exact: true }).click();

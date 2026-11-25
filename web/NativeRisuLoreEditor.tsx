@@ -113,7 +113,7 @@ export function NativeRisuLoreEditor({
   const folders = entries.map((item, i) => ({ item, i })).filter(({ item }) => isLoreFolder(item));
   const folder = !!entry && isLoreFolder(entry);
   const title = entry ? loreTitle(entry) : t('native.text_5ce4911d95');
-  useStudioItem(entry ? index : null, entry ? loreTitle(entry) : '');
+  useStudioItem(entry && !folder ? index : null, entry && !folder ? loreTitle(entry) : '');
   const needle = query.trim().toLocaleLowerCase();
   const matches = entries.map(
     (item) =>

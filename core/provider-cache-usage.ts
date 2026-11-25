@@ -27,6 +27,8 @@ export function providerCacheUsage(
       write1hTokens: token(creation.ephemeral_1h_input_tokens),
     };
   }
+  if (protocol === 'openai-decisions-v1' || protocol === 'openai-compatible-decisions-v1')
+    return { readTokens: token(record(raw.input_tokens_details).cached_tokens), writeTokens: null };
   if (protocol === 'openai-responses-v1') {
     const details = record(raw.input_tokens_details);
     return {

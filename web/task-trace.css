@@ -5,11 +5,6 @@
   gap: 0 6px;
   min-width: 0;
 }
-.trace-meta > * + *::before {
-  content: "·" / "";
-  margin-inline-end: 6px;
-  color: var(--faint);
-}
 .trace-quiet {
   color: var(--muted);
   font-size: var(--font-small);
@@ -138,7 +133,7 @@
 }
 .trace-tools code {
   font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
-  color: var(--text);
+  color: inherit;
 }
 .trace-cost {
   min-width: 88px;
@@ -207,7 +202,7 @@
   border-bottom: 0;
 }
 
-@container trace-calls (max-width: 520px) {
+@container trace-calls (max-width: 680px) {
   .trace-calls table,
   .trace-calls tbody,
   .trace-calls tbody :is(th, td) {
@@ -258,7 +253,7 @@
     overflow-wrap: anywhere;
   }
   .trace-calls tbody th,
-  .trace-calls tbody td:nth-child(2) {
+  .trace-calls .trace-call-row > td:nth-child(2) {
     grid-column: 1 / -1;
   }
   .trace-calls tbody th {
@@ -279,7 +274,7 @@
     display: block;
     color: var(--muted);
   }
-  .trace-calls tbody td:nth-child(2)::before {
+  .trace-calls .trace-call-row > td:nth-child(2)::before {
     content: none;
   }
   .trace-cost-bar {

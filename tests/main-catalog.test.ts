@@ -166,6 +166,36 @@ test('the request contract asks for a read only while the catalog lists a discov
   expect(excerpt.input.catalog).toMatchObject([{ id: 'lore-1' }]);
 });
 
+test.each(['search', 'relevant', 'browse'])(
+  '%s discovery follows the read tools of this consumer even on a shared snapshot',
+  (mode) => {
+    const skill = lore(2, { kind: 'skill' });
+    const reference = lore(1, { relatedIds: [skill.id] });
+    const fixed = snapshot([reference, skill]);
+    const search = (offered: string[]) =>
+      executeTool(
+        fixed,
+        {
+          name: 'knowledge.search',
+          callId: 'discover',
+          args: mode === 'browse' ? { mode } : { mode, query: 'fictional' },
+        },
+        undefined,
+        'main',
+        undefined,
+        offered
+      ).result;
+    const both = ['knowledge.search', 'knowledge.read', 'skills.load'];
+    expect(search(both)).toMatchObject({ total: 2 });
+    const restricted = search(['knowledge.search', 'knowledge.read']);
+    expect(restricted).toMatchObject({
+      total: 1,
+      items: [{ id: reference.id, relatedIds: [], nextRead: { name: 'knowledge.read' } }],
+    });
+    expect(search(both)).toMatchObject({ total: 2 });
+  }
+);
+
 test('retained lore kept as several pages that cover the whole body counts as delivered', () => {
   const long = lore(1, { text: 'A long harbor chronicle. '.repeat(40) });
   const page = (start: number, end: number) => ({

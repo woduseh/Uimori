@@ -93,9 +93,11 @@ export class LibraryOrganizationStore {
     this.store.db.prepare('DELETE FROM library_placements WHERE kind=? AND id=?').run(kind, id);
     this.bump();
   }
-  private folder(id: string) {
+  private folder(id: string, expectedCategory?: string) {
     const folder = this.snapshot().folders.find((item) => item.id === id);
     if (!folder) throw new HttpError(404, 'Library folder not found');
+    if (expectedCategory !== undefined && category(expectedCategory) !== folder.category)
+      throw new HttpError(409, 'Folder is outside this category');
     return folder;
   }
   createFolder(value: unknown) {
@@ -126,13 +128,13 @@ export class LibraryOrganizationStore {
       throw new HttpError(400, 'Folder cover image not found');
     this.store.db.prepare('INSERT INTO library_folder_covers VALUES(?,?)').run(id, hash);
   }
-  updateFolder(id: string, value: unknown) {
+  updateFolder(id: string, value: unknown, expectedCategory?: string) {
     const b = record(value);
     fields(b, ['expectedRevision', 'title', 'beforeFolderId', 'coverImageHash']);
     if (b.title === undefined && b.beforeFolderId === undefined && b.coverImageHash === undefined)
       throw new HttpError(400, 'Folder update is empty');
     return this.edit(b.expectedRevision, () => {
-      const folder = this.folder(id);
+      const folder = this.folder(id, expectedCategory);
       if (b.title !== undefined)
         this.store.db
           .prepare('UPDATE library_folders SET title=? WHERE id=?')
@@ -157,11 +159,11 @@ export class LibraryOrganizationStore {
       update.run(index, id);
     });
   }
-  deleteFolder(id: string, value: unknown) {
+  deleteFolder(id: string, value: unknown, expectedCategory?: string) {
     const b = record(value);
     fields(b, ['expectedRevision']);
     return this.edit(b.expectedRevision, () => {
-      const folder = this.folder(id);
+      const folder = this.folder(id, expectedCategory);
       this.clearCover(id);
       this.store.db
         .prepare('UPDATE library_placements SET folder_id=NULL WHERE folder_id=?')

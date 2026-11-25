@@ -31,7 +31,7 @@ import {
 import { usageCompact } from './usage-display.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 import type { TraceCostTotal } from '../core/task-trace.js';
-import { formatUsdSummary } from './pricing-display.js';
+import { formatUsdSubtotal, formatUsdSummary } from './pricing-display.js';
 import { traceCostSummary } from './task-trace.js';
 import { TraceCallTable, TraceDisclosure, TraceFooter } from './TaskTrace.js';
 
@@ -84,7 +84,8 @@ function helperTaskTotals(tasks: HelperTaskView[], partial: boolean) {
               return !!cost && cost.usd === null && cost.subtotalUsd > 0;
             })
         ),
-        formatUsdSummary
+        formatUsdSummary,
+        formatUsdSubtotal
       ),
     },
   ];

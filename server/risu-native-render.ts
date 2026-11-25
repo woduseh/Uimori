@@ -278,12 +278,16 @@ export function nativeRisuRegexPlan(native: RisuContentSource, mode: NativeRisuR
     .sort((a, b) => b.order - a.order || a.index - b.index);
 }
 
-export function processNativeRisuText(input: NativeRisuTextInput): Promise<NativeRisuTextResult> {
+export function processNativeRisuText(
+  input: NativeRisuTextInput,
+  signal?: AbortSignal
+): Promise<NativeRisuTextResult> {
   return runNativeRisuWorker(
     new URL('./risu-native-render.js', import.meta.url),
     'processNativeRisuTextInWorker',
     input,
-    input.timeoutMs
+    input.timeoutMs,
+    signal
   );
 }
 

@@ -8,7 +8,8 @@ import {
   type RefObject,
 } from 'react';
 
-export const isApplePlatform = () => /^(Mac|iPhone|iPad)/.test(navigator.platform);
+import { isApplePlatform } from './shortcut-bindings.js';
+export { isApplePlatform };
 
 export function sendKeyLabel(enterSend: boolean) {
   if (enterSend) return 'Enter';

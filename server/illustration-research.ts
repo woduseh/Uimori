@@ -7,7 +7,7 @@ import { fields, number, text } from './request-validation.js';
 import { KNOWLEDGE_ITEM_TOKENS } from '../core/provider.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { excerptScene, ILLUSTRATION_EXCERPT_TOKENS } from '../core/illustration.js';
-import { nativeRisuLore, nativeRisuSourcePaths } from '../core/risu-native.js';
+import { nativeRisuLore, nativeRisuSources } from '../core/risu-native.js';
 
 const paging = {
   offset: { type: 'integer', minimum: 0 },
@@ -132,8 +132,8 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
             ? item
             : { path: item.path, length: item.text.length }
         ),
-        ...(lore
-          ? [{ path: `/package/nativeRisu${nativeRisuSourcePaths(native!).lore}`, entries: lore }]
+        ...(native && lore
+          ? [{ path: `/package/nativeRisu${nativeRisuSources(native).lore.path}`, entries: lore }]
           : []),
       ],
     };

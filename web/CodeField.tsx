@@ -4,6 +4,7 @@ import {
   Suspense,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -103,7 +104,7 @@ export function PlainCodeField({
   const field = useRef<HTMLTextAreaElement>(null);
   const source = useRef(value);
   source.current = value;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = field.current;
     if (!element) return;
     const reveal = (event: Event) => {
@@ -111,8 +112,9 @@ export function PlainCodeField({
       element.focus();
       element.setSelectionRange(from, to);
     };
-    element.addEventListener(CODE_FIELD_REVEAL, reveal);
-    return () => element.removeEventListener(CODE_FIELD_REVEAL, reveal);
+    const target = element.closest('[data-code-field]')!;
+    target.addEventListener(CODE_FIELD_REVEAL, reveal);
+    return () => target.removeEventListener(CODE_FIELD_REVEAL, reveal);
   }, []);
   useEffect(() => {
     if (!helper) return;
@@ -132,11 +134,11 @@ export function PlainCodeField({
       selectionEnd: element.selectionEnd,
     };
   };
-  return (
+  const textarea = (
     <textarea
       {...aria}
       ref={field}
-      data-code-field={name}
+      data-code-field={helper ? undefined : name}
       className={className}
       rows={rows}
       disabled={disabled}
@@ -151,6 +153,14 @@ export function PlainCodeField({
       onBlur={(event) => remember(event.currentTarget, false)}
     />
   );
+  return helper ? (
+    <div className="code-field" data-code-field={name} data-editor-helper>
+      {textarea}
+      {helper.action}
+    </div>
+  ) : (
+    textarea
+  );
 }
 
 function useCodeFieldHelper(props: CodeFieldProps): CodeFieldHelper | null {
@@ -158,7 +168,9 @@ function useCodeFieldHelper(props: CodeFieldProps): CodeFieldHelper | null {
   const ask = useEditorHelperAsk();
   const field = usePublishedEditorField();
   const controller = useRef<CodeFieldController | null>(null);
-  const [selected, setSelected] = useState(false);
+  const [selection, setSelection] = useState<{ name: string; value: string } | null>(null);
+  const selected = selection?.name === props.name && selection.value === props.value;
+  if (selection && !selected) setSelection(null);
   const parts = codeFieldParts(props.name);
   if (!ask || !parts) return null;
   const label = props['aria-label'] ?? parts.field;
@@ -186,7 +198,7 @@ function useCodeFieldHelper(props: CodeFieldProps): CodeFieldHelper | null {
   return {
     controller,
     report: (snapshot) => {
-      setSelected(!!snapshot.selection);
+      setSelection(snapshot.selection ? { name: props.name, value: props.value } : null);
       field.publish(describe(snapshot));
     },
     pending: field.pending,

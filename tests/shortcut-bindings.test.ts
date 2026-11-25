@@ -80,6 +80,14 @@ test('Escape does not count for 1.5 seconds after a dialog or menu closed', () =
   );
 });
 
+test('the Apple editor helper shortcut leaves Option+I available to type a circumflex', () => {
+  const bindings = defaultShortcutBindings(true);
+  expect(resolveShortcut(bindings, press('KeyI', { altKey: true }), idle)).toBeNull();
+  expect(resolveShortcut(bindings, press('KeyU', { metaKey: true, shiftKey: true }), idle)).toBe(
+    'editor.askHelper'
+  );
+});
+
 test('turning shortcuts off leaves only the theme safe mode', () => {
   const off = { enabled: false };
   expect(resolve(press('KeyK', { ctrlKey: true }), off)).toBeNull();

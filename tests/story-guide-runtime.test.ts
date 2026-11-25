@@ -386,6 +386,12 @@ test('a guide that read once is reused for the same initial input', async () => 
       loading: 'discoverable',
     },
   ];
+  source.resources.push({
+    ...source.resources[0],
+    kind: 'skill',
+    id: 'reunion-skill',
+    text: 'Use the reunion writing technique.',
+  });
   vi.mocked(fetch)
     .mockImplementationOnce(async () =>
       sse(
@@ -400,9 +406,14 @@ test('a guide that read once is reused for the same initial input', async () => 
       )
     )
     .mockImplementationOnce(async () => completed());
-  const log = observed();
+  const read = vi.fn();
+  const log = observed({ onToolDiagnostic: read });
   const first = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
   expect(first).toMatchObject({ error: null, cached: false, usage: { modelCalls: 2 } });
+  expect(read.mock.calls[0][0].result).toMatchObject({
+    total: 1,
+    items: [{ id: 'reunion', nextRead: { name: 'knowledge.read' } }],
+  });
   const second = await prepareStoryGuide(source, log.hooks, {
     cachedBrief: first.brief,
     reserveCalls: 1,

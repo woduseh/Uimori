@@ -168,7 +168,7 @@ Behavior the descriptions leave out:
 - Each resource is searched through one authored representation: the native `card` and `module` of a bot, persona or module, and the `program` and `values` of a prompt preset. Derived copies of the same text, such as `content.text` and `package.body`, are not fields, so one passage yields one hit.
 - Within a bot, persona or module, fields are searched in this order: description, personality and scenario; lorebook entries; other fields; extensions and assets. The order decides which matches reach the first page.
 - A library result carries `metadata.category`: the kind for a bot, persona or module, and `main` or `translation` for a prompt preset, whose kind is `prompt`.
-- In `scope:"chats"`, a scene inherited through a fork appears under every chat whose ancestry contains it, numbered within that chat. The source ID and `chatId` together identify a result, which is why `chatId` travels in the ref and into a narrowing search.
+- In `scope:"chats"`, a fork has its own copies of the scenes up to its branch point. Use the chat and source IDs from the selected result when narrowing a search or asking about that copy.
 - An excerpt is at most 2,000 UTF-16 units. The `following` text of the first two excerpts uses only the page budget left after the page is filled, so it never changes which items a page holds or its `nextOffset`, and it stops before the next excerpt of the same field. An answer often sits just past the matched phrase, and this saves the `data.read` round that would continue the excerpt. A `data.read` batch and a field directory page each stop at about 16,000 serialized characters; `nextIndex` and the directory's `nextOffset` report what was left out.
 
 Outside these operations:
@@ -183,7 +183,7 @@ Behavior the descriptions leave out:
 - Saving an original compiles any `<a2ui>` Story UI blocks before storage, so the stored text differs from the submitted text when it holds an `<a2ui>` block. The receipt's `expectedTextHash` is the hash of the stored text, and `storyUiFailures` lists the blocks that were saved as written because they did not compile. `scene.restore` passes stored fences through unchanged, and rollback does not compile.
 - `scene.read` returns stored text before any CBS display transformation as well as before HTML rendering.
 - A regex `scene.search` ignores zero-width matches.
-- A whole-chat `scene.search` reads only scenes the selected chat owns. `excludedScenes` counts the rest of its ancestry: scenes inherited from a fork parent, and disabled scenes unless `includeDisabled` is set.
+- A whole-chat `scene.search` reads only scenes the selected chat owns. `excludedScenes` counts the rest of its ancestry: scenes owned by another chat, and disabled scenes unless `includeDisabled` is set.
 - Translation reads use the same completed-result projection as the Reader, so an earlier completed translation stays readable while a new attempt is pending. The identity of that displayed result is distinct from the latest revision, which is what a save conflict checks.
 
 Outside these operations:

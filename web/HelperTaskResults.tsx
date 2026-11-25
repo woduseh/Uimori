@@ -37,7 +37,8 @@ import { DropdownIcon } from './ui-icons.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { usageCompact } from './usage-display.js';
-import { formatUsd } from './pricing-display.js';
+import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
+import { formatUsd, pricingRateLabels } from './pricing-display.js';
 import { TraceSummary, traceUsageTotals } from './TaskTrace.js';
 import { StoryUiThemePreview } from './StoryBoardPanel.js';
 import { ThemeContext } from './ThemeContext.js';
@@ -200,11 +201,63 @@ function settingValue(
   return typeof value === 'number' ? formatNumber(value) : value;
 }
 
-function ratesValue(rates: HelperTaskResultTarget['afterRates']) {
-  if (!rates) return t('taskTrace.catalogRates');
-  const rate = (value: number | null) =>
-    value === null ? t('visualpanels.unknown') : formatUsd(value);
-  return t('taskTrace.rates', { input: rate(rates.input), output: rate(rates.output) });
+function receiptPricing(pricing: ModelPricing | undefined, rates: TokenRates | null | undefined) {
+  return (
+    pricing ??
+    (rates === undefined
+      ? undefined
+      : rates === null
+        ? { mode: 'official' as const }
+        : { mode: 'manual' as const, rates })
+  );
+}
+
+function pricingFields(pricing: ModelPricing) {
+  const fields = new Map<string, string>();
+  fields.set(
+    t('providers.m502'),
+    pricing.mode === 'official'
+      ? t('taskTrace.catalogRates')
+      : t('visualpanels.manuallyEnteredPrice')
+  );
+  if (pricing.mode !== 'manual') return fields;
+  const addRates = (tier: string, rates: TokenRates | undefined) => {
+    if (!rates) return;
+    for (const key of ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite1h'] as const) {
+      if (rates[key] != null)
+        fields.set(
+          t('providers.m595', { value0: tier, value1: pricingRateLabels[key] }),
+          formatUsd(rates[key])
+        );
+    }
+  };
+  for (const [tier, rates, long] of [
+    ['Standard', pricing.rates, pricing.longContext],
+    ['Flex', pricing.flexRates, pricing.flexLongContext],
+    ['Batch', pricing.batchRates, pricing.batchLongContext],
+  ] as const) {
+    addRates(tier, rates);
+    if (long) {
+      fields.set(t('providers.m598', { value0: tier }), formatNumber(long.aboveInputTokens));
+      addRates(t('providers.m599', { value0: tier }), long.rates);
+    }
+  }
+  return fields;
+}
+
+function rateChanges(target: HelperTaskResultTarget) {
+  const before = receiptPricing(target.beforePricing, target.beforeRates);
+  const after = receiptPricing(target.afterPricing, target.afterRates);
+  if (!before || !after) return [];
+  const previous = pricingFields(before);
+  const current = pricingFields(after);
+  return [...new Set([...previous.keys(), ...current.keys()])]
+    .filter((key) => previous.get(key) !== current.get(key))
+    .map((label) => ({
+      label,
+      before: previous.get(label) ?? t('visualpanels.unknown'),
+      after: current.get(label) ?? t('visualpanels.unknown'),
+    }));
 }
 
 function ResultTarget({
@@ -220,6 +273,7 @@ function ResultTarget({
   const [failed, setFailed] = useState(false);
   const pending = useRef(false);
   const deleted = deletingOperations.has(operation);
+  const rates = rateChanges(target);
   async function open() {
     if (!onOpen || pending.current) return;
     pending.current = true;
@@ -258,12 +312,17 @@ function ResultTarget({
         <span>{title}</span>
         {subtitle && <small>{subtitle}</small>}
       </span>
-      {!deleted && target.beforeRates !== undefined && target.afterRates !== undefined ? (
-        <span className="helper-result-values">
-          <span>{ratesValue(target.beforeRates)}</span>
-          <span aria-hidden="true">→</span>
-          <span className="sr-only">{t('helperResults.changedTo')}</span>
-          <span>{ratesValue(target.afterRates)}</span>
+      {!deleted && rates.length > 0 ? (
+        <span className="helper-result-pricing">
+          {rates.map((change) => (
+            <span key={change.label} className="helper-result-values">
+              <strong>{change.label}</strong>
+              <span>{change.before}</span>
+              <span aria-hidden="true">→</span>
+              <span className="sr-only">{t('helperResults.changedTo')}</span>
+              <span>{change.after}</span>
+            </span>
+          ))}
         </span>
       ) : !deleted && target.before !== undefined && target.after !== undefined ? (
         <span className="helper-result-values">
@@ -488,25 +547,43 @@ export function HelperTaskResultItems({
     review,
   });
   const expandSingle = review && undoable && changes.length === 1;
+  const groups: HelperChange[][] = [];
+  const unitGroups = new Map<string, HelperChange[]>();
+  for (const change of changes) {
+    const unit = rollback.unitKey(change);
+    const group = unit ? unitGroups.get(unit) : undefined;
+    if (group) group.push(change);
+    else {
+      groups.push([change]);
+      if (unit) unitGroups.set(unit, groups.at(-1)!);
+    }
+  }
+  const lastResourceGroup = new Map<string, number>();
+  groups.forEach((group, index) => {
+    for (const change of group)
+      if (change.domain === 'resource') lastResourceGroup.set(change.targetId, index);
+  });
   return (
     <>
       {rollback.strip}
       <ul className="helper-result-list">
-        {changes.map((change, index) => (
-          <li key={`change:${change.domain}:${change.targetId}:${index}`}>
-            <HelperChangeCard
-              change={change}
-              expanded={expandSingle}
-              onOpen={onOpenChange}
-              rollback={rollback.action(change)}
-              outcome={rollback.status(change)}
-            />
-            {change.domain === 'resource' &&
-              !changes
-                .slice(index + 1)
-                .some(
-                  (later) => later.domain === 'resource' && later.targetId === change.targetId
-                ) && <ChangedStoryUiTheme themeId={change.targetId} />}
+        {groups.map((group, index) => (
+          <li key={`change:${group[0]!.domain}:${group[0]!.targetId}:${index}`}>
+            {group.map((change, position) => (
+              <HelperChangeCard
+                key={position}
+                change={change}
+                expanded={expandSingle}
+                onOpen={onOpenChange}
+                rollback={rollback.action(change)}
+                outcome={rollback.status(change)}
+              />
+            ))}
+            {[...lastResourceGroup]
+              .filter(([, last]) => last === index)
+              .map(([themeId]) => (
+                <ChangedStoryUiTheme key={themeId} themeId={themeId} />
+              ))}
           </li>
         ))}
         {data.results.flatMap((result) =>

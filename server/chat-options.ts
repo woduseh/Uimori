@@ -395,6 +395,11 @@ export function invokeHelperOptions(
     const unset = body.unset === undefined ? [] : body.unset;
     if (!Array.isArray(unset) || unset.some((id) => typeof id !== 'string'))
       throw new HttpError(400, 'Invalid unset');
+    const controls = new Set(current.controls?.map((control) => control.id));
+    for (const id of unset) {
+      if (!controls.has(id)) throw new HttpError(400, 'Unknown option to unset');
+      if (Object.hasOwn(set, id)) throw new HttpError(400, 'Cannot set and unset the same option');
+    }
     const values: Record<string, unknown> = { ...current.fixedValues, ...set };
     for (const id of unset) delete values[id];
     delete body.set;

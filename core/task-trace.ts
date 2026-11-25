@@ -64,6 +64,12 @@ export type ChatTraceCall = TraceCall & {
   error: string | null;
 };
 
+export type SceneTokens = {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  inputPartial: boolean;
+  outputPartial: boolean;
+};
 export type TraceCostTotal = {
   usd: number | null;
   subtotalUsd: number;

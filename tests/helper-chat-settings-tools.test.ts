@@ -113,6 +113,17 @@ test('options.fix set and unset change only the named options and keep the other
   ]);
   const fixed = options.get(chat.id);
   const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('unknown', 'options.fix', {
+      expectedRevision: fixed.revision,
+      binding: fixed.binding as unknown as Json,
+      unset: ['absent-option'],
+    }),
+    helperCall('ambiguous', 'options.fix', {
+      expectedRevision: fixed.revision,
+      binding: fixed.binding as unknown as Json,
+      unset: [second!.id],
+      set: { [second!.id]: other(second!) } as Json,
+    }),
     helperCall('unset', 'options.fix', {
       expectedRevision: fixed.revision,
       binding: fixed.binding as unknown as Json,
@@ -127,7 +138,8 @@ test('options.fix set and unset change only the named options and keep the other
     helperDone,
   ]);
   expect(options.get(chat.id).fixedValues).toEqual({ [second!.id]: other(second!) });
-  expect(run.finished('mixed')).toMatchObject({ denied: true });
+  for (const call of ['unknown', 'ambiguous', 'mixed'])
+    expect(run.finished(call)).toMatchObject({ denied: true });
   const read = output(run, 'unset') as { definitions?: unknown; controls?: unknown };
   expect(read.definitions).toBeDefined();
   expect(read).not.toHaveProperty('controls');
@@ -236,6 +248,10 @@ test('library.organize renames and removes a folder without deleting its items',
   });
   const revision = store.libraryOrganization.snapshot().revision;
   const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('wrong-category', 'library.organize', {
+      action: 'delete-folder',
+      body: { expectedRevision: revision, category: 'module', folderId },
+    }),
     helperCall('rename', 'library.organize', {
       action: 'update-folder',
       body: { expectedRevision: revision, category: 'bot', folderId, title: 'New name' },
@@ -246,6 +262,7 @@ test('library.organize renames and removes a folder without deleting its items',
     }),
     helperDone,
   ]);
+  expect(run.finished('wrong-category')).toMatchObject({ denied: true });
   expect(run.finished('rename')).toMatchObject({ denied: false });
   expect(run.finished('remove')).toMatchObject({ denied: false });
   expect(store.libraryOrganization.snapshot().folders.some((f) => f.id === folderId)).toBe(false);

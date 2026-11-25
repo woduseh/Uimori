@@ -50,15 +50,22 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
   };
 }
 
+export function nativeRisuVariableDefaults(
+  defaultVariables: string,
+  templateDefaultVariables?: string
+) {
+  return Object.fromEntries([
+    ...parseKeyValue(templateDefaultVariables),
+    ...parseKeyValue(defaultVariables),
+  ]);
+}
+
 function initializeNativeRisuCbs(context: NativeRisuCbsContext, issues: string[]) {
   const { variables } = context;
   const native = normalizeRisuContentSource(context.native);
   const card = native.card;
   const defaultVariables = nativeRisuSources(native).defaultVariables.text;
-  const defaults = Object.fromEntries([
-    ...parseKeyValue(context.templateDefaultVariables),
-    ...parseKeyValue(defaultVariables),
-  ]);
+  const defaults = nativeRisuVariableDefaults(defaultVariables, context.templateDefaultVariables);
   const messages = context.messages ?? [];
   const chat = {
     message: messages,

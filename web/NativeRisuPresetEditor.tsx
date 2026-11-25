@@ -106,7 +106,7 @@ export function NativeRisuPresetEditor({
   );
   function jumpTo(use: EditorJumpTarget) {
     const target = use.section as Section;
-    if (!sections.includes(target)) return;
+    if (!sections.includes(target) && target !== 'options' && target !== 'collaboration') return;
     onSelect(target);
     if (target === 'blocks' && use.item !== null) {
       setSelected(use.item);

@@ -73,8 +73,8 @@
 .code-field {
   position: relative;
 }
-.code-field[data-editor-helper] .cm-line {
-  padding-inline-end: var(--control-h);
+.code-field[data-editor-helper] {
+  padding-inline-end: calc(var(--control-h) + 8px);
 }
 .code-field > .code-field-helper {
   position: absolute;

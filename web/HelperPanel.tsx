@@ -208,6 +208,7 @@ export type HelperHandoff =
     } & HelperSelection)
   | {
       kind: 'editor';
+      snapshot: NonNullable<ReturnType<typeof captureActiveEditorContext>>;
       epoch: number;
       key: string;
       scope: HelperScope;
@@ -809,11 +810,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   useEffect(() => {
     if (props.expanded && !wasExpanded.current && scopeKey && conversation) {
       try {
-        const attached = frozenEditors[scopeKey];
-        const live = getActiveEditorContext();
-        const matchingEditor =
-          attached && live && attached.kind === live.kind && attached.targetId === live.targetId;
-        if (scopeKey in frozenEditors && (!props.returnToSidecar || !matchingEditor)) {
+        if (scopeKey in frozenEditors && !props.returnToSidecar) {
           wasExpanded.current = true;
           return;
         }
@@ -871,28 +868,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const close = useRef(props.onClose);
   close.current = props.onClose;
   const closePanel = useRef(() => props.onClose());
-  const attachedEditor = frozenEditors[scopeKey];
-  const matchingLiveEditor =
-    !props.expanded &&
-    editor &&
-    attachedEditor &&
-    editor.kind === attachedEditor.kind &&
-    editor.targetId === attachedEditor.targetId;
-  const displayEditor = matchingLiveEditor
-    ? editor
-    : props.expanded || scopeKey in frozenEditors
-      ? attachedEditor
-      : editor;
-  const currentResource =
-    props.expanded || scopeKey in frozenResources
-      ? (frozenResources[scopeKey] ?? null)
-      : (props.resource ?? null);
-  const attachedResourceRequest = useRef<HelperResourceRef | null>(null);
-  useEffect(() => {
-    if (!props.resource || !scopeKey || attachedResourceRequest.current === props.resource) return;
-    attachedResourceRequest.current = props.resource;
-    setFrozenResources((old) => ({ ...old, [scopeKey]: props.resource ?? null }));
-  }, [props.resource, scopeKey]);
+  const contextualEditor = !props.expanded && JSON.stringify(scope) === JSON.stringify(props.scope);
+  const displayEditor = contextualEditor ? editor : frozenEditors[scopeKey];
+  const currentResource = contextualEditor ? props.resource : frozenResources[scopeKey];
   const draft = drafts[scopeKey] ?? local(`helper-input:${scopeKey}`) ?? '';
   const editorFocus = currentResource ? undefined : displayEditor?.focus;
   const editorFocusId = editorFocusKey(editorFocus);
@@ -1012,7 +990,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
       } catch (cause) {
         if (!current()) return;
-        if (selected.kind !== 'selection' || !(cause instanceof ApiError) || cause.status !== 404)
+        if (
+          (selected.kind !== 'selection' && selected.kind !== 'editor') ||
+          !(cause instanceof ApiError) ||
+          cause.status !== 404
+        )
           throw cause;
         owner = await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
       }
@@ -1047,6 +1029,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         setSelections((old) => ({ ...old, [owner.id]: value }));
         saveLocal(`helper-selection:${owner.id}`, JSON.stringify(value));
       } else if (selected.kind === 'editor') {
+        setFrozenEditors((old) => ({ ...old, [owner.id]: selected.snapshot }));
+        setFrozenResources((old) => ({ ...old, [owner.id]: null }));
         const key = editorFocusKey(selected.focus);
         setEditorAsks((old) => ({ ...old, [owner.id]: key }));
         setDetachedFocus((old) => ({ ...old, [owner.id]: '' }));
@@ -1182,13 +1166,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     let captured: ReturnType<typeof captureActiveEditorContext> = null;
     if (!saved && !steerTaskId && !targeted) {
       try {
-        captured = matchingLiveEditor
-          ? captureActiveEditorContext()
-          : props.expanded || owner in frozenEditors
-            ? (frozenEditors[owner] ?? null)
-            : sameScope
-              ? captureActiveEditorContext()
-              : null;
+        captured = contextualEditor ? captureActiveEditorContext() : (frozenEditors[owner] ?? null);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
         return false;
@@ -1486,6 +1464,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       text: choice,
       scope: scopeKey,
       targetConversationId: conversation.id,
+      ...(latestTaskId ? { declinedConfirmations: declinedHelperConfirmations(latestTaskId) } : {}),
       ...(mode === 'plan' ? { mode: 'plan' as const } : {}),
     });
   }
@@ -2597,7 +2576,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         type="button"
                         className="helper-chip-action"
                         aria-label={t('editorHelper.saveEditor')}
-                        onClick={() => void saveActiveEditor()}
+                        onClick={async () => {
+                          try {
+                            await saveActiveEditor();
+                          } catch (cause) {
+                            setError(
+                              cause instanceof Error ? cause.message : uiMessage('helpers.m015')
+                            );
+                          }
+                        }}
                       >
                         {t('shared.save')}
                       </button>
