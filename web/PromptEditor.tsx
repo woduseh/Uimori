@@ -18,6 +18,7 @@ import { EditorChanges, PreviousVersionAction, RestoredVersionNotice } from './E
 import { changedValuePaths } from './editor-values.js';
 import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
+import { useShortcut } from './shortcuts.js';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { useResourceAnchor } from './resource-anchor.js';
@@ -287,7 +288,22 @@ export function PromptEditor({
     }
   }
   const saveButton = useRef<HTMLButtonElement>(null);
+  const titleField = useRef<HTMLInputElement>(null);
+  const titleErrorId = useId();
+  const [titleTouched, setTitleTouched] = useState(false);
+  const titleMissing = !state.creationPending && !draft.title.trim();
+  const titleError = titleMissing && titleTouched;
+  const editorRoot = useRef<HTMLElement>(null);
+  const requestTitle = () => {
+    setTitleTouched(true);
+    titleField.current?.focus();
+  };
+  useShortcut('editor.save', requestTitle, { scope: editorRoot, active: titleMissing });
   useEditorSaveCommand(session, () => {
+    if (titleMissing) {
+      requestTitle();
+      return Promise.resolve(false);
+    }
     if (
       [...cache.current.values()].some(
         (other) => other !== session && (other.snapshot().dirty || other.snapshot().creationPending)
@@ -441,6 +457,7 @@ export function PromptEditor({
   return (
     <ResourceEditorProvider value={shared} saveButton={saveButton}>
       <section
+        ref={editorRoot}
         className="prompt-editor"
         data-testid="prompt-editor"
         aria-label={t('prompts.uiFullPromptEditor')}
@@ -454,17 +471,30 @@ export function PromptEditor({
           header={
             <div className="prompt-editor-heading">
               {heading}
-              <h2 ref={headingRef} tabIndex={-1} className="editor-title-field">
-                <input
-                  aria-label={t('prompts.uiPromptName')}
-                  placeholder={t('prompts.uiPromptName')}
-                  required
-                  maxLength={160}
-                  disabled={busy}
-                  value={draft.title}
-                  onChange={(event) => edit({ title: event.target.value })}
-                />
-              </h2>
+              <div className="editor-title">
+                <h2 ref={headingRef} tabIndex={-1} className="editor-title-field">
+                  <input
+                    ref={titleField}
+                    aria-label={t('prompts.uiPromptName')}
+                    aria-invalid={titleError || undefined}
+                    aria-describedby={titleError ? titleErrorId : undefined}
+                    placeholder={t('prompts.uiPromptName')}
+                    required
+                    maxLength={160}
+                    disabled={busy}
+                    value={draft.title}
+                    onChange={(event) => {
+                      setTitleTouched(true);
+                      edit({ title: event.target.value });
+                    }}
+                  />
+                </h2>
+                {titleError && (
+                  <small id={titleErrorId} className="editor-title-error" role="alert">
+                    {t('library.nameRequired')}
+                  </small>
+                )}
+              </div>
               <ResourceEditorActions
                 value={shared}
                 commands={commands}
