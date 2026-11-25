@@ -15,10 +15,8 @@ import {
   NATIVE_RISU_PRESET_SKIPPED_BLOCKS,
 } from '../core/risu-native-preset.js';
 import {
-  nativeRisuExtension,
   nativeRisuRegexEntries,
-  nativeRisuSourcePaths,
-  nativeRisuTriggers,
+  nativeRisuSources,
   type RisuContentSource,
 } from '../core/risu-native.js';
 import { nativeLoreDecoratorReport } from './risu-import-lore.js';
@@ -279,10 +277,9 @@ async function triggerFindings(
   sections: Set<CodeDiagnosisSection>,
   signal?: AbortSignal
 ) {
-  const raw = list(
-    native.module ? native.module.trigger : nativeRisuExtension(native).triggerscript
-  );
-  const lowLevelAccess = nativeRisuTriggers(native)[0]?.lowLevelAccess === true;
+  const sources = nativeRisuSources(native);
+  const raw = list(sources.triggers.entries);
+  const lowLevelAccess = sources.lowLevelAccess;
   const chunks: { code: string; path: string }[] = [];
   raw.forEach((value, index) => {
     if (!isObject(value)) return;
@@ -432,8 +429,8 @@ function loreFindings(
   sections: Set<CodeDiagnosisSection>
 ) {
   const module = native.module?.lorebook != null;
-  const base = nativeRisuSourcePaths(native).lore;
-  const raw = list(native.module?.lorebook ?? object(native.card.character_book).entries);
+  const { path: base, entries } = nativeRisuSources(native).lore;
+  const raw = list(entries);
   raw.forEach((value, index) => {
     if (!isObject(value) || value.mode === 'folder') return;
     const path = `${base}/${index}`;
@@ -592,34 +589,12 @@ function presetBlockFindings(preset: JsonObject, findings: CodeFinding[]) {
   });
 }
 
-function regexPatternUsesCbs(entry: unknown) {
-  const script = object(entry);
-  if (script.ableFlag !== true) return false;
-  return [...string(script.flag).matchAll(/<([^>]+)>/gu)].some((match) =>
-    match[1]!.split(',').some((meta) => meta.trim() === 'cbs')
-  );
-}
-
 export function cbsFields(
   target: CodeDiagnosisTarget,
   input = codeDiagnosisReferenceInput(target)
 ) {
-  const regex =
-    target.kind === 'content'
-      ? list(
-          target.native.module
-            ? target.native.module.regex
-            : nativeRisuExtension(target.native).customScripts
-        )
-      : list(target.preset.regex ?? target.preset.presetRegex);
   return input.cbs.filter(
-    (field) =>
-      !(
-        field.section === 'regex' &&
-        field.field === 'in' &&
-        !regexPatternUsesCbs(regex[field.item!])
-      ) &&
-      (field.text.includes('{') || /<(?:user|char|bot)>/iu.test(field.text))
+    (field) => field.text.includes('{') || /<(?:user|char|bot)>/iu.test(field.text)
   );
 }
 
@@ -642,20 +617,14 @@ export async function diagnoseRisuCode(
       findings.push(...cbsTextFindings(field.text, field.path));
   if (target.kind === 'content') {
     const native = target.native;
-    const paths = nativeRisuSourcePaths(native);
+    const sources = nativeRisuSources(native);
     if (sections.has('assets')) assetFindings(native, cbsFields(target, input), findings);
     if (sections.has('regex') || sections.has('compatibility'))
-      regexFindings(
-        native,
-        paths.regex,
-        list(native.module ? native.module.regex : nativeRisuExtension(native).customScripts),
-        findings,
-        sections
-      );
+      regexFindings(native, sources.regex.path, list(sources.regex.entries), findings, sections);
     if (sections.has('lore') || sections.has('compatibility'))
       loreFindings(native, findings, sections);
     if (sections.has('triggers') || sections.has('lua') || sections.has('compatibility'))
-      await triggerFindings(native, paths.triggers, findings, sections, signal);
+      await triggerFindings(native, sources.triggers.path, findings, sections, signal);
   } else {
     const preset = target.preset;
     const key = preset.regex == null && preset.presetRegex != null ? 'presetRegex' : 'regex';

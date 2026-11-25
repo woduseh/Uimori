@@ -45,10 +45,79 @@ const records = (value: unknown): Record<string, unknown>[] =>
     : [];
 export const nativeRisuExtension = (native: RisuContentSource) =>
   object(object(native.card.extensions).risuai);
+const string = (value: unknown) => (typeof value === 'string' ? value : '');
+export type NativeRisuTextSource = { field: string; path: string; text: string };
+export function nativeRisuSources(native: RisuContentSource) {
+  const module = native.module;
+  const standalone = !Object.keys(native.card).length && !!module;
+  const extension = nativeRisuExtension(native);
+  const base = '/card/extensions/risuai';
+  const moduleToggles = standalone || module?.customModuleToggle != null;
+  return {
+    standalone,
+    root: standalone ? '/module' : '/card',
+    lore:
+      module?.lorebook != null
+        ? { path: '/module/lorebook', entries: module.lorebook }
+        : {
+            path: '/card/character_book/entries',
+            entries: object(native.card.character_book).entries,
+          },
+    regex: module
+      ? { path: '/module/regex', entries: module.regex }
+      : { path: `${base}/customScripts`, entries: extension.customScripts },
+    triggers: module
+      ? { path: '/module/trigger', entries: module.trigger }
+      : { path: `${base}/triggerscript`, entries: extension.triggerscript },
+    lowLevelAccess: (Object.keys(native.card).length ? extension : module)?.lowLevelAccess === true,
+    backgrounds: [
+      ...(standalone
+        ? []
+        : [
+            {
+              field: 'backgroundHTML',
+              path: `${base}/backgroundHTML`,
+              text: string(extension.backgroundHTML),
+            },
+          ]),
+      ...(module
+        ? [
+            {
+              field: 'backgroundEmbedding',
+              path: '/module/backgroundEmbedding',
+              text: string(module.backgroundEmbedding),
+            },
+          ]
+        : []),
+    ] satisfies NativeRisuTextSource[],
+    defaultVariables: (standalone
+      ? {
+          field: 'defaultVariables',
+          path: '/module/defaultVariables',
+          text: string(module.defaultVariables),
+        }
+      : {
+          field: 'defaultVariables',
+          path: `${base}/defaultVariables`,
+          text: string(extension.defaultVariables),
+        }) satisfies NativeRisuTextSource,
+    toggles: (moduleToggles
+      ? {
+          field: 'customModuleToggle',
+          path: '/module/customModuleToggle',
+          text: string(module?.customModuleToggle),
+        }
+      : {
+          field: 'toggles',
+          path: `${base}/toggles`,
+          text: string(extension.toggles),
+        }) satisfies NativeRisuTextSource,
+  };
+}
 export function nativeRisuRegexEntries(
   native: RisuContentSource
 ): { script: NativeRisuRegex; index: number }[] {
-  const raw = native.module ? native.module.regex : nativeRisuExtension(native).customScripts;
+  const raw = nativeRisuSources(native).regex.entries;
   return (Array.isArray(raw) ? raw : []).flatMap((item, index) =>
     item &&
     typeof item === 'object' &&
@@ -64,36 +133,17 @@ export function nativeRisuRegex(native: RisuContentSource): NativeRisuRegex[] {
   return nativeRisuRegexEntries(native).map((entry) => entry.script);
 }
 export function nativeRisuTriggers(native: RisuContentSource): Record<string, unknown>[] {
-  const lowLevelAccess =
-    (Object.keys(native.card).length ? nativeRisuExtension(native) : native.module)
-      ?.lowLevelAccess === true;
-  return records(
-    native.module ? native.module.trigger : nativeRisuExtension(native).triggerscript
-  ).map((trigger) => ({ ...trigger, lowLevelAccess }));
+  const { triggers, lowLevelAccess } = nativeRisuSources(native);
+  return records(triggers.entries).map((trigger) => ({ ...trigger, lowLevelAccess }));
 }
 export function nativeRisuLore(native: RisuContentSource): Record<string, unknown>[] {
-  return records(native.module?.lorebook ?? object(native.card.character_book).entries);
-}
-export function nativeRisuSourcePaths(native: RisuContentSource) {
-  const standalone = !Object.keys(native.card).length && !!native.module;
-  const extension = '/card/extensions/risuai';
-  return {
-    root: standalone ? '/module' : '/card',
-    lore: native.module?.lorebook != null ? '/module/lorebook' : '/card/character_book/entries',
-    regex: native.module ? '/module/regex' : `${extension}/customScripts`,
-    triggers: native.module ? '/module/trigger' : `${extension}/triggerscript`,
-    background: standalone ? '/module/backgroundEmbedding' : `${extension}/backgroundHTML`,
-    defaultVariables: standalone ? '/module/defaultVariables' : `${extension}/defaultVariables`,
-    toggles: standalone ? '/module/customModuleToggle' : `${extension}/toggles`,
-  };
+  return records(nativeRisuSources(native).lore.entries);
 }
 export function nativeRisuBackground(native: RisuContentSource): string {
-  const value = nativeRisuExtension(native).backgroundHTML;
-  return typeof value === 'string' ? value : '';
+  return string(nativeRisuExtension(native).backgroundHTML);
 }
 export function nativeRisuModuleBackground(native: RisuContentSource): string {
-  const value = native.module?.backgroundEmbedding;
-  return typeof value === 'string' ? value : '';
+  return string(native.module?.backgroundEmbedding);
 }
 export function joinRisuModuleBackgrounds(backgrounds: readonly string[]): string {
   return backgrounds.filter(Boolean).join('\n\n');

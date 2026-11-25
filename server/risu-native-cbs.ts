@@ -5,8 +5,8 @@ import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { parseKeyValue, type Database } from '../third_party/risuai/cad8595a/cbs-support.js';
 import type { character, RisuModule } from '../third_party/risuai/cad8595a/types.js';
 import {
-  nativeRisuExtension,
   nativeRisuLore,
+  nativeRisuSources,
   normalizeRisuContentSource,
   type RisuContentSource,
 } from '../core/risu-native.js';
@@ -54,10 +54,10 @@ function initializeNativeRisuCbs(context: NativeRisuCbsContext, issues: string[]
   const { variables } = context;
   const native = normalizeRisuContentSource(context.native);
   const card = native.card;
-  const extension = nativeRisuExtension(native);
+  const defaultVariables = nativeRisuSources(native).defaultVariables.text;
   const defaults = Object.fromEntries([
     ...parseKeyValue(context.templateDefaultVariables),
-    ...parseKeyValue(string(extension.defaultVariables)),
+    ...parseKeyValue(defaultVariables),
   ]);
   const messages = context.messages ?? [];
   const chat = {
@@ -91,7 +91,7 @@ function initializeNativeRisuCbs(context: NativeRisuCbsContext, issues: string[]
     ]),
     prebuiltAssetCommand: false,
     prebuiltAssetExclude: [],
-    defaultVariables: string(extension.defaultVariables),
+    defaultVariables,
   } as unknown as character;
   const database: Database = {
     characters: [chara],

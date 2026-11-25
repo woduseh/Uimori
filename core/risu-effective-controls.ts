@@ -1,5 +1,5 @@
 import { nativeRisuPresetControls, nativeRisuToggleControls } from './risu-native-preset.js';
-import { nativeRisuExtension } from './risu-native.js';
+import { nativeRisuSources } from './risu-native.js';
 import type { ProfileSnapshot } from './product.js';
 import type { PromptControl, PromptValue, RisuPrompt } from './risu-prompt.js';
 
@@ -19,10 +19,7 @@ export function effectiveRisuControls(
       (item) => item.id === ref.id && item.revision === ref.revision
     )?.nativeRisu;
     if (!native) continue;
-    const declaration = native.module?.customModuleToggle ?? nativeRisuExtension(native).toggles;
-    for (const control of nativeRisuToggleControls(
-      typeof declaration === 'string' ? declaration : ''
-    )) {
+    for (const control of nativeRisuToggleControls(nativeRisuSources(native).toggles.text)) {
       const existing = seen.get(control.id);
       if (existing) {
         if (
@@ -38,6 +35,22 @@ export function effectiveRisuControls(
     }
   }
   return result;
+}
+
+export function declaredToggleVariables(
+  declaration: string,
+  valuesByKey: Record<string, string>
+): Record<string, string> {
+  const controls = nativeRisuToggleControls(declaration);
+  return nativeToggleVariables(
+    controls,
+    Object.fromEntries(
+      controls.flatMap((control) => {
+        const key = control.nativeKey ?? control.id;
+        return Object.hasOwn(valuesByKey, key) ? [[control.id, valuesByKey[key]!]] : [];
+      })
+    )
+  );
 }
 
 export function nativeToggleVariables(

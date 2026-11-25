@@ -5,7 +5,8 @@ import {
   nativeRisuContentReferenceInput,
   nativeRisuPresetReferenceInput,
 } from '../core/cbs-references.js';
-import type { RisuContentSource } from '../core/risu-native.js';
+import { nativeRisuSources, type RisuContentSource } from '../core/risu-native.js';
+import { effectiveRisuControls } from '../core/risu-effective-controls.js';
 
 const native = (card: Record<string, unknown>, module?: Record<string, unknown>) =>
   ({
@@ -157,6 +158,56 @@ describe('content cross references', () => {
       'variables',
     ]);
     expect(entry(result, 'global', 'toggle_m')?.uses[0]?.field).toBe('customModuleToggle');
+  });
+
+  test('a card with an embedded module indexes the sources the runtime uses', () => {
+    const charx = native(
+      {
+        name: 'Bot',
+        first_mes: '{{getglobalvar::toggle_mode}} {{getglobalvar::toggle_card}}',
+        extensions: { risuai: { toggles: 'card=Card', defaultVariables: 'bg=1' } },
+      },
+      {
+        customModuleToggle: 'mode=Mode',
+        backgroundEmbedding: '<p>{{getvar::bg}}</p>',
+        defaultVariables: 'ignored=1',
+        regex: [
+          { type: 'editdisplay', in: '{{getvar::plain}}', out: 'x' },
+          {
+            type: 'editdisplay',
+            in: '{{getvar::flagged}}',
+            out: 'y',
+            ableFlag: true,
+            flag: '<cbs>g',
+          },
+        ],
+      }
+    );
+    const sources = nativeRisuSources(charx);
+    expect(sources.toggles.path).toBe('/module/customModuleToggle');
+    expect(sources.defaultVariables.path).toBe('/card/extensions/risuai/defaultVariables');
+    expect(sources.backgrounds.map((item) => item.path)).toEqual([
+      '/card/extensions/risuai/backgroundHTML',
+      '/module/backgroundEmbedding',
+    ]);
+    expect(
+      effectiveRisuControls({
+        packageAttachments: [{ id: 'bot', revision: 1, role: 'bot' }],
+        packages: [{ id: 'bot', revision: 1, nativeRisu: charx } as never],
+      }).map((control) => control.nativeKey ?? control.id)
+    ).toEqual(['mode']);
+    const result = index(charx);
+    expect(result.findings).toEqual([
+      { code: 'read-without-default', scope: 'chat', name: 'flagged', certain: true },
+      { code: 'toggle-undefined', scope: 'global', name: 'toggle_card', certain: true },
+    ]);
+    expect(entry(result, 'chat', 'bg')?.uses.map((use) => [use.field, use.path])).toEqual([
+      ['backgroundEmbedding', '/module/backgroundEmbedding'],
+      ['defaultVariables', '/card/extensions/risuai/defaultVariables'],
+    ]);
+    expect(entry(result, 'chat', 'plain')).toBeUndefined();
+    expect(entry(result, 'chat', 'flagged')?.uses[0]).toMatchObject({ field: 'in' });
+    expect(entry(result, 'chat', 'ignored')).toBeUndefined();
   });
 
   test('reuses analysis for unchanged text', () => {
