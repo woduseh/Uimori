@@ -142,6 +142,11 @@ test('change views diff text, keep scalars as values, summarize images and repor
     type: 'text',
     diff: { mode: 'prose', added: 1, removed: 1 },
   });
+  const [bracketed] = view(
+    card({ first_mes: '[Start New Session]' }),
+    card({ first_mes: '[Start New Session] 덧붙인 글' })
+  );
+  expect(bracketed).toMatchObject({ type: 'text', diff: { mode: 'prose', added: 2, removed: 0 } });
   expect(view({ preset: { temperature: 80 } }, { preset: { temperature: 95 } })).toEqual([
     { type: 'value', before: 80, after: 95 },
   ]);

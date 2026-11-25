@@ -348,9 +348,10 @@ export function editorChangeView(
     return { type: 'summary', before: count(before), after: count(after) };
   }
   const text = (left: string, right: string) => {
-    const sample = right || left;
-    const mode = CODE_PATH.test(path) || /^\s*[{[<]/u.test(sample) ? 'code' : 'prose';
-    return { type: 'text' as const, diff: diffText(left, right, mode, limits) };
+    return {
+      type: 'text' as const,
+      diff: diffText(left, right, CODE_PATH.test(path) ? 'code' : 'prose', limits),
+    };
   };
   if (item && !change.field.length && kind !== 'changed') {
     const value = kind === 'added' ? after : before;
