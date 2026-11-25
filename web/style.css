@@ -50,6 +50,7 @@
   --form-w: 880px;
   --editor-list-w: 224px;
   --studio-rail-w: 200px;
+  --studio-meta-w: 280px;
   --settings-w: 960px;
   --settings-dialog-w: min(1180px, 92vw);
   --settings-dialog-h: min(820px, calc(var(--app-height, 100dvh) * 0.88));

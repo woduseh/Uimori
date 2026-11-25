@@ -112,7 +112,7 @@ for (const { flow, viewport } of flows) {
     }
     const editor = page.getByTestId(prompt ? 'prompt-editor' : 'library-panel');
     if (prompt) await selectEditorSection(editor, '기본 옵션');
-    const name = editor.getByLabel(prompt ? '프롬프트 이름' : 'Risu 자료 이름', { exact: true });
+    const name = editor.getByLabel(prompt ? /^프롬프트 이름$/u : /^(봇|페르소나|모듈) 이름$/u);
     await name.fill(`${title} edited`);
     const guard = page.getByRole(flow === 'global-navigation' ? 'dialog' : 'alertdialog', {
       name:

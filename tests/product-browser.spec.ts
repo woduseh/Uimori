@@ -7,6 +7,7 @@ import {
   selectSettingsSection,
   startProviderConnection,
   editLibraryContent,
+  selectEditorSection,
   selectContent,
   createPromptChoice,
   navigationAction,
@@ -172,6 +173,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   const library = await openDetails(page, 'library-panel');
   await library.getByRole('tab', { name: '모듈', exact: true }).click();
   await editLibraryContent(page, `Mira ${unique}`);
+  await selectEditorSection(page, '기본 정보');
   await page
     .getByLabel('카드 설명', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');

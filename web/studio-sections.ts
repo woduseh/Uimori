@@ -370,6 +370,18 @@ export function placeSections<Id extends string, Doc>(
     }));
 }
 
+export function defaultContentSection(
+  content: RisuContent,
+  kind: Exclude<StudioKind, 'prompt'>
+): ContentSection {
+  const order = kind === 'module' ? MODULE_SECTION_ORDER : [];
+  return (
+    placeSections(contentSectionRegistry, content, kind, 'basic', [], order).find(({ id }) =>
+      definition(contentSectionRegistry, id).defaultFor.includes(kind)
+    )?.id ?? 'basic'
+  );
+}
+
 function resolve<Id extends string, Doc>(
   section: StudioSectionDefinition<Id, Doc>,
   doc: Doc,

@@ -36,7 +36,7 @@ async function openEditor(page: Page, title: string) {
   await navigationAction(page, '서재');
   await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(title);
   await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
-  await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
 }
 async function save(page: Page): Promise<Content> {
   const response = page.waitForResponse(
@@ -71,7 +71,7 @@ for (const width of [412]) {
       page.getByRole('alertdialog', { name: '미저장 자료 확인', exact: true })
     ).toBeHidden();
     await openEditor(page, original.title);
-    await page.getByLabel('Risu 자료 이름', { exact: true }).fill(`${original.title} changed`);
+    await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(`${original.title} changed`);
     const saved = await save(page);
     expect(saved.title).toBe(`${original.title} changed`);
     await selectEditorSection(page, 'JSON 소스');
@@ -82,7 +82,7 @@ for (const width of [412]) {
     await raw.fill(JSON.stringify(card, null, 2));
     expect((await save(page)).text).toBe(card.description);
     await selectEditorSection(page, '기본 정보');
-    await page.getByLabel('Risu 자료 이름', { exact: true }).fill('Recovered local input');
+    await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill('Recovered local input');
     await expect
       .poll(() =>
         page.evaluate(async (text) => {
@@ -104,13 +104,13 @@ for (const width of [412]) {
       )
       .toBe(true);
     await page.reload();
-    if (!(await page.getByLabel('Risu 자료 이름', { exact: true }).isVisible()))
+    if (!(await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).isVisible()))
       await openEditor(page, saved.title);
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(
+    await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(
       'Recovered local input'
     );
     await discardEdits(page);
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(saved.title);
+    await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(saved.title);
     expect((await (await request.get(`/api/content/${saved.id}`)).json()).title).toBe(saved.title);
     expect(paths.some((path) => path.includes('edit-draft'))).toBe(false);
     expect(errors).toEqual([]);
@@ -336,9 +336,9 @@ test('PERSONAL saving one tab preserves another tab recovery through reload', as
   try {
     await openEditor(page, original.title);
     await openEditor(other, original.title);
-    await other.getByLabel('Risu 자료 이름', { exact: true }).fill(savedTitle);
+    await other.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(savedTitle);
     await expect.poll(storedTitle).toBe(savedTitle);
-    await page.getByLabel('Risu 자료 이름', { exact: true }).fill(recoveredTitle);
+    await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(recoveredTitle);
     await expect.poll(storedTitle).toBe(recoveredTitle);
     await save(other);
     await expect(
@@ -348,15 +348,15 @@ test('PERSONAL saving one tab preserves another tab recovery through reload', as
     ).toBeVisible();
     expect(await storedTitle()).toBe(recoveredTitle);
     await page.reload();
-    if (!(await page.getByLabel('Risu 자료 이름', { exact: true }).isVisible()))
+    if (!(await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).isVisible()))
       await openEditor(page, savedTitle);
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(recoveredTitle);
+    await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(recoveredTitle);
     await page.screenshot({
       path: info.outputPath('personal-other-tab-recovery-restored.png'),
       fullPage: true,
     });
     await discardEdits(page);
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(savedTitle);
+    await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(savedTitle);
     await expect.poll(storedTitle).toBeUndefined();
   } finally {
     await other.close();

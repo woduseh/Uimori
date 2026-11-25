@@ -325,8 +325,55 @@
   align-self: flex-end;
 }
 
-.native-authoring > .native-form-stack {
+.native-editor .native-basic-body {
+  max-width: calc(var(--form-w) + var(--studio-meta-w) + 32px);
+  container-type: inline-size;
+}
+.native-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--studio-meta-w);
+  gap: 32px;
+  min-width: 0;
+}
+.native-overview-meta {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.native-overview-meta .package-portrait-editor {
+  grid-template-columns: minmax(0, 1fr);
+}
+.native-overview-meta .package-portrait-media {
+  justify-self: start;
+}
+.native-authoring {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
   padding-top: 16px;
+  border-top: var(--hairline) solid var(--line);
+}
+.native-authoring > h3 {
+  margin: 0;
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+@container (max-width: 760px) {
+  .native-overview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    gap: 24px;
+  }
+  .native-overview-meta {
+    display: contents;
+  }
+  .native-overview-meta .package-portrait-editor {
+    order: -1;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
 }
 .library-page-editing .native-panel-fields:has(> .native-basic-body:not([hidden])) {
   flex: 1 0 auto;
@@ -334,6 +381,7 @@
   flex-direction: column;
 }
 .library-page-editing .native-basic-body:not([hidden]),
+.library-page-editing .native-basic-body .native-overview,
 .library-page-editing .native-basic-body .native-description-field,
 .library-page-editing .native-basic-body .native-description-field > label {
   flex: 1 0 auto;

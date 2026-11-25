@@ -32,6 +32,10 @@
 .editor-studio-header > .dismissible-error {
   margin: 8px 0;
 }
+.editor-studio-header > .editor-title-error {
+  margin: 8px 0;
+  font-size: var(--font-small);
+}
 .library-page-editing .editor-studio-header > :is(.prompt-editor-heading, .library-detail-heading) {
   display: flex;
   align-items: center;

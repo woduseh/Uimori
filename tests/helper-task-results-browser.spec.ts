@@ -1394,7 +1394,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   ).toBe(true);
 
   await selectEditorSection(library, '기본 정보');
-  const name = library.getByRole('textbox', { name: 'Risu 자료 이름', exact: true });
+  const name = library.getByRole('textbox', { name: /^(봇|페르소나|모듈) 이름$/u });
   await name.fill('저장하지 않은 이름');
   await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
   await results

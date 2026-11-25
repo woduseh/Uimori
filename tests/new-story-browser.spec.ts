@@ -845,7 +845,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await page.goto('/');
   await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
   const library = page.getByTestId('library-panel');
-  await expect(library.getByLabel('Risu 자료 이름')).toHaveValue(title);
+  await expect(library.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(title);
   await expect(library.getByTestId('package-fields')).toHaveCount(0);
   await selectEditorSection(library, '첫 메시지');
   await library.getByLabel('기본 첫 메시지', { exact: true }).fill('<selector> Edited');

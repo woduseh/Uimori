@@ -71,7 +71,11 @@ async function editorFits(
           Math.abs(body!.width - outer!.width),
           'list section fills the canvas'
         ).toBeLessThanOrEqual(1);
-      else expect(body!.width).toBeLessThanOrEqual(formMaxWidth);
+      else {
+        const overview = await form.evaluate((node) => node.matches('.native-basic-body'));
+        const metaColumn = 280 + 32;
+        expect(body!.width).toBeLessThanOrEqual(formMaxWidth + (overview ? metaColumn : 0));
+      }
       expect(
         Math.abs(body!.x + body!.width / 2 - (outer!.x + outer!.width / 2)),
         'single-column form is centered'
@@ -397,7 +401,7 @@ for (const viewport of viewports) {
       const save = editor.getByRole('button', { name: '변경사항 저장', exact: true });
       const editedName = title + ' 편집됨';
       const opening = '<b>{{char}}</b> greets {{user}}.\n{{getvar::place}}';
-      await editor.getByLabel('Risu 자료 이름', { exact: true }).fill(editedName);
+      await editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(editedName);
       await openMenu(editor, '자료 메뉴');
       await expect(
         editor.getByRole('button', { name: 'CHARX 내보내기', exact: true })
@@ -409,7 +413,7 @@ for (const viewport of viewports) {
       await selectEditorSection(editor, '첫 메시지');
       await editor.getByLabel('기본 첫 메시지', { exact: true }).fill(opening);
       await selectEditorSection(editor, '기본 정보');
-      await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(editedName);
+      await expect(editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(editedName);
       await selectEditorSection(editor, '첫 메시지');
       await expect(editor.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue(opening);
       await editorFits(page, editor, save);

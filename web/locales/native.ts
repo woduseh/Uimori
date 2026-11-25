@@ -1,16 +1,4 @@
 export const messages = {
-  'native.creatorSummary': {
-    ko: '제작자 {creator}',
-    en: 'By {creator}',
-    ja: '制作者 {creator}',
-    zh: '作者 {creator}',
-  },
-  'native.versionSummary': {
-    ko: '버전 {version}',
-    en: 'Version {version}',
-    ja: 'バージョン {version}',
-    zh: '版本 {version}',
-  },
   'native.characterCount': {
     ko: '{count, number}자',
     en: '{count, plural, one {# character} other {# characters}}',
@@ -1774,12 +1762,6 @@ export const messages = {
     en: 'Review source',
     ja: 'ソースを確認',
     zh: '查看源码',
-  },
-  'native.text_d63d79b1e2': {
-    ko: 'Risu 자료 이름',
-    en: 'Risu resource name',
-    ja: 'Risu資料名',
-    zh: 'Risu资料名称',
   },
   'native.text_9e7348ca61': {
     ko: '모듈 설명',

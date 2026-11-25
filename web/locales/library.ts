@@ -89,6 +89,12 @@ export const messages = {
     ja: '複製',
     zh: '复制',
   },
+  'library.nameRequired': {
+    ko: '이름을 입력해 주세요.',
+    en: 'Enter a name.',
+    ja: '名前を入力してください。',
+    zh: '请输入名称。',
+  },
   'library.images': {
     ko: '이미지',
     en: 'Images',

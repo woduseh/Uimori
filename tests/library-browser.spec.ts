@@ -490,7 +490,7 @@ test('LIBUI10 the library root keeps its create action when every resource is in
     const create = panel.getByRole('button', { name: '새 페르소나', exact: true });
     await expect(create).toHaveCount(1);
     await create.click();
-    await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+    await expect(panel.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
   } finally {
     await move(null);
   }
@@ -505,7 +505,7 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
   await navigationAction(page, '서재');
   const panel = page.getByTestId('library-panel');
   await createLibraryContent(page);
-  const name = panel.getByLabel('Risu 자료 이름', { exact: true });
+  const name = panel.getByLabel(/^(봇|페르소나|모듈) 이름$/u);
   const title = `EDITORRECOVERY2 ${crypto.randomUUID()}`;
   await name.fill(title);
   const submissions: Record<string, unknown>[] = [];
@@ -682,7 +682,7 @@ test('LIBCLONE01 a reclassified content copy safely shortens its maximum-length 
   const result = (await response.json()) as { saved: Content };
   const copy = result.saved;
   const editor = page.getByRole('region', { name: '자료 상세', exact: true });
-  await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(copyTitle);
+  await expect(editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(copyTitle);
   expect(copy.title).toBe(copyTitle);
   expect(copy.id).not.toBe(source.id);
   expect(copy.kind).toBe('bot');
@@ -737,7 +737,7 @@ test('LIBCLONE03 accepted content clone opens its saved copy when placement and 
   expect(response.ok(), await response.text()).toBe(true);
   const copy = (await response.json()).saved as Content;
   const editor = page.getByRole('region', { name: '자료 상세', exact: true });
-  await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(`${title} 사본`);
+  await expect(editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(`${title} 사본`);
   const warning = page.getByRole('alert').filter({ hasText: '자료는 복제됐지만' });
   await expect(warning).toContainText('폴더에 배치하지 못했어요.');
   await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
@@ -994,7 +994,7 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
   await editLibraryContent(page, title);
   const editor = page.getByRole('region', { name: '자료 상세', exact: true });
   const updated = `${title} edited`;
-  await editor.getByLabel('Risu 자료 이름', { exact: true }).fill(updated);
+  await editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(updated);
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -1021,7 +1021,7 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
     await editor.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     expect((await savedResponse).ok()).toBe(true);
     await refreshRequested;
-    await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toBeEnabled();
+    await expect(editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeEnabled();
     await expect(editor.getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled();
     const saved = await (await request.get(`/api/content/${content.id}`)).json();
     expect(saved.title).toBe(updated);
@@ -1036,7 +1036,7 @@ test('SAVEPERF saved bot unlocks before library refresh and retains success on r
     await page.clock.fastForward(4500);
     await expect(completion).toHaveCount(0);
     await expect(warning).toBeVisible();
-    await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toBeEnabled();
+    await expect(editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeEnabled();
     expect((await (await request.get(`/api/content/${content.id}`)).json()).revision).toBe(
       saved.revision
     );

@@ -138,7 +138,7 @@ test('TGUIDE invalid incomplete row stays editable; only bot editor exposes the 
   await navigationAction(page, '페르소나');
   await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(persona.title);
   await page.getByRole('button', { name: `${persona.title} 편집`, exact: true }).click();
-  await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
   await selectEditorSection(page, '번역 지침');
   const personaGuide = page.getByLabel('봇 번역 지침', { exact: true });
   await personaGuide.fill('봇으로 사용할 때만 적용할 페르소나 자료의 번역 지침');

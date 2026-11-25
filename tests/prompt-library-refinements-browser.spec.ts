@@ -95,7 +95,7 @@ test('PLR02 every package category is editable from card and list controls', asy
         await menu.click();
         await menu.locator('..').getByRole('button', { name: '편집', exact: true }).click();
       }
-      await expect(library.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(item.title);
+      await expect(library.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(item.title);
       await expect(library.getByLabel('카드 설명', { exact: true })).toHaveValue('Synthetic only.');
       await library.getByRole('button', { name: '서재 목록', exact: true }).click();
     }

@@ -2749,7 +2749,7 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
     await navigationAction(page, '서재');
     await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(changedTitle);
     await page.getByRole('button', { name: `${changedTitle} 편집`, exact: true }).click();
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+    await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
   };
   const openEditorHelper = async () => {
     await page
@@ -2782,7 +2782,7 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
     expect(restored.ok(), await restored.text()).toBe(true);
   });
   await openEditor();
-  const draft = page.getByLabel('Risu 자료 이름', { exact: true });
+  const draft = page.getByLabel(/^(봇|페르소나|모듈) 이름$/u);
   await draft.fill('지키려는 미저장 입력');
   const panel = await openEditorHelper();
   const results = panel.getByTestId('helper-task-results');

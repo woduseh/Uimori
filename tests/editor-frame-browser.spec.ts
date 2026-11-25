@@ -199,7 +199,7 @@ test('EFRAME02 save is emphasized only with unsaved changes and chat start stays
   await selectEditorSection(page, '로어북');
   await expect(start).toBeInViewport();
   await selectEditorSection(page, '기본 정보');
-  await page.getByLabel('Risu 자료 이름', { exact: true }).fill(`${title} 수정`);
+  await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(`${title} 수정`);
   await expect(header.locator('.resource-editor-status').getByRole('status')).toHaveText(
     '미저장 변경'
   );
@@ -371,7 +371,7 @@ test('EFRAME05 collection tabs name their current counts and follow local edits'
   await expect(tabs.getByRole('tab', { name: '에셋 2개', exact: true })).toHaveText('에셋2');
 });
 
-test('EFRAME06 basic info folds the authoring fields, fills the height and syncs the header name', async ({
+test('EFRAME06 basic info puts the description beside a meta column and edits the name only in the header', async ({
   page,
   request,
 }) => {
@@ -387,40 +387,77 @@ test('EFRAME06 basic info folds the authoring fields, fills the height and syncs
     .locator('.destination-scroll')
     .evaluate((node) => node.scrollHeight - node.clientHeight);
   expect(overflow).toBeLessThanOrEqual(1);
+  const portrait = page.getByRole('region', { name: '대표 이미지 설정', exact: true });
+  const credits = page.getByRole('region', { name: '제작 정보', exact: true });
+  const portraitBox = (await portrait.boundingBox())!;
+  expect(portraitBox.x, 'meta column sits right of the description').toBeGreaterThan(
+    box!.x + box!.width
+  );
+  expect((await credits.boundingBox())!.y).toBeGreaterThan(portraitBox.y);
+  await expect(portrait.locator('.native-identity-meta').first()).toHaveText('봇');
   await capture(page, 'eframe06-basic-1440');
   await description.fill('가'.repeat(20));
   await expect(page.getByText('20자', { exact: true })).toBeVisible();
 
-  const authoring = page.locator('details.native-authoring');
-  await expect(authoring).not.toHaveAttribute('open', '');
-  await expect(page.getByLabel('제작자 코멘트', { exact: true })).toBeHidden();
-  await authoring.getByText('제작 정보', { exact: true }).click();
-  await page.getByLabel('제작자 코멘트', { exact: true }).fill('합성 메모');
-  await page.getByLabel('제작자', { exact: true }).fill('합성 제작자');
-  await page.getByLabel('자료 버전', { exact: true }).fill('1.2');
-  const portrait = page.getByRole('region', { name: '대표 이미지 설정', exact: true });
-  await expect(portrait.getByText('제작자 합성 제작자', { exact: true })).toBeVisible();
-  await expect(portrait.getByText('버전 1.2', { exact: true })).toBeVisible();
-
+  await credits.getByLabel('제작자 코멘트', { exact: true }).fill('합성 메모');
+  await credits.getByLabel('제작자', { exact: true }).fill('합성 제작자');
+  await credits.getByLabel('자료 버전', { exact: true }).fill('1.2');
+  await expect(page.getByRole('textbox', { name: '이름', exact: true })).toHaveCount(0);
   const header = page.getByLabel('봇 이름', { exact: true });
-  const field = page.getByLabel('Risu 자료 이름', { exact: true });
   await expect(header).toHaveValue(title);
   await header.fill(`${title} 머리글`);
-  await expect(field).toHaveValue(`${title} 머리글`);
-  await field.fill(`${title} 본문`);
-  await expect(header).toHaveValue(`${title} 본문`);
   const saved = waitForContentSave(page);
   await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   const result = await saved;
   const card = result.package!.nativeRisu.card;
-  expect(result.title).toBe(`${title} 본문`);
-  expect(card.name).toBe(`${title} 본문`);
+  expect(result.title).toBe(`${title} 머리글`);
+  expect(card.name).toBe(`${title} 머리글`);
   expect(card.creator_notes).toBe('합성 메모');
   expect(card.creator).toBe('합성 제작자');
   expect(card.character_version).toBe('1.2');
 
-  await openBot(page, `${title} 본문`);
-  await expect(page.locator('details.native-authoring')).not.toHaveAttribute('open', '');
+  await page.setViewportSize({ width: 700, height: 900 });
+  const narrowDescription = (await description.boundingBox())!;
+  const narrowPortrait = (await portrait.boundingBox())!;
+  expect(narrowPortrait.y + narrowPortrait.height).toBeLessThanOrEqual(narrowDescription.y);
+  expect((await credits.boundingBox())!.y).toBeGreaterThan(narrowDescription.y);
+  expect(
+    await page
+      .locator('.editor-studio-canvas')
+      .evaluate((node) => node.scrollWidth - node.clientWidth)
+  ).toBeLessThanOrEqual(0);
+});
+
+test('EFRAME15 a new resource focuses the header name and explains an empty name once it is edited or saved', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  const library = page.getByTestId('library-panel');
+  await library.getByRole('tab', { name: '모듈', exact: true }).click();
+  await library.getByRole('button', { name: '새 모듈', exact: true }).click();
+  const name = library.getByLabel('모듈 이름', { exact: true });
+  await expect(name).toBeFocused();
+  await expect(editorTab(library, '로어북')).toHaveAttribute('aria-selected', 'true');
+  const alert = library.getByRole('alert').filter({ hasText: '이름을 입력해 주세요.' });
+  await expect(alert).toHaveCount(0);
+  const register = library.getByRole('button', { name: '자료 등록', exact: true });
+  await expect(register).toBeDisabled();
+  await editorTab(library, '로어북').focus();
+  await expect(alert).toHaveCount(0);
+  await page.keyboard.press('Control+s');
+  await expect(name).toBeFocused();
+  await expect(alert).toBeVisible();
+  await expect(name).toHaveAttribute('aria-invalid', 'true');
+  await expect(name).toHaveAccessibleDescription('이름을 입력해 주세요.');
+  await capture(page, 'eframe15-new-module-1440');
+  await name.fill('합성 모듈');
+  await expect(alert).toHaveCount(0);
+  await expect(name).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(register).toBeEnabled();
+  await name.fill('');
+  await expect(alert).toBeVisible();
+  await expect(register).toBeDisabled();
 });
 
 test('EFRAME07 the asset grid keeps its columns, shows an inspector hint and offers tile actions by keyboard', async ({
@@ -824,6 +861,7 @@ test('EFRAME14 the rail follows the content kind, keeps sections with data and o
   await open('모듈', module);
   const moduleRail = (await editorSectionPlacement(page)).shown;
   expect(moduleRail[0]).toBe('로어북');
+  await expect(editorTab(rail, '로어북')).toHaveAttribute('aria-selected', 'true');
   expect(moduleRail).toEqual([
     '로어북',
     '기본 정보',

@@ -251,7 +251,7 @@ export async function createLibraryContent(page: Page) {
 }
 export async function revealLibraryEditor(page: Page) {
   const library = page.getByTestId('library-panel');
-  await expect(library.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+  await expect(library.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
 }
 export async function selectContent(page: Page, label: string, title: string) {
   await page.getByRole('button', { name: label, exact: true }).click();

@@ -1,4 +1,5 @@
 import { ScrollStrip } from './ScrollStrip.js';
+import { useShortcut } from './shortcuts.js';
 import { cloneWithReceipt } from './resource-create-retry.js';
 import {
   t,
@@ -34,7 +35,12 @@ import {
   useResourceEditor,
   useResourceEditorCommands,
 } from './resource-editor.js';
-import { availableSections, contentSectionRegistry, contentSections } from './studio-sections.js';
+import {
+  availableSections,
+  contentSectionRegistry,
+  contentSections,
+  defaultContentSection,
+} from './studio-sections.js';
 import {
   editableResource,
   type ContentEditModel,
@@ -1249,7 +1255,7 @@ function ContentEditor({
   const [section, selectSection] = useStudioSection(
     `content:${value.kind}`,
     availableSections(contentSectionRegistry, value.package),
-    'basic',
+    defaultContentSection(value.package, value.kind),
     !!initial
   );
   const sections = contentSections(value.package, value.kind, section, state.local.unappliedFields);
@@ -1350,11 +1356,31 @@ function ContentEditor({
     }
   }
   const saveButton = useRef<HTMLButtonElement>(null);
-  useEditorSaveCommand(shared.session, () => saveContent());
+  const titleField = useRef<HTMLInputElement>(null);
+  const titleErrorId = useId();
+  const [titleTouched, setTitleTouched] = useState(false);
+  const titleMissing = !state.creationPending && !value.title.trim();
+  const titleError = titleMissing && titleTouched;
+  const editorRoot = useRef<HTMLElement>(null);
+  const requestTitle = () => {
+    setTitleTouched(true);
+    titleField.current?.focus();
+  };
+  useShortcut('editor.save', requestTitle, { scope: editorRoot, active: titleMissing });
+  useEditorSaveCommand(shared.session, () => {
+    if (!titleMissing) return saveContent();
+    requestTitle();
+    return Promise.resolve(false);
+  });
+  const ready = state.ready;
+  useEffect(() => {
+    if (ready && !initial) titleField.current?.focus();
+  }, [ready, initial]);
   if (!state.ready) return <ResourceEditorStatus value={shared} />;
   return (
     <ResourceEditorProvider value={shared} saveButton={saveButton}>
       <section
+        ref={editorRoot}
         className="library-detail library-content-editor"
         aria-label={t('library.resourceDetails')}
         aria-busy={editorUnavailable}
@@ -1377,13 +1403,17 @@ function ContentEditor({
               />
               <h2 className="editor-title-field">
                 <input
+                  ref={titleField}
                   aria-label={t('library.resourceName', { v0: t(contentLabelKeys[value.kind]) })}
+                  aria-invalid={titleError || undefined}
+                  aria-describedby={titleError ? titleErrorId : undefined}
                   placeholder={t('library.new', { v0: t(contentLabelKeys[kind]) })}
                   maxLength={200}
                   disabled={editorUnavailable}
                   value={value.title}
                   onChange={(event) => {
                     const title = event.target.value;
+                    setTitleTouched(true);
                     setValue((current) => ({
                       ...current,
                       title,
@@ -1554,7 +1584,16 @@ function ContentEditor({
               {headerTrailing}
             </div>
           }
-          notice={<DismissibleError message={exportError} onDismiss={() => setExportError('')} />}
+          notice={
+            <>
+              {titleError && (
+                <p id={titleErrorId} className="error editor-title-error" role="alert">
+                  {t('library.nameRequired')}
+                </p>
+              )}
+              <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
+            </>
+          }
         >
           <form
             id={formId}

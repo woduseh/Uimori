@@ -6,6 +6,7 @@ import {
   MODULE_SECTION_ORDER,
   contentSection,
   contentSectionRegistry,
+  defaultContentSection,
   isAuthoringPath,
   placeSections,
   presetSection,
@@ -134,4 +135,13 @@ test('owns maps helper paths to the section that edits them', () => {
     'variables'
   );
   expect(presetSection('/program/nativeRisuPreset/preset/temperature')).toBeNull();
+});
+
+test('each kind opens on its first default section', () => {
+  expect(defaultContentSection(nativeContent({ name: 'Bot' }), 'bot')).toBe('basic');
+  expect(defaultContentSection(nativeContent({}, {}, 'persona'), 'persona')).toBe('basic');
+  expect(defaultContentSection(standaloneModule({}), 'module')).toBe('lore');
+  expect(defaultContentSection(nativeContent({ name: 'Carded' }, {}, 'module'), 'module')).toBe(
+    'lore'
+  );
 });

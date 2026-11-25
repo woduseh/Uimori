@@ -98,7 +98,6 @@ export function RisuNativeFields({
   const [greetingFont, setGreetingFont] = useState(() =>
     readPresentationChoice(GREETING_FONT_KEY, GREETING_FONTS, 'body')
   );
-  const [authoringOpen, setAuthoringOpen] = useState(false);
   const requested = anchor?.anchor ?? null;
   const loreFocus =
     requested && anchorSection(requested) === 'lore' && requested.index !== null
@@ -123,7 +122,6 @@ export function RisuNativeFields({
     },
     (target) => {
       onSelect(anchoredSection(target));
-      if (anchoredAuthoring(target)) setAuthoringOpen(true);
     }
   );
   const [part, setPart] = useState<SourcePart>('lore');
@@ -372,58 +370,45 @@ export function RisuNativeFields({
           />
         </StudioPanel>
         <StudioPanel section="basic" className="native-section-body native-basic-body">
-          <PackagePortraitEditor value={value} onChange={onChange} onDirtyChange={setPortraitBusy}>
-            <label>
-              {t('native.text_9aa18e5071')}
-              <input
-                aria-label={t('native.text_d63d79b1e2')}
-                value={string(standalone ? native.module?.name : native.card.name)}
-                maxLength={200}
-                onChange={(e) => field('name', e.target.value)}
-              />
-            </label>
-            {!standalone && (creator || version) && (
-              <p className="native-identity-meta ui-meta-row">
-                {creator && <span>{t('native.creatorSummary', { creator })}</span>}
-                {version && <span>{t('native.versionSummary', { version })}</span>}
-              </p>
-            )}
-            {overview}
-          </PackagePortraitEditor>
-          <div className="native-description-field">
-            <label>
-              {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
-              <textarea
-                className="native-description"
-                aria-label={standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
-                aria-describedby={`${id}-description-count`}
-                rows={12}
-                value={description}
-                onChange={(e) => field('description', e.target.value)}
-              />
-            </label>
-            <small id={`${id}-description-count`} className="native-field-count">
-              {t('native.characterCount', { count: description.length })}
-            </small>
-          </div>
-          {!standalone && (
-            <details
-              className="native-advanced native-authoring"
-              open={authoringOpen}
-              onToggle={(event) => setAuthoringOpen(event.currentTarget.open)}
-            >
-              <summary>{t('native.text_78def74816')}</summary>
-              <div className="native-form-stack">
-                <label>
-                  {t('native.text_d9f63fc805')}
-                  <textarea
-                    aria-label={t('native.text_d9f63fc805')}
-                    rows={4}
-                    value={string(native.card.creator_notes)}
-                    onChange={(e) => field('creator_notes', e.target.value)}
-                  />
-                </label>
-                <div className="native-field-row">
+          <div className="native-overview">
+            <div className="native-overview-main native-description-field">
+              <label>
+                {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
+                <textarea
+                  className="native-description"
+                  aria-label={
+                    standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')
+                  }
+                  aria-describedby={`${id}-description-count`}
+                  rows={12}
+                  value={description}
+                  onChange={(e) => field('description', e.target.value)}
+                />
+              </label>
+              <small id={`${id}-description-count`} className="native-field-count">
+                {t('native.characterCount', { count: description.length })}
+              </small>
+            </div>
+            <div className="native-overview-meta">
+              <PackagePortraitEditor
+                value={value}
+                onChange={onChange}
+                onDirtyChange={setPortraitBusy}
+              >
+                {overview}
+              </PackagePortraitEditor>
+              {!standalone && (
+                <section className="native-authoring" aria-labelledby={`${id}-authoring-heading`}>
+                  <h3 id={`${id}-authoring-heading`}>{t('native.text_78def74816')}</h3>
+                  <label>
+                    {t('native.text_d9f63fc805')}
+                    <textarea
+                      aria-label={t('native.text_d9f63fc805')}
+                      rows={4}
+                      value={string(native.card.creator_notes)}
+                      onChange={(e) => field('creator_notes', e.target.value)}
+                    />
+                  </label>
                   <label>
                     {t('native.text_59a4b7210d')}
                     <input value={creator} onChange={(e) => field('creator', e.target.value)} />
@@ -435,10 +420,10 @@ export function RisuNativeFields({
                       onChange={(e) => field('character_version', e.target.value)}
                     />
                   </label>
-                </div>
-              </div>
-            </details>
-          )}
+                </section>
+              )}
+            </div>
+          </div>
         </StudioPanel>
         {!standalone && (
           <StudioPanel section="greetings" className="native-panes">
