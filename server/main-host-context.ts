@@ -182,21 +182,23 @@ export function attachMainHostContext(snapshot: RunSnapshot, input?: MainInput):
   if (!snapshot.promptCompilation) return snapshot;
   if (!PROMPT_COMPILER_VERSIONS.has(snapshot.promptCompilation.compilerVersion))
     throw new Error('PROMPT_INVALID_COMPILED');
-  input ??= buildMainInput(snapshot);
-  const text = nativeHostContextText({ input: requestInput(snapshot, input) });
-  const compilation = structuredClone(snapshot.promptCompilation),
-    existing = compilation.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID);
+  const existing = snapshot.promptCompilation.messages.find(
+    (message) => message.id === NATIVE_HOST_CONTEXT_ID
+  );
   if (existing) {
     if (
       existing.provenance.blockId !== NATIVE_HOST_CONTEXT_ID ||
+      existing.provenance.origin !== 'prompt' ||
       existing.role !== 'user' ||
       existing.content.length !== 1 ||
-      existing.content[0].type !== 'text' ||
-      existing.content[0].text !== text
+      existing.content[0].type !== 'text'
     )
       throw new ProviderContractError('NATIVE_HOST_CONTEXT_COLLISION');
     return snapshot;
   }
+  input ??= buildMainInput(snapshot);
+  const text = nativeHostContextText({ input: requestInput(snapshot, input) });
+  const compilation = structuredClone(snapshot.promptCompilation);
   let index = compilation.messages.findIndex((message) => message.provenance.origin === 'current');
   if (index < 0) {
     if (snapshot.nativeRisuExecution?.requestPresent !== false)

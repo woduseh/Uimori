@@ -1334,3 +1334,81 @@ test('an advisor sees the catalog only while one of its own read tools can use i
   expect(knowledge.stable.contract).toContain(CATALOG_READ_GUIDANCE);
   expect(request(['notes']).stable.tools).toEqual([]);
 });
+
+describe('runs frozen by an earlier build', () => {
+  async function frozenByEarlierBuild(endpoint: string) {
+    const work = await snapshot(endpoint);
+    work.profile!.packages = [nativeContent({ name: 'Bot', description: 'SYNTHETIC_PINNED_BOT' })];
+    work.profile!.packageAttachments = [{ id: 'synthetic-risu', revision: 1, role: 'bot' }];
+    await refreshNativeSnapshot(work);
+    const compiled = compileSnapshotPrompt(work);
+    const host = compiled.promptCompilation!.messages.find(
+      (message) => message.id === NATIVE_HOST_CONTEXT_ID
+    )!.content[0] as { type: 'text'; text: string };
+    const current = host.text;
+    const prefix = current.slice(0, current.indexOf('{'));
+    const context = JSON.parse(current.slice(prefix.length)) as { catalog: unknown[] };
+    context.catalog = [
+      {
+        id: 'package:synthetic-risu:bot:body',
+        revision: 1,
+        kind: 'lore',
+        title: 'Bot',
+        description: '',
+        sourceKind: 'bot',
+        loading: 'pinned',
+      },
+      ...context.catalog,
+    ];
+    host.text = prefix + JSON.stringify(context);
+    return { compiled, current, frozen: host.text };
+  }
+  const hostTexts = (bodies: string[]) =>
+    bodies.map((body) =>
+      (JSON.parse(body).messages as { content: unknown }[])
+        .map((message) =>
+          typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+        )
+        .filter((text) => text.includes('Host context (JSON reference data'))
+    );
+
+  test('a tool round and a replayed resume complete with one consistent host context', async () => {
+    let calls = 0;
+    const server = await loopbackProvider(async (request, response) => {
+      const body = JSON.parse(request.body);
+      calls++;
+      await writeSse(response, [
+        calls % 2 === 1
+          ? toolTurn([toolOutput(body, 'knowledge.read', { ids: ['synthetic-reference'] }, 'read')])
+          : complete('Frozen run finished.'),
+        '[DONE]',
+      ]);
+    });
+    closes.push(server.close);
+    const { compiled, current, frozen } = await frozenByEarlierBuild(`${server.origin}/v1`);
+    expect(frozen).not.toBe(current);
+    const first = hooks(server.origin);
+    expect(await runMain(compiled, first.value)).toMatchObject({
+      status: 'completed',
+      text: 'Frozen run finished.',
+    });
+    expect(first.events.map((event) => [event.name, event.denied])).toEqual([
+      ['knowledge.read', false],
+    ]);
+    const resumed = hooks(server.origin);
+    resumed.value.replayToolEvents = structuredClone(first.events);
+    expect(await runMain(compiled, resumed.value)).toMatchObject({
+      status: 'completed',
+      text: 'Frozen run finished.',
+    });
+    expect(resumed.events).toEqual([]);
+    const bodies = server.requests.map((request) => request.body);
+    expect(bodies).toHaveLength(4);
+    const texts = hostTexts(bodies);
+    expect(texts.every((found) => found.length === 1)).toBe(true);
+    expect(JSON.stringify(texts)).not.toContain('"loading":"pinned"');
+    const tools = bodies.map((body) => JSON.stringify(JSON.parse(body).tools));
+    expect(new Set(tools).size).toBe(1);
+    expect(tools[0]).toContain('knowledge');
+  });
+});
