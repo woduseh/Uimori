@@ -303,7 +303,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
   await task.getByRole('button', { name: '자세히 보기', exact: true }).click();
   const usage = task.locator('.task-history-detail');
   await expect(usage.locator('.trace-summary [data-row="cost"] dd')).toHaveText(
-    '$0.125 이상미확인 1회'
+    '$0.125+미확인 1회'
   );
   const table = usage.getByRole('table', { name: '실행 흐름', exact: true });
   await expect(table.locator('thead th')).toHaveText([

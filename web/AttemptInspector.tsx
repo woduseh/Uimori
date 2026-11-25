@@ -110,7 +110,9 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
           )}
         </>
       ) : (
-        <p className="muted">{t('visualpanels.noPriceWasFixedForThisCall')}</p>
+        estimate?.status !== 'estimated' && (
+          <p className="muted">{t('visualpanels.noPriceWasFixedForThisCall')}</p>
+        )
       )}
       {attempt.pricingStartedAt && (
         <small>

@@ -1854,10 +1854,10 @@ export const messages = {
     zh: '输出 {count}',
   },
   'reader.inspectorCostAtLeast': {
-    ko: '{value} 이상',
-    en: 'At least {value}',
-    ja: '{value} 以上',
-    zh: '至少 {value}',
+    ko: '{value}+',
+    en: '{value}+',
+    ja: '{value}+',
+    zh: '{value}+',
   },
   'reader.inspectorContext': {
     ko: '컨텍스트 {estimated, select, true {약 {percent}%} other {{percent}%}} ({input} / {limit})',

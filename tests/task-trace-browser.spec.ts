@@ -225,10 +225,10 @@ test('TRACE01 a scene record lists every call of the scene with its tool, and th
   await expect(summary.locator('[data-row="calls"] dd')).toContainText('장면 번역 1');
   await expect(summary.locator('[data-row="input"] dd > span').first()).toHaveText('58,010');
   await expect(summary.locator('[data-row="output"] dd > span').first()).toHaveText('6,525');
-  await expect(summary.locator('[data-row="cost"] dd > span').first()).toHaveText('$0.295 이상');
+  await expect(summary.locator('[data-row="cost"] dd > span').first()).toHaveText('$0.295+');
   await expect(summary.locator('[data-row="cost"]')).toContainText('미확인 1회');
   await expect(summary.locator('.trace-summary-parts')).toHaveText(
-    '본문 $0.283번역 $0.0123 이상채팅 제목 < $0.001'
+    '본문 $0.283번역 $0.0123+채팅 제목 < $0.001'
   );
   await expect(record.locator('.trace-footer code')).toHaveText(run.id);
   await expect(record.getByRole('button', { name: '원본 JSON 보기', exact: true })).toBeVisible();

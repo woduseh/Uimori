@@ -146,7 +146,7 @@ test('a partly priced task reads as a lower bound with its unpriced calls', () =
     attempts: [attempt({ inputTokens: 10, outputTokens: 5, costUsd: 0.02 }), attempt({})],
   });
   expect(html).toContain('data-row="cost"');
-  expect(html).toContain('$0.02 이상');
+  expect(html).toContain('$0.02+');
   expect(html).toContain('미확인 1회');
 });
 

@@ -770,7 +770,7 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   await expect(usageValue(results, 'calls')).toHaveText('모델 2회도구 7회내부 호출 2회');
   await expect(usageValue(results, 'input')).toHaveText('1,000미확인 1회(캐시 600, 60%)');
   await expect(usageValue(results, 'output')).toHaveText('90미확인 1회(추론 30, 33%)');
-  await expect(usageValue(results, 'cost')).toHaveText('$0.02 이상미확인 1회');
+  await expect(usageValue(results, 'cost')).toHaveText('$0.02+미확인 1회');
   await expect(results.locator('.helper-usage-headline')).toHaveText('마지막 요청 컨텍스트 약 850');
   await expect(results.getByRole('button', { name: '누적 입력 설명', exact: true })).toBeVisible();
   await expect(results.locator('.context-breakdown-bar')).toHaveCount(0);
