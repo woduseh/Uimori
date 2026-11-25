@@ -15,12 +15,11 @@ import {
   StickyNote,
 } from 'lucide-react';
 import type { HelperChange } from '../core/helper.js';
-import type { TextDiffHunk } from '../core/text-diff.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
-import { formatNumber, t } from './i18n.js';
+import { t } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { ProseHunk } from './ProseDiff.js';
+import { TextDiffHunks, TextDiffStats, textDiffOmission } from './TextDiffView.js';
 
 const resourceIcons = {
   content: BookOpen,
@@ -51,38 +50,6 @@ const actionLabels: Partial<Record<HelperChange['action'], string>> = {
   reorder: 'helperChanges.reordered',
 };
 
-function lines(text: string) {
-  const parts = text.split('\n');
-  if (parts.at(-1) === '') parts.pop();
-  return parts;
-}
-
-function CodeHunk({ hunk }: { hunk: TextDiffHunk }) {
-  return (
-    <div className="helper-diff-code">
-      {hunk.segments.flatMap((segment, index) =>
-        lines(segment.text).map((line, row) => (
-          <div key={`${index}:${row}`} className="helper-diff-line" data-op={segment.op}>
-            <span className="helper-diff-gutter" aria-hidden="true">
-              {segment.op === 'insert' ? '+' : segment.op === 'delete' ? '−' : ''}
-            </span>
-            {segment.op !== 'equal' && (
-              <span className="sr-only">
-                {t(
-                  segment.op === 'insert'
-                    ? 'helperChanges.insertedLine'
-                    : 'helperChanges.removedLine'
-                )}
-              </span>
-            )}
-            <code>{line}</code>
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
 export function HelperChangeCard({
   change,
   onOpen,
@@ -106,8 +73,8 @@ export function HelperChangeCard({
     ? t(
         change.textRemoved === 'deleted' ? 'helperChanges.textDeleted' : 'helperChanges.textExpired'
       )
-    : diff && 'omitted' in diff
-      ? t(diff.omitted === 'size' ? 'helperChanges.omittedSize' : 'helperChanges.omittedTime')
+    : diff
+      ? textDiffOmission(diff)
       : '';
   const action = actionLabels[change.action];
   const location = change.location ? helperChangeLocationParts(change.location) : [];
@@ -144,24 +111,7 @@ export function HelperChangeCard({
           </small>
         )}
       </span>
-      {hunks && (hunks.added > 0 || hunks.removed > 0) && (
-        <span className="helper-change-stats">
-          <span aria-hidden="true">
-            {hunks.added > 0 && (
-              <span className="helper-change-added">+{formatNumber(hunks.added)}</span>
-            )}
-            {hunks.removed > 0 && (
-              <span className="helper-change-removed">−{formatNumber(hunks.removed)}</span>
-            )}
-          </span>
-          <span className="sr-only">
-            {t(hunks.unit === 'word' ? 'helperChanges.wordStats' : 'helperChanges.lineStats', {
-              added: hunks.added,
-              removed: hunks.removed,
-            })}
-          </span>
-        </span>
-      )}
+      {hunks && <TextDiffStats diff={hunks} />}
       {action && <span className="helper-change-action">{t(action)}</span>}
     </>
   );
@@ -200,24 +150,14 @@ export function HelperChangeCard({
       {hunks && (
         <div
           id={regionId}
-          className="helper-change-diff"
+          className="helper-change-diff text-diff-box"
           role="region"
           aria-label={t('helperChanges.diffRegion', { title: name })}
           tabIndex={0}
           hidden={!expanded}
           data-mode={hunks.mode}
         >
-          {expanded &&
-            hunks.hunks.map((hunk, index) => (
-              <div key={`${hunk.beforeOffset}:${hunk.afterOffset}`} className="helper-diff-hunk">
-                {index > 0 && (
-                  <span className="helper-diff-gap" role="separator">
-                    <span className="sr-only">{t('helperChanges.moreHunks')}</span>
-                  </span>
-                )}
-                {hunks.mode === 'prose' ? <ProseHunk hunk={hunk} /> : <CodeHunk hunk={hunk} />}
-              </div>
-            ))}
+          {expanded && <TextDiffHunks diff={hunks} />}
         </div>
       )}
       {failed && <NoticeBanner tone="error">{t('helperResults.openFailed')}</NoticeBanner>}

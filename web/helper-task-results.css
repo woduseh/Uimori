@@ -198,22 +198,6 @@ button.helper-result-target:hover {
     transition: transform var(--motion-fast) var(--motion-ease-out);
   }
 }
-.helper-change-stats {
-  display: flex;
-  flex-shrink: 0;
-  margin-inline-start: auto;
-  font-variant-numeric: tabular-nums;
-}
-.helper-change-stats > span {
-  display: flex;
-  gap: 6px;
-}
-.helper-change-added {
-  color: var(--success);
-}
-.helper-change-removed {
-  color: var(--error);
-}
 .helper-change-location {
   display: flex;
   flex-wrap: wrap;
@@ -240,51 +224,7 @@ button.helper-result-target:hover {
   padding-block-end: 6px;
 }
 .helper-change-diff {
-  max-height: var(--diff-max-h);
   margin: 0 0 8px;
-  padding: 8px 10px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-  color: var(--text);
-}
-.helper-change-diff:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: calc(var(--focus-ring-width) * -1);
-}
-.helper-diff-code {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
-  font-size: var(--font-small);
-  line-height: 1.6;
-}
-.helper-diff-line {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 4px;
-  min-width: 0;
-}
-.helper-diff-line > code {
-  font: inherit;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.helper-diff-line[data-op="insert"] {
-  background: var(--success-bg);
-}
-.helper-diff-line[data-op="delete"] {
-  background: var(--error-bg);
-}
-.helper-diff-gutter {
-  color: var(--muted);
-  text-align: center;
-  user-select: none;
-}
-.helper-diff-gap {
-  display: block;
-  margin-block: 6px;
-  border-top: var(--hairline) dashed var(--line);
 }
 .helper-rollback-status {
   padding-inline-start: calc(2px + 16px + 8px);

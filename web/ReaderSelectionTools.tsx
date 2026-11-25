@@ -19,7 +19,7 @@ import { IconButton } from './IconButton.js';
 import { useFocusFallback } from './useFocusFallback.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { ProseHunk } from './ProseDiff.js';
+import { ProseHunk } from './TextDiffView.js';
 import {
   placeBeside,
   placeDocked,

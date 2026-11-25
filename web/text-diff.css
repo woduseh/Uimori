@@ -1,0 +1,90 @@
+.helper-diff-prose {
+  margin: 0;
+  font-size: var(--font-body);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.helper-diff-prose ins,
+.helper-diff-prose del + ins,
+.helper-diff-prose ins + del {
+  margin-inline-start: 4px;
+}
+.helper-diff-prose del {
+  border-radius: var(--radius-small);
+  color: var(--text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.helper-diff-prose ins {
+  background: var(--success-bg);
+  text-decoration-line: underline;
+  text-decoration-color: var(--success);
+}
+.helper-diff-prose del {
+  background: var(--error-bg);
+  text-decoration-line: line-through;
+  text-decoration-color: var(--error);
+}
+.text-diff-box {
+  max-height: var(--diff-max-h);
+  padding: 8px 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+.text-diff-box:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+.helper-diff-code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: var(--font-small);
+  line-height: 1.6;
+}
+.helper-diff-line {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 4px;
+  min-width: 0;
+}
+.helper-diff-line > code {
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.helper-diff-line[data-op="insert"] {
+  background: var(--success-bg);
+}
+.helper-diff-line[data-op="delete"] {
+  background: var(--error-bg);
+}
+.helper-diff-gutter {
+  color: var(--muted);
+  text-align: center;
+  user-select: none;
+}
+.helper-diff-gap {
+  display: block;
+  margin-block: 6px;
+  border-top: var(--hairline) dashed var(--line);
+}
+.helper-change-stats {
+  display: flex;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+.helper-change-stats > span {
+  display: flex;
+  gap: 6px;
+}
+.helper-change-added {
+  color: var(--success);
+}
+.helper-change-removed {
+  color: var(--error);
+}
