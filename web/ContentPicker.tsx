@@ -126,14 +126,16 @@ export function ContentPicker({
     >
       <ContentAvatar content={content} />
       <span className="content-picker-copy">
-        <strong title={content.title}>{content.title}</strong>
+        <span className="content-picker-title">
+          <strong title={content.title}>{content.title}</strong>
+          {(all || pinned) && (
+            <small className="content-picker-meta ui-meta-row">
+              {all && <span>{t(roleTitleKeys[libraryCategory(library, content)])}</span>}
+              {pinned && <span>{t('library.currentSelection')}</span>}
+            </small>
+          )}
+        </span>
         {content.description && <small>{content.description}</small>}
-        {(all || pinned) && (
-          <small className="content-picker-meta ui-meta-row">
-            {all && <span>{t(roleTitleKeys[libraryCategory(library, content)])}</span>}
-            {pinned && <span>{t('library.currentSelection')}</span>}
-          </small>
-        )}
       </span>
       {reference(content) === value ? <CheckIcon size={18} aria-hidden="true" /> : null}
     </button>

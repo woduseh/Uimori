@@ -123,6 +123,7 @@
 .content-picker-results,
 .package-portrait-choices {
   display: grid;
+  grid-auto-rows: max-content;
   gap: 6px;
   max-height: 50vh;
   overflow-y: auto;
@@ -175,8 +176,20 @@
   font-size: var(--font-small);
   color: var(--muted);
 }
+.content-picker-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.content-picker-title > strong {
+  min-width: 0;
+}
 .content-picker-copy small.ui-meta-row {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 .content-picker-footer {
   display: flex;
