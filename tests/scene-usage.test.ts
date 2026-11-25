@@ -70,13 +70,21 @@ test('the run text cost keeps a known subtotal apart from unpriced calls', () =>
   expect(
     sceneCostLabels({ usd: null, subtotalUsd: 0.004995, unknownCount: 1, attemptCount: 2 })
   ).toEqual({
-    short: '$0.004995 이상',
+    short: '$0.005',
     full: '확인된 금액 합계 $0.004995, 미확인 1회 포함',
   });
   expect(
     sceneCostLabels({ usd: null, subtotalUsd: 0, unknownCount: 1, attemptCount: 1 })
   ).toBeNull();
   expect(sceneCostLabels({ usd: 0, subtotalUsd: 0, unknownCount: 0, attemptCount: 0 })).toBeNull();
+  const short = (usd: number) =>
+    sceneCostLabels({ usd, subtotalUsd: usd, unknownCount: 0, attemptCount: 1 })?.short;
+  expect([0.3059483, 12.3456, 0.0004, 1].map(short)).toEqual([
+    '$0.306',
+    '$12.35',
+    '< $0.001',
+    '$1.00',
+  ]);
 });
 
 test('a run with measured parts draws its categories and a legend instead of the single bar', () => {

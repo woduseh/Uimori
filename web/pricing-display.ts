@@ -25,6 +25,16 @@ export const formatUsd = (value: number | null | undefined) =>
       ? '< $0.00000001'
       : `$${formatNumber(value, { maximumFractionDigits: 8 })}`;
 
+const formatUsdSummary = (value: number) =>
+  value > 0 && value < 0.001
+    ? '< $0.001'
+    : `$${formatNumber(
+        value,
+        value >= 1
+          ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+          : { maximumSignificantDigits: 3 }
+      )}`;
+
 export function sceneCostLabels(
   estimate:
     | { usd: number | null; subtotalUsd: number; unknownCount: number; attemptCount: number }
@@ -32,8 +42,7 @@ export function sceneCostLabels(
 ) {
   if (!estimate?.attemptCount) return null;
   if (estimate.usd !== null && estimate.unknownCount === 0) {
-    const value = formatUsd(estimate.usd);
-    return { short: value, full: value };
+    return { short: formatUsdSummary(estimate.usd), full: formatUsd(estimate.usd) };
   }
   const full = t('reader.knownSubtotalValueIncludesValueUnpricedCalls', {
     v0:
@@ -42,9 +51,7 @@ export function sceneCostLabels(
         : formatUsd(estimate.subtotalUsd),
     v1: estimate.unknownCount,
   });
-  return estimate.subtotalUsd > 0
-    ? { short: t('reader.inspectorCostAtLeast', { value: formatUsd(estimate.subtotalUsd) }), full }
-    : null;
+  return estimate.subtotalUsd > 0 ? { short: formatUsdSummary(estimate.subtotalUsd), full } : null;
 }
 
 const estimateNotes: Record<string, string> = {
