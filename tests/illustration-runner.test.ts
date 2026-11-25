@@ -1445,7 +1445,10 @@ test.each([3, 1])(
     expect(bodies).toHaveLength(maxCalls);
     if (maxCalls === 1) {
       expect(bodies[0].stable.tools).toEqual([]);
-      expect(result).toMatchObject({ status: 'failed', code: 'ILLUSTRATION_PROMPT_UNKNOWN_TOOL' });
+      expect(result).toMatchObject({
+        status: 'failed',
+        code: 'ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED',
+      });
       return;
     }
     expect(bodies.map((body) => body.stable.tools.length)).toEqual([2, 2, 2]);

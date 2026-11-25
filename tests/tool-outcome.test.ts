@@ -44,8 +44,9 @@ test('recoverable feedback stays available to the owning loop budget; unclassifi
   expect(toolCorrectionOutcome(event)).toBe('continue');
   expect(toolCorrectionOutcome({ ...event, denied: false, errorKind: undefined })).toBe('continue');
   expect(toolCorrectionOutcome({ ...event, errorKind: undefined })).toBe('denied');
-  const denied = executeTool(snapshot, { callId: 'a', name: 'shell', args: {} });
-  expect(toolCorrectionOutcome(denied)).toBe('denied');
+  const unknown = executeTool(snapshot, { callId: 'a', name: 'shell', args: {} });
+  expect(unknown).toMatchObject({ denied: true, result: { code: 'TOOL_NOT_ALLOWED' } });
+  expect(toolCorrectionOutcome(unknown)).toBe('continue');
 });
 
 test('knowledge search splits whitespace and matches every term independently', () => {

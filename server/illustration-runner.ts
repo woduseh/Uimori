@@ -1,6 +1,5 @@
 import { illustrationResearch, ILLUSTRATION_RESEARCH_TOOLS } from './illustration-research.js';
 import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
-import { unofferedToolCall } from '../core/tool-outcome.js';
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
 import { judgeIllustrationPlacement } from './illustration-placement-judgment.js';
 import type { JudgmentHooks } from './judgment.js';
@@ -352,9 +351,7 @@ export async function runIllustrationJob(
         (value) => structuredClone(value)
       );
       if (result.status === 'completed') return result.text;
-      if (result.status === 'tool_calls' && unofferedToolCall(base.stable.tools, result.toolCalls))
-        throw new IllustrationError('ILLUSTRATION_PROMPT_UNKNOWN_TOOL');
-      if (enabled && result.status === 'tool_calls' && result.toolCalls.length) {
+      if (result.status === 'tool_calls' && result.toolCalls.length) {
         if (calls >= maxCalls)
           throw new IllustrationError('ILLUSTRATION_PROMPT_CALL_BUDGET_EXHAUSTED');
         opaqueState = result.opaqueState ?? undefined;

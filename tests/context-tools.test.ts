@@ -317,26 +317,28 @@ test('main shell results reach the next request and saved receipts avoid repeati
   ).toBe(false);
 });
 
-test('the writer fails the attempt instead of running a read tool its request did not offer', async () => {
+test('the writer runs a read tool it knows even when the request withheld it, and corrects an unknown name', async () => {
   const fixed = await snapshot();
   const observed = hooks();
-  const started: string[] = [];
-  observed.value.onToolStart = (event) => {
-    started.push(event.name);
-  };
   const sent = script([
     (body) => {
       expect(body.stable.tools.map((tool) => tool.name)).not.toContain('story.read');
-      return toolTurn([{ id: 'unoffered', name: 'story.read', args: { sceneNumber: 1 } }], 1);
+      return toolTurn(
+        [
+          { id: 'withheld', name: 'story.read', args: { sceneNumber: 1 } },
+          { id: 'unknown', name: 'story.imagine', args: {} },
+        ],
+        1
+      );
     },
+    () => completed(),
   ]);
-  expect(await runMain(fixed, observed.value)).toMatchObject({
-    status: 'error',
-    error: 'UNKNOWN_TOOL',
-  });
-  expect(sent).toHaveLength(1);
-  expect(started).toEqual([]);
-  expect(observed.events).toEqual([]);
+  expect(await runMain(fixed, observed.value)).toMatchObject({ status: 'completed' });
+  expect(sent).toHaveLength(2);
+  expect(observed.events.map((event) => [event.callId, event.denied, event.errorKind])).toEqual([
+    ['withheld', false, undefined],
+    ['unknown', true, 'recoverable'],
+  ]);
 });
 
 test('a chat range that keeps a request but cuts its scene leaves story reads open', async () => {

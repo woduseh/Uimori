@@ -456,18 +456,27 @@ describe('server main runner through the actual loopback adapter', () => {
     expect(checks).toBe(2);
   });
 
-  test('P01 P04 excludes unapproved resources and denies model tool escalation', async () => {
+  test('P01 P04 excludes unapproved resources and never runs a tool the app does not have', async () => {
+    let turns = 0;
     const server = await fixture(async (_captured, response) => {
-      await writeSse(response, [
-        {
-          type: 'tool_delta',
-          index: 0,
-          id: 'escape',
-          name: 'shell.execute',
-          argumentsDelta: '{"command":"PRIVATE_ARGUMENT"}',
-        },
-        { type: 'done', reason: 'tool_calls' },
-      ]);
+      await writeSse(
+        response,
+        ++turns === 1
+          ? [
+              {
+                type: 'tool_delta',
+                index: 0,
+                id: 'escape',
+                name: 'shell.execute',
+                argumentsDelta: '{"command":"PRIVATE_ARGUMENT"}',
+              },
+              { type: 'done', reason: 'tool_calls' },
+            ]
+          : [
+              { type: 'text_delta', delta: '등대의 불이 켜졌다.' },
+              { type: 'done', reason: 'stop' },
+            ]
+      );
     });
     const snapshot = routedSnapshot(server.endpoint);
     snapshot.resources[0].relatedIds = ['lore-1', 'persona-1', 'unknown-private-id'];
@@ -477,9 +486,18 @@ describe('server main runner through the actual loopback adapter', () => {
     ).toEqual(['lore-1']);
     const observed = runnerHooks(server.origin);
     const result = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
-    expect(result).toMatchObject({ status: 'error', error: 'UNKNOWN_TOOL' });
-    expect(observed.tools).toEqual([]);
-    expect(server.requests).toHaveLength(1);
+    expect(result).toMatchObject({ status: 'completed' });
+    expect(observed.tools).toMatchObject([
+      {
+        callId: 'escape',
+        name: 'unapproved',
+        args: {},
+        denied: true,
+        errorKind: 'recoverable',
+        result: { code: 'TOOL_NOT_ALLOWED' },
+      },
+    ]);
+    expect(server.requests).toHaveLength(2);
   });
 
   test('P01 P03 keeps an empty native profile free of synthetic facts', () => {

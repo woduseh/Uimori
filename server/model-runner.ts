@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
-import { toolCorrectionOutcome, toolResultChars, unofferedToolCall } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome, toolResultChars } from '../core/tool-outcome.js';
 import { estimateContextTokens, MIN_INPUT_TOKEN_LIMIT } from '../core/context-budget.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import { executeTool, KNOWLEDGE_READ_TOKENS, KNOWLEDGE_READ_MAX_TOKENS } from '../core/provider.js';
@@ -230,7 +230,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     native = false,
     prepareShellEvent?: (event: ToolEvent, remainingCalls: ProviderResult['toolCalls']) => ToolEvent
   ): Promise<MainResult | undefined> => {
-    if (unofferedToolCall(offered, result.toolCalls)) return fail('UNKNOWN_TOOL');
     if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
       if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
         return fail('MODEL_CALL_BUDGET_EXHAUSTED');

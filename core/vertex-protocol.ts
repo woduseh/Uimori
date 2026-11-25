@@ -71,7 +71,6 @@ export type VertexTurn = {
   completedResultsHash: string;
   pending: PendingCall[];
   usedIds: string[];
-  tools?: string[];
   stateHash: string;
 };
 function seal(turn: Omit<VertexTurn, 'stateHash'>): VertexTurn {
@@ -370,7 +369,6 @@ export function encodeVertex(
       completedResultsHash: hash(results),
       pending: [],
       usedIds: [...usedIds],
-      tools: [...names],
     }),
   };
 }
@@ -638,7 +636,6 @@ export class VertexDecoder {
     const args = call.args === undefined ? {} : call.args;
     if (!nonempty(call.name) || (call.id !== undefined && !nonempty(call.id)) || !object(args))
       reject('INVALID_TOOL_ARGUMENTS');
-    if (!this.context.tools?.includes(call.name)) reject('UNKNOWN_TOOL');
     if (this.calls.length >= 32) reject('INVALID_TOOLS');
     const id =
       typeof call.id === 'string'

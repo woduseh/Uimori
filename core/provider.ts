@@ -496,7 +496,12 @@ export function executeTool(
     args: {},
     result: { code },
     denied: true,
-    ...(['INVALID_ARGUMENTS', 'RESOURCE_UNAVAILABLE', 'TOKEN_LIMIT_TOO_SMALL'].includes(code)
+    ...([
+      'INVALID_ARGUMENTS',
+      'RESOURCE_UNAVAILABLE',
+      'TOKEN_LIMIT_TOO_SMALL',
+      'TOOL_NOT_ALLOWED',
+    ].includes(code)
       ? { errorKind: 'recoverable' as const }
       : {}),
   });

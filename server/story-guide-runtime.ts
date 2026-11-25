@@ -22,7 +22,6 @@ import {
   type ProviderRequest,
   type ProviderResult,
 } from '../core/transport.js';
-import { unofferedToolCall } from '../core/tool-outcome.js';
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { measureMainContext } from './context-planning.js';
 import type { MainHooks } from './model-runner.js';
@@ -389,7 +388,6 @@ export async function prepareStoryGuide(
     const ids = new Set<string>();
     if (
       !result.toolCalls.length ||
-      unofferedToolCall(request.stable.tools, result.toolCalls) ||
       result.toolCalls.some((call) => {
         if (ids.has(call.id)) return true;
         ids.add(call.id);
