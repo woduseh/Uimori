@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.17.0` · DB 스키마 15**
+> **현재 버전 `v0.18.0` · DB 스키마 15**
 >
-> 도우미가 모델을 등록하고 지우고, 채팅에 붙은 페르소나와 모듈을 바꾸고, 장면을 숨기고, 책갈피와 채팅 폴더를 정리해요. 삽화 컷, 글꼴, 팔레트, 모델처럼 되돌릴 수 없는 삭제는 먼저 확인 카드로 묻고, 유료 생성 확인을 켜면 삽화 생성도 물어요. [릴리스 노트](docs/releases/v0.17.0.md) · [업데이트 안내](docs/UPDATES.md)
+> 봇과 프리셋을 고치는 화면을 새로 만들었어요. 긴 글 입력칸이 Risu 템플릿을 색으로 구분하고 오류를 알려 주며, 저장 전 변경을 항목별로 비교하고 되돌려요. 편집 화면의 어느 항목에서든 도우미를 바로 부를 수 있고, 도우미가 바꾼 내용은 띠에서 확인하고 되돌려요. 작업 기록은 호출을 시간순으로 보여 줘요. [릴리스 노트](docs/releases/v0.18.0.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.17.0` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.18.0` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.17.0 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.18.0 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev

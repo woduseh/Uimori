@@ -9,9 +9,9 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 - Edit source text and translations directly, and copy a chat into an independent copy.
 - Keep story memory and backups.
 
-> **Current version `v0.17.0` · DB schema 15**
+> **Current version `v0.18.0` · DB schema 15**
 >
-> The helper can now register and delete models, change the persona and modules attached to a chat, hide scenes, and organize bookmarks and chat folders. Deletions that cannot be undone, such as illustration cuts, fonts, palettes and models, wait for a confirmation card, and illustration generation does too when paid-generation confirmation is on. See the [release notes](docs/releases/v0.17.0.md) and [update guide](docs/UPDATES.md).
+> The screen for editing bots and presets is new. Long text fields color Risu templates and point out errors, and unsaved changes can be compared field by field and reverted. The helper can be called from any item in the editor, and what it changed shows in a strip where it can be undone. The task record lists calls in order. See the [release notes](docs/releases/v0.18.0.md) and [update guide](docs/UPDATES.md).
 
 > [!NOTE]
 > The detailed guides under `docs/` are written in Korean. The app interface itself supports English.
@@ -20,11 +20,11 @@ Uimori is a personal creative-writing web app for reading long manuscripts and c
 
 **Requirements**: Node **26.13.0 or later 26.x**, npm, and Chrome or Edge. SQLite comes built into Node, so no separate install is needed.
 
-1. Check that the `v0.17.0` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
+1. Check that the `v0.18.0` release is published on [GitHub Releases](https://github.com/woduseh/Uimori/releases).
 2. Get the source and start the app.
 
    ```powershell
-   git clone --branch v0.17.0 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.18.0 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
