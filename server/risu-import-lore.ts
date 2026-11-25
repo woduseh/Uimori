@@ -76,6 +76,33 @@ function reportedDecorators(decorators: LoreDecorators) {
   return found;
 }
 
+const POSITION_DECORATORS = ['end', 'depth', 'reverse_depth', 'role'];
+
+export function nativeLoreDecoratorReport(content: string) {
+  const parsed = interpretLoreDecorators(content);
+  const decorators = parsed.decorators;
+  const depth = decorators.depth ?? decorators.reverse_depth ?? 0;
+  const positioned =
+    !decorators.position &&
+    !decorators.inject_lore &&
+    !decorators.inject_at &&
+    (decorators.depth !== null || decorators.reverse_depth !== null || decorators.role !== null) &&
+    Number.isSafeInteger(depth) &&
+    depth >= 0 &&
+    depth <= 1_000_000;
+  return {
+    parsed,
+    positioned,
+    notices: reportedDecorators(decorators)
+      .filter(({ decorator }) => !(positioned && POSITION_DECORATORS.includes(decorator)))
+      .map(({ decorator, notice }) => ({ decorator, ...NOTICES[notice] })),
+    // https://github.com/kwaroran/ccardlib/blob/e9a4b49e9e2f551866b62e20d307b00241378244/src/decorators.ts#L7-L38 (2026-11-20):
+    // parseDecorators stops at the first line that does not start with `@@` and returns that line
+    // and everything after it, later `@@` lines included, as the body.
+    inlineDirective: parsed.body.split('\n').some((line) => line.trim().startsWith('@@')),
+  };
+}
+
 // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/characterCards.ts#L1058-L1119 (2026-11-20):
 // convertCharbook assigns `use_regex` and `selective` on each entry it is given and deletes the
 // keys it migrates from that entry's `extensions` object.
@@ -138,36 +165,28 @@ export function importRisuLore({
     const id = `lore-${index}`;
     const name = string(entry.name) || string(entry.comment) || `로어 ${index + 1}`;
     const source = converted.lorebook[index];
-    const parsed = interpretLoreDecorators(source.content);
+    const report = nativeLoreDecoratorReport(source.content);
+    const parsed = report.parsed;
     const decorators = parsed.decorators;
     const nativeDepth = decorators.depth ?? decorators.reverse_depth ?? 0;
-    const nativePosition =
-      !decorators.position &&
-      !decorators.inject_lore &&
-      !decorators.inject_at &&
-      (decorators.depth !== null ||
-        decorators.reverse_depth !== null ||
-        decorators.role !== null) &&
-      Number.isSafeInteger(nativeDepth) &&
-      nativeDepth >= 0 &&
-      nativeDepth <= 1_000_000
-        ? {
-            mode:
-              decorators.depth !== null
-                ? ('depth' as const)
-                : decorators.reverse_depth !== null
-                  ? ('reverse_depth' as const)
-                  : ('lore' as const),
-            depth: nativeDepth,
-            role: decorators.role ?? ('system' as const),
-            order:
-              typeof entry.insertion_order === 'number' &&
-              Number.isSafeInteger(entry.insertion_order) &&
-              Math.abs(entry.insertion_order) <= 1_000_000
-                ? entry.insertion_order
-                : 0,
-          }
-        : undefined;
+    const nativePosition = report.positioned
+      ? {
+          mode:
+            decorators.depth !== null
+              ? ('depth' as const)
+              : decorators.reverse_depth !== null
+                ? ('reverse_depth' as const)
+                : ('lore' as const),
+          depth: nativeDepth,
+          role: decorators.role ?? ('system' as const),
+          order:
+            typeof entry.insertion_order === 'number' &&
+            Number.isSafeInteger(entry.insertion_order) &&
+            Math.abs(entry.insertion_order) <= 1_000_000
+              ? entry.insertion_order
+              : 0,
+        }
+      : undefined;
     const content = parsed.body;
     const executable = parsed.decorators.dont_activate;
     const enabled = entry.mode !== 'folder' && entry.enabled !== false && !executable;
@@ -190,19 +209,10 @@ export function importRisuLore({
         'warning',
         '@@dont_activate가 지정된 로어는 모델에 보내지 않고 Risu 원문에 보존해요.'
       );
-    for (const { decorator, notice } of reportedDecorators(parsed.decorators)) {
-      if (nativePosition && ['end', 'depth', 'reverse_depth', 'role'].includes(decorator)) continue;
-      findings.add(
-        `lore-decorator:${decorator}`,
-        NOTICES[notice].level,
-        NOTICES[notice].message(decorator)
-      );
-    }
+    for (const { decorator, level, message } of report.notices)
+      findings.add(`lore-decorator:${decorator}`, level, message(decorator));
     for (const found of parsed.unknown) unknown.add(found.slice(0, MAX_UNKNOWN_DECORATOR_LENGTH));
-    // https://github.com/kwaroran/ccardlib/blob/e9a4b49e9e2f551866b62e20d307b00241378244/src/decorators.ts#L7-L38 (2026-11-20):
-    // parseDecorators stops at the first line that does not start with `@@` and returns that line
-    // and everything after it, later `@@` lines included, as the body.
-    if (content.split('\n').some((line) => line.trim().startsWith('@@')))
+    if (report.inlineDirective)
       findings.add(
         'lore-decorator-position',
         'unsupported',

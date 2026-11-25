@@ -20,14 +20,28 @@ export type NativeRisuRenderResult = {
   css: string;
   issues: string[];
 };
+export const NATIVE_RISU_REGEX_MODES = [
+  'editinput',
+  'editoutput',
+  'editprocess',
+  'editdisplay',
+] as const;
+export type NativeRisuRegexMode = (typeof NATIVE_RISU_REGEX_MODES)[number];
 export type NativeRisuTextInput = NativeRisuRenderInput & {
-  mode: 'editinput' | 'editoutput' | 'editprocess' | 'editdisplay';
+  mode: NativeRisuRegexMode;
+  trace?: boolean;
 };
+export type NativeRisuTextStep = { script: number | null; before: string; after: string };
 export type NativeRisuTextResult = {
   text: string;
   variables: Record<string, string>;
   issues: string[];
+  steps?: NativeRisuTextStep[];
+  stepsTruncated?: boolean;
 };
+const TRACE_MAX_CHARS = 4_000_000;
+export const NATIVE_RISU_ASSET_TAG =
+  /{{(raw|path|img|image|video|audio|bgm|bg|emotion|asset|video-img|source)::([^{}]*?)}}/gims;
 const escapeAttribute = (value: string) =>
   value
     .replaceAll('&', '&amp;')
@@ -107,7 +121,11 @@ function assetDistance(a: string, b: string, limit: number): number {
   return previous[b.length];
 }
 
-function createAssetResolver(input: NativeRisuRenderInput): (name: string) => string | undefined {
+export function createAssetResolver(
+  input: Pick<NativeRisuRenderInput, 'native'> & {
+    context: Pick<NativeRisuRenderInput['context'], 'assetUrls'>;
+  }
+): (name: string) => string | undefined {
   const urls = input.context.assetUrls ?? {};
   const exact = new Map<string, string>();
   const candidates: { name: string; url: string }[] = [];
@@ -145,25 +163,22 @@ function createAssetResolver(input: NativeRisuRenderInput): (name: string) => st
 }
 
 function assets(text: string, resolve: (name: string) => string | undefined, issues: string[]) {
-  return text.replace(
-    /{{(raw|path|img|image|video|audio|bgm|bg|emotion|asset|video-img|source)::([^{}]*?)}}/gims,
-    (tag, rawType: string, name: string) => {
-      const type = rawType.toLowerCase();
-      const url = resolve(name);
-      if (!url) {
-        issues.push(`asset:${name.trim()}`);
-        return type === 'raw' || type === 'path' || type === 'source' ? '' : tag;
-      }
-      if (['raw', 'path', 'source'].includes(type)) return url;
-      const safe = escapeAttribute(url);
-      if (type === 'audio' || type === 'bgm') return `<audio controls src="${safe}"></audio>`;
-      if (type === 'video' || type === 'video-img') return `<video controls src="${safe}"></video>`;
-      if (type === 'bg')
-        return `<div class="risu-background" style="background-image:url('${safe}')"></div>`;
-      const img = `<img src="${safe}" alt="${escapeAttribute(name)}">`;
-      return type === 'image' ? `<div class="risu-inlay-image">${img}</div>` : img;
+  return text.replace(NATIVE_RISU_ASSET_TAG, (tag, rawType: string, name: string) => {
+    const type = rawType.toLowerCase();
+    const url = resolve(name);
+    if (!url) {
+      issues.push(`asset:${name.trim()}`);
+      return type === 'raw' || type === 'path' || type === 'source' ? '' : tag;
     }
-  );
+    if (['raw', 'path', 'source'].includes(type)) return url;
+    const safe = escapeAttribute(url);
+    if (type === 'audio' || type === 'bgm') return `<audio controls src="${safe}"></audio>`;
+    if (type === 'video' || type === 'video-img') return `<video controls src="${safe}"></video>`;
+    if (type === 'bg')
+      return `<div class="risu-background" style="background-image:url('${safe}')"></div>`;
+    const img = `<img src="${safe}" alt="${escapeAttribute(name)}">`;
+    return type === 'image' ? `<div class="risu-inlay-image">${img}</div>` : img;
+  });
 }
 
 // https://github.com/kwaroran/RisuAI/blob/cad8595aa39620df4246f56918f0962c2aa0263a/src/ts/process/scripts.ts#L133-L341 (2026-11-20):
@@ -180,38 +195,24 @@ export function processNativeRisuTextInWorker(input: NativeRisuTextInput): Nativ
   const role =
     input.mode === 'editinput' ? 'user' : input.mode === 'editoutput' ? 'assistant' : undefined;
   const issues: string[] = [];
+  const steps: NativeRisuTextStep[] = [];
+  let traced = 0;
+  let stepsTruncated = false;
+  const record = (script: number | null, before: string, after: string) => {
+    if (!input.trace || before === after) return;
+    traced += before.length + after.length;
+    if (traced > TRACE_MAX_CHARS) stepsTruncated = true;
+    else steps.push({ script, before, after });
+  };
   let text = cbs.parse(input.text, role);
-  const scripts = nativeRisuRegex(input.native)
-    .map((script, index) => ({ script, index }))
-    .filter(({ script }) => script.type === input.mode)
-    .map(({ script, index }) => {
-      const actions: string[] = [];
-      let order = 0;
-      const flag = (script.ableFlag ? script.flag || 'g' : 'g').replace(
-        /<([^>]+)>/gu,
-        (_tag, metas: string) => {
-          for (const meta of metas.split(',').map((value) => value.trim())) {
-            if (meta.startsWith('order ')) order = Number.parseInt(meta.slice(6), 10) || 0;
-            else actions.push(meta);
-          }
-          return '';
-        }
-      );
-      return { script, index, order, actions, flag };
-    })
-    .sort((a, b) => b.order - a.order || a.index - b.index);
-  for (const { script, index, actions, flag } of scripts) {
+  record(null, input.text, text);
+  for (const { script, index, actions, flags, moving, replacement } of nativeRisuRegexPlan(
+    input.native,
+    input.mode
+  )) {
     if (!script.in) continue;
+    const before = text;
     try {
-      let replacement = script.out.replaceAll('$n', '\n').replaceAll('{{data}}', '$&');
-      const moving =
-        replacement.startsWith('@@move_top') ||
-        replacement.startsWith('@@move_bottom') ||
-        actions.includes('move_top') ||
-        actions.includes('move_bottom');
-      let flags = [...new Set(flag.replace(/[^dgimsuvy]/gu, '').split(''))].join('') || 'u';
-      if (moving) flags = flags.replaceAll('g', '');
-      if (replacement.endsWith('>') && !actions.includes('no_end_nl')) replacement += '\n';
       const pattern = actions.includes('cbs') ? cbs.parse(script.in, role) : script.in;
       const regex = new RegExp(pattern, flags);
       if (moving) {
@@ -236,8 +237,45 @@ export function processNativeRisuTextInWorker(input: NativeRisuTextInput): Nativ
       if (error instanceof Error && /LIMIT|TIMEOUT/u.test(error.message)) throw error;
       issues.push(`regex:${index}`);
     }
+    record(index, before, text);
   }
-  return { text, variables: context.variables, issues: [...new Set([...issues, ...cbs.issues])] };
+  return {
+    text,
+    variables: context.variables,
+    issues: [...new Set([...issues, ...cbs.issues])],
+    ...(input.trace ? { steps, ...(stepsTruncated ? { stepsTruncated } : {}) } : {}),
+  };
+}
+
+export function nativeRisuRegexPlan(native: RisuContentSource, mode: NativeRisuRegexMode) {
+  return nativeRisuRegex(native)
+    .map((script, index) => ({ script, index }))
+    .filter(({ script }) => script.type === mode)
+    .map(({ script, index }) => {
+      const actions: string[] = [];
+      let order = 0;
+      const flag = (script.ableFlag ? script.flag || 'g' : 'g').replace(
+        /<([^>]+)>/gu,
+        (_tag, metas: string) => {
+          for (const meta of metas.split(',').map((value) => value.trim())) {
+            if (meta.startsWith('order ')) order = Number.parseInt(meta.slice(6), 10) || 0;
+            else actions.push(meta);
+          }
+          return '';
+        }
+      );
+      let replacement = script.out.replaceAll('$n', '\n').replaceAll('{{data}}', '$&');
+      const moving =
+        replacement.startsWith('@@move_top') ||
+        replacement.startsWith('@@move_bottom') ||
+        actions.includes('move_top') ||
+        actions.includes('move_bottom');
+      let flags = [...new Set(flag.replace(/[^dgimsuvy]/gu, '').split(''))].join('') || 'u';
+      if (moving) flags = flags.replaceAll('g', '');
+      if (replacement.endsWith('>') && !actions.includes('no_end_nl')) replacement += '\n';
+      return { script, index, order, actions, flags, moving, replacement };
+    })
+    .sort((a, b) => b.order - a.order || a.index - b.index);
 }
 
 export function processNativeRisuText(input: NativeRisuTextInput): Promise<NativeRisuTextResult> {

@@ -1,5 +1,9 @@
 import { analyzeCbs, type CbsRange, type CbsReference } from './cbs-analysis.js';
-import { nativeRisuExtension, nativeRisuLore, type RisuContentSource } from './risu-native.js';
+import {
+  nativeRisuExtension,
+  nativeRisuSourcePaths,
+  type RisuContentSource,
+} from './risu-native.js';
 
 export type CbsVariableScope = CbsReference['scope'];
 export type CbsVariableAccess = CbsReference['access'] | 'default' | 'define';
@@ -9,6 +13,7 @@ export type CbsUseLocation = {
   item: number | null;
   label: string;
   field: string;
+  path: string;
 };
 export type CbsVariableUse = CbsUseLocation & {
   access: CbsVariableAccess;
@@ -255,28 +260,50 @@ function toggleUses(source: string, location: CbsUseLocation): CbsDirectUse[] {
   });
 }
 
-function regexTexts(entries: unknown[], section: string): CbsReferenceInput['cbs'] {
+function regexTexts(entries: unknown[], section: string, base: string): CbsReferenceInput['cbs'] {
   return entries.flatMap((raw, item) => {
     const entry = object(raw);
     const label = string(entry.comment);
+    const key = (primary: string, legacy: string) =>
+      entry[primary] == null && entry[legacy] != null ? legacy : primary;
     return [
-      { section, item, label, field: 'in', text: string(entry.in ?? entry.find) },
-      { section, item, label, field: 'out', text: string(entry.out ?? entry.replace) },
+      {
+        section,
+        item,
+        label,
+        field: 'in',
+        path: `${base}/${item}/${key('in', 'find')}`,
+        text: string(entry.in ?? entry.find),
+      },
+      {
+        section,
+        item,
+        label,
+        field: 'out',
+        path: `${base}/${item}/${key('out', 'replace')}`,
+        text: string(entry.out ?? entry.replace),
+      },
     ];
   });
 }
 
-function triggerInput(entries: unknown[], section: string) {
+function triggerInput(entries: unknown[], section: string, base: string) {
   const input: CbsReferenceInput = { cbs: [], lua: [], direct: [] };
   entries.forEach((raw, item) => {
     const trigger = object(raw);
     const label = string(trigger.comment);
-    const at = (field: string): CbsUseLocation => ({ section, item, label, field });
+    const at = (field: string, key: string): CbsUseLocation => ({
+      section,
+      item,
+      label,
+      field,
+      path: `${base}/${item}/${field.replace('.', '/')}/${key}`,
+    });
     const variable = (value: unknown, access: 'read' | 'write', field: string) => {
       const name = string(value);
       if (!name) return;
       input.direct.push({
-        ...at(field),
+        ...at(field, 'var'),
         scope: 'chat',
         name,
         dynamic: name.includes('{{'),
@@ -292,12 +319,12 @@ function triggerInput(entries: unknown[], section: string) {
     list(trigger.effect).forEach((rawEffect, index) => {
       const effect = object(rawEffect);
       if (effect.type === 'triggerlua')
-        input.lua.push({ ...at(`effect.${index}`), text: string(effect.code) });
+        input.lua.push({ ...at(`effect.${index}`, 'code'), text: string(effect.code) });
       else {
         if (effect.type === 'setvar' || effect.type === 'v2SetVar')
           variable(effect.var, 'write', `effect.${index}`);
         if (typeof effect.value === 'string')
-          input.cbs.push({ ...at(`effect.${index}`), text: effect.value });
+          input.cbs.push({ ...at(`effect.${index}`, 'value'), text: effect.value });
       }
     });
   });
@@ -317,32 +344,63 @@ export function nativeRisuContentReferenceInput(native: RisuContentSource): CbsR
   const standalone = !Object.keys(native.card).length && !!module;
   const extension = nativeRisuExtension(native);
   const card = native.card;
-  const text = (section: string, field: string, value: unknown, item: number | null = null) => ({
+  const paths = nativeRisuSourcePaths(native);
+  const text = (
+    section: string,
+    field: string,
+    value: unknown,
+    path: string,
+    item: number | null = null
+  ) => ({
     section,
     item,
     label: '',
     field,
+    path,
     text: string(value),
   });
   const cbs: CbsReferenceInput['cbs'] = [
-    text('basic', 'description', standalone ? module?.description : card.description),
+    text(
+      'basic',
+      'description',
+      standalone ? module?.description : card.description,
+      `${paths.root}/description`
+    ),
   ];
   if (!standalone) {
-    cbs.push(text('greetings', 'first_mes', card.first_mes, 0));
+    cbs.push(text('greetings', 'first_mes', card.first_mes, '/card/first_mes', 0));
     cbs.push(
       ...list(card.alternate_greetings).map((greeting, index) =>
-        text('greetings', 'alternate_greetings', greeting, index + 1)
+        text(
+          'greetings',
+          'alternate_greetings',
+          greeting,
+          `/card/alternate_greetings/${index}`,
+          index + 1
+        )
       ),
-      text('instructions', 'post_history_instructions', card.post_history_instructions),
-      text('instructions', 'mes_example', card.mes_example)
+      text(
+        'instructions',
+        'post_history_instructions',
+        card.post_history_instructions,
+        '/card/post_history_instructions'
+      ),
+      text('instructions', 'mes_example', card.mes_example, '/card/mes_example')
     );
   }
+  const lore = list(module?.lorebook ?? object(card.character_book).entries).flatMap(
+    (entry, index) =>
+      entry && typeof entry === 'object' && !Array.isArray(entry)
+        ? [{ entry: entry as Record<string, unknown>, index }]
+        : []
+  );
   cbs.push(
-    ...nativeRisuLore(native).map((entry, item) => ({
+    ...lore.map(({ entry, index }, item) => ({
       section: 'lore',
       item,
       label: string(entry.comment ?? entry.name),
       field: 'content',
+      path: `${paths.lore}/${index}/content`,
       text: string(entry.content),
     }))
   );
@@ -350,14 +408,16 @@ export function nativeRisuContentReferenceInput(native: RisuContentSource): CbsR
     text(
       'display',
       standalone ? 'backgroundEmbedding' : 'backgroundHTML',
-      standalone ? module?.backgroundEmbedding : extension.backgroundHTML
+      standalone ? module?.backgroundEmbedding : extension.backgroundHTML,
+      paths.background
     )
   );
-  const variables = (field: string): CbsUseLocation => ({
+  const variables = (field: string, path: string): CbsUseLocation => ({
     section: 'variables',
     item: null,
     label: '',
     field,
+    path,
   });
   const defaultsField = 'defaultVariables';
   const togglesField = standalone ? 'customModuleToggle' : 'toggles';
@@ -365,21 +425,25 @@ export function nativeRisuContentReferenceInput(native: RisuContentSource): CbsR
     {
       cbs: [
         ...cbs,
-        ...regexTexts(list(module ? module.regex : extension.customScripts), 'regex'),
+        ...regexTexts(list(module ? module.regex : extension.customScripts), 'regex', paths.regex),
       ].filter((entry) => entry.text),
       lua: [],
       direct: [
         ...defaultUses(
           string(standalone ? module?.defaultVariables : extension.defaultVariables),
-          variables(defaultsField)
+          variables(defaultsField, paths.defaultVariables)
         ),
         ...toggleUses(
           string(standalone ? module?.customModuleToggle : extension.toggles),
-          variables(togglesField)
+          variables(togglesField, paths.toggles)
         ),
       ],
     },
-    triggerInput(list(module ? module.trigger : extension.triggerscript), 'triggers')
+    triggerInput(
+      list(module ? module.trigger : extension.triggerscript),
+      'triggers',
+      paths.triggers
+    )
   );
 }
 
@@ -394,17 +458,23 @@ export function nativeRisuPresetReferenceInput(preset: Record<string, unknown>):
           item,
           label: string(block.name),
           field,
+          path: `/promptTemplate/${item}/${field}`,
           text: string(block[field]),
         });
   });
   cbs.push(
-    ...regexTexts(list(preset.regex ?? preset.presetRegex), 'regex').filter((entry) => entry.text)
+    ...regexTexts(
+      list(preset.regex ?? preset.presetRegex),
+      'regex',
+      preset.regex == null && preset.presetRegex != null ? '/presetRegex' : '/regex'
+    ).filter((entry) => entry.text)
   );
   const variables = (field: string): CbsUseLocation => ({
     section: 'variables',
     item: null,
     label: '',
     field,
+    path: `/${field}`,
   });
   return {
     cbs,

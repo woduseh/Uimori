@@ -35,13 +35,20 @@ function savedPackage(store: Store, id: string, revision: unknown) {
   return { content, pkg: content.package as RisuContent };
 }
 
-function toggleDefaults(native: RisuContentSource) {
+function toggleVariables(native: RisuContentSource, values: Record<string, string>) {
   const declaration = native.module?.customModuleToggle ?? nativeRisuExtension(native).toggles;
+  const controls = nativeRisuToggleControls(typeof declaration === 'string' ? declaration : '');
   return nativeToggleVariables(
-    nativeRisuToggleControls(typeof declaration === 'string' ? declaration : ''),
-    {}
+    controls,
+    Object.fromEntries(
+      controls.flatMap((control) => {
+        const key = control.nativeKey ?? control.id;
+        return Object.hasOwn(values, key) ? [[control.id, values[key]!]] : [];
+      })
+    )
   );
 }
+export type NativeRisuPreviewOptions = { toggleValues?: Record<string, string> };
 
 async function renderStart(
   pkg: RisuContent,
@@ -50,7 +57,8 @@ async function renderStart(
   variables: Record<string, string>,
   start: string,
   query: PreviewRequest,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: NativeRisuPreviewOptions = {}
 ) {
   const assetNames = nativeRisuAssetNameResolver(native);
   const blobHashes = new Map<string, string>();
@@ -60,7 +68,7 @@ async function renderStart(
     viewport: readDisplayViewport(query),
     native,
     variables,
-    globalVariables: toggleDefaults(native),
+    globalVariables: toggleVariables(native, options.toggleValues ?? {}),
     messages: [],
     charName,
     userName: query.userName ? text(query.userName, 'user name', 200) : '사용자',
@@ -94,22 +102,34 @@ async function renderStart(
   }
 }
 
-export async function nativeRisuPreview(
+export async function nativeRisuStartPreview(
   store: Store,
   id: string,
-  query: PreviewRequest & { startId?: string }
+  query: PreviewRequest & { startId?: string },
+  signal?: AbortSignal,
+  options: NativeRisuPreviewOptions = {}
 ) {
   const { content, pkg } = savedPackage(store, id, query.revision);
   const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
   if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
-  const result = await renderStart(
+  return renderStart(
     pkg,
     structuredClone(pkg.nativeRisu),
     content.title,
     structuredClone(pkg.variableDefaults?.values ?? {}),
     start.text,
-    query
+    query,
+    signal,
+    options
   );
+}
+
+export async function nativeRisuPreview(
+  store: Store,
+  id: string,
+  query: PreviewRequest & { startId?: string }
+) {
+  const result = await nativeRisuStartPreview(store, id, query);
   if ('failure' in result) throw new HttpError(422, 'RISU_PREVIEW_EVALUATION_FAILED');
   return result;
 }
@@ -118,7 +138,8 @@ export async function nativeRisuDraftPreview(
   store: Store,
   id: string,
   body: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: NativeRisuPreviewOptions = {}
 ) {
   const input = record(body);
   fields(input, ['revision', 'nativeRisu', 'text', 'userName', 'viewportWidth', 'viewportHeight']);
@@ -141,5 +162,5 @@ export async function nativeRisuDraftPreview(
   }
   const name = native.card.name;
   const charName = typeof name === 'string' && name.trim() ? name : content.title;
-  return renderStart(pkg, native, charName, variables, start, input, signal);
+  return renderStart(pkg, native, charName, variables, start, input, signal, options);
 }

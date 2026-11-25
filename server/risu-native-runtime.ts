@@ -13,7 +13,11 @@ import { countTextTokens } from '../core/text-tokens.js';
 import type { TokenizerProfileId } from '../core/tokenizer-profiles.js';
 import { nativeRisuReadableLore } from './risu-native-lore.js';
 
-import { RISU_NATIVE_LUA_DISPATCH, RISU_NATIVE_LUA_PRELUDE } from './risu-native-lua.js';
+import {
+  RISU_NATIVE_LUA_DISPATCH,
+  RISU_NATIVE_LUA_MODEL_FUNCTIONS,
+  RISU_NATIVE_LUA_PRELUDE,
+} from './risu-native-lua.js';
 import { createNativeRisuCbsSession, type NativeRisuCbsContext } from './risu-native-cbs.js';
 import { nativeRisuEntropyMarker } from './risu-native-entropy.js';
 
@@ -145,7 +149,44 @@ function requestMessages(value: unknown): NativeRisuRequestMessage[] {
   });
 }
 
+export const RISU_NATIVE_TRIGGER_CONDITIONS: readonly string[] = ['var', 'value', 'chatindex'];
+export const RISU_NATIVE_TRIGGER_OPERATORS: readonly string[] = [
+  '=',
+  '!=',
+  '>',
+  '<',
+  '>=',
+  '<=',
+  'true',
+  'null',
+];
+export const RISU_NATIVE_TRIGGER_EFFECTS: readonly string[] = [
+  'triggerlua',
+  'v2Header',
+  'v2If',
+  'v2IfAdvanced',
+  'v2Else',
+  'v2EndIndent',
+  'v2SetVar',
+  'setvar',
+  'v2Impersonate',
+  'impersonate',
+  'v2ModifyChat',
+  'v2StopPromptSending',
+  'v2StopPrompt',
+  'stop',
+];
+export const RISU_NATIVE_TRIGGER_MAX_INDENT = 64;
+export const RISU_NATIVE_SETVAR_OPERATORS: readonly string[] = ['=', '+=', '-=', '*=', '/=', '%='];
+
+export function mixesNativeRisuLua(effects: Record<string, unknown>[]): boolean {
+  const lua = effects.filter((effect) => effect.type === 'triggerlua').length;
+  return lua > 0 && lua !== effects.length;
+}
+
 function compare(left: string, right: string, operator: string, numericEquality: boolean): boolean {
+  if (!RISU_NATIVE_TRIGGER_OPERATORS.includes(operator))
+    fail('RISU_NATIVE_CONDITION_UNSUPPORTED', operator);
   const numeric = numericEquality && !Number.isNaN(Number(left)) && !Number.isNaN(Number(right));
   switch (operator) {
     case '=':
@@ -201,7 +242,7 @@ async function executeNativeRisuInvocation(
   for (const trigger of input.effectiveTriggers ?? nativeRisuTriggers(input.native)) {
     const effects = Array.isArray(trigger.effect) ? trigger.effect.map(record) : [];
     const lua = effects.filter((effect) => effect.type === 'triggerlua');
-    if (lua.length && lua.length !== effects.length) fail('RISU_NATIVE_MIXED_TRIGGER_UNSUPPORTED');
+    if (mixesNativeRisuLua(effects)) fail('RISU_NATIVE_MIXED_TRIGGER_UNSUPPORTED');
     if (
       !lua.length &&
       (input.event === 'manual' ? trigger.comment !== input.argument : trigger.type !== input.event)
@@ -225,11 +266,11 @@ async function executeNativeRisuInvocation(
     ) {
       for (const raw of Array.isArray(trigger.conditions) ? trigger.conditions : []) {
         const condition = record(raw);
-        let left = '';
+        if (!RISU_NATIVE_TRIGGER_CONDITIONS.includes(text(condition.type)))
+          fail('RISU_NATIVE_CONDITION_UNSUPPORTED', text(condition.type));
+        let left = String(state.messages.length);
         if (condition.type === 'var') left = state.variables[text(condition.var)] ?? 'null';
         else if (condition.type === 'value') left = text(condition.var);
-        else if (condition.type === 'chatindex') left = String(state.messages.length);
-        else fail('RISU_NATIVE_CONDITION_UNSUPPORTED', text(condition.type));
         if (
           !compare(await parse(left), await parse(condition.value), text(condition.operator), false)
         ) {
@@ -253,7 +294,7 @@ async function executeNativeRisuInvocation(
     const blocks: { indent: number; pass: boolean; parent: boolean }[] = [];
     for (const effect of effects) {
       const indent = Number(effect.indent ?? 0);
-      if (!Number.isSafeInteger(indent) || indent < 0 || indent > 64)
+      if (!Number.isSafeInteger(indent) || indent < 0 || indent > RISU_NATIVE_TRIGGER_MAX_INDENT)
         fail('RISU_NATIVE_TRIGGER_INDENT');
       while (blocks.length && blocks[blocks.length - 1].indent > indent) blocks.pop();
       if (effect.type === 'v2EndIndent') {
@@ -281,6 +322,8 @@ async function executeNativeRisuInvocation(
         continue;
       }
       if (!enabled) continue;
+      if (!RISU_NATIVE_TRIGGER_EFFECTS.includes(text(effect.type)))
+        fail('RISU_NATIVE_EFFECT_UNSUPPORTED', text(effect.type));
       switch (effect.type) {
         case 'v2Header':
           break;
@@ -290,6 +333,8 @@ async function executeNativeRisuInvocation(
           if (forbidden.has(key)) fail('RISU_NATIVE_VARIABLES');
           const value = await readValue(effect.value, effect.valueType);
           const before = Number(state.variables[key]) || 0;
+          if (!RISU_NATIVE_SETVAR_OPERATORS.includes(text(effect.operator)))
+            fail('RISU_NATIVE_OPERATOR_UNSUPPORTED', text(effect.operator));
           let next = value;
           switch (effect.operator) {
             case '=':
@@ -425,7 +470,7 @@ async function executeNativeRisuInvocation(
           if (!options.host) fail('RISU_NATIVE_HOST_UNAVAILABLE', method);
           return options.host!(method, args, signal);
         }
-        if (!['LLM', 'axLLM', 'simpleLLM'].includes(method))
+        if (!RISU_NATIVE_LUA_MODEL_FUNCTIONS.includes(method))
           fail('RISU_NATIVE_HOST_UNSUPPORTED', method);
         const payload = record(args),
           scriptIndex = Number(payload.__nativeScript);

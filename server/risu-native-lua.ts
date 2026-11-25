@@ -1,3 +1,5 @@
+export const RISU_NATIVE_LUA_MODEL_FUNCTIONS: readonly string[] = ['LLM', 'axLLM', 'simpleLLM'];
+
 export const RISU_NATIVE_LUA_PRELUDE = String.raw`
 local __json, __snapshot, __input, __host = api.json, api.snapshot, api.input, api.host.call
 local __history = api.history
@@ -291,3 +293,23 @@ while true do
   __effects = {reloadDisplay=false, stopChat=false, notifications=__json.array({})}
 end
 `;
+
+const quotedNames = (block: string) => [...block.matchAll(/'([A-Za-z_]\w*)'/gu)].map((m) => m[1]!);
+
+export const RISU_NATIVE_LUA_UNSUPPORTED_FUNCTIONS: string[] = [
+  ...quotedNames(/\blocal __unsupported = \{([^}]*)\}/u.exec(RISU_NATIVE_LUA_PRELUDE)?.[1] ?? ''),
+  ...[...RISU_NATIVE_LUA_PRELUDE.matchAll(/'RISU_NATIVE_API_UNSUPPORTED:([\w.]+)'/gu)].map(
+    (m) => m[1]!
+  ),
+];
+
+export const RISU_NATIVE_LUA_FUNCTIONS: string[] = [
+  ...new Set([
+    ...[...RISU_NATIVE_LUA_PRELUDE.matchAll(/^function ([A-Za-z_]\w*)\s*\(/gmu)].map((m) => m[1]!),
+    ...[...RISU_NATIVE_LUA_PRELUDE.matchAll(/^\s*env\.([A-Za-z_]\w*) = function\s*\(/gmu)].map(
+      (m) => m[1]!
+    ),
+  ]),
+]
+  .filter((name) => !RISU_NATIVE_LUA_UNSUPPORTED_FUNCTIONS.includes(name))
+  .sort();

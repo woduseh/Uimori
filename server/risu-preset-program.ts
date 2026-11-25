@@ -1,25 +1,21 @@
 import { resolvePromptValues, validateRisuPrompt } from '../core/risu-prompt.js';
 import {
   createNativeRisuPresetProgram,
+  NATIVE_RISU_PRESET_BLOCKS,
+  NATIVE_RISU_PRESET_SKIPPED_BLOCKS,
   nativeRisuPresetSource,
 } from '../core/risu-native-preset.js';
 import type { RisuPresetProgramImport } from '../core/risu-preset.js';
 
+export const RISU_PRESET_IGNORED_SETTINGS: readonly string[] = [
+  'utilOverride',
+  'customChainOfThought',
+];
+
 export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport {
   const native = nativeRisuPresetSource(value);
   const program = validateRisuPrompt(createNativeRisuPresetProgram(native));
-  const supported = new Set([
-    'plain',
-    'chatML',
-    'chat',
-    'cache',
-    'persona',
-    'description',
-    'lorebook',
-    'authornote',
-    'postEverything',
-    'memory',
-  ]);
+  const supported = new Set([...NATIVE_RISU_PRESET_BLOCKS, ...NATIVE_RISU_PRESET_SKIPPED_BLOCKS]);
   const unsupported = (native.preset.promptTemplate as Record<string, unknown>[])
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => !supported.has(String(item.type)));
@@ -36,14 +32,12 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
         path: `promptTemplate[${index}]`,
         message: `${index + 1}번 블록(${String(item.type)})은 저장되지만 실행되지 않아요. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요.`,
       })),
-      ...['utilOverride', 'customChainOfThought']
-        .filter((key) => settings?.[key] === true)
-        .map((key) => ({
-          code: 'RISU_PRESET_HOST_SETTING',
-          level: 'unsupported' as const,
-          path: `promptSettings.${key}`,
-          message: `${key}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요.`,
-        })),
+      ...RISU_PRESET_IGNORED_SETTINGS.filter((key) => settings?.[key] === true).map((key) => ({
+        code: 'RISU_PRESET_HOST_SETTING',
+        level: 'unsupported' as const,
+        path: `promptSettings.${key}`,
+        message: `${key}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요.`,
+      })),
       ...((native.preset.promptTemplate as Record<string, unknown>[]).some(
         (item) => item.type === 'memory'
       )

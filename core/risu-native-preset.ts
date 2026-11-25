@@ -166,8 +166,23 @@ export function evaluatedNativeRisuPreset(
         raw[key] = fields[`block:${index}:${key}`];
   return result;
 }
+export const NATIVE_RISU_PRESET_SKIPPED_BLOCKS: readonly string[] = ['jailbreak', 'cot', 'memory'];
+export const NATIVE_RISU_PRESET_SLOT_BLOCKS: readonly string[] = [
+  'persona',
+  'description',
+  'lorebook',
+  'authornote',
+  'postEverything',
+];
+export const NATIVE_RISU_PRESET_BLOCKS: readonly string[] = [
+  'plain',
+  'chatML',
+  'chat',
+  'cache',
+  ...NATIVE_RISU_PRESET_SLOT_BLOCKS,
+];
 export function nativeRisuBlockEnabled(type: unknown): boolean {
-  return !['jailbreak', 'cot', 'memory'].includes(String(type));
+  return !NATIVE_RISU_PRESET_SKIPPED_BLOCKS.includes(String(type));
 }
 export type NativePresetFieldContext = {
   slots?: Record<string, string>;

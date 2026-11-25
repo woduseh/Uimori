@@ -11,6 +11,7 @@ import {
   validateNativeRisuPreset,
   nativeRisuPresetControls,
   nativeRisuBlockEnabled,
+  NATIVE_RISU_PRESET_BLOCKS,
   type NativeRisuPreset,
 } from './risu-native-preset.js';
 import { nativeChatMlMessages, type NativePromptMessage } from './risu-native-messages.js';
@@ -440,6 +441,7 @@ export function compileRisuPrompt(
       trace.push({ blockId: id, included: false, messageIds: [], reason: 'disabled' });
       continue;
     }
+    if (!NATIVE_RISU_PRESET_BLOCKS.includes(type)) fail('RISU_NATIVE_PRESET_BLOCK', type);
     if (type === 'plain') {
       const content = text(raw.text);
       add(id, content, role(raw.role));
@@ -509,9 +511,7 @@ export function compileRisuPrompt(
       if (!anchors.length) warnings.push(`PROMPT_EMPTY_CACHE_ANCHOR (${id})`);
       for (const message of anchors)
         cachePlan.push({ blockId: id, afterMessageId: message.id, policy: 'prefer' });
-    } else if (
-      ['persona', 'description', 'lorebook', 'authornote', 'postEverything'].includes(type)
-    ) {
+    } else {
       const slot = type === 'authornote' ? 'authorNote' : type;
       const content = context.slots[slot] || (type === 'authornote' ? text(raw.defaultText) : '');
       if (content) {
@@ -525,7 +525,7 @@ export function compileRisuPrompt(
           formatted ? role(raw.role2) : 'system'
         );
       }
-    } else fail('RISU_NATIVE_PRESET_BLOCK', type);
+    }
     trace.push({ blockId: id, included: true, messageIds: messages.slice(start).map((m) => m.id) });
   }
   for (const reference of context.references ?? []) {

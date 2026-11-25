@@ -45,13 +45,23 @@ const records = (value: unknown): Record<string, unknown>[] =>
     : [];
 export const nativeRisuExtension = (native: RisuContentSource) =>
   object(object(native.card.extensions).risuai);
+export function nativeRisuRegexEntries(
+  native: RisuContentSource
+): { script: NativeRisuRegex; index: number }[] {
+  const raw = native.module ? native.module.regex : nativeRisuExtension(native).customScripts;
+  return (Array.isArray(raw) ? raw : []).flatMap((item, index) =>
+    item &&
+    typeof item === 'object' &&
+    !Array.isArray(item) &&
+    typeof item.in === 'string' &&
+    typeof item.out === 'string' &&
+    typeof item.type === 'string'
+      ? [{ script: item as NativeRisuRegex, index }]
+      : []
+  );
+}
 export function nativeRisuRegex(native: RisuContentSource): NativeRisuRegex[] {
-  return records(
-    native.module ? native.module.regex : nativeRisuExtension(native).customScripts
-  ).filter(
-    (item) =>
-      typeof item.in === 'string' && typeof item.out === 'string' && typeof item.type === 'string'
-  ) as NativeRisuRegex[];
+  return nativeRisuRegexEntries(native).map((entry) => entry.script);
 }
 export function nativeRisuTriggers(native: RisuContentSource): Record<string, unknown>[] {
   const lowLevelAccess =
@@ -63,6 +73,19 @@ export function nativeRisuTriggers(native: RisuContentSource): Record<string, un
 }
 export function nativeRisuLore(native: RisuContentSource): Record<string, unknown>[] {
   return records(native.module?.lorebook ?? object(native.card.character_book).entries);
+}
+export function nativeRisuSourcePaths(native: RisuContentSource) {
+  const standalone = !Object.keys(native.card).length && !!native.module;
+  const extension = '/card/extensions/risuai';
+  return {
+    root: standalone ? '/module' : '/card',
+    lore: native.module?.lorebook != null ? '/module/lorebook' : '/card/character_book/entries',
+    regex: native.module ? '/module/regex' : `${extension}/customScripts`,
+    triggers: native.module ? '/module/trigger' : `${extension}/triggerscript`,
+    background: standalone ? '/module/backgroundEmbedding' : `${extension}/backgroundHTML`,
+    defaultVariables: standalone ? '/module/defaultVariables' : `${extension}/defaultVariables`,
+    toggles: standalone ? '/module/customModuleToggle' : `${extension}/toggles`,
+  };
 }
 export function nativeRisuBackground(native: RisuContentSource): string {
   const value = nativeRisuExtension(native).backgroundHTML;
