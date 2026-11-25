@@ -73,10 +73,19 @@ test('EDIT01 the header counts changed sections, the drawer jumps to one and a p
   await expect(sheet).toHaveCSS('transform', 'none');
   const items = sheet
     .getByRole('list', { name: '변경한 편집 영역', exact: true })
-    .getByRole('button');
+    .locator('.editor-changes-item');
   await expect(items).toHaveText(['기본 정보', '첫 메시지', 'JSON 소스적용 전 입력']);
+  await expect(items.and(page.locator('[aria-expanded="false"]'))).toHaveCount(3);
+  await sheet.getByRole('button', { name: '기본 정보', exact: true }).click();
+  const description = sheet.getByRole('region', { name: '카드 설명 변경 내용', exact: true });
+  await expect(description.locator('del')).toHaveText('삭제된 부분 처음 쓴');
+  await expect(description.locator('ins')).toHaveText('추가된 부분 고친');
+  await expect(sheet.getByRole('region', { name: '이름 변경 내용', exact: true })).toHaveCount(1);
+  await items.nth(2).click();
+  await expect(sheet).toContainText('적용하지 않은 입력은 아직 비교에 들어가지 않아요.');
   await capture(page, 'edit01-drawer-1440-dark', 'dark');
-  await sheet.getByRole('button', { name: '첫 메시지', exact: true }).click();
+  await capture(page, 'edit01-drawer-1440-light');
+  await sheet.getByRole('button', { name: '첫 메시지 영역으로 이동', exact: true }).click();
   await expect(sheet).toBeHidden();
   await expect(chip).toBeFocused();
   await expect(editorTab(page, '첫 메시지')).toHaveAttribute('aria-selected', 'true');
@@ -119,7 +128,7 @@ for (const width of [700, 390]) {
     const cancel = sheet.getByRole('button', { name: '편집 취소', exact: true });
     await expect(cancel).toBeInViewport();
     await capture(page, `edit02-drawer-${width}`);
-    await sheet.getByRole('button', { name: '기본 정보', exact: true }).click();
+    await sheet.getByRole('button', { name: '기본 정보 영역으로 이동', exact: true }).click();
     await expect(sheet).toBeHidden();
     await expectEditorSection(page, '기본 정보');
     await chip.click();
@@ -152,6 +161,13 @@ test('EDIT03 comparing with the previous save lists the differing sections, rest
     .getByRole('list', { name: '다른 영역', exact: true })
     .getByRole('listitem');
   await expect(sections).toHaveText(['기본 정보', '첫 메시지']);
+  await expect(
+    page.locator('.action-menu-body').filter({ has: page.locator('.previous-version-dialog') })
+  ).toBeHidden();
+  await dialog.getByRole('button', { name: '첫 메시지', exact: true }).click();
+  const greeting = dialog.getByRole('region', { name: '기본 첫 메시지 변경 내용', exact: true });
+  await expect(greeting.locator('del')).toHaveText('삭제된 부분 처음');
+  await expect(greeting.locator('ins')).toHaveText('추가된 부분 두 번째');
   await capture(page, 'edit03-compare-1440');
   await dialog.getByRole('button', { name: '이전 저장본으로 복원', exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -229,8 +245,16 @@ test('EDIT05 prompt presets count sections and restore the previous save', async
   await expect(editorChanges(editor)).toHaveAccessibleName('변경 2건');
   await editorChanges(editor).click();
   await expect(
-    drawer(page).getByRole('list', { name: '변경한 편집 영역', exact: true }).getByRole('button')
+    drawer(page)
+      .getByRole('list', { name: '변경한 편집 영역', exact: true })
+      .locator('.editor-changes-item')
   ).toHaveText(['구성', '기본 옵션']);
+  await drawer(page).getByRole('button', { name: '구성', exact: true }).click();
+  await expect(
+    drawer(page)
+      .getByRole('region', { name: /본문 \(Risu CBS\) 변경 내용$/u })
+      .locator('ins')
+  ).toHaveText(['추가된 부분 고친', '추가된 부분 프롬프트', '추가된 부분 본문']);
   await page.keyboard.press('Escape');
   await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   await expect(editorChanges(editor)).toHaveCount(0);
@@ -249,4 +273,76 @@ test('EDIT05 prompt presets count sections and restore the previous save', async
   await editor.getByRole('button', { name: '복원 취소', exact: true }).click();
   await expectCodeFieldValue(body, '고친 프롬프트 본문');
   await expectEditorSection(editor, '구성');
+});
+
+test('EDIT06 360px the drawer and the previous-save comparison show one edited lore entry without page overflow', async ({
+  page,
+  request,
+}) => {
+  const title = `EDIT06 ${randomUUID().slice(0, 8)}`;
+  const entries = ['등대', '항구', '숲'].map((name, id) => ({
+    id,
+    keys: [name],
+    content: `${name} 로어`,
+    comment: name,
+  }));
+  const response = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title,
+      package: nativeContent({ name: title, character_book: { entries } }),
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  await page.setViewportSize({ width: 360, height: 780 });
+  await openBot(page, title);
+  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
+  await selectEditorSection(editor, '로어북');
+  const navigation = editor.getByRole('complementary', { name: '로어 목록', exact: true });
+  if (!(await navigation.isVisible()))
+    await editor.getByRole('button', { name: '로어 목록 보기', exact: true }).click();
+  await navigation.getByRole('button', { name: '항구', exact: true }).click();
+  await editor.getByLabel('로어 본문', { exact: true }).fill('바람이 부는 항구 로어');
+  await editorChanges(page).click();
+  const sheet = drawer(page);
+  await sheet.getByRole('button', { name: '로어북', exact: true }).click();
+  const fields = sheet.locator('.editor-field-change');
+  await expect(fields).toHaveCount(1);
+  const diff = sheet.getByRole('region', { name: '항구 / 로어 본문 변경 내용', exact: true });
+  await expect(diff.locator('ins')).toHaveText('추가된 부분 바람이 부는');
+  const fits = (selector: string) =>
+    page.locator(selector).evaluate((node) => node.scrollWidth <= node.clientWidth);
+  expect(await fits('.editor-changes-drawer .editor-changes-list')).toBe(true);
+  const box = (await sheet.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(360);
+  await capture(page, 'edit06-drawer-360', 'dark');
+  await capture(page, 'edit06-drawer-360-light');
+  await page.keyboard.press('Escape');
+  const saved = waitForContentSave(page);
+  await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+  await saved;
+
+  const menu = page.getByLabel('자료 메뉴', { exact: true });
+  await menu.click();
+  await page.getByRole('button', { name: '이전 저장본과 비교', exact: true }).click();
+  const dialog = compareDialog(page);
+  await expect(dialog.locator('.editor-changes-item')).toHaveText(['로어북']);
+  await dialog.getByRole('button', { name: '로어북', exact: true }).click();
+  await expect(dialog.locator('.editor-field-change')).toHaveCount(1);
+  await expect(
+    dialog.getByRole('region', { name: '항구 / 로어 본문 변경 내용', exact: true }).locator('del')
+  ).toHaveCount(0);
+  await expect(
+    page.locator('.action-menu-body').filter({ has: page.locator('.previous-version-dialog') })
+  ).toBeHidden();
+  expect(await fits('.previous-version-dialog .dialog-body')).toBe(true);
+  const dialogBox = (await dialog.boundingBox())!;
+  expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(360);
+  await capture(page, 'edit06-compare-360');
+  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(menu).toBeFocused();
 });

@@ -13,7 +13,7 @@ import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { EditorStudio, useStudioSection } from './EditorStudio.js';
-import { presetChanges, presetSections } from './studio-sections.js';
+import { presetChangeSection, presetChanges, presetSections } from './studio-sections.js';
 import { EditorChanges, PreviousVersionAction, RestoredVersionNotice } from './EditorChanges.js';
 import { changedValuePaths } from './editor-values.js';
 import { CopyIcon } from './ui-icons.js';
@@ -334,9 +334,8 @@ export function PromptEditor({
           <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
             <PreviousVersionAction
               commands={commands}
-              compare={(previous) =>
-                presetChanges(sections, changedValuePaths(state.document.baseModel, previous))
-              }
+              sections={(paths) => presetChanges(sections, paths)}
+              sectionOf={presetChangeSection(sections)}
             />
             <div className="action-menu-group">
               <button
@@ -500,7 +499,13 @@ export function PromptEditor({
                 commands={commands}
                 hideSyncError
                 changes={
-                  <EditorChanges commands={commands} changes={changes} onSelect={selectSection} />
+                  <EditorChanges
+                    commands={commands}
+                    changes={changes}
+                    current={model}
+                    sectionOf={presetChangeSection(sections)}
+                    onSelect={selectSection}
+                  />
                 }
               />
               {saveActions}

@@ -1,6 +1,7 @@
 import { t } from './i18n.js';
 import type { RisuContent } from '../core/risu-content.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
+import type { ContentEditModel, ResourceModel } from '../core/resource-editing.js';
 import {
   nativeRisuBackground,
   nativeRisuExtension,
@@ -444,6 +445,19 @@ export function presetSections(
 
 export type ChangedSection<K extends string> = StudioSection<K> & { pending: boolean };
 
+function sectionPlacer<Id extends string, Doc>(
+  registry: readonly StudioSectionDefinition<Id, Doc>[],
+  fallback: (path: string) => Id,
+  shown: readonly StudioSection<Id>[]
+) {
+  const place = (id: Id) => (shown.some((section) => section.id === id) ? id : fallback(''));
+  return {
+    place,
+    sectionOf: (path: string) =>
+      place(registry.find((section) => section.owns(path))?.id ?? fallback(path)),
+  };
+}
+
 function changedSections<Id extends string, Doc>(
   registry: readonly StudioSectionDefinition<Id, Doc>[],
   fallback: (path: string) => Id,
@@ -451,11 +465,10 @@ function changedSections<Id extends string, Doc>(
   paths: readonly string[],
   drafts: readonly string[]
 ): ChangedSection<Id>[] {
-  const place = (id: Id) => (shown.some((section) => section.id === id) ? id : fallback(''));
+  const { place, sectionOf } = sectionPlacer(registry, fallback, shown);
   const changed = new Set<Id>();
   const pending = new Set<Id>();
-  for (const path of paths)
-    changed.add(place(registry.find((section) => section.owns(path))?.id ?? fallback(path)));
+  for (const path of paths) changed.add(sectionOf(path));
   for (const key of drafts) {
     const owner = registry.find((section) =>
       section.drafts?.some((draft) => key === draft || key.startsWith(`${draft}.`))
@@ -468,23 +481,37 @@ function changedSections<Id extends string, Doc>(
     .map((section) => ({ ...section, pending: pending.has(section.id) }));
 }
 
+const contentFallback = (path: string): ContentSection =>
+  path.startsWith('/package/nativeRisu/') ? 'source' : 'basic';
+const presetFallback = (): PresetSection => 'options';
+
 export const contentChanges = (
   shown: readonly StudioSection<ContentSection>[],
   paths: readonly string[],
   drafts: readonly string[] = []
-) =>
-  changedSections(
-    contentSectionRegistry,
-    (path) => (path.startsWith('/package/nativeRisu/') ? 'source' : 'basic'),
-    shown,
-    paths,
-    drafts
-  );
+) => changedSections(contentSectionRegistry, contentFallback, shown, paths, drafts);
 export const presetChanges = (
   shown: readonly StudioSection<PresetSection>[],
   paths: readonly string[],
   drafts: readonly string[] = []
-) => changedSections(presetSectionRegistry, () => 'options', shown, paths, drafts);
+) => changedSections(presetSectionRegistry, presetFallback, shown, paths, drafts);
+export function authoredContentModel(model: ResourceModel): ResourceModel {
+  const content = model as ContentEditModel;
+  const {
+    revision: _revision,
+    title: _title,
+    description: _description,
+    body: _body,
+    lore: _lore,
+    loreFolders: _folders,
+    ...authored
+  } = content.package;
+  return { ...content, package: authored as RisuContent };
+}
+export const contentChangeSection = (shown: readonly StudioSection<ContentSection>[]) =>
+  sectionPlacer(contentSectionRegistry, contentFallback, shown).sectionOf;
+export const presetChangeSection = (shown: readonly StudioSection<PresetSection>[]) =>
+  sectionPlacer(presetSectionRegistry, presetFallback, shown).sectionOf;
 
 export function promptBlockTypeLabels(): Record<string, string> {
   return {

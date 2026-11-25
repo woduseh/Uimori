@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { CloseIcon, EditIcon, ExpandIcon, HistoryIcon } from './ui-icons.js';
+import { CloseIcon, EditIcon, HistoryIcon } from './ui-icons.js';
+import { ChangedSectionList } from './EditorFieldChanges.js';
+import { changedValuePaths } from './editor-values.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import type { ResourceEditorCommands } from './resource-editor.js';
 import type { ChangedSection } from './studio-sections.js';
@@ -12,10 +14,14 @@ import type { ChangedSection } from './studio-sections.js';
 export function EditorChanges<K extends string>({
   commands,
   changes,
+  current,
+  sectionOf,
   onSelect,
 }: {
   commands: ResourceEditorCommands;
   changes: readonly ChangedSection<K>[];
+  current: ResourceModel;
+  sectionOf: (path: string) => K;
   onSelect: (id: K) => void;
 }) {
   useI18n();
@@ -52,26 +58,17 @@ export function EditorChanges<K extends string>({
         onClose={() => setOpen(false)}
       >
         <p className="muted">{t('shared.changedSectionsHelp')}</p>
-        <ul className="editor-changes-list" aria-label={t('shared.changedSections')}>
-          {changes.map((section) => (
-            <li key={section.id}>
-              <button
-                type="button"
-                className="editor-changes-item"
-                onClick={() => {
-                  onSelect(section.id);
-                  setOpen(false);
-                }}
-              >
-                <span className="editor-changes-title">{section.title}</span>
-                {section.pending && (
-                  <span className="editor-changes-badge">{t('shared.pendingInput')}</span>
-                )}
-                <ExpandIcon size={18} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <ChangedSectionList
+          label={t('shared.changedSections')}
+          sections={changes}
+          before={state.document.baseModel}
+          after={current}
+          sectionOf={sectionOf}
+          onSelect={(id) => {
+            onSelect(id);
+            setOpen(false);
+          }}
+        />
         <div className="editor-changes-footer">
           <button
             type="button"
@@ -88,6 +85,8 @@ export function EditorChanges<K extends string>({
   );
 }
 
+const sameModel = (model: ResourceModel) => model;
+
 type PreviousVersion =
   | { status: 'loading' }
   | { status: 'failed'; error: string }
@@ -96,10 +95,14 @@ type PreviousVersion =
 
 export function PreviousVersionAction<K extends string>({
   commands,
-  compare,
+  sections: changedSections,
+  sectionOf,
+  authored = sameModel,
 }: {
   commands: ResourceEditorCommands;
-  compare: (previous: ResourceModel) => readonly ChangedSection<K>[];
+  sections: (paths: readonly string[]) => readonly ChangedSection<K>[];
+  sectionOf: (path: string) => K;
+  authored?: (model: ResourceModel) => ResourceModel;
 }) {
   useI18n();
   const { session, state } = commands.value;
@@ -135,9 +138,16 @@ export function PreviousVersionAction<K extends string>({
       request.current++;
     };
   }, [open, load]);
-  if (!state.document.targetId) return null;
   const stale = previous.status === 'ready' && previous.savedRevision !== revision;
-  const sections = previous.status === 'ready' && !stale ? compare(previous.model) : [];
+  const baseModel = state.document.baseModel;
+  const compared = useMemo(() => {
+    if (!open || previous.status !== 'ready' || stale) return null;
+    const before = authored(previous.model);
+    const after = authored(baseModel);
+    return { before, after, paths: changedValuePaths(before, after) };
+  }, [open, previous, stale, baseModel, authored]);
+  if (!state.document.targetId) return null;
+  const sections = compared ? changedSections(compared.paths) : [];
   const close = () => {
     if (!busy) setOpen(false);
   };
@@ -169,14 +179,16 @@ export function PreviousVersionAction<K extends string>({
           <p>{t('shared.noPreviousVersion')}</p>
         ) : stale ? (
           <p role="alert">{t('shared.previousChanged')}</p>
-        ) : sections.length ? (
+        ) : compared && sections.length ? (
           <>
             <p>{t('shared.comparePreviousHelp')}</p>
-            <ul className="previous-version-sections" aria-label={t('shared.differentSections')}>
-              {sections.map((section) => (
-                <li key={section.id}>{section.title}</li>
-              ))}
-            </ul>
+            <ChangedSectionList
+              label={t('shared.differentSections')}
+              sections={sections}
+              before={compared.before}
+              after={compared.after}
+              sectionOf={sectionOf}
+            />
           </>
         ) : (
           <p>{t('shared.previousSame')}</p>

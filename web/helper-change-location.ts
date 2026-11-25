@@ -71,7 +71,7 @@ const listSections: Record<HelperChangeListSection, string> = {
   prompt: 'native.text_02eb4cbf48',
   terms: 'library.namesAndTerminology',
 };
-const itemFields: Record<HelperChangeListSection, Record<string, string>> = {
+export const listItemFieldLabels: Record<HelperChangeListSection, Record<string, string>> = {
   lore: {
     comment: 'native.text_3df0f8d368',
     name: 'native.text_3df0f8d368',
@@ -102,7 +102,7 @@ const storyUiFields: Record<string, string> = {
   css: 'storyUi.customCss',
   boardCss: 'storyUi.boardCss',
 };
-const NATIVE_PREFIX =
+export const NATIVE_PREFIX =
   /^\/(?:package\/nativeRisu\/(?:card|module)|program\/nativeRisuPreset\/preset)(?=\/|$)/u;
 
 const label = (key: string): LocationPart => ({ text: t(key) });
@@ -157,7 +157,7 @@ function resourceList(location: Extract<HelperChangeLocation, { kind: 'resource-
     });
   const [field] = location.field;
   if (field !== undefined) {
-    const key = itemFields[location.section][field];
+    const key = listItemFieldLabels[location.section][field];
     parts.push(key ? label(key) : identifier(location.field));
   }
   return parts;

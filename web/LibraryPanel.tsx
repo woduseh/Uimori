@@ -36,6 +36,8 @@ import {
 } from './resource-editor.js';
 import {
   availableSections,
+  authoredContentModel,
+  contentChangeSection,
   contentChanges,
   contentSectionRegistry,
   contentSections,
@@ -1455,7 +1457,13 @@ function ContentEditor({
                   commands={commands}
                   hideSyncError
                   changes={
-                    <EditorChanges commands={commands} changes={changes} onSelect={selectSection} />
+                    <EditorChanges
+                      commands={commands}
+                      changes={changes}
+                      current={value}
+                      sectionOf={contentChangeSection(sections)}
+                      onSelect={selectSection}
+                    />
                   }
                 />
                 {selected && canUse(category) && (
@@ -1502,9 +1510,9 @@ function ContentEditor({
                 <LibraryItemMenu title={t('library.resourceMenu')}>
                   <PreviousVersionAction
                     commands={commands}
-                    compare={(previous) =>
-                      contentChanges(sections, changedValuePaths(document.baseModel, previous))
-                    }
+                    sections={(paths) => contentChanges(sections, paths)}
+                    sectionOf={contentChangeSection(sections)}
+                    authored={authoredContentModel}
                   />
                   {selected && (
                     <div className="action-menu-group">
