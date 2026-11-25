@@ -52,7 +52,9 @@ const model = (): ModelSnapshot => ({
     catalogError: null,
   },
 });
-async function snapshot(): Promise<RunSnapshot> {
+async function snapshot(
+  chat: Record<string, unknown>[] = [{ type: 'chat', rangeStart: 0, rangeEnd: 'end' }]
+): Promise<RunSnapshot> {
   const target = model();
   const history = chapters.map((text, index) => ({
     revision: `chapter-${index}`,
@@ -103,7 +105,7 @@ async function snapshot(): Promise<RunSnapshot> {
             program: nativePrompt('FIXED_INSTRUCTIONS_CANARY', {
               promptTemplate: [
                 { type: 'plain', role: 'system', text: 'FIXED_INSTRUCTIONS_CANARY' },
-                { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+                ...chat,
               ],
             }),
           },
@@ -335,6 +337,18 @@ test('the writer fails the attempt instead of running a read tool its request di
   expect(sent).toHaveLength(1);
   expect(started).toEqual([]);
   expect(observed.events).toEqual([]);
+});
+
+test('a chat range that keeps a request but cuts its scene leaves story reads open', async () => {
+  const names = async (chat?: Record<string, unknown>[]) =>
+    buildMainProviderRequest(await snapshot(chat)).request.stable.tools.map((tool) => tool.name);
+  expect(await names()).not.toContain('story.read');
+  expect(
+    await names([
+      { type: 'chat', rangeStart: 0, rangeEnd: -2 },
+      { type: 'chat', rangeStart: -1, rangeEnd: 'end' },
+    ])
+  ).toContain('story.read');
 });
 
 test('the shell description names knowledge.read only when the request offers it', async () => {

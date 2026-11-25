@@ -165,6 +165,7 @@ export function pinnedSlotSources(
 export type MainReadOptions = {
   delivery?: 'writer' | 'direct';
   families?: readonly ReadFamily[];
+  sentScenes?: (history: MainInput['history']) => ReadonlySet<string>;
 };
 function writerDeliveredReferences(
   snapshot: RunSnapshot,
@@ -344,15 +345,19 @@ export function buildMainInput(
         ...(writer ? writerDeliveredReferences(snapshot, packages, resources) : []),
       ]),
       scenes: snapshot.history,
-      deliveredScenes: new Set(
-        writer && snapshot.promptCompilation
-          ? snapshot.promptCompilation.messages.flatMap((message) =>
-              message.provenance.origin !== 'prompt' && message.provenance.sourceRevision
-                ? [message.provenance.sourceRevision]
-                : []
-            )
-          : input.history.map((entry) => entry.revision)
-      ),
+      deliveredScenes:
+        reads.sentScenes?.(input.history) ??
+        new Set(
+          writer && snapshot.promptCompilation
+            ? snapshot.promptCompilation.messages.flatMap((message) =>
+                message.role === 'assistant' &&
+                message.provenance.origin !== 'prompt' &&
+                message.provenance.sourceRevision
+                  ? [message.provenance.sourceRevision]
+                  : []
+              )
+            : input.history.map((entry) => entry.revision)
+        ),
     },
     reads.families ?? MAIN_READ_FAMILIES
   );

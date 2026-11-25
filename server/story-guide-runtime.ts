@@ -10,7 +10,7 @@ import {
 import { isGeminiProtocol, modelTimeoutMs } from '../core/product.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { outlineContract } from '../core/outline.js';
-import { buildMainInput, executeTool } from '../core/provider.js';
+import { buildMainInput, executeTool, type MainInput } from '../core/provider.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 import type { StoryGuideBrief } from '../core/story-guide.js';
@@ -79,6 +79,28 @@ export function storyGuideReservedTokens(snapshot: RunSnapshot): number {
   return snapshot.storyGuide?.config.enabled ? GUIDE_RESERVE_TOKENS : 0;
 }
 
+function guideHistory(snapshot: RunSnapshot, kept: MainInput['history']) {
+  const revisions = new Set(kept.map((entry) => entry.revision));
+  return (
+    snapshot.nativeRisuExecution?.history ??
+    snapshot.logicalHistory ??
+    kept.map((entry) => ({
+      role: 'assistant' as const,
+      text: entry.text,
+      sourceRevision: entry.revision,
+      sourceHash: entry.contentHash,
+    }))
+  )
+    .filter((message) => !('current' in message && message.current))
+    .filter((message) => !message.sourceRevision || revisions.has(message.sourceRevision))
+    .map(({ role, text, sourceRevision, sourceHash }) => ({
+      role,
+      text,
+      ...(sourceRevision ? { sourceRevision } : {}),
+      ...(sourceHash ? { sourceHash } : {}),
+    }));
+}
+
 function guideRequest(snapshot: RunSnapshot, reads: boolean): ProviderRequest {
   const target = snapshot.profile!.models.main!;
   const search = snapshot.storyGuide!.config.webSearch === true;
@@ -88,28 +110,16 @@ function guideRequest(snapshot: RunSnapshot, reads: boolean): ProviderRequest {
       !reads || (search && isGeminiProtocol(target.connection.protocol))
         ? []
         : ['knowledge', 'story'],
+    sentScenes: (kept) =>
+      new Set(
+        guideHistory(snapshot, kept).flatMap((message) =>
+          message.role === 'assistant' && message.sourceRevision ? [message.sourceRevision] : []
+        )
+      ),
   });
   const tools = MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name));
   const characterExamples = nativeCharacterExamples(snapshot);
-  const kept = new Set(input.history.map((entry) => entry.revision));
-  const history = (
-    snapshot.nativeRisuExecution?.history ??
-    snapshot.logicalHistory ??
-    input.history.map((entry) => ({
-      role: 'assistant' as const,
-      text: entry.text,
-      sourceRevision: entry.revision,
-      sourceHash: entry.contentHash,
-    }))
-  )
-    .filter((message) => !('current' in message && message.current))
-    .filter((message) => !message.sourceRevision || kept.has(message.sourceRevision))
-    .map(({ role, text, sourceRevision, sourceHash }) => ({
-      role,
-      text,
-      ...(sourceRevision ? { sourceRevision } : {}),
-      ...(sourceHash ? { sourceHash } : {}),
-    }));
+  const history = guideHistory(snapshot, input.history);
   return {
     role: 'main',
     ...(search ? { webSearch: true } : {}),
