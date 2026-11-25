@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { MAIN_SHELL_TOOL } from '../core/main-shell.js';
+import { mainShellTool } from '../core/main-shell.js';
 import { providerToolNames } from '../core/provider-tool-names.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import {
@@ -51,7 +51,7 @@ test('helper app mutations keep operation identity host-owned', () => {
 
 test('writer read and helper tools describe each top-level argument', () => {
   const tools = [
-    MAIN_SHELL_TOOL,
+    mainShellTool(true),
     ...MAIN_READ_TOOLS,
     HELPER_SHELL_TOOL,
     ...HELPER_GATEWAY_TOOLS,

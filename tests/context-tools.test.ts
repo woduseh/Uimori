@@ -315,6 +315,36 @@ test('main shell results reach the next request and saved receipts avoid repeati
   ).toBe(false);
 });
 
+test('the writer fails the attempt instead of running a read tool its request did not offer', async () => {
+  const fixed = await snapshot();
+  const observed = hooks();
+  const started: string[] = [];
+  observed.value.onToolStart = (event) => {
+    started.push(event.name);
+  };
+  const sent = script([
+    (body) => {
+      expect(body.stable.tools.map((tool) => tool.name)).not.toContain('story.read');
+      return toolTurn([{ id: 'unoffered', name: 'story.read', args: { sceneNumber: 1 } }], 1);
+    },
+  ]);
+  expect(await runMain(fixed, observed.value)).toMatchObject({
+    status: 'error',
+    error: 'UNKNOWN_TOOL',
+  });
+  expect(sent).toHaveLength(1);
+  expect(started).toEqual([]);
+  expect(observed.events).toEqual([]);
+});
+
+test('the shell description names knowledge.read only when the request offers it', async () => {
+  const tools = buildMainProviderRequest(await snapshot(), { shell: true }).request.stable.tools;
+  expect(tools.map((item) => item.name)).not.toContain('knowledge.read');
+  expect(tools.find((item) => item.name === 'data.exec')?.description).not.toContain(
+    'knowledge.read'
+  );
+});
+
 test('shell output of 800 repetitions keeps logs and paired results so writing can continue', async () => {
   const repetitions = 800;
   const fixed = await snapshot();

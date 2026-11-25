@@ -45,14 +45,13 @@ export function shellExecutionOptions(
   };
 }
 
-export const MAIN_SHELL_TOOL: ProviderTool = {
+export const mainShellTool = (knowledgeRead: boolean): ProviderTool => ({
   name: 'data.exec',
-  description:
-    'Run Bash with rg, jq, Python or Node in the Linux workspace of this writing run. Use it for multi-step reference searches and local processing that single reads cannot do in one call; knowledge.read stays the shorter route for known ids. Start with INDEX.md for file paths. current/ holds the frozen effective references, the complete source history and the existing summary, ready on the first call. To read other saved library or chat data, run uimori export with JSON: {"scope":"library"} or {"scope":"chats"} writes an index, "id":"..." adds one resource or chat, and "all":true exports everything. These live exports are separate from the frozen current/ files. File edits here are scratch work and never save to the app, and printed output is working evidence, not adopted lore or memory. Each call is synchronous and cannot leave background jobs running. The result shows a head/tail preview of the output and the path of the complete log in outputFile; filter that file for more passages.',
+  description: `Run Bash with rg, jq, Python or Node in the Linux workspace of this writing run. Use it for multi-step reference searches and local processing that single reads cannot do in one call${knowledgeRead ? '; knowledge.read stays the shorter route for known ids' : ''}. Start with INDEX.md for file paths. current/ holds the frozen effective references, the complete source history and the existing summary, ready on the first call. To read other saved library or chat data, run uimori export with JSON: {"scope":"library"} or {"scope":"chats"} writes an index, "id":"..." adds one resource or chat, and "all":true exports everything. These live exports are separate from the frozen current/ files. File edits here are scratch work and never save to the app, and printed output is working evidence, not adopted lore or memory. Each call is synchronous and cannot leave background jobs running. The result shows a head/tail preview of the output and the path of the complete log in outputFile; filter that file for more passages.`,
   inputSchema: {
     type: 'object',
     properties: SHELL_EXEC_PROPERTIES,
     required: ['command'],
     additionalProperties: false,
   },
-};
+});
