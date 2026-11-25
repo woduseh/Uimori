@@ -349,6 +349,36 @@ export function alignSequences(
   }
 }
 
+const REWRITE_SHARE = 0.5;
+const REWRITE_MIN_WORDS = 3;
+
+export function rewriteAsBlocks(segments: readonly TextDiffSegment[]): TextDiffSegment[] {
+  const first = segments.findIndex((segment) => segment.op !== 'equal');
+  const last = segments.findLastIndex((segment) => segment.op !== 'equal');
+  const span = segments.slice(first, last + 1);
+  const count = (op: Step) =>
+    span.reduce((sum, segment) => sum + (segment.op === op ? wordCount(segment.text) : 0), 0);
+  const removed = count('delete');
+  const added = count('insert');
+  const kept = count('equal');
+  if (
+    first < 0 ||
+    Math.max(removed, added) < REWRITE_MIN_WORDS ||
+    (removed + added) / (removed + added + 2 * kept) <= REWRITE_SHARE
+  )
+    return [...segments];
+  const before = span
+    .flatMap((segment) => (segment.op === 'insert' ? [] : [segment.text]))
+    .join('');
+  const after = span.flatMap((segment) => (segment.op === 'delete' ? [] : [segment.text])).join('');
+  return [
+    ...segments.slice(0, first),
+    ...(before ? [{ op: 'delete' as const, text: before }] : []),
+    ...(after ? [{ op: 'insert' as const, text: after }] : []),
+    ...segments.slice(last + 1),
+  ];
+}
+
 export function applyTextDiff(before: string, hunks: readonly TextDiffHunk[]): string {
   let result = '';
   let cursor = 0;

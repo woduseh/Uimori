@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Content, PromptPreset } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
@@ -254,7 +255,7 @@ test('EDIT05 prompt presets count sections and restore the previous save', async
     drawer(page)
       .getByRole('region', { name: /본문 \(Risu CBS\) 변경 내용$/u })
       .locator('ins')
-  ).toHaveText(['추가된 부분 고친', '추가된 부분 프롬프트', '추가된 부분 본문']);
+  ).toHaveText(['추가된 부분 고친 프롬프트 본문']);
   await page.keyboard.press('Escape');
   await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   await expect(editorChanges(editor)).toHaveCount(0);
@@ -345,4 +346,56 @@ test('EDIT06 360px the drawer and the previous-save comparison show one edited l
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(menu).toBeFocused();
+});
+
+test('EDIT07 a rewritten lore entry reads as two blocks while a light edit stays word by word', async ({
+  page,
+  request,
+}) => {
+  const title = `EDIT07 ${randomUUID().slice(0, 8)}`;
+  const harbour =
+    '비가 그치자 항구의 불빛이 하나둘 켜졌어요. 리아는 낡은 우산을 접고 부두 끝까지 천천히 걸어갔어요.';
+  const forest = '숲은 해가 지면 금세 어두워져요. 길잡이 등불은 오래된 참나무 아래에 걸려 있어요.';
+  const entries = [
+    { id: 0, keys: ['항구'], content: harbour, comment: '항구' },
+    { id: 1, keys: ['숲'], content: forest, comment: '숲' },
+  ];
+  const response = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title,
+      package: nativeContent({ name: title, character_book: { entries } }),
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.addInitScript(() => localStorage.setItem('uimori:theme', 'dark'));
+  await openBot(page, title);
+  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
+  await selectEditorSection(editor, '로어북');
+  const navigation = editor.getByRole('complementary', { name: '로어 목록', exact: true });
+  const body = editor.getByLabel('로어 본문', { exact: true });
+  await navigation.getByRole('button', { name: '항구', exact: true }).click();
+  await body.fill(
+    '항구에 다시 불이 들어온 건 비가 그친 뒤였어요. 리아는 젖은 우산을 털며 부두 끝으로 서둘러 걸어갔어요.'
+  );
+  await navigation.getByRole('button', { name: '숲', exact: true }).click();
+  await body.fill(forest.replace('금세', '순식간에').replace('오래된', '커다란'));
+  await editorChanges(page).click();
+  const sheet = drawer(page);
+  await sheet.getByRole('button', { name: '로어북', exact: true }).click();
+  const rewritten = sheet.getByRole('region', { name: '항구 / 로어 본문 변경 내용', exact: true });
+  await expect(rewritten.locator('del')).toHaveCount(1);
+  await expect(rewritten.locator('del')).toContainText(
+    '비가 그치자 항구의 불빛이 하나둘 켜졌어요.'
+  );
+  await expect(rewritten.locator('ins')).toHaveCount(1);
+  const light = sheet.getByRole('region', { name: '숲 / 로어 본문 변경 내용', exact: true });
+  await expect(light.locator('del')).toHaveText(['삭제된 부분 금세', '삭제된 부분 오래된']);
+  await expect(light.locator('ins')).toHaveText(['추가된 부분 순식간에', '추가된 부분 커다란']);
+  mkdirSync('output/editor-studio-6', { recursive: true });
+  await page.screenshot({ path: 'output/editor-studio-6/diff-block-and-word.png' });
 });

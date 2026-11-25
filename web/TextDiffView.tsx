@@ -1,4 +1,4 @@
-import type { TextDiff, TextDiffHunk } from '../core/text-diff.js';
+import { rewriteAsBlocks, type TextDiff, type TextDiffHunk } from '../core/text-diff.js';
 import { formatNumber, t } from './i18n.js';
 import './text-diff.css';
 
@@ -7,7 +7,7 @@ export type ShownTextDiff = Exclude<TextDiff, { omitted: unknown }>;
 export function ProseHunk({ hunk }: { hunk: TextDiffHunk }) {
   return (
     <p className="helper-diff-prose">
-      {hunk.segments.map((segment, index) =>
+      {rewriteAsBlocks(hunk.segments).map((segment, index) =>
         segment.op === 'equal' ? (
           <span key={index}>{segment.text}</span>
         ) : segment.op === 'insert' ? (

@@ -1,5 +1,11 @@
 import { expect, test } from 'vitest';
-import { TEXT_DIFF_LIMITS, applyTextDiff, diffText, type TextDiff } from '../core/text-diff.js';
+import {
+  TEXT_DIFF_LIMITS,
+  applyTextDiff,
+  diffText,
+  rewriteAsBlocks,
+  type TextDiff,
+} from '../core/text-diff.js';
 
 const changes = (diff: TextDiff) => {
   if ('omitted' in diff) throw new Error(`omitted: ${diff.omitted}`);
@@ -29,6 +35,27 @@ test('a one-particle change in a long Korean paragraph is one small word change'
     .map((segment) => segment.text.match(/\S+/gu)?.length ?? 0);
   expect(contextWords.every((count) => count <= 8)).toBe(true);
   expect(applyTextDiff(before, diff.hunks)).toBe(after);
+});
+
+test('a rewritten paragraph reads as one deleted block and one inserted block', () => {
+  const before =
+    '비가 그치자 항구의 불빛이 하나둘 켜졌어요. 리아는 낡은 우산을 접고 부두 끝까지 천천히 걸어갔어요.\n';
+  const after =
+    '항구에 다시 불이 들어온 건 비가 그친 뒤였어요. 리아는 젖은 우산을 털며 부두 끝으로 서둘러 걸어갔어요.\n';
+  const diff = changes(diffText(before, after, 'prose'));
+  const [hunk] = diff.hunks;
+  expect(hunk!.segments.filter((segment) => segment.op !== 'equal').length).toBeGreaterThan(10);
+  const blocks = rewriteAsBlocks(hunk!.segments);
+  expect(blocks.map((segment) => segment.op)).toEqual(['delete', 'insert', 'equal']);
+  expect(applyTextDiff(before, [{ ...hunk!, segments: blocks }])).toBe(after);
+
+  const sentence = '그 문장은 리아가 우산을 접고 부두 끝까지 걸어가는 장면을 차분하게 그려요.';
+  const light = changes(
+    diffText(sentence, sentence.replace('우산을', '양산을').replace('차분하게', '조용히'), 'prose')
+  );
+  for (const item of light.hunks) expect(rewriteAsBlocks(item.segments)).toEqual(item.segments);
+  const swap = changes(diffText('그는 다리를 건넜다.', '그는 강을 헤엄쳤다.', 'prose'));
+  expect(rewriteAsBlocks(swap.hunks[0]!.segments)).toEqual(swap.hunks[0]!.segments);
 });
 
 test('separate prose changes become separate hunks and inserted paragraphs count their words', () => {
