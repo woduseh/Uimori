@@ -155,7 +155,6 @@ const capabilities: readonly ModelCapability[] = [
     stopSequences: false,
     thinkingLevels: ['LOW', 'MEDIUM', 'HIGH', 'XHIGH'],
     defaultThinkingLevel: 'HIGH',
-    serviceTiers: ['standard', 'flex'],
     sources: [
       'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-neon',
       'https://aistudio.google.com/docs/models/gemini-4-neon',
