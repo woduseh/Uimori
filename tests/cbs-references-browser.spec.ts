@@ -152,8 +152,7 @@ test('CBSREF02 variable and toggle names complete inside CBS calls', async ({ pa
   await capture(page, 'completion-variable');
   await completion.getByRole('option', { name: 'mood', exact: true }).click();
   await page.keyboard.type('}} {{#when::toggle::r');
-  await expect(completion.getByRole('option', { name: 'rain', exact: true })).toBeVisible();
-  await page.keyboard.press('Enter');
+  await completion.getByRole('option', { name: 'rain', exact: true }).click();
   await expect
     .poll(() => codeFieldValue(field))
     .toBe(`${referenceCard.first_mes} {{getvar::mood}} {{#when::toggle::rain`);
