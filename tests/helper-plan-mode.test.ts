@@ -138,6 +138,7 @@ test('an operation joins the read classification only by updating this reviewed 
     'outline.read',
     'palette.list',
     'preset.validate',
+    'prompt.combination.list',
     'resource.read',
     'resource.readMany',
     'scene.lore',

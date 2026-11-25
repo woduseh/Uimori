@@ -6,6 +6,8 @@ const deleteConfirmedNames = new Set([
   'font.delete',
   'palette.delete',
   'model.delete',
+  'chat.delete',
+  'prompt.combination.delete',
 ]);
 const paidConfirmedNames = new Set([
   'scene.request',

@@ -1,4 +1,3 @@
-import { supportedLocale } from '../core/ui-locale.js';
 import { PushService, pushRoutes } from './push-service.js';
 import type { PushSender } from './push-transport.js';
 import { basename, relative, sep } from 'node:path';
@@ -44,6 +43,7 @@ import { Store } from './store.js';
 import { readTranslationSelection, readStoredRunSnapshot, runResponse } from './run-projections.js';
 import { composerRunSnapshot } from './composer-run.js';
 import { ChatTitleService } from './chat-title.js';
+import { createChat } from './chat-creation.js';
 import { HelperRuntime, helperWritingSnapshot } from './helper-runtime.js';
 import { invokeTaskTool } from './helper-task-tools.js';
 import { readHelperChatContext } from './helper-context.js';
@@ -425,6 +425,11 @@ export async function createApp(options: AppOptions): Promise<App> {
       connectionTests,
       sceneUpdated,
       chatChanged: publish,
+      chatCreated: (chatId, autoTitleLocale) => {
+        if (autoTitleLocale) titles.enroll(chatId, autoTitleLocale);
+        publish(chatId);
+      },
+      chatDeleted: (chatId) => chatDeleted(chatId),
       story: {
         requireRunModel: requireRequestModel,
         requireTranslationModel: requireJobModel,
@@ -643,6 +648,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     publish,
   });
+  const chatDeleted = (chatId: string) => {
+    titles.cancel(chatId);
+    chatEvents.closeChat(chatId, { kind: 'chat.deleted', chatId });
+  };
 
   const pumpJobs = () => {
     if (stopping.signal.aborted || !admitted()) return;
@@ -975,10 +984,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     accessToken: options.accessToken,
     publicOrigin: network.publicOrigin,
     publish,
-    onChatDeleted: (chatId) => {
-      titles.cancel(chatId);
-      chatEvents.closeChat(chatId, { kind: 'chat.deleted', chatId });
-    },
+    onChatDeleted: chatDeleted,
     onAuthChanged: () => {
       pushService?.revokeInactive();
       publishAll();
@@ -1193,28 +1199,8 @@ export async function createApp(options: AppOptions): Promise<App> {
     }
   );
   app.post('/api/chats', async (request) => {
-    const body: RecordBody = record(request.body);
-    fields(body, ['title', 'botId', 'folderId', 'autoTitle', 'titleLocale', 'persona']);
-    if (body.autoTitle !== undefined && typeof body.autoTitle !== 'boolean')
-      throw new HttpError(400, 'Invalid automatic title choice');
-    let persona: import('../core/product.js').ContentRef | null | undefined;
-    if (body.persona === null) persona = null;
-    else if (body.persona !== undefined) {
-      const ref = record(body.persona);
-      fields(ref, ['id', 'revision']);
-      persona = {
-        id: text(ref.id, 'persona ID', 100),
-        revision: number(ref.revision, 'persona revision'),
-      };
-    }
-    const chat = store.createChat(chatTitle(body.title), {
-      ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
-      ...(body.folderId === undefined
-        ? {}
-        : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
-      ...(persona === undefined ? {} : { persona }),
-    });
-    if (body.autoTitle === true) titles.enroll(chat.id, supportedLocale(body.titleLocale));
+    const { chat, autoTitleLocale } = createChat(store, request.body);
+    if (autoTitleLocale) titles.enroll(chat.id, autoTitleLocale);
     return chat;
   });
   app.patch<{ Params: { id: string } }>('/api/chats/:id/title', async (request) => {

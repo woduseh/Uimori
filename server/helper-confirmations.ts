@@ -68,6 +68,14 @@ function confirmationTargets(
       args.id,
       () => fontCatalog(store).fonts.find((font) => font.id === args.id)?.title
     );
+  if (name === 'chat.delete')
+    return titled('chat', args.chatId, () => store.chat(String(args.chatId)).title);
+  if (name === 'prompt.combination.delete')
+    return titled(
+      'prompt-combination',
+      args.id,
+      () => store.product.get<{ title: string }>('prompt-combination', String(args.id)).title
+    );
   if (name === 'palette.delete')
     return titled('palette', args.id, () => readPalette(store, String(args.id)).title);
   if (name === 'task.retry') return [];
@@ -115,6 +123,7 @@ function requirement(
     modelInUse(store, args.modelId)
   )
     return null;
+  if (name === 'chat.delete' && args.chatId === chatId) return null;
   if (confirmation === 'paid' && !task.snapshot.confirmPaidGeneration) return null;
   if (name === 'task.retry' && !retriesPaidGeneration(store, args)) return null;
   return needs(

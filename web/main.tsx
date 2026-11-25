@@ -1126,7 +1126,8 @@ function App() {
             ? 'illustrations'
             : target.kind === 'prompt-workspace' ||
                 target.setting === 'global.mainPromptPreset' ||
-                target.setting === 'global.translationPromptPreset'
+                target.setting === 'global.translationPromptPreset' ||
+                target.setting?.startsWith('prompt.combination.')
               ? 'prompts'
               : target.setting === 'model.pricing' ||
                   target.setting === 'model.parameters' ||

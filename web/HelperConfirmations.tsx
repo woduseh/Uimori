@@ -17,6 +17,8 @@ export const HELPER_CONFIRMATION_OPERATION_LABELS: Record<string, string> = {
   'font.delete': 'helperConfirm.fontDelete',
   'palette.delete': 'helperConfirm.paletteDelete',
   'model.delete': 'helperConfirm.modelDelete',
+  'chat.delete': 'helperConfirm.chatDelete',
+  'prompt.combination.delete': 'helperConfirm.promptCombinationDelete',
   'chat.lore': 'helperConfirm.chatLoreRemove',
   'illustration.generate': 'helperConfirm.illustrationGenerate',
   'illustration.cut.redraw': 'helperConfirm.illustrationRedraw',

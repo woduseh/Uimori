@@ -66,6 +66,12 @@ import {
   readHelperChatState,
   applyHelperChatState,
 } from './helper-chat-state-tools.js';
+import type { UiLocale } from '../core/ui-locale.js';
+import { createHelperChat, deleteHelperChat } from './helper-chat-lifecycle-tools.js';
+import {
+  applyHelperPromptCombination,
+  readHelperPromptCombinations,
+} from './helper-prompt-combination-tools.js';
 import {
   applyHelperChatOrganization,
   readHelperChatOrganization,
@@ -885,6 +891,8 @@ export type HelperServices = {
   connectionTests?: ConnectionTestRunner;
   sceneUpdated?: (sourceId: string) => void;
   chatChanged?: (chatId: string) => void;
+  chatCreated?: (chatId: string, autoTitleLocale: UiLocale | null) => void;
+  chatDeleted?: (chatId: string) => void;
   story?: HelperStoryEffects & {
     started: (work: { run: Run } | { job: Job }) => void;
   };
@@ -3438,6 +3446,45 @@ export class HelperRuntime {
         if (name === 'scene.context.update' && typeof result.sourceId === 'string')
           this.options.services?.sceneUpdated?.(result.sourceId);
       }
+      return result;
+    }
+    if (name.startsWith('prompt.combination.')) {
+      if (name === 'prompt.combination.list') return readHelperPromptCombinations(this.store, args);
+      this.workspace.assertRunning(task.id);
+      const receiptId = `${task.id}:${operationId}`;
+      const result = this.workspace.operation(task.id, receiptId, { name, args }, () =>
+        applyHelperPromptCombination(this.store, this.workspace, task, receiptId, name, args)
+      );
+      this.workspace.event(
+        task.conversationId,
+        task.id,
+        'settings.updated',
+        asJson(result) as Record<string, Json>
+      );
+      return result;
+    }
+    if (name === 'chat.create') {
+      this.workspace.assertRunning(task.id);
+      const receiptId = `${task.id}:${operationId}`;
+      let created: ReturnType<typeof createHelperChat> | undefined;
+      const result = this.workspace.operation(task.id, receiptId, { name, args }, () => {
+        created = createHelperChat(this.store, this.workspace, task, receiptId, args);
+        return created.result;
+      });
+      if (created) {
+        this.options.services?.chatCreated?.(String(result.chatId), created.autoTitleLocale);
+        if (created.run?.status === 'queued')
+          this.options.services?.story?.started({ run: created.run });
+      }
+      return result;
+    }
+    if (name === 'chat.delete') {
+      this.workspace.assertRunning(task.id);
+      const receiptId = `${task.id}:${operationId}`;
+      const result = this.workspace.operation(task.id, receiptId, { name, args }, () =>
+        deleteHelperChat(this.store, this.workspace, task, receiptId, args)
+      );
+      this.options.services?.chatDeleted?.(result.chatId);
       return result;
     }
     if (name === 'chat.organize') {

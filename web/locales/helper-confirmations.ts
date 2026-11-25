@@ -53,6 +53,18 @@ export const messages = {
     ja: 'モデルの削除',
     zh: '删除模型',
   },
+  'helperConfirm.chatDelete': {
+    ko: '채팅 삭제',
+    en: 'Delete a chat',
+    ja: 'チャットの削除',
+    zh: '删除聊天',
+  },
+  'helperConfirm.promptCombinationDelete': {
+    ko: '옵션 프리셋 삭제',
+    en: 'Delete an option preset',
+    ja: 'オプションプリセットの削除',
+    zh: '删除选项预设',
+  },
   'helperConfirm.chatLoreRemove': {
     ko: '채팅 전용 로어 삭제',
     en: 'Remove chat-only lore',

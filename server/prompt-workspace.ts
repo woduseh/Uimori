@@ -843,27 +843,26 @@ export function promptWorkspaceRoutes(app: FastifyInstance, store: Store, publis
   app.post('/api/prompt-workspace/apply', async (request) =>
     publishResult(applyWorkspacePromptPreset(store, request.body))
   );
-  app.post('/api/prompt-workspace/apply-options', async (request) => {
-    const b = record(request.body);
-    fields(b, ['expectedRevision', 'role', 'combinationId']);
-    const role = roleValue(b.role);
-    store.product.assertAvailable(
-      'prompt-combination',
-      text(b.combinationId, 'option preset', 100)
-    );
-    const preset = store.product.get<SavedPromptCombination>(
-      'prompt-combination',
-      text(b.combinationId, 'option preset', 100)
-    );
-    if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
-    const current = promptWorkspace(store)[role];
-    if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))
-      throw new HttpError(409, '이 프롬프트의 옵션 조합이 아니거나 옵션 정의가 변경됐어요.');
-    return publishResult(
-      updatePromptWorkspace(store, {
-        expectedRevision: b.expectedRevision,
-        [role]: { ...current, values: preset.values, optionValues: preset.values },
-      })
-    );
+  app.post('/api/prompt-workspace/apply-options', async (request) =>
+    publishResult(applyPromptCombination(store, request.body))
+  );
+}
+
+export function applyPromptCombination(store: Store, value: unknown) {
+  const b = record(value);
+  fields(b, ['expectedRevision', 'role', 'combinationId']);
+  const role = roleValue(b.role);
+  store.product.assertAvailable('prompt-combination', text(b.combinationId, 'option preset', 100));
+  const preset = store.product.get<SavedPromptCombination>(
+    'prompt-combination',
+    text(b.combinationId, 'option preset', 100)
+  );
+  if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
+  const current = promptWorkspace(store)[role];
+  if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))
+    throw new HttpError(409, '이 프롬프트의 옵션 조합이 아니거나 옵션 정의가 변경됐어요.');
+  return updatePromptWorkspace(store, {
+    expectedRevision: b.expectedRevision,
+    [role]: { ...current, values: preset.values, optionValues: preset.values },
   });
 }

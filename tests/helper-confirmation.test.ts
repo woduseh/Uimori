@@ -114,14 +114,9 @@ test('resource deletion waits for confirmation, and a patch of three resources s
   rollBackHelperTask(f.store(), workspace, run.task.id, undefined);
   expect(
     [one, two, three].map(
-      (bot) =>
-        (
-          f.store().product.get<Content>('content', bot.id).package?.nativeRisu?.card as {
-            description: string;
-          }
-        ).description
+      (bot) => f.store().product.get<Content>('content', bot.id).package!.nativeRisu!.card
     )
-  ).toEqual(['설명', '설명', '설명']);
+  ).toMatchObject([{ description: '설명' }, { description: '설명' }, { description: '설명' }]);
 });
 
 test('paid generation waits for confirmation only when the helper setting asks for it', async () => {

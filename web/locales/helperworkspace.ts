@@ -893,6 +893,36 @@ export const messages = {
     ja: 'シーン名を保存済み',
     zh: '场景名称已保存',
   },
+  'helperResults.promptCombinationSaved': {
+    ko: '옵션 프리셋 저장',
+    en: 'Option preset saved',
+    ja: 'オプションプリセット保存',
+    zh: '已保存选项预设',
+  },
+  'helperResults.promptCombinationUpdated': {
+    ko: '옵션 프리셋 수정',
+    en: 'Option preset edited',
+    ja: 'オプションプリセット編集',
+    zh: '已编辑选项预设',
+  },
+  'helperResults.promptCombinationDeleted': {
+    ko: '옵션 프리셋 삭제',
+    en: 'Option preset deleted',
+    ja: 'オプションプリセット削除',
+    zh: '已删除选项预设',
+  },
+  'helperResults.promptCombinationApplied': {
+    ko: '옵션 프리셋 적용',
+    en: 'Option preset applied',
+    ja: 'オプションプリセット適用',
+    zh: '已应用选项预设',
+  },
+  'helperResults.chatCreated': {
+    ko: '새 채팅 만듦',
+    en: 'New chat created',
+    ja: '新しいチャットを作成済み',
+    zh: '已创建新聊天',
+  },
   'helperResults.chatOptions': {
     ko: '창작 옵션',
     en: 'Writing options',

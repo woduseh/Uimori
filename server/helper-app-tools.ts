@@ -14,6 +14,8 @@ import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
 import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
 import { HELPER_CHAT_STATE_TOOLS } from './helper-chat-state-tools.js';
 import { HELPER_CHAT_ORGANIZATION_TOOLS } from './helper-chat-organization-tools.js';
+import { HELPER_CHAT_LIFECYCLE_TOOLS } from './helper-chat-lifecycle-tools.js';
+import { HELPER_PROMPT_COMBINATION_TOOLS } from './helper-prompt-combination-tools.js';
 import { helperConfirmationTrait } from './helper-confirmation-traits.js';
 import { HELPER_STORY_TOOLS } from './helper-story-tools.js';
 import { HELPER_IMAGE_TOOLS } from './helper-image-tools.js';
@@ -126,6 +128,8 @@ const TOOLS: ProviderTool[] = [
   ...HELPER_SCENE_TOOLS,
   ...HELPER_CHAT_STATE_TOOLS,
   ...HELPER_CHAT_ORGANIZATION_TOOLS,
+  ...HELPER_CHAT_LIFECYCLE_TOOLS,
+  ...HELPER_PROMPT_COMBINATION_TOOLS,
   ...HELPER_STORY_TOOLS,
   ...HELPER_IMAGE_TOOLS,
   ...HELPER_ILLUSTRATION_TOOLS,
@@ -675,6 +679,7 @@ const readNames = new Set([
   'context.read',
   'outline.read',
   'options.read',
+  'prompt.combination.list',
   'artifact.read',
   'scene.read',
   'scene.search',
@@ -732,6 +737,8 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       data ||
       HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) ||
       name === 'chat.organize' ||
+      name === 'chat.create' ||
+      name === 'chat.delete' ||
       isVertexLocationTool(name) ||
       name.startsWith('task.'),
     writingRead,
@@ -769,7 +776,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ],
   [
     'chat',
-    'chat list, scene index, title, fork, chat-only lore, next request preview, Risu variables, original-work reference settings, attached persona and modules, author note, bookmarks, chat folders and pins of a bot',
+    'chat list, new chats, deleting chats, scene index, title, fork, chat-only lore, next request preview, Risu variables, original-work reference settings, attached persona and modules, author note, bookmarks, chat folders and pins of a bot',
   ],
   [
     'scene',
@@ -782,6 +789,7 @@ export const HELPER_OPERATION_AREAS: readonly (readonly [area: string, purpose: 
   ['context', 'conversation summary'],
   ['notes', 'author notes'],
   ['options', 'writing options of a chat'],
+  ['prompt', 'saved option presets of the writing and translation prompts'],
   ['editor', 'captured editor input'],
   ['artifact', 'hypothetical scenes'],
   ['db', 'read-only SQL'],
@@ -951,6 +959,17 @@ const discoveryTerms: Record<string, string> = {
     'hide show disable enable exclude scene request skip 장면 숨기기 끄기 켜기 요청 제외',
   'chat.bookmark': 'bookmark mark place reading position 책갈피 북마크',
   'chat.organize': 'folder organize chats sort move default persona 채팅 폴더 정리 기본 페르소나',
+  'chat.create':
+    'new chat start begin story conversation with bot persona first message greeting 새 채팅 시작 만들기',
+  'chat.delete': 'remove delete erase chat conversation story permanently 채팅 삭제 지우기',
+  'prompt.combination.list':
+    'option preset combination saved writing options values 옵션 프리셋 조합 목록',
+  'prompt.combination.save':
+    'save store remember current writing options as option preset combination 옵션 프리셋 저장',
+  'prompt.combination.update': 'edit option preset combination values title 옵션 프리셋 이름 수정',
+  'prompt.combination.delete': 'remove delete option preset combination 옵션 프리셋 삭제',
+  'prompt.combination.apply':
+    'apply use choose select option preset combination default values 옵션 프리셋 적용',
   'illustration-preset.select':
     'choose use apply switch illustration preset style 삽화 프리셋 선택',
 };

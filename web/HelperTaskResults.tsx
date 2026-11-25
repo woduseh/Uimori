@@ -66,7 +66,9 @@ const workOutcomes: Record<string, string> = {
   'scene.request': 'helperResults.sceneQueued',
   'scene.translate': 'helperResults.translationQueued',
   'scene.title': 'helperResults.sceneNamed',
+  'chat.create': 'helperResults.chatCreated',
 };
+const deletingOperations = new Set(['resource.delete', 'chat.delete', 'prompt.combination.delete']);
 const queuedOperations = new Set([
   'illustration.generate',
   'illustration.cut.redraw',
@@ -217,7 +219,7 @@ function ResultTarget({
   const [opening, setOpening] = useState(false);
   const [failed, setFailed] = useState(false);
   const pending = useRef(false);
-  const deleted = operation === 'resource.delete';
+  const deleted = deletingOperations.has(operation);
   async function open() {
     if (!onOpen || pending.current) return;
     pending.current = true;
