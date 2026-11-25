@@ -227,6 +227,32 @@ test('reverting list items removes an addition, restores a deletion in place and
   );
 });
 
+test('undoing a move keeps the edits made to the moved item', () => {
+  const list = (entries: unknown[]) => card({ character_book: { entries } });
+  const [lighthouse, harbour, forest] = ['등대', '항구', '숲'].map((name, id) => ({
+    id,
+    comment: name,
+    content: name,
+  }));
+  const base = list([lighthouse, harbour, forest]);
+  const edited = { ...forest, content: '안개 낀 숲' };
+  const model = list([edited, lighthouse, harbour]);
+  expect(revertAll(base, model, (change) => change.kind === 'moved')).toEqual(
+    list([lighthouse, harbour, edited])
+  );
+});
+
+test('removing the only item added to a list that did not exist leaves no empty list behind', () => {
+  const base = card({ name: '봇' });
+  for (const added of [
+    card({ name: '봇', alternate_greetings: ['새 인사'] }),
+    card({ name: '봇', extensions: { risuai: { triggerscript: [{ comment: '시작' }] } } }),
+  ]) {
+    const reverted = revertAll(base, added, () => true);
+    expect(sameEditorValue(base, reverted), JSON.stringify(reverted)).toBe(true);
+  }
+});
+
 test('reverting preset blocks, regex scripts and triggers restores each kind', () => {
   const preset = (promptTemplate: unknown[], regex: unknown[]) => ({
     program: { nativeRisuPreset: { preset: { promptTemplate, regex } } },

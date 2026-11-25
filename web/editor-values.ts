@@ -358,29 +358,54 @@ function placement(base: readonly unknown[], list: readonly unknown[], from: num
   return 0;
 }
 
+const empty = (value: unknown) =>
+  Array.isArray(value) ? !value.length : record(value) && !Object.keys(value).length;
+
+function removeAt(model: unknown, base: unknown, keys: readonly string[]) {
+  let depth = keys.length;
+  while (depth > 1) {
+    const parent = keys.slice(0, depth - 1);
+    const rest = valueAt(
+      updateAt(model, keys.slice(0, depth), () => undefined),
+      parent
+    );
+    if (!empty(rest) || valueAt(base, parent) !== undefined) break;
+    depth--;
+  }
+  return updateAt(model, keys.slice(0, depth), () => undefined);
+}
+
 export function revertEditorChange<Model>(model: Model, base: unknown, change: EditorFieldChange) {
   const keys = keysOf(change.path);
   if (!change.item || change.field.length || change.kind === 'changed')
-    return updateAt(model, keys, () => change.before) as Model;
+    return (
+      change.before === undefined
+        ? removeAt(model, base, keys)
+        : updateAt(model, keys, () => change.before)
+    ) as Model;
   const listKeys = keys.slice(0, -1);
   const list = valueAt(model, listKeys);
   const baseList = valueAt(base, listKeys);
   const items = Array.isArray(list) ? list : [];
   const original = Array.isArray(baseList) ? baseList : [];
-  const insert = (target: readonly unknown[], from: number) => {
+  const insert = (target: readonly unknown[], from: number, value: unknown) => {
     const at = placement(original, target, from);
-    return [...target.slice(0, at), change.before, ...target.slice(at)];
+    return [...target.slice(0, at), value, ...target.slice(at)];
   };
+  const rest = items.filter((_, index) => index !== change.item!.index);
   if (change.kind === 'added')
-    return updateAt(model, listKeys, () =>
-      items.filter((_, index) => index !== change.item!.index)
+    return (
+      !rest.length && baseList === undefined
+        ? removeAt(model, base, listKeys)
+        : updateAt(model, listKeys, () => rest)
     ) as Model;
   if (change.kind === 'removed')
-    return updateAt(model, listKeys, () => insert(items, change.item!.index)) as Model;
+    return updateAt(model, listKeys, () =>
+      insert(items, change.item!.index, change.before)
+    ) as Model;
   const from = original.indexOf(change.before);
-  const rest = items.filter((_, index) => index !== change.item!.index);
   return updateAt(model, listKeys, () =>
-    insert(rest, from >= 0 ? from : change.item!.index)
+    insert(rest, from >= 0 ? from : change.item!.index, items[change.item!.index])
   ) as Model;
 }
 
