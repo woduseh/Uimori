@@ -1421,27 +1421,34 @@ function ContentEditor({
                 disabled={editorUnavailable}
                 onClick={onClose}
               />
-              <h2 className="editor-title-field">
-                <input
-                  ref={titleField}
-                  aria-label={t('library.resourceName', { v0: t(contentLabelKeys[value.kind]) })}
-                  aria-invalid={titleError || undefined}
-                  aria-describedby={titleError ? titleErrorId : undefined}
-                  placeholder={t('library.new', { v0: t(contentLabelKeys[kind]) })}
-                  maxLength={200}
-                  disabled={editorUnavailable}
-                  value={value.title}
-                  onChange={(event) => {
-                    const title = event.target.value;
-                    setTitleTouched(true);
-                    setValue((current) => ({
-                      ...current,
-                      title,
-                      package: withNativeContentTitle(current.package, title),
-                    }));
-                  }}
-                />
-              </h2>
+              <div className="editor-title">
+                <h2 className="editor-title-field">
+                  <input
+                    ref={titleField}
+                    aria-label={t('library.resourceName', { v0: t(contentLabelKeys[value.kind]) })}
+                    aria-invalid={titleError || undefined}
+                    aria-describedby={titleError ? titleErrorId : undefined}
+                    placeholder={t('library.new', { v0: t(contentLabelKeys[kind]) })}
+                    maxLength={200}
+                    disabled={editorUnavailable}
+                    value={value.title}
+                    onChange={(event) => {
+                      const title = event.target.value;
+                      setTitleTouched(true);
+                      setValue((current) => ({
+                        ...current,
+                        title,
+                        package: withNativeContentTitle(current.package, title),
+                      }));
+                    }}
+                  />
+                </h2>
+                {titleError && (
+                  <small id={titleErrorId} className="editor-title-error" role="alert">
+                    {t('library.nameRequired')}
+                  </small>
+                )}
+              </div>
               <div className="library-detail-actions">
                 <ResourceEditorActions
                   value={shared}
@@ -1618,11 +1625,6 @@ function ContentEditor({
           }
           notice={
             <>
-              {titleError && (
-                <p id={titleErrorId} className="error editor-title-error" role="alert">
-                  {t('library.nameRequired')}
-                </p>
-              )}
               <RestoredVersionNotice commands={commands} />
               <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
             </>

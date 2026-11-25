@@ -32,9 +32,23 @@
 .editor-studio-header > .dismissible-error {
   margin: 8px 0;
 }
-.editor-studio-header > .editor-title-error {
-  margin: 8px 0;
+.editor-studio-header .editor-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.editor-studio-header .editor-title > .editor-title-field {
+  flex: none;
+  width: 100%;
+}
+.editor-title-error {
+  padding-left: 12px;
+  color: var(--error);
   font-size: var(--font-small);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .library-page-editing .editor-studio-header > :is(.prompt-editor-heading, .library-detail-heading) {
   display: flex;
@@ -362,6 +376,17 @@
     display: contents;
   }
   .library-page-editing .editor-studio-header .resource-editor-actions:has([role="alert"]) {
+    order: 1;
+    flex: 1 0 100%;
+  }
+  .library-page-editing .editor-studio-header .editor-title {
+    display: contents;
+  }
+  .library-page-editing .editor-studio-header .editor-title > .editor-title-field {
+    flex: 1;
+    width: auto;
+  }
+  .library-page-editing .editor-studio-header .editor-title-error {
     order: 1;
     flex: 1 0 100%;
   }

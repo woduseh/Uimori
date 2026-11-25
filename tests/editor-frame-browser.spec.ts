@@ -13,6 +13,7 @@ import {
   editorSectionPlacement,
   navigationAction,
   editorTab,
+  expectEditorSection,
   selectEditorSection,
 } from './ui-navigation.js';
 import { browserPath } from '../scripts/browser-path.mjs';
@@ -427,37 +428,48 @@ test('EFRAME06 basic info puts the description beside a meta column and edits th
   ).toBeLessThanOrEqual(0);
 });
 
-test('EFRAME15 a new resource focuses the header name and explains an empty name once it is edited or saved', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
-  const library = page.getByTestId('library-panel');
-  await library.getByRole('tab', { name: '모듈', exact: true }).click();
-  await library.getByRole('button', { name: '새 모듈', exact: true }).click();
-  const name = library.getByLabel('모듈 이름', { exact: true });
-  await expect(name).toBeFocused();
-  await expect(editorTab(library, '로어북')).toHaveAttribute('aria-selected', 'true');
-  const alert = library.getByRole('alert').filter({ hasText: '이름을 입력해 주세요.' });
-  await expect(alert).toHaveCount(0);
-  const register = library.getByRole('button', { name: '자료 등록', exact: true });
-  await expect(register).toBeDisabled();
-  await editorTab(library, '로어북').focus();
-  await expect(alert).toHaveCount(0);
-  await page.keyboard.press('Control+s');
-  await expect(name).toBeFocused();
-  await expect(alert).toBeVisible();
-  await expect(name).toHaveAttribute('aria-invalid', 'true');
-  await expect(name).toHaveAccessibleDescription('이름을 입력해 주세요.');
-  await capture(page, 'eframe15-new-module-1440');
-  await name.fill('합성 모듈');
-  await expect(alert).toHaveCount(0);
-  await expect(name).not.toHaveAttribute('aria-invalid', 'true');
-  await expect(register).toBeEnabled();
-  await name.fill('');
-  await expect(alert).toBeVisible();
-  await expect(register).toBeDisabled();
-});
+for (const width of [1440, 390]) {
+  test(`EFRAME15 ${width}px a new resource focuses the header name and explains an empty name inline once it is edited or saved`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.goto('/');
+    const library = page.getByTestId('library-panel');
+    await library.getByRole('tab', { name: '모듈', exact: true }).click();
+    await library.getByRole('button', { name: '새 모듈', exact: true }).click();
+    const name = library.getByLabel('모듈 이름', { exact: true });
+    await expect(name).toBeFocused();
+    await expectEditorSection(library, '로어북');
+    const alert = library.getByRole('alert').filter({ hasText: '이름을 입력해 주세요.' });
+    await expect(alert).toHaveCount(0);
+    const register = library.getByRole('button', { name: '자료 등록', exact: true });
+    await expect(register).toBeDisabled();
+    const heading = library.locator('.library-detail-heading');
+    const before = (await heading.boundingBox())!.height;
+    await editorTab(library, '로어북')
+      .or(library.getByLabel('편집 영역 선택', { exact: true }))
+      .focus();
+    await expect(alert).toHaveCount(0);
+    await page.keyboard.press('Control+s');
+    await expect(name).toBeFocused();
+    await expect(alert).toBeVisible();
+    await expect(alert).not.toHaveClass(/(^|\s)error(\s|$)/u);
+    await expect(alert).toHaveCSS('font-size', '12px');
+    expect((await heading.boundingBox())!.height - before, 'one line at most').toBeLessThanOrEqual(
+      24
+    );
+    await expect(name).toHaveAttribute('aria-invalid', 'true');
+    await expect(name).toHaveAccessibleDescription('이름을 입력해 주세요.');
+    await capture(page, `eframe15-new-module-${width}`);
+    await name.fill('합성 모듈');
+    await expect(alert).toHaveCount(0);
+    await expect(name).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(register).toBeEnabled();
+    await name.fill('');
+    await expect(alert).toBeVisible();
+    await expect(register).toBeDisabled();
+  });
+}
 
 test('EFRAME07 the asset grid keeps its columns, shows an inspector hint and offers tile actions by keyboard', async ({
   page,
