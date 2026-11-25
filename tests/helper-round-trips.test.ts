@@ -11,6 +11,7 @@ import {
   knownHelperOperations,
 } from '../server/helper-app-tools.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
+import { rollBackHelperTask } from '../server/helper-rollback.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { countTextTokens } from '../core/text-tokens.js';
@@ -259,6 +260,54 @@ for (const behavior of ['reads-the-continuation', 'uses-the-following-text'] as 
     expect(new Set(lookup.bodies.map(stablePrefix)).size).toBe(1);
     expect(new Set(attemptPrefixes(f)).size).toBe(1);
   });
+
+test('a task after a rollback keeps one stable prefix and one source across its rounds', async () => {
+  let bot: Content | undefined;
+  let stage = 0;
+  const f = fixture((_body, round) => {
+    if (stage === 0)
+      return round === 0
+        ? [
+            appCall('patch', 'resource.patch', {
+              kind: 'content',
+              id: bot!.id,
+              expectedRevision: bot!.revision,
+              changes: [
+                { op: 'set', path: '/package/nativeRisu/card/description', value: 'Edited.' },
+              ],
+            }),
+          ]
+        : 'Edited Harin.';
+    return round === 0
+      ? [appCall(`read-${stage}`, 'resource.read', { kind: 'content', id: bot!.id })]
+      : 'Harin is unchanged.';
+  });
+  bot = f.store.product.content(fixtureBotInput('Harin', 'Name: Harin.')) as Content;
+  const edited = await f.run('Edit Harin.');
+  expect(
+    rollBackHelperTask(f.store, f.runtime.workspace, edited.task.id, undefined).units
+  ).toMatchObject([{ status: 'restored' }]);
+  stage = 1;
+  const next = await f.run('Show Harin.');
+  stage = 2;
+  const later = await f.run('Show Harin again.');
+  expect(next.rounds).toBe(2);
+  const all = [...edited.bodies, ...next.bodies, ...later.bodies];
+  expect(new Set(all.map(stablePrefix)).size).toBe(1);
+  const sources = next.bodies.map((body) => JSON.stringify(requestSource(body)));
+  expect(new Set(sources).size).toBe(1);
+  expect(requestSource(next.bodies[0]).revertedChanges).toEqual([
+    {
+      taskId: edited.task.id,
+      request: 'Edit Harin.',
+      domain: 'resource',
+      kind: 'content',
+      targetId: bot.id,
+      title: 'Harin',
+    },
+  ]);
+  expect(requestSource(later.bodies[0])).not.toHaveProperty('revertedChanges');
+});
 
 test('known operations follow the review allowlist, the count cap and the size cap', () => {
   const names = HELPER_APP_TOOLS.map((tool) => tool.name);

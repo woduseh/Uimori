@@ -35,8 +35,16 @@ import {
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
 import { applyHelperResourceMutation } from './helper-resource-mutation.js';
 import { recordHelperChatLoreChange, withHelperChange } from './helper-changes.js';
-import { helperRollbackView, rollBackHelperTask } from './helper-rollback.js';
-import { helperConfirmationGate, resolveHelperConfirmations } from './helper-confirmations.js';
+import {
+  helperRevertedChanges,
+  helperRollbackView,
+  rollBackHelperTask,
+} from './helper-rollback.js';
+import {
+  helperConfirmationGate,
+  resolveHelperConfirmations,
+  resolveHelperDeclines,
+} from './helper-confirmations.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
@@ -252,6 +260,7 @@ type HelperAttachmentAdmission = HelperAttachments & {
 export type HelperRequestOptions = {
   mode?: HelperMode;
   confirmations?: string[];
+  declinedConfirmations?: string[];
   references?: HelperReferencePointer[];
   resume?: boolean;
 };
@@ -273,7 +282,7 @@ const RESUMED_TASK_GUIDANCE =
   'Continue this same request from an earlier task that stopped before it finished. Take the task and constraints from the actual request, configured instructions and explicit author notes. Resume from the host-recorded exchanges; exact successful receipts override stale next-step plans and completed mutations must not be replayed. Finish the remaining work and answer the user. Completion records do not prove the whole request is resolved.';
 const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
-const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
+const CONTRACT = `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. The owner undid the changes in source.revertedChanges and declined the held calls in source.declinedCalls: do not make them again unless the request asks for them. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs. ${AUTHOR_NOTE_GUIDANCE}
 Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, such as several independent reads as calls in one response, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For a bot’s Story UI appearance, use theme.guide and read the bot’s authored content. In a chat, writing.packages identifies the owning bot by role=bot. Saving a theme creates it; when the user requests application, use theme.select with dimension=storyUi for the bot or settings.update for an explicit chat choice.
@@ -1075,6 +1084,11 @@ export class HelperRuntime {
     const confirmations = [
       ...new Set(options.confirmations ?? inherited?.map((call) => call.id) ?? []),
     ].sort();
+    const declined = retryOf
+      ? []
+      : [...new Set(options.declinedConfirmations ?? [])]
+          .filter((id) => !confirmations.includes(id))
+          .sort();
     const references =
       options.references ??
       (retryOf ? this.workspace.task(retryOf).snapshot.references : undefined);
@@ -1094,6 +1108,7 @@ export class HelperRuntime {
           ...(references?.length ? { references } : {}),
           ...(mode === 'plan' ? { mode } : {}),
           ...(confirmations.length ? { confirmations } : {}),
+          ...(declined.length ? { declined } : {}),
           ...(admission?.receipt ? { attachments: admission.receipt } : {}),
         })
       )
@@ -1202,10 +1217,19 @@ export class HelperRuntime {
       }
       const confirmedCalls =
         inherited ?? resolveHelperConfirmations(this.store, conversationId, confirmations);
+      const retried = retryOf ? this.workspace.task(retryOf).snapshot : undefined;
+      const revertedChanges = retried
+        ? retried.revertedChanges
+        : helperRevertedChanges(this.store, conversationId);
+      const declinedCalls = retried
+        ? retried.declinedCalls
+        : resolveHelperDeclines(this.store, conversationId, declined);
       const queued = this.workspace.enqueue(conversationId, requestKey, request, {
         requestFingerprint,
         ...(mode === 'plan' ? { mode } : {}),
         ...(confirmedCalls.length ? { confirmations: confirmedCalls } : {}),
+        ...(revertedChanges ? { revertedChanges } : {}),
+        ...(declinedCalls?.length ? { declinedCalls } : {}),
         ...(workspace.helperConfirmPaidGeneration ? { confirmPaidGeneration: true as const } : {}),
         ...(admission?.images?.length ? { images: structuredClone(admission.images) } : {}),
         ...(admission?.files?.length ? { files: structuredClone(admission.files) } : {}),
@@ -2413,6 +2437,21 @@ export class HelperRuntime {
                           },
                         ]
                       : []
+                  ),
+                }
+              : {}),
+            ...(task.snapshot.revertedChanges
+              ? {
+                  revertedChanges: task.snapshot.revertedChanges.changes,
+                  ...(task.snapshot.revertedChanges.omitted
+                    ? { revertedChangesOmitted: task.snapshot.revertedChanges.omitted }
+                    : {}),
+                }
+              : {}),
+            ...(task.snapshot.declinedCalls?.length
+              ? {
+                  declinedCalls: task.snapshot.declinedCalls.map(
+                    ({ id: _id, operation, ...call }) => ({ name: operation, ...call })
                   ),
                 }
               : {}),

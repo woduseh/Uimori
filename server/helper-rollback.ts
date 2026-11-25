@@ -1,12 +1,15 @@
 import { isDeepStrictEqual } from 'node:util';
-import type {
-  HelperChange,
-  HelperChangeDomain,
-  HelperRollbackReason,
-  HelperRollbackStatus,
-  HelperRollbackTouch,
-  HelperRollbackUnit,
-  HelperRollbackView,
+import {
+  HELPER_REVERTED_CHANGES_LIMIT,
+  type HelperChange,
+  type HelperChangeDomain,
+  type HelperRevertedChange,
+  type HelperRollbackReason,
+  type HelperRollbackStatus,
+  type HelperRollbackTouch,
+  type HelperRollbackUnit,
+  type HelperRollbackView,
+  type HelperTaskSnapshot,
 } from '../core/helper.js';
 import type { AuthorNote } from '../core/notes.js';
 import {
@@ -53,15 +56,16 @@ type Notice = NonNullable<HelperRollbackUnit['notices']>[number];
 
 const ROLLBACK_AUTHOR = '도우미 변경 되돌리기';
 
-const field = (row: Row) => row.target_id.slice(row.target_id.lastIndexOf(':') + 1);
+const field = (row: Pick<Row, 'target_id'>) =>
+  row.target_id.slice(row.target_id.lastIndexOf(':') + 1);
 const parsed = (row: Row): unknown => (row.baseline === null ? null : JSON.parse(row.baseline));
-const entriesOf = (row: Row) => JSON.parse(row.entries) as HelperChange[];
-function resourceKey(row: Row): { kind: ResourceKind; id: string } {
+const entriesOf = (row: Pick<Row, 'entries'>) => JSON.parse(row.entries) as HelperChange[];
+function resourceKey(row: Pick<Row, 'target_id'>): { kind: ResourceKind; id: string } {
   const at = row.target_id.indexOf(':');
   return { kind: row.target_id.slice(0, at) as ResourceKind, id: row.target_id.slice(at + 1) };
 }
 
-function unitKey(row: Row) {
+function unitKey(row: Pick<Row, 'domain' | 'target_id' | 'source_id'>) {
   if (row.domain === 'scene')
     return field(row) === 'title' ? `scene-title:${row.source_id}` : `scene:${row.source_id}`;
   return `${row.domain}:${row.target_id}`;
@@ -171,19 +175,26 @@ function touches(unit: Unit): HelperRollbackTouch | null {
   return null;
 }
 
-function describe(store: Store, unit: Unit, assessment: Assessment): HelperRollbackUnit {
-  const entries = unit.rows.flatMap(entriesOf);
-  const chatId = unit.rows[0]!.chat_id;
+function unitTitle(
+  store: Store,
+  entries: readonly HelperChange[],
+  row: Pick<Row, 'chat_id' | 'target_id'>
+) {
   let title = entries[0]?.title;
-  if (!title && chatId) {
+  if (!title && row.chat_id) {
     try {
-      title = store.chat(chatId).title;
+      title = store.chat(row.chat_id).title;
     } catch {}
   }
+  return title ?? row.target_id;
+}
+
+function describe(store: Store, unit: Unit, assessment: Assessment): HelperRollbackUnit {
+  const entries = unit.rows.flatMap(entriesOf);
   return {
     unit: unit.unit,
     domain: unit.domain,
-    title: title ?? unit.rows[0]!.target_id,
+    title: unitTitle(store, entries, unit.rows[0]!),
     changeTargetIds: [...new Set(entries.map((entry) => entry.targetId))],
     status: assessment.status,
     ...(assessment.reason ? { reason: assessment.reason } : {}),
@@ -411,6 +422,55 @@ function restoreNotes(store: Store, row: Row, key: string) {
     } else write({ retired: true, replacesId: note.id });
   }
   for (const note of baseline) if (!matched.has(note.id)) write(restored(note));
+}
+
+const REVERTED_REQUEST_CHARS = 160;
+
+export function helperRevertedChanges(
+  store: Store,
+  conversationId: string
+): NonNullable<HelperTaskSnapshot['revertedChanges']> | undefined {
+  const previous = store.db
+    .prepare(
+      'SELECT created_at FROM helper_tasks WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1'
+    )
+    .get(conversationId);
+  if (!previous) return undefined;
+  const rows = store.db
+    .prepare(
+      `SELECT c.task_id,t.request,c.domain,c.target_id,c.chat_id,c.source_id,c.entries
+       FROM helper_changes c JOIN helper_tasks t ON t.id=c.task_id
+       WHERE t.conversation_id=? AND c.rolled_back_at IS NOT NULL AND c.rolled_back_at>=?
+       ORDER BY c.rolled_back_at,t.rowid,c.position`
+    )
+    .all(conversationId, String(previous.created_at)) as (Pick<
+    Row,
+    'domain' | 'target_id' | 'chat_id' | 'source_id' | 'entries'
+  > & { task_id: string; request: string })[];
+  const changes = new Map<string, HelperRevertedChange>();
+  for (const row of rows) {
+    const key = `${row.task_id}\n${unitKey(row)}`;
+    if (changes.has(key)) continue;
+    const resource = row.domain === 'resource' ? resourceKey(row) : null;
+    const request = Array.from(row.request);
+    changes.set(key, {
+      taskId: row.task_id,
+      request:
+        request.length > REVERTED_REQUEST_CHARS
+          ? `${request.slice(0, REVERTED_REQUEST_CHARS).join('')}…`
+          : row.request,
+      domain: row.domain,
+      ...(resource ? { kind: resource.kind } : {}),
+      targetId: resource?.id ?? row.source_id ?? row.chat_id ?? row.target_id,
+      title: unitTitle(store, entriesOf(row), row),
+    });
+  }
+  if (!changes.size) return undefined;
+  const all = [...changes.values()];
+  return {
+    changes: all.slice(-HELPER_REVERTED_CHANGES_LIMIT),
+    omitted: Math.max(0, all.length - HELPER_REVERTED_CHANGES_LIMIT),
+  };
 }
 
 export function rollBackHelperTask(

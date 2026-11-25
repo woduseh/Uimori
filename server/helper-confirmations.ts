@@ -2,6 +2,7 @@ import type {
   HelperConfirmation,
   HelperConfirmationReason,
   HelperConfirmedCall,
+  HelperDeclinedCall,
   HelperTask,
 } from '../core/helper.js';
 import { helperConfirmationTrait } from './helper-confirmation-traits.js';
@@ -183,22 +184,43 @@ export function helperConfirmationGate(
   });
 }
 
+function latestTaskConfirmations(store: Store, conversationId: string) {
+  const latest = store.db
+    .prepare('SELECT id FROM helper_tasks WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1')
+    .get(conversationId)?.id;
+  const read = store.db.prepare(
+    `SELECT data FROM helper_events WHERE task_id=? AND kind='confirmation.required' AND json_extract(data,'$.id')=?`
+  );
+  return (id: string) => {
+    const row = read.get(latest ?? '', id);
+    return row ? (JSON.parse(String(row.data)) as Recorded) : undefined;
+  };
+}
+
+export function resolveHelperDeclines(
+  store: Store,
+  conversationId: string,
+  ids: readonly string[]
+): HelperDeclinedCall[] {
+  if (!ids.length) return [];
+  const recorded = latestTaskConfirmations(store, conversationId);
+  return ids.flatMap((id) => {
+    const held = recorded(id);
+    if (!held) return [];
+    const { operation, reason, chatId, targets, count } = held;
+    return [{ id, operation, reason, chatId, targets, ...(count === undefined ? {} : { count }) }];
+  });
+}
+
 export function resolveHelperConfirmations(
   store: Store,
   conversationId: string,
   ids: readonly string[]
 ): HelperConfirmedCall[] {
   if (!ids.length) return [];
-  const latest = store.db
-    .prepare('SELECT id FROM helper_tasks WHERE conversation_id=? ORDER BY rowid DESC LIMIT 1')
-    .get(conversationId)?.id;
+  const read = latestTaskConfirmations(store, conversationId);
   return ids.map((id) => {
-    const row = store.db
-      .prepare(
-        `SELECT data FROM helper_events WHERE task_id=? AND kind='confirmation.required' AND json_extract(data,'$.id')=?`
-      )
-      .get(latest ?? '', id);
-    const recorded = row && (JSON.parse(String(row.data)) as Recorded);
+    const recorded = read(id);
     if (!recorded?.arguments) throw new HttpError(409, 'CONFIRMATION_UNAVAILABLE');
     return {
       id,

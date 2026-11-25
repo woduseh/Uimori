@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { HelperRollbackUnit, HelperTask } from '../core/helper.js';
+import {
+  HELPER_REVERTED_CHANGES_LIMIT,
+  type HelperRollbackUnit,
+  type HelperTask,
+} from '../core/helper.js';
 import { OUTLINE_LEVELS, outlineParentAllowed, type OutlineLevel } from '../core/outline.js';
 import type { Content } from '../core/product.js';
 import { editableResource, type ResourceModel } from '../core/resource-editing.js';
@@ -20,7 +24,14 @@ import {
 } from '../server/helper-changes.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
-import { helperRollbackView, rollBackHelperTask } from '../server/helper-rollback.js';
+import {
+  helperRevertedChanges,
+  helperRollbackView,
+  rollBackHelperTask,
+} from '../server/helper-rollback.js';
+import { HelperRuntime } from '../server/helper-runtime.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import { ResponseStreamStore } from '../server/response-stream.js';
 import { invokeHelperSceneTool } from '../server/helper-scene-tools.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
@@ -1120,4 +1131,172 @@ test('the rollback routes preview and restore a task that ran through the app', 
     await app.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+function helperRuns(store: Store, chatId: string) {
+  const http = selectFixtureModels(store);
+  const codexConnection = store.product.connection({
+    title: 'Synthetic Codex',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const codex = store.product.model({
+    title: 'Synthetic Codex',
+    connectionId: codexConnection.id,
+    modelId: 'synthetic-codex',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  const sources: { protocol: string; source: Record<string, unknown> }[] = [];
+  let failNext = false;
+  const outcome = (): transport.ProviderResult => {
+    if (!failNext) return structuredClone(helperDone);
+    failNext = false;
+    return {
+      ...structuredClone(helperDone),
+      status: 'error',
+      text: '',
+      error: { code: 'SYNTHETIC' },
+    };
+  };
+  const wire = (protocol: transport.WireRecord['protocol']): transport.WireRecord => ({
+    connectionId: 'synthetic',
+    protocol,
+    role: 'helper',
+    modelId: 'synthetic',
+    method: 'POST',
+    url: 'http://127.0.0.1:9',
+    headers: {},
+    body: {},
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  });
+  vi.spyOn(transport, 'executeProvider').mockImplementation(async (target, request, options) => {
+    options.beforeTurn?.();
+    await options.onWire?.(wire(target.protocol));
+    sources.push({
+      protocol: target.protocol,
+      source: request.input.source as Record<string, unknown>,
+    });
+    return outcome();
+  });
+  const work: Promise<void>[] = [];
+  const runtime = new HelperRuntime(store, {
+    owner: 'rollback-feedback',
+    signal: new AbortController().signal,
+    track: (promise) => work.push(promise),
+    streams: new ResponseStreamStore(store),
+    executeCodexAgent: async (connection, request, options) => {
+      await options.beforeTurn?.();
+      await options.onWire?.(wire(connection.protocol));
+      sources.push({ protocol: connection.protocol, source: JSON.parse(request.text).source });
+      return outcome();
+    },
+  });
+  const conversation = runtime.workspace.open({ kind: 'chat', chatId });
+  const use = (model: { id: string }) => {
+    const selected = modelWorkspace(store);
+    updateModelWorkspace(store, {
+      expectedRevision: selected.revision,
+      routes: selected.routes,
+      translationPolicy: selected.translationPolicy,
+      helperModel: { id: model.id },
+    });
+  };
+  const run = async (request: string, options: { retryOf?: string; fail?: boolean } = {}) => {
+    failNext = !!options.fail;
+    const task = runtime.enqueue(
+      conversation.id,
+      randomUUID(),
+      request,
+      undefined,
+      undefined,
+      options.retryOf
+    );
+    await Promise.all(work);
+    return runtime.workspace.task(task.id);
+  };
+  return { http, codex, sources, use, run, conversation };
+}
+
+test('the next task is told once what was rolled back, and a retry on Codex keeps the same list', async () => {
+  const f = fixture();
+  const [first] = f.scenes;
+  const bot = f.store.product.content(fixtureBotInput('되돌릴 봇', '처음 설명'));
+  const task = f.begin();
+  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
+  f.resource(task, 'resource.patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision,
+    changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미 설명' }],
+  });
+  f.finish(task);
+  const kept = f.begin();
+  f.scene(kept, { ...f.read(f.scenes[1]!.id), text: '남겨 둘 장면.\n' });
+  f.finish(kept);
+  expect(f.rollBack(task).units.map((unit) => unit.status)).toEqual(['restored', 'restored']);
+
+  const h = helperRuns(f.store, f.chat.id);
+  const failed = await h.run('다음 요청', { fail: true });
+  expect(failed.status).toBe('failed');
+  const expected = [
+    {
+      taskId: task.id,
+      request: 'Edit',
+      domain: 'scene',
+      targetId: first!.id,
+      title: expect.any(String),
+    },
+    {
+      taskId: task.id,
+      request: 'Edit',
+      domain: 'resource',
+      kind: 'content',
+      targetId: bot.id,
+      title: '되돌릴 봇',
+    },
+  ];
+  expect(failed.snapshot.revertedChanges).toEqual({ changes: expected, omitted: 0 });
+  const httpSource = h.sources.at(-1)!;
+  expect(httpSource.protocol).toBe('fixture-sse-v1');
+  expect(httpSource.source.revertedChanges).toEqual(failed.snapshot.revertedChanges!.changes);
+  expect(httpSource.source).not.toHaveProperty('revertedChangesOmitted');
+
+  h.use(h.codex);
+  const retried = await h.run('다음 요청', { retryOf: failed.id });
+  expect(retried.status).toBe('completed');
+  expect(retried.snapshot.revertedChanges).toEqual(failed.snapshot.revertedChanges);
+  const codexSource = h.sources.at(-1)!;
+  expect(codexSource.protocol).toBe('codex-app-server-v1');
+  expect(codexSource.source.revertedChanges).toEqual(httpSource.source.revertedChanges);
+
+  h.use(h.http);
+  const later = await h.run('그다음 요청');
+  expect(later.snapshot.revertedChanges).toBeUndefined();
+  expect(h.sources.at(-1)!.source).not.toHaveProperty('revertedChanges');
+});
+
+test('the rolled-back list keeps the most recent changes and counts the rest', () => {
+  const f = fixture();
+  const bots = Array.from(
+    { length: HELPER_REVERTED_CHANGES_LIMIT + 2 },
+    (_, index) => f.store.product.content(fixtureBotInput(`봇 ${index + 1}`, '처음')) as Content
+  );
+  const task = f.begin();
+  for (const bot of bots)
+    f.resource(task, 'resource.patch', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미' }],
+    });
+  f.finish(task);
+  f.rollBack(task);
+  const listed = helperRevertedChanges(f.store, f.conversation.id)!;
+  expect(listed.omitted).toBe(2);
+  expect(listed.changes.map((change) => change.targetId)).toEqual(
+    bots.slice(2).map((bot) => bot.id)
+  );
 });

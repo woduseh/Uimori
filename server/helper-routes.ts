@@ -1,6 +1,10 @@
 import type { OutlineTarget } from '../core/outline.js';
 import type { FastifyInstance } from 'fastify';
-import type { HelperScope, HelperEditor } from '../core/helper.js';
+import {
+  HELPER_DECLINED_CALLS_LIMIT,
+  type HelperScope,
+  type HelperEditor,
+} from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
 import { readHelperActivity } from './helper-activity.js';
 import { readHelperContextState } from './helper-context.js';
@@ -272,6 +276,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         'files',
         'mode',
         'confirmations',
+        'declinedConfirmations',
       ]);
       const references =
         body.references === undefined ? undefined : parseHelperReferencePointers(body.references);
@@ -288,6 +293,16 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         body.confirmations === undefined
           ? undefined
           : (body.confirmations as unknown[]).map((id) => text(id, 'confirmation ID', 64));
+      if (
+        body.declinedConfirmations !== undefined &&
+        (!Array.isArray(body.declinedConfirmations) ||
+          body.declinedConfirmations.length > HELPER_DECLINED_CALLS_LIMIT)
+      )
+        throw new HttpError(400, 'Invalid declined helper confirmations');
+      const declinedConfirmations =
+        body.declinedConfirmations === undefined
+          ? undefined
+          : (body.declinedConfirmations as unknown[]).map((id) => text(id, 'confirmation ID', 64));
       let outline: OutlineTarget | undefined;
       if (body.outline !== undefined) {
         const selected = record(body.outline);
@@ -349,7 +364,13 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
           outline,
           { images: requestImageUploads(body.images), files: requestFileUploads(body.files) },
           true,
-          { mode: body.mode, confirmations, references, resume: body.resume === true }
+          {
+            mode: body.mode,
+            confirmations,
+            declinedConfirmations,
+            references,
+            resume: body.resume === true,
+          }
         )
       );
     }

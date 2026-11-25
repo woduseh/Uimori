@@ -189,6 +189,56 @@ test('a grant survives a restart, runs the exact call once and rejects other arg
   ]);
 });
 
+test('a declined call reaches only the next task, without its arguments', async () => {
+  const f = fixture();
+  const [one] = f.bots as [Content];
+  const first = await runScriptedChatHelper(f.store(), f.chat.id, [
+    helperCall('delete', 'resource.delete', {
+      kind: 'content',
+      id: one.id,
+      expectedRevision: one.revision,
+    }),
+    helperDone,
+  ]);
+  const [held] = readHelperTaskResults(f.store(), first.task.id).confirmations;
+  const second = await runScriptedChatHelper(
+    f.store(),
+    f.chat.id,
+    [helperDone],
+    {},
+    {
+      request: '다른 걸 해 줘',
+      declinedConfirmations: [held!.id, 'unknown-confirmation'],
+    }
+  );
+  const declined = {
+    reason: 'delete',
+    chatId: f.chat.id,
+    targets: [{ kind: 'content', id: one.id }],
+  };
+  expect(second.task.snapshot.declinedCalls).toEqual([
+    { id: held!.id, operation: 'resource.delete', ...declined },
+  ]);
+  expect((second.requests[0]!.input.source as { declinedCalls: unknown }).declinedCalls).toEqual([
+    { name: 'resource.delete', ...declined },
+  ]);
+  expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
+    { id: held!.id, grantedBy: null, grantable: false },
+  ]);
+  const third = await runScriptedChatHelper(
+    f.store(),
+    f.chat.id,
+    [helperDone],
+    {},
+    {
+      request: '계속해 줘',
+      declinedConfirmations: [held!.id],
+    }
+  );
+  expect(third.task.snapshot.declinedCalls).toBeUndefined();
+  expect(third.requests[0]!.input.source).not.toHaveProperty('declinedCalls');
+});
+
 test('a call held again after an earlier grant can be confirmed again', async () => {
   const f = fixture();
   const [one, two, three] = f.bots as [Content, Content, Content];

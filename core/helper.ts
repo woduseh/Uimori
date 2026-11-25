@@ -158,9 +158,29 @@ export type HelperConfirmedCall = {
   chatId: string | null;
   arguments?: Record<string, unknown>;
 };
+export const HELPER_REVERTED_CHANGES_LIMIT = 20;
+export const HELPER_DECLINED_CALLS_LIMIT = 16;
+export type HelperRevertedChange = {
+  taskId: string;
+  request: string;
+  domain: HelperChangeDomain;
+  kind?: import('./resource-editing.js').ResourceKind;
+  targetId: string;
+  title: string;
+};
+export type HelperDeclinedCall = {
+  id: string;
+  operation: string;
+  reason: HelperConfirmationReason;
+  chatId: string | null;
+  targets: HelperConfirmation['targets'];
+  count?: number;
+};
 export type HelperTaskSnapshot = {
   mode?: 'plan';
   confirmations?: HelperConfirmedCall[];
+  revertedChanges?: { changes: HelperRevertedChange[]; omitted: number };
+  declinedCalls?: HelperDeclinedCall[];
   confirmPaidGeneration?: true;
   images?: import('./request-images.js').RequestImage[];
   files?: import('./request-files.js').RequestFile[];
