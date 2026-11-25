@@ -6,6 +6,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { helperConfirmationGate } from '../server/helper-confirmations.js';
+import { helperRollbackView, rollBackHelperTask } from '../server/helper-rollback.js';
 import { HELPER_APP_TOOLS, helperToolTraits } from '../server/helper-app-tools.js';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -16,6 +17,7 @@ import {
 } from '../web/HelperConfirmations.js';
 import { t } from '../web/i18n.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
+import { requestTranslation } from '../server/source-editing.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -68,27 +70,27 @@ function fixture() {
   return { store, restart, chat, bots, patch, exists };
 }
 
-test('resource deletion and a patch of three resources wait for confirmation, a patch of two does not', async () => {
+const remove = (bot: Content, expectedRevision = bot.revision) => ({
+  kind: 'content',
+  id: bot.id,
+  expectedRevision,
+});
+
+test('resource deletion waits for confirmation, and a patch of three resources saves with an undo for each', async () => {
   const f = fixture();
   const [one, two, three] = f.bots as [Content, Content, Content];
   const run = await runScriptedChatHelper(f.store(), f.chat.id, [
-    helperCall('delete', 'resource.delete', {
-      kind: 'content',
-      id: one.id,
-      expectedRevision: one.revision,
-    }),
+    helperCall('delete', 'resource.delete', remove(one)),
     helperCall('three', 'resource.patchMany', {
       items: [f.patch(one, '1'), f.patch(two, '2'), f.patch(three, '3')],
     }),
-    helperCall('two', 'resource.patchMany', { items: [f.patch(one, '1'), f.patch(two, '2')] }),
     helperDone,
   ]);
   expect(run.finished('delete')).toMatchObject({
     denied: true,
     errorCode: 'CONFIRMATION_REQUIRED',
   });
-  expect(run.finished('three')).toMatchObject({ denied: true, errorCode: 'CONFIRMATION_REQUIRED' });
-  expect(run.finished('two')).toMatchObject({ denied: false });
+  expect(run.finished('three')).toMatchObject({ denied: false });
   expect(f.exists(one.id)).toBe(true);
   expect(readHelperTaskResults(f.store(), run.task.id).confirmations).toEqual([
     {
@@ -101,16 +103,25 @@ test('resource deletion and a patch of three resources wait for confirmation, a 
       grantedBy: null,
       grantable: true,
     },
-    expect.objectContaining({
-      operation: 'resource.patchMany',
-      reason: 'bulk',
-      targets: [
-        { kind: 'content', id: one.id },
-        { kind: 'content', id: two.id },
-        { kind: 'content', id: three.id },
-      ],
-    }),
   ]);
+  const workspace = new HelperWorkspace(f.store());
+  expect(
+    helperRollbackView(f.store(), workspace, run.task.id).units.map(({ unit, status }) => [
+      unit,
+      status,
+    ])
+  ).toEqual([one, two, three].map((bot) => [`resource:content:${bot.id}`, 'restorable'] as const));
+  rollBackHelperTask(f.store(), workspace, run.task.id, undefined);
+  expect(
+    [one, two, three].map(
+      (bot) =>
+        (
+          f.store().product.get<Content>('content', bot.id).package?.nativeRisu?.card as {
+            description: string;
+          }
+        ).description
+    )
+  ).toEqual(['설명', '설명', '설명']);
 });
 
 test('paid generation waits for confirmation only when the helper setting asks for it', async () => {
@@ -152,11 +163,6 @@ test('paid generation waits for confirmation only when the helper setting asks f
 test('a grant survives a restart, runs the exact call once and rejects other arguments', async () => {
   const f = fixture();
   const [one, two] = f.bots as [Content, Content];
-  const remove = (bot: Content) => ({
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: bot.revision,
-  });
   const first = await runScriptedChatHelper(f.store(), f.chat.id, [
     helperCall('delete', 'resource.delete', remove(one)),
     helperDone,
@@ -241,12 +247,8 @@ test('a declined call reaches only the next task, without its arguments', async 
 
 test('a call held again after an earlier grant can be confirmed again', async () => {
   const f = fixture();
-  const [one, two, three] = f.bots as [Content, Content, Content];
-  const stale = (bot: Content, title: string) => ({ ...f.patch(bot, title), expectedRevision: 99 });
-  const call = () =>
-    helperCall('patch', 'resource.patchMany', {
-      items: [stale(one, '1'), stale(two, '2'), stale(three, '3')],
-    });
+  const [one] = f.bots as [Content];
+  const call = () => helperCall('patch', 'resource.delete', remove(one, 99));
   const first = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
   const [confirmation] = readHelperTaskResults(f.store(), first.task.id).confirmations;
   const granted = await runScriptedChatHelper(
@@ -298,11 +300,8 @@ const storedArguments = (store: Store) => ({
 
 test('held and granted call arguments are released once the call can no longer be confirmed', async () => {
   const f = fixture();
-  const [one, two, three] = f.bots as [Content, Content, Content];
-  const call = () =>
-    helperCall('patch', 'resource.patchMany', {
-      items: [f.patch(one, '첫 문장'), f.patch(two, '둘'), f.patch(three, '셋')],
-    });
+  const [one] = f.bots as [Content];
+  const call = () => helperCall('patch', 'resource.delete', remove(one));
   const first = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
   expect(storedArguments(f.store())).toEqual({ held: [first.task.id], granted: [] });
   const [confirmation] = readHelperTaskResults(f.store(), first.task.id).confirmations;
@@ -316,7 +315,7 @@ test('held and granted call arguments are released once the call can no longer b
   expect(granted.finished('patch')).toMatchObject({ denied: false });
   expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
   expect(granted.task.snapshot.confirmations).toEqual([
-    { id: confirmation!.id, operation: 'resource.patchMany', chatId: f.chat.id },
+    { id: confirmation!.id, operation: 'resource.delete', chatId: f.chat.id },
   ]);
   expect(readHelperTaskResults(f.store(), first.task.id).confirmations).toMatchObject([
     { grantedBy: granted.task.id, grantable: false },
@@ -325,11 +324,9 @@ test('held and granted call arguments are released once the call can no longer b
 
 test('deleting a target a held call names removes its arguments and the hold expires', async () => {
   const f = fixture();
-  const [one, two, three] = f.bots as [Content, Content, Content];
+  const [, two] = f.bots as [Content, Content];
   const held = await runScriptedChatHelper(f.store(), f.chat.id, [
-    helperCall('patch', 'resource.patchMany', {
-      items: [f.patch(one, '첫 문장'), f.patch(two, '둘'), f.patch(three, '셋')],
-    }),
+    helperCall('patch', 'resource.delete', remove(two)),
     helperDone,
   ]);
   const [confirmation] = readHelperTaskResults(f.store(), held.task.id).confirmations;
@@ -357,12 +354,8 @@ test('deleting a target a held call names removes its arguments and the hold exp
 
 test('deleting a target also removes the arguments a failed granted task kept for its retry', async () => {
   const f = fixture();
-  const [one, two, three] = f.bots as [Content, Content, Content];
-  const stale = (bot: Content, title: string) => ({ ...f.patch(bot, title), expectedRevision: 99 });
-  const call = () =>
-    helperCall('patch', 'resource.patchMany', {
-      items: [stale(one, '1'), stale(two, '2'), stale(three, '3')],
-    });
+  const [, two] = f.bots as [Content, Content];
+  const call = () => helperCall('patch', 'resource.delete', remove(two, 99));
   const held = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
   const [confirmation] = readHelperTaskResults(f.store(), held.task.id).confirmations;
   const granted = await runScriptedChatHelper(
@@ -537,7 +530,6 @@ test('every deleting operation waits for confirmation or names why it does not, 
     .map(({ key }) => key);
   expect(unexplained).toEqual([]);
   const held = new Set([
-    'resource.patchMany',
     ...HELPER_APP_TOOLS.flatMap((tool) =>
       operationCases(tool)
         .filter(({ args }) => helperToolTraits(tool.name, args).confirmation)
@@ -607,6 +599,24 @@ test('paid illustration and retry calls wait only when paid confirmation is on, 
       'r3'
     )
   ).toMatchObject({ confirmation: { operation: 'task.retry', reason: 'paid', targets: [] } });
+  const translation = requestTranslation(f.store(), sceneIds[0]!);
+  expect(
+    helperConfirmationGate(
+      f.store(),
+      on.workspace,
+      on.task,
+      'task.retry',
+      { kind: 'job', id: translation.id },
+      'r-job'
+    )
+  ).toMatchObject({ confirmation: { operation: 'task.retry', reason: 'paid' } });
+  for (const [index, args] of [
+    { kind: 'helper', id: 'helper-1' },
+    { kind: 'job', id: 'missing-job' },
+  ].entries())
+    expect(
+      helperConfirmationGate(f.store(), on.workspace, on.task, 'task.retry', args, `r${index + 4}`)
+    ).toBeNull();
 });
 
 test('an irreversible deletion waits even without paid confirmation and names its target', () => {

@@ -15,8 +15,6 @@ import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readPalette } from './themes.js';
 
-export const HELPER_BULK_CONFIRMATION_RESOURCES = 3;
-
 type Requirement = Pick<
   HelperConfirmation,
   'operation' | 'reason' | 'chatId' | 'targets' | 'count'
@@ -76,6 +74,13 @@ function confirmationTargets(
   return chat;
 }
 
+function retriesPaidGeneration(store: Store, args: Record<string, unknown>) {
+  if (args.kind === 'run' || args.kind === 'illustration') return true;
+  if (args.kind !== 'job' || typeof args.id !== 'string') return false;
+  const job = store.db.prepare('SELECT kind FROM jobs WHERE id=?').get(args.id);
+  return job?.kind === 'translation' || job?.kind === 'image';
+}
+
 function requirement(
   store: Store,
   task: Pick<HelperTask, 'snapshot'>,
@@ -94,15 +99,13 @@ function requirement(
     targets,
     ...(count === undefined ? {} : { count }),
   });
-  if (name === 'resource.delete' || name === 'resource.patchMany') {
+  if (name === 'resource.delete') {
     const operation = helperResourceOperation(name, args);
     if (!operation || operation.readOnly) return null;
     const targets = (operation.targets ?? (operation.target ? [operation.target] : [])).flatMap(
       (target) => (target.id ? [{ kind: target.kind, id: target.id }] : [])
     );
-    if (name === 'resource.delete') return needs('delete', targets);
-    const distinct = new Set(targets.map((target) => `${target.kind}:${target.id}`));
-    return distinct.size >= HELPER_BULK_CONFIRMATION_RESOURCES ? needs('bulk', targets) : null;
+    return needs('delete', targets);
   }
   const confirmation = helperConfirmationTrait(name, args);
   if (!confirmation) return null;
@@ -113,6 +116,7 @@ function requirement(
   )
     return null;
   if (confirmation === 'paid' && !task.snapshot.confirmPaidGeneration) return null;
+  if (name === 'task.retry' && !retriesPaidGeneration(store, args)) return null;
   return needs(
     confirmation,
     confirmationTargets(store, name, args, chatId),
@@ -172,7 +176,7 @@ export function helperConfirmationGate(
     )
       workspace.event(task.conversationId, task.id, 'confirmation.required', recorded);
     return {
-      error: `CONFIRMATION_REQUIRED: ${required.reason === 'paid' ? 'Paid generation' : required.reason === 'delete' ? 'A deletion that cannot be undone' : 'Changing this many resources at once'} needs the owner's confirmation. Nothing was changed.`,
+      error: `CONFIRMATION_REQUIRED: ${required.reason === 'paid' ? 'Paid generation' : 'A deletion that cannot be undone'} needs the owner's confirmation. Nothing was changed.`,
       code: 'CONFIRMATION_REQUIRED',
       recoverable: false,
       retryMode: 'never',

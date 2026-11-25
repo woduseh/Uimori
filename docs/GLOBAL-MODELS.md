@@ -18,7 +18,7 @@
 
 ## 저장과 실행 경계
 
-역할별 모델, 번역 정책, 요약 길이([요약 길이](CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)), 본문 거절 감지, 판단 프로바이더, 선택 기능 모델(제목·도우미·컨텍스트 정리·확장 호출), 도우미 작업 제한 시간, 유료 생성 전 확인([도우미 도구](HELPER-TOOLS.md#confirmation-before-destructive-or-bulk-operations))은 작업실 설정으로 함께 저장되며 동시 편집 충돌을 수정 번호로 보호해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 기본 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
+역할별 모델, 번역 정책, 요약 길이([요약 길이](CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)), 본문 거절 감지, 판단 프로바이더, 선택 기능 모델(제목·도우미·컨텍스트 정리·확장 호출), 도우미 작업 제한 시간, 유료 생성 전 확인([도우미 도구](HELPER-TOOLS.md#confirmation-before-deletion-or-paid-generation))은 작업실 설정으로 함께 저장되며 동시 편집 충돌을 수정 번호로 보호해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 기본 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
 
 DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐요. 새 DB의 역할 모델은 미지정으로 시작하고 채팅 body의 모델 값을 기본값으로 채택하지 않아요. API의 채팅 `profile.routes`는 고정 본문 모델을 포함한 현재 적용 설정의 읽기 전용 projection이에요. 채팅별 선택은 `profile.pinned.mainPromptPresetId`와 `profile.pinned.mainModel`에 ID로 저장해요. 프로필 수정에서 `pinned` 생략은 유지, `{}`는 전체 고정 해제이며 `expectedRevision`으로 충돌을 보호해요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요. 지원하지 않는 과거 DB/archive를 임의로 변환하지 않아요.
 

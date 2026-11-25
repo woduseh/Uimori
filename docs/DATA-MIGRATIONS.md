@@ -35,7 +35,7 @@ Uimori 개인 작업실 데이터베이스의 현재 스키마 버전, 보관 �
 서버는 DB를 열 때마다 한 트랜잭션에서 이전 모양으로 남은 행만 현재 모양으로 바꿔요. 수정 번호는 바꾸지 않고, 이미 현재 모양인 행은 다시 쓰지 않아요. 전체 백업에서 복원한 DB도 처음 열 때 같은 정리를 거쳐요.
 
 - **자동 제목 등록 언어**: 언어 대신 채팅 ID가 저장된 `chat.title.eligible` 기록은 한국어(`ko`)로 바꿔요.
-- **도우미 확인 인자**: 더 이상 확인할 수 없는 보류 호출과, 끝났거나 다시 시도한 작업이 받은 확인 호출에서 호출 인자를 지워요([도우미 도구](HELPER-TOOLS.md#confirmation-before-destructive-or-bulk-operations)).
+- **도우미 확인 인자**: 더 이상 확인할 수 없는 보류 호출과, 끝났거나 다시 시도한 작업이 받은 확인 호출에서 호출 인자를 지워요([도우미 도구](HELPER-TOOLS.md#confirmation-before-deletion-or-paid-generation)).
 - **도우미 한도와 입력 측정**: 대화 한도와 작업 스냅샷 한도의 `artifacts`를 지우고, `inputTokenLimit`가 없는 입력 측정 기록에는 작업 스냅샷의 모델 한도가 있으면 복사해요.
 - **삽화 설정·프리셋·참고 이미지·작업 입력**: [삽화 프리셋](#삽화-프리셋)과 [문단 삽화](#문단-삽화)에 적은 대로 채워요.
 - **평가 도구 폐지 설정**: 모델 프리셋의 `evaluationTools`에서 `maximumToolRounds`·`terminalLateCorrections`·`outputRecovery`를 지워요. 이후 이 필드가 있는 평가 설정은 저장과 검증 모두에서 거부돼요.

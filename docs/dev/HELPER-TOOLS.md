@@ -127,7 +127,7 @@ Read-only refusals, the reviewed read-operation set, task-list mode reporting, a
 - Refusal uses the same `helperToolTraits` classification that governs receipts and change tracking so there is one list; discovery still lists write operations so a plan can name exact calls and arguments.
 - Executing a plan is an ordinary follow-up request: the server keeps no link between plan and execution, and a retry preserves the retried task's mode.
 
-## Confirmation before destructive or bulk operations
+## Confirmation before deletion or paid generation
 
 Defaults, `helperConfirmPaidGeneration`, exact-argument single-use grants across restarts, latest-task scoping, argument release, and deletion cleanup are enforced by `tests/helper-confirmation.test.ts` and `HCONFIRM03` in `tests/helper-browser.spec.ts`.
 
@@ -135,10 +135,10 @@ Defaults, `helperConfirmPaidGeneration`, exact-argument single-use grants across
 - A confirmation binds to the conversation, target chat, operation, and exact arguments (revision guards included); a grant is consumed at dispatch even if the save fails, a replayed call identity never consumes it twice, and the granted request carries `source.confirmedCalls` so the next task can repeat arguments verbatim.
 - Only confirmations from the conversation's latest task can be granted (`CONFIRMATION_UNAVAILABLE` otherwise), retries keep their task's grants, and plan mode refuses grants (`HELPER_PLAN_CONFIRMATIONS`, with the composer toggling apply/plan cleanly per `HCONFIRM03`).
 - The same call identity may be held again in a later task; each hold's `grantedBy` names only a subsequent task, and declines are keyed per task and confirmation.
-- `helperConfirmationTrait`, exposed as `helperToolTraits(...).confirmation`, is the one classification of held calls: `delete` marks a deletion that turn rollback cannot undo and is always held; `paid` marks a call that starts paid generation and is held only with `helperConfirmPaidGeneration`, which is snapshotted at task admission like the timeout and cannot be changed by the helper's own `settings.update` or by the settings keys it adds. The argument-dependent bulk rule (`resource.patchMany` over `HELPER_BULK_CONFIRMATION_RESOURCES` or more resources) stays in `requirement`.
+- `helperConfirmationTrait`, exposed as `helperToolTraits(...).confirmation`, is the one classification of held calls: `delete` marks a deletion that turn rollback cannot undo and is always held; `paid` marks a call that starts paid generation and is held only with `helperConfirmPaidGeneration`, which is snapshotted at task admission like the timeout and cannot be changed by the helper's own `settings.update` or by the settings keys it adds. Argument-dependent refinements stay in `requirement`: `task.retry` is held only when `retriesPaidGeneration` says the retried task generates paid output (a run, an illustration, or a translation or image job; never a helper task, which no paid confirmation covers when it is first requested).
+- Nothing is held only for its size: the owner released the earlier rule that held a `resource.patchMany` over three or more resources, because every resource it saves is its own restorable unit in the review strip. Stored `bulk` holds from before keep their card label so old task results still render.
 - The trait lives in its own module because `helper-task-results` reads confirmations and `helper-app-tools` reaches `helper-task-results` through the settings tools; importing the trait from `helper-app-tools` made that cycle fail at module initialization.
 - `tests/helper-confirmation.test.ts` requires every operation, or top-level `action` value, named `delete` or `remove` to carry the `delete` trait or an exemption with its reason, and every held operation to have a card label in `HELPER_CONFIRMATION_OPERATION_LABELS`. It exists because `illustration.cut.delete`, `font.delete` and `palette.delete` once shipped without confirmation.
-- `task.retry` is `paid` for every task kind, because each kind it can retry calls a model.
 - A hold records `count` for `illustration.generate` and, for targets the client cannot name (models, fonts, palettes), the title at hold time; titles are display text only and play no part in the grant identity.
 - The results view never exposes held-call arguments. `releaseHelperConfirmationArguments` drops stored arguments from `confirmation.required` once a later task exists and from granted calls once completed or retried, while `forgetHelperConfirmationTargets` clears both on chat, scene, or resource deletion (including library holds targeting via `chatId`); argument-stripped holds show as expired and fail grant or retry with `CONFIRMATION_UNAVAILABLE`.
 
@@ -331,7 +331,7 @@ Protocol search selection is owned by `helperWebSearchCapability`, pricing rules
 - `scene.request` builds its run via `composerRunSnapshot` and reserves it through `store.createRunInTransaction`, and `scene.translate` delegates to `requestTranslation`; neither adds a parallel path.
 - Reservation, helper receipt, and result target commit in one transaction with the run's idempotency key derived from the receipt; execution starts strictly post-commit and only when this call created it, so a replayed receipt never executes twice.
 - A chat with a queued or running run returns `SCENE_REQUEST_BUSY` before conflict checks.
-- With `helperConfirmPaidGeneration` enabled, both operations require [confirmation](#confirmation-before-destructive-or-bulk-operations); reference images and lore-selection reset remain composer-only.
+- With `helperConfirmPaidGeneration` enabled, both operations require [confirmation](#confirmation-before-deletion-or-paid-generation); reference images and lore-selection reset remain composer-only.
 
 ## Next request preview, scene lore and card variables
 

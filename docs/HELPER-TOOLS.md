@@ -125,7 +125,7 @@ Behavior the types leave out:
 - Discovery still lists the operations that write, so a plan can name the operation and arguments it would use.
 - Carrying out a plan is an ordinary request that refers to it. The server keeps no link between the plan and the request that runs it, and a retry keeps the mode of the task it retries.
 
-### Confirmation before destructive or bulk operations
+### Confirmation before deletion or paid generation
 
 - The runtime cannot pause a tool call for an answer: an HTTP provider loop and a native Codex turn both expect the result. So a held call is refused without effect, the task finishes its turn, and the owner's next request carries the grant. Everything is in the database (the event, the task snapshot and a `confirmation.used` event), so a reload or a restart loses nothing, and declining is just a request without the grant.
 - A confirmation is bound to the conversation, the chat the call acts on, the operation and its exact arguments, revision guards included. A grant is consumed when the confirmed call is dispatched, even if the save then fails, and a replay of the same call identity does not consume it twice.
@@ -133,7 +133,7 @@ Behavior the types leave out:
 - Only a confirmation required by the conversation's latest task can be granted (`CONFIRMATION_UNAVAILABLE` otherwise), so a grant never revives an old request. A retry keeps the grants of the task it retries.
 - A plan-mode request cannot carry a grant (`HELPER_PLAN_CONFIRMATIONS`): plan mode refuses every write, so the grant would be spent on a task that cannot run the call, and the arguments are released as soon as that later task exists. The composer therefore switches to apply mode when the owner confirms a held call, and switching to plan mode removes the pending grants; the card offers the confirmation again.
 - The same call identity can be held again in a later task, for example after a granted call failed. Each holding task is answered on its own: its `grantedBy` names only a task after it, so an earlier grant neither marks the new hold as granted nor hides it, and the client keys a decline by task and confirmation.
-- By default resource deletion and a `resource.patchMany` over three or more resources are held. The confirmation setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
+- Deletions that turn rollback cannot undo are always held. Changes that rollback can undo, such as a `resource.patchMany` over many resources, run at once and are reviewed and undone in the change review strip. With paid-generation confirmation on, `task.retry` is held only when the retried task generates paid output: a writing run, a translation or picture job, or an illustration, not a helper task. The confirmation setting is copied into the task at admission, like the task timeout, and the helper's own `settings.update` cannot change it.
 - The results view does not expose the held call's arguments.
 
 ### Choice question cards and `@` target references
@@ -285,7 +285,7 @@ Outside these operations:
 ### Requesting the next scene or a translation
 
 - A chat whose run is already queued or running returns `SCENE_REQUEST_BUSY` before the conflict checks, so the helper reports it instead of sending the request again.
-- With `helperConfirmPaidGeneration` on, both operations first wait for the owner's [confirmation](#confirmation-before-destructive-or-bulk-operations).
+- With `helperConfirmPaidGeneration` on, both operations first wait for the owner's [confirmation](#confirmation-before-deletion-or-paid-generation).
 
 Outside these operations:
 
