@@ -279,7 +279,7 @@ export function ThemeSettings({
       });
       setBaseline(JSON.stringify(themeDefinition(result.saved)));
       setPreview(null);
-      await state.refresh(true);
+      await state.refresh();
       setNotice(uiMessage('visualpanels.themeSavedUseApplyToActivateIt'));
       saved = true;
     }, true);
@@ -301,7 +301,7 @@ export function ThemeSettings({
       });
       setPreview(null);
       state.setDisabled(false);
-      await state.refresh(true);
+      await state.refresh();
       setNotice(
         targetScope === 'global' &&
           ((state.scope.chatId && p.chatThemes[state.scope.chatId]) ||
@@ -323,7 +323,7 @@ export function ThemeSettings({
       });
       setPreview(null);
       state.setDisabled(false);
-      await state.refresh(true);
+      await state.refresh();
       setNotice(
         scope === 'global' &&
           ((state.scope.chatId && p.chatPalettes?.[state.scope.chatId]) ||
@@ -342,7 +342,7 @@ export function ThemeSettings({
         themeId,
         expectedRevision: p.revision,
       });
-      await state.refresh(true);
+      await state.refresh();
       setNotice(uiMessage('storyUi.botDefaultSaved'));
     });
   }
@@ -1173,7 +1173,7 @@ export function ThemeSettings({
                 if (draft?.id === deleting.id) setDraft(null);
                 setPreview(null);
                 setDeleting(null);
-                await state.refresh(true);
+                await state.refresh();
               });
             }}
           >

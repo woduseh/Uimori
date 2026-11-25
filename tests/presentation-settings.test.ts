@@ -6,7 +6,7 @@ import {
   watchPresentationWriteFailure,
   writePresentationSetting,
 } from '../web/presentation-settings.js';
-import { fitSidePanelWidth, readSidePanelWidth, writeSidePanelWidth } from '../web/side-panel.js';
+import { fitSidePanelWidth, readSidePanelWidth } from '../web/side-panel.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -87,7 +87,6 @@ test('the right panel width keeps a stored preset, clamps other values and survi
     },
   });
   expect(readSidePanelWidth()).toBe(384);
-  expect(() => writeSidePanelWidth(400)).not.toThrow();
 });
 
 test('a refused write is reported once storage refuses it and an unset numeric choice keeps its fallback', () => {

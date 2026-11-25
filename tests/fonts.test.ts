@@ -35,6 +35,8 @@ function fixture() {
 }
 test('font bytes deduplicate without replacing the original title and selections fall back after deletion', () => {
   const store = database();
+  const invalidations: string[] = [];
+  store.observeInvalidations((name) => invalidations.push(name));
   const bytes = fixture();
   const font = registerFont(store, {
     title: 'First',
@@ -55,6 +57,7 @@ test('font bytes deduplicate without replacing the original title and selections
     fonts: [],
     preferences: { revision: 2, appFontId: null, readerFontId: null },
   });
+  expect(invalidations).toEqual(['fonts', 'fonts', 'fonts', 'fonts']);
 });
 
 test('opening existing fonts removes retired metadata while preserving files, identity and selections', () => {

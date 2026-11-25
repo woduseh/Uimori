@@ -155,9 +155,19 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
     },
   });
   const preset = (await response.json()).saved as IllustrationPreset;
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await section.getByRole('button', { name: `${title} 삽화 프리셋 편집`, exact: true }).click();
   await editor.getByLabel('삽화 그림 지침').fill('unsaved local direction');
+  let catalogReads = 0;
+  let releaseLiveRead!: () => void;
+  const liveReadReleased = new Promise<void>((resolve) => {
+    releaseLiveRead = resolve;
+  });
+  let liveReadDone!: Promise<void>;
+  await page.route('**/api/illustration-presets', (route) => {
+    if (catalogReads++ > 0) return route.continue();
+    liveReadDone = liveReadReleased.then(() => route.continue());
+    return liveReadDone;
+  });
   const remote = await request.post('/api/resources/save', {
     data: {
       kind: 'illustration-preset',
@@ -167,9 +177,13 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
     },
   });
   expect(remote.ok()).toBe(true);
+  await expect.poll(() => catalogReads).toBe(1);
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
   const conflictDialog = page.getByRole('alertdialog', { name: '삽화 프리셋 저장본 확인' });
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('saved in another window');
+  releaseLiveRead();
+  await liveReadDone;
+  await page.unroute('**/api/illustration-presets');
   await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(
     'unsaved local direction'
   );

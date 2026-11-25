@@ -34,9 +34,7 @@ import { illustrationErrorMessage, illustrationGeneratorLabels } from './illustr
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
 import './settings-layout.css';
-import { writeOptionalStorage } from './optional-storage.js';
-import { storageKeys } from './storage-keys.js';
-import { helperResourceFrame } from './live-frames.js';
+import { presentationFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 
 type Draft = {
@@ -44,7 +42,6 @@ type Draft = {
   revision?: number;
   model: IllustrationPresetDefinition;
 };
-const changedKey = storageKeys.illustrationPresetsChanged;
 const messageOf = (error: unknown) => {
   const message = (error as Error).message;
   return /^COMFYUI_/u.test(message) ? illustrationErrorMessage(message) : message;
@@ -92,7 +89,7 @@ export function IllustrationPresetSettings({
   const alive = useRef(true);
   const epoch = useRef(0);
   const dirty = !!draft && JSON.stringify(draft.model) !== baseline;
-  const refresh = useCallback(async (notify = false) => {
+  const refresh = useCallback(async () => {
     const version = ++epoch.current;
     try {
       const next = await api<IllustrationPresetCatalog>('/illustration-presets');
@@ -103,26 +100,15 @@ export function IllustrationPresetSettings({
     } catch (cause) {
       if (alive.current && version === epoch.current) setLoadError(messageOf(cause));
     }
-    if (notify) writeOptionalStorage('local', changedKey, `${Date.now()}:${Math.random()}`);
   }, []);
   useEffect(() => {
     alive.current = true;
     void refresh();
-    const focus = () => {
-      void refresh();
-    };
-    const storage = (event: StorageEvent) => {
-      if (event.key === changedKey) focus();
-    };
-    const live = watchLive({ match: helperResourceFrame('illustration-preset'), refresh });
-    window.addEventListener('focus', focus);
-    window.addEventListener('storage', storage);
+    const live = watchLive({ match: presentationFrame('illustration-presets'), refresh });
     return () => {
       alive.current = false;
       epoch.current++;
       live.dispose();
-      window.removeEventListener('focus', focus);
-      window.removeEventListener('storage', storage);
     };
   }, [refresh]);
   useEffect(() => {
@@ -194,7 +180,7 @@ export function IllustrationPresetSettings({
           ? '저장했어요. 다음 생성부터 적용돼요.'
           : '저장했어요. 사용할 범위에 적용해 주세요.'
       );
-      await refresh(true);
+      await refresh();
     }, !asCopy);
   }
   useSettingsSaveHandler(onSaveHandlerChange, () => save());
@@ -311,7 +297,7 @@ export function IllustrationPresetSettings({
         presetId,
         expectedRevision: p.revision,
       });
-      await refresh(true);
+      await refresh();
       setNotice('프리셋을 변경했어요. 다음 생성부터 적용돼요.');
     });
   return (
@@ -791,7 +777,7 @@ export function IllustrationPresetSettings({
                   );
                   if (draft?.id === deleting.id) setDraft(null);
                   setDeleting(null);
-                  await refresh(true);
+                  await refresh();
                   setNotice('프리셋을 삭제했어요.');
                 });
             }}

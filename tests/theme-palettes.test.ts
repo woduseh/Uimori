@@ -46,6 +46,8 @@ test('portable palettes strip identity and reject executable or unknown colors',
 });
 test('custom palettes persist independently, select with CAS, and deletion restores inheritance', () => {
   const store = database();
+  const invalidations: string[] = [];
+  store.observeInvalidations((name) => invalidations.push(name));
   const first = savePalette(store, model);
   const copy = savePalette(store, parsePaletteFile(paletteFile(first)));
   expect(copy.id).not.toBe(first.id);
@@ -72,6 +74,7 @@ test('custom palettes persist independently, select with CAS, and deletion resto
   expect(() => savePalette(store, model, first.id, 1)).toThrow();
   expect(() => deletePalette(store, first.id, 1)).toThrow();
   deletePalette(store, first.id, 2);
+  expect(invalidations).toEqual(['themes', 'themes', 'themes', 'themes', 'themes']);
   expect(resolvePaletteId(themeCatalog(store), {})).toBe('theme');
   expect(themeCatalog(store).palettes?.some((p) => p.id === copy.id)).toBe(true);
   expect(() => savePalette(store, model, 'forest', 1)).toThrow();

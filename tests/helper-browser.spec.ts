@@ -1441,11 +1441,14 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
       effectReads.push(path);
   });
   state.complete(task);
-  for (const kind of ['settings.updated', 'theme.updated', 'illustration-preset.updated'])
-    state.emit(kind);
+  const themesChanged = await page.request.post('/api/test/live-frame', {
+    data: { event: 'invalidate', data: { name: 'themes', seq: 0 } },
+  });
+  expect(themesChanged.ok()).toBe(true);
+  for (const kind of ['settings.updated', 'illustration-preset.updated']) state.emit(kind);
   await expect
     .poll(() => state.framesReceived())
-    .toEqual(expect.arrayContaining(['task.completed', 'settings.updated', 'theme.updated']));
+    .toEqual(expect.arrayContaining(['task.completed', 'settings.updated']));
   expect(effectReads).toEqual([]);
   await page.evaluate(() => {
     delete (document as unknown as { hidden?: boolean }).hidden;

@@ -520,6 +520,17 @@ test('THEMES palette selections lock duplicate actions and refresh conflicts wit
   await expect(cream).toBeEnabled();
   expect(selections).toBe(1);
   await page.unroute('**/api/themes/selection');
+  let catalogReads = 0;
+  let releaseLiveRead!: () => void;
+  const liveReadReleased = new Promise<void>((resolve) => {
+    releaseLiveRead = resolve;
+  });
+  let liveReadDone!: Promise<void>;
+  await page.route('**/api/themes', (route) => {
+    if (catalogReads++ > 0) return route.continue();
+    liveReadDone = liveReadReleased.then(() => route.continue());
+    return liveReadDone;
+  });
   const current = await (await request.get('/api/themes')).json();
   const changed = await request.post('/api/themes/selection', {
     data: {
@@ -530,12 +541,16 @@ test('THEMES palette selections lock duplicate actions and refresh conflicts wit
     },
   });
   expect(changed.ok()).toBe(true);
+  await expect.poll(() => catalogReads).toBe(1);
   await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
   await expect(page.getByRole('button', { name: '로즈 팔레트 적용', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
   );
+  releaseLiveRead();
+  await liveReadDone;
+  await page.unroute('**/api/themes');
   await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue('Keep conflicted draft');
   await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
   await expect(

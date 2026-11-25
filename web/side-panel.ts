@@ -32,10 +32,6 @@ export function readSidePanelWidth() {
     : SIDE_PANEL_DEFAULT_WIDTH;
 }
 
-export function writeSidePanelWidth(width: number) {
-  writePresentationSetting(SIDE_PANEL_WIDTH_KEY, String(width));
-}
-
 export function fitSidePanelWidth(preferred: number, minimum: number, room: number) {
   const width = Math.min(SIDE_PANEL_MAX_WIDTH, Math.max(minimum, preferred));
   return room >= minimum ? Math.min(width, room) : width;

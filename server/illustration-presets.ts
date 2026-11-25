@@ -27,6 +27,7 @@ function writePreferences(store: Store, p: IllustrationPresetPreferences) {
       'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
     )
     .run(preferenceKey, JSON.stringify(next));
+  store.invalidated('illustration-presets');
   return next;
 }
 export function readIllustrationPreset(store: Store, id: string): IllustrationPreset {
@@ -70,12 +71,14 @@ export function saveIllustrationPreset(
   } catch (error) {
     throw new HttpError(400, (error as Error).message);
   }
-  return store.product.save(
+  const saved = store.product.save(
     'illustration-preset',
     model,
     id,
     expectedRevision
   ) as IllustrationPreset;
+  store.invalidated('illustration-presets');
+  return saved;
 }
 export function selectIllustrationPreset(store: Store, value: unknown) {
   const b = record(value);

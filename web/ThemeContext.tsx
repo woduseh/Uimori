@@ -25,10 +25,9 @@ import { applyThemeAssets } from './theme-assets.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useShortcut } from './shortcuts.js';
 import { storageKeys } from './storage-keys.js';
-import { helperResourceFrame } from './live-frames.js';
+import { presentationFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 
-export const themesChangedKey = storageKeys.themesChanged;
 const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
 type ThemeState = {
   catalog: ThemeCatalog;
@@ -37,7 +36,7 @@ type ThemeState = {
   loading: boolean;
   error: string;
   setScope: (scope: ThemeScope) => void;
-  refresh: (notify?: boolean) => Promise<void>;
+  refresh: () => Promise<void>;
   preview: ThemeDefinition | null;
   setPreview: (theme: ThemeDefinition | null) => void;
   disabled: boolean;
@@ -64,8 +63,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
   const alive = useRef(true);
   const epoch = useRef(0);
-  const refresh = useCallback(async (notify = false) => {
-    if (notify) writeOptionalStorage('local', themesChangedKey, `${Date.now()}:${Math.random()}`);
+  const refresh = useCallback(async () => {
     const current = ++epoch.current;
     try {
       const next = await api<ThemeCatalog>('/themes');
@@ -100,21 +98,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     alive.current = true;
     void refresh();
-    const focus = () => {
-      void refresh();
-    };
-    const storage = (event: StorageEvent) => {
-      if (event.key === themesChangedKey) focus();
-    };
-    const live = watchLive({ match: helperResourceFrame('theme'), refresh });
-    window.addEventListener('focus', focus);
-    window.addEventListener('storage', storage);
+    const live = watchLive({ match: presentationFrame('themes'), refresh });
     return () => {
       alive.current = false;
       epoch.current++;
       live.dispose();
-      window.removeEventListener('focus', focus);
-      window.removeEventListener('storage', storage);
     };
   }, [refresh]);
   const setDisabled = useCallback((value: boolean) => {

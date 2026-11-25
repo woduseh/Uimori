@@ -111,6 +111,8 @@ test('portable recipes validate the workflow and preserve text, not local IDs or
 test('chat, bot and global selection resolve one whole recipe; inherit and stale IDs fall back predictably', () => {
   const store = databases.create();
   const chat = createFixtureChat(store, 'Scoped chat');
+  const invalidations: string[] = [];
+  store.observeInvalidations((name) => invalidations.push(name));
   const global = save(store, 'Global'),
     bot = save(store, 'Bot'),
     local = save(store, 'Chat');
@@ -141,6 +143,7 @@ test('chat, bot and global selection resolve one whole recipe; inherit and stale
   expect(() => choose(store, global.id, 'chat', 'missing')).toThrow();
   deleteIllustrationPreset(store, bot.id, bot.revision);
   expect(effectiveIllustrationPreset(store, chat.id)).toEqual(global);
+  expect(invalidations).toEqual(Array(8).fill('illustration-presets'));
 });
 
 test('shared resource saves support CAS and undo; creating and exporting never select or generate', () => {

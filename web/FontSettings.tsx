@@ -89,7 +89,7 @@ export function FontSettings({
       setFile(null);
       setTitle('');
       if (input.current) input.current.value = '';
-      await state.refresh(true);
+      await state.refresh();
     }, message('fonts.registered'));
   }
   useSettingsSaveHandler(onSaveHandlerChange, upload);

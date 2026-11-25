@@ -94,9 +94,6 @@ export const storageKeys = {
   readingClient: exact('uimori:reading-client', local, 'browser'),
   storageRecency: exact('uimori:storage-recency:v1', local, 'browser'),
   libraryChanged: exact('uimori:library-change', local, 'signal'),
-  fontsChanged: exact('uimori:fonts-changed', local, 'signal'),
-  themesChanged: exact('uimori:themes-changed', local, 'signal'),
-  illustrationPresetsChanged: exact('uimori:illustration-presets-changed', local, 'signal'),
 
   readingPosition: keyed('reading:', both, 'chat', one),
   activityAcknowledgement: keyed(

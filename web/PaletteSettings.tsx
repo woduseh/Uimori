@@ -104,7 +104,7 @@ export function usePaletteLibrary() {
       state.setPreview(null);
       saved = true;
       setNotice(message('palettes.saved'));
-      await state.refresh(true);
+      await state.refresh();
     });
     return saved;
   }
@@ -121,7 +121,7 @@ export function usePaletteLibrary() {
         state.setPreview(null);
       }
       setDeleting(null);
-      await state.refresh(true);
+      await state.refresh();
     });
   }
   function saveAsNew() {

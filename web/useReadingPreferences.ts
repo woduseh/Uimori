@@ -3,16 +3,15 @@ import {
   readerLocation,
   THEME_BODY_SCROLL_SELECTOR,
 } from './theme-body-scroll.js';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import { readingPositionElements } from './reader-dom.js';
-import { readPresentationSetting, writePresentationSetting } from './presentation-settings.js';
+import { readPresentationSetting, usePresentationSetting } from './presentation-settings.js';
 import { defaultAppFont } from '../core/fonts.js';
 import {
   normalizeReadability,
   READABILITY_STORAGE_KEY,
   type ReadabilitySettings,
 } from './reading-preferences.js';
-import { storageKeys } from './storage-keys.js';
 
 function readPreferences() {
   try {
@@ -60,15 +59,18 @@ export function useReadingPreferences(
     readerFamily = null,
   }: { appFamily?: string | null; readerFamily?: string | null } = {}
 ) {
-  const [settings, setSettings] = useState(readPreferences);
   const positions = useRef<ReadingPosition[]>([]);
   const changeLayout = useCallback((change: () => void) => {
     positions.current = readingPositions();
     change();
   }, []);
+  const [settings, setSettings] = usePresentationSetting(READABILITY_STORAGE_KEY, readPreferences, {
+    serialize: JSON.stringify,
+    receive: changeLayout,
+  });
   const update = useCallback(
     (next: ReadabilitySettings) => changeLayout(() => setSettings(normalizeReadability(next))),
-    [changeLayout]
+    [changeLayout, setSettings]
   );
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -103,21 +105,5 @@ export function useReadingPreferences(
     }
     positions.current = [];
   }, [font, fontSize, width, settings, appFamily, readerFamily]);
-  useEffect(() => {
-    writePresentationSetting(READABILITY_STORAGE_KEY, JSON.stringify(settings));
-  }, [settings]);
-  useEffect(() => writePresentationSetting(storageKeys.font, font), [font]);
-  useEffect(() => writePresentationSetting(storageKeys.fontSize, String(fontSize)), [fontSize]);
-  useEffect(() => writePresentationSetting(storageKeys.readingWidth, String(width)), [width]);
-  useEffect(() => {
-    const receive = (event: StorageEvent) => {
-      if (event.key !== READABILITY_STORAGE_KEY && event.key !== null) return;
-      try {
-        if (event.storageArea === localStorage) changeLayout(() => setSettings(readPreferences()));
-      } catch {}
-    };
-    window.addEventListener('storage', receive);
-    return () => window.removeEventListener('storage', receive);
-  }, [changeLayout]);
   return { settings, update, changeLayout };
 }

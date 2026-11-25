@@ -88,7 +88,7 @@ export function ThemeBackgroundSettings({
         setBaseline(JSON.stringify(background ?? inherited));
         setDraft(background ?? inherited);
       }
-      await state.refresh(true);
+      await state.refresh();
       if (alive.current) setNotice(uiMessage('visuals.m001'));
       return true;
     } catch (cause) {

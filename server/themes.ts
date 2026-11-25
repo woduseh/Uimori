@@ -81,7 +81,9 @@ export function saveTheme(
     throw new HttpError(400, (error as Error).message);
   }
   assertThemeAssetsStored(store.db, model.assets);
-  return store.product.save('theme', model, id, expectedRevision) as Theme;
+  const saved = store.product.save('theme', model, id, expectedRevision) as Theme;
+  store.invalidated('themes');
+  return saved;
 }
 function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
   const next = { ...p, revision: p.revision + 1 };
@@ -90,6 +92,7 @@ function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
       'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
     )
     .run(preferenceKey, JSON.stringify(next));
+  store.invalidated('themes');
   return next;
 }
 export function selectTheme(store: Store, input: unknown): ThemePreferences {
@@ -237,7 +240,9 @@ export function savePalette(
   } catch (error) {
     throw new HttpError(400, (error as Error).message);
   }
-  return store.product.save('palette', model, id, expectedRevision) as Palette;
+  const saved = store.product.save('palette', model, id, expectedRevision) as Palette;
+  store.invalidated('themes');
+  return saved;
 }
 export function deletePalette(store: Store, id: string, expectedRevision: number) {
   if (isPaletteId(id)) throw new HttpError(400, '기본 팔레트는 삭제할 수 없어요.');

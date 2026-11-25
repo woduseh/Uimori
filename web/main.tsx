@@ -68,7 +68,7 @@ import { canDismissReaderRun } from '../core/reader-conversation.js';
 import {
   readPresentationChoice,
   readFontSize,
-  writePresentationSetting,
+  usePresentationSetting,
   watchPresentationWriteFailure,
   type ResponseDisplayMode,
 } from './presentation-settings.js';
@@ -164,7 +164,6 @@ import {
   readWorkspacePanelState,
   SIDE_PANEL_MAX_WIDTH,
   sidePanelMinimumWidth,
-  writeSidePanelWidth,
   writeWorkspacePanelState,
   type SidePanelTab,
 } from './side-panel.js';
@@ -595,16 +594,14 @@ function App() {
   modelPickerScope.current = panel === 'model' ? s.viewKey : null;
   const settingsReturnToNew = useRef(false);
   const [focus, setFocus] = useState(false);
-  const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(
+  const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = usePresentationSetting(
+    storageKeys.sceneNavigator,
     () => readPresentationChoice(storageKeys.sceneNavigator, ['true', 'false'], 'true') === 'true'
   );
   const showSceneNavigator = sceneNavigatorEnabled && !focus;
   useEffect(() => {
     if (focus) setSceneList(false);
   }, [focus]);
-  useEffect(() => {
-    writePresentationSetting(storageKeys.sceneNavigator, String(sceneNavigatorEnabled));
-  }, [sceneNavigatorEnabled]);
   const [inspectedRun, setInspectedRun] = useState('');
   const [chatTool, setChatTool] = useState<{
     scope: string;
@@ -613,19 +610,25 @@ function App() {
   const currentChatTool = chatTool?.scope === s.viewKey ? chatTool.kind : null;
   const navigationOpener = useRef<HTMLButtonElement>(null);
   const navigationReturnFocus = useRef<HTMLButtonElement>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+  const [sidebarCollapsed, setSidebarCollapsed] = usePresentationSetting(
+    storageKeys.sidebarCollapsed,
     () =>
-      readPresentationChoice(storageKeys.sidebarCollapsed, ['true', 'false'], 'false') === 'true'
+      readPresentationChoice(storageKeys.sidebarCollapsed, ['true', 'false'], 'false') === 'true',
+    { follow: false }
   );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [panelSidebarExpanded, setPanelSidebarExpanded] = useState(false);
   const [libraryEditorOpen, setLibraryEditorOpen] = useState(false);
   const [editorSidebarExpanded, setEditorSidebarExpanded] = useState(false);
-  const [readingWidth, setReadingWidth] = useState(() =>
+  const [readingWidth, setReadingWidth] = usePresentationSetting(storageKeys.readingWidth, () =>
     readPresentationChoice(storageKeys.readingWidth, READING_WIDTHS, 880)
   );
-  const [panelWidth, setPanelWidth] = useState(readSidePanelWidth);
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
+  const [panelWidth, setPanelWidth] = usePresentationSetting(
+    storageKeys.panelWidth,
+    readSidePanelWidth,
+    { follow: false }
+  );
+  const [sidebarWidth, setSidebarWidth] = usePresentationSetting(storageKeys.sidebarWidth, () =>
     readPresentationChoice(storageKeys.sidebarWidth, SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
   );
   const desktopSidebarWidth = Math.min(
@@ -726,32 +729,36 @@ function App() {
         helperWorkspaceOpen ? 'helper-workspace' : (workspacePanel ?? 'closed')
       );
   }, [workspacePanel, helperWorkspaceOpen]);
-  useEffect(() => {
-    writePresentationSetting(storageKeys.sidebarCollapsed, String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
-  const [theme, setTheme] = useState(() =>
+  const [theme, setTheme] = usePresentationSetting(storageKeys.theme, () =>
     readPresentationChoice(storageKeys.theme, ['system', 'dark', 'light'] as const, 'system')
   );
-  const [font, setFont] = useState<string>(() =>
+  const [font, setFont] = usePresentationSetting<string>(storageKeys.font, () =>
     readPresentationChoice(storageKeys.font, ['sans', 'serif'], 'sans')
   );
-  const [fontSize, setFontSize] = useState(readFontSize);
-  const [enterSend, setEnterSend] = useState(
+  const [fontSize, setFontSize] = usePresentationSetting(storageKeys.fontSize, readFontSize);
+  const [enterSend, setEnterSend] = usePresentationSetting(
+    storageKeys.enterSend,
     () => readPresentationChoice(storageKeys.enterSend, ['true', 'false'], 'false') === 'true'
   );
-  const [readingLanguage, setReadingLanguage] = useState<string>(() =>
-    readPresentationChoice(storageKeys.readingLanguage, ['translation', 'original'], 'translation')
+  const [readingLanguage, setReadingLanguage] = usePresentationSetting<string>(
+    storageKeys.readingLanguage,
+    () =>
+      readPresentationChoice(
+        storageKeys.readingLanguage,
+        ['translation', 'original'],
+        'translation'
+      )
   );
-  const [illustrationsCollapsed, setIllustrationsCollapsed] = useState(
+  const [illustrationsCollapsed, setIllustrationsCollapsed] = usePresentationSetting(
+    storageKeys.illustrationsCollapsed,
     () =>
       readPresentationChoice(storageKeys.illustrationsCollapsed, ['true', 'false'], 'false') ===
       'true'
   );
-  useEffect(() => {
-    writePresentationSetting(storageKeys.illustrationsCollapsed, String(illustrationsCollapsed));
-  }, [illustrationsCollapsed]);
-  const [responseDisplay, setResponseDisplay] = useState<ResponseDisplayMode>(() =>
-    readPresentationChoice(storageKeys.responseDisplay, ['stream', 'complete'] as const, 'stream')
+  const [responseDisplay, setResponseDisplay] = usePresentationSetting<ResponseDisplayMode>(
+    storageKeys.responseDisplay,
+    () =>
+      readPresentationChoice(storageKeys.responseDisplay, ['stream', 'complete'] as const, 'stream')
   );
   const fonts = useFonts();
   const reading = useReadingPreferences(font, fontSize, readingWidth, fonts);
@@ -940,25 +947,11 @@ function App() {
     };
     apply();
     media.addEventListener('change', apply);
-    writePresentationSetting(storageKeys.theme, theme);
     return () => media.removeEventListener('change', apply);
   }, [theme]);
   useEffect(() => {
-    writePresentationSetting(storageKeys.enterSend, String(enterSend));
-  }, [enterSend]);
-  useEffect(() => {
-    writePresentationSetting(storageKeys.readingLanguage, readingLanguage);
-  }, [readingLanguage]);
-  useEffect(() => {
-    writePresentationSetting(storageKeys.responseDisplay, responseDisplay);
-  }, [responseDisplay]);
-  useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', `${desktopSidebarWidth}px`);
   }, [desktopSidebarWidth]);
-  useEffect(() => {
-    writePresentationSetting(storageKeys.sidebarWidth, String(sidebarWidth));
-  }, [sidebarWidth]);
-  useEffect(() => writeSidePanelWidth(panelWidth), [panelWidth]);
   useEffect(() => {
     const viewport = visualViewport;
     const update = () =>

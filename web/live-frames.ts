@@ -34,9 +34,9 @@ export const helperSessionsFrame = (
 export const helperDataFrame = (frame: LiveFrame) =>
   frame.event === 'helper' && (finishedTask.test(frame.kind) || helperDataKinds.has(frame.kind));
 
-export const helperResourceFrame =
-  (resource: 'theme' | 'illustration-preset' | 'font') => (frame: LiveFrame) =>
-    frame.event === 'helper' && frame.kind === `${resource}.updated`;
+export const presentationFrame =
+  (catalog: 'themes' | 'illustration-presets' | 'fonts') => (frame: LiveFrame) =>
+    frame.event === 'invalidate' && frame.name === catalog;
 
 export const promptWorkspaceFrame = (frame: LiveFrame) =>
   frame.event === 'chats' && frame.kind === 'prompt-workspace.updated';

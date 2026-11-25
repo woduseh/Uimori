@@ -101,6 +101,7 @@ export function registerFont(store: Store, input: { title: string; bytes: Uint8A
   store.db
     .prepare('INSERT INTO font_assets(id,metadata,bytes) VALUES(?,?,?)')
     .run(id, JSON.stringify(asset), bytes);
+  store.invalidated('fonts');
   return asset;
 }
 function writePreferences(store: Store, preferences: FontPreferences) {
@@ -109,6 +110,7 @@ function writePreferences(store: Store, preferences: FontPreferences) {
       'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
     )
     .run(key, JSON.stringify(preferences));
+  store.invalidated('fonts');
   return preferences;
 }
 export function selectFonts(store: Store, input: unknown): FontPreferences {
@@ -133,6 +135,7 @@ export function deleteFont(store: Store, id: string): FontCatalog {
   readFont(store, id);
   return store.transaction(() => {
     store.db.prepare('DELETE FROM font_assets WHERE id=?').run(id);
+    store.invalidated('fonts');
     const preferences = fontPreferences(store);
     if (preferences.appFontId === id || preferences.readerFontId === id)
       writePreferences(store, {

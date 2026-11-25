@@ -11,18 +11,14 @@ import { api } from './api.js';
 import { useThemes } from './ThemeContext.js';
 
 import { fontFamily, type FontCatalog } from '../core/fonts.js';
-import { writeOptionalStorage } from './optional-storage.js';
 export {
   fontFamily,
   type FontAsset,
   type FontPreferences,
   type FontCatalog,
 } from '../core/fonts.js';
-import { storageKeys } from './storage-keys.js';
-import { helperResourceFrame } from './live-frames.js';
+import { presentationFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
-export const fontsChangedKey = storageKeys.fontsChanged;
-export const fontsChangedEvent = 'uimori-fonts-changed';
 type FontState = {
   catalog: FontCatalog | null;
   loading: boolean;
@@ -30,7 +26,7 @@ type FontState = {
   runtimeError: boolean;
   appFamily: string | null;
   readerFamily: string | null;
-  refresh: (notify?: boolean) => Promise<void>;
+  refresh: () => Promise<void>;
   accept: (catalog: FontCatalog) => void;
 };
 const FontContext = createContext<FontState | null>(null);
@@ -48,58 +44,32 @@ export function FontProvider({ children }: { children: ReactNode }) {
   const [runtimeError, setRuntimeError] = useState(false);
   const epoch = useRef(0);
   const faces = useRef(new Map<string, FontFace>());
-  const sender = useRef({});
-  const notify = useCallback(() => {
-    writeOptionalStorage('local', fontsChangedKey, `${Date.now()}:${Math.random()}`);
-    window.dispatchEvent(new CustomEvent(fontsChangedEvent, { detail: sender.current }));
-  }, []);
-  const refresh = useCallback(
-    async (broadcast = false) => {
-      if (broadcast) notify();
-      const current = ++epoch.current;
-      try {
-        const next = await api<FontCatalog>('/fonts');
-        if (current === epoch.current) {
-          setCatalog((old) => (old && JSON.stringify(old) === JSON.stringify(next) ? old : next));
-          setError('');
-        }
-      } catch (cause) {
-        if (current === epoch.current) setError((cause as Error).message);
-      } finally {
-        if (current === epoch.current) setLoading(false);
+  const refresh = useCallback(async () => {
+    const current = ++epoch.current;
+    try {
+      const next = await api<FontCatalog>('/fonts');
+      if (current === epoch.current) {
+        setCatalog((old) => (old && JSON.stringify(old) === JSON.stringify(next) ? old : next));
+        setError('');
       }
-    },
-    [notify]
-  );
-  const accept = useCallback(
-    (next: FontCatalog) => {
-      ++epoch.current;
-      setCatalog(next);
-      setError('');
-      setLoading(false);
-      notify();
-    },
-    [notify]
-  );
+    } catch (cause) {
+      if (current === epoch.current) setError((cause as Error).message);
+    } finally {
+      if (current === epoch.current) setLoading(false);
+    }
+  }, []);
+  const accept = useCallback((next: FontCatalog) => {
+    ++epoch.current;
+    setCatalog(next);
+    setError('');
+    setLoading(false);
+  }, []);
   useEffect(() => {
     void refresh();
-    const receive = (event: StorageEvent) => {
-      if (event.key === fontsChangedKey || event.key === null) void refresh();
-    };
-    const focus = () => void refresh();
-    const changed = (event: Event) => {
-      if (!(event instanceof CustomEvent) || event.detail !== sender.current) void refresh();
-    };
-    const live = watchLive({ match: helperResourceFrame('font'), refresh: () => refresh() });
-    window.addEventListener('storage', receive);
-    window.addEventListener('focus', focus);
-    window.addEventListener(fontsChangedEvent, changed);
+    const live = watchLive({ match: presentationFrame('fonts'), refresh });
     return () => {
       ++epoch.current;
       live.dispose();
-      window.removeEventListener('storage', receive);
-      window.removeEventListener('focus', focus);
-      window.removeEventListener(fontsChangedEvent, changed);
     };
   }, [refresh]);
   useEffect(() => {

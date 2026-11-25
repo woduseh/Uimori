@@ -3,6 +3,7 @@ import {
   activityFrame,
   helperDataFrame,
   helperSessionsFrame,
+  presentationFrame,
   promptWorkspaceFrame,
 } from '../web/live-frames.js';
 import type { LiveFrame } from '../web/live-stream.js';
@@ -78,4 +79,12 @@ test('the conversation list follows chat titles only when it shows them and only
   expect(helperSessionsFrame(helper('context.compaction.completed', null), listed)).toBe(true);
   expect(helperSessionsFrame(invalidate('helper-list'), listed)).toBe(true);
   expect(helperSessionsFrame(invalidate('activity'), listed)).toBe(false);
+});
+
+test('theme, font and illustration preset views read on their own catalog invalidation, whoever wrote it', () => {
+  expect(presentationFrame('themes')(invalidate('themes'))).toBe(true);
+  expect(presentationFrame('fonts')(invalidate('fonts'))).toBe(true);
+  expect(presentationFrame('illustration-presets')(invalidate('illustration-presets'))).toBe(true);
+  expect(presentationFrame('themes')(invalidate('fonts'))).toBe(false);
+  expect(presentationFrame('themes')(helper('theme.updated'))).toBe(false);
 });
