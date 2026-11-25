@@ -1,57 +1,126 @@
-import { nativeRisuAssetNameResolver } from '../core/risu-native.js';
+import {
+  assertRisuContentSource,
+  nativeRisuAssetNameResolver,
+  nativeRisuExtension,
+  type RisuContentSource,
+} from '../core/risu-native.js';
 import type { Content } from '../core/product.js';
+import type { RisuContent } from '../core/risu-content.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Store } from './store.js';
-import { HttpError, number, text } from './request-validation.js';
+import { HttpError, fields, number, record, text } from './request-validation.js';
 import { executeRisuNative } from './risu-native-runtime.js';
 import { renderNativeRisuMessage } from './risu-native-render.js';
 import { readDisplayViewport } from './display-viewport.js';
+import { importRisuVariableDefaults } from './risu-variable-defaults.js';
 
-export async function nativeRisuPreview(
-  store: Store,
-  id: string,
-  query: {
-    revision?: string;
-    startId?: string;
-    userName?: string;
-    viewportWidth?: string;
-    viewportHeight?: string;
-  }
+type PreviewRequest = {
+  revision?: unknown;
+  userName?: unknown;
+  viewportWidth?: unknown;
+  viewportHeight?: unknown;
+};
+
+const EVALUATION_MESSAGE_MAX_CHARS = 500;
+
+function savedPackage(store: Store, id: string, revision: unknown) {
+  const content = store.product.get<Content>(
+    'content',
+    id,
+    number(Number(revision), 'content revision')
+  );
+  if (!content.package?.nativeRisu) throw new HttpError(400, 'Native Risu content required');
+  return { content, pkg: content.package as RisuContent };
+}
+
+async function renderStart(
+  content: Content,
+  pkg: RisuContent,
+  native: RisuContentSource,
+  variables: Record<string, string>,
+  start: string,
+  query: PreviewRequest,
+  signal?: AbortSignal
 ) {
-  const revision = number(Number(query.revision), 'content revision');
-  const content = store.product.get<Content>('content', id, revision);
-  const pkg = content.package;
-  if (!pkg?.nativeRisu) throw new HttpError(400, 'Native Risu content required');
-  const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
-  if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
-  const assetNames = nativeRisuAssetNameResolver(pkg.nativeRisu);
+  const assetNames = nativeRisuAssetNameResolver(native);
   const blobHashes = new Map<string, string>();
   for (const image of pkg.images ?? [])
     if (!blobHashes.has(image.id)) blobHashes.set(image.id, image.blobHash);
   const context = {
     viewport: readDisplayViewport(query),
-    native: structuredClone(pkg.nativeRisu),
-    variables: structuredClone(pkg.variableDefaults?.values ?? {}),
+    native,
+    variables,
     messages: [],
     charName: content.title,
     userName: query.userName ? text(query.userName, 'user name', 200) : '사용자',
     assetUrls: Object.fromEntries(
-      pkg.nativeRisu.assets.flatMap((asset) => {
+      native.assets.flatMap((asset) => {
         const blobHash = blobHashes.get(asset.imageId);
         const url = blobHash !== undefined && `/api/package-image-blobs/${blobHash}`;
         return url ? assetNames(asset).map((name) => [name, url]) : [];
       })
     ),
   };
-  const edited = await executeRisuNative({
-    ...context,
-    event: 'editDisplay',
-    text: start.text,
-    meta: { index: -1 },
-  });
-  const rendered = await renderNativeRisuMessage({
-    native: context.native,
-    text: edited.text ?? start.text,
-    context: { ...context, variables: edited.variables, messageIndex: -1, displaying: true },
-  });
-  return { ...rendered, issues: [...new Set([...edited.warnings, ...rendered.issues])] };
+  try {
+    const edited = await executeRisuNative(
+      { ...context, event: 'editDisplay', text: start, meta: { index: -1 } },
+      { signal }
+    );
+    const rendered = await renderNativeRisuMessage({
+      native,
+      text: edited.text ?? start,
+      context: { ...context, variables: edited.variables, messageIndex: -1, displaying: true },
+    });
+    return { ...rendered, issues: [...new Set([...edited.warnings, ...rendered.issues])] };
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new HttpError(422, message.slice(0, EVALUATION_MESSAGE_MAX_CHARS));
+  }
+}
+
+export async function nativeRisuPreview(
+  store: Store,
+  id: string,
+  query: PreviewRequest & { startId?: string }
+) {
+  const { content, pkg } = savedPackage(store, id, query.revision);
+  const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
+  if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
+  return renderStart(
+    content,
+    pkg,
+    structuredClone(pkg.nativeRisu),
+    structuredClone(pkg.variableDefaults?.values ?? {}),
+    start.text,
+    query
+  );
+}
+
+export async function nativeRisuDraftPreview(
+  store: Store,
+  id: string,
+  body: unknown,
+  signal?: AbortSignal
+) {
+  const input = record(body);
+  fields(input, ['revision', 'nativeRisu', 'text', 'userName', 'viewportWidth', 'viewportHeight']);
+  const { content, pkg } = savedPackage(store, id, input.revision);
+  const start = text(input.text, 'start text', SOURCE_TEXT_MAX_CHARS, true);
+  try {
+    assertRisuContentSource(input.nativeRisu);
+  } catch (error) {
+    throw new HttpError(
+      400,
+      error instanceof Error ? error.message : 'PACKAGE_NATIVE_RISU_INVALID'
+    );
+  }
+  const native = structuredClone(input.nativeRisu);
+  let variables: Record<string, string> = {};
+  try {
+    variables = { ...importRisuVariableDefaults(nativeRisuExtension(native).defaultVariables) };
+  } catch {
+    throw new HttpError(400, 'RISU_VARIABLE_DEFAULTS_INVALID');
+  }
+  return renderStart(content, pkg, native, variables, start, input, signal);
 }

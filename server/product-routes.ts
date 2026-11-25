@@ -2,7 +2,7 @@ import { updateAssetMetadata } from './asset-metadata.js';
 import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { processImageUpload } from './image-processing.js';
 import { databaseBackupStream } from './database-backup.js';
-import { nativeRisuPreview } from './risu-native-preview.js';
+import { nativeRisuDraftPreview, nativeRisuPreview } from './risu-native-preview.js';
 import { nativeRisuCbsFunctionCatalog } from './risu-native-cbs.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
@@ -208,6 +208,19 @@ export function productRoutes(
     assertLibraryVisible(store, 'content', request.params.id);
     return nativeRisuPreview(store, request.params.id, request.query);
   });
+  app.post<{ Params: { id: string } }>(
+    '/api/content/:id/risu-preview',
+    { bodyLimit: 16 * 1024 * 1024 },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      assertLibraryVisible(store, 'content', request.params.id);
+      const disconnected = new AbortController();
+      reply.raw.on('close', () => {
+        if (!reply.raw.writableEnded) disconnected.abort();
+      });
+      return nativeRisuDraftPreview(store, request.params.id, request.body, disconnected.signal);
+    }
+  );
   app.get<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) => {
     assertLibraryVisible(store, 'prompt-preset', request.params.id);
     return product.get('prompt-preset', request.params.id);
