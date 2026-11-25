@@ -528,6 +528,32 @@ test('standalone RISUM preserves authored fields, scripts and asset bytes throug
   expect(saved).toEqual(before);
 });
 
+test('an edited module background stays where RisuAI reads it through export and reimport', () => {
+  const { store } = fixture();
+  const saved = importedModule(store, 'styled', { backgroundEmbedding: '<style>.a{}</style>' });
+  const { id, revision, kind, title, description, text, loading, relatedIds } = saved;
+  const module = { ...saved.package.nativeRisu.module, backgroundEmbedding: '<b>{{char}}</b>' };
+  const edited = store.product.content(
+    {
+      kind,
+      title,
+      description,
+      text,
+      loading,
+      relatedIds,
+      expectedRevision: revision,
+      package: { ...saved.package, nativeRisu: { ...saved.package.nativeRisu, module } },
+    },
+    id
+  ) as Content;
+  const output = exportRisuContent(store.product, edited);
+  const read = readCharacterCard(source(output.bytes, output.filename));
+  expect(read.nativeModule?.backgroundEmbedding).toBe('<b>{{char}}</b>');
+  expect(read.nativeCard).toEqual({});
+  const reimported = analyzeNativeRisuImport(read).file.contents[0].source;
+  expect(reimported.package?.nativeRisu.module).toMatchObject(module);
+});
+
 test.each([false, true])(
   'individual Risu export preserves own source and linked data without bundling standalone=%s',
   (standalone) => {

@@ -18,6 +18,7 @@ function withoutBackground(source: TagInput['native']) {
     ...extensions,
     risuai: { ...(extensions?.risuai as Record<string, unknown> | undefined), backgroundHTML: '' },
   };
+  if (native.module) native.module.backgroundEmbedding = '';
   return native;
 }
 

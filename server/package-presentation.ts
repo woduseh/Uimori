@@ -19,7 +19,7 @@ export type PackagePresentationSource = {
   translation?: { text: string; sourceRevision: string; sourceHash: string };
 };
 const PRESENTATION_RENDER_TIMEOUT_MS = 10_000;
-export const PACKAGE_PRESENTATION_RENDERER_VERSION = 1;
+export const PACKAGE_PRESENTATION_RENDERER_VERSION = 2;
 type DisplayPart = NativeRisuRenderResult & { text: string; changed: true; applied: string[] };
 const displayParts = new ByteBoundedCache<DisplayPart>({
   maxBytes: 48 * 1024 * 1024,

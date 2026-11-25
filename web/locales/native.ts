@@ -89,12 +89,6 @@ export const messages = {
     ja: '背景HTMLとCSS',
     zh: '背景 HTML / CSS',
   },
-  'native.imageInstructions': {
-    ko: '이미지 지침',
-    en: 'Image instructions',
-    ja: '画像の指示',
-    zh: '图片指令',
-  },
   'native.initialVariablesAndToggles': {
     ko: '변수와 토글 초기값',
     en: 'Initial variables and toggles',

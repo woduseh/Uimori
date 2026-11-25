@@ -18,6 +18,7 @@ import type { RisuContent } from '../core/risu-content.js';
 import { detectRisuImageHandoff } from '../core/risu-image-handoff.js';
 import {
   nativeRisuBackground,
+  nativeRisuModuleBackground,
   nativeRisuExtension,
   nativeRisuLore,
   nativeRisuRegex,
@@ -574,44 +575,46 @@ export function RisuNativeFields({
             </label>
           </div>
         </StudioPanel>
-        {available.includes('display') && (
-          <StudioPanel section="display" className="native-section-body">
-            <div className="native-form-stack">
-              {!standalone && (
-                <label>
-                  {t('native.text_50262c6215')}
-                  <textarea
-                    rows={12}
-                    className="native-main-text"
-                    spellCheck={false}
-                    value={nativeRisuBackground(native)}
-                    onChange={(e) => extension('backgroundHTML', e.target.value)}
-                  />
-                </label>
-              )}
-              {value.imageHandoff && (
-                <RisuImageHandoffFields
-                  policy={value.imageHandoff}
-                  selected={value.imageHandoff.ranges
-                    .filter((range) => range.enabled)
-                    .map((range) => range.id)}
-                  onChange={(ids) =>
-                    onChange({
-                      ...value,
-                      imageHandoff: {
-                        ...value.imageHandoff!,
-                        ranges: value.imageHandoff!.ranges.map((range) => ({
-                          ...range,
-                          enabled: ids.includes(range.id),
-                        })),
-                      },
-                    })
-                  }
-                />
-              )}
-            </div>
-          </StudioPanel>
-        )}
+        <StudioPanel section="display" className="native-section-body">
+          <div className="native-form-stack">
+            <label>
+              {t('native.text_50262c6215')}
+              <textarea
+                rows={12}
+                className="native-main-text"
+                spellCheck={false}
+                value={
+                  standalone ? nativeRisuModuleBackground(native) : nativeRisuBackground(native)
+                }
+                onChange={(e) =>
+                  standalone
+                    ? field('backgroundEmbedding', e.target.value)
+                    : extension('backgroundHTML', e.target.value)
+                }
+              />
+            </label>
+            {value.imageHandoff && (
+              <RisuImageHandoffFields
+                policy={value.imageHandoff}
+                selected={value.imageHandoff.ranges
+                  .filter((range) => range.enabled)
+                  .map((range) => range.id)}
+                onChange={(ids) =>
+                  onChange({
+                    ...value,
+                    imageHandoff: {
+                      ...value.imageHandoff!,
+                      ranges: value.imageHandoff!.ranges.map((range) => ({
+                        ...range,
+                        enabled: ids.includes(range.id),
+                      })),
+                    },
+                  })
+                }
+              />
+            )}
+          </div>
+        </StudioPanel>
         <StudioPanel section="modules" className="native-section-body">
           <PackageFeaturesEditor
             value={value}

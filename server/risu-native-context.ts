@@ -5,6 +5,8 @@ import {
   nativeRisuTriggers,
   nativeRisuLore,
   nativeRisuBackground,
+  nativeRisuModuleBackground,
+  joinRisuModuleBackgrounds,
   nativeRisuAssetNameResolver,
 } from '../core/risu-native.js';
 import type { RisuContentSource } from '../core/risu-native.js';
@@ -103,6 +105,7 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
       ],
       trigger: effectiveTriggers,
       lorebook: natives.flatMap(nativeRisuLore),
+      backgroundEmbedding: joinRisuModuleBackgrounds(natives.map(nativeRisuModuleBackground)),
     },
     assets: natives.flatMap((entry) => entry.assets),
   };

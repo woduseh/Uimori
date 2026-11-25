@@ -196,7 +196,7 @@ function diffMode(path: string, before: unknown, after: unknown): TextDiffMode {
   if (typeof before !== 'string' && before !== undefined) return 'code';
   if (typeof after !== 'string' && after !== undefined) return 'code';
   if (
-    /\/(?:customscript|regex|triggerscript|lua|scripts?|css|backgroundHTML|values|assets)(?:\/|$)/iu.test(
+    /\/(?:customscript|regex|triggerscript|lua|scripts?|css|backgroundHTML|backgroundEmbedding|values|assets)(?:\/|$)/iu.test(
       path
     )
   )

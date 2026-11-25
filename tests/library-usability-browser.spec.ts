@@ -10,6 +10,8 @@ import {
 } from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
+import type { Chat, ChatDetail, Run } from '../core/types.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 
 async function seedBot(request: APIRequestContext, title: string) {
   const description = '낯선 도시를 함께 탐험할 합성 안내자예요.';
@@ -113,8 +115,7 @@ test('LUSE04 standalone module navigation omits bot-only panes and retains its s
   await panel.getByLabel('서재 검색', { exact: true }).fill(title);
   await editLibraryContent(page, title);
   const sections = await editorSectionNames(panel);
-  for (const botOnly of ['첫 메시지', '추가 지침', '배경 HTML과 CSS', '이미지 지침'])
-    expect(sections).not.toContain(botOnly);
+  for (const botOnly of ['첫 메시지', '추가 지침']) expect(sections).not.toContain(botOnly);
   await selectEditorSection(panel, '변수와 토글 초기값');
   await expect(panel.getByRole('textbox', { name: '기본 변수', exact: true })).toHaveValue(
     'place=forest'
@@ -125,4 +126,99 @@ test('LUSE04 standalone module navigation omits bot-only panes and retains its s
     defaultVariables: 'place=forest',
     preserved: 'source',
   });
+});
+
+test('LUSE05 a standalone module background edited in the editor styles a chat that uses the module', async ({
+  page,
+  request,
+}, info) => {
+  const title = `LUSE05 module ${crypto.randomUUID()}`;
+  const pkg = nativeContent({ name: title }, {}, 'module');
+  pkg.nativeRisu.card = {};
+  pkg.nativeRisu.module = { name: title, lorebook: [], regex: [], trigger: [] };
+  const moduleResponse = await request.post('/api/content', {
+    data: { kind: 'module', title, package: pkg, loading: 'pinned', relatedIds: [] },
+  });
+  expect(moduleResponse.ok(), await moduleResponse.text()).toBe(true);
+  const module = (await moduleResponse.json()) as Content;
+  const botInput = fixtureBotInput(`LUSE05 bot ${crypto.randomUUID()}`);
+  botInput.package.nativeRisu!.card.extensions = {
+    risuai: { backgroundHTML: '<div class="bot-mark">봇 배경</div>' },
+  };
+  botInput.package.modules = [{ id: module.id, revision: module.revision }];
+  const botResponse = await request.post('/api/content', { data: botInput });
+  expect(botResponse.ok(), await botResponse.text()).toBe(true);
+  const created = await request.post('/api/chats', {
+    data: { title: `LUSE05 chat ${Date.now()}`, botId: (await botResponse.json()).id },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  const detail = async () =>
+    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  const before = await detail();
+  const started = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: 'Synthetic scene: a lantern lights the quiet river.',
+      expectedRevision: before.chat.headRevision,
+      expectedSettingsRevision: before.chat.settingsRevision,
+      idempotencyKey: `luse05-${chat.id}`,
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  const run = (await started.json()) as Run;
+  await expect
+    .poll(async () => (await detail()).runs.find((item) => item.id === run.id)?.status)
+    .toBe('completed');
+  const source = (await detail()).sources.find((item) => item.runId === run.id)!;
+
+  if (visualReview) await page.emulateMedia({ colorScheme: 'dark' });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  await panel.getByRole('tab', { name: '모듈', exact: true }).click();
+  await panel.getByLabel('서재 검색', { exact: true }).fill(title);
+  await editLibraryContent(page, title);
+  await selectEditorSection(panel, '배경 HTML과 CSS');
+  const background = panel.getByRole('textbox', { name: '배경 HTML / CSS', exact: true });
+  await expect(background).toHaveValue('');
+  await background.fill(
+    '<style>.risu-chat-text p { color: rgb(150, 200, 255); }</style><div class="module-mark" onclick="window.moduleClicked = true">{{char}} 모듈 배경</div>'
+  );
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('module-display-1440-dark.png') });
+  const saving = waitForContentSave(page, module.id);
+  await panel.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+  const saved = await saving;
+  expect(saved.package?.nativeRisu.module).toMatchObject({
+    name: title,
+    backgroundEmbedding: expect.stringContaining('module-mark'),
+  });
+  expect(saved.package?.nativeRisu.card).toEqual({});
+  if (visualReview) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: info.outputPath('module-display-390.png') });
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+
+  await page.goto(`/?chat=${chat.id}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  const mark = scene.locator('.module-mark');
+  await expect(mark).toHaveText(`${botInput.title} 모듈 배경`);
+  await expect(scene.locator('.bot-mark')).toHaveText('봇 배경');
+  expect(
+    await scene.locator('.risu-message-surface').evaluate((host) => {
+      const root = host.shadowRoot!;
+      const bot = root.querySelector('.bot-mark')!;
+      const module = root.querySelector('.module-mark')!;
+      return bot.compareDocumentPosition(module) & Node.DOCUMENT_POSITION_FOLLOWING;
+    })
+  ).toBeTruthy();
+  await expect(mark).not.toHaveAttribute('onclick');
+  expect(
+    await scene
+      .locator('.risu-chat-text p')
+      .first()
+      .evaluate((node) => getComputedStyle(node).color)
+  ).toBe('rgb(150, 200, 255)');
+  if (visualReview) await page.screenshot({ path: info.outputPath('module-background-chat.png') });
 });

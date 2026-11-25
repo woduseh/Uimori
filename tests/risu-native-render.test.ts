@@ -3,7 +3,10 @@ import { splitSource } from '../core/auxiliary.js';
 import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { RisuContentSource } from '../core/risu-native.js';
+import { nativeRisuBackground, type RisuContentSource } from '../core/risu-native.js';
+import { defaultProfile } from '../core/product.js';
+import type { RunSnapshot } from '../core/types.js';
+import { nativeRisuContext } from '../server/risu-native-context.js';
 import {
   createNativeRisuCbs,
   createNativeRisuCbsSession,
@@ -117,6 +120,55 @@ test('viewport CBS aliases drive authored responsive CSS and remain unsupported 
     context: { variables: {} },
   });
   expect(withoutBrowser.issues).toEqual(['screenwidth', 'screenheight']);
+});
+test('module backgrounds follow the character background in attachment order as RisuAI joins them', async () => {
+  const sources: RisuContentSource[] = [
+    native({
+      card: { name: 'Guide', extensions: { risuai: { backgroundHTML: '<i>{{char}}</i>' } } },
+      module: { backgroundEmbedding: '<u>embedded</u>' },
+    }),
+    native({ card: {}, module: { backgroundEmbedding: '<b>{{user}}</b>' } }),
+    native({ card: {}, module: { regex: [] } }),
+    native({ card: {}, module: { backgroundEmbedding: '<s>last</s>' } }),
+  ];
+  const snapshot: RunSnapshot = {
+    chatId: 'backgrounds',
+    parentRevision: null,
+    settingsRevision: 1,
+    settings: { maxCalls: 1 },
+    request: '',
+    history: [],
+    resources: [],
+    profile: {
+      ...defaultProfile('backgrounds'),
+      models: {},
+      packages: sources.map((nativeRisu, index) => ({
+        version: 2 as const,
+        id: `package-${index}`,
+        revision: 1,
+        title: index ? `Module ${index}` : 'Guide',
+        description: '',
+        body: '',
+        lore: [],
+        nativeRisu,
+      })),
+      packageAttachments: sources.map((_, index) => ({
+        id: `package-${index}`,
+        revision: 1,
+        role: index ? ('module' as const) : ('bot' as const),
+      })),
+    },
+  };
+  const context = nativeRisuContext(snapshot)!;
+  const result = await renderNativeRisuMessage({
+    native: context.native,
+    text: 'Scene',
+    context: { ...context, userName: 'Reader' },
+  });
+  const modules = ['<u>embedded</u>', '<b>Reader</b>', '<s>last</s>'];
+  const risuAi = `<i>Guide</i>\n${modules.map((part) => `\n${part}\n`).join('')}`;
+  expect(result.html.slice(0, result.html.indexOf('<div class="risu-chat'))).toBe(risuAi);
+  expect(nativeRisuBackground(context.native)).toBe('<i>{{char}}</i>');
 });
 test('native CBS preserves shared variable writes across fields and native button/condition markup', async () => {
   const input = native();

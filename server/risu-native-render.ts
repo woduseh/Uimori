@@ -1,7 +1,7 @@
 import { createReadingMarkdown } from '../core/reading-markdown.js';
 import {
   nativeRisuAssetNameResolver,
-  nativeRisuBackground,
+  nativeRisuDisplayBackground,
   nativeRisuRegex,
   type RisuContentSource,
 } from '../core/risu-native.js';
@@ -265,7 +265,11 @@ export function renderNativeRisuMessageInWorker(
     variables: processed.variables,
   });
   let text = assets(processed.text, resolveAsset, issues);
-  const background = assets(cbs.parse(nativeRisuBackground(input.native)), resolveAsset, issues);
+  const background = assets(
+    cbs.parse(nativeRisuDisplayBackground(input.native)),
+    resolveAsset,
+    issues
+  );
   const styles: string[] = [];
   const beforeStyles = text;
   const styleOffsets: { start: number; end: number; delta: number }[] = [];

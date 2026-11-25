@@ -68,6 +68,18 @@ export function nativeRisuBackground(native: RisuContentSource): string {
   const value = nativeRisuExtension(native).backgroundHTML;
   return typeof value === 'string' ? value : '';
 }
+export function nativeRisuModuleBackground(native: RisuContentSource): string {
+  const value = native.module?.backgroundEmbedding;
+  return typeof value === 'string' ? value : '';
+}
+export function joinRisuModuleBackgrounds(backgrounds: readonly string[]): string {
+  return backgrounds.filter(Boolean).join('\n\n');
+}
+export function nativeRisuDisplayBackground(native: RisuContentSource): string {
+  const character = nativeRisuBackground(native);
+  const modules = nativeRisuModuleBackground(native);
+  return modules ? `${character}\n\n${modules}\n` : character;
+}
 export function nativeRisuAssetNameResolver(native: RisuContentSource) {
   const byUri = new Map<unknown, Map<unknown, Record<string, unknown>>>();
   for (const entry of records(native.card.assets)) {

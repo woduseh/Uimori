@@ -868,6 +868,7 @@ test('EFRAME14 the rail follows the content kind, keeps sections with data and o
     '트리거 / Lua',
     '정규식',
     '변수와 토글 초기값',
+    '배경 HTML과 CSS',
     '에셋',
   ]);
 });

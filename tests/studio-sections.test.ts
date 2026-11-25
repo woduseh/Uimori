@@ -89,7 +89,7 @@ test('a section with data, the current section and a pending draft are never und
 
 test('a standalone module leads with lore and orders groups by the module defaults', () => {
   const { shown, more } = placement(standaloneModule({}), 'module');
-  expect(shown).toEqual(['lore', 'basic', 'triggers', 'regex', 'variables', 'assets']);
+  expect(shown).toEqual(['lore', 'basic', 'triggers', 'regex', 'variables', 'display', 'assets']);
   expect(more).toEqual(['modules', 'appearances', 'translation', 'source']);
   expect([...MODULE_SECTION_ORDER].sort()).toEqual(
     contentSectionRegistry
@@ -99,10 +99,17 @@ test('a standalone module leads with lore and orders groups by the module defaul
   );
 });
 
-test('display needs a card or image instructions and greetings need a card', () => {
+test('a standalone module edits its own background and greetings need a card', () => {
   const standalone = placement(standaloneModule({}), 'module');
-  expect([...standalone.shown, ...standalone.more]).not.toContain('display');
+  expect(standalone.shown).toContain('display');
   expect([...standalone.shown, ...standalone.more]).not.toContain('greetings');
+  const display = contentSectionRegistry.find(({ id }) => id === 'display')!;
+  expect(display.hasData(standaloneModule({}))).toBe(false);
+  const styled = standaloneModule({ backgroundEmbedding: '<style>.x{}</style>' });
+  expect(display.hasData(styled)).toBe(true);
+  const title = (content: RisuContent, kind: 'bot' | 'module') =>
+    contentSections(content, kind, 'basic').find(({ id }) => id === 'display')?.title;
+  expect(title(styled, 'module')).toBe(title(nativeContent({ name: 'Bot' }), 'bot'));
   const carded = placement(nativeContent({ name: 'Carded' }, {}, 'module'), 'module');
   expect(carded.shown.slice(0, 3)).toEqual(['lore', 'basic', 'triggers']);
   expect(carded.shown).toContain('display');
@@ -118,6 +125,7 @@ test('owns maps helper paths to the section that edits them', () => {
   expect(contentSection('/package/nativeRisu/card/extensions/risuai/customScripts/0/in')).toBe(
     'regex'
   );
+  expect(contentSection('/package/nativeRisu/module/backgroundEmbedding')).toBe('display');
   expect(contentSection('/package/nativeRisu/module/regex')).toBe('regex');
   expect(contentSection('/package/nativeRisu/module/trigger/0')).toBe('triggers');
   expect(contentSection('/package/nativeRisu/card/extensions/risuai/triggerscript')).toBe(

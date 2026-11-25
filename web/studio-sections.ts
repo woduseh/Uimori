@@ -1,7 +1,12 @@
 import { t } from './i18n.js';
 import type { RisuContent } from '../core/risu-content.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
-import { nativeRisuBackground, nativeRisuExtension, nativeRisuLore } from '../core/risu-native.js';
+import {
+  nativeRisuBackground,
+  nativeRisuExtension,
+  nativeRisuLore,
+  nativeRisuModuleBackground,
+} from '../core/risu-native.js';
 import { readTranslationGuide } from '../core/translation-guide.js';
 import { readIllustrationAppearanceProfiles } from '../core/illustration-profiles.js';
 
@@ -173,10 +178,15 @@ export const contentSectionRegistry: readonly StudioSectionDefinition<
     labelKey: 'native.backgroundHtmlCss',
     kinds: CONTENT_KINDS,
     defaultFor: ['bot', 'module'],
-    available: (content) => !isStandaloneModule(content) || !!content.imageHandoff,
     hasData: (content) =>
-      filled(nativeRisuBackground(content.nativeRisu)) || !!content.imageHandoff,
-    owns: matches(/^\/package\/imageHandoff(\/|$)|\/(backgroundHTML|css)(\/|$)/u),
+      filled(
+        isStandaloneModule(content)
+          ? nativeRisuModuleBackground(content.nativeRisu)
+          : nativeRisuBackground(content.nativeRisu)
+      ) || !!content.imageHandoff,
+    owns: matches(
+      /^\/package\/imageHandoff(\/|$)|\/(backgroundHTML|backgroundEmbedding|css)(\/|$)/u
+    ),
     layout: 'canvas',
   },
   {
@@ -418,11 +428,7 @@ export function contentSections(
     pending,
     kind === 'module' ? MODULE_SECTION_ORDER : []
   ).map(({ id, more }) => ({
-    ...resolve(
-      definition(contentSectionRegistry, id),
-      content,
-      id === 'display' && isStandaloneModule(content) ? t('native.imageInstructions') : undefined
-    ),
+    ...resolve(definition(contentSectionRegistry, id), content),
     ...(more ? { more } : {}),
   }));
 }
