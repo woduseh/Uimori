@@ -193,8 +193,7 @@ test('CODEFIELD04 a stale value during Hangul composition waits for the composit
     type Fiber = { return: { memoizedProps: { onChange(value: string): void } } };
     (host as unknown as Record<string, Fiber>)[fiberKey]!.return.memoizedProps.onChange('인사');
     type View = { composing: boolean };
-    return (element as unknown as { cmTile: { root: { view: View } } }).cmTile.root.view
-      .composing;
+    return (element as unknown as { cmTile: { root: { view: View } } }).cmTile.root.view.composing;
   });
   expect(composing).toBe(true);
   await protocol.send('Input.imeSetComposition', {
@@ -208,8 +207,7 @@ test('CODEFIELD04 a stale value during Hangul composition waits for the composit
   await expectCodeFieldValue(field, '인사 안녕하세요');
   const caret = await field.evaluate((element) => {
     type View = { state: { selection: { main: { head: number } }; doc: { length: number } } };
-    const { state } = (element as unknown as { cmTile: { root: { view: View } } }).cmTile.root
-      .view;
+    const { state } = (element as unknown as { cmTile: { root: { view: View } } }).cmTile.root.view;
     return [state.selection.main.head, state.doc.length];
   });
   expect(caret[0]).toBe(caret[1]);
