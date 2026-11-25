@@ -850,7 +850,7 @@ const discoveryTerms: Record<string, string> = {
   'scene.title': 'name rename label scene chapter title 장면 이름 제목',
   'chat.guide.update': 'original work canon spoiler reference settings story guide 원작 참고',
   'model.parameters.update':
-    'temperature max output tokens reasoning effort thinking verbosity top p 온도 파라미터',
+    'temperature max output tokens reasoning effort thinking verbosity top p 온도 파라미터 호환 옵션',
   'illustration.profiles.read': 'local override 채팅 외형 프로필',
   'illustration.profiles.save': 'local override 채팅 외형 프로필',
   'helper.ask': 'ask clarify question choice options multiple choice 선택지 질문 확인',

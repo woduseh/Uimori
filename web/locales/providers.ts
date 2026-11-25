@@ -839,6 +839,18 @@ export const messages = {
     ja: 'その他',
     zh: '其他',
   },
+  'providers.compatibilityOptions': {
+    ko: '호환 옵션',
+    en: 'Compatibility options',
+    ja: '互換オプション',
+    zh: '兼容选项',
+  },
+  'providers.compatibilityOptionsHint': {
+    ko: '최신 주력 모델은 이 값을 무시하거나 거절해요. 이전 모델이나 호환 프로바이더에만 지정해요.',
+    en: 'Current flagship models ignore or reject these values. Set them only for older models or compatible providers.',
+    ja: '最新の主力モデルはこれらの値を無視するか拒否します。以前のモデルや互換プロバイダーにだけ指定します。',
+    zh: '当前主力模型会忽略或拒绝这些值。仅为旧模型或兼容提供商设置。',
+  },
   'providers.verbosity': {
     ko: '응답 길이',
     en: 'Verbosity',

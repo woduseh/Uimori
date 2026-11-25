@@ -1019,6 +1019,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByLabel('캐시 유지 시간', { exact: true }).selectOption('30m');
   await form.getByLabel('캐시 방식', { exact: true }).selectOption('disabled');
   await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveValue('30m');
+  await form.getByText('호환 옵션', { exact: true }).click();
   await form.getByLabel('Temperature', { exact: true }).fill('0');
   await form.locator('.provider-specified-settings > summary').click();
   await expect(form.locator('.provider-specified-settings')).toContainText(/Temperature\s*0/);
@@ -1259,6 +1260,103 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
     'serviceTier'
   );
   expect(writes).toBe(1);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+  expect(observed.legacyReads).toEqual([]);
+});
+
+test('PMUI16 sampling controls sit in a compatibility disclosure that opens for stored values and is absent where no model accepts them', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  const title = 'PMUI16 ' + Date.now(),
+    observed = observe(page),
+    connection = (name: string, protocol: string, endpoint: string) =>
+      api<Connection>(request, '/connections', {
+        title: `${title} ${name}`,
+        protocol,
+        endpoint,
+        apiKey: 'PM_SYNTHETIC_KEY',
+        enabled: false,
+      });
+  const compatible = await connection('compatible', 'openai-chat-v1', 'http://127.0.0.1:9/v1'),
+    responses = await connection('responses', 'openai-responses-v1', 'https://api.openai.com/v1'),
+    vertex = await connection(
+      'vertex',
+      'vertex-gemini-v1',
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-sampling/locations/global/publishers/google/models'
+    );
+  const preset = (name: string, owner: Connection, modelId: string, extra = {}) =>
+    api<ModelPreset>(request, '/model-presets', {
+      title: `${title} ${name}`,
+      connectionId: owner.id,
+      modelId,
+      maxOutputTokens: 8192,
+      temperature: null,
+      enabled: true,
+      ...extra,
+    });
+  await preset('empty', compatible, 'custom-sampling-model');
+  const stored = await preset('stored', compatible, 'custom-sampling-model', { temperature: 0.7 });
+  await preset('neon', vertex, 'gemini-4-neon');
+  await preset('hydrogen', vertex, 'gemini-4-hydrogen');
+  await preset('flagship', responses, 'gpt-6.2-sol');
+  await settings(page);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
+  const form = page.getByRole('form', { name: '모델 편집 양식' }),
+    disclosure = form.locator('[data-model-options="compatibility"]');
+  const reopen = async (name: string) => {
+    const back = page.getByRole('button', { name: '모델 프리셋', exact: true });
+    if (await form.isVisible()) await back.click();
+    await openProviderModel(page, name);
+  };
+
+  await reopen(`${title} empty`);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(disclosure).toHaveCount(1);
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  await expect(disclosure.locator('summary')).toHaveText('호환 옵션');
+  await expect(form.getByLabel('Temperature', { exact: true })).toBeHidden();
+  await disclosure.locator('summary').click();
+  await expect(disclosure).toContainText('최신 주력 모델은 이 값을 무시하거나 거절해요.');
+  await expect(form.getByLabel('Temperature', { exact: true })).toBeVisible();
+  await expect(form.getByLabel('Top P', { exact: true })).toHaveCount(0);
+
+  await reopen(`${title} stored`);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(disclosure).toHaveAttribute('open', '');
+  await expect(form.getByLabel('Temperature', { exact: true })).toHaveValue('0.7');
+  await form.getByRole('button', { name: '기본', exact: true }).click();
+  await form.getByLabel('모델 프리셋 이름').fill(`${title} stored renamed`);
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await library(request)).models.find((item) => item.id === stored.id))
+    .toMatchObject({ title: `${title} stored renamed`, temperature: 0.7, revision: 2 });
+
+  for (const name of ['neon', 'flagship']) {
+    await reopen(`${title} ${name}`);
+    await form.getByRole('button', { name: '고급', exact: true }).click();
+    await expect(form.getByLabel('토크나이저', { exact: true })).toBeVisible();
+    await expect(disclosure).toHaveCount(0);
+    await expect(form.getByLabel('Temperature', { exact: true })).toHaveCount(0);
+  }
+
+  if (visualReview)
+    for (const name of ['flagship', 'hydrogen', 'stored renamed'])
+      for (const width of [1440, 390])
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.setViewportSize({ width, height: width > 800 ? 1000 : 844 });
+          await page.emulateMedia({ colorScheme });
+          await reopen(`${title} ${name}`);
+          await form.getByRole('button', { name: '고급', exact: true }).click();
+          await form
+            .getByRole('heading', { name: '생성 옵션', exact: true })
+            .evaluate((node) => node.scrollIntoView({ block: 'start' }));
+          await page.screenshot({
+            path: info.outputPath(`sampling-${name.replace(' ', '-')}-${width}-${colorScheme}.png`),
+          });
+        }
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
   expect(observed.legacyReads).toEqual([]);

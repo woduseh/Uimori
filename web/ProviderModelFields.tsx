@@ -3,7 +3,7 @@ import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { serviceTierLabel } from './pricing-display.js';
 import { AddIcon, CloseIcon } from './ui-icons.js';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { isGeminiProtocol, type Connection, type VertexRequestTier } from '../core/product.js';
 import {
   GEMINI_SAFETY_CATEGORIES,
@@ -215,6 +215,38 @@ function ModelOptionSelect({
     </label>
   );
 }
+const optionalNumberOffered = (sendable: boolean, documented: boolean | undefined) =>
+  sendable && documented !== false;
+function SamplingOptions({
+  shown,
+  stored,
+  children,
+}: {
+  shown: boolean;
+  stored: boolean;
+  children: ReactNode;
+}) {
+  useI18n();
+  const [open, setOpen] = useState(stored);
+  useEffect(() => {
+    if (stored) setOpen(true);
+  }, [stored]);
+  if (!shown) return null;
+  return (
+    <details
+      className="provider-stop-sequences full"
+      data-model-options="compatibility"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>{t('providers.compatibilityOptions')}</summary>
+      <div className="provider-stop-sequences-body editor-fields">
+        <p className="muted full">{t('providers.compatibilityOptionsHint')}</p>
+        {children}
+      </div>
+    </details>
+  );
+}
 function OptionalNumber({
   label,
   value,
@@ -239,7 +271,7 @@ function OptionalNumber({
   useEffect(() => {
     ref.current?.setCustomValidity(translateMessage(error));
   }, [error]);
-  if (!sendable && value === '') return null;
+  if (!optionalNumberOffered(sendable, documented) && value === '') return null;
   return (
     <label>
       {label}
@@ -377,6 +409,7 @@ export function ProviderModelFields({
   const hints = connection ? modelHints(connection, value.modelId, value.modelFamily) : undefined;
   const capability = hints?.capability;
   const cacheTtlAvailable = value.cacheMode === 'explicit' || value.cacheMode === 'automatic';
+  const samplingStored = value.temperature !== '' || value.topP !== '';
   const optionsError =
     connection && value.modelId ? modelDraftError(value, connection, forcedVertexTier) : '';
   const providerOptionsError =
@@ -700,24 +733,33 @@ export function ProviderModelFields({
             onChange={(reasoningContext) => update({ reasoningContext })}
           />
         )}
-        <OptionalNumber
-          label="Temperature"
-          value={value.temperature}
-          sendable={sends('temperature')}
-          documented={capability?.temperature}
-          min={0}
-          max={2}
-          onChange={(temperature) => update({ temperature })}
-        />
-        <OptionalNumber
-          label="Top P"
-          value={value.topP}
-          sendable={sends('topP')}
-          documented={capability?.topP}
-          min={0}
-          max={1}
-          onChange={(topP) => update({ topP })}
-        />
+        <SamplingOptions
+          shown={
+            optionalNumberOffered(sends('temperature'), capability?.temperature) ||
+            optionalNumberOffered(sends('topP'), capability?.topP) ||
+            samplingStored
+          }
+          stored={samplingStored}
+        >
+          <OptionalNumber
+            label="Temperature"
+            value={value.temperature}
+            sendable={sends('temperature')}
+            documented={capability?.temperature}
+            min={0}
+            max={2}
+            onChange={(temperature) => update({ temperature })}
+          />
+          <OptionalNumber
+            label="Top P"
+            value={value.topP}
+            sendable={sends('topP')}
+            documented={capability?.topP}
+            min={0}
+            max={1}
+            onChange={(topP) => update({ topP })}
+          />
+        </SamplingOptions>
         {connection && !fixture && !codex && sends('structuredOutput') && (
           <label>
             {t('providers.m199')}
