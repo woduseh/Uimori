@@ -48,6 +48,13 @@
 .action-menu:not([open]) > .action-menu-body {
   display: none;
 }
+.action-menu:has(> .action-menu-body dialog[open]) > .action-menu-body,
+.action-menu:has(> .action-menu-body dialog[open])::before {
+  visibility: hidden;
+}
+.action-menu-body dialog[open] {
+  visibility: visible;
+}
 .action-menu > .action-menu-body {
   position: absolute;
   z-index: 8;
