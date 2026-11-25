@@ -89,12 +89,6 @@ export const messages = {
     ja: '複製',
     zh: '复制',
   },
-  'library.lore': {
-    ko: '로어',
-    en: 'Lore',
-    ja: 'ロア',
-    zh: '设定',
-  },
   'library.images': {
     ko: '이미지',
     en: 'Images',
@@ -1848,10 +1842,10 @@ export const messages = {
     zh: '{title}已保存，但无法刷新资料库列表。',
   },
   'library.detailAction': {
-    ko: '{title} {action, select, select {선택} other {상세 보기}}',
-    en: '{action, select, select {Select {title}} other {View {title} details}}',
-    ja: '{action, select, select {{title}を選択} other {{title}の詳細を見る}}',
-    zh: '{action, select, select {选择{title}} other {查看{title}详情}}',
+    ko: '{title} {action, select, select {선택} other {편집}}',
+    en: '{action, select, select {Select {title}} other {Edit {title}}}',
+    ja: '{action, select, select {{title}を選択} other {{title}を編集}}',
+    zh: '{action, select, select {选择{title}} other {编辑{title}}}',
   },
   'library.labelCount': {
     ko: '{label} {count, number}',

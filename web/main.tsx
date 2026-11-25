@@ -437,7 +437,7 @@ function App() {
   const [helperNavigationHost, setHelperNavigationHost] = useState<HTMLDivElement | null>(null);
   const helperNavigationActions = useRef<{ create: () => void; activity: () => void } | null>(null);
   const [helperSearchRequest, setHelperSearchRequest] = useState(0);
-  const [contentToOpen, setContentToOpen] = useState<{ id: string; edit: boolean } | null>(null);
+  const [contentToOpen, setContentToOpen] = useState<string | null>(null);
   const [resourceAnchor, setResourceAnchor] = useState<ResourceAnchor | null>(null);
   const consumeResourceAnchor = useCallback(
     (epoch: number) => setResourceAnchor((current) => (current?.epoch === epoch ? null : current)),
@@ -1054,17 +1054,13 @@ function App() {
     else if (role === 'persona') newStory(undefined, undefined, content);
     else setModuleToUse(content);
   }
-  async function openResultDestination(
-    navigation: number,
-    target: HelperTaskResultTarget,
-    edit: boolean
-  ) {
+  async function openResultDestination(navigation: number, target: HelperTaskResultTarget) {
     if (target.kind === 'content') {
       const content = await api<Content>(`/content/${encodeURIComponent(target.id)}`);
       await s.loadLibrary();
       if (navigation !== helperResultNavigation.current) return;
       setLibraryTab(content.kind === 'persona' || content.kind === 'module' ? content.kind : 'bot');
-      setContentToOpen({ id: content.id, edit });
+      setContentToOpen(content.id);
       s.showLibrary();
     } else if (target.kind === 'prompt-preset') {
       await s.loadLibrary();
@@ -1151,7 +1147,7 @@ function App() {
     const go = async () => {
       if (anchor) setResourceAnchor(anchor);
       try {
-        await openResultDestination(navigation, target, !!anchor);
+        await openResultDestination(navigation, target);
       } catch (error) {
         if (anchor) consumeResourceAnchor(anchor.epoch);
         throw error;
@@ -2059,10 +2055,9 @@ function App() {
                 onContinueChat={select}
                 initialTab={libraryTab}
                 listRequest={libraryListRequest}
-                initialContentId={contentToOpen?.id}
-                initialContentEdit={contentToOpen?.edit}
+                initialContentId={contentToOpen}
                 onInitialContentHandled={(id) =>
-                  setContentToOpen((current) => (current?.id === id ? null : current))
+                  setContentToOpen((current) => (current === id ? null : current))
                 }
                 onTabChange={setLibraryTab}
                 onDirtyChange={setLibraryDirty}

@@ -78,11 +78,7 @@ async function openLibrary(page: Page, kind: Content['kind']) {
 async function edit(page: Page, content: Content) {
   const library = await openLibrary(page, content.kind);
   await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(content.title);
-  await library.getByRole('button', { name: `${content.title} 상세 보기`, exact: true }).click();
-  await library
-    .locator('.library-detail-actions')
-    .getByRole('button', { name: '편집', exact: true })
-    .click();
+  await library.getByRole('button', { name: `${content.title} 편집`, exact: true }).click();
   await revealLibraryEditor(page);
   return library;
 }
@@ -200,13 +196,9 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   expect(uploaded.package!.images).toHaveLength(2);
   await expect(portrait.locator('img')).toHaveAttribute('src', thumbnail(profile.blobHash));
   await library.getByRole('button', { name: '서재 목록', exact: true }).click();
-  const card = library.getByRole('button', { name: `${original.title} 상세 보기`, exact: true });
+  const card = library.getByRole('button', { name: `${original.title} 편집`, exact: true });
   await expect(card.locator('img')).toHaveAttribute('src', thumbnail(profile.blobHash));
   await card.click();
-  await library
-    .locator('.library-detail-actions')
-    .getByRole('button', { name: '편집', exact: true })
-    .click();
   await revealLibraryEditor(page);
   await choosePortraitAction(portrait, '대표 이미지 해제');
   const unset = await save(page, library, uploaded);

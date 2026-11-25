@@ -26,7 +26,7 @@ async function seed(
   return response.json() as Promise<Content>;
 }
 
-test('LCOM05 opening a bot from a scrolled mobile list starts its detail at the top', async ({
+test('LCOM05 opening a bot from a scrolled mobile list starts its editor at the top', async ({
   page,
   request,
 }) => {
@@ -42,14 +42,14 @@ test('LCOM05 opening a bot from a scrolled mobile list starts its detail at the 
   await panel.getByLabel('서재 검색', { exact: true }).fill(prefix);
   await panel.getByRole('button', { name: '목록', exact: true }).click();
   const last = items.at(-1)!;
-  const open = panel.getByRole('button', { name: `${last.title} 상세 보기`, exact: true });
+  const open = panel.getByRole('button', { name: `${last.title} 편집`, exact: true });
   await open.click({ trial: true });
   const scrollport = page.locator('.destination-scroll');
   expect(await scrollport.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
   await open.click();
   const detail = panel.getByRole('region', { name: '자료 상세', exact: true });
-  const title = detail.getByRole('heading', { name: last.title, exact: true });
-  await expect(title).toHaveCount(1);
+  const title = detail.getByLabel('봇 이름', { exact: true });
+  await expect(title).toHaveValue(last.title);
   expect(await scrollport.evaluate((node) => node.scrollTop)).toBe(0);
   await expect(title).toBeInViewport();
 });

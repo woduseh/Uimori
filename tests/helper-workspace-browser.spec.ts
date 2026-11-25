@@ -414,8 +414,7 @@ test('HSPACE05 a contextual reopen attaches the editor after an independent work
   await page.goto('/');
   await navigationAction(page, '서재');
   await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(resource.title);
-  await page.getByRole('button', { name: `${resource.title} 상세 보기`, exact: true }).click();
-  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.getByRole('button', { name: `${resource.title} 편집`, exact: true }).click();
   await page.getByLabel('Risu 자료 이름', { exact: true }).fill('연결할 현재 편집 내용');
   await navigationAction(page, '도우미');
   const panel = page.locator('#helper-panel');
@@ -956,8 +955,7 @@ test('HSPACE02 expanding a resource helper preserves its unsaved editor', async 
   await page.goto('/');
   await navigationAction(page, '서재');
   await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(resource.title);
-  await page.getByRole('button', { name: `${resource.title} 상세 보기`, exact: true }).click();
-  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.getByRole('button', { name: `${resource.title} 편집`, exact: true }).click();
   const editor = page.getByLabel('Risu 자료 이름', { exact: true });
   await editor.fill('저장하지 않은 인물 이름');
   await page

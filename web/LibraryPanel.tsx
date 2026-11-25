@@ -60,6 +60,7 @@ import {
   CardsIcon,
   CopyIcon,
   EditIcon,
+  HistoryIcon,
   ListIcon,
   ModuleIcon,
   MoveIcon,
@@ -200,7 +201,6 @@ export function LibraryPanel({
   initialTab = 'bot',
   listRequest = 0,
   initialContentId,
-  initialContentEdit = false,
   onInitialContentHandled,
   onTabChange,
   onDirtyChange,
@@ -220,7 +220,6 @@ export function LibraryPanel({
   initialTab?: PrimaryLibraryTab;
   listRequest?: number;
   initialContentId?: string | null;
-  initialContentEdit?: boolean;
   onInitialContentHandled?: (id: string) => void;
   onTabChange?: (tab: PrimaryLibraryTab) => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -248,7 +247,6 @@ export function LibraryPanel({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [moving, setMoving] = useState<LibraryItemKey[] | null>(null);
   const [editing, setEditing] = useState<{ kind: ContentKind; item: Content | null } | null>(null);
-  const [detail, setDetail] = useState<Content | null>(null);
   const [loading, setLoading] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const selectionExit = useRef<HTMLButtonElement>(null);
@@ -321,9 +319,9 @@ export function LibraryPanel({
     onReorder: moveManualItem,
   });
   useLayoutEffect(() => {
-    if (detail || editing)
+    if (editing)
       panelRef.current?.closest<HTMLElement>('.destination-scroll')?.scrollTo({ top: 0 });
-  }, [detail, editing]);
+  }, [editing]);
   useEffect(() => {
     if (selecting) selectionExit.current?.focus();
     else if (wasSelecting.current)
@@ -364,12 +362,10 @@ export function LibraryPanel({
     const item = library.contents.find((value) => value.id === initialContentId);
     if (item) {
       setTab(item.kind === 'persona' || item.kind === 'module' ? item.kind : 'bot');
-      void openContent(item, initialContentEdit ? 'edit' : 'detail').finally(() =>
-        onInitialContentHandled?.(initialContentId)
-      );
+      void openContent(item).finally(() => onInitialContentHandled?.(initialContentId));
     } else onInitialContentHandled?.(initialContentId);
   }, [initialContentId, library, onInitialContentHandled]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves a detail view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves the editor.
   useEffect(() => {
     if (externalList.current === listRequest) return;
     externalList.current = listRequest;
@@ -396,7 +392,6 @@ export function LibraryPanel({
     }
     const available = new Set(library.contents.map((item) => item.id));
     setMoving((current) => (current?.some((item) => !available.has(item.id)) ? null : current));
-    setDetail((current) => (current && !available.has(current.id) ? null : current));
   }, [library]);
   function cancelOpening() {
     opening.current++;
@@ -405,7 +400,6 @@ export function LibraryPanel({
   function switchTab(next: PrimaryLibraryTab, closeOnly = false) {
     cancelOpening();
     setEditing(null);
-    setDetail(null);
     setDirty(false);
     setMoving(null);
     setSelectedIds([]);
@@ -419,7 +413,7 @@ export function LibraryPanel({
     }
   }
   function navigate(next: PrimaryLibraryTab, closeOnly = false) {
-    if (next === tab && !closeOnly && !editing && !detail) return;
+    if (next === tab && !closeOnly && !editing) return;
     if (dirty) setPendingNavigation({ tab: next, closeOnly });
     else switchTab(next, closeOnly);
   }
@@ -450,7 +444,7 @@ export function LibraryPanel({
   }
   async function openContent(
     item: Content,
-    action: 'detail' | 'edit' | 'clone' | 'configure-chat' | PrimaryLibraryTab = 'detail'
+    action: 'edit' | 'clone' | 'configure-chat' | PrimaryLibraryTab = 'edit'
   ) {
     if (action === 'clone') {
       if (cloning.current) return;
@@ -459,19 +453,16 @@ export function LibraryPanel({
     const request = ++opening.current;
     setLoading(true);
     try {
-      const cached = detail && refValue(detail) === refValue(item) ? detail : null;
       const full =
-        cached ??
-        (action !== 'clone' && (library?.contentBodiesOmitted || (item.hasPackage && !item.package))
+        action !== 'clone' && (library?.contentBodiesOmitted || (item.hasPackage && !item.package))
           ? await api<Content>(`/content/${item.id}`)
-          : item);
+          : item;
       if (
         request !== opening.current ||
         !latestLibrary.current?.contents.some((current) => current.id === item.id)
       )
         return;
       if (action === 'edit') {
-        setDetail(null);
         setEditing({ kind: full.kind, item: full });
       } else if (action === 'clone') {
         const result = await cloneWithReceipt<ResourceSaveResult>(
@@ -504,7 +495,6 @@ export function LibraryPanel({
           );
         }
         if (request === opening.current) {
-          setDetail(null);
           setEditing({ kind: copy.kind, item: copy });
           if (warnings.length)
             onError(
@@ -516,10 +506,8 @@ export function LibraryPanel({
                   })
             );
         }
-      } else if (action === 'detail') setDetail(full);
-      else if (action === 'configure-chat') onConfigureStartStory?.(full);
-      else if (onUseContent) onUseContent(full, action);
-      else if (action === 'bot') onStartStory?.(full);
+      } else if (action === 'configure-chat') onConfigureStartStory?.(full);
+      else applyRole(full, action);
     } catch (error) {
       if (request === opening.current) onError((error as Error).message);
     } finally {
@@ -527,9 +515,14 @@ export function LibraryPanel({
       if (request === opening.current) setLoading(false);
     }
   }
+  function applyRole(item: Content, role: PrimaryLibraryTab) {
+    if (onUseContent) onUseContent(item, role);
+    else if (role === 'bot') onStartStory?.(item);
+  }
+  const canUse = (role: PrimaryLibraryTab) =>
+    role === 'bot' ? !!(onUseContent || onStartStory) : !!onUseContent;
   function openNew() {
     cancelOpening();
-    setDetail(null);
     setEditing({ kind: tab, item: null });
   }
   function changeFolder(next: FolderFilter) {
@@ -684,7 +677,7 @@ export function LibraryPanel({
           className="library-open-content"
           aria-label={t('library.detailAction', {
             title: item.title,
-            action: selecting ? 'select' : 'detail',
+            action: selecting ? 'select' : 'edit',
           })}
           aria-pressed={selecting ? selectedIds.includes(item.id) : undefined}
           onClick={() => (selecting ? toggleSelection(item.id) : void openContent(item))}
@@ -759,29 +752,6 @@ export function LibraryPanel({
       </div>
     </div>
   );
-  const detailRole: PrimaryLibraryTab = detail ? categoryOf(detail) : tab;
-  const detailFolderId = detail ? folderOf(detail.id) : null;
-  const detailFolder = detailFolderId
-    ? organization?.folders.find((item) => item.id === detailFolderId)?.title
-    : undefined;
-  const detailCounts = detail?.package
-    ? [
-        [t('library.lore'), detail.package.lore.length],
-        [t('library.images'), detail.package.images?.length ?? 0],
-      ]
-        .filter(([, count]) => (count as number) > 0)
-        .map(([label, count]) =>
-          t('library.labelCount', { label: String(label), count: Number(count) })
-        )
-    : [];
-  const roleActionLabel = (id: PrimaryLibraryTab, title: string) =>
-    id === 'bot'
-      ? t('library.newChatAsBot')
-      : id === 'persona'
-        ? t('library.useAsPersona')
-        : t('library.addAs', { v0: title });
-  const roleActionIcon = (id: PrimaryLibraryTab) =>
-    id === 'bot' ? NewChatIcon : id === 'persona' ? PersonaIcon : ModuleIcon;
   const newLabel = t('library.new', { v0: t(contentLabelKeys[tab]) });
   return (
     <section
@@ -793,7 +763,7 @@ export function LibraryPanel({
       <header className="library-heading" hidden={!!editing}>
         {headerLeading}
         <h1>{t('library.library')}</h1>
-        {library && !detail && (
+        {library && (
           <div className="library-heading-actions">
             <RisuImport
               defaultKind={tab === 'bot' ? '' : tab}
@@ -882,145 +852,27 @@ export function LibraryPanel({
           onClose={() => navigate(tab, true)}
           onDeleted={() => switchTab(tab, true)}
           onDirtyChange={setDirty}
-          onStartStory={onStartStory}
+          placement={(item) => {
+            const folderId = item ? folderOf(item.id) : null;
+            return {
+              category: item ? categoryOf(item) : editing.kind,
+              folder: folderId
+                ? organization?.folders.find((entry) => entry.id === folderId)?.title
+                : undefined,
+            };
+          }}
+          canUse={canUse}
+          onUse={applyRole}
+          onConfigureChat={onConfigureStartStory}
+          recentChats={recentChatByContent}
+          onContinueChat={onContinueChat}
+          onDuplicate={(item) => void openContent(item, 'clone')}
+          onMove={(item) => setMoving([{ kind: 'content', id: item.id }])}
+          moving={organizer.busy || loading}
           onCreated={(item, revision) => placeCreated(item, false, revision)}
           headerLeading={headerLeading}
           headerTrailing={headerTrailing}
         />
-      ) : detail ? (
-        <section
-          className="library-detail library-preview"
-          aria-label={t('library.resourceDetails')}
-        >
-          <div className="library-detail-heading">
-            <IconButton
-              className="secondary"
-              label={t('library.libraryList')}
-              icon={BackIcon}
-              onClick={() => navigate(tab, true)}
-            />
-            <div className="library-detail-actions">
-              <IconButton
-                icon={EditIcon}
-                label={t('library.edit')}
-                disabled={loading}
-                onClick={() => void openContent(detail, 'edit')}
-              />
-              <LibraryItemMenu title={t('library.menu', { v0: detail.title })}>
-                <div className="action-menu-group">
-                  {detailRole === 'bot' && onConfigureStartStory && (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={loading}
-                      onClick={() => void openContent(detail, 'configure-chat')}
-                    >
-                      <NewChatIcon size={18} aria-hidden="true" />
-                      {t('transfer.configureNewChat')}
-                    </button>
-                  )}
-                  {libraryTabs
-                    .filter(({ id }) => id !== detailRole)
-                    .map(({ id, titleKey }) => (
-                      <button
-                        type="button"
-                        className="secondary"
-                        key={id}
-                        aria-label={roleActionLabel(id, t(titleKey))}
-                        disabled={
-                          loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
-                        }
-                        onClick={() => void openContent(detail, id)}
-                      >
-                        {(() => {
-                          const Icon = roleActionIcon(id);
-                          return <Icon size={18} aria-hidden="true" />;
-                        })()}
-                        {roleActionLabel(id, t(titleKey))}
-                      </button>
-                    ))}
-                </div>
-                <div className="action-menu-group">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={loading}
-                    onClick={() => void openContent(detail, 'clone')}
-                  >
-                    <CopyIcon size={18} aria-hidden="true" />
-                    {t('library.duplicate')}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={organizer.busy}
-                    onClick={() => setMoving([{ kind: 'content', id: detail.id }])}
-                  >
-                    <MoveIcon size={18} aria-hidden="true" />
-                    {t('library.moveCategoryOrFolder')}
-                  </button>
-                </div>
-                <div className="action-menu-group">
-                  <DeleteButton
-                    path={`/content/${encodeURIComponent(detail.id)}`}
-                    revision={detail.revision}
-                    title={detail.title}
-                    onDeleted={async () => {
-                      cancelOpening();
-                      await reload();
-                      navigate(tab, true);
-                    }}
-                    onError={onError}
-                  />
-                </div>
-              </LibraryItemMenu>
-            </div>
-          </div>
-          <div className="library-preview-heading">
-            <ContentAvatar content={detail} className="library-preview-avatar" fullSize />
-            <div>
-              <h2>{detail.title}</h2>
-              <small className="ui-meta-row">
-                <span>{t(contentLabelKeys[detailRole])}</span>
-                {detailFolder && <span>{detailFolder}</span>}
-              </small>
-              {detail.description && <p>{detail.description}</p>}
-            </div>
-          </div>
-          <div className="library-use-actions">
-            <button
-              type="button"
-              className="primary"
-              aria-label={roleActionLabel(detailRole, t(contentLabelKeys[detailRole]))}
-              disabled={
-                loading || (detailRole === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
-              }
-              onClick={() => void openContent(detail, detailRole)}
-            >
-              <NewChatIcon size={18} aria-hidden="true" />
-              {detailRole === 'bot'
-                ? t('library.newChat')
-                : roleActionLabel(detailRole, t(contentLabelKeys[detailRole]))}
-            </button>
-            {recentChatByContent?.[detail.id] && onContinueChat && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onContinueChat(recentChatByContent[detail.id])}
-              >
-                {t('library.continueRecentChat')}
-              </button>
-            )}
-          </div>
-          {detail.package && detailCounts.length > 0 && (
-            <p className="library-preview-counts muted ui-meta-row">
-              {detailCounts.map((count, index) => (
-                <span key={index}>{count}</span>
-              ))}
-            </p>
-          )}
-          {detail.text && <div className="library-preview-body">{detail.text}</div>}
-        </section>
       ) : (
         <>
           <ScrollStrip
@@ -1299,6 +1151,46 @@ export function LibraryPanel({
     </section>
   );
 }
+function roleActionLabel(role: PrimaryLibraryTab) {
+  return role === 'bot'
+    ? t('library.newChatAsBot')
+    : role === 'persona'
+      ? t('library.useAsPersona')
+      : t('library.addAs', { v0: t(contentLabelKeys[role]) });
+}
+function RoleActionIcon({ role }: { role: PrimaryLibraryTab }) {
+  const Icon = role === 'bot' ? NewChatIcon : role === 'persona' ? PersonaIcon : ModuleIcon;
+  return <Icon size={18} aria-hidden="true" />;
+}
+function ContentOverviewMeta({
+  category,
+  folder,
+  counts,
+}: {
+  category: PrimaryLibraryTab | null;
+  folder?: string;
+  counts: readonly { id: string; title: string; count?: number }[];
+}) {
+  return (
+    <>
+      {category && (
+        <p className="native-identity-meta ui-meta-row">
+          <span>{t(contentLabelKeys[category])}</span>
+          {folder && <span>{folder}</span>}
+        </p>
+      )}
+      {counts.length > 0 && (
+        <p className="native-identity-meta ui-meta-row">
+          {counts.map((item) => (
+            <span key={item.id}>
+              {t('library.labelCount', { label: item.title, count: item.count! })}
+            </span>
+          ))}
+        </p>
+      )}
+    </>
+  );
+}
 function ContentEditor({
   reload,
   onError,
@@ -1306,8 +1198,16 @@ function ContentEditor({
   kind,
   onClose,
   onDeleted,
-  onStartStory,
   onDirtyChange,
+  placement,
+  canUse,
+  onUse,
+  onConfigureChat,
+  recentChats,
+  onContinueChat,
+  onDuplicate,
+  onMove,
+  moving,
   onCreated,
   headerLeading,
   headerTrailing,
@@ -1316,8 +1216,16 @@ function ContentEditor({
   kind: ContentKind;
   onClose: () => void;
   onDeleted: () => void;
-  onStartStory?: (bot: Content) => void;
   onDirtyChange: (dirty: boolean) => void;
+  placement: (content: Content | null) => { category: PrimaryLibraryTab; folder?: string };
+  canUse: (role: PrimaryLibraryTab) => boolean;
+  onUse: (content: Content, role: PrimaryLibraryTab) => void;
+  onConfigureChat?: (bot: Content) => void;
+  recentChats?: Record<string, string>;
+  onContinueChat?: (chatId: string) => void;
+  onDuplicate: (content: Content) => void;
+  onMove: (content: Content) => void;
+  moving: boolean;
   onCreated?: (content: Content, creationOrganizationRevision: number | null) => Promise<void>;
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
@@ -1353,6 +1261,8 @@ function ContentEditor({
         revision: document.baseRevision!,
       }
     : null;
+  const { category, folder } = placement(selected);
+  const recentChat = selected ? recentChats?.[selected.id] : undefined;
   const [placing, setPlacing] = useState(false);
   const busy = state.saving || placing;
   const [saved, setSaved] = useState('');
@@ -1369,6 +1279,7 @@ function ContentEditor({
     []
   );
   const editorUnavailable = busy || !state.ready;
+  const savedVersionBusy = editorUnavailable || dirty || nativeDraftDirty || portraitBusy;
   useEffect(() => {
     onDirtyChange(dirty || busy || portraitBusy || state.creationPending);
   }, [dirty, busy, portraitBusy, state.creationPending, onDirtyChange]);
@@ -1483,15 +1394,17 @@ function ContentEditor({
               </h2>
               <div className="library-detail-actions">
                 <ResourceEditorActions value={shared} commands={commands} hideSyncError />
-                {selected?.kind === 'bot' && onStartStory && (
+                {selected && canUse(category) && (
                   <button
                     type="button"
                     className="secondary editor-start-chat"
-                    disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
-                    onClick={() => onStartStory(selected)}
+                    disabled={savedVersionBusy}
+                    onClick={() => onUse(selected, category)}
                   >
-                    <NewChatIcon size={18} aria-hidden="true" />
-                    <span>{t('library.startChat')}</span>
+                    <RoleActionIcon role={category} />
+                    <span>
+                      {category === 'bot' ? t('library.startChat') : roleActionLabel(category)}
+                    </span>
                   </button>
                 )}
                 <SaveButton
@@ -1524,7 +1437,54 @@ function ContentEditor({
                 />
                 <LibraryItemMenu title={t('library.resourceMenu')}>
                   <ResourceEditorMenuActions commands={commands} />
+                  {selected && (
+                    <div className="action-menu-group">
+                      {category === 'bot' && onConfigureChat && (
+                        <button
+                          type="button"
+                          disabled={savedVersionBusy}
+                          onClick={() => onConfigureChat(selected)}
+                        >
+                          <NewChatIcon size={18} aria-hidden="true" />
+                          {t('transfer.configureNewChat')}
+                        </button>
+                      )}
+                      {libraryTabs
+                        .filter(({ id }) => id !== category && canUse(id))
+                        .map(({ id }) => (
+                          <button
+                            type="button"
+                            key={id}
+                            disabled={savedVersionBusy}
+                            onClick={() => onUse(selected, id)}
+                          >
+                            <RoleActionIcon role={id} />
+                            {roleActionLabel(id)}
+                          </button>
+                        ))}
+                      {recentChat && onContinueChat && (
+                        <button
+                          type="button"
+                          disabled={savedVersionBusy}
+                          onClick={() => onContinueChat(recentChat)}
+                        >
+                          <HistoryIcon size={18} aria-hidden="true" />
+                          {t('library.continueRecentChat')}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="action-menu-group">
+                    {selected && (
+                      <button
+                        type="button"
+                        disabled={savedVersionBusy || moving}
+                        onClick={() => onDuplicate(selected)}
+                      >
+                        <CopyIcon size={18} aria-hidden="true" />
+                        {t('library.duplicate')}
+                      </button>
+                    )}
                     {(['bot', 'persona', 'module'] as const)
                       .filter((role) => role !== value.kind)
                       .map((role) => (
@@ -1560,6 +1520,16 @@ function ContentEditor({
                         disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
                         onError={setExportError}
                       />
+                    )}
+                    {selected && (
+                      <button
+                        type="button"
+                        disabled={editorUnavailable || moving}
+                        onClick={() => onMove(selected)}
+                      >
+                        <MoveIcon size={18} aria-hidden="true" />
+                        {t('library.moveCategoryOrFolder')}
+                      </button>
                     )}
                   </div>
                   {selected && (
@@ -1605,6 +1575,13 @@ function ContentEditor({
                   setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
                 }
                 onPortraitBusy={setPortraitBusy}
+                overview={
+                  <ContentOverviewMeta
+                    category={selected ? category : null}
+                    folder={folder}
+                    counts={sections.filter((item) => !!item.count)}
+                  />
+                }
               />
             </fieldset>
             {error && (

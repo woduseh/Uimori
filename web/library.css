@@ -249,10 +249,6 @@
     order: 3;
     flex-basis: 100%;
   }
-  .library-preview > .library-detail-heading > .library-detail-actions {
-    order: initial;
-    flex-basis: auto;
-  }
 }
 .library-detail .editor-grid {
   margin-top: 0;
@@ -669,76 +665,14 @@
   width: 100%;
   margin: 0;
 }
-.library-preview-heading {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-.library-preview-avatar {
-  --content-avatar-size: 200px;
-  border-radius: var(--radius-panel);
-  font-size: var(--font-heading);
-}
 @media (min-width: 761px) {
-  .library-portrait-card .library-item-avatar:has(> span),
-  .library-preview-avatar:has(> span) {
+  .library-portrait-card .library-item-avatar:has(> span) {
     background: linear-gradient(160deg, var(--accent-soft), var(--surface) 72%);
     color: var(--accent-text);
     font-family: Georgia, "Batang", "Noto Serif CJK KR", serif;
     font-weight: 500;
     font-size: 48px;
   }
-  .library-preview-avatar:has(> span) {
-    font-size: 64px;
-  }
-}
-.library-preview-counts {
-  font-size: var(--font-body);
-  margin: 0 0 8px;
-}
-.library-preview-heading > div {
-  min-width: 0;
-}
-.library-preview-heading h2 {
-  font-size: var(--font-heading);
-  line-height: 1.4;
-  margin: 6px 0 10px;
-  overflow-wrap: anywhere;
-}
-.library-preview-heading small {
-  color: var(--muted);
-}
-.library-preview-heading p {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-body);
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-.library-use-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 20px 0 12px;
-}
-.library-use-actions > button:first-child {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.library-preview > .muted {
-  font-size: var(--font-small);
-  line-height: 1.7;
-}
-.library-preview-body {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.8;
-  font-size: var(--font-body);
-  border-top: var(--hairline) solid var(--border);
-  padding-top: 24px;
-  margin-top: 24px;
 }
 .library-prompt-icon {
   display: grid;
@@ -774,23 +708,6 @@
   }
   .library-item-copy strong {
     font-size: var(--font-body);
-  }
-  .library-preview-heading {
-    gap: 16px;
-    align-items: flex-start;
-  }
-  .library-preview-avatar {
-    --content-avatar-size: 86px;
-    font-size: var(--font-heading);
-  }
-  .library-preview-heading h2 {
-    font-size: var(--font-heading);
-  }
-  .library-preview-heading p {
-    font-size: var(--font-small);
-  }
-  .library-use-actions > button {
-    flex: 1 1 130px;
   }
 }
 @media (hover: none), (pointer: coarse) {

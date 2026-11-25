@@ -119,8 +119,7 @@ test('NATIVEUI03 imports and exports a standalone Risu module', async ({ page, r
   expect((await savedRoot(request, result)).kind).toBe('module');
   expect(await (await request.get('/api/chats')).json()).toHaveLength(beforeChats.length);
   await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
-  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
   await page.locator('summary').filter({ hasText: '자료 메뉴' }).click();
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'RISUM 내보내기', exact: true }).click();

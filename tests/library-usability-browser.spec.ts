@@ -50,9 +50,9 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-readable-${width}.png`) });
 
-    await row.getByRole('button', { name: `${seed.title} 상세 보기`, exact: true }).click();
-    await expect(panel.getByRole('heading', { name: seed.title, exact: true })).toHaveCount(1);
-    await expect(panel.getByText(seed.description, { exact: true })).toBeVisible();
+    await row.getByRole('button', { name: `${seed.title} 편집`, exact: true }).click();
+    await expect(panel.getByLabel('봇 이름', { exact: true })).toHaveValue(seed.title);
+    await expect(panel.getByLabel('제작자 코멘트', { exact: true })).toHaveValue(seed.description);
     await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
 
     await createLibraryContent(page);

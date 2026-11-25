@@ -1398,8 +1398,7 @@ for (const width of [MOBILE_WIDTH]) {
       await page.goto('/');
       await navigationAction(page, '서재');
       await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(title);
-      await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-      await page.getByRole('button', { name: '편집', exact: true }).click();
+      await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
       const navigation = page.getByLabel('자료 편집 영역', { exact: true });
       await expect
         .poll(async () => {

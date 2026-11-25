@@ -8,7 +8,7 @@ import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
 import type { ResourceModel } from '../core/resource-editing.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   useAnchorArrival,
   type ResourceAnchor,
@@ -78,6 +78,7 @@ export function RisuNativeFields({
   section,
   onSelect,
   idPrefix: id,
+  overview,
 }: {
   value: RisuContent;
   onChange: (value: RisuContent) => void;
@@ -87,6 +88,7 @@ export function RisuNativeFields({
   section: Section;
   onSelect: (section: Section) => void;
   idPrefix: string;
+  overview?: ReactNode;
 }) {
   const { t } = useI18n();
 
@@ -386,6 +388,7 @@ export function RisuNativeFields({
                 {version && <span>{t('native.versionSummary', { version })}</span>}
               </p>
             )}
+            {overview}
           </PackagePortraitEditor>
           <div className="native-description-field">
             <label>

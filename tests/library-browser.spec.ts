@@ -180,9 +180,7 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   expect(currentChat.chat.botId).toBe(a.id);
   await panel.getByRole('tab', { name: '페르소나', exact: true }).click();
   await chooseFolder(panel, personas.title);
-  await expect(
-    panel.getByRole('button', { name: `${a.title} 상세 보기`, exact: true })
-  ).toBeVisible();
+  await expect(panel.getByRole('button', { name: `${a.title} 편집`, exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -200,9 +198,7 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
     'true'
   );
   await chooseFolder(panel, personas.title);
-  await expect(
-    panel.getByRole('button', { name: `${a.title} 상세 보기`, exact: true })
-  ).toBeVisible();
+  await expect(panel.getByRole('button', { name: `${a.title} 편집`, exact: true })).toBeVisible();
 });
 
 test('LIBUI02 mobile folder deletion refreshes another page and stale moves require review', async ({
@@ -244,7 +240,7 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
     (await organization(request)).items.find((entry) => entry.id === item.id)?.folderId
   ).toBeNull();
   await expect(
-    panel.getByRole('button', { name: `${item.title} 상세 보기`, exact: true })
+    panel.getByRole('button', { name: `${item.title} 편집`, exact: true })
   ).toBeVisible();
   await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: '분류와 폴더 이동', exact: true }).click();
@@ -768,12 +764,9 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
   await page.getByTestId('library-panel').getByRole('tab', { name: '모듈', exact: true }).click();
   await page
     .getByTestId('library-panel')
-    .getByRole('button', { name: `${persona.title} 상세 보기`, exact: true })
+    .getByRole('button', { name: `${persona.title} 편집`, exact: true })
     .click();
-  await page
-    .getByTestId('library-panel')
-    .getByLabel(`${persona.title} 메뉴`, { exact: true })
-    .click();
+  await page.getByTestId('library-panel').getByLabel('자료 메뉴', { exact: true }).click();
   await page
     .getByTestId('library-panel')
     .getByRole('button', { name: '페르소나로 사용', exact: true })
@@ -843,18 +836,18 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     await expect(
       panel
         .locator(`[data-folder-section="${folder.id}"]`)
-        .getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
+        .getByRole('button', { name: `${filed.title} 편집`, exact: true })
     ).toBeVisible();
     await expect(
       panel
         .locator('[data-folder-section=""]')
-        .getByRole('button', { name: `${loose.title} 상세 보기`, exact: true })
+        .getByRole('button', { name: `${loose.title} 편집`, exact: true })
     ).toBeVisible();
     if (visualReview)
       await page.screenshot({ path: info.outputPath(`library-overview-${width}.png`) });
     await search.fill(prefix);
     await expect(
-      panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
+      panel.getByRole('button', { name: `${filed.title} 편집`, exact: true })
     ).toBeVisible();
     await expect(
       panel.locator('.library-list-item').filter({ hasText: filed.title })
@@ -884,7 +877,7 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     await confirm.getByRole('button', { name: '폴더 삭제', exact: true }).click();
     await expect(confirm).toBeHidden();
     await expect(
-      panel.getByRole('button', { name: `${filed.title} 상세 보기`, exact: true })
+      panel.getByRole('button', { name: `${filed.title} 편집`, exact: true })
     ).toBeVisible();
     expect(
       (await organization(request)).items.find((entry) => entry.id === filed.id)?.folderId
@@ -1084,12 +1077,10 @@ test('LIBUI11 all shows every resource in folder sections, chips filter and coll
   const panel = page.getByTestId('library-panel');
   const section = panel.locator(`[data-folder-section="${folder.id}"]`);
   const open = (item: Content) =>
-    panel.getByRole('button', { name: `${item.title} 상세 보기`, exact: true });
-  await expect(section.getByRole('button', { name: `${filed.title} 상세 보기` })).toBeVisible();
+    panel.getByRole('button', { name: `${item.title} 편집`, exact: true });
+  await expect(section.getByRole('button', { name: `${filed.title} 편집` })).toBeVisible();
   await expect(
-    panel
-      .locator('[data-folder-section=""]')
-      .getByRole('button', { name: `${loose.title} 상세 보기` })
+    panel.locator('[data-folder-section=""]').getByRole('button', { name: `${loose.title} 편집` })
   ).toBeVisible();
   await expect(folderChip(panel, '전체')).toHaveAttribute('aria-pressed', 'true');
   if (visualReview)
@@ -1170,3 +1161,85 @@ for (const width of [MOBILE_WIDTH, 1440] as const) {
     }
   });
 }
+
+test('LIBUI13 opening a resource lands in its editor with every former detail action', async ({
+  page,
+  request,
+}) => {
+  const prefix = `LIBUI13 ${Date.now()}`;
+  const bot = await createContent(request, `${prefix} Host`);
+  const persona = await createContent(request, `${prefix} Player`, 'persona');
+  const module = await createContent(request, `${prefix} World`, 'module');
+  const chat = await (
+    await request.post('/api/chats', { data: { title: `${prefix} chat`, botId: bot.id } })
+  ).json();
+  const before = await organization(request);
+  expect(
+    (
+      await request.post('/api/library/folders', {
+        data: { expectedRevision: before.revision, category: 'bot', title: `${prefix} Shelf` },
+      })
+    ).ok()
+  ).toBe(true);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  const header = panel.locator('.library-detail-heading');
+  const menu = panel.getByLabel('자료 메뉴', { exact: true });
+  const cases = [
+    [
+      bot,
+      '봇',
+      '채팅 시작',
+      ['설정 후 새 채팅', '페르소나로 사용', '모듈로 추가', '최근 채팅 이어가기'],
+    ],
+    [persona, '페르소나', '페르소나로 사용', ['봇으로 새 채팅', '모듈로 추가']],
+    [module, '모듈', '모듈로 추가', ['봇으로 새 채팅', '페르소나로 사용']],
+  ] as const;
+  for (const [item, tab, primary, others] of cases) {
+    await panel.getByRole('tab', { name: tab, exact: true }).click();
+    await panel.getByLabel('서재 검색', { exact: true }).fill(prefix);
+    await panel.getByRole('button', { name: `${item.title} 편집`, exact: true }).click();
+    await expect(panel.getByLabel(`${tab} 이름`, { exact: true })).toHaveValue(item.title);
+    await expect(header.getByRole('button', { name: primary, exact: true })).toBeEnabled();
+    await menu.click();
+    for (const name of [...others, '복제', '분류와 폴더 이동', `${item.title} 자료 삭제`])
+      await expect(panel.getByRole('button', { name, exact: true })).toBeVisible();
+    await expect(
+      panel.locator('.action-menu-body').getByText(primary, { exact: true })
+    ).toHaveCount(0);
+    await menu.click();
+    await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
+  }
+
+  await panel.getByRole('tab', { name: '봇', exact: true }).click();
+  await panel.getByLabel('서재 검색', { exact: true }).fill(prefix);
+  await panel.getByRole('button', { name: `${bot.title} 편집`, exact: true }).click();
+  const meta = panel.locator('[data-studio-section="basic"] .native-identity-meta');
+  await expect(meta.first()).toHaveText('봇');
+  await menu.click();
+  await panel.getByRole('button', { name: '분류와 폴더 이동', exact: true }).click();
+  const move = page.getByRole('dialog', { name: '자료 이동', exact: true });
+  await move.getByLabel('이동할 폴더', { exact: true }).selectOption({ label: `${prefix} Shelf` });
+  await move.getByRole('button', { name: '이동', exact: true }).click();
+  await expect(move).toBeHidden();
+  await expect(meta.first()).toContainText(`${prefix} Shelf`);
+
+  await panel.getByLabel('봇 이름', { exact: true }).fill(`${bot.title} 수정`);
+  await expect(header.getByRole('button', { name: '채팅 시작', exact: true })).toBeDisabled();
+  await menu.click();
+  for (const name of ['설정 후 새 채팅', '최근 채팅 이어가기', '복제'])
+    await expect(panel.getByRole('button', { name, exact: true })).toBeDisabled();
+  await menu.click();
+  await panel.getByRole('button', { name: '편집 취소', exact: true }).click();
+  await expect(header.getByRole('button', { name: '채팅 시작', exact: true })).toBeEnabled();
+
+  await menu.click();
+  await panel.getByRole('button', { name: '복제', exact: true }).click();
+  await expect(panel.getByLabel('봇 이름', { exact: true })).toHaveValue(`${bot.title} 사본`);
+  await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await panel.getByRole('button', { name: `${bot.title} 편집`, exact: true }).click();
+  await menu.click();
+  await panel.getByRole('button', { name: '최근 채팅 이어가기', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`chat=${chat.id}`));
+});

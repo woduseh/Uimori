@@ -843,12 +843,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   expect(response.ok()).toBe(true);
   const saved = (await response.json()) as Content;
   await page.goto('/');
-  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-  await page
-    .getByRole('region', { name: '자료 상세', exact: true })
-    .getByRole('button', { name: '편집', exact: true })
-    .first()
-    .click();
+  await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
   const library = page.getByTestId('library-panel');
   await expect(library.getByLabel('Risu 자료 이름')).toHaveValue(title);
   await expect(library.getByTestId('package-fields')).toHaveCount(0);

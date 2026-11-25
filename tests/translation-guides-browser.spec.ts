@@ -16,8 +16,7 @@ async function open(page: Page, title: string) {
   await page.goto('/');
   await navigationAction(page, '서재');
   await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(title);
-  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
   await selectEditorSection(page, '번역 지침');
 }
 async function save(page: Page) {
@@ -138,8 +137,7 @@ test('TGUIDE invalid incomplete row stays editable; only bot editor exposes the 
   await page.goto('/');
   await navigationAction(page, '페르소나');
   await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(persona.title);
-  await page.getByRole('button', { name: `${persona.title} 상세 보기`, exact: true }).click();
-  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.getByRole('button', { name: `${persona.title} 편집`, exact: true }).click();
   await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
   await selectEditorSection(page, '번역 지침');
   const personaGuide = page.getByLabel('봇 번역 지침', { exact: true });

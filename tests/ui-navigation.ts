@@ -240,12 +240,7 @@ export async function revealProviderDiagnostics(page: Page, title: string) {
   ).toBeVisible();
 }
 export async function editLibraryContent(page: Page, title: string) {
-  await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
-  await page
-    .getByRole('region', { name: '자료 상세', exact: true })
-    .getByRole('button', { name: '편집', exact: true })
-    .first()
-    .click();
+  await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
   await revealLibraryEditor(page);
 }
 export async function createLibraryContent(page: Page) {
