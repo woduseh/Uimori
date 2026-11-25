@@ -421,7 +421,8 @@ function Editor({
 }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const emitted = useRef(value);
+  const initialValue = useRef(value).current;
+  const unacknowledged = useRef<string[]>([]);
   const changeHandler = useRef(onChange);
   changeHandler.current = onChange;
   const compartments = useRef({
@@ -457,7 +458,7 @@ function Editor({
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) return;
           const next = update.state.sliceDoc();
-          emitted.current = next;
+          if (unacknowledged.current.push(next) > 32) unacknowledged.current.shift();
           changeHandler.current(next);
         }),
       ],
@@ -467,7 +468,7 @@ function Editor({
   const initialLanguage = useRef(language).current;
 
   useLayoutEffect(() => {
-    const editor = new EditorView({ state: createState(emitted.current), parent: host.current! });
+    const editor = new EditorView({ state: createState(initialValue), parent: host.current! });
     view.current = editor;
     const previous = handoff.current;
     if (previous.focused) {
@@ -495,12 +496,19 @@ function Editor({
       editor.destroy();
       view.current = null;
     };
-  }, [compartments, createState, handoff, initialLanguage]);
+  }, [compartments, createState, handoff, initialLanguage, initialValue]);
 
   useEffect(() => {
     const editor = view.current;
-    if (!editor || value === emitted.current) return;
-    emitted.current = value;
+    if (!editor) return;
+    const pending = unacknowledged.current;
+    const echo = pending.indexOf(value);
+    if (echo >= 0) {
+      pending.splice(0, echo + 1);
+      return;
+    }
+    if (value === editor.state.sliceDoc()) return;
+    pending.length = 0;
     editor.setState(createState(value));
   }, [value, createState]);
 
