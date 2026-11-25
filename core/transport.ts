@@ -387,6 +387,9 @@ export async function executeProvider(
       input: request.input,
       ...(request.prompt ? { prompt: request.prompt } : {}),
       ...(request.opaqueState !== undefined ? { opaqueState: request.opaqueState } : {}),
+      ...(request.continuationInput !== undefined
+        ? { continuationInput: request.continuationInput }
+        : {}),
     };
     assertContextBudget(bodyValue, request.contextBudget);
     const body = JSON.stringify(bodyValue);
