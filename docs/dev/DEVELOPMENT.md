@@ -13,6 +13,8 @@ npm ci --no-audit --no-fund
 npm run dev
 ```
 
+Run `git config core.hooksPath .githooks` once per clone; worktrees share it. The pre-commit hook checks staged files with Biome, because CI is otherwise the first place a file formatted by another tool is refused.
+
 For an offline install with a populated npm cache, add `--offline`. `dev` builds and starts the server; `npm start` uses the existing build. See [README](../../README.md) for app configuration.
 
 Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `UIMORI_BROWSER_PATH` to use a browser outside the discovered locations. The shared resolver falls back to an installed Playwright Chromium. `doctor`, the shared browser harness and `verify:selfhost` launch the resolved browser and check a synthetic loopback page and nonzero text geometry before app tests. Missing libraries, fonts or executables report `BLOCKED`; this basic layout check does not prove complete glyph coverage. Configure an environment-specific wrapper with `UIMORI_BROWSER_PATH`, not a hardcoded workspace path.
@@ -88,9 +90,11 @@ npm run verify:browser -- --workers 4
 npm run verify:browser -- --grep READERREC --workers 1
 ```
 
+One runner of the shared harness executes at a time on a machine, across checkouts and worktrees: `waitForBrowserTurn` holds a loopback port, and a second run waits for it instead of starting. Two runs sharing the CPUs fail with "App ready timeout" or in unrelated specs that pass alone. The operating system frees the port when the holder exits, so an interrupted run leaves nothing to clean up.
+
 `summary.json` records the worker count and each server's URL and DB under `servers`; each server's log is under `servers/<n>/server.log`. A direct `npx playwright test` without the harness still uses one worker and `UIMORI_BASE_URL`/`UIMORI_DB`.
 
-`tests/server.test.ts` checks independent server processes, ports and SQLite databases from one build, including restart persistence. No extra Git checkouts are needed.
+`tests/server.test.ts` checks independent server processes, ports and SQLite databases from one build, including restart persistence. It is the only Vitest file that executes `dist`, and it fails with "Run npm run build" when the build does not match the source. No extra Git checkouts are needed.
 
 After a matching build, `node --expose-gc scripts/benchmark-native-preparation.mjs` compares sequential and batched native text preparation for 10, 50 and 100 messages, three times each. It checks identical outputs and records elapsed time, Worker calls, sampled process RSS and cancellation latency under `output/benchmarks/`. These synthetic measurements exclude callbacks and provider work.
 

@@ -2,7 +2,7 @@ import packageJson from '../package.json' with { type: 'json' };
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { injectWithFixtureBot, fixtureBotInput } from './fixtures/chat.js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createApp, type App } from '../server/app.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { loopbackProvider } from './fixtures/loopback-provider.js';
+import { assertBuild } from '../scripts/lib.mjs';
 
 const owned: { app?: App; directory: string; child?: ChildProcess }[] = [];
 afterEach(async () => {
@@ -431,8 +432,10 @@ describe('file SQLite HTTP runtime', () => {
   });
 });
 
+let currentBuild: ReturnType<typeof assertBuild> | undefined;
 async function startChild(directory: string) {
-  const build = JSON.parse(await readFile('dist/build-identity.json', 'utf8'));
+  currentBuild ??= assertBuild();
+  const build = await currentBuild;
   const child = spawn(process.execPath, [resolve('dist/server/index.js')], {
     cwd: process.cwd(),
     env: {

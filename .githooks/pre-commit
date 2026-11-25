@@ -1,0 +1,4 @@
+#!/bin/sh
+npx --no-install biome check --staged --no-errors-on-unmatched --error-on-warnings && exit 0
+echo "Biome owns formatting and lint here. Run 'npx biome check --write <files>' and stage the result; do not use another formatter." >&2
+exit 1

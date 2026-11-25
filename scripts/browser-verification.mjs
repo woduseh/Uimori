@@ -5,6 +5,8 @@ import { requiredNode, supportedNode } from './node-runtime.mjs';
 import path from 'node:path';
 import { availableParallelism, totalmem } from 'node:os';
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:net';
+import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, readdir, copyFile, readFile } from 'node:fs/promises';
 import { startProviderFixture } from './provider-management-fixture.mjs';
 import { parseOptions } from './release-common.mjs';
@@ -37,6 +39,34 @@ export function defaultBrowserWorkers({ cpus = availableParallelism(), memory = 
 export function parseBrowserWorkers(value) {
   if (!/^[1-9]\d?$/u.test(value ?? '')) throw new Error('Use a worker count from 1 to 99');
   return Number(value);
+}
+
+const browserTurnPort = 47613;
+
+export async function waitForBrowserTurn({
+  port = browserTurnPort,
+  retryDelay = 2000,
+  cancelled = () => false,
+  announce = (message) => console.error(message),
+} = {}) {
+  for (let announced = false; ; ) {
+    const holder = createServer();
+    const held = await new Promise((resolve, reject) => {
+      holder.once('error', (error) =>
+        error.code === 'EADDRINUSE' ? resolve(false) : reject(error)
+      );
+      holder.listen({ port, host: '127.0.0.1', exclusive: true }, () => resolve(true));
+    });
+    if (held) return () => new Promise((resolve) => holder.close(resolve));
+    if (cancelled()) throw new Error('Verification cancelled');
+    if (!announced) {
+      announced = true;
+      announce(
+        'Another browser verification is running on this machine. Waiting for it to finish; concurrent runs time out each other.'
+      );
+    }
+    await delay(retryDelay);
+  }
 }
 
 export async function runBrowserVerification({
@@ -100,7 +130,8 @@ export async function runBrowserVerification({
   await json(path.join(directory, 'ownership.json'), ownership);
   let environmentBlocked = false,
     cancelled = false,
-    fixture;
+    fixture,
+    endBrowserTurn;
   const cancellationCleanup = [];
   const cancel = (signal) => {
     cancelled = true;
@@ -128,6 +159,8 @@ export async function runBrowserVerification({
       environmentBlocked = true;
       throw new Error(`Node ${requiredNode} required`);
     }
+    endBrowserTurn = await waitForBrowserTurn({ cancelled: () => cancelled });
+    summary.turnStartedAt = new Date().toISOString();
     const identity = await assertBuild();
     summary.environment.browserRuntime = await assertBrowserRuntime({ executablePath: browser });
     summary.identity = identity;
@@ -262,6 +295,7 @@ export async function runBrowserVerification({
       (child) => child.pid && child.exitCode === null && child.signalCode === null
     );
     if (live.length) cleanupErrors.push('Owned child process still running; runtime retained');
+    await endBrowserTurn?.();
     try {
       if (!live.length) {
         if (failures.length) {
