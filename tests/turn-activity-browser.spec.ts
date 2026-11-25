@@ -254,7 +254,7 @@ test('TURNUI01 independent response panels, flat inspector, lazy raw record and 
     '로어',
   ]);
   await expect(receipt.locator('[data-row="lore"] dd')).toContainText('4건 포함');
-  await expect(receipt.locator('[data-row="cache"] dd')).toHaveText('읽기 98,000 / 쓰기 1,200');
+  await expect(receipt.locator('[data-row="cache"] dd')).toHaveText('읽기 98,000 (80%)쓰기 1,200');
   expect(sceneReads).toHaveLength(1);
   const translation = inspector.getByTestId('job-translation');
   await expect(translation).toContainText('한국어 번역');
@@ -409,7 +409,7 @@ for (const width of [MOBILE_WIDTH]) {
     await expect(usage.getByText(/요청 1,234, 응답 87 토큰/)).toBeVisible();
     await expect(usage.getByText(/컨텍스트 사용량 1.9%/)).toBeVisible();
     await expect(usage.getByText('컨텍스트 1.9% (1,234 / 65,536)', { exact: true })).toBeVisible();
-    await expect(usage.locator('[data-row="cache"] dd')).toHaveText('읽기 123 / 쓰기 45');
+    await expect(usage.locator('[data-row="cache"] dd')).toHaveText('읽기 123 (10%)쓰기 45');
     expect(sceneReads).toHaveLength(1);
     await expect(sections.locator('.task-history-raw')).toHaveCount(0);
     await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
@@ -634,6 +634,149 @@ for (const width of [360, MOBILE_WIDTH]) {
     expect(state.writes).toEqual([expect.stringContaining(`/api/jobs/${failedId}/retry`)]);
   });
 }
+
+test('TURNUI07 the inspector splits the request context by category and keeps older runs on one bar', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request, 2);
+  const [measured, older] = seeded.runs;
+  const parts = {
+    prompt: 6_200,
+    botDescription: 3_100,
+    persona: 800,
+    lore: 9_400,
+    summary: 4_000,
+    history: 92_000,
+    request: 1_500,
+    tools: 2_300,
+    other: 700,
+  };
+  const estimated = Object.values(parts).reduce((sum, tokens) => sum + tokens, 0);
+  const usage = (id: string, withParts: boolean): ReaderRun['sceneUsage'] => ({
+    attemptId: `breakdown-${id}`,
+    inputTokens: 118_000,
+    outputTokens: 4_200,
+    inputScope: 'request',
+    context: {
+      estimatedInputTokens: estimated,
+      inputTokenLimit: 272_000,
+      ...(withParts ? { parts } : {}),
+    },
+  });
+  await page.route('**/api/attempts/*/scene-detail', (route) =>
+    route.fulfill({
+      json: {
+        cache: { readTokens: 59_000, writeTokens: null },
+        lore: null,
+      } satisfies SceneUsageDetail,
+    })
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await harness(page, seeded.chat.id, (body) => {
+    body.runs = body.runs.map((item) =>
+      item.id === measured!.id
+        ? { ...item, sceneUsage: usage(item.id, true) }
+        : item.id === older!.id
+          ? { ...item, sceneUsage: usage(item.id, false) }
+          : item
+    );
+  });
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844],
+  ] as const) {
+    if (width !== 1440) {
+      await page.setViewportSize({ width, height });
+      await page.reload();
+      await expect(page.getByTestId('turn-activity').first()).toBeVisible();
+    }
+    const panels = page.getByTestId('source').getByTestId('turn-activity');
+    const first = panels.nth(0);
+    const second = panels.nth(1);
+    for (const panel of [first, second])
+      if ((await panel.getAttribute('open')) === null)
+        await panel.locator(':scope > summary').click();
+    const receipt = first.getByTestId('scene-receipt');
+    await expect(receipt).toContainText('컨텍스트 43.4% (118,000 / 272,000)');
+    await expect(receipt.locator('[data-row="cache"] dd')).toHaveText('읽기 59,000 (50%)');
+    const bar = receipt.locator('.context-breakdown-bar');
+    await expect(bar).toHaveAttribute('aria-hidden', 'true');
+    expect(
+      await bar
+        .locator('.context-breakdown-segment')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-part')))
+    ).toEqual([
+      'prompt',
+      'botDescription',
+      'persona',
+      'lore',
+      'summary',
+      'history',
+      'request',
+      'tools',
+      'other',
+    ]);
+    await expect(receipt.locator('.scene-context-bar')).toHaveCount(0);
+    await expect(receipt.locator('.context-breakdown-legend > li')).toHaveText([
+      '프롬프트6,200',
+      '봇 설명3,100',
+      '페르소나800',
+      '로어9,400',
+      '대화 요약4,000',
+      '이전 대화92K',
+      '이번 요청1,500',
+      '도구 설명2,300',
+      '기타700',
+    ]);
+    const toggle = receipt.getByRole('button', { name: '구분 보기', exact: true });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(receipt.getByRole('button', { name: '구분 접기', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    const table = receipt.getByRole('table', { name: '컨텍스트 구분', exact: true });
+    for (const [label, value, share] of [
+      ['이전 대화', '92,000', '33.8%'],
+      ['로어', '9,400', '3.5%'],
+      ['합계 (추정)', '120,000', '44.1%'],
+      ['남은 여유', '152,000', '55.9%'],
+      ['자동 정리 기준', '231,200', '85%'],
+      ['보고된 입력', '118,000', ''],
+    ])
+      await expect(
+        table
+          .getByRole('row')
+          .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
+          .getByRole('cell')
+      ).toHaveText([value, share]);
+    await expect(table.getByRole('rowheader', { name: '작가 노트' })).toHaveCount(0);
+    expect(
+      await first
+        .getByTestId('scene-inspector')
+        .evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    ).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    const old = second.getByTestId('scene-receipt');
+    await expect(old.locator('.scene-context-bar')).toHaveCount(1);
+    await expect(old.locator('.context-breakdown-bar')).toHaveCount(0);
+    await expect(old.locator('.context-breakdown-legend')).toHaveCount(0);
+    await expect(old.getByRole('button', { name: '구분 보기', exact: true })).toHaveCount(0);
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await first.screenshot({
+        path: info.outputPath(`scene-breakdown-${width}-${colorScheme}.png`),
+      });
+      await second.screenshot({
+        path: info.outputPath(`scene-old-run-${width}-${colorScheme}.png`),
+      });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+});
 
 test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and ownership', async ({
   page,

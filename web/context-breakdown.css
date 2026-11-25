@@ -1,0 +1,147 @@
+.context-breakdown-bar,
+.context-breakdown-key {
+  --usage-track: var(--surface-active);
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="instructions"] {
+  --usage-part: var(--muted);
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="tools"] {
+  --usage-part: var(--input-border);
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="history"] {
+  --usage-part: color-mix(in oklab, var(--info) 60%, var(--info-line));
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="summary"] {
+  --usage-part: var(--info-line);
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="reference"] {
+  --usage-part: color-mix(in oklab, var(--warning) 15%, var(--warning-line));
+}
+:is(.context-breakdown-segment, .context-breakdown-key):is(
+  [data-tone="results"],
+  [data-tone="request"]
+) {
+  --usage-part: color-mix(in oklab, var(--success) 85%, var(--success-line));
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="note"] {
+  --usage-part: var(--success-line);
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="description"] {
+  --usage-part: var(--accent);
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="persona"] {
+  --usage-part: color-mix(in oklab, var(--accent) 50%, var(--accent-line));
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="guide"] {
+  --usage-part: color-mix(in oklab, var(--error) 45%, var(--error-line));
+}
+.context-breakdown-bar {
+  position: relative;
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-small);
+  background: var(--usage-track);
+  overflow: hidden;
+}
+.context-breakdown-bar[data-threshold]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline: calc(var(--usage-threshold) * 100%) 0;
+  background: repeating-linear-gradient(135deg, var(--border-hover) 0 1px, transparent 1px 4px);
+}
+.context-breakdown-bar[data-threshold]::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--usage-threshold) * 100%);
+  width: 2px;
+  background: var(--text);
+}
+.context-breakdown-segment {
+  position: relative;
+  flex: none;
+  width: calc(var(--part-share) * 100%);
+  background: var(--usage-part);
+  box-shadow: inset -1px 0 var(--usage-track);
+}
+.context-breakdown-segment[data-tone="other"] {
+  background: var(--usage-track);
+  box-shadow: inset 0 0 0 1px var(--input-border);
+}
+.context-breakdown-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 12px;
+  min-width: 0;
+}
+.context-breakdown-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+.context-breakdown-legend > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.context-breakdown-legend-value {
+  color: var(--text);
+}
+.context-breakdown-table {
+  width: 100%;
+  max-width: 360px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.context-breakdown-table th[scope="row"] {
+  padding: 2px 0;
+  color: var(--muted);
+  font-weight: inherit;
+  text-align: start;
+}
+.context-breakdown-table td {
+  padding: 2px 0 2px 12px;
+  text-align: end;
+  white-space: nowrap;
+}
+.context-breakdown-table tbody + tbody > tr:first-child > * {
+  padding-top: 6px;
+  border-top: var(--hairline) solid var(--line);
+}
+.context-breakdown-table .context-breakdown-total > * {
+  color: var(--text);
+  font-weight: 600;
+}
+.context-breakdown-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.context-breakdown-key {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--usage-part, transparent);
+}
+.context-breakdown-key[data-tone="other"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--input-border);
+}
+.context-breakdown-key[data-tone="free"] {
+  border-radius: 0;
+  background: var(--usage-track);
+}
+.context-breakdown-key[data-tone="threshold"] {
+  height: 10px;
+  border-radius: 0;
+  background: linear-gradient(var(--text), var(--text)) center / 2px 100% no-repeat;
+}

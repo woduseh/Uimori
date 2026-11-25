@@ -86,27 +86,84 @@ button.helper-result-target:hover {
 .helper-result-usage summary small {
   margin-inline-start: 4px;
 }
-.helper-result-usage dl {
-  margin: 10px 14px 14px;
+.helper-result-usage .execution-record[open] {
+  border-radius: var(--radius-panel);
 }
-.helper-result-usage .helper-usage-note {
-  margin: 0 14px 14px;
+.helper-usage-body {
+  padding: 12px 14px 14px;
 }
-.helper-result-usage dd {
+.helper-usage-record {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
+.helper-usage-record > * + * {
+  padding-top: 8px;
+  border-top: var(--hairline) solid var(--line);
+}
+.helper-usage-context {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.helper-usage-headline {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
+  gap: 2px 8px;
+  margin: 0;
+  color: var(--text);
+}
+.helper-usage-headline small,
+.helper-usage-rows dd small {
+  color: var(--muted);
+  font-size: inherit;
+}
+.helper-usage-rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 16px;
+  margin: 0;
+}
+.helper-usage-rows > div {
+  display: contents;
+}
+.helper-usage-rows dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.helper-usage-rows dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
   min-width: 0;
   margin: 0;
   color: var(--text);
 }
-.helper-result-usage dd small {
-  color: var(--muted);
+.helper-usage-rows [data-row="calls"] dd {
+  gap: 0 6px;
 }
-.helper-result-usage .helper-input-budget {
-  flex-basis: 100%;
-  max-width: 24rem;
+.helper-usage-rows [data-row="calls"] dd > span + span::before {
+  content: "·" / "";
+  margin-inline-end: 6px;
+  color: var(--faint);
+}
+.helper-usage-rows .helper-usage-help {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin-block: calc((1lh - 24px) / 2);
+  padding: 0;
+  color: var(--muted);
 }
 
 .helper-change {

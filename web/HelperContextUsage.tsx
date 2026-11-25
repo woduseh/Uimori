@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { Gauge } from 'lucide-react';
 import {
   HELPER_COMPACTION_INPUT_RATIO,
@@ -7,47 +6,61 @@ import {
   type HelperTaskResultsView,
 } from '../core/helper.js';
 import { ActionMenu } from './ActionMenu.js';
+import {
+  ContextBar,
+  ContextTable,
+  type ContextNote,
+  type ContextSegment,
+  type ContextTone,
+} from './ContextBreakdown.js';
 import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
 import { RunningIcon } from './ui-icons.js';
 import { usageCompact } from './usage-display.js';
 import './activity-status.css';
 import './helper-context-usage.css';
 
-const parts: (keyof HelperInputParts)[] = [
-  'instructions',
-  'toolSchemas',
-  'history',
-  'source',
-  'toolResults',
-];
+export const helperInputTones: Record<keyof HelperInputParts, ContextTone> = {
+  instructions: 'instructions',
+  toolSchemas: 'tools',
+  history: 'history',
+  source: 'reference',
+  toolResults: 'results',
+};
+const parts = Object.keys(helperInputTones) as (keyof HelperInputParts)[];
 
-type Segment = { part: keyof HelperInputParts | 'other'; tokens: number };
-
-function UsageBar({
-  segments,
-  scale,
-  threshold,
-}: {
-  segments: Segment[];
-  scale: number;
-  threshold: number;
-}) {
-  return (
-    <span
-      className="helper-context-usage-bar"
-      aria-hidden="true"
-      style={{ '--usage-threshold': threshold / scale } as CSSProperties}
-    >
-      {segments.map(({ part, tokens }) => (
-        <span
-          key={part}
-          className="helper-context-usage-segment"
-          data-part={part}
-          style={{ '--part-share': tokens / scale } as CSSProperties}
-        />
-      ))}
-    </span>
-  );
+export function helperInputBreakdown(
+  inputParts: HelperInputParts | null | undefined,
+  estimate: number | null,
+  adjust: (part: keyof HelperInputParts, tokens: number) => number = (_part, tokens) => tokens
+) {
+  const rows = parts.map((part) => {
+    const amount = inputParts?.[part] ?? null;
+    return {
+      key: part,
+      label: t(`helperUsage.${part}`),
+      tokens: amount === null ? null : adjust(part, amount),
+      tone: helperInputTones[part],
+    };
+  });
+  const known = rows.flatMap((row) => (row.tokens === null ? [] : [row.tokens]));
+  const other =
+    estimate === null ? null : Math.max(0, estimate - known.reduce((sum, value) => sum + value, 0));
+  const otherRow = {
+    key: 'other',
+    label: t('contextBreakdown.other'),
+    tone: 'other' as const,
+  };
+  const segments: ContextSegment[] = [
+    ...rows.flatMap((row) => (row.tokens ? [{ ...row, tokens: row.tokens }] : [])),
+    ...(other ? [{ ...otherRow, tokens: other }] : []),
+  ];
+  return {
+    rows:
+      other !== null && other > 0 && known.length > 0
+        ? [...rows, { ...otherRow, tokens: other }]
+        : rows,
+    segments,
+  };
 }
 
 export function HelperContextUsage({
@@ -94,21 +107,15 @@ export function HelperContextUsage({
         : share >= HELPER_COMPACTION_INPUT_RATIO
           ? 'near'
           : undefined;
-  const rows = parts.map((part) => {
-    const amount = usage.latestInputParts?.[part] ?? null;
-    return {
-      part,
-      tokens: part === 'history' && amount !== null ? afterCompaction(amount) : amount,
-    };
-  });
-  const known = rows.flatMap((row) => (row.tokens === null ? [] : [row.tokens]));
-  const other =
-    estimate === null ? null : Math.max(0, estimate - known.reduce((sum, value) => sum + value, 0));
-  const segments: Segment[] = [
-    ...rows.flatMap(({ part, tokens }) => (tokens ? [{ part, tokens }] : [])),
-    ...(other ? [{ part: 'other' as const, tokens: other }] : []),
-  ];
-  const scale = limit && estimate !== null ? Math.max(limit, estimate) : null;
+  const { rows, segments } = helperInputBreakdown(
+    usage.latestInputParts,
+    estimate,
+    (part, tokens) => (part === 'history' ? afterCompaction(tokens) : tokens)
+  );
+  const bar =
+    limit && estimate !== null && threshold !== null ? (
+      <ContextBar segments={segments} total={estimate} limit={limit} threshold={threshold} />
+    ) : null;
   const unknown = estimate === null && !(native && reported !== null);
   const text =
     estimate !== null
@@ -132,12 +139,6 @@ export function HelperContextUsage({
           })
         : text
   }`;
-  const value = (amount: number | null | undefined) =>
-    amount == null ? t('helperResults.unknown') : formatNumber(amount);
-  const percent = (amount: number | null) =>
-    amount === null || !limit
-      ? ''
-      : formatNumber(amount / limit, { style: 'percent', maximumFractionDigits: 1 });
   const compactable = !native && Boolean(onCompact);
   const showSummary = Boolean(onShowSummary) && (context?.summaryChars ?? 0) > 0;
   const failureText = compactError
@@ -145,18 +146,31 @@ export function HelperContextUsage({
     : failure
       ? t(`errors.${failure}`)
       : '';
-  const row = (name: string, amount: string, part?: string, shareText = '', className?: string) => (
-    <tr key={name} className={className}>
-      <th scope="row">
-        <span className="helper-context-usage-name">
-          <span className="helper-context-usage-key" data-part={part} aria-hidden="true" />
-          {name}
-        </span>
-      </th>
-      <td>{amount}</td>
-      {limit !== null && <td>{shareText}</td>}
-    </tr>
-  );
+  const notes: ContextNote[] = [
+    ...(compacted && !compacted.origin
+      ? [
+          {
+            key: 'before',
+            label: t('helperUsage.beforeCompaction'),
+            value: formatNumber(compacted.beforeTokens),
+          },
+          {
+            key: 'after',
+            label: t('helperUsage.afterCompaction'),
+            value: formatNumber(compacted.afterTokens),
+          },
+        ]
+      : []),
+    ...(context && context.compactedMessages > 0
+      ? [
+          {
+            key: 'compacted',
+            label: t('helperUsage.compacted'),
+            value: t('helperUsage.compactedCount', { count: context.compactedMessages }),
+          },
+        ]
+      : []),
+  ];
   return (
     <ActionMenu
       className="helper-context-usage"
@@ -180,9 +194,7 @@ export function HelperContextUsage({
             )}
             <span className="helper-context-usage-text">{text}</span>
             {shortText && <span className="helper-context-usage-short">{shortText}</span>}
-            {scale !== null && threshold !== null && (
-              <UsageBar segments={segments} scale={scale} threshold={threshold} />
-            )}
+            {bar}
           </span>
         )
       }
@@ -202,76 +214,29 @@ export function HelperContextUsage({
               </span>
               {share !== null && (
                 <span className="helper-context-usage-percent" data-level={level}>
-                  {percent(estimate)}
+                  {formatNumber(share, { style: 'percent', maximumFractionDigits: 1 })}
                 </span>
               )}
             </span>
           )}
         </div>
-        {scale !== null && threshold !== null && (
-          <UsageBar segments={segments} scale={scale} threshold={threshold} />
+        {bar}
+        {native ? (
+          <ContextTable
+            label={t('helperUsage.label')}
+            rows={[{ key: 'reported', label: t('helperUsage.reported'), tokens: reported }]}
+            limit={null}
+          />
+        ) : (
+          <ContextTable
+            label={t('helperUsage.label')}
+            rows={rows}
+            total={estimate}
+            limit={limit}
+            threshold={threshold}
+            notes={notes}
+          />
         )}
-        <table className="helper-context-usage-table" aria-label={t('helperUsage.label')}>
-          <thead className="sr-only">
-            <tr>
-              <th scope="col">{t('helperUsage.columnPart')}</th>
-              <th scope="col">{t('helperUsage.columnTokens')}</th>
-              {limit !== null && <th scope="col">{t('helperUsage.columnShare')}</th>}
-            </tr>
-          </thead>
-          {native ? (
-            <tbody>{row(t('helperUsage.reported'), value(reported))}</tbody>
-          ) : (
-            <>
-              <tbody>
-                {rows.map(({ part, tokens }) =>
-                  row(t(`helperUsage.${part}`), value(tokens), part, percent(tokens))
-                )}
-                {other !== null &&
-                  other > 0 &&
-                  known.length > 0 &&
-                  row(t('helperUsage.other'), formatNumber(other), 'other', percent(other))}
-              </tbody>
-              <tbody>
-                {row(
-                  t('helperUsage.total'),
-                  value(estimate),
-                  undefined,
-                  percent(estimate),
-                  'helper-context-usage-total'
-                )}
-                {limit !== null &&
-                  estimate !== null &&
-                  row(
-                    t('helperUsage.free'),
-                    formatNumber(Math.max(0, limit - estimate)),
-                    'free',
-                    percent(Math.max(0, limit - estimate))
-                  )}
-                {(limit === null || estimate === null) && row(t('helperUsage.limit'), value(limit))}
-                {threshold !== null &&
-                  row(
-                    t('helperUsage.threshold'),
-                    formatNumber(threshold),
-                    'threshold',
-                    percent(threshold)
-                  )}
-                {compacted &&
-                  !compacted.origin &&
-                  row(t('helperUsage.beforeCompaction'), formatNumber(compacted.beforeTokens))}
-                {compacted &&
-                  !compacted.origin &&
-                  row(t('helperUsage.afterCompaction'), formatNumber(compacted.afterTokens))}
-                {context &&
-                  context.compactedMessages > 0 &&
-                  row(
-                    t('helperUsage.compacted'),
-                    t('helperUsage.compactedCount', { count: context.compactedMessages })
-                  )}
-              </tbody>
-            </>
-          )}
-        </table>
         {(native || compacted) && (
           <p>
             {t(

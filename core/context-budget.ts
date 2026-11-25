@@ -104,6 +104,10 @@ export function estimateContextTokens(value: unknown, budget?: ContextBudget): n
   return estimateContextInput(value, budget).totalTokens;
 }
 
+export function estimateImageTokens(width: number, height: number): number {
+  return Math.max(4096, Math.ceil((width * height * 2) / 750) + 1024);
+}
+
 export function estimateContextInput(value: unknown, budget?: ContextBudget) {
   let serialized: string | undefined;
   let imageTokens = 0;
@@ -123,7 +127,7 @@ export function estimateContextInput(value: unknown, budget?: ContextBudget) {
       const image = plannedImageMetadata(item);
       if (!image) return item;
       imageCount++;
-      imageTokens += Math.max(4096, Math.ceil((image.width * image.height * 2) / 750) + 1024);
+      imageTokens += estimateImageTokens(image.width, image.height);
       return { type: 'image', width: image.width, height: image.height };
     });
   } catch {

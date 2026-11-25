@@ -95,6 +95,16 @@
   font-size: inherit;
   line-height: inherit;
 }
+.scene-receipt-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+.scene-receipt-pair > span + span::before {
+  content: "/" / "";
+  margin-inline-end: 6px;
+  color: var(--faint);
+}
 .scene-receipt-model-id {
   display: block;
   color: var(--muted);

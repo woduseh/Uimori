@@ -24,9 +24,26 @@ export type SceneUsageDetail = {
   lore: RequestLore | null;
 };
 
+export const MAIN_CONTEXT_PARTS = [
+  'prompt',
+  'botDescription',
+  'persona',
+  'lore',
+  'authorNote',
+  'storyGuide',
+  'summary',
+  'history',
+  'request',
+  'tools',
+  'other',
+] as const;
+export type MainContextPart = (typeof MAIN_CONTEXT_PARTS)[number];
+export type MainContextParts = Partial<Record<MainContextPart, number>>;
+
 export type RequestContext = {
   estimatedInputTokens: number;
   inputTokenLimit: number;
+  parts?: MainContextParts;
   estimator?: ContextBudget['estimator'];
   tokenizer?: TokenizerProfileId;
   tokenizerFallback?: boolean;

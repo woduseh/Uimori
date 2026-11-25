@@ -1,21 +1,3 @@
-.helper-context-usage {
-  --usage-track: var(--surface-active);
-}
-.helper-context-usage [data-part="instructions"] {
-  --usage-part: var(--muted);
-}
-.helper-context-usage [data-part="toolSchemas"] {
-  --usage-part: var(--input-border);
-}
-.helper-context-usage [data-part="history"] {
-  --usage-part: color-mix(in oklab, var(--info) 60%, var(--info-line));
-}
-.helper-context-usage [data-part="source"] {
-  --usage-part: color-mix(in oklab, var(--warning) 15%, var(--warning-line));
-}
-.helper-context-usage [data-part="toolResults"] {
-  --usage-part: color-mix(in oklab, var(--success) 85%, var(--success-line));
-}
 .helper-context-usage > summary {
   width: auto;
   padding-inline: 8px;
@@ -38,6 +20,12 @@
 .helper-context-usage-short {
   display: none;
 }
+.helper-context-usage-summary .context-breakdown-bar {
+  height: 4px;
+}
+.helper-context-usage-summary .context-breakdown-bar[data-threshold]::before {
+  background: repeating-linear-gradient(135deg, var(--border-hover) 0 1px, transparent 1px 3px);
+}
 @container helper-composer (max-width: 400px) {
   .helper-context-usage-summary[data-unknown] .helper-context-usage-icon,
   .helper-context-usage-short {
@@ -46,40 +34,6 @@
   .helper-context-usage-text {
     display: none;
   }
-}
-.helper-context-usage-bar {
-  position: relative;
-  display: flex;
-  height: 4px;
-  border-radius: var(--radius-small);
-  background: var(--usage-track);
-  overflow: hidden;
-}
-.helper-context-usage-bar::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  inset-inline: calc(var(--usage-threshold) * 100%) 0;
-  background: repeating-linear-gradient(135deg, var(--border-hover) 0 1px, transparent 1px 3px);
-}
-.helper-context-usage-bar::after {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: calc(var(--usage-threshold) * 100%);
-  width: 2px;
-  background: var(--text);
-}
-.helper-context-usage-segment {
-  position: relative;
-  flex: none;
-  width: calc(var(--part-share) * 100%);
-  background: var(--usage-part);
-  box-shadow: inset -1px 0 var(--usage-track);
-}
-.helper-context-usage-segment[data-part="other"] {
-  background: var(--usage-track);
-  box-shadow: inset 0 0 0 1px var(--input-border);
 }
 .helper-context-usage-summary[data-level="near"],
 .helper-context-usage-percent[data-level="near"] {
@@ -110,61 +64,6 @@
 }
 .helper-context-usage-percent {
   font-weight: 600;
-}
-.helper-context-usage-body .helper-context-usage-bar {
-  height: 8px;
-}
-.helper-context-usage-body .helper-context-usage-bar::before {
-  background: repeating-linear-gradient(135deg, var(--border-hover) 0 1px, transparent 1px 4px);
-}
-.helper-context-usage-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-.helper-context-usage-table th[scope="row"] {
-  padding: 2px 0;
-  color: var(--muted);
-  font-weight: inherit;
-  text-align: start;
-}
-.helper-context-usage-table td {
-  padding: 2px 0 2px 12px;
-  text-align: end;
-  white-space: nowrap;
-}
-.helper-context-usage-table tbody + tbody > tr:first-child > * {
-  padding-top: 6px;
-  border-top: var(--hairline) solid var(--line);
-}
-.helper-context-usage-table .helper-context-usage-total > * {
-  color: var(--text);
-  font-weight: 600;
-}
-.helper-context-usage-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.helper-context-usage-key {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--usage-part, transparent);
-}
-.helper-context-usage-key[data-part="other"] {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--input-border);
-}
-.helper-context-usage-key[data-part="free"] {
-  border-radius: 0;
-  background: var(--usage-track);
-}
-.helper-context-usage-key[data-part="threshold"] {
-  height: 10px;
-  border-radius: 0;
-  background: linear-gradient(var(--text), var(--text)) center / 2px 100% no-repeat;
 }
 .helper-context-usage-body p {
   margin: 0;

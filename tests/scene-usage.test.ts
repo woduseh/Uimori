@@ -78,3 +78,21 @@ test('the run text cost keeps a known subtotal apart from unpriced calls', () =>
   ).toBeNull();
   expect(sceneCostLabels({ usd: 0, subtotalUsd: 0, unknownCount: 0, attemptCount: 0 })).toBeNull();
 });
+
+test('a run with measured parts draws its categories and a legend instead of the single bar', () => {
+  const html = receipt({
+    inputTokens: null,
+    outputTokens: 100,
+    context: {
+      ...context,
+      parts: { prompt: 400, history: 1200, request: 48, tools: 300, other: 100 },
+    },
+  });
+  expect(html).toContain('컨텍스트 약 25% (2,048 / 8,192)');
+  expect(html).not.toContain('scene-context-bar');
+  expect(html.match(/class="context-breakdown-segment"/g)).toHaveLength(5);
+  for (const label of ['프롬프트', '이전 대화', '이번 요청', '도구 설명', '기타'])
+    expect(html).toContain(label);
+  expect(html).not.toContain('대화 요약');
+  expect(html).toContain('구분 보기');
+});

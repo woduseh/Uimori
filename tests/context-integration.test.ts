@@ -19,6 +19,7 @@ import { Store } from '../server/store.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { measureMainContext, withContextProjection } from '../server/context-planning.js';
 import type { Connection, ModelPreset } from '../core/product.js';
+import type { RequestContext } from '../core/scene-usage.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
 
 const endpoint = 'http://127.0.0.1:44997/turn';
@@ -519,6 +520,17 @@ describe('standalone context summaries and explicit corrections', () => {
       detailsOmitted: true,
     });
     expect(attempts.at(-1)?.request).not.toHaveProperty('body');
+    const measured = (attempts.at(-1)!.request as { requestContext: RequestContext })
+      .requestContext;
+    expect(measured.parts).toMatchObject({
+      prompt: expect.any(Number),
+      summary: expect.any(Number),
+      history: expect.any(Number),
+      request: expect.any(Number),
+    });
+    expect(Object.values(measured.parts!).reduce((sum, tokens) => sum + tokens!, 0)).toBe(
+      measured.estimatedInputTokens
+    );
   });
   test('summary editing admits long token-fitting text and rejects token overflow without changing the saved summary', async () => {
     const { app, chatId } = await setup({ count: 0 });

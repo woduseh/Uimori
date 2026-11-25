@@ -11,17 +11,113 @@ export const messages = {
     ja: '推定入力 {count}',
     zh: '估算输入 {count}',
   },
-  'helperResults.latestInput': {
-    ko: '마지막 요청 입력',
-    en: 'Last request input',
-    ja: '直近のリクエスト入力',
-    zh: '最近一次请求输入',
-  },
   'helperResults.cumulativeExplanation': {
     ko: '누적 입력은 각 요청에 다시 보낸 컨텍스트와 캐시 입력을 포함해요.',
     en: 'Cumulative input includes context sent again on each request and cached input.',
     ja: '累積入力には、各リクエストで再送したコンテキストとキャッシュ入力が含まれます。',
     zh: '累计输入包含每次请求重复发送的上下文和缓存输入。',
+  },
+  'helperResults.cumulativeHelp': {
+    ko: '누적 입력 설명',
+    en: 'About cumulative input',
+    ja: '累積入力の説明',
+    zh: '累计输入说明',
+  },
+  'helperResults.contextHeadline': {
+    ko: '마지막 요청 컨텍스트 약 {input} / {limit}',
+    en: 'Last request context ~{input} / {limit}',
+    ja: '直近リクエストのコンテキスト 約{input} / {limit}',
+    zh: '最近请求上下文 约 {input} / {limit}',
+  },
+  'helperResults.contextHeadlineNoLimit': {
+    ko: '마지막 요청 컨텍스트 약 {input}',
+    en: 'Last request context ~{input}',
+    ja: '直近リクエストのコンテキスト 約{input}',
+    zh: '最近请求上下文 约 {input}',
+  },
+  'helperResults.contextUnmeasured': {
+    ko: '마지막 요청 컨텍스트',
+    en: 'Last request context',
+    ja: '直近リクエストのコンテキスト',
+    zh: '最近请求上下文',
+  },
+  'helperResults.contextExact': {
+    ko: '마지막 요청 입력 {count}',
+    en: 'Last request input {count}',
+    ja: '直近のリクエスト入力 {count}',
+    zh: '最近一次请求输入 {count}',
+  },
+  'helperResults.contextReported': {
+    ko: '보고된 입력 {count}',
+    en: 'Reported input {count}',
+    ja: '報告された入力 {count}',
+    zh: '报告的输入 {count}',
+  },
+  'helperResults.contextTable': {
+    ko: '마지막 요청 컨텍스트 구분',
+    en: 'Last request context breakdown',
+    ja: '直近リクエストのコンテキスト内訳',
+    zh: '最近请求上下文明细',
+  },
+  'helperResults.runs': {
+    ko: '실행',
+    en: 'Runs',
+    ja: '実行',
+    zh: '执行',
+  },
+  'helperResults.modelCalls': {
+    ko: '모델 {count}회',
+    en: 'Model {count}',
+    ja: 'モデル {count}回',
+    zh: '模型 {count}次',
+  },
+  'helperResults.internalCallsShort': {
+    ko: '내부 호출 {count}회',
+    en: 'Internal {count}',
+    ja: '内部呼び出し {count}回',
+    zh: '内部调用 {count}次',
+  },
+  'helperResults.cumulativeInput': {
+    ko: '누적 입력',
+    en: 'Total input',
+    ja: '累積入力',
+    zh: '累计输入',
+  },
+  'helperResults.cumulativeOutput': {
+    ko: '누적 출력',
+    en: 'Total output',
+    ja: '累積出力',
+    zh: '累计输出',
+  },
+  'helperResults.costShort': {
+    ko: '비용',
+    en: 'Cost',
+    ja: '費用',
+    zh: '费用',
+  },
+  'helperResults.cachedShare': {
+    ko: '(캐시 {count}, {share})',
+    en: '(cached {count}, {share})',
+    ja: '（キャッシュ {count}、{share}）',
+    zh: '（缓存 {count}，{share}）',
+  },
+  'helperResults.reasoningShare': {
+    ko: '(추론 {count}, {share})',
+    en: '(reasoning {count}, {share})',
+    ja: '（推論 {count}、{share}）',
+    zh: '（推理 {count}，{share}）',
+  },
+  'contextBreakdown.show': {
+    ko: '구분 보기',
+    en: 'Show breakdown',
+    ja: '内訳を表示',
+    zh: '查看明细',
+  },
+  'contextBreakdown.hide': {
+    ko: '구분 접기',
+    en: 'Hide breakdown',
+    ja: '内訳を閉じる',
+    zh: '收起明细',
   },
   'helperResults.outputSummary': {
     ko: '출력 {count} 토큰',
@@ -46,18 +142,6 @@ export const messages = {
     en: 'Partially reported',
     ja: '一部未確認',
     zh: '部分未确认',
-  },
-  'helperResults.inputBudgetMeter': {
-    ko: '입력 예산 대비 마지막 전송 입력 추정치',
-    en: 'Last estimated sent input relative to the input budget',
-    ja: '入力予算に対する最後の送信入力の推定値',
-    zh: '最后发送输入的估算量占输入预算的比例',
-  },
-  'helperResults.inputBudgetValue': {
-    ko: '입력 예산 {limit} 토큰 중 약 {input} 토큰',
-    en: 'Approximately {input} of {limit} input-budget tokens',
-    ja: '入力予算{limit}トークン中、約{input}トークン',
-    zh: '输入预算 {limit} 词元中约 {input} 词元',
   },
   'helpers.searchSessions': {
     ko: '대화 검색',
@@ -287,19 +371,25 @@ export const messages = {
     ja: 'ツール結果',
     zh: '工具结果',
   },
-  'helperUsage.total': {
+  'contextBreakdown.unknown': {
+    ko: '미확인',
+    en: 'Unknown',
+    ja: '不明',
+    zh: '未知',
+  },
+  'contextBreakdown.total': {
     ko: '합계 (추정)',
     en: 'Total (estimate)',
     ja: '合計（推定）',
     zh: '合计（估算）',
   },
-  'helperUsage.limit': {
+  'contextBreakdown.limit': {
     ko: '입력 예산',
     en: 'Input budget',
     ja: '入力予算',
     zh: '输入预算',
   },
-  'helperUsage.threshold': {
+  'contextBreakdown.threshold': {
     ko: '자동 정리 기준',
     en: 'Automatic compaction at',
     ja: '自動整理の基準',
@@ -317,31 +407,31 @@ export const messages = {
     ja: '約{input} トークン',
     zh: '约 {input} 词元',
   },
-  'helperUsage.other': {
+  'contextBreakdown.other': {
     ko: '기타',
     en: 'Other',
     ja: 'その他',
     zh: '其他',
   },
-  'helperUsage.free': {
+  'contextBreakdown.free': {
     ko: '남은 여유',
     en: 'Free space',
     ja: '残りの余裕',
     zh: '剩余空间',
   },
-  'helperUsage.columnPart': {
+  'contextBreakdown.columnPart': {
     ko: '항목',
     en: 'Item',
     ja: '項目',
     zh: '项目',
   },
-  'helperUsage.columnTokens': {
+  'contextBreakdown.columnTokens': {
     ko: '토큰',
     en: 'Tokens',
     ja: 'トークン',
     zh: '词元',
   },
-  'helperUsage.columnShare': {
+  'contextBreakdown.columnShare': {
     ko: '예산 대비',
     en: 'Of budget',
     ja: '予算比',
@@ -623,42 +713,6 @@ export const messages = {
     ja: '使用量',
     zh: '用量',
   },
-  'helperResults.executions': {
-    ko: '모델 실행 요청',
-    en: 'Model execution requests',
-    ja: 'モデル実行リクエスト',
-    zh: '模型执行请求',
-  },
-  'helperResults.tools': {
-    ko: '도구 실행',
-    en: 'Tool executions',
-    ja: 'ツール実行',
-    zh: '工具执行',
-  },
-  'helperResults.input': {
-    ko: '누적 입력 토큰',
-    en: 'Cumulative input tokens',
-    ja: '累積入力トークン',
-    zh: '累计输入词元',
-  },
-  'helperResults.output': {
-    ko: '누적 출력 토큰',
-    en: 'Cumulative output tokens',
-    ja: '累積出力トークン',
-    zh: '累计输出词元',
-  },
-  'helperResults.cached': {
-    ko: '입력 중 캐시 토큰',
-    en: 'Cached input tokens',
-    ja: '入力のキャッシュトークン',
-    zh: '输入中的缓存词元',
-  },
-  'helperResults.reasoning': {
-    ko: '출력 중 추론 토큰',
-    en: 'Reasoning output tokens',
-    ja: '出力の推論トークン',
-    zh: '输出中的推理词元',
-  },
   'helperResults.cost': {
     ko: '확인된 비용',
     en: 'Known cost',
@@ -676,12 +730,6 @@ export const messages = {
     en: '{count} unreported',
     ja: '{count} 回は不明',
     zh: '{count} 次未报告',
-  },
-  'helperResults.latestEstimate': {
-    ko: '마지막 전송 입력 (추정)',
-    en: 'Last sent input (estimated)',
-    ja: '直近の送信入力（推定）',
-    zh: '最近发送输入（估算）',
   },
   'helperResults.enabled': {
     ko: '켜짐',
@@ -736,12 +784,6 @@ export const messages = {
     en: 'Continuity saved',
     ja: '連続性を保存済み',
     zh: '连续性已保存',
-  },
-  'helperResults.internalCalls': {
-    ko: '보고된 내부 모델 호출',
-    en: 'Reported internal model calls',
-    ja: '報告された内部モデル呼び出し',
-    zh: '已报告的内部模型调用',
   },
   'helpers.queuedCount': {
     ko: '대기 {count}',

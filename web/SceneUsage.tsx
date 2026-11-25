@@ -1,9 +1,21 @@
 import { t, useI18n, formatNumber } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useId, useState, type CSSProperties, type ReactNode } from 'react';
-import type { SceneUsageDetail, SceneUsageReceipt } from '../core/scene-usage.js';
+import {
+  MAIN_CONTEXT_PARTS,
+  type MainContextPart,
+  type SceneUsageDetail,
+  type SceneUsageReceipt,
+} from '../core/scene-usage.js';
 import type { ReaderRun } from '../core/types.js';
 import { CONTEXT_COMPACTION_TRIGGER_RATIO } from '../core/context-compaction.js';
+import {
+  ContextBar,
+  ContextLegend,
+  ContextTable,
+  type ContextSegment,
+  type ContextTone,
+} from './ContextBreakdown.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { RequestLoreEntries } from './RequestLoreEntries.js';
 import { DropdownIcon } from './ui-icons.js';
@@ -40,10 +52,40 @@ function sceneTokenTotals(usage: SceneUsageReceipt) {
   );
 }
 
+const contextParts: Record<MainContextPart, { label: () => string; tone: ContextTone }> = {
+  prompt: { label: () => t('reader.prompt'), tone: 'instructions' },
+  botDescription: { label: () => t('reader.contextBotDescription'), tone: 'description' },
+  persona: { label: () => t('reader.persona'), tone: 'persona' },
+  lore: { label: () => t('reader.lore'), tone: 'reference' },
+  authorNote: { label: () => t('reader.contextAuthorNote'), tone: 'note' },
+  storyGuide: { label: () => t('reader.contextStoryGuide'), tone: 'guide' },
+  summary: { label: () => t('reader.conversationSummary'), tone: 'summary' },
+  history: { label: () => t('reader.contextHistory'), tone: 'history' },
+  request: { label: () => t('reader.contextRequest'), tone: 'request' },
+  tools: { label: () => t('helperUsage.toolSchemas'), tone: 'tools' },
+  other: { label: () => t('contextBreakdown.other'), tone: 'other' },
+};
+
+export function sceneContextSegments(usage: SceneUsageReceipt): ContextSegment[] {
+  const parts = usage.context?.parts;
+  if (!parts) return [];
+  return MAIN_CONTEXT_PARTS.flatMap((key) => {
+    const tokens = parts[key];
+    return typeof tokens === 'number' && Number.isFinite(tokens) && tokens > 0
+      ? [{ key, label: contextParts[key].label(), tokens, tone: contextParts[key].tone }]
+      : [];
+  });
+}
+
 function SceneContextBar({ usage }: { usage: SceneUsageReceipt }) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
   const context = sceneContext(usage);
   if (!context) return null;
   const share = context.input / context.limit;
+  const segments = sceneContextSegments(usage);
+  const threshold = Math.floor(context.limit * CONTEXT_COMPACTION_TRIGGER_RATIO);
+  const estimate = usage.context!.estimatedInputTokens;
   return (
     <div className="scene-context">
       <p>
@@ -54,26 +96,103 @@ function SceneContextBar({ usage }: { usage: SceneUsageReceipt }) {
           limit: formatNumber(context.limit),
         })}
       </p>
-      <div
-        className="scene-context-bar"
-        data-level={
-          share >= 1 ? 'over' : share >= CONTEXT_COMPACTION_TRIGGER_RATIO ? 'near' : undefined
-        }
-        title={t('reader.contextCompactionMark')}
-        aria-hidden="true"
-        style={
-          {
-            '--usage-share': Math.min(share, 1),
-            '--usage-threshold': CONTEXT_COMPACTION_TRIGGER_RATIO,
-          } as CSSProperties
-        }
-      >
-        <span />
-      </div>
+      {segments.length ? (
+        <>
+          <ContextBar
+            segments={segments}
+            total={context.input}
+            limit={context.limit}
+            threshold={threshold}
+          />
+          <div className="context-breakdown-summary">
+            <ContextLegend segments={segments} />
+            <button
+              type="button"
+              className="scene-receipt-expand"
+              aria-expanded={open}
+              aria-controls={`${id}-parts`}
+              onClick={() => setOpen(!open)}
+            >
+              <DropdownIcon size={14} aria-hidden="true" />
+              {t(open ? 'contextBreakdown.hide' : 'contextBreakdown.show')}
+            </button>
+          </div>
+          {open && (
+            <div id={`${id}-parts`}>
+              <ContextTable
+                label={t('reader.contextTable')}
+                rows={segments}
+                total={estimate}
+                limit={context.limit}
+                threshold={threshold}
+                notes={
+                  context.estimated
+                    ? []
+                    : [
+                        {
+                          key: 'reported',
+                          label: t('reader.contextReported'),
+                          value: formatNumber(context.input),
+                        },
+                      ]
+                }
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <div
+          className="scene-context-bar"
+          data-level={
+            share >= 1 ? 'over' : share >= CONTEXT_COMPACTION_TRIGGER_RATIO ? 'near' : undefined
+          }
+          title={t('reader.contextCompactionMark')}
+          aria-hidden="true"
+          style={
+            {
+              '--usage-share': Math.min(share, 1),
+              '--usage-threshold': CONTEXT_COMPACTION_TRIGGER_RATIO,
+            } as CSSProperties
+          }
+        >
+          <span />
+        </div>
+      )}
       {usage.context?.tokenizerFallback && (
         <p role="status">{t('reader.theSelectedTokenizerCouldNotBeLoadedAGeneral')}</p>
       )}
     </div>
+  );
+}
+
+function SceneCache({
+  cache,
+  inputTokens,
+}: {
+  cache: NonNullable<SceneUsageDetail['cache']>;
+  inputTokens: number | null;
+}) {
+  const read = cache.readTokens;
+  const write = cache.writeTokens;
+  return (
+    <span className="scene-receipt-pair">
+      {read !== null && (
+        <span>
+          {inputTokens
+            ? t('reader.inspectorCacheReadShare', {
+                read: formatNumber(read),
+                share: formatNumber(read / inputTokens, {
+                  style: 'percent',
+                  maximumFractionDigits: 0,
+                }),
+              })
+            : t('reader.inspectorCacheRead', { read: formatNumber(read) })}
+        </span>
+      )}
+      {write !== null && (
+        <span>{t('reader.inspectorCacheWrite', { write: formatNumber(write) })}</span>
+      )}
+    </span>
   );
 }
 
@@ -154,15 +273,12 @@ export function SceneReceipt({
     ...(summary
       ? [{ key: 'summary', label: t('reader.conversationSummary'), value: summary }]
       : []),
-    ...(cache
+    ...(cache && (cache.readTokens !== null || cache.writeTokens !== null)
       ? [
           {
             key: 'cache',
             label: t('reader.cache'),
-            value: t('reader.inspectorCache', {
-              read: amount(cache.readTokens),
-              write: amount(cache.writeTokens),
-            }),
+            value: <SceneCache cache={cache} inputTokens={usage?.inputTokens ?? null} />,
           },
         ]
       : []),

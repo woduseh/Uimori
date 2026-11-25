@@ -1,21 +1,23 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import {
   BookOpen,
   Check,
   Clock3,
   FileText,
   Image,
+  Info,
   Languages,
   Palette,
   PenLine,
   Settings2,
 } from 'lucide-react';
-import type {
-  HelperChange,
-  HelperStatus,
-  HelperTaskAttemptUsage,
-  HelperTaskResultTarget,
-  HelperTaskResultsView,
+import {
+  HELPER_COMPACTION_INPUT_RATIO,
+  type HelperChange,
+  type HelperStatus,
+  type HelperTaskAttemptUsage,
+  type HelperTaskResultTarget,
+  type HelperTaskResultsView,
 } from '../core/helper.js';
 import { api } from './api.js';
 import { watchLive } from './live-stream.js';
@@ -30,7 +32,11 @@ import {
 } from './HelperConfirmations.js';
 import { settingsLabels } from './helper-change-location.js';
 import { isStoryUiStyle } from '../core/story-ui-style.js';
+import { ContextBar, ContextLegend, ContextTable } from './ContextBreakdown.js';
+import { helperInputBreakdown } from './HelperContextUsage.js';
 import { formatNumber, t, useI18n } from './i18n.js';
+import { IconButton } from './IconButton.js';
+import { DropdownIcon } from './ui-icons.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { usageCompact, usageUsd } from './usage-display.js';
@@ -324,20 +330,41 @@ function ResultTarget({
   );
 }
 
-function UsageAmount({ amount, cost = false }: { amount: RecordedAmount; cost?: boolean }) {
+function UsageAmount({ amount }: { amount: RecordedAmount }) {
   return (
     <>
       <span>
         {amount.reported === 0 && amount.unknown > 0
           ? t('helperResults.unknown')
-          : cost
-            ? usageUsd(amount.value)
-            : formatNumber(amount.value)}
+          : formatNumber(amount.value)}
       </span>
       {amount.unknown > 0 && amount.reported > 0 && (
         <small>{t('helperResults.missingRequests', { count: formatNumber(amount.unknown) })}</small>
       )}
     </>
+  );
+}
+
+function UsageShare({
+  label,
+  part,
+  whole,
+}: {
+  label: 'helperResults.cachedShare' | 'helperResults.reasoningShare';
+  part: RecordedAmount;
+  whole: RecordedAmount;
+}) {
+  if (part.reported === 0 || part.value === 0) return null;
+  return (
+    <small>
+      {t(label, {
+        count: formatNumber(part.value),
+        share: formatNumber(whole.value > 0 ? part.value / whole.value : 0, {
+          style: 'percent',
+          maximumFractionDigits: 0,
+        }),
+      })}
+    </small>
   );
 }
 
@@ -380,8 +407,90 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
             {partial && <span>{t('helperResults.partialUsage')}</span>}
           </span>
         </summary>
-        <HelperTaskUsageRecord usage={usage} />
+        <div className="helper-usage-body">
+          <HelperTaskUsageRecord usage={usage} />
+        </div>
       </details>
+    </div>
+  );
+}
+
+function TaskContext({ usage }: { usage: HelperTaskResultsView['usage'] }) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const native = usage.latestInputExecution === 'codex-native';
+  const reported = usage.latestInputTokens ?? null;
+  const estimate = native ? null : usage.latestInputEstimate;
+  const limit = native ? null : (usage.latestInputLimit ?? null);
+  const threshold = limit ? Math.floor(limit * HELPER_COMPACTION_INPUT_RATIO) : null;
+  const parts = estimate === null ? null : (usage.latestInputParts ?? null);
+  const { rows, segments } = helperInputBreakdown(parts, estimate);
+  const unmeasured = (usage.unmeasuredFileCount ?? 0) > 0;
+  if (estimate === null && reported === null && !unmeasured) return null;
+  return (
+    <div className="helper-usage-context">
+      <p className="helper-usage-headline">
+        {estimate !== null ? (
+          <span>
+            {limit
+              ? t('helperResults.contextHeadline', {
+                  input: usageCompact(estimate),
+                  limit: usageCompact(limit),
+                })
+              : t('helperResults.contextHeadlineNoLimit', { input: usageCompact(estimate) })}
+          </span>
+        ) : unmeasured ? (
+          <span>{t('helperResults.contextUnmeasured')}</span>
+        ) : (
+          <span>{t('helperResults.contextExact', { count: formatNumber(reported!) })}</span>
+        )}
+        {estimate !== null && reported !== null && (
+          <small>{t('helperResults.contextReported', { count: formatNumber(reported) })}</small>
+        )}
+        {unmeasured && usage.knownInputEstimate != null && (
+          <small>
+            {t('helperConversation.measuredInput', {
+              count: formatNumber(usage.knownInputEstimate),
+            })}
+          </small>
+        )}
+        {unmeasured && (
+          <small>
+            {t('helperConversation.unmeasuredFiles', { count: usage.unmeasuredFileCount! })}
+          </small>
+        )}
+      </p>
+      {parts && estimate !== null && (
+        <>
+          {limit !== null && (
+            <ContextBar segments={segments} total={estimate} limit={limit} threshold={threshold} />
+          )}
+          <div className="context-breakdown-summary">
+            <ContextLegend segments={segments} />
+            <button
+              type="button"
+              className="scene-receipt-expand"
+              aria-expanded={open}
+              aria-controls={`${id}-parts`}
+              onClick={() => setOpen(!open)}
+            >
+              <DropdownIcon size={14} aria-hidden="true" />
+              {t(open ? 'contextBreakdown.hide' : 'contextBreakdown.show')}
+            </button>
+          </div>
+          {open && (
+            <div id={`${id}-parts`}>
+              <ContextTable
+                label={t('helperResults.contextTable')}
+                rows={rows}
+                total={estimate}
+                limit={limit}
+                threshold={threshold}
+              />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -389,113 +498,87 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
 export function HelperTaskUsageRecord({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   useI18n();
   const totals = helperTaskUsageTotals(usage.attempts);
-  const inputLimit = usage.latestInputLimit;
-  const inputEstimate = usage.latestInputEstimate;
-  const lastInput = usage.latestInputTokens ?? null;
-  const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
   const repeatedInput =
     usage.attempts.length > 1 ||
     totals.internalModelCalls.value > 1 ||
     totals.cachedInputTokens.value > 0;
+  const cost = totals.costUsd;
   return (
-    <>
-      <dl className="scene-receipt">
-        {lastInput !== null && (
-          <>
-            <dt>{t('helperResults.latestInput')}</dt>
-            <dd>{formatNumber(lastInput)}</dd>
-          </>
-        )}
-        {inputEstimate !== null && (
-          <>
-            <dt>{t('helperResults.latestEstimate')}</dt>
-            <dd>
-              {formatNumber(inputEstimate)}
-              {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
-              {hasInputBudget && (
-                <meter
-                  className="helper-input-budget"
-                  min={0}
-                  max={inputLimit}
-                  value={Math.min(inputEstimate, inputLimit)}
-                  aria-label={t('helperResults.inputBudgetMeter')}
-                  aria-valuetext={t('helperResults.inputBudgetValue', {
-                    input: formatNumber(inputEstimate),
-                    limit: formatNumber(inputLimit),
-                  })}
-                />
-              )}
-            </dd>
-          </>
-        )}
-        {(usage.unmeasuredFileCount ?? 0) > 0 && (
-          <>
-            <dt>{t('helperResults.latestEstimate')}</dt>
-            <dd>
-              {usage.knownInputEstimate != null && (
-                <span>
-                  {t('helperConversation.measuredInput', {
-                    count: formatNumber(usage.knownInputEstimate),
-                  })}
-                </span>
-              )}
+    <div className="helper-usage-record">
+      <TaskContext usage={usage} />
+      <dl className="helper-usage-rows">
+        <div data-row="calls">
+          <dt>{t('helperResults.runs')}</dt>
+          <dd>
+            <span>
+              {t('helperResults.modelCalls', { count: formatNumber(usage.attempts.length) })}
+            </span>
+            {usage.toolExecutions > 0 && (
               <span>
-                {t('helperConversation.unmeasuredFiles', {
-                  count: usage.unmeasuredFileCount!,
+                {t('helperResults.toolSummary', { count: formatNumber(usage.toolExecutions) })}
+              </span>
+            )}
+            {totals.internalModelCalls.reported > 0 && (
+              <span>
+                {t('helperResults.internalCallsShort', {
+                  count: formatNumber(totals.internalModelCalls.value),
                 })}
               </span>
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.executions')}</dt>
-        <dd>{formatNumber(usage.attempts.length)}</dd>
-        {usage.toolExecutions > 0 && (
-          <>
-            <dt>{t('helperResults.tools')}</dt>
-            <dd>{formatNumber(usage.toolExecutions)}</dd>
-          </>
-        )}
-        {totals.internalModelCalls.reported > 0 && (
-          <>
-            <dt>{t('helperResults.internalCalls')}</dt>
+            )}
+          </dd>
+        </div>
+        <div data-row="input">
+          <dt>
+            <span>{t('helperResults.cumulativeInput')}</span>
+            {repeatedInput && (
+              <IconButton
+                className="helper-usage-help"
+                icon={Info}
+                size={14}
+                label={t('helperResults.cumulativeHelp')}
+                title={t('helperResults.cumulativeExplanation')}
+              />
+            )}
+          </dt>
+          <dd>
+            <UsageAmount amount={totals.inputTokens} />
+            <UsageShare
+              label="helperResults.cachedShare"
+              part={totals.cachedInputTokens}
+              whole={totals.inputTokens}
+            />
+          </dd>
+        </div>
+        <div data-row="output">
+          <dt>{t('helperResults.cumulativeOutput')}</dt>
+          <dd>
+            <UsageAmount amount={totals.outputTokens} />
+            <UsageShare
+              label="helperResults.reasoningShare"
+              part={totals.reasoningTokens}
+              whole={totals.outputTokens}
+            />
+          </dd>
+        </div>
+        {cost.reported > 0 && (
+          <div data-row="cost">
+            <dt>{t('helperResults.costShort')}</dt>
             <dd>
-              <UsageAmount amount={totals.internalModelCalls} />
+              <span>
+                {cost.unknown > 0
+                  ? t('reader.inspectorCostAtLeast', { value: usageUsd(cost.value) })
+                  : usageUsd(cost.value)}
+              </span>
+              {cost.unknown > 0 && (
+                <small>
+                  {t('helperResults.missingRequests', { count: formatNumber(cost.unknown) })}
+                </small>
+              )}
             </dd>
-          </>
+          </div>
         )}
-        <dt>{t('helperResults.input')}</dt>
-        <dd>
-          <UsageAmount amount={totals.inputTokens} />
-        </dd>
-        {totals.cachedInputTokens.reported > 0 && (
-          <>
-            <dt>{t('helperResults.cached')}</dt>
-            <dd>
-              <UsageAmount amount={totals.cachedInputTokens} />
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.output')}</dt>
-        <dd>
-          <UsageAmount amount={totals.outputTokens} />
-        </dd>
-        {totals.reasoningTokens.reported > 0 && (
-          <>
-            <dt>{t('helperResults.reasoning')}</dt>
-            <dd>
-              <UsageAmount amount={totals.reasoningTokens} />
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.cost')}</dt>
-        <dd>
-          <UsageAmount amount={totals.costUsd} cost />
-        </dd>
       </dl>
-      {repeatedInput && (
-        <p className="helper-usage-note">{t('helperResults.cumulativeExplanation')}</p>
-      )}
-    </>
+    </div>
   );
 }
 

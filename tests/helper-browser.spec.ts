@@ -2096,7 +2096,7 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
     await expect(steps.nth(2)).toContainText('SYNTHETIC_TOOL_FAILURE');
     await expect(sections.locator('.task-history-timeline code')).toHaveCount(0);
     await expect(sections.locator('.task-history-timeline')).not.toContainText('resource.read');
-    await expect(sections.locator('.scene-receipt')).toContainText('확인된 비용');
+    await expect(sections.locator('.helper-usage-rows [data-row="cost"]')).toContainText('비용');
     await expect(sections.locator('.task-history-raw')).toHaveCount(0);
     await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
     await expect(sections.locator('.task-history-raw')).toContainText('"activity"');

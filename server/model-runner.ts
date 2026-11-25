@@ -32,6 +32,7 @@ import {
 import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 import { requestLore } from './request-lore.js';
+import { mainContextParts } from './context-parts.js';
 import { requestReceipt } from './request-receipt.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 
@@ -563,16 +564,25 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
       onWire: async (wire, resumeAttemptId) => {
         const tokenizeStarted = performance.now();
+        const estimatedInputTokens =
+          !wire.requestContext && request.contextBudget
+            ? estimateContextTokens(wire.body, request.contextBudget)
+            : 0;
+        const parts =
+          !wire.requestContext && request.contextBudget
+            ? mainContextParts(fixed, request, estimatedInputTokens)
+            : undefined;
         const requestContext =
           wire.requestContext ??
           (request.contextBudget && {
-            estimatedInputTokens: estimateContextTokens(wire.body, request.contextBudget),
+            estimatedInputTokens,
             inputTokenLimit: request.contextBudget.inputTokenLimit,
             estimator: request.contextBudget.estimator,
             ...(request.contextBudget.estimator === 'model-local-v1' && {
               tokenizer: request.contextBudget.tokenizer,
               tokenizerFallback: tokenizerInfo(request.contextBudget.tokenizer).fallback,
             }),
+            ...(parts && { parts }),
           });
         if (requestContext && !wire.requestContext)
           hooks.onPhaseSpan?.('preflightTokenize', performance.now() - tokenizeStarted);

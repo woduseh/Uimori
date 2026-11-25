@@ -1,6 +1,8 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
-import type { HelperTaskAttemptUsage } from '../core/helper.js';
-import { helperTaskUsageTotals } from '../web/HelperTaskResults.js';
+import type { HelperTaskAttemptUsage, HelperTaskResultsView } from '../core/helper.js';
+import { HelperTaskUsageRecord, helperTaskUsageTotals } from '../web/HelperTaskResults.js';
 import { helperChangeLocationParts } from '../web/helper-change-location.js';
 
 const attempt = (overrides: Partial<HelperTaskAttemptUsage>): HelperTaskAttemptUsage => ({
@@ -62,4 +64,69 @@ test('package settings a helper change names read as the editor sections that ho
     '기본 정보',
     '제작 정보',
   ]);
+});
+
+const record = (usage: Partial<HelperTaskResultsView['usage']>) =>
+  renderToStaticMarkup(
+    createElement(HelperTaskUsageRecord, {
+      usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null, ...usage },
+    })
+  );
+
+test('the usage record shows cumulative shares and hides an unknown cost', () => {
+  const html = record({
+    attempts: [
+      attempt({ inputTokens: 1000, outputTokens: 90, cachedInputTokens: 600, reasoningTokens: 30 }),
+    ],
+    toolExecutions: 2,
+  });
+  expect(html).toContain('모델 1회');
+  expect(html).toContain('도구 2회');
+  expect(html).toContain('(캐시 600, 60%)');
+  expect(html).toContain('(추론 30, 33%)');
+  expect(html).not.toContain('data-row="cost"');
+  expect(html).not.toContain('미확인');
+});
+
+test('a partly priced task reads as a lower bound with its unpriced calls', () => {
+  const html = record({
+    attempts: [attempt({ inputTokens: 10, outputTokens: 5, costUsd: 0.02 }), attempt({})],
+  });
+  expect(html).toContain('data-row="cost"');
+  expect(html).toContain('US$0.02 이상');
+  expect(html).toContain('미확인 1회');
+});
+
+test('the latest request context shows its parts against the budget', () => {
+  const html = record({
+    latestInputEstimate: 1000,
+    latestInputTokens: 980,
+    latestInputLimit: 4000,
+    latestInputExecution: 'provider-tool-loop',
+    latestInputParts: {
+      instructions: 100,
+      toolSchemas: 200,
+      history: 500,
+      source: null,
+      toolResults: null,
+    },
+  });
+  expect(html).toContain('마지막 요청 컨텍스트 약 1,000 / 4,000');
+  expect(html).toContain('보고된 입력 980');
+  expect(html.match(/class="context-breakdown-segment"/g)).toHaveLength(4);
+  expect(html).toContain('data-part="other"');
+  expect(html).toContain('구분 보기');
+});
+
+test('a native Codex task reports its exact input without a bar', () => {
+  const html = record({
+    latestInputEstimate: 1000,
+    latestInputTokens: 90_040,
+    latestInputLimit: 4000,
+    latestInputExecution: 'codex-native',
+    latestInputParts: null,
+  });
+  expect(html).toContain('마지막 요청 입력 90,040');
+  expect(html).not.toContain('context-breakdown-bar');
+  expect(html).not.toContain('약 1,000');
 });

@@ -163,8 +163,8 @@ async function seed(
   }
 }
 
-const usageValue = (results: Locator, label: string) =>
-  results.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]');
+const usageValue = (results: Locator, row: string) =>
+  results.locator(`.helper-usage-rows [data-row="${row}"] dd`);
 
 test('HRESULT-STORYUI setting results identify changes and open generation settings', async ({
   page,
@@ -621,8 +621,13 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   await expect(results.locator('.helper-result-note')).toHaveCount(0);
   await expect(results.locator('.helper-result-list > li')).toHaveCount(0);
   await results.locator('summary').click();
-  await expect(usageValue(results, '모델 실행 요청')).toHaveText('1');
-  await expect(usageValue(results, '확인된 비용')).toHaveText('미확인');
+  await expect(usageValue(results, 'calls')).toHaveText('모델 1회');
+  await expect(results.locator('.helper-usage-rows dt')).toHaveText([
+    '실행',
+    '누적 입력',
+    '누적 출력',
+  ]);
+  await expect(results.locator('.helper-usage-rows [data-row="cost"]')).toHaveCount(0);
 });
 
 test('HRESULT02 actual results retain partial usage and recover from refresh/open failures', async ({
@@ -750,30 +755,25 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   await expect(results.locator('summary')).toContainText('도구 7회');
   await expect(results.locator('summary')).toContainText('일부 미확인');
   await results.locator('summary').click();
-  await expect(usageValue(results, '모델 실행 요청')).toHaveText('2');
-  await expect(usageValue(results, '도구 실행')).toHaveText('7');
-  await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');
-  await expect(usageValue(results, '입력 중 캐시 토큰')).toHaveText('600미확인 1회');
-  await expect(usageValue(results, '누적 출력 토큰')).toHaveText('90미확인 1회');
-  await expect(usageValue(results, '출력 중 추론 토큰')).toHaveText('30미확인 1회');
-  await expect(usageValue(results, '확인된 비용')).toHaveText('US$0.02미확인 1회');
-  await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850');
-  await expect(results).not.toContainText('%');
+  await expect(usageValue(results, 'calls')).toHaveText('모델 2회도구 7회내부 호출 2회');
+  await expect(usageValue(results, 'input')).toHaveText('1,000미확인 1회(캐시 600, 60%)');
+  await expect(usageValue(results, 'output')).toHaveText('90미확인 1회(추론 30, 33%)');
+  await expect(usageValue(results, 'cost')).toHaveText('US$0.02 이상미확인 1회');
+  await expect(results.locator('.helper-usage-headline')).toHaveText('마지막 요청 컨텍스트 약 850');
+  await expect(results.getByRole('button', { name: '누적 입력 설명', exact: true })).toBeVisible();
+  await expect(results.locator('.context-breakdown-bar')).toHaveCount(0);
   await expect(results.getByRole('meter')).toHaveCount(0);
   projection.usage.latestInputLimit = 1000;
   await taskFrame();
-  const inputMeter = results.getByRole('meter', {
-    name: '입력 예산 대비 마지막 전송 입력 추정치',
-  });
-  await expect(inputMeter).toHaveAttribute('max', '1000');
-  await expect(inputMeter).toHaveAttribute('value', '850');
-  await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850 / 1,000');
-  await expect(inputMeter).toHaveAttribute('aria-valuetext', '입력 예산 1,000 토큰 중 약 850 토큰');
+  await expect(results.locator('.helper-usage-headline')).toHaveText(
+    '마지막 요청 컨텍스트 약 850 / 1,000'
+  );
+  await expect(results.locator('.context-breakdown-bar')).toHaveCount(0);
   refreshFails = true;
   await taskFrame();
   await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');
   await expect(saved).toBeVisible();
-  await expect(usageValue(results, '누적 입력 토큰')).toHaveText('1,000미확인 1회');
+  await expect(usageValue(results, 'input')).toHaveText('1,000미확인 1회(캐시 600, 60%)');
   const beforeRetry = reads;
   refreshFails = false;
   await results.getByRole('button', { name: '다시 불러오기', exact: true }).click();
@@ -1420,6 +1420,150 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   await expect(landing).not.toHaveClass(/arrival-mark/, { timeout: 5000 });
 });
 
+test('HRESULT03 the usage record splits the last request context and keeps short rows on one line', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, task } = await seed(request);
+  const usage: HelperTaskResultsView['usage'] = {
+    toolExecutions: 4,
+    latestInputEstimate: 48_000,
+    latestInputTokens: 46_310,
+    latestInputLimit: 128_000,
+    latestInputExecution: 'provider-tool-loop',
+    latestInputParts: {
+      instructions: 5_200,
+      toolSchemas: 13_800,
+      history: 21_000,
+      source: 6_000,
+      toolResults: null,
+    },
+    attempts: [
+      {
+        id: 'first',
+        purpose: 'helper',
+        status: 'completed',
+        inputTokens: 40_000,
+        outputTokens: 1_200,
+        cachedInputTokens: 30_000,
+        reasoningTokens: 400,
+        costUsd: null,
+        internalModelCalls: null,
+      },
+      {
+        id: 'second',
+        purpose: 'helper',
+        status: 'completed',
+        inputTokens: 46_310,
+        outputTokens: 800,
+        cachedInputTokens: 38_000,
+        reasoningTokens: 200,
+        costUsd: null,
+        internalModelCalls: null,
+      },
+    ],
+  };
+  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+    route.fulfill({
+      json: {
+        taskId: task.id,
+        status: 'completed',
+        results: [],
+        changes: [],
+        confirmations: [],
+        unrecordedOperations: 0,
+        usage,
+      } satisfies HelperTaskResultsView,
+    })
+  );
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const answer = page.locator(`.helper-message.assistant[data-task-id="${task.id}"]`);
+    const results = answer.getByTestId('helper-task-results');
+    const summary = results.locator('.helper-result-usage > details > summary');
+    const duration = answer.locator('.helper-task > .turn-activity > summary');
+    await expect(summary).toContainText('마지막 입력 46.31K');
+    if (width === 1440)
+      expect(
+        Math.abs((await summary.boundingBox())!.y - (await duration.boundingBox())!.y)
+      ).toBeLessThan(4);
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await answer.screenshot({
+        path: info.outputPath(`helper-usage-collapsed-${width}-${colorScheme}.png`),
+      });
+    }
+    await summary.click();
+    await expect(results.locator('.helper-usage-headline')).toHaveText(
+      '마지막 요청 컨텍스트 약 48K / 128K보고된 입력 46,310'
+    );
+    expect(
+      await results
+        .locator('.context-breakdown-bar .context-breakdown-segment')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-part')))
+    ).toEqual(['instructions', 'toolSchemas', 'history', 'source', 'other']);
+    await expect(results.locator('.context-breakdown-legend > li')).toHaveText([
+      '지시문5,200',
+      '도구 설명13.8K',
+      '대화21K',
+      '원문과 자료6,000',
+      '기타2,000',
+    ]);
+    await expect(usageValue(results, 'calls')).toHaveText('모델 2회도구 4회');
+    await expect(usageValue(results, 'input')).toHaveText('86,310(캐시 68,000, 79%)');
+    await expect(usageValue(results, 'output')).toHaveText('2,000(추론 600, 30%)');
+    await expect(results.locator('.helper-usage-rows [data-row="cost"]')).toHaveCount(0);
+    for (const term of await results.locator('.helper-usage-rows dt').all()) {
+      const box = (await term.boundingBox())!;
+      expect(box.height).toBeLessThan(30);
+    }
+    await expect(results.getByText('누적 입력은 각 요청에', { exact: false })).toBeHidden();
+    await results.getByRole('button', { name: '구분 보기', exact: true }).click();
+    const table = results.getByRole('table', { name: '마지막 요청 컨텍스트 구분', exact: true });
+    for (const [label, value, share] of [
+      ['대화', '21,000', '16.4%'],
+      ['도구 결과', '미확인', ''],
+      ['기타', '2,000', '1.6%'],
+      ['합계 (추정)', '48,000', '37.5%'],
+      ['남은 여유', '80,000', '62.5%'],
+      ['자동 정리 기준', '108,800', '85%'],
+    ])
+      await expect(
+        table
+          .getByRole('row')
+          .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
+          .getByRole('cell')
+      ).toHaveText([value, share]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      await answer.screenshot({
+        path: info.outputPath(`helper-usage-expanded-${width}-${colorScheme}.png`),
+      });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+  usage.latestInputExecution = 'codex-native';
+  usage.latestInputParts = null;
+  usage.latestInputTokens = 90_040;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const results = page
+    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+    .getByTestId('helper-task-results');
+  await results.locator('.helper-result-usage > details > summary').click();
+  await expect(results.locator('.helper-usage-headline')).toHaveText('마지막 요청 입력 90,040');
+  await expect(results.locator('.context-breakdown-bar')).toHaveCount(0);
+  await expect(results.getByRole('button', { name: '구분 보기', exact: true })).toHaveCount(0);
+});
+
 test('HUSAGE01 the composer shows the latest context estimate, its parts and the compaction mark', async ({
   page,
   request,
@@ -1470,17 +1614,17 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
     );
     await expect(meter.locator('[data-level="near"]')).toHaveCount(1);
     const parts = ['instructions', 'toolSchemas', 'history', 'source', 'other'];
-    await expect(meter.locator('.helper-context-usage-segment')).toHaveCount(parts.length);
+    await expect(meter.locator('.context-breakdown-segment')).toHaveCount(parts.length);
     await meter.click();
     const body = helper.locator('.helper-context-usage-body').filter({ visible: true });
     await expect(body.locator('.helper-context-usage-headline')).toHaveText(
       '약 240K / 272K 토큰88.2%'
     );
-    const bar = body.locator('.helper-context-usage-bar');
+    const bar = body.locator('.context-breakdown-bar');
     await expect(bar).toHaveAttribute('aria-hidden', 'true');
     expect(
       await bar
-        .locator('.helper-context-usage-segment')
+        .locator('.context-breakdown-segment')
         .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-part')))
     ).toEqual(parts);
     const table = body.getByRole('table', { name: '컨텍스트 사용량' });
@@ -1532,12 +1676,12 @@ test('HUSAGE01 the composer shows the latest context estimate, its parts and the
   await openHelper(page);
   const native = page.locator('#helper-panel .helper-context-usage > summary');
   await expect(native).not.toContainText('약');
-  await expect(native.locator('.helper-context-usage-bar')).toHaveCount(0);
+  await expect(native.locator('.context-breakdown-bar')).toHaveCount(0);
   await native.click();
   const nativeBody = page
     .locator('#helper-panel .helper-context-usage-body')
     .filter({ visible: true });
-  await expect(nativeBody.locator('.helper-context-usage-bar')).toHaveCount(0);
+  await expect(nativeBody.locator('.context-breakdown-bar')).toHaveCount(0);
   await expect(
     nativeBody
       .getByRole('row')
