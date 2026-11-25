@@ -1984,7 +1984,8 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
   const fullRequest = `  첫 문장의 공백도 유지해 주세요.\n\n${'긴 한국어 요청을 접어 두고 필요한 부분을 확인해요. '.repeat(30)}\n마지막 줄의 공백도 유지해 주세요.  `;
   failed.request = fullRequest;
   failed.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
-  failed.usage = { modelCalls: 2, inputTokens: 1200, outputTokens: 300, costUsd: 0.012 };
+  failed.usage = { modelCalls: 2, inputTokens: 1200, outputTokens: 300, costUsd: null };
+  failed.estimatedCost = { usd: 0.0123, subtotalUsd: 0.0123, unknownCount: 0, attemptCount: 1 };
   state.results.set(failed.id, {
     results: [
       {
@@ -2000,14 +2001,24 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
       attempts: [
         {
           id: 'history-attempt',
+          kind: 'helper',
+          owner: 'helper',
+          sceneRunId: null,
           purpose: 'helper',
+          modelId: 'synthetic-helper',
           status: 'completed',
+          startedAt: null,
+          elapsedMs: 2400,
+          firstByteMs: null,
           inputTokens: 1200,
           outputTokens: 300,
-          costUsd: 0.012,
+          costUsd: null,
+          estimatedUsd: 0.0123,
+          estimatedSubtotalUsd: 0.0123,
           cachedInputTokens: null,
           reasoningTokens: null,
           internalModelCalls: null,
+          tools: [],
         },
       ],
       toolExecutions: 3,
@@ -2045,7 +2056,7 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
     await expect(history.locator('.task-history-summary dt')).toHaveText([
       '작업',
       '토큰',
-      '확인된 비용',
+      '추정 비용',
     ]);
     const record = history.locator(`[data-task-id="${failed.id}"]`);
     const requestText = record.locator('.task-request');
@@ -2062,7 +2073,7 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
     await expect(meta).toContainText('예약 당시 도우미 모델');
     await expect(meta).toContainText('실행 요청 2회');
     await expect(meta).toContainText('1,500 토큰');
-    await expect(meta).toContainText('US$0.01');
+    await expect(meta).toContainText('$0.0123');
     await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
     await expect(
       record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })
@@ -2089,25 +2100,41 @@ test('HELPHISTORY task history rows show status, usage and one level of sections
     const sections = record.locator('.task-history-detail');
     await expect(sections.locator('.task-history-section-head > h3')).toHaveText([
       '결과와 변경',
-      '단계',
       '호출과 비용',
-      '원본 기록',
+      '실행 흐름',
     ]);
-    await expect(sections.locator('details')).toHaveCount(0);
+    await expect(sections.locator('details')).toHaveCount(1);
     await expect(sections.getByText('등대지기 미라').first()).toBeVisible();
     const steps = sections.locator('.task-history-timeline > li');
     await expect(steps).toHaveCount(3);
-    await expect(steps.nth(0)).toContainText('도구 사용을 요청했어요');
+    await expect(steps.nth(0)).toContainText('모델 호출 1');
+    await expect(steps.nth(0)).not.toContainText('도구 사용을 요청했어요');
     await expect(steps.nth(1)).toContainText('자료 확인');
     await expect(steps.nth(1)).toContainText('장면 1개');
     await expect(steps.nth(1)).toContainText('등대의 밤');
+    await expect(steps.nth(1).locator('code')).toHaveText(['scene.read', 'resource.read']);
     await expect(steps.nth(2)).toHaveAttribute('data-tone', 'issue');
+    await expect(steps.nth(2)).toContainText('자료 및 설정 변경');
+    await expect(steps.nth(2).locator('code')).toHaveText('resource.patch');
     await expect(steps.nth(2)).toContainText('SYNTHETIC_TOOL_FAILURE');
-    await expect(sections.locator('.task-history-timeline code')).toHaveCount(0);
-    await expect(sections.locator('.task-history-timeline')).not.toContainText('resource.read');
-    await expect(sections.locator('.helper-usage-rows [data-row="cost"]')).toContainText('비용');
+    await expect(sections.locator('.trace-summary [data-row="cost"]')).toContainText(
+      '추정 비용$0.0123'
+    );
+    const calls = sections.getByTestId('helper-call-list');
+    await expect(calls.locator(':scope > summary')).toHaveText('호출별 내역 (1회)');
+    await calls.locator(':scope > summary').click();
+    await expect(calls.getByRole('row', { name: /도우미/ })).toContainText('2.4초');
+    if (process.env.UIMORI_TRACE_SHOTS) {
+      await page.emulateMedia({ colorScheme: width === MOBILE_WIDTH ? 'light' : 'dark' });
+      await record.scrollIntoViewIfNeeded();
+      await page.screenshot({
+        path: `${process.env.UIMORI_TRACE_SHOTS}/helper-record-${width}.png`,
+      });
+      await page.emulateMedia({ colorScheme: null });
+    }
     await expect(sections.locator('.task-history-raw')).toHaveCount(0);
-    await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
+    await expect(sections.locator('.trace-footer code')).toHaveText(failed.id);
+    await sections.getByRole('button', { name: '원본 JSON 보기', exact: true }).click();
     await expect(sections.locator('.task-history-raw')).toContainText('"activity"');
     await expect(sections.locator('.task-history-raw')).toContainText('resource.patch');
     await sections.getByRole('button', { name: '복사', exact: true }).click();
@@ -2556,7 +2583,7 @@ test('HROLLBACK01 a whole-task rollback restores what it can and names what it l
         results.locator('.helper-change', { hasText: '서윤' }).locator('.helper-rollback-status')
       ).toHaveText('작업 뒤에 바뀌어서 되돌릴 수 없어요.');
       await expect(
-        results.getByText('설정, 채팅 전용 로어, 장면 이름 변경은 되돌리기 대상이 아니에요.')
+        results.getByText('설정 변경은 되돌리기 대상이 아니에요.', { exact: true })
       ).toHaveCount(1);
       await expect(results.locator('.helper-rollback-unit')).toHaveCount(2);
       await results.getByRole('button', { name: '모두 되돌리기', exact: true }).click();

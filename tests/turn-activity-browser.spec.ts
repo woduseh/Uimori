@@ -378,10 +378,12 @@ for (const width of [MOBILE_WIDTH]) {
     await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await expect(sections).toBeHidden();
-    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toHaveCount(
-      0
-    );
-    await expect(task.getByTestId('scene-usage')).toHaveCount(0);
+    await expect(
+      task
+        .locator('.task-history-row-actions')
+        .getByRole('button', { name: '새 채팅으로 분기', exact: true })
+    ).toBeVisible();
+    await expect(task.getByTestId('scene-receipt')).toHaveCount(0);
     await expect(task.getByTestId('context-summary')).toHaveCount(0);
     expect(sceneReads).toEqual([]);
     expect(state.runReads).toEqual([]);
@@ -392,33 +394,26 @@ for (const width of [MOBILE_WIDTH]) {
     await expect(collapse).toHaveAttribute('aria-expanded', 'true');
     await expect(task.locator('.task-request')).not.toHaveAttribute('data-clamped');
     await expect(sections.locator('.task-history-section-head > h3')).toHaveText([
-      '결과',
-      '단계',
       '호출과 비용',
-      '원본 기록',
+      '실행 흐름',
     ]);
     await expect(sections.locator('details details')).toHaveCount(0);
-    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
     await expect(sections.getByTestId('context-summary')).toHaveText(
       '앞선 원문 3개 요약, 입력 약 1,200 / 65,536 토큰, 요약 1회'
     );
-    const usage = sections.getByTestId('scene-usage');
-    await expect(usage).not.toHaveAttribute('open');
-    expect(sceneReads).toEqual([]);
-    await usage.locator(':scope > summary').click();
-    await expect(usage.getByText(/요청 1,234, 응답 87 토큰/)).toBeVisible();
-    await expect(usage.getByText(/컨텍스트 사용량 1.9%/)).toBeVisible();
+    const usage = sections.getByTestId('scene-receipt');
     await expect(usage.getByText('컨텍스트 1.9% (1,234 / 65,536)', { exact: true })).toBeVisible();
     await expect(usage.locator('[data-row="cache"] dd')).toHaveText('읽기 123 (10%)쓰기 45');
     expect(sceneReads).toHaveLength(1);
     await expect(sections.locator('.task-history-raw')).toHaveCount(0);
-    await sections.getByRole('button', { name: '원본 보기', exact: true }).click();
+    await expect(sections.locator('.trace-footer code')).toHaveText(run.id);
+    await sections.getByRole('button', { name: '원본 JSON 보기', exact: true }).click();
     await expect(sections.locator('.task-history-raw')).toContainText('snapshot');
     await expect(sections.getByRole('button', { name: '복사', exact: true })).toBeVisible();
     expect(state.runReads).toHaveLength(1);
-    const attempts = sections.getByRole('table', { name: '호출 목록', exact: true });
+    const attempts = sections.getByRole('table', { name: '실행 흐름', exact: true });
     const attemptRow = attempts.locator('tbody > tr').first();
-    await expect(attempts.getByRole('rowheader').first()).toHaveText('본문');
+    await expect(attempts.getByRole('rowheader').first()).toContainText('본문');
     await expect(attemptRow.getByRole('cell').first()).toBeVisible();
     expect(
       await attempts.locator('thead').evaluate((node) => node.getBoundingClientRect().width <= 1)
@@ -426,9 +421,9 @@ for (const width of [MOBILE_WIDTH]) {
     expect(
       await attemptRow
         .locator('td[data-label]')
-        .first()
+        .nth(1)
         .evaluate((node) => getComputedStyle(node, '::before').content)
-    ).toContain('모델');
+    ).toContain('입력');
     expect(
       await attemptRow
         .getByRole('rowheader')
@@ -440,7 +435,7 @@ for (const width of [MOBILE_WIDTH]) {
     ).toBe(true);
     expect(
       await sections
-        .locator('.attempt-list .table-scroll')
+        .locator('.trace-calls')
         .evaluate((node) => node.scrollWidth <= node.clientWidth + 1)
     ).toBe(true);
     if (visualReview)
@@ -516,7 +511,7 @@ for (const width of [MOBILE_WIDTH]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    expect(sceneReads).toHaveLength(1);
+    expect(sceneReads).toHaveLength(2);
     expect(state.runReads).toHaveLength(2);
     expect(state.writes).toEqual([]);
     expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);

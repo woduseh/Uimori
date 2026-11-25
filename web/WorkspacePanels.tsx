@@ -328,7 +328,7 @@ export function TasksPanel({
         label={t('chatsettings.m13')}
         errorLabel={t('chatsettings.m14')}
       />
-      {allRuns && allRuns.length > 0 && (
+      {allRuns && (
         <ChatUsage key={detail.chat.id} chatId={detail.chat.id} revision={detail.reader.cursor} />
       )}
     </section>

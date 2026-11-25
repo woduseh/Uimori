@@ -163,8 +163,20 @@ async function seed(
   }
 }
 
+const traceDefaults = {
+  kind: 'helper' as const,
+  owner: 'helper' as const,
+  sceneRunId: null,
+  modelId: 'fixture-helper',
+  startedAt: null,
+  elapsedMs: null,
+  firstByteMs: null,
+  estimatedUsd: null,
+  estimatedSubtotalUsd: 0,
+  tools: [],
+};
 const usageValue = (results: Locator, row: string) =>
-  results.locator(`.helper-usage-rows [data-row="${row}"] dd`);
+  results.locator(`.trace-summary [data-row="${row}"] dd`);
 
 test('HRESULT-STORYUI setting results identify changes and open generation settings', async ({
   page,
@@ -622,12 +634,8 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   await expect(results.locator('.helper-result-list > li')).toHaveCount(0);
   await results.locator('summary').click();
   await expect(usageValue(results, 'calls')).toHaveText('모델 1회');
-  await expect(results.locator('.helper-usage-rows dt')).toHaveText([
-    '실행',
-    '누적 입력',
-    '누적 출력',
-  ]);
-  await expect(results.locator('.helper-usage-rows [data-row="cost"]')).toHaveCount(0);
+  await expect(results.locator('.trace-summary dt')).toHaveText(['실행', '누적 입력', '누적 출력']);
+  await expect(results.locator('.trace-summary [data-row="cost"]')).toHaveCount(0);
 });
 
 test('HRESULT02 actual results retain partial usage and recover from refresh/open failures', async ({
@@ -703,6 +711,8 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
       attempts: [
         {
           id: 'known',
+          ...traceDefaults,
+          ...traceDefaults,
           purpose: 'helper',
           status: 'completed',
           inputTokens: 1000,
@@ -714,6 +724,8 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
         },
         {
           id: 'unknown',
+          ...traceDefaults,
+          ...traceDefaults,
           purpose: 'helper',
           status: 'error',
           inputTokens: null,
@@ -758,7 +770,7 @@ test('HRESULT02 actual results retain partial usage and recover from refresh/ope
   await expect(usageValue(results, 'calls')).toHaveText('모델 2회도구 7회내부 호출 2회');
   await expect(usageValue(results, 'input')).toHaveText('1,000미확인 1회(캐시 600, 60%)');
   await expect(usageValue(results, 'output')).toHaveText('90미확인 1회(추론 30, 33%)');
-  await expect(usageValue(results, 'cost')).toHaveText('US$0.02 이상미확인 1회');
+  await expect(usageValue(results, 'cost')).toHaveText('$0.02 이상미확인 1회');
   await expect(results.locator('.helper-usage-headline')).toHaveText('마지막 요청 컨텍스트 약 850');
   await expect(results.getByRole('button', { name: '누적 입력 설명', exact: true })).toBeVisible();
   await expect(results.locator('.context-breakdown-bar')).toHaveCount(0);
@@ -1441,6 +1453,7 @@ test('HRESULT03 the usage record splits the last request context and keeps short
     attempts: [
       {
         id: 'first',
+        ...traceDefaults,
         purpose: 'helper',
         status: 'completed',
         inputTokens: 40_000,
@@ -1452,6 +1465,7 @@ test('HRESULT03 the usage record splits the last request context and keeps short
       },
       {
         id: 'second',
+        ...traceDefaults,
         purpose: 'helper',
         status: 'completed',
         inputTokens: 46_310,
@@ -1517,8 +1531,8 @@ test('HRESULT03 the usage record splits the last request context and keeps short
     await expect(usageValue(results, 'calls')).toHaveText('모델 2회도구 4회');
     await expect(usageValue(results, 'input')).toHaveText('86,310(캐시 68,000, 79%)');
     await expect(usageValue(results, 'output')).toHaveText('2,000(추론 600, 30%)');
-    await expect(results.locator('.helper-usage-rows [data-row="cost"]')).toHaveCount(0);
-    for (const term of await results.locator('.helper-usage-rows dt').all()) {
+    await expect(results.locator('.trace-summary [data-row="cost"]')).toHaveCount(0);
+    for (const term of await results.locator('.trace-summary dt').all()) {
       const box = (await term.boundingBox())!;
       expect(box.height).toBeLessThan(30);
     }

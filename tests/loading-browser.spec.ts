@@ -99,10 +99,10 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
   await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
   await panel.getByRole('button', { name: '작업 목록 다시 불러오기', exact: true }).click();
   await expect(panel.getByTestId('run')).toHaveCount(8);
-  await panel.locator('summary').filter({ hasText: '전체 역할의 호출과 비용' }).click();
+  await panel.locator('summary').filter({ hasText: '이 채팅 전체 누적 사용량' }).click();
   await expect(
-    panel.getByText('보관된 본문 생성 기록 8개, 완료 8개, 거절 0개, 부분 생성 0개')
-  ).toBeVisible();
+    panel.getByRole('table', { name: '역할별 합계', exact: true }).getByRole('rowheader')
+  ).toContainText(['본문']);
   const task = panel.locator(`[data-testid="run"][data-run-id="${target.runId}"]`);
   await task.getByRole('button', { name: '원고 읽기', exact: true }).click();
   await expect(panel).toHaveCount(0);
