@@ -37,6 +37,7 @@ import { NativeCollectionEditor } from './NativeCollectionEditor.js';
 import { NativeRisuLoreEditor } from './NativeRisuLoreEditor.js';
 import { NativeRisuAssetsEditor } from './NativeRisuAssetsEditor.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
+import { StudioPanel } from './EditorStudio.js';
 import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
 import { IconButton } from './IconButton.js';
 import { CodeIcon } from './ui-icons.js';
@@ -270,13 +271,6 @@ export function RisuNativeFields({
   const description = string(standalone ? native.module?.description : native.card.description);
   const creator = string(native.card.creator);
   const version = string(native.card.character_version);
-  const panel = (key: Section) => ({
-    id: id + '-' + key + '-panel',
-    role: 'tabpanel' as const,
-    'aria-labelledby': id + '-' + key + '-tab',
-    'data-studio-section': key,
-    hidden: section !== key,
-  });
   const rawEditor = section === 'source' && (
     <div className="native-source-editor">
       <p className="muted">
@@ -347,7 +341,7 @@ export function RisuNativeFields({
         </p>
       )}
       <fieldset disabled={!!draft} className="native-panel-fields">
-        <div {...panel('translation')} className="native-section-body">
+        <StudioPanel section="translation" className="native-section-body">
           <TranslationGuideEditor
             value={readTranslationGuide(standalone ? native.module! : native.card)}
             onChange={(guide) =>
@@ -359,8 +353,8 @@ export function RisuNativeFields({
               })
             }
           />
-        </div>
-        <div {...panel('appearances')} className="native-section-body">
+        </StudioPanel>
+        <StudioPanel section="appearances" className="native-section-body">
           <IllustrationAppearanceEditor
             key={value.id}
             images={value.images ?? []}
@@ -374,8 +368,8 @@ export function RisuNativeFields({
               })
             }
           />
-        </div>
-        <div {...panel('basic')} className="native-section-body native-basic-body">
+        </StudioPanel>
+        <StudioPanel section="basic" className="native-section-body native-basic-body">
           <PackagePortraitEditor value={value} onChange={onChange} onDirtyChange={setPortraitBusy}>
             <label>
               {t('native.text_9aa18e5071')}
@@ -442,9 +436,9 @@ export function RisuNativeFields({
               </div>
             </details>
           )}
-        </div>
+        </StudioPanel>
         {!standalone && (
-          <div {...panel('greetings')} className="native-panes">
+          <StudioPanel section="greetings" className="native-panes">
             <NativeCollectionEditor
               label={t('native.text_be7723bd53')}
               items={greetings.map((message, i) => ({
@@ -500,9 +494,9 @@ export function RisuNativeFields({
                 />
               )}
             </NativeCollectionEditor>
-          </div>
+          </StudioPanel>
         )}
-        <div {...panel('lore')} className="native-panes">
+        <StudioPanel section="lore" className="native-panes">
           <NativeRisuLoreEditor
             focus={loreFocus}
             entries={lore}
@@ -529,12 +523,12 @@ export function RisuNativeFields({
               </label>
             }
           />
-        </div>
-        <div {...panel('assets')} className="native-section-body">
+        </StudioPanel>
+        <StudioPanel section="assets" className="native-section-body">
           <NativeRisuAssetsEditor value={value} onChange={onChange} onBusyChange={setAssetsBusy} />
-        </div>
+        </StudioPanel>
         {!standalone && (
-          <div {...panel('instructions')} className="native-section-body">
+          <StudioPanel section="instructions" className="native-section-body">
             <div className="native-form-stack">
               <label>
                 {t('native.text_2d2a2c8204')}
@@ -554,9 +548,9 @@ export function RisuNativeFields({
                 />
               </label>
             </div>
-          </div>
+          </StudioPanel>
         )}
-        <div {...panel('variables')} className="native-section-body">
+        <StudioPanel section="variables" className="native-section-body">
           <div className="native-form-stack">
             <label>
               {t('native.text_0510e453e9')}
@@ -591,9 +585,9 @@ export function RisuNativeFields({
               />
             </label>
           </div>
-        </div>
+        </StudioPanel>
         {available.includes('display') && (
-          <div {...panel('display')} className="native-section-body">
+          <StudioPanel section="display" className="native-section-body">
             <div className="native-form-stack">
               {!standalone && (
                 <label>
@@ -628,17 +622,17 @@ export function RisuNativeFields({
                 />
               )}
             </div>
-          </div>
+          </StudioPanel>
         )}
-        <div {...panel('modules')} className="native-section-body">
+        <StudioPanel section="modules" className="native-section-body">
           <PackageFeaturesEditor
             value={value}
             onChange={onChange}
             onDirtyChange={setModulesDirty}
           />
-        </div>
+        </StudioPanel>
       </fieldset>
-      <div {...panel('triggers')} className="native-section-body">
+      <StudioPanel section="triggers" className="native-section-body">
         <NativeRisuTriggerEditor
           value={Array.isArray(triggers) ? triggers : []}
           draftPath="package.native.triggers"
@@ -647,8 +641,8 @@ export function RisuNativeFields({
           onPendingChange={setTriggersDirty}
           disabled={!!draft}
         />
-      </div>
-      <div {...panel('regex')} className="native-section-body native-regex-panel">
+      </StudioPanel>
+      <StudioPanel section="regex" className="native-section-body native-regex-panel">
         <NativeRisuRegexEditor
           value={Array.isArray(regex) ? regex : []}
           draftPath="package.native.regex"
@@ -657,12 +651,12 @@ export function RisuNativeFields({
           onPendingChange={setRegexDirty}
           disabled={!!draft}
         />
-      </div>
-      <div {...panel('source')} className="native-section-body">
+      </StudioPanel>
+      <StudioPanel section="source" className="native-section-body">
         <fieldset className="native-panel-fields" disabled={regexDirty || triggersDirty}>
           {rawEditor}
         </fieldset>
-      </div>
+      </StudioPanel>
     </div>
   );
 }

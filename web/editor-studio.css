@@ -81,6 +81,30 @@
   padding: 16px 12px 24px 0;
   border-right: var(--hairline) solid var(--line);
 }
+.editor-studio-more {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: var(--hairline) solid var(--line);
+}
+.editor-studio-more > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-h);
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--font-body);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .editor-studio-more > summary:hover {
+    background: var(--hover);
+  }
+}
+.editor-studio-more > .section-navigation {
+  margin-top: 4px;
+}
 .editor-studio-canvas {
   min-width: 0;
   min-height: 0;

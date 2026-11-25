@@ -17,7 +17,7 @@ function Studio({
 }: {
   program: RisuPrompt;
   header?: ReactNode;
-  children: (section: PresetSection, onSelect: (section: PresetSection) => void) => ReactNode;
+  children: (onSelect: (section: PresetSection) => void) => ReactNode;
 }) {
   const [section, setSection] = useState<PresetSection>('blocks');
   return (
@@ -29,7 +29,7 @@ function Studio({
       onSelect={setSection}
       idPrefix="fixture"
     >
-      {children(section, setSection)}
+      {children(setSection)}
     </EditorStudio>
   );
 }
@@ -58,7 +58,7 @@ export function mount() {
           </button>
         }
       >
-        {(section, onSelect) => (
+        {(onSelect) => (
           <>
             <NativeRisuPresetEditor
               program={program}
@@ -66,7 +66,6 @@ export function mount() {
               values={values}
               onValuesChange={setValues}
               onPendingDraftChange={setPending}
-              section={section}
               onSelect={onSelect}
               idPrefix="fixture"
             />
@@ -100,12 +99,11 @@ export function mountReorderFixture() {
     );
     return (
       <Studio program={program}>
-        {(section, onSelect) => (
+        {(onSelect) => (
           <>
             <NativeRisuPresetEditor
               program={program}
               onChange={setProgram}
-              section={section}
               onSelect={onSelect}
               idPrefix="fixture"
             />

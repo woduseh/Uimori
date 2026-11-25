@@ -121,7 +121,12 @@ export function PromptEditor({
   const commands = useResourceEditorCommands(shared);
   const sectionId = useId();
   const sections = presetSections(model.program, role === 'main');
-  const [section, selectSection] = useStudioSection('prompt', sections, 'blocks', !!initialPreset);
+  const [section, selectSection] = useStudioSection(
+    'prompt',
+    sections.map((item) => item.id),
+    'blocks',
+    !!initialPreset
+  );
   const anchor = useResourceAnchor('prompt-preset', state.document.targetId);
   const base: PromptPreset | null = state.document.targetId
     ? {
@@ -470,7 +475,6 @@ export function PromptEditor({
               <NativeRisuPresetEditor
                 key={`${role}:${session.options.editorKey}`}
                 anchor={anchor}
-                section={section}
                 onSelect={selectSection}
                 idPrefix={sectionId}
                 program={draft.program}

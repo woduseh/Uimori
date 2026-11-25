@@ -34,7 +34,7 @@ import {
   useResourceEditor,
   useResourceEditorCommands,
 } from './resource-editor.js';
-import { contentSections } from './studio-sections.js';
+import { availableSections, contentSectionRegistry, contentSections } from './studio-sections.js';
 import {
   editableResource,
   type ContentEditModel,
@@ -1338,13 +1338,13 @@ function ContentEditor({
   const { document, dirty } = state;
   const commands = useResourceEditorCommands(shared);
   const sectionId = useId();
-  const sections = contentSections(value.package);
   const [section, selectSection] = useStudioSection(
     `content:${value.kind}`,
-    sections,
+    availableSections(contentSectionRegistry, value.package),
     'basic',
     !!initial
   );
+  const sections = contentSections(value.package, value.kind, section, state.local.unappliedFields);
   const anchor = useResourceAnchor('content', document.targetId);
   const selected = document.targetId
     ? {

@@ -55,11 +55,20 @@ export function ResourceEditorLeaveWarning() {
     </p>
   ) : null;
 }
-export type ActiveEditorContext = EditorContext & { editorKey: string; dirty: boolean };
+export type EditorLocationItem = { index: number; label: string };
+export type EditorLocation = { section: string; item?: EditorLocationItem };
+export type ActiveEditorContext = EditorContext & {
+  editorKey: string;
+  dirty: boolean;
+  location?: EditorLocation;
+};
+const locations = new WeakMap<ResourceEditorSession, EditorLocation>();
 function context(session: ResourceEditorSession | null): ActiveEditorContext | null {
   const state = session?.snapshot();
   if (!session || !state?.ready) return null;
+  const location = locations.get(session);
   return {
+    ...(location ? { location } : {}),
     kind: session.options.kind,
     targetId: state.document.targetId,
     revision: state.document.baseRevision,
@@ -342,6 +351,14 @@ export function useEditorSavePreparation(
   const latest = useRef(prepare);
   latest.current = prepare;
   useEffect(() => session?.prepareOnSave(path, (model) => latest.current(model)), [session, path]);
+}
+export function usePublishedEditorLocation(location: EditorLocation) {
+  const session = useContext(EditorContextValue)?.session;
+  useEffect(() => {
+    if (!session) return;
+    locations.set(session, location);
+    changed();
+  }, [session, location]);
 }
 export function useUnappliedEditorField(path: string, pending: boolean) {
   const session = useContext(EditorContextValue)?.session;

@@ -723,3 +723,34 @@ test('RSURFACE appearance follows app settings without resetting authored contro
   await expect(native.locator('#authored')).toHaveCSS('font-size', '12px');
   await expect(native.getByRole('textbox', { name: 'Unsaved input' })).toHaveValue('Keep me');
 });
+
+test('STUDIOLOC01 the active editor location follows the selected section and list item', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/studio-location-editor.tsx';
+    const { mount } = await import(path);
+    mount();
+  });
+  const location = () => page.evaluate(() => window.studioLocation());
+  await expect.poll(location).toEqual({ section: 'basic' });
+  await selectEditorSection(page, '첫 메시지');
+  await expect.poll(location).toMatchObject({ section: 'greetings', item: { index: 0 } });
+  const panel = (section: string) => page.locator(`[data-studio-section="${section}"]`);
+  await panel('greetings').locator('[data-studio-item="1"]').click();
+  await expect.poll(location).toMatchObject({ section: 'greetings', item: { index: 1 } });
+  await selectEditorSection(page, '로어북');
+  await expect.poll(location).toEqual({ section: 'lore', item: { index: 0, label: 'Forest' } });
+  await panel('lore').locator('[data-studio-item="1"] .nl-select').click();
+  await expect.poll(location).toEqual({ section: 'lore', item: { index: 1, label: 'River' } });
+  await selectEditorSection(page, '정규식');
+  await expect.poll(location).toEqual({ section: 'regex', item: { index: 0, label: 'Emphasis' } });
+  await panel('regex').locator('[data-studio-item="1"]').click();
+  await expect.poll(location).toEqual({ section: 'regex', item: { index: 1, label: 'Quotes' } });
+  await selectEditorSection(page, '기본 정보');
+  await expect.poll(location).toEqual({ section: 'basic' });
+  await selectEditorSection(page, '로어북');
+  await expect.poll(location).toEqual({ section: 'lore', item: { index: 1, label: 'River' } });
+});

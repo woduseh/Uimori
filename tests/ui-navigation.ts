@@ -105,27 +105,53 @@ export async function expectEditorSection(scope: Page | Locator, name: string) {
     );
 }
 
-export async function editorSectionNames(scope: Page | Locator) {
+export async function editorSectionPlacement(scope: Page | Locator) {
   const studio = scope.locator('.editor-studio').first();
   await expect(studio).toBeVisible();
-  return studio.evaluate((node) =>
-    [...node.querySelectorAll<HTMLButtonElement>('button[id$="-tab"]')].map(
-      (button) => button.getAttribute('aria-label') ?? ''
-    )
-  );
+  return studio.evaluate((node) => {
+    const placement = { shown: [] as string[], more: [] as string[] };
+    for (const button of node.querySelectorAll<HTMLButtonElement>('button[id$="-tab"]'))
+      placement[button.closest('.editor-studio-more') ? 'more' : 'shown'].push(
+        (button.getAttribute('aria-label') ?? '').replace(/ [\d,]+개$/u, '')
+      );
+    return placement;
+  });
+}
+
+export async function editorSectionNames(scope: Page | Locator) {
+  const { shown, more } = await editorSectionPlacement(scope);
+  return [...shown, ...more];
+}
+
+async function openDisclosure(summary: Locator) {
+  if (!(await summary.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
+    await summary.click();
 }
 
 export async function selectEditorSection(scope: Page | Locator, name: string) {
   const tab = editorTab(scope, name);
   const picker = editorSectionPicker(scope);
-  await expect(tab.or(picker).first()).toBeVisible();
+  const more = scope.locator('.editor-studio-rail .editor-studio-more > summary');
+  await expect(tab.or(picker).or(more).first()).toBeVisible();
   if (await tab.isVisible()) {
     await tab.click();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
     return;
   }
+  if (!(await picker.isVisible())) {
+    await openDisclosure(more);
+    await more
+      .locator('..')
+      .getByRole('button', { name: sectionName(name) })
+      .click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    return;
+  }
   await picker.click();
-  const option = picker.locator('..').getByRole('button', { name: sectionName(name) });
+  const menu = picker.locator('..');
+  const option = menu.getByRole('button', { name: sectionName(name) });
+  if (!(await option.isVisible()))
+    await openDisclosure(menu.locator('.editor-studio-more > summary'));
   await option.click();
   await expect(option).toBeHidden();
 }

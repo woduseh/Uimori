@@ -53,6 +53,12 @@ export const messages = {
     ja: '編集セクションを選択',
     zh: '选择编辑区域',
   },
+  'shared.moreSections': {
+    ko: '더 보기 ({count, number})',
+    en: 'More ({count, number})',
+    ja: 'その他 ({count, number})',
+    zh: '更多 ({count, number})',
+  },
   'shared.close': {
     ko: '{title} 닫기',
     en: 'Close {title}',

@@ -7,7 +7,9 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import {
+  discardEdits,
   editLibraryContent,
+  editorSectionPlacement,
   navigationAction,
   editorTab,
   selectEditorSection,
@@ -759,4 +761,75 @@ test('EFRAME13 every former advanced section is one rail click away and a source
   await expect(notice).toHaveCount(0);
   await selectEditorSection(page, '변수와 토글 초기값');
   await expect(page.getByRole('textbox', { name: '기본 변수', exact: true })).toBeEnabled();
+});
+
+test('EFRAME14 the rail follows the content kind, keeps sections with data and offers the rest under more', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60000);
+  const id = randomUUID().slice(0, 8);
+  const seed = async (kind: 'persona' | 'module', title: string, card: Record<string, unknown>) => {
+    const pkg = nativeContent({ name: title, ...card }, {}, kind);
+    if (kind === 'module') {
+      pkg.nativeRisu.module = { name: title, lorebook: [{ key: 'k', content: 'c', comment: 'L' }] };
+      pkg.nativeRisu.card = {};
+    }
+    const response = await request.post('/api/content', {
+      data: { kind, title, package: pkg, loading: 'pinned', relatedIds: [] },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  };
+  const empty = `EFRAME14 빈 페르소나 ${id}`;
+  const withLore = `EFRAME14 로어 페르소나 ${id}`;
+  const module = `EFRAME14 모듈 ${id}`;
+  await seed('persona', empty, {});
+  await seed('persona', withLore, {
+    character_book: { entries: [{ keys: ['k'], content: '로어 본문', comment: '로어' }] },
+  });
+  await seed('module', module, {});
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const open = async (tab: '페르소나' | '모듈', title: string) => {
+    await page.goto('/');
+    await navigationAction(page, tab);
+    await page.getByTestId('library-panel').getByLabel('서재 검색', { exact: true }).fill(title);
+    await editLibraryContent(page, title);
+  };
+  const rail = page.getByRole('tablist', { name: '자료 편집 영역', exact: true });
+  const more = page.locator('.editor-studio-rail .editor-studio-more');
+
+  await open('페르소나', withLore);
+  expect((await editorSectionPlacement(page)).shown).toEqual(['기본 정보', '로어북', '에셋']);
+
+  await open('페르소나', empty);
+  const placement = await editorSectionPlacement(page);
+  expect(placement.shown).toEqual(['기본 정보', '에셋']);
+  expect(placement.more).toEqual(expect.arrayContaining(['로어북', '추가 지침', 'JSON 소스']));
+  await expect(more.locator('summary')).toHaveText(`더 보기 (${placement.more.length})`);
+  expect(await rail.locator('summary').count()).toBe(0);
+  await more.locator('summary').click();
+  await more.getByRole('button', { name: '추가 지침', exact: true }).click();
+  const instructions = editorTab(rail, '추가 지침');
+  await expect(instructions).toHaveAttribute('aria-selected', 'true');
+  await expect(instructions).toBeFocused();
+  await page.getByRole('textbox', { name: '글로벌 노트', exact: true }).fill('합성 지침');
+  await selectEditorSection(page, '번역 지침');
+  await selectEditorSection(page, '기본 정보');
+  const after = await editorSectionPlacement(page);
+  expect(after.shown).toEqual(['기본 정보', '추가 지침', '에셋']);
+  expect(after.more).toContain('번역 지침');
+  await expect(more.locator('summary')).toHaveText(`더 보기 (${after.more.length})`);
+  await discardEdits(page);
+
+  await open('모듈', module);
+  const moduleRail = (await editorSectionPlacement(page)).shown;
+  expect(moduleRail[0]).toBe('로어북');
+  expect(moduleRail).toEqual([
+    '로어북',
+    '기본 정보',
+    '트리거 / Lua',
+    '정규식',
+    '변수와 토글 초기값',
+    '에셋',
+  ]);
 });

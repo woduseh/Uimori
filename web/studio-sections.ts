@@ -25,6 +25,7 @@ export type StudioSection<K extends string> = {
   title: string;
   count?: number;
   group?: string;
+  more?: boolean;
 };
 
 export type ContentSection =
@@ -326,6 +327,49 @@ export function availableSections<Id extends string, Doc>(
     .map((section) => section.id);
 }
 
+export const MODULE_SECTION_ORDER: readonly ContentSection[] = [
+  'lore',
+  'triggers',
+  'regex',
+  'display',
+  'variables',
+  'assets',
+  'basic',
+];
+const GROUP_ORDER: readonly StudioGroup[] = ['story', 'presentation', 'behavior', 'source'];
+
+export function placeSections<Id extends string, Doc>(
+  registry: readonly StudioSectionDefinition<Id, Doc>[],
+  doc: Doc,
+  kind: StudioKind,
+  current: Id,
+  pending: readonly string[] = [],
+  order: readonly Id[] = []
+): { id: Id; more: boolean }[] {
+  const rank = (id: Id) => (order.includes(id) ? order.indexOf(id) : order.length);
+  const groupRank = (group?: StudioGroup) =>
+    Math.min(
+      ...registry.filter((section) => section.group === group).map((section) => rank(section.id))
+    );
+  return registry
+    .filter((section) => section.available?.(doc) ?? true)
+    .sort(
+      (a, b) =>
+        groupRank(a.group) - groupRank(b.group) ||
+        GROUP_ORDER.indexOf(a.group!) - GROUP_ORDER.indexOf(b.group!) ||
+        rank(a.id) - rank(b.id)
+    )
+    .map((section) => ({
+      id: section.id,
+      more: !(
+        section.defaultFor.includes(kind) ||
+        section.id === current ||
+        section.hasData(doc) ||
+        !!section.drafts?.some((path) => pending.includes(path))
+      ),
+    }));
+}
+
 function resolve<Id extends string, Doc>(
   section: StudioSectionDefinition<Id, Doc>,
   doc: Doc,
@@ -339,20 +383,28 @@ function resolve<Id extends string, Doc>(
   };
 }
 
-export function contentSections(content: RisuContent): StudioSection<ContentSection>[] {
-  return contentSectionRegistry
-    .filter((section) => section.available?.(content) ?? true)
-    .map((section) =>
-      resolve(
-        section,
-        content,
-        section.id === 'display' && isStandaloneModule(content)
-          ? t('native.imageInstructions')
-          : undefined
-      )
-    );
+export function contentSections(
+  content: RisuContent,
+  kind: Exclude<StudioKind, 'prompt'>,
+  current: ContentSection,
+  pending: readonly string[] = []
+): StudioSection<ContentSection>[] {
+  return placeSections(
+    contentSectionRegistry,
+    content,
+    kind,
+    current,
+    pending,
+    kind === 'module' ? MODULE_SECTION_ORDER : []
+  ).map(({ id, more }) => ({
+    ...resolve(
+      definition(contentSectionRegistry, id),
+      content,
+      id === 'display' && isStandaloneModule(content) ? t('native.imageInstructions') : undefined
+    ),
+    ...(more ? { more } : {}),
+  }));
 }
-
 export function presetSections(
   program: RisuPrompt,
   collaboration: boolean

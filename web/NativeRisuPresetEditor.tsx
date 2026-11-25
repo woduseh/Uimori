@@ -15,6 +15,7 @@ import {
 import { validateRisuPrompt, type RisuPrompt, type PromptValue } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
+import { StudioPanel, useStudioItem } from './EditorStudio.js';
 import { NativeRisuToggleEditor } from './NativeRisuToggleEditor.js';
 import {
   useBufferedEditorState,
@@ -50,11 +51,9 @@ export function NativeRisuPresetEditor({
   collaboration,
   metadata,
   anchor = null,
-  section,
   onSelect,
   idPrefix: id,
 }: {
-  section: Section;
   onSelect: (section: Section) => void;
   idPrefix: string;
   anchor?: ResourceAnchorRequest | null;
@@ -109,6 +108,7 @@ export function NativeRisuPresetEditor({
   const items = source.promptTemplate as Record<string, unknown>[];
   const index = Math.min(selected, Math.max(0, items.length - 1));
   const entry = items[index];
+  useStudioItem(entry ? index : null, entry ? blockTitle(entry) : '', 'blocks');
   const anchorSection = (target: ResourceAnchor): Section =>
     target.section === 'prompt' ? 'blocks' : (presetSection(target.path ?? '') ?? 'options');
   useAnchorArrival(
@@ -128,13 +128,6 @@ export function NativeRisuPresetEditor({
       }
     }
   );
-  const panel = (key: Section) => ({
-    id: id + '-' + key + '-panel',
-    role: 'tabpanel' as const,
-    'aria-labelledby': id + '-' + key + '-tab',
-    'data-studio-section': key,
-    hidden: section !== key,
-  });
   function mark(part: string, active: boolean) {
     setPendingParts((current) =>
       active ? [...new Set([...current, part])] : current.filter((key) => key !== part)
@@ -235,7 +228,7 @@ export function NativeRisuPresetEditor({
       {pending && (
         <NoticeBanner className="native-editor-notice">{t('native.text_9cceef2250')}</NoticeBanner>
       )}
-      <div {...panel('blocks')} className="native-editor-split native-panes">
+      <StudioPanel section="blocks" className="native-editor-split native-panes">
         <aside className="native-item-list" aria-label={t('native.text_944b1569af')}>
           <input
             type="search"
@@ -259,6 +252,7 @@ export function NativeRisuPresetEditor({
               <button
                 type="button"
                 key={i}
+                data-studio-item={i}
                 aria-current={index === i ? 'true' : undefined}
                 data-dragging={dragged === i ? 'true' : undefined}
                 data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}
@@ -514,8 +508,8 @@ export function NativeRisuPresetEditor({
             </div>
           )}
         </div>
-      </div>
-      <div {...panel('options')} className="native-section-body">
+      </StudioPanel>
+      <StudioPanel section="options" className="native-section-body">
         {metadata}
         <h3>{t('native.text_90e595ef29')}</h3>
         {!!nativeRisuToggleItems(text(source.customPromptTemplateToggle)).length &&
@@ -533,8 +527,8 @@ export function NativeRisuPresetEditor({
             </button>
           </div>
         )}
-      </div>
-      <div {...panel('variables')} className="native-section-body native-toggle-panel">
+      </StudioPanel>
+      <StudioPanel section="variables" className="native-section-body native-toggle-panel">
         <NativeRisuToggleEditor
           value={text(source.customPromptTemplateToggle)}
           variables={text(source.templateDefaultVariables)}
@@ -554,8 +548,8 @@ export function NativeRisuPresetEditor({
             )
           }
         />
-      </div>
-      <div {...panel('regex')} className="native-section-body native-regex-panel">
+      </StudioPanel>
+      <StudioPanel section="regex" className="native-section-body native-regex-panel">
         <NativeRisuRegexEditor
           value={(source.regex ?? source.presetRegex ?? []) as unknown[]}
           draftPath="prompt.native.regex"
@@ -571,11 +565,11 @@ export function NativeRisuPresetEditor({
             })
           }
         />
-      </div>
+      </StudioPanel>
       {collaboration && (
-        <div {...panel('collaboration')} className="native-section-body">
+        <StudioPanel section="collaboration" className="native-section-body">
           {collaboration}
-        </div>
+        </StudioPanel>
       )}
       <NativeDeleteDialog
         target={removing === null ? null : blockTitle(items[removing] ?? {})}

@@ -27,6 +27,7 @@ import {
   type LoreEntry,
   type LoreDropPosition,
 } from './native-lore-document.js';
+import { useStudioItem } from './EditorStudio.js';
 import './native-risu-lore.css';
 import './deletion.css';
 
@@ -109,6 +110,7 @@ export function NativeRisuLoreEditor({
   const folders = entries.map((item, i) => ({ item, i })).filter(({ item }) => isLoreFolder(item));
   const folder = !!entry && isLoreFolder(entry);
   const title = entry ? loreTitle(entry) : t('native.text_5ce4911d95');
+  useStudioItem(entry ? index : null, entry ? loreTitle(entry) : '');
   const needle = query.trim().toLocaleLowerCase();
   const matches = entries.map(
     (item) =>
@@ -267,6 +269,7 @@ export function NativeRisuLoreEditor({
       <div key={i} className="nl-tree-node">
         <div
           className={`nl-row${index === i ? ' is-selected' : ''}`}
+          data-studio-item={i}
           style={{ paddingLeft: Math.min(depth, 5) * 14 }}
           data-dragging={dragged === i ? 'true' : undefined}
           data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}

@@ -3,6 +3,7 @@ import { useState, type DragEvent, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
+import { useStudioItem } from './EditorStudio.js';
 
 export function NativeCollectionEditor({
   label,
@@ -40,6 +41,7 @@ export function NativeCollectionEditor({
   } | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
   const index = Math.min(selected, Math.max(0, items.length - 1));
+  useStudioItem(items[index] ? index : null, items[index]?.title ?? '');
   const remove = (target: number) => {
     setRemoving(null);
     onRemove?.(target);
@@ -100,6 +102,7 @@ export function NativeCollectionEditor({
           <button
             type="button"
             key={i}
+            data-studio-item={i}
             aria-current={index === i ? 'true' : undefined}
             data-dragging={dragged === i ? 'true' : undefined}
             data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}

@@ -38,7 +38,7 @@ export function mount() {
           </button>
         }
         label={t('native.text_b891876a9a')}
-        sections={contentSections(value)}
+        sections={contentSections(value, 'bot', section)}
         value={section}
         onSelect={setSection}
         idPrefix="fixture"
