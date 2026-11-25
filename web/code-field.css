@@ -15,6 +15,24 @@
   min-width: 0;
   min-height: 0;
 }
+.code-field[data-editor-helper] > textarea {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  resize: none;
+}
+.code-field[data-editor-helper][data-font="mono"] > textarea {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
 .code-field[data-rows] > .cm-editor {
   max-height: calc(var(--code-field-rows) * 1.65em + 20px);
 }

@@ -139,7 +139,7 @@ export function PlainCodeField({
       {...aria}
       ref={field}
       data-code-field={helper ? undefined : name}
-      className={className}
+      className={helper ? undefined : className}
       rows={rows}
       disabled={disabled}
       readOnly={readOnly}
@@ -154,7 +154,12 @@ export function PlainCodeField({
     />
   );
   return helper ? (
-    <div className="code-field" data-code-field={name} data-editor-helper>
+    <div
+      className={className ? `code-field ${className}` : 'code-field'}
+      data-code-field={name}
+      data-font={font}
+      data-editor-helper
+    >
       {textarea}
       {helper.action}
     </div>
