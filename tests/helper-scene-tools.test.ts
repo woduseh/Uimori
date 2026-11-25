@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Store } from '../server/store.js';
-import { invokeHelperSceneTool } from '../server/helper-scene-tools.js';
+import { invokeHelperSceneTool, sceneTranslationState } from '../server/helper-scene-tools.js';
 import { latestTranslation } from '../server/source-editing.js';
 import { invokeSceneRegexSearch } from '../server/helper-data-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -376,6 +376,26 @@ test('translation editing preserves source, skips no-op writes and invalidates i
   expect(store.source(source.id).text).toBe('Original words');
   call('scene.patch', { ...read().editTarget, text: 'New original' });
   expect(() => read('translation')).toThrow(/no usable/);
+});
+
+test('the translation state of a scene names a failed or stopped attempt instead of pending', () => {
+  const { store, chatId, source } = fixture('Original.');
+  const attempt = (status: string, revision: number) =>
+    store.db
+      .prepare(
+        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at) VALUES(?,?,?,?,'translation',?,?,?,?)"
+      )
+      .run(randomUUID(), chatId, source.id, source.hash, status, revision, '1', '1');
+  expect(sceneTranslationState(store, source)).toBe('none');
+  attempt('running', 1);
+  expect(sceneTranslationState(store, source)).toBe('pending');
+  let revision = 1;
+  for (const status of ['failed', 'cancelled', 'interrupted', 'partial']) {
+    attempt(status, ++revision);
+    expect(sceneTranslationState(store, source), status).toBe('failed');
+  }
+  attempt('queued', ++revision);
+  expect(sceneTranslationState(store, source)).toBe('pending');
 });
 
 test('translation pagination detects completion that changes displayed text without a new revision', () => {
