@@ -20,6 +20,7 @@ import {
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
+import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const sse = (...events: unknown[]) =>
@@ -373,6 +374,18 @@ test('guide consumes prepared logical history and one summary, ignores prior adv
 
 test('a guide that read once is reused for the same initial input', async () => {
   const source = await snapshot();
+  source.resources = [
+    {
+      id: 'reunion',
+      chatId: source.chatId,
+      kind: 'lore',
+      revision: 1,
+      title: 'Reunion',
+      description: 'How the reunion went in the original.',
+      text: 'The reunion happens at the harbor.',
+      loading: 'discoverable',
+    },
+  ];
   vi.mocked(fetch)
     .mockImplementationOnce(async () =>
       sse(
@@ -592,4 +605,55 @@ test('a fitting writer input does not call the summary provider merely to reserv
   expect(withoutSummaryModel.snapshot.contextPlan!.compacted).toHaveLength(0);
   expect(log.wires).toHaveLength(0);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+test('the guide offers local reads, the catalog and read wording only while something is left to read', async () => {
+  const lore = {
+    id: 'reunion',
+    chatId: 'guide-chat',
+    kind: 'lore' as const,
+    revision: 1,
+    title: 'Reunion',
+    description: 'How the reunion went in the original.',
+    text: 'The reunion happens at the harbor.',
+    loading: 'discoverable' as const,
+  };
+  const request = async (source: RunSnapshot) => {
+    const log = observed();
+    const result = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
+    expect(log.wires, JSON.stringify(result)).toHaveLength(1);
+    return log.wires[0]!.body as unknown as {
+      stable: { contract: string; tools: { name: string }[] };
+      input: { catalog: { id: string }[] };
+    };
+  };
+  const delivered = await request(await snapshot());
+  expect(delivered.stable.tools).toEqual([]);
+  expect(delivered.input.catalog).toEqual([]);
+  expect(delivered.stable.contract).not.toContain('local reads');
+  expect(delivered.stable.contract).not.toContain(CATALOG_READ_GUIDANCE);
+
+  const unread = await snapshot();
+  unread.resources = [lore];
+  const open = await request(unread);
+  expect(open.stable.tools.map((tool) => tool.name)).toEqual([
+    'knowledge.search',
+    'knowledge.read',
+  ]);
+  expect(open.input.catalog.map((item) => item.id)).toEqual(['reunion']);
+  expect(open.stable.contract).toContain('local reads');
+  expect(open.stable.contract).toContain(CATALOG_READ_GUIDANCE);
+
+  const searched = await snapshot();
+  searched.resources = [lore];
+  searched.storyGuide!.config.webSearch = true;
+  searched.profile!.models.main!.connection.protocol = 'google-gemini-v1';
+  searched.profile!.models.main!.connection.credentialRef = 'SYNTHETIC_GUIDE_KEY';
+  searched.profile!.models.main!.connection.endpoint =
+    'https://generativelanguage.googleapis.com/v1beta';
+  searched.profile!.models.main!.modelId = 'gemini-2.5-pro';
+  const wire = JSON.stringify(await request(searched));
+  expect(wire).not.toContain('knowledge.read');
+  expect(wire).not.toContain('reunion');
+  expect(wire).not.toContain('local reads');
 });

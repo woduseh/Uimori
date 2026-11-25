@@ -12,6 +12,7 @@ import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { outlineContract } from '../core/outline.js';
 import { buildMainInput, executeTool } from '../core/provider.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
+import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 import type { StoryGuideBrief } from '../core/story-guide.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import {
@@ -32,8 +33,10 @@ const GUIDE_SEARCH_CONTRACT = `Search for scene-relevant facts about the named w
 const GUIDE_CONTRACT = `Prepare a brief for the author and the next writer. Follow the author's requested language; for a generic outline command, use the language of the outline and recent story. Default to Korean when unclear. Help the writer tell original-work references, established branch events and creative suggestions apart. Focus on details that affect a choice in this scene.
 Use the named work and edition within the configured disclosure position. Attribute facts to their sources and explicitly label unverified model knowledge. Distinguish what the audience knows from what each character has learned. Character examples guide voice; label any sample dialogue you invent.
 Treat the branch's original characters and changes as intentional. With followCanon, propose developments compatible with this branch and its timing, leaving the player's choices open. Elapsed time alone does not establish that an event occurred.
-Use the supplied material first. If a missing passage matters, use at most one batch of local reads, then finish with the evidence and uncertainty available. Keep the guide under about 1,200 tokens.
+Keep the guide under about 1,200 tokens.
 ${AUTHOR_NOTE_GUIDANCE}`;
+const GUIDE_READ_CONTRACT =
+  'Use the supplied material first. If a missing passage matters, use at most one batch of local reads, then finish with the evidence and uncertainty available.';
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 
@@ -77,9 +80,13 @@ export function storyGuideReservedTokens(snapshot: RunSnapshot): number {
 
 function guideRequest(snapshot: RunSnapshot): ProviderRequest {
   const target = snapshot.profile!.models.main!;
-  const input = buildMainInput(snapshot);
-  const characterExamples = nativeCharacterExamples(snapshot);
   const search = snapshot.storyGuide!.config.webSearch === true;
+  const input = buildMainInput(snapshot, [], undefined, {
+    delivery: 'direct',
+    families: search && isGeminiProtocol(target.connection.protocol) ? [] : ['knowledge', 'story'],
+  });
+  const tools = MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name));
+  const characterExamples = nativeCharacterExamples(snapshot);
   const kept = new Set(input.history.map((entry) => entry.revision));
   const history = (
     snapshot.nativeRisuExecution?.history ??
@@ -104,17 +111,18 @@ function guideRequest(snapshot: RunSnapshot): ProviderRequest {
     ...(search ? { webSearch: true } : {}),
     ...modelRequestFields(target),
     stable: {
-      contract:
-        GUIDE_CONTRACT +
-        (search ? '\n' + GUIDE_SEARCH_CONTRACT : '') +
-        (input.outline
-          ? `\nApply these outline rules when advising the writer, without writing story prose: ${outlineContract(input.outline)}`
-          : ''),
-      tools: (search && isGeminiProtocol(target.connection.protocol) ? [] : MAIN_READ_TOOLS)
-        .filter(
-          (tool) => input.tools.includes(tool.name) && /^(knowledge|story)\./u.test(tool.name)
-        )
-        .map((tool) => structuredClone(tool)),
+      contract: [
+        GUIDE_CONTRACT,
+        ...(search ? [GUIDE_SEARCH_CONTRACT] : []),
+        ...(tools.length ? [GUIDE_READ_CONTRACT] : []),
+        ...(input.tools.includes('knowledge.read') ? [CATALOG_READ_GUIDANCE] : []),
+        ...(input.outline
+          ? [
+              `Apply these outline rules when advising the writer, without writing story prose: ${outlineContract(input.outline)}`,
+            ]
+          : []),
+      ].join('\n'),
+      tools: structuredClone(tools),
     },
     generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
