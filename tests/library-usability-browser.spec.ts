@@ -5,6 +5,7 @@ import { waitForContentSave } from './fixtures/resource-save.js';
 import {
   createLibraryContent,
   editLibraryContent,
+  editorChanges,
   editorSectionNames,
   selectEditorSection,
 } from './ui-navigation.js';
@@ -66,7 +67,8 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
     await panel.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(createdTitle);
     await panel.getByLabel('카드 설명', { exact: true }).fill(body);
-    await expect(saveState).toHaveText('미저장 변경');
+    await expect(saveState).toHaveText('');
+    await expect(editorChanges(panel)).toHaveAccessibleName('변경 1건');
     const savedResponse = waitForContentSave(page);
     const register = panel.getByRole('button', { name: '자료 등록', exact: true });
     await expect(register).toHaveText('등록');

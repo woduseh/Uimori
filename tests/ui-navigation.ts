@@ -90,8 +90,19 @@ export function editorSectionPicker(scope: Page | Locator) {
 
 export async function discardEdits(scope: Page | Locator) {
   const page = 'viewportSize' in scope ? scope : scope.page();
-  if (compactLayout(page)) await scope.getByLabel(/^(자료 메뉴|프롬프트 관리)$/u).click();
-  await scope.getByRole('button', { name: '편집 취소', exact: true }).click();
+  if (!compactLayout(page)) {
+    await scope.getByRole('button', { name: '편집 취소', exact: true }).click();
+    return;
+  }
+  await editorChanges(scope).click();
+  await scope
+    .getByRole('dialog', { name: '변경한 편집 영역', exact: true })
+    .getByRole('button', { name: '편집 취소', exact: true })
+    .click();
+}
+
+export function editorChanges(scope: Page | Locator) {
+  return scope.getByRole('button', { name: /^변경 \d+건$/u });
 }
 
 export async function expectEditorSection(scope: Page | Locator, name: string) {

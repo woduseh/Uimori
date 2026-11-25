@@ -347,6 +347,15 @@ export class ResourceEditorSession {
     const saved = await api<SavedResource>(this.path());
     return { revision: saved.revision, model: editableResource(this.options.kind, saved) };
   }
+  async readPrevious() {
+    if (!this.state.document.targetId) return null;
+    try {
+      return await api<{ savedRevision: number; model: ResourceModel }>(`${this.path()}/previous`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
   async save(
     model?: ResourceModel,
     options?: { copy?: boolean }
@@ -471,6 +480,7 @@ export class ResourceEditorSession {
       );
     }
     this.notifySaved();
+    return result.saved.revision;
   }
   async discard() {
     await this.reloadSaved();

@@ -3,7 +3,12 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Content, PromptPreset } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { navigationAction, expectEditorSection, selectEditorSection } from './ui-navigation.js';
+import {
+  editorChanges,
+  navigationAction,
+  expectEditorSection,
+  selectEditorSection,
+} from './ui-navigation.js';
 import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
@@ -141,7 +146,8 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
     await name.fill(title);
-    await expect(saveState).toHaveText('미저장 변경');
+    await expect(saveState).toHaveText('');
+    await expect(editorChanges(editor)).toHaveAccessibleName('변경 1건');
     const savedResponse = page.waitForResponse(
       (response) =>
         /\/api\/resources\/save$/.test(response.url()) && response.request().method() === 'POST'

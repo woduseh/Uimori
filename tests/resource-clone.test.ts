@@ -409,3 +409,40 @@ test('a repeated clone returns its original identity after the source changes', 
   const incompatible = await postClone(app, { ...command, title: 'Another copy' });
   expect(incompatible.statusCode).toBe(409);
 });
+
+test('the previous saved version is readable for comparison and undo toggles back to the newer one', async () => {
+  const { store, app } = fixture();
+  const first = store.product.promptPreset({
+    title: 'First',
+    role: 'main',
+    program: nativePrompt('First text'),
+    values: {},
+  }) as PromptPreset;
+  const previousOf = (id: string) =>
+    app.inject({ method: 'GET', url: `/api/resources/prompt-preset/${id}/previous` });
+  expect((await previousOf(first.id)).statusCode).toBe(404);
+  const second = saveResource(store, {
+    kind: 'prompt-preset',
+    id: first.id,
+    expectedRevision: first.revision,
+    model: { ...editableResource('prompt-preset', first), title: 'Second' },
+  }).saved as PromptPreset;
+  const read = await previousOf(first.id);
+  expect(read.statusCode, read.body).toBe(200);
+  expect(read.json()).toEqual({
+    savedRevision: second.revision,
+    model: editableResource('prompt-preset', first),
+  });
+  const restored = await app.inject({
+    method: 'POST',
+    url: `/api/resources/prompt-preset/${first.id}/undo`,
+    payload: { expectedRevision: second.revision },
+  });
+  expect(restored.statusCode, restored.body).toBe(200);
+  expect(restored.json().saved.title).toBe('First');
+  expect((await previousOf(first.id)).json()).toMatchObject({
+    savedRevision: restored.json().saved.revision,
+    model: { title: 'Second' },
+  });
+  expect((await previousOf('missing')).statusCode).toBe(404);
+});

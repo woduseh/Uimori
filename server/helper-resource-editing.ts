@@ -21,7 +21,7 @@ import { RisuContentError } from '../core/risu-content.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
-import { readResource, saveResource } from './resource-service.js';
+import { readPreviousResource, readResource, saveResource } from './resource-service.js';
 import {
   HelperResourcePatchError,
   type HelperResourcePatchReason,
@@ -223,19 +223,10 @@ export function readHelperResource(
     throw new HttpError(400, '읽을 저장본을 확인해 주세요.');
   const previous = args.version === 'previous';
   if (previous) {
-    const row = store.db
-      .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
-      .get(kind, id);
-    if (!row) throw new HttpError(404, '직전 저장본이 없어요.');
-    if (row.saved_revision !== saved.revision)
+    const row = readPreviousResource(store, kind, id);
+    if (row.savedRevision !== saved.revision)
       throw new HttpError(409, '최근 저장 이후 자료가 변경됐어요.');
-    try {
-      const parsed: unknown = JSON.parse(String(row.model));
-      if (!object(parsed)) throw new Error('Invalid previous model');
-      model = parsed as ResourceModel;
-    } catch {
-      throw new HttpError(409, '직전 저장본을 읽을 수 없어요.');
-    }
+    model = row.model;
   }
   const read = (selection: JsonObject, limit = maximum) =>
     readHelperModel(

@@ -2,7 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { choice, fields, HttpError, number, record, text } from './request-validation.js';
-import { cloneResource, readResource, saveResource, undoResource } from './resource-service.js';
+import {
+  cloneResource,
+  readPreviousResource,
+  readResource,
+  saveResource,
+  undoResource,
+} from './resource-service.js';
 
 const kinds = ['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'];
 export function resourceKind(value: unknown): ResourceKind {
@@ -51,6 +57,14 @@ export function resourceRoutes(app: FastifyInstance, store: Store) {
         : { idempotencyKey: text(body.idempotencyKey, 'request key', 200) }),
     });
   });
+  app.get<{ Params: { kind: string; id: string } }>(
+    '/api/resources/:kind/:id/previous',
+    (request) => {
+      const kind = resourceKind(request.params.kind);
+      readResource(store, kind, request.params.id);
+      return readPreviousResource(store, kind, request.params.id);
+    }
+  );
   app.post<{ Params: { kind: string; id: string } }>('/api/resources/:kind/:id/undo', (request) => {
     const body = record(request.body);
     fields(body, ['expectedRevision']);

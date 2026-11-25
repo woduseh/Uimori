@@ -12,6 +12,7 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
   createLibraryContent,
   editLibraryContent,
+  editorChanges,
   navigationAction,
   selectContent,
   selectEditorSection,
@@ -527,9 +528,7 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
   await expect.poll(() => submissions.length).toBe(2);
   expect(submissions[1]).toEqual(submissions[0]);
   await expect(name).toHaveValue('');
-  await expect(panel.locator('.resource-editor-status').getByRole('status')).toHaveText(
-    '미저장 변경'
-  );
+  await expect(editorChanges(panel)).toBeVisible();
   const saved = await request.get(`/api/content/${createdId}`);
   expect(saved.ok(), await saved.text()).toBe(true);
   expect((await saved.json()).title).toBe(title);

@@ -203,17 +203,25 @@ export function cloneResource(
   });
 }
 
-export function undoResource(store: Store, kind: ResourceKind, id: string, revision: number) {
+export function readPreviousResource(store: Store, kind: ResourceKind, id: string) {
   const row = store.db
     .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
     .get(kind, id);
   if (!row) throw new HttpError(404, '직전 저장본이 없어요.');
-  if (row.saved_revision !== revision)
+  let model: unknown;
+  try {
+    model = JSON.parse(String(row.model));
+  } catch {
+    throw new HttpError(409, '직전 저장본을 읽을 수 없어요.');
+  }
+  if (!model || typeof model !== 'object' || Array.isArray(model))
+    throw new HttpError(409, '직전 저장본을 읽을 수 없어요.');
+  return { savedRevision: Number(row.saved_revision), model: model as ResourceModel };
+}
+
+export function undoResource(store: Store, kind: ResourceKind, id: string, revision: number) {
+  const previous = readPreviousResource(store, kind, id);
+  if (previous.savedRevision !== revision)
     throw new HttpError(409, '최근 저장 이후 자료가 변경됐어요.');
-  return saveResource(store, {
-    kind,
-    id,
-    expectedRevision: revision,
-    model: JSON.parse(String(row.model)),
-  });
+  return saveResource(store, { kind, id, expectedRevision: revision, model: previous.model });
 }

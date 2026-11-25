@@ -1,8 +1,6 @@
 import { t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
-import { IconButton } from './IconButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
-import { CloseIcon, UndoIcon } from './ui-icons.js';
 import {
   createContext,
   useCallback,
@@ -370,9 +368,11 @@ export function useUnappliedEditorField(path: string, pending: boolean) {
 export function ResourceEditorStatus({
   value,
   hideSyncError = false,
+  showUnsaved = true,
 }: {
   value: ResourceEditorValue;
   hideSyncError?: boolean;
+  showUnsaved?: boolean;
 }) {
   useI18n();
   const { state, session } = value;
@@ -393,7 +393,9 @@ export function ResourceEditorStatus({
           {state.saving
             ? t('shared.saving')
             : state.dirty
-              ? t('shared.unsaved')
+              ? showUnsaved
+                ? t('shared.unsaved')
+                : ''
               : state.document.targetId
                 ? ''
                 : t('shared.notRegistered')}
@@ -427,76 +429,72 @@ export function useResourceEditorCommands(value: ResourceEditorValue) {
   const [error, setError] = useState('');
   const run = (work: () => Promise<unknown>) => {
     setError('');
-    void work().catch((caught) => setError((caught as Error).message));
+    return work().then(
+      () => {},
+      (caught) => setError((caught as Error).message)
+    );
   };
+  const { session, state } = value;
+  const [restoredRevision, setRestoredRevision] = useState<{
+    session: ResourceEditorSession;
+    revision: number;
+  } | null>(null);
+  useEffect(() => {
+    if (state.dirty) setRestoredRevision(null);
+  }, [state.dirty]);
   return {
     value,
     error,
-    canDiscard: value.state.dirty,
-    canUndo: !value.state.dirty && (value.state.document.baseRevision ?? 0) > 1,
-    discard: () => run(() => value.session.discard()),
-    undo: () => run(() => value.session.undo()),
+    canDiscard: state.dirty,
+    discard: () => run(() => session.discard()),
+    restored:
+      restoredRevision?.session === session &&
+      !state.dirty &&
+      state.document.baseRevision === restoredRevision.revision,
+    restore: async () => {
+      setError('');
+      setRestoredRevision(null);
+      setRestoredRevision({ session, revision: await session.undo() });
+    },
+    undoRestore: () =>
+      run(async () => {
+        setRestoredRevision(null);
+        await session.undo();
+      }),
+    dismissRestored: () => setRestoredRevision(null),
   };
 }
-type ResourceEditorCommands = ReturnType<typeof useResourceEditorCommands>;
+export type ResourceEditorCommands = ReturnType<typeof useResourceEditorCommands>;
 
 export function ResourceEditorActions({
   value,
   commands,
   hideSyncError = false,
+  changes,
 }: {
   value: ResourceEditorValue;
   commands?: ResourceEditorCommands;
   hideSyncError?: boolean;
+  changes?: ReactNode;
 }) {
   useI18n();
   const own = useResourceEditorCommands(value);
-  const { error, canDiscard, canUndo, discard, undo } = commands ?? own;
+  const { error, canDiscard, discard } = commands ?? own;
   return (
     <div className="resource-editor-actions">
-      <ResourceEditorStatus value={value} hideSyncError={hideSyncError} />
+      <ResourceEditorStatus value={value} hideSyncError={hideSyncError} showUnsaved={!changes} />
+      {value.state.dirty && changes}
       {canDiscard && (
         <button
           type="button"
           className="ghost resource-editor-discard"
           disabled={value.state.saving}
-          onClick={discard}
+          onClick={() => void discard()}
         >
           {t('shared.cancelEditing')}
         </button>
       )}
-      {canUndo && (
-        <IconButton
-          className="ghost resource-editor-undo"
-          label={t('shared.undoSave')}
-          icon={UndoIcon}
-          disabled={value.state.saving}
-          onClick={undo}
-        />
-      )}
       {error && <small role="alert">{translateMessage(error)}</small>}
-    </div>
-  );
-}
-
-export function ResourceEditorMenuActions({ commands }: { commands: ResourceEditorCommands }) {
-  useI18n();
-  const { value, canDiscard, canUndo, discard, undo } = commands;
-  if (!canDiscard && !canUndo) return null;
-  return (
-    <div className="action-menu-group resource-editor-menu-actions">
-      {canDiscard && (
-        <button type="button" disabled={value.state.saving} onClick={discard}>
-          <CloseIcon size={18} aria-hidden="true" />
-          {t('shared.cancelEditing')}
-        </button>
-      )}
-      {canUndo && (
-        <button type="button" disabled={value.state.saving} onClick={undo}>
-          <UndoIcon size={18} aria-hidden="true" />
-          {t('shared.undoSave')}
-        </button>
-      )}
     </div>
   );
 }

@@ -289,7 +289,7 @@ export const presetSectionRegistry: readonly StudioSectionDefinition<
     owns: matches(
       /\/(defaultVariables|templateDefaultVariables|customPromptTemplateToggle)(\/|$)/u
     ),
-    drafts: ['prompt.native.toggles'],
+    drafts: ['prompt.native.toggles', 'prompt.native.defaults', 'prompt.native.pendingParts'],
     layout: 'canvas',
   },
   {
@@ -310,7 +310,7 @@ export const presetSectionRegistry: readonly StudioSectionDefinition<
     defaultFor: ['prompt'],
     available: (doc) => doc.collaboration,
     hasData: () => false,
-    owns: () => false,
+    owns: matches(/^\/program\/collaboration(\/|$)/u),
     layout: 'canvas',
   },
 ];
@@ -441,6 +441,50 @@ export function presetSections(
     .filter((section) => section.available?.(doc) ?? true)
     .map((section) => resolve(section, doc));
 }
+
+export type ChangedSection<K extends string> = StudioSection<K> & { pending: boolean };
+
+function changedSections<Id extends string, Doc>(
+  registry: readonly StudioSectionDefinition<Id, Doc>[],
+  fallback: (path: string) => Id,
+  shown: readonly StudioSection<Id>[],
+  paths: readonly string[],
+  drafts: readonly string[]
+): ChangedSection<Id>[] {
+  const place = (id: Id) => (shown.some((section) => section.id === id) ? id : fallback(''));
+  const changed = new Set<Id>();
+  const pending = new Set<Id>();
+  for (const path of paths)
+    changed.add(place(registry.find((section) => section.owns(path))?.id ?? fallback(path)));
+  for (const key of drafts) {
+    const owner = registry.find((section) =>
+      section.drafts?.some((draft) => key === draft || key.startsWith(`${draft}.`))
+    );
+    if (owner) pending.add(place(owner.id));
+  }
+  if (drafts.length && !changed.size && !pending.size) pending.add(fallback(''));
+  return shown
+    .filter((section) => changed.has(section.id) || pending.has(section.id))
+    .map((section) => ({ ...section, pending: pending.has(section.id) }));
+}
+
+export const contentChanges = (
+  shown: readonly StudioSection<ContentSection>[],
+  paths: readonly string[],
+  drafts: readonly string[] = []
+) =>
+  changedSections(
+    contentSectionRegistry,
+    (path) => (path.startsWith('/package/nativeRisu/') ? 'source' : 'basic'),
+    shown,
+    paths,
+    drafts
+  );
+export const presetChanges = (
+  shown: readonly StudioSection<PresetSection>[],
+  paths: readonly string[],
+  drafts: readonly string[] = []
+) => changedSections(presetSectionRegistry, () => 'options', shown, paths, drafts);
 
 export function promptBlockTypeLabels(): Record<string, string> {
   return {

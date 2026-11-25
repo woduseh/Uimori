@@ -13,10 +13,12 @@ import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { EditorStudio, useStudioSection } from './EditorStudio.js';
-import { presetSections } from './studio-sections.js';
+import { presetChanges, presetSections } from './studio-sections.js';
+import { EditorChanges, PreviousVersionAction, RestoredVersionNotice } from './EditorChanges.js';
+import { changedValuePaths } from './editor-values.js';
 import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
-import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
@@ -35,7 +37,6 @@ import {
   ResourceEditorProvider,
   ResourceEditorStatus,
   ResourceEditorActions,
-  ResourceEditorMenuActions,
   requestResourceConflictReview,
   useResourceEditor,
   useResourceEditorCommands,
@@ -121,6 +122,16 @@ export function PromptEditor({
   const commands = useResourceEditorCommands(shared);
   const sectionId = useId();
   const sections = presetSections(model.program, role === 'main');
+  const changedPaths = useMemo(
+    () => (state.dirty ? changedValuePaths(state.document.baseModel, model) : []),
+    [state.dirty, state.document.baseModel, model]
+  );
+  const changes = state.dirty
+    ? presetChanges(sections, changedPaths, [
+        ...Object.keys(state.local.rawFields),
+        ...state.local.unappliedFields,
+      ])
+    : [];
   const [section, selectSection] = useStudioSection(
     'prompt',
     sections.map((item) => item.id),
@@ -303,69 +314,66 @@ export function PromptEditor({
           className="primary native-editor-save"
           onClick={() => void save(!!draft.base)}
         />
-        {(draft.base || commands.canDiscard) && (
-          <ActionMenu
-            label={t('prompts.uiManagePrompts')}
-            className={`prompt-management-menu${draft.base ? '' : ' editor-phone-menu'}`}
-          >
-            <ResourceEditorMenuActions commands={commands} />
-            {draft.base && (
-              <div className="action-menu-group">
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={
-                    busy || state.creationPending || !!collaborationIssue || !draft.title.trim()
+        {draft.base && (
+          <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
+            <PreviousVersionAction
+              commands={commands}
+              compare={(previous) =>
+                presetChanges(sections, changedValuePaths(state.document.baseModel, previous))
+              }
+            />
+            <div className="action-menu-group">
+              <button
+                type="button"
+                className="secondary"
+                disabled={
+                  busy || state.creationPending || !!collaborationIssue || !draft.title.trim()
+                }
+                onClick={() => void save(false)}
+              >
+                <CopyIcon size={18} aria-hidden="true" />
+                {t('prompts.uiSaveACopy')}
+              </button>
+              <RisuExportButton
+                kind="prompt-presets"
+                id={draft.base.id}
+                revision={draft.base.revision}
+                title={draft.base.title}
+                disabled={busy || draft.dirty || pendingTemplate}
+                onError={setExportError}
+              />
+            </div>
+            <div className="action-menu-group">
+              <DeleteButton
+                path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+                revision={draft.base.revision}
+                title={draft.base.title}
+                label={t('prompts.uiDeletePrompt')}
+                disabled={busy}
+                onError={onError}
+                onDeleted={async () => {
+                  const removed = draft.base!.id;
+                  setLocalPresets((current) => current.filter((item) => item.id !== removed));
+                  for (const [key, cached] of cache.current) {
+                    if (cached.snapshot().document.targetId === removed) cache.current.delete(key);
                   }
-                  onClick={() => void save(false)}
-                >
-                  <CopyIcon size={18} aria-hidden="true" />
-                  {t('prompts.uiSaveACopy')}
-                </button>
-                <RisuExportButton
-                  kind="prompt-presets"
-                  id={draft.base.id}
-                  revision={draft.base.revision}
-                  title={draft.base.title}
-                  disabled={busy || draft.dirty || pendingTemplate}
-                  onError={setExportError}
-                />
-              </div>
-            )}
-            {draft.base && (
-              <div className="action-menu-group">
-                <DeleteButton
-                  path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
-                  revision={draft.base.revision}
-                  title={draft.base.title}
-                  label={t('prompts.uiDeletePrompt')}
-                  disabled={busy}
-                  onError={onError}
-                  onDeleted={async () => {
-                    const removed = draft.base!.id;
-                    setLocalPresets((current) => current.filter((item) => item.id !== removed));
-                    for (const [key, cached] of cache.current) {
-                      if (cached.snapshot().document.targetId === removed)
-                        cache.current.delete(key);
-                    }
-                    setSelectedSessions(
-                      (current) =>
-                        Object.fromEntries(
-                          roles.map((role) => {
-                            if (current[role].snapshot().document.targetId !== removed)
-                              return [role, current[role]];
-                            const next = createSession(role);
-                            cache.current.set(next.editorKey, next);
-                            return [role, next];
-                          })
-                        ) as Record<PromptRole, ResourceEditorSession>
-                    );
-                    await reload?.();
-                    setStatus(uiMessage('prompts.uiPromptDeleted'));
-                  }}
-                />
-              </div>
-            )}
+                  setSelectedSessions(
+                    (current) =>
+                      Object.fromEntries(
+                        roles.map((role) => {
+                          if (current[role].snapshot().document.targetId !== removed)
+                            return [role, current[role]];
+                          const next = createSession(role);
+                          cache.current.set(next.editorKey, next);
+                          return [role, next];
+                        })
+                      ) as Record<PromptRole, ResourceEditorSession>
+                  );
+                  await reload?.();
+                  setStatus(uiMessage('prompts.uiPromptDeleted'));
+                }}
+              />
+            </div>
           </ActionMenu>
         )}
       </div>
@@ -457,16 +465,26 @@ export function PromptEditor({
                   onChange={(event) => edit({ title: event.target.value })}
                 />
               </h2>
-              <ResourceEditorActions value={shared} commands={commands} hideSyncError />
+              <ResourceEditorActions
+                value={shared}
+                commands={commands}
+                hideSyncError
+                changes={
+                  <EditorChanges commands={commands} changes={changes} onSelect={selectSection} />
+                }
+              />
               {saveActions}
               {headingTrailing}
             </div>
           }
           notice={
-            <DismissibleError
-              message={translateMessage(exportError)}
-              onDismiss={() => setExportError('')}
-            />
+            <>
+              <RestoredVersionNotice commands={commands} />
+              <DismissibleError
+                message={translateMessage(exportError)}
+                onDismiss={() => setExportError('')}
+              />
+            </>
           }
         >
           <fieldset className="prompt-editor-fields" disabled={busy}>

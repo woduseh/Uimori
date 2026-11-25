@@ -26,7 +26,6 @@ import {
   ResourceEditorProvider,
   ResourceEditorStatus,
   ResourceEditorActions,
-  ResourceEditorMenuActions,
   ResourceEditorLeaveWarning,
   requestResourceConflictReview,
   discardActiveEditor,
@@ -37,17 +36,28 @@ import {
 } from './resource-editor.js';
 import {
   availableSections,
+  contentChanges,
   contentSectionRegistry,
   contentSections,
   defaultContentSection,
 } from './studio-sections.js';
+import { EditorChanges, PreviousVersionAction, RestoredVersionNotice } from './EditorChanges.js';
+import { changedValuePaths } from './editor-values.js';
 import {
   editableResource,
   type ContentEditModel,
   type ResourceSaveResult,
 } from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { placementCategory } from '../core/library-organization.js';
@@ -1259,6 +1269,16 @@ function ContentEditor({
     !!initial
   );
   const sections = contentSections(value.package, value.kind, section, state.local.unappliedFields);
+  const changedPaths = useMemo(
+    () => (dirty ? changedValuePaths(document.baseModel, value) : []),
+    [dirty, document.baseModel, value]
+  );
+  const changes = dirty
+    ? contentChanges(sections, changedPaths, [
+        ...Object.keys(state.local.rawFields),
+        ...state.local.unappliedFields,
+      ])
+    : [];
   const anchor = useResourceAnchor('content', document.targetId);
   const selected = document.targetId
     ? {
@@ -1423,7 +1443,14 @@ function ContentEditor({
                 />
               </h2>
               <div className="library-detail-actions">
-                <ResourceEditorActions value={shared} commands={commands} hideSyncError />
+                <ResourceEditorActions
+                  value={shared}
+                  commands={commands}
+                  hideSyncError
+                  changes={
+                    <EditorChanges commands={commands} changes={changes} onSelect={selectSection} />
+                  }
+                />
                 {selected && canUse(category) && (
                   <button
                     type="button"
@@ -1466,7 +1493,12 @@ function ContentEditor({
                   onClick={state.creationPending ? () => void saveContent() : undefined}
                 />
                 <LibraryItemMenu title={t('library.resourceMenu')}>
-                  <ResourceEditorMenuActions commands={commands} />
+                  <PreviousVersionAction
+                    commands={commands}
+                    compare={(previous) =>
+                      contentChanges(sections, changedValuePaths(document.baseModel, previous))
+                    }
+                  />
                   {selected && (
                     <div className="action-menu-group">
                       {category === 'bot' && onConfigureChat && (
@@ -1591,6 +1623,7 @@ function ContentEditor({
                   {t('library.nameRequired')}
                 </p>
               )}
+              <RestoredVersionNotice commands={commands} />
               <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
             </>
           }

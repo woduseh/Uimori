@@ -9,6 +9,7 @@ import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import {
   discardEdits,
   editLibraryContent,
+  editorChanges,
   editorSectionPlacement,
   navigationAction,
   editorTab,
@@ -200,9 +201,7 @@ test('EFRAME02 save is emphasized only with unsaved changes and chat start stays
   await expect(start).toBeInViewport();
   await selectEditorSection(page, '기본 정보');
   await page.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(`${title} 수정`);
-  await expect(header.locator('.resource-editor-status').getByRole('status')).toHaveText(
-    '미저장 변경'
-  );
+  await expect(editorChanges(header)).toHaveAccessibleName('변경 1건');
   await expect(save).toBeEnabled();
   await expect(start).toBeDisabled();
   await save.click();
@@ -645,8 +644,11 @@ for (const width of [360, 412]) {
     await expectOneRow(page, 'dirty');
     await expect(page.getByRole('button', { name: '편집 취소', exact: true })).toHaveCount(0);
     await page.getByLabel('자료 메뉴', { exact: true }).click();
-    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await expect(page.getByRole('button', { name: '편집 취소', exact: true })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await discardEdits(page);
     await expect(name).toHaveValue(title);
+    await expect(name).toBeFocused();
     await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled();
   });
 }
