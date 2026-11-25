@@ -16,7 +16,8 @@ async function fixtureDatabase(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, 'ledger.sqlite');
   const store = new Store(path);
-  const at = (offsetMs) => new Date(Date.now() - 86_400_000 + offsetMs).toISOString();
+  const dayAgo = Date.now() - 86_400_000;
+  const at = (offsetMs) => new Date(dayAgo + offsetMs).toISOString();
   const db = store.db;
   store.transaction(() => {
     db.prepare(
