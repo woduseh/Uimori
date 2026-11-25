@@ -1,4 +1,6 @@
 import { createRisuCbs } from '../third_party/risuai/cad8595a/cbs-parser.js';
+import { registerCBS, type CBSRegisterArg } from '../third_party/risuai/cad8595a/cbs.js';
+import type { CbsFunctionCatalog } from '../core/cbs-analysis.js';
 import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { parseKeyValue, type Database } from '../third_party/risuai/cad8595a/cbs-support.js';
 import type { character, RisuModule } from '../third_party/risuai/cad8595a/types.js';
@@ -270,6 +272,36 @@ export function createNativeRisuCbsSession(signal?: AbortSignal) {
       return (closing ??= worker?.close() ?? Promise.resolve());
     },
   };
+}
+
+let functionCatalog: CbsFunctionCatalog | undefined;
+
+export function nativeRisuCbsFunctionCatalog(): CbsFunctionCatalog {
+  if (functionCatalog) return functionCatalog;
+  const functions = new Map<string, CbsFunctionCatalog['functions'][number]>();
+  const registerFunction: CBSRegisterArg['registerFunction'] = (entry) => {
+    functions.delete(entry.name);
+    functions.set(entry.name, {
+      name: entry.name,
+      aliases: entry.alias.filter((alias) => alias !== entry.name),
+      description: entry.description,
+      ...(entry.deprecated
+        ? {
+            deprecated: {
+              message: entry.deprecated.message,
+              ...(entry.deprecated.replacement
+                ? { replacement: entry.deprecated.replacement }
+                : {}),
+            },
+          }
+        : {}),
+      ...(entry.internalOnly ? { internal: true } : {}),
+      ...(entry.callback === 'doc_only' ? { documentationOnly: true } : {}),
+    });
+  };
+  registerCBS({ registerFunction } as CBSRegisterArg);
+  functionCatalog = { functions: [...functions.values()] };
+  return functionCatalog;
 }
 
 function stripRisuComments(text: string): string {

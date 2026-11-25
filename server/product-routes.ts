@@ -3,6 +3,7 @@ import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { processImageUpload } from './image-processing.js';
 import { databaseBackupStream } from './database-backup.js';
 import { nativeRisuPreview } from './risu-native-preview.js';
+import { nativeRisuCbsFunctionCatalog } from './risu-native-cbs.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
 import { assetDeletionRoutes } from './asset-deletion.js';
@@ -160,6 +161,7 @@ export function productRoutes(
     return product.library(request.query.view === 'summary');
   });
   app.get('/api/provider-management/definitions', async () => PROVIDER_DEFINITIONS);
+  app.get('/api/risu/cbs-functions', async () => nativeRisuCbsFunctionCatalog());
   app.post(
     '/api/provider-management/vertex-credentials',
     { bodyLimit: 70 * 1024 },
