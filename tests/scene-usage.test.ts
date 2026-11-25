@@ -70,7 +70,7 @@ test('the run text cost keeps a known subtotal apart from unpriced calls', () =>
   expect(
     sceneCostLabels({ usd: null, subtotalUsd: 0.004995, unknownCount: 1, attemptCount: 2 })
   ).toEqual({
-    short: '$0.005',
+    short: '$0.005+',
     full: '확인된 금액 합계 $0.004995, 미확인 1회 포함',
   });
   expect(

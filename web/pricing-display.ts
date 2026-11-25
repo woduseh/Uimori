@@ -51,7 +51,9 @@ export function sceneCostLabels(
         : formatUsd(estimate.subtotalUsd),
     v1: estimate.unknownCount,
   });
-  return estimate.subtotalUsd > 0 ? { short: formatUsdSummary(estimate.subtotalUsd), full } : null;
+  return estimate.subtotalUsd > 0
+    ? { short: `${formatUsdSummary(estimate.subtotalUsd)}+`, full }
+    : null;
 }
 
 const estimateNotes: Record<string, string> = {
