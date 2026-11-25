@@ -75,7 +75,7 @@ async function renderStart(
   } catch (error) {
     if (error instanceof HttpError) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    throw new HttpError(422, message.slice(0, EVALUATION_MESSAGE_MAX_CHARS));
+    return { failure: message.slice(0, EVALUATION_MESSAGE_MAX_CHARS) };
   }
 }
 
@@ -87,7 +87,7 @@ export async function nativeRisuPreview(
   const { content, pkg } = savedPackage(store, id, query.revision);
   const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
   if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
-  return renderStart(
+  const result = await renderStart(
     content,
     pkg,
     structuredClone(pkg.nativeRisu),
@@ -95,6 +95,8 @@ export async function nativeRisuPreview(
     start.text,
     query
   );
+  if ('failure' in result) throw new HttpError(422, 'RISU_PREVIEW_EVALUATION_FAILED');
+  return result;
 }
 
 export async function nativeRisuDraftPreview(

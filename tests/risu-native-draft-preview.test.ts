@@ -126,8 +126,9 @@ test('rejects invalid drafts and reports evaluation failures without a server er
     },
   ];
   const failed = await post({ ...valid, nativeRisu: failing });
-  expect(failed.statusCode, failed.body).toBe(422);
-  expect(failed.json().error).toContain('broken draft');
+  expect(failed.statusCode, failed.body).toBe(200);
+  expect(failed.json().failure).toContain('broken draft');
+  expect(failed.json().html).toBeUndefined();
 });
 
 test('stays behind the API session', async () => {
