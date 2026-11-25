@@ -94,11 +94,43 @@ async function snapshot(
     settings: { maxCalls: 3 },
     request: 'SYNTHETIC_CURRENT_ONCE',
     history: [],
-    resources: [],
+    resources: [
+      {
+        id: 'synthetic-reference',
+        chatId: profile.chatId,
+        revision: 1,
+        kind: 'lore',
+        title: 'Synthetic reference',
+        description: 'Synthetic unread reference',
+        text: 'SYNTHETIC_REFERENCE_BODY',
+        loading: 'discoverable',
+      },
+    ],
     logicalHistory: [],
     profile,
   });
 }
+test('reference tools are offered only while a reference is left unread', async () => {
+  const build = async (loading?: 'pinned' | 'discoverable') => {
+    const current = await snapshot();
+    current.resources = loading ? [{ ...current.resources[0]!, loading }] : [];
+    delete current.promptCompilation;
+    const { request } = buildMainProviderRequest(current);
+    return {
+      tools: request.stable.tools.map((tool) => tool.name),
+      contract: request.stable.contract,
+    };
+  };
+  for (const delivered of [await build(), await build('pinned')]) {
+    expect(delivered.tools).not.toContain('knowledge.read');
+    expect(delivered.tools).not.toContain('knowledge.search');
+    expect(delivered.tools).toContain('story.read');
+    expect(delivered.contract).not.toContain('knowledge.read');
+  }
+  const unread = await build('discoverable');
+  expect(unread.tools).toEqual(expect.arrayContaining(['knowledge.search', 'knowledge.read']));
+  expect(unread.contract).toContain('marked loading "pinned" are already in the input in full');
+});
 test('Story UI guidance is an opted-in execution contract, not reference-data instructions', async () => {
   const off = await snapshot();
   expect(buildMainProviderRequest(off).request.stable.contract).not.toContain(
@@ -327,7 +359,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       history: () => [],
       product: {
         snapshot: () => structuredClone(work.profile),
-        resources: () => [],
+        resources: () => structuredClone(work.resources),
       },
       native: { snapshot: () => undefined },
       outline: { freezeFocus: () => undefined },

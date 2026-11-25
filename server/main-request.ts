@@ -10,7 +10,7 @@ import {
   CONTEXT_DERIVED_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
 } from '../core/context-summary-policy.js';
-import { MAIN_READ_TOOLS, SKILL_TOOL_NAMES } from '../core/read-tools.js';
+import { KNOWLEDGE_TOOL_NAMES, MAIN_READ_TOOLS, SKILL_TOOL_NAMES } from '../core/read-tools.js';
 import { MAIN_SHELL_TOOL } from '../core/main-shell.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
@@ -104,12 +104,11 @@ export function buildMainProviderRequest(
       : undefined);
   const input = buildMainInput(fixed, options.results ?? []),
     terminal = storySubmissionEnabled(fixed);
-  if (
-    !(input.catalogPage ? roleResources(fixed) : input.catalog).some(
-      (item) => item.kind === 'skill'
-    )
-  )
+  const references = input.catalogPage ? roleResources(fixed) : input.catalog;
+  if (!references.some((item) => item.kind === 'skill'))
     input.tools = input.tools.filter((name) => !SKILL_TOOL_NAMES.includes(name));
+  if (!references.some((item) => item.kind !== 'skill' && item.loading !== 'pinned'))
+    input.tools = input.tools.filter((name) => !KNOWLEDGE_TOOL_NAMES.includes(name));
 
   const collaboration = fixed.profile?.promptPresets?.main?.program.collaboration;
   const agentTools: ProviderTool[] = collaboration?.enabled
@@ -176,16 +175,14 @@ export function buildMainProviderRequest(
   if (evaluation)
     contract +=
       '\nThe selected evaluation tool set is scoped to this model preset and this run. Complete this run by calling eval_submit_artifact alone with the finished artifact in content and userFacingNotice as separate metadata. Ordinary final text does not complete the run.';
-  if (
-    input.tools.includes('knowledge.read') &&
-    input.catalog.some((item) => item.loading !== 'pinned')
-  )
-    contract += '\n' + CATALOG_READ_GUIDANCE;
+  const knowledge = input.tools.includes('knowledge.read');
+  if (knowledge) contract += '\n' + CATALOG_READ_GUIDANCE;
   const shell = options.shell ?? !!process.env.UIMORI_SHELL_ROOT;
   if (shell) {
     input.tools.push(MAIN_SHELL_TOOL.name);
-    contract +=
-      '\nUse data.exec when a reference question needs several searches or local processing; read known reference ids directly with knowledge.read.';
+    if (knowledge)
+      contract +=
+        '\nUse data.exec when a reference question needs several searches or local processing; read known reference ids directly with knowledge.read.';
   }
   const bootstrap = [...(evaluation?.bootstrap ?? []), ...(options.agentBootstrap ?? [])];
   const providerInput = requestInput(fixed, input);
