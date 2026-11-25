@@ -38,7 +38,7 @@ const prompt = (): ProviderPrompt => ({
   ],
   cachePlan: [],
 });
-const request = (modelId = 'gpt-5.6'): ProviderRequest => ({
+const request = (modelId = 'gpt-5.6-sol'): ProviderRequest => ({
   role: 'main',
   modelId,
   stable: {
@@ -131,7 +131,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
       'assistant',
       'user',
     ]);
-    const anthropic = wire(encodeAnthropic(request('claude-opus-5')).body);
+    const anthropic = wire(encodeAnthropic(request('claude-opus-5-5')).body);
     expect(anthropic.messages.map((m: any) => m.role)).toEqual(['user', 'assistant', 'user']);
     expect(anthropic.system.at(-1).text).toBe('NATIVE_SYSTEM');
     const vertex = wire(encodeVertex(request(VERTEX_GEMINI_MODEL_ID)).body);
@@ -178,7 +178,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     const responses = wire(encodeResponses(r).body);
     expect(responses.prompt_cache_options).toEqual({ mode: 'explicit' });
     expect(responses.input[0].content[0].prompt_cache_breakpoint).toEqual({ mode: 'explicit' });
-    const a = wire(encodeAnthropic({ ...r, modelId: 'claude-opus-5' }).body);
+    const a = wire(encodeAnthropic({ ...r, modelId: 'claude-opus-5-5' }).body);
     expect(a.system.at(-1).cache_control).toEqual({ type: 'ephemeral' });
     expect(wire(encodeChat(r).body)).not.toHaveProperty('prompt_cache_options');
     r.prompt!.cachePlan[0].policy = 'require';
@@ -203,7 +203,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
   test.each(['1h', undefined] as const)(
     'Claude applies TTL %s to automatic caching and every authored point',
     (cacheTtl) => {
-      const r = request('claude-fable-5-1');
+      const r = request('claude-fable-5-2');
       r.generation = {
         maxOutputTokens: 8192,
         temperature: null,
@@ -232,7 +232,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
   test.each(['openai-responses-v1', 'anthropic-messages-v1'] as const)(
     '%s retains four authored points by omitting the extra automatic point',
     (protocol) => {
-      const r = request(protocol === 'openai-responses-v1' ? 'gpt-5.6-sol' : 'claude-opus-5');
+      const r = request(protocol === 'openai-responses-v1' ? 'gpt-5.6-sol' : 'claude-opus-5-5');
       const encode = protocol === 'openai-responses-v1' ? encodeResponses : encodeAnthropic;
       r.generation = { maxOutputTokens: 8192, temperature: null, cacheMode: 'automatic' };
       r.prompt!.cachePlan = r
@@ -268,7 +268,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
   test.each(['openai-responses-v1', 'anthropic-messages-v1'] as const)(
     '%s cache OFF overrides authored required points with explicit diagnostics',
     (protocol) => {
-      const r = request(protocol === 'openai-responses-v1' ? 'gpt-6-astra' : 'claude-fable-5-1');
+      const r = request(protocol === 'openai-responses-v1' ? 'gpt-6-astra' : 'claude-fable-5-2');
       const encode = protocol === 'openai-responses-v1' ? encodeResponses : encodeAnthropic;
       r.generation = { maxOutputTokens: 8192, temperature: null, cacheMode: 'disabled' };
       r.prompt!.cachePlan = r.prompt!.messages.map((m) => ({
@@ -304,7 +304,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
       expect(() => planNativeMessages(r, protocol)).toThrow('PROMPT_CACHE_UNSUPPORTED');
     }
   });
-  test.each(['claude-opus-5-5', 'claude-fable-5-2', 'claude-mythos-5-2'])(
+  test.each(['claude-opus-5-5', 'claude-fable-5-2'])(
     'reviewed %s preserves an authored cache point without selecting a cache mode',
     (modelId) => {
       const r = request(modelId);
@@ -317,8 +317,8 @@ describe('native provider wire (synthetic, no live calls)', () => {
   );
   test('rejects prefill while Anthropic accepts mid-system for any model ID', () => {
     for (const [encoder, model] of [
-      [encodeResponses, 'gpt-5.6'],
-      [encodeChat, 'gpt-5.6'],
+      [encodeResponses, 'gpt-5.6-sol'],
+      [encodeChat, 'gpt-5.6-sol'],
       [encodeAnthropic, 'claude-opus-5-5'],
       [encodeVertex, VERTEX_GEMINI_MODEL_ID],
     ] as const) {
@@ -343,7 +343,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     expect(() => encodeAnthropic(r)).toThrow('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED');
   });
   test('Anthropic completes a late system section once without changing authored input or cache prefixes', () => {
-    const r = request('claude-opus-5');
+    const r = request('claude-opus-5-5');
     r.prompt!.messages = [
       message('system', 'system', 'NATIVE_SYSTEM'),
       message('old-user', 'user', 'EARLIER_REQUEST'),
@@ -387,7 +387,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
         blockId: 'seal',
         logicalIndex: 3,
         protocol: 'anthropic-messages-v1',
-        modelId: 'claude-opus-5',
+        modelId: 'claude-opus-5-5',
         status: 'mapped',
       },
     ]);
@@ -418,7 +418,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
   test.each([false, true])(
     'Anthropic replays frozen native turns without duplicating a boundary (inserted=%s)',
     (inserted) => {
-      const r = request('claude-opus-5');
+      const r = request('claude-opus-5-5');
       if (inserted)
         r.prompt!.messages.splice(
           3,
@@ -476,7 +476,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
       expect(r).toEqual(before);
     }
   );
-  test.each(['gemini-3.8-flash', 'google/Gemini-3.8-flash'])(
+  test.each(['gemini-4-carbon', 'google/Gemini-4-carbon'])(
     'maps every non-leading system to user only on the wire for %s',
     (modelId) => {
       const r = request(modelId);
@@ -551,7 +551,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
           before.prompt!.messages.map((m) => m.content.find((part) => part.type === 'text')?.text)
         );
       }
-      for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
+      for (const other of ['gpt-5.6-sol', 'claude-opus-5-5', 'custom-gemini-proxy']) {
         expect(
           planNativeMessages({ ...r, modelId: other }, 'openai-chat-v1')!.messages.map(
             (m) => wire(m).role
@@ -563,9 +563,9 @@ describe('native provider wire (synthetic, no live calls)', () => {
   );
   test('Gemini normalization preserves precise prefill and native final-assistant failures', () => {
     for (const [protocol, modelId, encoder] of [
-      ['vertex-gemini-v1', 'gemini-3.8-flash', encodeVertex],
-      ['openai-responses-v1', 'google/gemini-3.8-flash', encodeResponses],
-      ['openai-chat-v1', 'google/gemini-3.8-flash', encodeChat],
+      ['vertex-gemini-v1', 'gemini-4-carbon', encodeVertex],
+      ['openai-responses-v1', 'google/gemini-4-carbon', encodeResponses],
+      ['openai-chat-v1', 'google/gemini-4-carbon', encodeChat],
     ] as const) {
       const r = request(modelId);
       r.prompt!.messages.splice(2, 0, message('middle', 'system', 'MID_RULE'));
@@ -579,11 +579,11 @@ describe('native provider wire (synthetic, no live calls)', () => {
       );
       expect(r).toEqual(before);
     }
-    const r = request('gemini-3.8-flash');
+    const r = request('gemini-4-carbon');
     r.prompt!.messages.push(message('final-history', 'assistant', 'COMPLETED_HISTORY'));
     const before = structuredClone(r);
     expect(() => encodeVertex(r)).toThrow(
-      'PROMPT_COMPLETED_ASSISTANT_AT_END_UNSUPPORTED:block=final-history:index=4:protocol=vertex-gemini-v1:model=gemini-3.8-flash'
+      'PROMPT_COMPLETED_ASSISTANT_AT_END_UNSUPPORTED:block=final-history:index=4:protocol=vertex-gemini-v1:model=gemini-4-carbon'
     );
     expect(r).toEqual(before);
   });
@@ -647,7 +647,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
   test('Anthropic signed content and Vertex thought signatures survive native continuation', () => {
-    const r = request('claude-opus-5');
+    const r = request('claude-opus-5-5');
     const encoded = encodeAnthropic(r);
     const d = new AnthropicDecoder(encoded.context);
     d.accept({
@@ -702,7 +702,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
   test('Anthropic accepts script, context and helper roles without enabling a model call', () => {
     for (const role of ['script', 'context', 'helper'] as const)
       expect(
-        wire(encodeAnthropic({ ...request('claude-opus-5'), role }).body).messages
+        wire(encodeAnthropic({ ...request('claude-opus-5-5'), role }).body).messages
       ).toHaveLength(3);
   });
 });

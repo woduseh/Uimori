@@ -136,7 +136,7 @@ test.each(['known', 'unknown'] as const)(
         return nativeFetch(local.origin + '/vertex', init);
       })
     );
-    const snapshot = pricing(connection.protocol, 'gemini-3.8-flash');
+    const snapshot = pricing(connection.protocol, 'gemini-4-carbon');
     const flexRates = { input: 1, output: 4, cacheRead: 0.25, cacheWrite: null };
     snapshot.standardRates = { ...snapshot.rates };
     if (known === 'known') {

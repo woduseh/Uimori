@@ -74,7 +74,7 @@ test('DeepSeek uses max_tokens and preserves thinking across tool continuation',
 });
 test('DeepSeek normalizes authored text parts and bootstrap assistant reasoning', () => {
   const input = request();
-  input.modelId = 'deepseek-v4-flash';
+  input.modelId = 'deepseek-flash';
   input.bootstrap = [
     {
       callId: 'bootstrap-1',

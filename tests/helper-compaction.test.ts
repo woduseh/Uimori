@@ -2073,7 +2073,7 @@ test('manual compaction sends only attachments the summary model accepts', async
   const textOnly = f.store.product.model({
     title: 'Synthetic text-only context',
     connectionId: deepseek.id,
-    modelId: 'deepseek-v4-flash',
+    modelId: 'deepseek-flash',
     temperature: null,
     maxOutputTokens: 8192,
     inputTokenLimit: 65536,

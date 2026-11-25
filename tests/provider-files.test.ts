@@ -239,7 +239,7 @@ describe('native file attachment transmission', () => {
     }
     for (const name of ['recording.l16', 'recording.weba']) {
       expect(
-        fileInputSupported('google-gemini-v1', 'gemini-4-argon', classifyRequestFile(name)!)
+        fileInputSupported('google-gemini-v1', 'gemini-4-hydrogen', classifyRequestFile(name)!)
       ).toBe(true);
     }
     expect(fileInputSupported('openai-chat-v1', 'custom/future-model', office)).toBe(false);

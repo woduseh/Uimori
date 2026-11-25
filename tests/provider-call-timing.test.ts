@@ -72,7 +72,7 @@ test('Vertex streams record first byte, first thought, first visible text, strea
       'https://aiplatform.googleapis.com/v1/projects/synthetic/locations/global/publishers/google/models',
     credentialRef: 'UIMORI_PROVIDER_VERTEX_TIMING',
   };
-  const result = await executeProvider(connection, request('gemini-3.8-flash'), options());
+  const result = await executeProvider(connection, request('gemini-4-carbon'), options());
   expect(result.status).toBe('completed');
   const timing = result.timing!;
   expect(timing.requestBytes).toBe(Buffer.byteLength(bodies[0]!, 'utf8'));
@@ -98,7 +98,7 @@ test('Anthropic thinking deltas and HTTP failures carry only the timings they ca
         id: 'message-timing',
         type: 'message',
         role: 'assistant',
-        model: 'claude-opus-5',
+        model: 'claude-opus-5-5',
         content: [],
         stop_reason: null,
         usage: { input_tokens: 5, output_tokens: 0 },
@@ -127,7 +127,7 @@ test('Anthropic thinking deltas and HTTP failures carry only the timings they ca
     { type: 'message_stop' },
   ]);
   stubFetch(stream.response);
-  const streamed = await executeProvider(connection, request('claude-opus-5'), options());
+  const streamed = await executeProvider(connection, request('claude-opus-5-5'), options());
   expect(streamed.status).toBe('completed');
   expect(streamed.timing).toMatchObject({
     firstByteMs: expect.any(Number),
@@ -139,7 +139,7 @@ test('Anthropic thinking deltas and HTTP failures carry only the timings they ca
   expect(streamed.timing!.firstTextMs).toBeGreaterThanOrEqual(streamed.timing!.firstThoughtMs!);
 
   stubFetch(new Response('{"error":{"type":"overloaded_error"}}', { status: 529 }));
-  const failed = await executeProvider(connection, request('claude-opus-5'), options());
+  const failed = await executeProvider(connection, request('claude-opus-5-5'), options());
   expect(failed.error?.code).toBe('HTTP_529');
   expect(failed.timing).toMatchObject({
     firstByteMs: expect.any(Number),

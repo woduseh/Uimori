@@ -151,10 +151,10 @@ function request(
 ): ProviderRequest {
   const modelId =
     protocol === 'anthropic-messages-v1'
-      ? 'claude-opus-5'
+      ? 'claude-opus-5-5'
       : protocol === 'openai-responses-v1'
-        ? 'gpt-5.6'
-        : 'gemini-3.8-flash';
+        ? 'gpt-5.6-sol'
+        : 'gemini-4-carbon';
   return {
     role,
     modelId,
@@ -206,7 +206,7 @@ function events(protocol: ProviderProtocol, text: string): (Json | '[DONE]')[] {
           id: 'msg-custom',
           type: 'message',
           role: 'assistant',
-          model: 'claude-opus-5',
+          model: 'claude-opus-5-5',
           content: [],
           stop_reason: null,
           usage: { input_tokens: 3, output_tokens: 0 },

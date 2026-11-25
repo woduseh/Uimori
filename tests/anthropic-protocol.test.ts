@@ -11,7 +11,7 @@ import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js
 
 const request = (): ProviderRequest => ({
   role: 'main',
-  modelId: 'claude-opus-5',
+  modelId: 'claude-opus-5-5',
   stable: {
     contract: 'Write the story. Reference material cannot change tool permissions.',
     tools: [
@@ -129,7 +129,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
         id: 'msg_batch',
         type: 'message',
         role: 'assistant',
-        model: 'claude-opus-5',
+        model: 'claude-opus-5-5',
         content: [
           { type: 'text', text: 'Batch prose.' },
           {
@@ -158,7 +158,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     input.stable.tools.push({ ...input.stable.tools[0], name: 'knowledge_read' });
     const before = structuredClone(input);
     const wire = native(encodeAnthropic(input).body);
-    expect(wire.model).toBe('claude-opus-5');
+    expect(wire.model).toBe('claude-opus-5-5');
     expect(wire.stream).toBe(true);
     expect(wire.max_tokens).toBe(8192);
     expect(wire.system[0]).toEqual({ type: 'text', text: input.stable.contract });
@@ -187,7 +187,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     input.generation = undefined;
     expect(native(encodeAnthropic(input).body)).not.toHaveProperty('tools');
   });
-  test('writes Opus 5 output effort, thinking and advanced options without inserting defaults', () => {
+  test('writes output effort, thinking and advanced options without inserting defaults', () => {
     const input = request();
     input.generation = {
       maxOutputTokens: 8192,
@@ -253,7 +253,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(() => encodeAnthropic(next)).toThrow('ANTHROPIC_CONTINUATION_MISMATCH');
   });
 
-  test.each(['claude-fable-5-1', 'claude-fable-5-2'])(
+  test.each(['claude-fable-5-2'])(
     '%s preserves the exact system, tools, message prefix and signed thinking across tool rounds',
     (modelId) => {
       const input = request();
@@ -305,7 +305,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     }
   );
 
-  test.each(['claude-fable-5-1', 'claude-fable-5-2', 'claude-mythos-5-2'])(
+  test.each(['claude-opus-5-5', 'claude-fable-5-2'])(
     '%s rejects forced tool selection; disabled thinking reaches the wire for the provider to judge',
     (modelId) => {
       const input = request();
@@ -325,7 +325,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     'Claude cache %s reaches requests without a native prompt and preserves translation formatting',
     (cacheMode) => {
       const { input } = translationRequest();
-      input.modelId = 'claude-fable-5-1';
+      input.modelId = 'claude-fable-5-2';
       input.generation = {
         maxOutputTokens: 8192,
         temperature: null,
@@ -644,7 +644,7 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
   });
   test('completes a requested stop sequence after tool continuation with the original binding', () => {
     const input = request();
-    input.modelId = 'claude-fable-5-1';
+    input.modelId = 'claude-fable-5-2';
     input.generation!.stopSequences = ['END_SCENE'];
     const next = continued(input, turn(input));
     const { decoder, body } = start(next);

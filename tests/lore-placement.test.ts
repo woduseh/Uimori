@@ -109,7 +109,7 @@ test('four native wire codecs deliver pinned bodies once and preserve fixed pref
     revision: 1,
     title: 'M',
     connectionId: 'c',
-    modelId: 'gpt-5.6',
+    modelId: 'gpt-5.6-sol',
     capabilityProtocol: 'openai-responses-v1',
     maxOutputTokens: 1000,
     temperature: null,

@@ -446,7 +446,7 @@ describe('provider-neutral evaluation tools', () => {
       'user',
     ]);
     expect(anthropic.tool_choice.name).toMatch(/eval_create_case$/u);
-    const vertex = encodeVertex({ ...request, modelId: 'gemini-3.8-flash' }).body as any;
+    const vertex = encodeVertex({ ...request, modelId: 'gemini-4-carbon' }).body as any;
     expect(vertex.contents.slice(0, 4).map((item: any) => item.role)).toEqual([
       'model',
       'user',

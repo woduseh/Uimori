@@ -34,10 +34,10 @@ const protocols = [
 function snapshot(protocol: ProviderProtocol): RunSnapshot {
   const modelId =
     protocol === 'vertex-gemini-v1'
-      ? 'gemini-3.8-flash'
+      ? 'gemini-4-carbon'
       : protocol === 'anthropic-messages-v1'
-        ? 'claude-opus-5'
-        : 'gpt-5.6';
+        ? 'claude-opus-5-5'
+        : 'gpt-5.6-sol';
   const target = {
     id: 'model',
     revision: 1,

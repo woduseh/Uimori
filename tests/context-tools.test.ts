@@ -1150,12 +1150,12 @@ describe('host read compaction and provider continuation inside one main run', (
     };
     for (const events of [[read], [receipt, read]]) {
       const { request } = buildMainProviderRequest(fixed, { completedToolHistory: events });
-      const response = encodeResponses({ ...request, modelId: 'gpt-5.6' }).body as Record<
+      const response = encodeResponses({ ...request, modelId: 'gpt-5.6-sol' }).body as Record<
         string,
         any
       >;
-      const chat = encodeChat({ ...request, modelId: 'gpt-5.6' }).body as Record<string, any>;
-      const anthropic = encodeAnthropic({ ...request, modelId: 'claude-opus-5' }).body as Record<
+      const chat = encodeChat({ ...request, modelId: 'gpt-5.6-sol' }).body as Record<string, any>;
+      const anthropic = encodeAnthropic({ ...request, modelId: 'claude-opus-5-5' }).body as Record<
         string,
         any
       >;

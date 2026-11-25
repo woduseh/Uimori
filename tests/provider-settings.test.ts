@@ -96,9 +96,9 @@ const modelBody = (connection: Connection, changes: Record<string, unknown> = {}
   connectionId: connection.id,
   modelId:
     connection.protocol === 'vertex-gemini-v1' || connection.protocol === 'google-gemini-v1'
-      ? 'gemini-3.8-flash'
+      ? 'gemini-4-carbon'
       : connection.protocol === 'anthropic-messages-v1'
-        ? 'claude-opus-5'
+        ? 'claude-opus-5-5'
         : connection.protocol === 'openai-responses-v1'
           ? 'gpt-5.6-sol'
           : 'provider/model-with-editable-id',

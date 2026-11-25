@@ -198,7 +198,7 @@ test('Vercel list metadata keeps vocabulary effort values, tool tags and both li
 });
 
 test('hints prefer list metadata, fall back to the reviewed table, and always carry the protocol vocabulary', () => {
-  const reviewed = modelHints(connection('anthropic-messages-v1'), 'claude-opus-5');
+  const reviewed = modelHints(connection('anthropic-messages-v1'), 'claude-opus-5-5');
   expect(reviewed).toMatchObject({
     source: 'reviewed',
     maxOutputTokens: 128000,
@@ -207,12 +207,12 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
       known: ['low', 'medium', 'high', 'xhigh', 'max'],
       all: ['low', 'medium', 'high', 'xhigh', 'max'],
     },
-    thinkingModes: { known: ['adaptive', 'disabled'], all: ['disabled', 'adaptive'] },
+    thinkingModes: { known: ['adaptive'], all: ['disabled', 'adaptive'] },
   });
   const listed = modelHints(
     connection('anthropic-messages-v1', [
       {
-        id: 'claude-opus-5',
+        id: 'claude-opus-5-5',
         name: 'Opus',
         capabilities: {},
         priceRevision: null,
@@ -220,14 +220,14 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
         options: { thinking: ['low', 'high'] },
       },
     ]),
-    'claude-opus-5'
+    'claude-opus-5-5'
   );
   expect(listed).toMatchObject({
     source: 'catalog',
     maxOutputTokens: 64000,
     inputTokenLimit: 200000,
     thinking: { known: ['low', 'high'] },
-    thinkingModes: { known: ['adaptive', 'disabled'] },
+    thinkingModes: { known: ['adaptive'] },
   });
   const unknown = modelHints(connection('openai-responses-v1'), 'gpt-7');
   expect(unknown.source).toBe('none');
@@ -240,7 +240,7 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
     all: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
   });
   expect(
-    modelHints(connection('vercel-chat-v1'), 'anthropic/claude-opus-5').thinking
+    modelHints(connection('vercel-chat-v1'), 'anthropic/claude-opus-5-5').thinking
   ).toMatchObject({
     field: 'outputEffort',
     wire: 'providerOptions.anthropic.effort',
@@ -255,12 +255,12 @@ test('hints prefer list metadata, fall back to the reviewed table, and always ca
 test('Vertex Model Garden publisher entries keep Gemini model IDs only', () => {
   expect(
     vertexPublisherModelEntry({
-      name: 'publishers/google/models/gemini-3.8-flash',
+      name: 'publishers/google/models/gemini-4-carbon',
       versionId: '1',
     })
   ).toEqual({
-    id: 'gemini-3.8-flash',
-    name: 'gemini-3.8-flash',
+    id: 'gemini-4-carbon',
+    name: 'gemini-4-carbon',
     capabilities: { tools: null, structuredOutput: null },
     priceRevision: null,
   });

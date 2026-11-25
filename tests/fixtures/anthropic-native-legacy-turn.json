@@ -1,6 +1,6 @@
 {
   "version": "anthropic-messages-turn-v1",
-  "modelId": "claude-opus-5",
+  "modelId": "claude-opus-5-5",
   "bindingHash": "e092a27a87d22269c0da9f9a64b01ec3558bc46ecbbcbb93909c0a9df7c9b5d2",
   "phase": "request",
   "messages": [

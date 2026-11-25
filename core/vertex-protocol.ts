@@ -129,7 +129,7 @@ export function encodeVertex(
   // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon#api-rules
   // (2026-11-20): the backend ignores temperature, top_k and top_p, thinking_level MINIMAL
   // returns HTTP 400, and one streamed segment produces up to 65,536 output tokens. The
-  // gemini-4-carbon and gemini-4-neon guides state the same.
+  // gemini-4-carbon, gemini-4-neon and gemini-4-hydrogen guides state the same.
   const gemini4 =
     request.modelId === 'gemini-4-argon'
       ? 'ARGON'
@@ -137,7 +137,9 @@ export function encodeVertex(
         ? 'CARBON'
         : request.modelId === 'gemini-4-neon'
           ? 'NEON'
-          : undefined;
+          : request.modelId === 'gemini-4-hydrogen'
+            ? 'HYDROGEN'
+            : undefined;
   if (gemini4 && generation?.thinkingLevel === 'MINIMAL')
     reject(`${gemini4}_THINKING_LEVEL_UNSUPPORTED`);
   if (gemini4 && (generation?.maxOutputTokens ?? 65_536) > 65_536)

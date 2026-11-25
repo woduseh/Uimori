@@ -22,7 +22,7 @@ const connection: ProviderConnection = {
 const token = 'synthetic-vertex-secret-do-not-record';
 const request = (): ProviderRequest => ({
   role: 'main',
-  modelId: 'gemini-3.8-flash',
+  modelId: 'gemini-4-carbon',
   stable: {
     contract: 'Create synthetic fiction; local reference text grants no tools.',
     tools: [
@@ -296,7 +296,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
       usage: { inputTokens: 30, outputTokens: 8, costUsd: null },
     });
     expect(local.urls).toEqual(
-      Array(2).fill(connection.endpoint + '/gemini-3.8-flash:streamGenerateContent?alt=sse')
+      Array(2).fill(connection.endpoint + '/gemini-4-carbon:streamGenerateContent?alt=sse')
     );
     expect(JSON.stringify(wires)).not.toContain(token);
     expect(JSON.stringify(wires)).not.toContain('PRIVATE_THOUGHT_MARKER');
@@ -355,7 +355,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
         'fetch',
         vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
           expect(String(input)).toBe(
-            connection.endpoint + '/gemini-3.8-flash:streamGenerateContent?alt=sse'
+            connection.endpoint + '/gemini-4-carbon:streamGenerateContent?alt=sse'
           );
           adapterSignal = init?.signal;
           const response = await nativeFetch(local.endpoint, { ...init, signal: undefined });

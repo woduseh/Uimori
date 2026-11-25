@@ -3,13 +3,31 @@ import {
   acceptsMidConversationSystem,
   generationFromModel,
   helperGenerationFromModel,
+  modelCapability,
   protocolOptionKeys,
+  supportedModels,
   validateModelOptions,
 } from '../core/model-capabilities.js';
-import { PROVIDER_PROTOCOLS, type ModelGeneration, type ModelPreset } from '../core/product.js';
-import { validateRequest } from '../core/transport.js';
+import {
+  PROVIDER_PROTOCOLS,
+  type Connection,
+  type ModelGeneration,
+  type ModelPreset,
+  type ProviderProtocol,
+} from '../core/product.js';
+import { validateRequest, type Json, type ProviderRequest } from '../core/transport.js';
 import { createEvaluationToolSession } from '../server/evaluation-session.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { modelHints } from '../core/model-hints.js';
+import { encodeAnthropic } from '../core/anthropic-protocol.js';
+import { encodeChat } from '../core/openai-chat-protocol.js';
+import { encodeResponses } from '../core/openai-protocol.js';
+import { encodeVertex } from '../core/vertex-protocol.js';
+import { modelDraft, modelDraftError, modelPayload } from '../web/provider-model-draft.js';
+import { Store } from '../server/store.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
 
@@ -120,7 +138,7 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
 
   const request = {
     role: 'main',
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
     stable: { contract: 'Synthetic', tools: [] },
     input: { task: 'Synthetic', controls: {} },
     generation: configured,
@@ -185,7 +203,7 @@ test('opt-in economy can lower effort but cannot change cache, tier, stop string
     id: 'model',
     revision: 1,
     title: 'Synthetic',
-    modelId: 'claude-opus-5',
+    modelId: 'claude-opus-5-5',
     connectionId: 'connection',
     ...base,
     maxOutputTokens: 16000,
@@ -251,4 +269,221 @@ test('a helper request caches by default only on a reviewed Claude model without
   expect(
     helperGenerationFromModel({ ...base, modelId: 'gpt-5.5' }, 'openai-responses-v1').cacheMode
   ).toBeUndefined();
+});
+
+const savedConnection = (protocol: ProviderProtocol): Connection => ({
+  id: `connection-${protocol}`,
+  revision: 1,
+  title: protocol,
+  protocol,
+  endpoint: 'http://127.0.0.1:9/v1',
+  enabled: true,
+  catalog: [],
+  catalogError: null,
+});
+const wireOf = (encoded: { body: Json }) => encoded.body as Record<string, any>;
+const removedModels: {
+  protocol: ProviderProtocol;
+  modelId: string;
+  options: Partial<ModelGeneration>;
+  wire: (request: ProviderRequest) => Record<string, any>;
+  expected: Record<string, unknown>;
+}[] = [
+  {
+    protocol: 'vertex-gemini-v1',
+    modelId: 'gemini-4-argon',
+    options: { thinkingLevel: 'MEDIUM', serviceTier: 'flex', stopSequences: ['END'] },
+    wire: (request) => wireOf(encodeVertex(request)).generationConfig,
+    expected: { thinkingConfig: { thinkingLevel: 'MEDIUM' }, stopSequences: ['END'] },
+  },
+  {
+    protocol: 'vertex-gemini-v1',
+    modelId: 'gemini-3.8-flash',
+    options: { temperature: 0.7, topP: 0.9, thinkingLevel: 'LOW' },
+    wire: (request) => wireOf(encodeVertex(request)).generationConfig,
+    expected: { temperature: 0.7, topP: 0.9, thinkingConfig: { thinkingLevel: 'LOW' } },
+  },
+  {
+    protocol: 'anthropic-messages-v1',
+    modelId: 'claude-mythos-5-2',
+    options: {
+      outputEffort: 'xhigh',
+      thinkingMode: 'adaptive',
+      serviceTier: 'standard_only',
+      cacheMode: 'automatic',
+      cacheTtl: '1h',
+      stopSequences: ['END'],
+    },
+    wire: (request) => wireOf(encodeAnthropic(request)),
+    expected: {
+      output_config: { effort: 'xhigh' },
+      thinking: { type: 'adaptive' },
+      service_tier: 'standard_only',
+      cache_control: { type: 'ephemeral', ttl: '1h' },
+      stop_sequences: ['END'],
+    },
+  },
+  {
+    protocol: 'openai-responses-v1',
+    modelId: 'gpt-5.6-terra',
+    options: {
+      reasoningEffort: 'xhigh',
+      verbosity: 'low',
+      reasoningContext: 'all_turns',
+      serviceTier: 'flex',
+      cacheMode: 'explicit',
+      cacheTtl: '30m',
+    },
+    wire: (request) => wireOf(encodeResponses(request)),
+    expected: {
+      reasoning: { effort: 'xhigh', context: 'all_turns' },
+      text: { verbosity: 'low' },
+      service_tier: 'flex',
+      prompt_cache_options: { mode: 'explicit', ttl: '30m' },
+    },
+  },
+  {
+    protocol: 'deepseek-chat-v1',
+    modelId: 'deepseek-v4-flash',
+    options: { reasoningEffort: 'none', temperature: 0.4 },
+    wire: (request) => wireOf(encodeChat(request, 'deepseek-chat-v1')),
+    expected: { temperature: 0.4, thinking: { type: 'disabled' } },
+  },
+];
+
+test.each(removedModels)(
+  'a saved $modelId removed from the table loads, saves and sends its options as an unlisted model',
+  ({ protocol, modelId, options, wire, expected }) => {
+    const connection = savedConnection(protocol);
+    expect(modelCapability(protocol, modelId)).toBeUndefined();
+    expect(supportedModels(protocol).map((item) => item.id)).not.toContain(modelId);
+    expect(modelHints(connection, modelId).source).toBe('none');
+    const preset: ModelPreset = {
+      id: 'saved',
+      revision: 3,
+      title: 'Saved before the table changed',
+      connectionId: connection.id,
+      modelId,
+      ...base,
+      ...options,
+    };
+    const draft = modelDraft(preset);
+    expect(modelDraftError(draft, connection)).toBe('');
+    const resaved = modelPayload({ ...draft, title: 'Renamed' }, connection) as ModelPreset;
+    expect(generationFromModel(resaved)).toEqual(generationFromModel(preset));
+    const generation = generationFromModel(preset);
+    expect(() => validateModelOptions(generation, protocol)).not.toThrow();
+    const request: ProviderRequest = {
+      role: 'main',
+      modelId,
+      stable: { contract: 'Synthetic', tools: [] },
+      input: { task: 'Synthetic', controls: {} },
+      generation,
+    };
+    expect(wire(request)).toMatchObject(expected);
+  }
+);
+
+test('a stored model with a removed ID survives an unrelated settings save and builds the same request', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-removed-model-'));
+  const store = new Store(join(directory, 'story.sqlite'));
+  try {
+    const connection = store.product.connection({
+      title: 'Compatible',
+      protocol: 'openai-chat-v1',
+      endpoint: 'http://127.0.0.1:9999/v1',
+      enabled: true,
+    }) as Connection;
+    const options = { reasoningEffort: 'xhigh', serviceTier: 'flex', temperature: 0.3 } as const;
+    const saved = store.product.model({
+      title: 'Terra',
+      connectionId: connection.id,
+      modelId: 'gpt-5.6-terra',
+      maxOutputTokens: 4096,
+      ...options,
+    }) as ModelPreset;
+    const renamed = store.product.model(
+      {
+        title: 'Terra, renamed',
+        connectionId: connection.id,
+        modelId: saved.modelId,
+        ...generationFromModel(saved),
+        expectedRevision: saved.revision,
+      },
+      saved.id
+    ) as ModelPreset;
+    expect(generationFromModel(renamed)).toEqual(generationFromModel(saved));
+    const snapshot = store.product.modelSnapshot(renamed.id, undefined, false);
+    const body = wireOf(
+      encodeChat({
+        role: 'main',
+        modelId: snapshot.modelId,
+        stable: { contract: 'Synthetic', tools: [] },
+        input: { task: 'Synthetic', controls: {} },
+        generation: generationFromModel(snapshot),
+      })
+    );
+    expect(body).toMatchObject({
+      model: 'gpt-5.6-terra',
+      reasoning_effort: 'xhigh',
+      service_tier: 'flex',
+      temperature: 0.3,
+    });
+  } finally {
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('Gemini 4 Hydrogen exposes XHIGH with a HIGH default while Carbon stops at HIGH', () => {
+  for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
+    const hydrogen = modelCapability(protocol, 'gemini-4-hydrogen')!;
+    expect(hydrogen).toMatchObject({
+      name: 'Gemini 4 Hydrogen',
+      maxOutputTokens: 65_536,
+      temperature: false,
+      topP: false,
+      stopSequences: false,
+      thinkingLevels: ['LOW', 'MEDIUM', 'HIGH', 'XHIGH'],
+      defaultThinkingLevel: 'HIGH',
+    });
+    expect(modelCapability(protocol, 'gemini-4-carbon')!.thinkingLevels).not.toContain('XHIGH');
+    expect(() =>
+      validateModelOptions({ ...base, thinkingLevel: 'XHIGH', maxOutputTokens: 65_536 }, protocol)
+    ).not.toThrow();
+    expect(modelHints(savedConnection(protocol), 'gemini-4-hydrogen').thinking?.known).toEqual([
+      'LOW',
+      'MEDIUM',
+      'HIGH',
+      'XHIGH',
+    ]);
+  }
+  expect(modelCapability('vertex-gemini-v1', 'gemini-4-hydrogen')!.serviceTiers).toBeUndefined();
+  expect(modelCapability('google-gemini-v1', 'gemini-4-hydrogen')!.serviceTiers).toEqual([
+    'standard',
+    'flex',
+    'priority',
+  ]);
+});
+
+test('DeepSeek V4.1 Flash is listed under its API ID with the documented effort vocabulary', () => {
+  const flash = modelCapability('deepseek-chat-v1', 'deepseek-flash')!;
+  expect(flash).toMatchObject({
+    name: 'DeepSeek V4.1 Flash',
+    maxOutputTokens: 384_000,
+    temperature: true,
+    reasoningEfforts: ['none', 'low', 'high', 'max'],
+    defaultReasoningEffort: 'high',
+  });
+  expect(modelCapability('deepseek-chat-v1', 'deepseek-v4.1-flash')).toBeUndefined();
+  for (const reasoningEffort of ['none', 'low', 'high', 'max'] as const)
+    expect(() =>
+      validateModelOptions({ ...base, reasoningEffort }, 'deepseek-chat-v1')
+    ).not.toThrow();
+  expect(() => validateModelOptions({ ...base, verbosity: 'low' }, 'deepseek-chat-v1')).toThrow(
+    'UNSUPPORTED_GENERATION_OPTIONS'
+  );
+  expect(modelHints(savedConnection('deepseek-chat-v1'), 'deepseek-flash').thinking?.known).toEqual(
+    ['none', 'low', 'high', 'max']
+  );
 });

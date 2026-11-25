@@ -49,7 +49,7 @@ const connection = (endpoint: string): ProviderConnection => ({
 
 const request = (): ProviderRequest => ({
   role: 'main',
-  modelId: 'claude-opus-5',
+  modelId: 'claude-opus-5-5',
   stable: { contract: 'Write the requested prose.', tools: [] },
   generation: { maxOutputTokens: 2048, temperature: null },
   input: { task: 'Continue the scene.', controls: {} },
@@ -250,7 +250,7 @@ describe('Anthropic Batch execution', () => {
                 id: 'msg-batch-1',
                 type: 'message',
                 role: 'assistant',
-                model: 'claude-opus-5',
+                model: 'claude-opus-5-5',
                 content: [{ type: 'text', text: 'Recovered Batch prose.' }],
                 stop_reason: 'end_turn',
                 stop_sequence: null,
@@ -345,7 +345,7 @@ describe('Anthropic Batch execution', () => {
                 id: 'msg-reserved',
                 type: 'message',
                 role: 'assistant',
-                model: 'claude-opus-5',
+                model: 'claude-opus-5-5',
                 content: [{ type: 'text', text: 'Reserved restart completed.' }],
                 stop_reason: 'end_turn',
                 stop_sequence: null,

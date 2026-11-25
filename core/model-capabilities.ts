@@ -74,22 +74,6 @@ const openai = (id: string, name: string, rejectsNone = false): ModelCapability 
 });
 const capabilities: readonly ModelCapability[] = [
   {
-    id: 'gemini-3.5-flash-lite',
-    name: 'Gemini 3.5 Flash-Lite',
-    releasedAt: '2026-07-21',
-    protocol: 'vertex-gemini-v1',
-    maxOutputTokens: 65_536,
-    temperature: false,
-    topP: false,
-    stopSequences: true,
-    thinkingLevels: ['MINIMAL', 'MEDIUM', 'HIGH'],
-    defaultThinkingLevel: 'MINIMAL',
-    serviceTiers: ['standard', 'flex'],
-    sources: [
-      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash-lite',
-    ],
-  },
-  {
     id: 'spacexai/grok-4.6',
     name: 'Grok 4.6',
     protocol: 'vercel-chat-v1',
@@ -117,10 +101,17 @@ const capabilities: readonly ModelCapability[] = [
       'https://vercel.com/docs/ai-gateway/models-and-providers/service-tiers',
     ],
   },
-  ...(['pro', 'flash'] as const).map(
-    (variant): ModelCapability => ({
-      id: `deepseek-v4-${variant}`,
-      name: `DeepSeek V4 ${variant === 'pro' ? 'Pro' : 'Flash'}`,
+  ...(
+    [
+      // https://api-docs.deepseek.com/quick_start/pricing/ (2026-11-25): DeepSeek V4.1 Flash is
+      // served under the model ID deepseek-flash; no deepseek-v4.1-flash ID is documented.
+      ['deepseek-flash', 'DeepSeek V4.1 Flash'],
+      ['deepseek-v4-pro', 'DeepSeek V4 Pro'],
+    ] as const
+  ).map(
+    ([id, name]): ModelCapability => ({
+      id,
+      name,
       protocol: 'deepseek-chat-v1',
       maxOutputTokens: 384_000,
       temperature: true,
@@ -135,6 +126,23 @@ const capabilities: readonly ModelCapability[] = [
       ],
     })
   ),
+  {
+    id: 'gemini-4-hydrogen',
+    name: 'Gemini 4 Hydrogen',
+    protocol: 'vertex-gemini-v1',
+    maxOutputTokens: 65_536,
+    temperature: false,
+    topP: false,
+    // https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen (2026-11-25):
+    // the guide documents neither stop sequences nor service tiers.
+    stopSequences: false,
+    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH', 'XHIGH'],
+    defaultThinkingLevel: 'HIGH',
+    sources: [
+      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen',
+      'https://aistudio.google.com/docs/models/gemini-4-hydrogen',
+    ],
+  },
   {
     id: 'gemini-4-neon',
     name: 'Gemini 4 Neon',
@@ -171,59 +179,8 @@ const capabilities: readonly ModelCapability[] = [
       'https://aistudio.google.com/docs/models/gemini-4-carbon',
     ],
   },
-  {
-    id: 'gemini-4-argon',
-    name: 'Gemini 4 Argon',
-    protocol: 'vertex-gemini-v1',
-    maxOutputTokens: 65_536,
-    temperature: false,
-    topP: false,
-    stopSequences: true,
-    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
-    defaultThinkingLevel: 'MEDIUM',
-    serviceTiers: ['standard', 'flex'],
-    sources: [
-      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon',
-    ],
-  },
-  {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash',
-    protocol: 'vertex-gemini-v1',
-    maxOutputTokens: 65_536,
-    temperature: false,
-    topP: false,
-    stopSequences: true,
-    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
-    defaultThinkingLevel: 'MEDIUM',
-    serviceTiers: ['standard', 'flex'],
-    sources: [
-      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-3-8-flash',
-    ],
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro (Preview)',
-    preview: true,
-    protocol: 'vertex-gemini-v1',
-    maxOutputTokens: 65_536,
-    temperature: true,
-    topP: true,
-    stopSequences: true,
-    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
-    defaultThinkingLevel: 'HIGH',
-    serviceTiers: ['standard', 'flex'],
-    sources: [
-      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-pro',
-    ],
-  },
-  ...[
-    openai('gpt-5.6-sol', 'GPT-5.6 Sol'),
-    openai('gpt-5.6-terra', 'GPT-5.6 Terra'),
-    openai('gpt-5.6-luna', 'GPT-5.6 Luna'),
-    openai('gpt-5.6', 'GPT-5.6 (Sol alias)'),
-    openai('gpt-6-astra', 'GPT-6 Astra', true),
-  ],
+  openai('gpt-5.6-sol', 'GPT-5.6 Sol'),
+  openai('gpt-6-astra', 'GPT-6 Astra', true),
   ...(['astra', 'sol'] as const).map(
     (variant): ModelCapability => ({
       id: `gpt-6.2-${variant}`,
@@ -244,32 +201,28 @@ const capabilities: readonly ModelCapability[] = [
       ],
     })
   ),
-  ...(['fable', 'mythos'] as const).map(
-    (line): ModelCapability => ({
-      id: `claude-${line}-5-2`,
-      // https://platform.claude.com/docs/en/models/mythos-5-2/overview (2026-11-20): Claude Mythos
-      // 5.2 is the same model as Claude Fable 5.2, available only to verified organizations.
-      name: `Claude ${line === 'fable' ? 'Fable' : 'Mythos'} 5.2`,
-      releasedAt: '2026-11-09',
-      protocol: 'anthropic-messages-v1',
-      maxOutputTokens: 128_000,
-      temperature: false,
-      topP: false,
-      stopSequences: true,
-      outputEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-      defaultOutputEffort: 'high',
-      thinkingModes: ['adaptive'],
-      serviceTiers: ['auto', 'standard_only'],
-      cacheModes: ['disabled', 'explicit', 'automatic'],
-      cacheTtls: ['5m', '1h'],
-      forcedTools: false,
-      sources: [
-        `https://platform.claude.com/docs/en/models/${line}-5-2/overview`,
-        'https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2',
-        'https://platform.claude.com/docs/en/models/fable-5-2/migration-guide',
-      ],
-    })
-  ),
+  {
+    id: 'claude-fable-5-2',
+    name: 'Claude Fable 5.2',
+    releasedAt: '2026-11-09',
+    protocol: 'anthropic-messages-v1',
+    maxOutputTokens: 128_000,
+    temperature: false,
+    topP: false,
+    stopSequences: true,
+    outputEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    defaultOutputEffort: 'high',
+    thinkingModes: ['adaptive'],
+    serviceTiers: ['auto', 'standard_only'],
+    cacheModes: ['disabled', 'explicit', 'automatic'],
+    cacheTtls: ['5m', '1h'],
+    forcedTools: false,
+    sources: [
+      'https://platform.claude.com/docs/en/models/fable-5-2/overview',
+      'https://platform.claude.com/docs/en/models/fable-5-2/whats-new-fable-5-2',
+      'https://platform.claude.com/docs/en/models/fable-5-2/migration-guide',
+    ],
+  },
   {
     id: 'claude-opus-5-5',
     name: 'Claude Opus 5.5',
@@ -289,46 +242,6 @@ const capabilities: readonly ModelCapability[] = [
     sources: [
       'https://platform.claude.com/docs/en/models/opus-5-5/overview',
       'https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5',
-    ],
-  },
-  {
-    id: 'claude-fable-5-1',
-    name: 'Claude Fable 5.1',
-    releasedAt: '2026-09-01',
-    protocol: 'anthropic-messages-v1',
-    maxOutputTokens: 128_000,
-    temperature: false,
-    topP: false,
-    stopSequences: true,
-    outputEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultOutputEffort: 'high',
-    thinkingModes: ['adaptive'],
-    serviceTiers: ['auto', 'standard_only'],
-    cacheModes: ['disabled', 'explicit', 'automatic'],
-    cacheTtls: ['5m', '1h'],
-    forcedTools: false,
-    sources: [
-      'https://platform.claude.com/docs/en/models/fable-5-1/overview',
-      'https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1',
-    ],
-  },
-  {
-    id: 'claude-opus-5',
-    name: 'Claude Opus 5',
-    protocol: 'anthropic-messages-v1',
-    maxOutputTokens: 128_000,
-    temperature: false,
-    topP: false,
-    stopSequences: true,
-    outputEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
-    defaultOutputEffort: 'high',
-    thinkingModes: ['adaptive', 'disabled'],
-    serviceTiers: ['auto', 'standard_only'],
-    cacheModes: ['disabled', 'explicit', 'automatic'],
-    cacheTtls: ['5m', '1h'],
-    sources: [
-      'https://platform.claude.com/docs/en/models/opus-5/whats-new-opus-5',
-      'https://platform.claude.com/docs/en/api/http/messages/create',
     ],
   },
 ];

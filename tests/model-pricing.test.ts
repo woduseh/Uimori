@@ -147,7 +147,7 @@ test('built-in manufacturer tables are retired even for exact official endpoints
   for (const [protocol, endpoint, modelId] of [
     ['openai-responses-v1', 'https://api.openai.com/v1', 'gpt-5.6-sol'],
     ['anthropic-messages-v1', 'https://api.anthropic.com/v1', 'claude-opus-5-5'],
-    ['vertex-gemini-v1', vertex.endpoint, 'gemini-3.1-pro-preview'],
+    ['vertex-gemini-v1', vertex.endpoint, 'gemini-4-hydrogen'],
   ] as const) {
     const c = connection(protocol, endpoint);
     c.catalog = [

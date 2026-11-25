@@ -60,7 +60,7 @@ async function snapshot(
           title: 'Synthetic',
           connectionId: 'connection',
           connectionRevision: 1,
-          modelId: 'gpt-5.6',
+          modelId: 'gpt-5.6-sol',
           maxOutputTokens: 1024,
           temperature: null,
           connection: {
@@ -210,9 +210,9 @@ const toolTurn = (output: Json[]): Json => ({
 
 describe('Exact native main preview and terminal submission (synthetic loopback only)', () => {
   test.each([
-    ['openai-responses-v1', 'gpt-5.6', 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED'],
-    ['openai-chat-v1', 'gpt-5.6', 'PROMPT_CACHE_NOT_APPLIED'],
-    ['anthropic-messages-v1', 'claude-opus-5', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
+    ['openai-responses-v1', 'gpt-5.6-sol', 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED'],
+    ['openai-chat-v1', 'gpt-5.6-sol', 'PROMPT_CACHE_NOT_APPLIED'],
+    ['anthropic-messages-v1', 'claude-opus-5-5', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
   ] as const)('preview retains native mapping evidence for %s', async (protocol, modelId, code) => {
     const work = await snapshot();
     const target = work.profile!.models.main!;
@@ -233,7 +233,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     const work = await snapshot();
     const target = work.profile!.models.main!;
     target.connection.protocol = 'anthropic-messages-v1';
-    target.modelId = 'claude-opus-5';
+    target.modelId = 'claude-opus-5-5';
     work.profile!.promptPresets!.main!.program.nativeRisuPreset.preset.promptTemplate = [
       { type: 'plain', role: 'system', text: 'STABLE_PREFIX' },
       { type: 'cache', role: 'all', depth: 1 },
@@ -787,7 +787,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         target = work.profile!.models.main!;
       target.connection.protocol = 'anthropic-messages-v1';
       target.connection.credentialRef = 'UIMORI_PROVIDER_NATIVE_TEST';
-      target.modelId = 'claude-opus-5';
+      target.modelId = 'claude-opus-5-5';
       target.stopSequences = ['END_SCENE'];
       const nativeFetch = globalThis.fetch;
       vi.stubGlobal(
@@ -825,7 +825,7 @@ describe('Batch recovery in the real main tool loop', () => {
     const target = work.profile!.models.main!;
     target.connection.protocol = 'anthropic-messages-v1';
     target.executionMode = 'batch';
-    target.modelId = 'claude-opus-5';
+    target.modelId = 'claude-opus-5-5';
     target.evaluationTools = {
       ...defaultEvaluationToolOptions(),
       contextMode: 'model-selected',
@@ -855,7 +855,7 @@ describe('Batch recovery in the real main tool loop', () => {
           connectionId: 'connection',
           protocol: 'anthropic-messages-v1',
           role: 'main',
-          modelId: 'claude-opus-5',
+          modelId: 'claude-opus-5-5',
           method: 'POST',
           url: 'https://api.anthropic.com/v1/messages/batches',
           headers: {},
@@ -931,7 +931,7 @@ describe('Batch recovery in the real main tool loop', () => {
       const work = await snapshot('https://api.anthropic.com/v1');
       const target = work.profile!.models.main!;
       target.connection.protocol = 'anthropic-messages-v1';
-      target.modelId = 'claude-opus-5';
+      target.modelId = 'claude-opus-5-5';
       target.executionMode = 'batch';
       const { metadataProfile: _defaultMetadataProfile, ...legacy } =
         defaultEvaluationToolOptions();
@@ -961,7 +961,7 @@ describe('Batch recovery in the real main tool loop', () => {
             connectionId: 'connection',
             protocol: 'anthropic-messages-v1',
             role: 'main',
-            modelId: 'claude-opus-5',
+            modelId: 'claude-opus-5-5',
             method: 'POST',
             url: 'https://api.anthropic.com/v1/messages/batches',
             headers: {},
@@ -1040,7 +1040,7 @@ describe('Batch recovery in the real main tool loop', () => {
     const work = await snapshot('https://api.anthropic.com/v1');
     const target = work.profile!.models.main!;
     target.connection.protocol = 'anthropic-messages-v1';
-    target.modelId = 'claude-opus-5';
+    target.modelId = 'claude-opus-5-5';
     target.executionMode = 'batch';
 
     const execute = (log: ReturnType<typeof hooks>) => {
@@ -1051,7 +1051,7 @@ describe('Batch recovery in the real main tool loop', () => {
           connectionId: 'connection',
           protocol: 'anthropic-messages-v1',
           role: 'main',
-          modelId: 'claude-opus-5',
+          modelId: 'claude-opus-5-5',
           method: 'POST',
           url: 'https://api.anthropic.com/v1/messages/batches',
           headers: {},

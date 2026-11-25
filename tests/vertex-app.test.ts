@@ -26,7 +26,7 @@ import { waitForCompletedRun } from './fixtures/run-completion.js';
 
 const origin = 'https://aiplatform.googleapis.com';
 const endpoint = `${origin}/v1/projects/synthetic-project/locations/global/publishers/google/models`;
-const providerUrl = `${endpoint}/gemini-3.8-flash:streamGenerateContent?alt=sse`;
+const providerUrl = `${endpoint}/gemini-4-carbon:streamGenerateContent?alt=sse`;
 const fakeBearer = 'synthetic-vertex-app-bearer';
 const credentialRef = 'UIMORI_PROVIDER_VERTEX_APP_TEST';
 const usage = {
@@ -244,7 +244,7 @@ async function setup(app: App, translation = true) {
   const main = await api<ModelPreset>(app, '/api/model-presets', {
     title: 'Main fixture',
     connectionId: connection.id,
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
     maxOutputTokens: 8192,
     temperature: null,
     thinkingLevel: 'MEDIUM',
@@ -253,7 +253,7 @@ async function setup(app: App, translation = true) {
   const auxiliary = await api<ModelPreset>(app, '/api/model-presets', {
     title: 'Translation fixture',
     connectionId: connection.id,
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
     maxOutputTokens: 4096,
     temperature: null,
     thinkingLevel: 'LOW',

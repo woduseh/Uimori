@@ -131,7 +131,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
       endpoint.replace('https:', 'http:'),
       endpoint.replace('aiplatform.googleapis.com', 'example.invalid'),
       endpoint.replace('/global/', '/us-central1/'),
-      endpoint + '/gemini-3.8-flash:generateContent',
+      endpoint + '/gemini-4-carbon:generateContent',
       endpoint + '?key=synthetic',
       endpoint.replace('https://', 'https://synthetic@'),
     ])
@@ -197,7 +197,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
       return new Response(
         JSON.stringify({
           publisherModels: [
-            { name: 'publishers/google/models/gemini-3.8-flash' },
+            { name: 'publishers/google/models/gemini-4-carbon' },
             { name: 'publishers/google/models/gemini-4-pro-preview' },
             { name: 'publishers/google/models/embedding-001' },
           ],
@@ -213,7 +213,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
 
     expect(catalog.catalog.map((item) => item.id)).toEqual([
-      'gemini-3.8-flash',
+      'gemini-4-carbon',
       'gemini-4-pro-preview',
     ]);
     expect(catalog.catalogError).toBeNull();

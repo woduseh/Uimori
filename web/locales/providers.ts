@@ -2880,10 +2880,10 @@ export const messages = {
     zh: '使用官方 API 基础地址和 API 密钥认证。',
   },
   'providers.m622': {
-    ko: 'Claude Opus 5의 추론 강도와 사고 모드를 모델이 지원하는 조합으로 사용해요.',
-    en: 'Uses Claude Opus 5 reasoning strength and thinking mode in combinations each model supports.',
-    ja: 'Claude Opus 5の推論強度と思考モードを、モデルが対応する組み合わせで使います。',
-    zh: '按模型支持的组合使用 Claude Opus 5 的推理强度和思考模式。',
+    ko: 'Claude 모델의 추론 강도와 사고 모드를 모델이 지원하는 조합으로 사용해요.',
+    en: 'Uses Claude reasoning strength and thinking mode in combinations each model supports.',
+    ja: 'Claudeモデルの推論強度と思考モードを、モデルが対応する組み合わせで使います。',
+    zh: '按模型支持的组合使用 Claude 模型的推理强度和思考模式。',
   },
   'providers.m625': {
     ko: 'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
@@ -2910,10 +2910,10 @@ export const messages = {
     zh: '在 DeepSeek 官方地址使用 OpenAI Chat Completions 格式。',
   },
   'providers.m630': {
-    ko: 'V4 Pro와 V4 Flash를 지원해요. Reasoning Effort의 none은 사고를 끄며 기본값은 high예요.',
-    en: 'Supports V4 Pro and V4 Flash. Reasoning Effort none disables thinking; the default is high.',
-    ja: 'V4 ProとV4 Flashに対応します。Reasoning Effortのnoneは思考を無効にし、既定値はhighです。',
-    zh: '支持 V4 Pro 和 V4 Flash。Reasoning Effort 的 none 关闭思考，默认为 high。',
+    ko: 'V4 Pro와 V4.1 Flash를 지원해요. Reasoning Effort의 none은 사고를 끄며 기본값은 high예요.',
+    en: 'Supports V4 Pro and V4.1 Flash. Reasoning Effort none disables thinking; the default is high.',
+    ja: 'V4 ProとV4.1 Flashに対応します。Reasoning Effortのnoneは思考を無効にし、既定値はhighです。',
+    zh: '支持 V4 Pro 和 V4.1 Flash。Reasoning Effort 的 none 关闭思考，默认为 high。',
   },
   'providers.m631': {
     ko: '사고를 켜면 temperature를 사용할 수 없어요.',

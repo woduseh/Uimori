@@ -2175,7 +2175,7 @@ function useGeminiHelper(f: ReturnType<typeof fixture>) {
   const model = f.store.product.model({
     title: 'Synthetic Gemini',
     connectionId: connection.id,
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
     temperature: null,
     maxOutputTokens: 1024,
   });

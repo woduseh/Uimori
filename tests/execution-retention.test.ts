@@ -204,7 +204,7 @@ describe('Completed execution payload retention', () => {
       connectionId: 'vertex',
       protocol: 'vertex-gemini-v1',
       role: 'main',
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-carbon',
       method: 'POST',
       url: 'https://aiplatform.googleapis.com/v1',
       headers: {},

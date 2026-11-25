@@ -37,7 +37,7 @@ const variants: ProviderConnection[] = [
 ];
 const request = (connection: ProviderConnection): ProviderRequest => ({
   role: 'main',
-  modelId: connection.protocol === 'vertex-gemini-v1' ? 'gemini-3.8-flash' : 'synthetic-model',
+  modelId: connection.protocol === 'vertex-gemini-v1' ? 'gemini-4-carbon' : 'synthetic-model',
   stable: { contract: 'Write synthetic fiction.', tools: [] },
   generation: { maxOutputTokens: 512, temperature: null },
   input: {

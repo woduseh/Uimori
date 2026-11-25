@@ -125,7 +125,7 @@ for (const scenario of scenarios) {
         title: 'Synthetic',
         connectionId: 'synthetic',
         connectionRevision: 1,
-        modelId: 'gpt-5.6',
+        modelId: 'gpt-5.6-sol',
         maxOutputTokens: 8192,
         temperature: null,
         connection: {

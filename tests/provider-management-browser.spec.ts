@@ -857,7 +857,7 @@ const providerOptionCases = [
   {
     protocol: 'anthropic-messages-v1',
     endpoint: 'https://api.anthropic.com/v1',
-    modelId: 'claude-opus-5',
+    modelId: 'claude-opus-5-5',
     choices: {
       '추론 강도': 'high',
       '실행 방식': 'batch',
@@ -911,7 +911,7 @@ for (const [index, item] of providerOptionCases.entries()) {
       await expect(form.getByLabel('서비스 등급').locator('option[value="flex"]')).toHaveText(
         'Flex'
       );
-    if (item.modelId === 'claude-fable-5-1') {
+    if (item.modelId === 'claude-opus-5-5') {
       await form.getByRole('button', { name: '고급', exact: true }).click();
       const mode = form.getByLabel('사고 모드', { exact: true });
       await expect(mode.locator('optgroup[label="권장"] option')).toHaveText(['적응형']);
@@ -1210,7 +1210,7 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
   const model = await api<ModelPreset>(request, '/model-presets', {
     title,
     connectionId: connection.id,
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
     maxOutputTokens: 8192,
     temperature: null,
     serviceTier: 'standard',
@@ -1785,7 +1785,7 @@ test('PMUI Gemini Jailbreak on Agent Platform preserves explicit thresholds and 
   });
   const model = await api<ModelPreset>(request, '/model-presets', {
     ...modelInput(connection, title),
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
     safetySettings: { HARM_CATEGORY_HATE_SPEECH: 'BLOCK_MEDIUM_AND_ABOVE' },
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -1854,7 +1854,7 @@ test('PMUI Vertex location comparison includes the saved custom location, cancel
   });
   const model = await api<ModelPreset>(request, '/model-presets', {
     ...modelInput(connection, title),
-    modelId: 'gemini-3.8-flash',
+    modelId: 'gemini-4-carbon',
   });
   const finished: Record<string, Partial<ProviderConnectionTest>> = {
     'asia-south1': { status: 'completed', latencyMs: 500 },

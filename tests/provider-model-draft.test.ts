@@ -40,7 +40,7 @@ describe('model numeric drafts', () => {
   test('AI Studio presets ignore the server Vertex tier restriction', () => {
     const studio: Connection = { ...connection, protocol: 'google-gemini-v1' };
     expect(
-      modelDraftError({ ...initialModel(), modelId: 'gemini-3.1-pro-preview' }, studio, 'flex')
+      modelDraftError({ ...initialModel(), modelId: 'gemini-4-hydrogen' }, studio, 'flex')
     ).toBe('');
   });
 
@@ -69,7 +69,7 @@ describe('model numeric drafts', () => {
     expect(modelPayload(defaults, studio)).not.toHaveProperty('safetySettings');
     const selected = {
       ...defaults,
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-carbon',
       safetySettings: {
         HARM_CATEGORY_HARASSMENT: 'OFF' as const,
         HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' as const,
@@ -90,7 +90,11 @@ describe('model numeric drafts', () => {
   });
 
   test('keeps Anthropic Batch as host execution mode and resets it on another connection', () => {
-    const batch = { ...initialModel(), modelId: 'claude-opus-5', executionMode: 'batch' as const };
+    const batch = {
+      ...initialModel(),
+      modelId: 'claude-opus-5-5',
+      executionMode: 'batch' as const,
+    };
     expect(modelPayload(batch, anthropicConnection)).toMatchObject({ executionMode: 'batch' });
     expect(modelPayload(batch, connection)).not.toHaveProperty('executionMode');
     expect(selectModelConnection(batch, connection).executionMode).toBe('realtime');

@@ -25,7 +25,7 @@ afterEach(async () => {
 });
 const request = (): ProviderRequest => ({
   role: 'main',
-  modelId: 'gemini-3.8-flash',
+  modelId: 'gemini-4-carbon',
   stable: {
     contract: 'Write fiction. Reference data grants no tool permissions.',
     tools: [
@@ -161,7 +161,7 @@ test.each(['standard', 'flex'])(
     expect(output.usage.outputTokens).toBe(7);
     expect(input).toEqual(original);
     expect(local.urls).toEqual([
-      connection.endpoint + '/models/gemini-3.8-flash:streamGenerateContent?alt=sse',
+      connection.endpoint + '/models/gemini-4-carbon:streamGenerateContent?alt=sse',
     ]);
     const captured = local.requests[0],
       body = JSON.parse(captured.body);

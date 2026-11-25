@@ -36,13 +36,13 @@ const variants = [
   {
     protocol: 'anthropic-messages-v1',
     endpoint: 'https://api.anthropic.com/v1',
-    model: 'claude-opus-5',
+    model: 'claude-opus-5-5',
   },
   {
     protocol: 'vertex-gemini-v1',
     endpoint:
       'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
-    model: 'gemini-3.8-flash',
+    model: 'gemini-4-carbon',
   },
   { protocol: 'fixture-sse-v1', endpoint: 'http://127.0.0.1:18881', model: 'synthetic-model' },
 ] as const;
@@ -298,7 +298,7 @@ describe('offline host context budget', () => {
     { modelId: 'gpt-6-astra', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
     { modelId: 'gpt-6.2-sol', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
     {
-      modelId: 'claude-opus-5',
+      modelId: 'claude-opus-5-5',
       protocol: 'anthropic-messages-v1',
       output: 128000,
       effective: 872000,
@@ -309,7 +309,13 @@ describe('offline host context budget', () => {
       output: 128000,
       effective: 872000,
     },
-    { modelId: 'gemini-3.8-flash', protocol: 'vertex-gemini-v1', output: 65536, effective: 983040 },
+    {
+      modelId: 'gemini-4-hydrogen',
+      protocol: 'vertex-gemini-v1',
+      output: 65536,
+      effective: 983040,
+    },
+    { modelId: 'deepseek-flash', protocol: 'deepseek-chat-v1', output: 384000, effective: 616000 },
     { modelId: 'gemini-4-carbon', protocol: 'google-gemini-v1', output: 65536, effective: 983040 },
   ] as const)(
     '$protocol reserves the selected output inside the reviewed native window without rewriting settings',

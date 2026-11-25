@@ -170,7 +170,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/anthropic-protocol.ts#encodeAnthropic',
     limitations: [
       '공식 API 기본 주소와 API 키 인증을 사용해요.',
-      'Claude Opus 5의 추론 강도와 사고 모드를 모델이 지원하는 조합으로 사용해요.',
+      'Claude 모델의 추론 강도와 사고 모드를 모델이 지원하는 조합으로 사용해요.',
     ],
   }),
   definition({
@@ -207,7 +207,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'DeepSeek 공식 주소에서 OpenAI Chat Completions 형식을 사용해요.',
-      'V4 Pro와 V4 Flash를 지원해요. Reasoning Effort의 none은 사고를 끄며 기본값은 high예요.',
+      'V4 Pro와 V4.1 Flash를 지원해요. Reasoning Effort의 none은 사고를 끄며 기본값은 high예요.',
       '사고를 켜면 temperature를 사용할 수 없어요.',
     ],
   }),

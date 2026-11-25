@@ -159,10 +159,10 @@ test('ID-based selections follow current connections while protocol changes requ
         'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
     })
   ) as Connection;
-  const vm = s.product.model(modelBody(vertex, { modelId: 'gemini-3.8-flash' })) as ModelPreset;
+  const vm = s.product.model(modelBody(vertex, { modelId: 'gemini-4-carbon' })) as ModelPreset;
   const flex = s.product.model(
     modelBody(vertex, {
-      modelId: 'gemini-3.8-flash',
+      modelId: 'gemini-4-carbon',
       serviceTier: 'flex',
       expectedRevision: vm.revision,
     }),

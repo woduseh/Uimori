@@ -47,7 +47,7 @@ const request = (variant: Variant): ProviderRequest => ({
     variant.protocol === 'openai-responses-v1'
       ? 'gpt-5.6-sol'
       : variant.protocol === 'anthropic-messages-v1'
-        ? 'claude-opus-5'
+        ? 'claude-opus-5-5'
         : variant.protocol === 'deepseek-chat-v1'
           ? 'deepseek-v4-pro'
           : 'user-selected-model',
@@ -209,7 +209,7 @@ const geminiConnection: ProviderConnection = {
 };
 const geminiRequest = (): ProviderRequest => ({
   ...request(variants[0]),
-  modelId: 'gemini-3.8-flash',
+  modelId: 'gemini-4-carbon',
 });
 afterEach(() => {
   vi.unstubAllGlobals();

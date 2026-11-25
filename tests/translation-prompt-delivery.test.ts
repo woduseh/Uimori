@@ -117,9 +117,9 @@ function encodedBody(request: ProviderRequest, value: AuxiliaryBundle, protocol:
     protocol === 'codex-app-server-v1' ? 'codex://local' : 'https://synthetic.invalid';
   model.modelId =
     protocol === 'anthropic-messages-v1'
-      ? 'claude-opus-5'
+      ? 'claude-opus-5-5'
       : protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1'
-        ? 'gemini-3.8-flash'
+        ? 'gemini-4-carbon'
         : 'gpt-6-astra';
   return encodeMainPreview({ ...request, modelId: model.modelId }, model).body;
 }

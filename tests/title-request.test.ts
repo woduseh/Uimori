@@ -76,8 +76,8 @@ test('title provider options are copied instead of sharing editable nested data'
 });
 
 test.each([
-  ['gemini-4-argon', 'LOW'],
-  ['gemini-3.5-flash-lite', 'MINIMAL'],
+  ['gemini-4-hydrogen', 'LOW'],
+  ['gemini-4-carbon', 'LOW'],
 ] as const)('Vertex %s title requests its lowest thinking level', (modelId, level) => {
   const { connection, model } = fixture('vertex-gemini-v1');
   model.modelId = modelId;

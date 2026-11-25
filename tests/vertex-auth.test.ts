@@ -10,7 +10,7 @@ afterEach(() => {
 });
 const request: ProviderRequest = {
   role: 'main',
-  modelId: 'gemini-3.8-flash',
+  modelId: 'gemini-4-carbon',
   stable: { contract: 'Synthetic only', tools: [] },
   input: { task: 'A synthetic lamp.', controls: {} },
 };

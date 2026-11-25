@@ -520,7 +520,7 @@ describe('built server process boundary', () => {
               id: `message-${ordinal}`,
               type: 'message',
               role: 'assistant',
-              model: 'claude-opus-5',
+              model: 'claude-opus-5-5',
               content:
                 ordinal === 1
                   ? [
@@ -588,7 +588,7 @@ describe('built server process boundary', () => {
       const model = await api(instance.url, '/api/model-presets', {
         title: 'Batch writer',
         connectionId: connection.id,
-        modelId: 'claude-opus-5',
+        modelId: 'claude-opus-5-5',
         maxOutputTokens: 2048,
         temperature: null,
         executionMode: 'batch',
