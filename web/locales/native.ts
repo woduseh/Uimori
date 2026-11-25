@@ -1,4 +1,34 @@
 export const messages = {
+  'native.cbsUnclosedCall': {
+    ko: '{open}를 닫는 {close}가 없어요.',
+    en: '{open} has no closing {close}.',
+    ja: '{open}を閉じる{close}がありません。',
+    zh: '{open} 缺少对应的 {close}。',
+  },
+  'native.cbsUnclosedBlock': {
+    ko: '{opener} 블록을 닫는 {closer}가 없어요.',
+    en: 'The {opener} block has no {closer}.',
+    ja: '{opener}ブロックを閉じる{closer}がありません。',
+    zh: '{opener} 块缺少 {closer}。',
+  },
+  'native.cbsStrayCloser': {
+    ko: '{closer}로 닫을 블록이 없어요.',
+    en: 'No open block for {closer} to close.',
+    ja: '{closer}で閉じるブロックがありません。',
+    zh: '没有可由 {closer} 关闭的块。',
+  },
+  'native.cbsElseOutsideWhen': {
+    ko: '{else}는 {when} 블록 안에서만 동작해요.',
+    en: '{else} only works inside a {when} block.',
+    ja: '{else}は{when}ブロックの中でのみ動作します。',
+    zh: '{else} 只在 {when} 块内生效。',
+  },
+  'native.cbsUnknownFunction': {
+    ko: 'Risu에 없는 함수 이름이에요: {name}',
+    en: 'Risu has no function named {name}.',
+    ja: 'Risuにない関数名です: {name}',
+    zh: 'Risu 中没有名为 {name} 的函数。',
+  },
   'native.characterCount': {
     ko: '{count, number}자',
     en: '{count, plural, one {# character} other {# characters}}',

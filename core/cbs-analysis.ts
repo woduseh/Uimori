@@ -505,6 +505,7 @@ export function analyzeCbs(
           to: call.to,
           code: 'cbs.stray-closer',
           severity: 'error',
+          name: call.name,
         });
       }
     } else if (dat.startsWith('? ')) {
@@ -607,12 +608,14 @@ export function analyzeCbs(
           severity: 'error',
         });
     } else {
-      const opener = calls[blocks[frame.block]!.opener]!;
+      const block = blocks[frame.block]!;
+      const opener = calls[block.opener]!;
       diagnostics.push({
         from: opener.from,
         to: opener.to,
         code: 'cbs.unclosed-block',
         severity: 'error',
+        name: block.keyword,
       });
     }
   }

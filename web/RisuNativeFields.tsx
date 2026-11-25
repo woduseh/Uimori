@@ -41,6 +41,7 @@ import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { StudioPanel } from './EditorStudio.js';
 import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
 import { IconButton } from './IconButton.js';
+import { CodeField } from './CodeField.js';
 import { CodeIcon } from './ui-icons.js';
 import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
 import { markupPreview } from './markup-preview.js';
@@ -375,15 +376,14 @@ export function RisuNativeFields({
             <div className="native-overview-main native-description-field">
               <label>
                 {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
-                <textarea
+                <CodeField
                   className="native-description"
                   aria-label={
                     standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')
                   }
                   aria-describedby={`${id}-description-count`}
-                  rows={12}
                   value={description}
-                  onChange={(e) => field('description', e.target.value)}
+                  onChange={(next) => field('description', next)}
                 />
               </label>
               <small id={`${id}-description-count`} className="native-field-count">
@@ -469,16 +469,13 @@ export function RisuNativeFields({
               }
             >
               {(i) => (
-                <textarea
+                <CodeField
                   className="native-main-text"
-                  data-font={greetingFont}
+                  font={greetingFont}
                   aria-label={i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
-                  rows={18}
-                  value={greetings[i]}
-                  onChange={(e) =>
-                    writeGreetings(
-                      greetings.map((message, n) => (n === i ? e.target.value : message))
-                    )
+                  value={greetings[i] ?? ''}
+                  onChange={(next) =>
+                    writeGreetings(greetings.map((message, n) => (n === i ? next : message)))
                   }
                 />
               )}
@@ -521,19 +518,20 @@ export function RisuNativeFields({
             <div className="native-form-stack">
               <label>
                 {t('native.text_2d2a2c8204')}
-                <textarea
+                <CodeField
+                  aria-label={t('native.text_2d2a2c8204')}
                   rows={8}
                   value={string(native.card.post_history_instructions)}
-                  onChange={(e) => field('post_history_instructions', e.target.value)}
+                  onChange={(next) => field('post_history_instructions', next)}
                 />
               </label>
               <label>
                 {t('native.text_07b2960ad0')}
-                <textarea
+                <CodeField
                   aria-label={t('native.text_07b2960ad0')}
                   rows={8}
                   value={string(native.card.mes_example)}
-                  onChange={(e) => field('mes_example', e.target.value)}
+                  onChange={(next) => field('mes_example', next)}
                 />
               </label>
             </div>
@@ -579,17 +577,19 @@ export function RisuNativeFields({
           <div className="native-form-stack">
             <label>
               {t('native.text_50262c6215')}
-              <textarea
-                rows={12}
+              <CodeField
+                language="html"
                 className="native-main-text"
+                aria-label={t('native.text_50262c6215')}
                 spellCheck={false}
+                font="mono"
                 value={
                   standalone ? nativeRisuModuleBackground(native) : nativeRisuBackground(native)
                 }
-                onChange={(e) =>
+                onChange={(next) =>
                   standalone
-                    ? field('backgroundEmbedding', e.target.value)
-                    : extension('backgroundHTML', e.target.value)
+                    ? field('backgroundEmbedding', next)
+                    : extension('backgroundHTML', next)
                 }
               />
             </label>

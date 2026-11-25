@@ -1,5 +1,6 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useI18n, translateMessage } from './i18n.js';
+import { CodeField } from './CodeField.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useMemo, useState } from 'react';
 import { NativeCollectionEditor } from './NativeCollectionEditor.js';
@@ -166,24 +167,35 @@ export function NativeRisuRegexEditor({
                 </div>
                 <label>
                   {t('native.text_6b5f44ef65')}
-                  <textarea
-                    className="native-regex-find"
-                    aria-label={t('native.text_605efd02b3')}
-                    rows={3}
-                    spellCheck={false}
-                    value={regexText(entry.in ?? entry.find)}
-                    onChange={(e) => edit({ in: e.target.value })}
-                  />
+                  {entry.ableFlag === true && parsed.actions.includes('cbs') ? (
+                    <CodeField
+                      className="native-regex-find"
+                      aria-label={t('native.text_605efd02b3')}
+                      spellCheck={false}
+                      font="mono"
+                      value={regexText(entry.in ?? entry.find)}
+                      onChange={(next) => edit({ in: next })}
+                    />
+                  ) : (
+                    <textarea
+                      className="native-regex-find"
+                      aria-label={t('native.text_605efd02b3')}
+                      rows={3}
+                      spellCheck={false}
+                      value={regexText(entry.in ?? entry.find)}
+                      onChange={(e) => edit({ in: e.target.value })}
+                    />
+                  )}
                 </label>
                 <label>
                   {t('native.text_dce02ee0f0')}
-                  <textarea
+                  <CodeField
                     className="native-regex-replacement"
                     aria-label={t('native.text_0ed674a38e')}
-                    rows={7}
                     spellCheck={false}
+                    font="mono"
                     value={regexText(entry.out ?? entry.replace)}
-                    onChange={(e) => edit({ out: e.target.value })}
+                    onChange={(next) => edit({ out: next })}
                   />
                 </label>
                 <label className="check">

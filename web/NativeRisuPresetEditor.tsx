@@ -24,6 +24,7 @@ import {
 } from './resource-editor.js';
 import { presetSection, promptBlockTypeLabels, type PresetSection } from './studio-sections.js';
 import { IconButton } from './IconButton.js';
+import { CodeField } from './CodeField.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
 import './native-editor.css';
@@ -371,23 +372,22 @@ export function NativeRisuPresetEditor({
               {['plain', 'chatML'].includes(text(entry.type)) ? (
                 <label>
                   {t('native.text_d7e4bc7b33')}
-                  <textarea
+                  <CodeField
                     className="native-main-text"
                     aria-label={t('native.blockText', { number: index + 1 })}
-                    rows={16}
                     value={text(entry.text)}
-                    onChange={(e) => item({ text: e.target.value })}
+                    onChange={(next) => item({ text: next })}
                   />
                 </label>
               ) : (
                 ['persona', 'description', 'authornote'].includes(text(entry.type)) && (
                   <label>
                     {t('native.wrapperLabel', { slot: '{{slot}}' })}
-                    <textarea
+                    <CodeField
                       aria-label={t('native.blockWrapper', { number: index + 1 })}
                       rows={8}
                       value={text(entry.innerFormat)}
-                      onChange={(e) => item({ innerFormat: e.target.value })}
+                      onChange={(next) => item({ innerFormat: next })}
                     />
                   </label>
                 )
@@ -395,10 +395,11 @@ export function NativeRisuPresetEditor({
               {entry.type === 'authornote' && (
                 <label>
                   {t('native.text_d955c69f94')}
-                  <textarea
+                  <CodeField
+                    aria-label={t('native.text_d955c69f94')}
                     rows={6}
                     value={text(entry.defaultText)}
-                    onChange={(e) => item({ defaultText: e.target.value })}
+                    onChange={(next) => item({ defaultText: next })}
                   />
                 </label>
               )}

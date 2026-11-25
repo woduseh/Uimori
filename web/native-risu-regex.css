@@ -31,12 +31,14 @@
   font-size: var(--font-body);
   line-height: 1.65;
 }
-.native-regex-editor textarea.native-regex-find {
+.native-regex-editor textarea.native-regex-find,
+.native-regex-editor .code-field.native-regex-find {
   height: 120px;
   min-height: 80px;
   resize: vertical;
 }
-.native-regex-editor textarea.native-regex-replacement {
+.native-regex-editor textarea.native-regex-replacement,
+.native-regex-editor .code-field.native-regex-replacement {
   height: 250px;
   min-height: 140px;
   resize: vertical;

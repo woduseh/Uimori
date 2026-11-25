@@ -170,12 +170,14 @@
 }
 .native-editor input:not([type="checkbox"]):not([type="radio"]),
 .native-editor select,
-.native-editor textarea {
+.native-editor textarea,
+.native-editor .code-field {
   width: 100%;
   min-width: 0;
   color: var(--text);
 }
-.native-editor textarea {
+.native-editor textarea,
+.native-editor .code-field {
   font-family: inherit;
   font-size: var(--font-body);
   line-height: 1.65;
@@ -183,7 +185,8 @@
   min-height: 100px;
   max-height: none;
 }
-.native-editor textarea:is([spellcheck="false"], [data-font="mono"]) {
+.native-editor textarea:is([spellcheck="false"], [data-font="mono"]),
+.native-editor .code-field[data-font="mono"] {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 .native-editor .native-main-text {
@@ -283,7 +286,8 @@
   }
   .native-editor input,
   .native-editor select,
-  .native-editor textarea {
+  .native-editor textarea,
+  .native-editor .code-field {
     font-size: var(--font-heading);
   }
   .native-editor .native-main-text {
@@ -291,12 +295,14 @@
     min-height: 280px;
   }
 }
-.prompt-editor .native-editor textarea {
+.prompt-editor .native-editor textarea,
+.prompt-editor .native-editor .code-field {
   font-family: inherit;
   font-size: var(--font-body);
   line-height: 1.65;
 }
-.prompt-editor .native-editor textarea[spellcheck="false"] {
+.prompt-editor .native-editor textarea[spellcheck="false"],
+.prompt-editor .native-editor .code-field[data-font="mono"] {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 .native-editor .native-description {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'rea
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
+import { CodeField } from './CodeField.js';
 import {
   AddIcon,
   FolderAddIcon,
@@ -542,12 +543,11 @@ export function NativeRisuLoreEditor({
               <>
                 <label>
                   {t('native.text_bf0b828e2d')}
-                  <textarea
+                  <CodeField
                     className="native-main-text"
                     aria-label={t('native.text_bf0b828e2d')}
-                    rows={16}
                     value={loreText(entry.content)}
-                    onChange={(e) => edit({ content: e.target.value })}
+                    onChange={(content) => edit({ content })}
                   />
                 </label>
                 <details className="native-advanced nl-advanced" key={index}>

@@ -2,7 +2,7 @@ import { t, translateMessage, useI18n } from './i18n.js';
 import { Component, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
 
-class PanelErrorBoundary extends Component<
+export class PanelErrorBoundary extends Component<
   { children: ReactNode; fallback: ReactNode },
   { failed: boolean }
 > {

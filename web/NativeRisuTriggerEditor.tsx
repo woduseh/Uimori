@@ -8,6 +8,7 @@ import {
 } from './resource-editor.js';
 import { AddIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
+import { CodeField } from './CodeField.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import './native-risu-trigger.css';
 
@@ -201,7 +202,8 @@ export function NativeRisuTriggerEditor({
                   {effects.length > 1
                     ? t('native.luaNumber', { number: effectIndex + 1 })
                     : t('native.text_8601ddaaf9')}
-                  <textarea
+                  <CodeField
+                    language="lua"
                     aria-label={
                       effects.length > 1
                         ? t('native.luaNumber', { number: effectIndex + 1 })
@@ -209,13 +211,14 @@ export function NativeRisuTriggerEditor({
                     }
                     rows={14}
                     spellCheck={false}
+                    font="mono"
                     disabled={disabled || pending}
                     value={effect.code as string}
-                    onChange={(event) =>
+                    onChange={(code) =>
                       replace({
                         ...entry,
                         effect: effects.map((item, i) =>
-                          i === effectIndex ? { ...item, code: event.target.value } : item
+                          i === effectIndex ? { ...item, code } : item
                         ),
                       })
                     }

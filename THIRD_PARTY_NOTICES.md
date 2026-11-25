@@ -43,6 +43,12 @@ Modified MIT를 따라요. 각 원저작권과 라이선스 고지를 함께 배
 설치된 패키지의 라이선스를 보존하고, 모델 가중치나 Python 런타임은 포함하지 않아요.
 토크나이저 데이터는 실행 중 다운로드하지 않으며 선택한 계열만 로컬에서 읽어요.
 
+## CodeMirror
+
+- 출처: [CodeMirror 6](https://codemirror.net/)와 [Lezer](https://lezer.codemirror.net/). npm `@codemirror/state`, `view`, `commands`, `language`, `autocomplete`, `lint`, `lang-html`, `legacy-modes`와 `@lezer/highlight`를 사용하고, 이들이 가져오는 `@codemirror/lang-css`, `lang-javascript`, `@lezer/common`, `lr`, `css`, `html`, `javascript`, `crelt`, `style-mod`, `w3c-keyname`, `@marijn/find-cluster-break`가 함께 배포돼요. 정확한 버전은 `package-lock.json`이 기록해요.
+- 적용 조건: 모두 MIT예요. 원저작권 고지와 전문을 [CodeMirror](third_party/codemirror/CODEMIRROR-LICENSE), [Lezer](third_party/codemirror/LEZER-LICENSE), [crelt](third_party/codemirror/CRELT-LICENSE), [style-mod](third_party/codemirror/STYLE-MOD-LICENSE), [w3c-keyname](third_party/codemirror/W3C-KEYNAME-LICENSE), [find-cluster-break](third_party/codemirror/FIND-CLUSTER-BREAK-LICENSE)에 보존해요. 같은 고지를 쓰는 패키지는 한 파일로 묶었어요.
+- 사용: Risu 편집기의 코드 입력 칸에서만 지연 로딩하며 원본 npm 파일은 수정하지 않아요.
+
 ## UI message formatting
 
 The browser uses `intl-messageformat` 12.2.0 from [FormatJS](https://github.com/formatjs/formatjs)
