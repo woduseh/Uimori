@@ -18,6 +18,7 @@ import {
 } from './ui-navigation.js';
 import { browserPath } from '../scripts/browser-path.mjs';
 import { waitForContentSave } from './fixtures/resource-save.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 test.use({
   launchOptions: {
@@ -220,7 +221,7 @@ test('EFRAME03 first messages use one label, remember the monospace choice and h
   await openBot(page, title);
   await selectEditorSection(page, '첫 메시지');
   const text = page.getByLabel('기본 첫 메시지', { exact: true });
-  await expect(text).toHaveValue('<div class="intro">{{char}}</div>');
+  await expectCodeFieldValue(text, '<div class="intro">{{char}}</div>');
   await expect(page.locator('label').filter({ hasText: '기본 첫 메시지' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '첫 메시지 위로', exact: true })).toHaveCount(0);
   const mono = page.getByRole('button', { name: '고정폭 글꼴', exact: true });
@@ -561,7 +562,8 @@ test('EFRAME08 first-message previews show readable text instead of template cod
   await expect(rows.nth(0).locator('small')).toHaveText('코드만 있는 메시지');
   await expect(rows.nth(1).locator('small')).toHaveText('다시 만났네, .');
   await expect(list).not.toContainText('{{');
-  await expect(page.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue(
+  await expectCodeFieldValue(
+    page.getByLabel('기본 첫 메시지', { exact: true }),
     '<div class="intro">{{char}}</div>'
   );
   await capture(page, 'eframe08-greetings-1440');

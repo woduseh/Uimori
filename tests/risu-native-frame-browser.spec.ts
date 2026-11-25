@@ -7,6 +7,7 @@ import {
   MOBILE_HEIGHT,
   DESKTOP_HEIGHT,
 } from './fixtures/browser-viewports.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 let vite: FixtureVite;
 let origin: string;
@@ -390,7 +391,7 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   await options.locator('summary').click();
   await editor.getByLabel('Mood', { exact: true }).selectOption('"1"');
   await selectEditorSection(page, '구성');
-  await expect(editor.getByLabel('1번 프롬프트 본문')).toHaveValue('{{getvar::place}}');
+  await expectCodeFieldValue(editor.getByLabel('1번 프롬프트 본문'), '{{getvar::place}}');
   await editor.getByLabel('1번 프롬프트 본문').fill('{{#when::mood::tis::1}}VIVID{{/when}}');
   await selectEditorSection(page, '정규식');
   await editor.getByText('고급 JSON 편집', { exact: true }).click();
@@ -430,7 +431,7 @@ test('native preset blocks reorder by drag and keep the moved block selected', a
   await expect(rows).toHaveCount(3);
   await rows.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 20, y: 40 } });
   await expect(rows.locator('strong')).toHaveText(['1. Second', '2. Third', '3. First']);
-  await expect(editor.getByLabel('3번 프롬프트 본문')).toHaveValue('First');
+  await expectCodeFieldValue(editor.getByLabel('3번 프롬프트 본문'), 'First');
   const savedOrder = () =>
     page
       .locator('output')

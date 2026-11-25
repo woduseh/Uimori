@@ -10,6 +10,7 @@ import {
   selectEditorSection,
 } from './ui-navigation.js';
 import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
   const response = await request.post('/api/content', {
@@ -101,7 +102,10 @@ test('PLR02 every package category is editable from card and list controls', asy
         await menu.locator('..').getByRole('button', { name: '편집', exact: true }).click();
       }
       await expect(library.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(item.title);
-      await expect(library.getByLabel('카드 설명', { exact: true })).toHaveValue('Synthetic only.');
+      await expectCodeFieldValue(
+        library.getByLabel('카드 설명', { exact: true }),
+        'Synthetic only.'
+      );
       await library.getByRole('button', { name: '서재 목록', exact: true }).click();
     }
   }
@@ -143,7 +147,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
       await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption(role);
       await selectEditorSection(editor, '구성');
     }
-    await expect(native.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(text);
+    await expectCodeFieldValue(native.getByLabel('1번 프롬프트 본문', { exact: true }), text);
     const title = `PLR 기본 ${role} ${crypto.randomUUID()}`;
     await name.fill(title);
     await expect(saveState).toHaveText('');

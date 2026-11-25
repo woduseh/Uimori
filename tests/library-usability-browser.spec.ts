@@ -13,6 +13,7 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 async function seedBot(request: APIRequestContext, title: string) {
   const description = '낯선 도시를 함께 탐험할 합성 안내자예요.';
@@ -182,7 +183,7 @@ test('LUSE05 a standalone module background edited in the editor styles a chat t
   await editLibraryContent(page, title);
   await selectEditorSection(panel, '배경 HTML과 CSS');
   const background = panel.getByRole('textbox', { name: '배경 HTML / CSS', exact: true });
-  await expect(background).toHaveValue('');
+  await expectCodeFieldValue(background, '');
   await background.fill(
     '<style>.risu-chat-text p { color: rgb(150, 200, 255); }</style><div class="module-mark" onclick="window.moduleClicked = true">{{char}} 모듈 배경</div>'
   );

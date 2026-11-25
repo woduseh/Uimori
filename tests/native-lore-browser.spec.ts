@@ -9,6 +9,7 @@ import {
 } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 const FOLDER_KEY = '\uf000folder:world';
 
@@ -190,7 +191,8 @@ test.describe('Native lore drag and drop', () => {
 
       await selectLore(editor, '도시');
       await expect(editor.getByLabel('로어 이름', { exact: true })).toHaveValue('도시');
-      await expect(editor.getByLabel('로어 본문', { exact: true })).toHaveValue(
+      await expectCodeFieldValue(
+        editor.getByLabel('로어 본문', { exact: true }),
         '높은 성벽 안에 오래된 도시가 있어요.'
       );
       await expect(editor.getByLabel('로어 폴더', { exact: true })).toHaveValue(FOLDER_KEY);
@@ -273,7 +275,8 @@ test.describe('Native lore drag and drop', () => {
       await page.reload();
       const reloaded = await openLoreEditor(page, title);
       await selectLore(reloaded, '수도');
-      await expect(reloaded.getByLabel('로어 본문', { exact: true })).toHaveValue(
+      await expectCodeFieldValue(
+        reloaded.getByLabel('로어 본문', { exact: true }),
         '수도는 강과 성벽 사이에 있어요.'
       );
       await expect(reloaded.getByLabel('로어 폴더', { exact: true })).toHaveValue('');

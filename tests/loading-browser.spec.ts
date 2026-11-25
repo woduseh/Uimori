@@ -8,6 +8,7 @@ import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/typ
 import type { Content } from '../core/product.js';
 import type { ChatTranscript } from '../core/chat-transcript.js';
 import { navigationAction } from './ui-navigation.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 test.setTimeout(120000);
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
@@ -608,7 +609,8 @@ test('LOADUI03 library uses summaries then fetches current content on click', as
   });
   expect(update.ok()).toBeTruthy();
   await editLibraryContent(page, `${first.title}`);
-  await expect(page.getByLabel('카드 설명', { exact: true })).toHaveValue(
+  await expectCodeFieldValue(
+    page.getByLabel('카드 설명', { exact: true }),
     'Current content replaces the earlier library summary on open.'
   );
   expect(revisionRequests).toHaveLength(1);

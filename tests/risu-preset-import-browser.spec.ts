@@ -6,6 +6,7 @@ import { navigationAction, expectEditorSection, selectEditorSection } from './ui
 import { postFixtureChat } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission through dialog close', async ({
   page,
@@ -183,7 +184,8 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
     });
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
   await selectEditorSection(page, '구성');
-  await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
+  await expectCodeFieldValue(
+    composer.getByLabel('1번 프롬프트 본문'),
     source.promptTemplate[0]!.text!
   );
   if (process.env.UIMORI_VISUAL_REVIEW === '1') {

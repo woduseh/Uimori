@@ -18,6 +18,7 @@ import {
   navigationAction,
   selectEditorSection,
 } from './ui-navigation.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 async function post<T>(request: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await request.post(path, { data });
@@ -415,7 +416,7 @@ for (const viewport of viewports) {
       await selectEditorSection(editor, '기본 정보');
       await expect(editor.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(editedName);
       await selectEditorSection(editor, '첫 메시지');
-      await expect(editor.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue(opening);
+      await expectCodeFieldValue(editor.getByLabel('기본 첫 메시지', { exact: true }), opening);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 
@@ -647,7 +648,7 @@ for (const viewport of viewports) {
       await selectEditorSection(editor, '기본 옵션');
       await expect(editor.getByLabel('분위기', { exact: true })).toHaveValue('"1"');
       await selectEditorSection(editor, '구성');
-      await expect(editor.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(body);
+      await expectCodeFieldValue(editor.getByLabel('1번 프롬프트 본문', { exact: true }), body);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`preset-body-${viewport.name}.png`) });
 

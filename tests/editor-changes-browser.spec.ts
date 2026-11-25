@@ -14,6 +14,7 @@ import {
   navigationAction,
   selectEditorSection,
 } from './ui-navigation.js';
+import { expectCodeFieldValue, codeFieldValue } from './code-field.js';
 
 async function seedBot(request: APIRequestContext, title: string) {
   const pkg = nativeContent({
@@ -79,12 +80,12 @@ test('EDIT01 the header counts changed sections, the drawer jumps to one and a p
   await expect(sheet).toBeHidden();
   await expect(chip).toBeFocused();
   await expect(editorTab(page, '첫 메시지')).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue('고친 인사');
+  await expectCodeFieldValue(page.getByLabel('기본 첫 메시지', { exact: true }), '고친 인사');
 
   await chip.click();
   await sheet.getByRole('button', { name: '편집 취소', exact: true }).click();
   await expect(chip).toHaveCount(0);
-  await expect(page.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue('처음 인사');
+  await expectCodeFieldValue(page.getByLabel('기본 첫 메시지', { exact: true }), '처음 인사');
   await expect(page.getByLabel('봇 이름', { exact: true })).toHaveValue(title);
   await expect(page.getByLabel('봇 이름', { exact: true })).toBeFocused();
 });
@@ -154,26 +155,26 @@ test('EDIT03 comparing with the previous save lists the differing sections, rest
   await capture(page, 'edit03-compare-1440');
   await dialog.getByRole('button', { name: '이전 저장본으로 복원', exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue('처음 인사');
+  await expectCodeFieldValue(page.getByLabel('기본 첫 메시지', { exact: true }), '처음 인사');
   await selectEditorSection(page, '기본 정보');
-  await expect(description).toHaveValue('처음 쓴 카드 설명');
+  await expectCodeFieldValue(description, '처음 쓴 카드 설명');
   const stored = await (await request.get(`/api/content/${seeded.id}`)).json();
   expect(stored.revision).toBe(3);
   const notice = page.locator('.editor-restored-notice');
   await expect(notice).toContainText('이전 저장본으로 복원했어요.');
   await notice.getByRole('button', { name: '복원 취소', exact: true }).click();
   await expect(notice).toHaveCount(0);
-  await expect(description).toHaveValue('두 번째 카드 설명');
+  await expectCodeFieldValue(description, '두 번째 카드 설명');
 
   await menu.click();
   await page.getByRole('button', { name: '이전 저장본과 비교', exact: true }).click();
   await expect(sections).toHaveText(['기본 정보', '첫 메시지']);
   await dialog.getByRole('button', { name: '이전 저장본으로 복원', exact: true }).click();
-  await expect(description).toHaveValue('처음 쓴 카드 설명');
+  await expectCodeFieldValue(description, '처음 쓴 카드 설명');
   await menu.click();
   await page.getByRole('button', { name: '이전 저장본과 비교', exact: true }).click();
   await dialog.getByRole('button', { name: '이전 저장본으로 복원', exact: true }).click();
-  await expect(description).toHaveValue('두 번째 카드 설명');
+  await expectCodeFieldValue(description, '두 번째 카드 설명');
   await description.fill('세 번째 카드 설명');
   await menu.click();
   await expect(
@@ -222,7 +223,7 @@ test('EDIT05 prompt presets count sections and restore the previous save', async
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
   const editor = page.getByTestId('prompt-editor');
   const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
-  const original = await body.inputValue();
+  const original = await codeFieldValue(body);
   await body.fill('고친 프롬프트 본문');
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} 수정`);
   await expect(editorChanges(editor)).toHaveAccessibleName('변경 2건');
@@ -241,11 +242,11 @@ test('EDIT05 prompt presets count sections and restore the previous save', async
   ).toHaveText(['구성', '기본 옵션']);
   await dialog.getByRole('button', { name: '이전 저장본으로 복원', exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(body).toHaveValue(original);
+  await expectCodeFieldValue(body, original);
   await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
   const stored = await (await request.get(`/api/resources/prompt-preset/${preset.id}`)).json();
   expect(stored.title).toBe(title);
   await editor.getByRole('button', { name: '복원 취소', exact: true }).click();
-  await expect(body).toHaveValue('고친 프롬프트 본문');
+  await expectCodeFieldValue(body, '고친 프롬프트 본문');
   await expectEditorSection(editor, '구성');
 });

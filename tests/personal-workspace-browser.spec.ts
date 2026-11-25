@@ -14,6 +14,7 @@ import {
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
+import { expectCodeFieldValue, codeFieldValue } from './code-field.js';
 
 async function createBot(request: APIRequestContext, title: string): Promise<Content> {
   const pkg = nativeContent({ name: title, description: 'Synthetic story source.' });
@@ -62,7 +63,7 @@ for (const width of [412]) {
     page.on('pageerror', (error) => errors.push(error.message));
     await openEditor(page, original.title);
     const description = page.getByLabel('카드 설명', { exact: true });
-    const originalDescription = await description.inputValue();
+    const originalDescription = await codeFieldValue(description);
     await description.fill(`${originalDescription}\nTemporary edit`);
     await description.fill(originalDescription);
     await page.getByRole('button', { name: '서재 목록', exact: true }).click();
@@ -459,7 +460,7 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   expect(accepted.ok(), await accepted.text()).toBe(true);
   await expect(description).toBeEnabled();
   await expect(title).toHaveValue('Saved image');
-  await expect(description).toHaveValue('Saved description');
+  await expectCodeFieldValue(description, 'Saved description');
   await page.unroute(path);
   await page.route(path, (route) =>
     route.fulfill({ status: 409, json: { error: 'REVISION_CONFLICT' } })
@@ -471,12 +472,12 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   await expect(title).toBeEnabled();
   await expect(description).toBeEnabled();
   await expect(title).toHaveValue('Keep unsaved title');
-  await expect(description).toHaveValue('Keep unsaved description');
+  await expectCodeFieldValue(description, 'Keep unsaved description');
   await page.getByText('이름과 설명 편집', { exact: true }).click();
   await expect(title).not.toBeVisible();
   await page.getByText('이름과 설명 편집', { exact: true }).click();
   await expect(title).toHaveValue('Keep unsaved title');
-  await expect(description).toHaveValue('Keep unsaved description');
+  await expectCodeFieldValue(description, 'Keep unsaved description');
   await expect(page.getByRole('alert')).toBeVisible();
   await page.screenshot({
     path: info.outputPath('personal-metadata-error-retained.png'),
