@@ -510,8 +510,13 @@ async function harness(page: Page, seedCount = 0) {
     loseRollback: () => {
       loseRollback = true;
     },
-    activity: (task: HelperTaskView, events: HelperActivityEvent[]) =>
-      activities.set(task.id, events),
+    activity: (task: HelperTaskView, events: HelperActivityEvent[]) => {
+      activities.set(task.id, events);
+      const view = [...views.values()].find((item) =>
+        item.tasks.some((candidate) => candidate.id === task.id)
+      );
+      if (view) event(view, task, 'tool.finished');
+    },
     streamReads,
     streams,
     streamCursors,
