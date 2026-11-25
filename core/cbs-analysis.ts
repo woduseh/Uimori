@@ -538,26 +538,52 @@ export function analyzeCbs(
     nearestCallFrame()?.children.push({ from: call.from, to: call.to });
   };
   const addWhenReferences = (call: CbsCall) => {
-    const parts = call.arguments;
-    const word = (i: number) => {
-      const part = parts[i];
-      return part && !part.dynamic ? s.slice(part.from, part.to) : null;
+    const stack: (CbsArgument | null)[] = [...call.arguments];
+    const reads: { item: CbsArgument; toggle: boolean }[] = [];
+    const read = (item: CbsArgument | null | undefined, toggle: boolean) => {
+      if (item) reads.push({ item, toggle });
     };
-    for (let i = 0; i < parts.length; i++) {
-      const operator = word(i);
-      if ((operator === 'var' || operator === 'toggle') && parts[i + 1])
-        addReference(
-          call,
-          parts[i + 1]!,
-          operator === 'var' ? 'chat' : 'global',
-          'read',
-          operator === 'toggle' ? 'toggle_' : ''
-        );
-      if ((operator === 'vis' || operator === 'visnot') && i > 0)
-        addReference(call, parts[i - 1]!, 'chat', 'read');
-      if ((operator === 'tis' || operator === 'tisnot') && i > 0)
-        addReference(call, parts[i - 1]!, 'global', 'read', 'toggle_');
+    while (stack.length > 1) {
+      const condition = stack.pop()!;
+      const operator = stack.pop()!;
+      if (operator?.dynamic) break;
+      const word = operator ? s.slice(operator.from, operator.to) : null;
+      const toggle = word?.startsWith('t') ?? false;
+      switch (word) {
+        case 'keep':
+        case 'legacy':
+          stack.push(condition);
+          break;
+        case 'var':
+        case 'toggle':
+          read(condition, toggle);
+          stack.push(null);
+          break;
+        case 'vis':
+        case 'visnot':
+        case 'tis':
+        case 'tisnot':
+          read(stack.pop(), toggle);
+          stack.push(null);
+          break;
+        case 'and':
+        case 'or':
+        case 'is':
+        case 'isnot':
+        case '>':
+        case '<':
+        case '>=':
+        case '<=':
+          stack.pop();
+          stack.push(null);
+          break;
+        default:
+          stack.push(null);
+      }
     }
+    reads.sort((a, b) => a.item.from - b.item.from);
+    for (const { item, toggle } of reads)
+      addReference(call, item, toggle ? 'global' : 'chat', 'read', toggle ? 'toggle_' : '');
   };
 
   const legacyName = /<(user|char|bot)>/iy;

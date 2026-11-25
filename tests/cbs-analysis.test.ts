@@ -147,6 +147,7 @@ describe('references', () => {
     const analysis = analyzeCbs('{{ Get_Var :: My Name }}');
     expect(analysis.references[0]).toMatchObject({ name: ' My Name ', scope: 'chat' });
   });
+
 });
 
 describe('diagnostics', () => {
@@ -290,6 +291,51 @@ describe('agreement with the vendored parser', () => {
       cbs.parse(text);
       expect(cbs.issues, text).toEqual(reached);
     }
+  });
+
+  test('#when references are the variables the evaluator reads', () => {
+    const recorder = () => {
+      const reads = new Set<string>();
+      const target = new Proxy({} as Record<string, string>, {
+        getOwnPropertyDescriptor: (_target, key) => {
+          if (typeof key === 'string') reads.add(key);
+          return undefined;
+        },
+      });
+      return { reads, target };
+    };
+    const evaluatorReads = (text: string) => {
+      const chat = recorder();
+      const global = recorder();
+      createNativeRisuCbs({
+        native,
+        variables: chat.target,
+        globalVariables: global.target,
+      }).parse(text);
+      return [...chat.reads, ...global.reads].sort();
+    };
+    const analysisReads = (text: string) =>
+      analyzeCbs(text)
+        .references.filter((ref) => !ref.dynamic)
+        .map((ref) => ref.name)
+        .sort();
+    const exact = [
+      '{{#when::toggle::rain}}a{{/when}}',
+      '{{#when::mood::vis::calm}}a{{/when}}',
+      '{{#when::{{getvar::kind}}::is::toggle::and::var::flag}}a{{/when}}',
+      '{{#when::not::var::ready}}a{{/when}}',
+      '{{#when::var::is::var}}a{{/when}}',
+      '{{#when::season::tis::on::or::hp::visnot::0}}a{{/when}}',
+      '{{#when::keep::toggle::rain}}a{{/when}}',
+      '{{#when::level::>::3::and::toggle::hard}}a{{/when}}',
+      '{{#when::toggle::is::vis}}a{{/when}}',
+      '{{#when::legacy::var::seen}}a{{/when}}',
+    ];
+    for (const text of exact) expect(analysisReads(text), text).toEqual(evaluatorReads(text));
+    expect(analysisReads('{{#when::toggle::is::vis}}a{{/when}}')).toEqual([]);
+    const ambiguous = '{{#when::var::{{getvar::op}}::name}}a{{/when}}';
+    expect(analysisReads(ambiguous)).toEqual(['op']);
+    expect(evaluatorReads(ambiguous)).toContain('op');
   });
 
   test('block pairing is balanced exactly when the generator closed everything', () => {
