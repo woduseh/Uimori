@@ -326,7 +326,7 @@ test('an unsaved editor is analysis input and a patch of that resource saves its
       title: '변경된 제목',
       revision: resource.revision + 1,
     });
-  expect(draft.title).toBe('편집 중인 자료');
+  expect(draft).toMatchObject({ title: '편집 중인 자료' });
   expect(f.workspace.task(task.id).status).toBe('completed');
   expect(
     f.store.db
@@ -460,7 +460,7 @@ describe('a helper save under an unsaved editor draft overwrites neither side', 
         };
       }
       if (index === 2) {
-        expect(request.input.results.at(-1)).toMatchObject({
+        expect((request.input.results as transport.Json[]).at(-1)).toMatchObject({
           denied: false,
           result: { revision: userRevision },
         });
@@ -470,7 +470,10 @@ describe('a helper save under an unsaved editor draft overwrites neither side', 
           toolCalls: [patchCall('fresh', resource, userRevision, '사용자가 저장할 설명 + 도우미')],
         };
       }
-      expect(request.input.results.at(-1)).toMatchObject({ callId: 'fresh', denied: false });
+      expect((request.input.results as transport.Json[]).at(-1)).toMatchObject({
+        callId: 'fresh',
+        denied: false,
+      });
       return structuredClone(success);
     });
     const task = f.runtime.enqueue(
