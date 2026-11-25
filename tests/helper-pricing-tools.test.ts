@@ -346,6 +346,13 @@ test('judgment backfill prices only the unpriced judgment calls of the matching 
       )
       .get(id);
   const unpricedJev = call_(jev, 1_000_000);
+  const releasedJev = call_(jev, 1_000_000);
+  store.db
+    .prepare(
+      `UPDATE attempts SET request=json_object('protocol',json_extract(request,'$.protocol'),
+        'pricingSnapshot',json_extract(request,'$.pricingSnapshot'),'detailsOmitted',json('true')) WHERE id=?`
+    )
+    .run(releasedJev);
   const otherTarget = call_(
     {
       protocol: 'openai-compatible-decisions-v1',
@@ -394,12 +401,13 @@ test('judgment backfill prices only the unpriced judgment calls of the matching 
   expect(call(store, 'model.pricing.backfill', { judgment: true })).toMatchObject({
     judgment: true,
     provider: 'typesafe',
-    unpricedCalls: 1,
-    estimatedCalls: 1,
+    unpricedCalls: 2,
+    estimatedCalls: 2,
     partialCalls: 0,
     stillUnknownCalls: 0,
-    addedUsd: 0.042,
+    addedUsd: 0.084,
   });
+  expect(estimate(releasedJev)).toMatchObject({ status: 'estimated', usd: 0.042 });
   expect(estimate(unpricedJev)).toEqual({
     status: 'estimated',
     usd: 0.042,

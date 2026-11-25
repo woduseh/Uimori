@@ -23,7 +23,7 @@ export type UsageBackfill = {
 
 const unpriced = `is_synthetic=0 AND status!='running'
   AND (cost_usd IS NULL OR cost_usd<0) AND COALESCE(estimate_status,'unavailable')='unavailable'
-  AND json_type(request,'$.pricingSnapshot') IS NULL`;
+  AND COALESCE(json_type(request,'$.pricingSnapshot'),'null')='null'`;
 
 export function backfillUnpricedCalls(store: Store, modelId: string): UsageBackfill {
   const model = store.product.get<ModelPreset>('model', modelId);
