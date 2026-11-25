@@ -1,6 +1,7 @@
 import type { RequestLore } from '../core/request-lore.js';
 import type { Json, ProviderRequest, WireRecord } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
+import { roleResources } from '../core/provider.js';
 import type { Store } from './store.js';
 import { serializeRisuLoreSources, type RisuContextSource } from '../core/risu-context-source.js';
 import {
@@ -61,7 +62,6 @@ export function requestLore(
   wire: WireRecord,
   options: {
     pinned: readonly PinnedSource[];
-    catalog?: readonly LoreIdentity[];
     sourceOnly?: boolean;
   }
 ): RequestLore {
@@ -69,7 +69,7 @@ export function requestLore(
   const resources = new Map<string, LoreIdentity>();
   for (const item of [
     ...snapshot.resources.filter((entry) => entry.chatId === snapshot.chatId),
-    ...(options.catalog ?? []),
+    ...roleResources(snapshot, request.role === 'translation' ? 'translation' : 'main'),
     ...options.pinned,
   ])
     resources.set(item.id, { ...resources.get(item.id), ...item });

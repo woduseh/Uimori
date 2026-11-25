@@ -62,6 +62,7 @@ export function captureTranslationReferences(store: Store, snapshot: RunSnapshot
     }
   };
   return {
+    count: identities.length,
     load(id?: string) {
       const selected =
         id === undefined ? identities : [byId.get(id)].filter((item) => item !== undefined);

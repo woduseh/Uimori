@@ -281,10 +281,12 @@ test('pinned evidence distinguishes source and entry markers despite identical s
   }
   const legacy = { id: 'legacy', kind: 'lore', text: 'An older pinned source.' };
   expect(
-    requestLore(snapshot([]), request(), wire(JSON.stringify(legacy)), {
-      pinned: [legacy],
-      catalog: [{ id: 'legacy', kind: 'lore', title: 'Preserved catalog title' }],
-    }).entries
+    requestLore(
+      snapshot([{ ...resource('legacy', legacy.text), title: 'Preserved catalog title' }]),
+      request(),
+      wire(JSON.stringify(legacy)),
+      { pinned: [legacy] }
+    ).entries
   ).toEqual([{ id: 'legacy', title: 'Preserved catalog title', via: 'pinned', delivery: 'full' }]);
 });
 

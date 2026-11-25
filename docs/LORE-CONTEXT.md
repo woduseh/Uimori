@@ -4,7 +4,7 @@
 
 ## 포함과 배치
 
-`loading: pinned`인 항목은 본문을 제공하고 `discoverable`인 항목은 목록에서 찾거나 `knowledge.read`로 읽어요. `loreContext.placement`의 `background`와 `scene`은 고정 자료의 배치를 정해요. 생략하면 배경이에요. 같은 패키지·부착 역할 안에서 그룹은 등장 순서, 그룹 안 항목은 `order` 오름차순으로 정렬해요. 같은 값이면 원래 배열 순서를 유지해요.
+`loading: pinned`인 항목은 본문을 제공하고 `discoverable`인 항목은 목록에서 찾거나 `knowledge.read`로 읽어요. 자료 목록에는 본문이 아직 입력에 없는 항목만 실려요. 고정 자료, 모델이 고른 로어, 전체 본문이 유지된 이전 로어처럼 이미 전달한 항목은 목록에서 빠지고, 읽을 항목이 하나도 남지 않으면 `knowledge.*` 도구와 읽기 안내도 보내지 않아요. `loreContext.placement`의 `background`와 `scene`은 고정 자료의 배치를 정해요. 생략하면 배경이에요. 같은 패키지·부착 역할 안에서 그룹은 등장 순서, 그룹 안 항목은 `order` 오름차순으로 정렬해요. 같은 값이면 원래 배열 순서를 유지해요.
 
 Risu 프리셋의 `promptTemplate`이 캐릭터·페르소나·로어·대화의 역할과 순서를 정해요. Uimori는 실제 출력에 사용자 메모·플롯·보존한 조회 구간을 연결해요. 별도의 Uimori 슬롯 언어로 원문을 바꾸지 않아요.
 

@@ -223,7 +223,7 @@ describe('M1 source-bound auxiliary roles', () => {
   test('translation can use its remaining budget to correct reads or finish without optional references', async () => {
     const raw = source('A source.'),
       run = snapshot(),
-      input = translationInput(raw, context(), run);
+      input = translationInput(raw, context(), run, 'full', 1);
     const result = await executeAuxiliary(
       input,
       run,
@@ -483,4 +483,46 @@ test('presentation input cannot invoke a generative selector or asset tool loop'
     })
   ).rejects.toThrow('JEV_JUDGMENT_REQUIRED');
   expect(calls).toBe(0);
+});
+
+test('translation offers each read pair and policy sentence only while it has something to return', () => {
+  const raw = source('A source.');
+  const bare = { ...snapshot(), resources: [] };
+  const first = translationInput(raw, { ...context(), previousSources: [] }, bare);
+  expect(first.tools).toEqual([]);
+  expect(first.catalog).toEqual([]);
+  expect(first.referencePolicy).toBe('');
+
+  const scenes = Array.from({ length: 9 }, (_, index) => ({
+    revision: `scene-${index}`,
+    text: `Scene ${index}.`,
+  }));
+  const later = translationInput(
+    raw,
+    { ...context(), previousSources: scenes.slice(-2) },
+    { ...snapshot(), history: scenes },
+    'full',
+    3
+  );
+  expect(later.tools).toEqual([
+    'knowledge.search',
+    'knowledge.read',
+    'skills.list',
+    'skills.load',
+    'story.search',
+    'story.read',
+    'translation.search',
+    'translation.read',
+  ]);
+  expect(later.catalog.map((item) => item.id)).toEqual(['chat-a:glossary', 'chat-a:skill']);
+  expect(later.referencePolicy).toContain('story.search/read');
+  expect(later.referencePolicy).toContain('translation.search/read');
+
+  const shown = translationInput(
+    raw,
+    { ...context(), previousSources: scenes.slice(-2) },
+    { ...bare, history: scenes.slice(-2) }
+  );
+  expect(shown.tools).toEqual([]);
+  expect(shown.referencePolicy).not.toContain('story.search');
 });

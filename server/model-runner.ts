@@ -613,7 +613,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             ...(requestContext && { requestContext }),
             requestLore: requestLore(fixed, request, wire, {
               pinned: input.pinnedSources ?? [],
-              catalog: input.catalog,
             }),
           },
           resumeAttemptId

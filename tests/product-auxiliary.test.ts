@@ -350,10 +350,14 @@ test('custom translation prompt survives tool continuation and refusal retry wit
   expect(server.requests).toHaveLength(3);
   for (const captured of server.requests) {
     const wire = JSON.parse(captured.body);
-    expect(wire.stable.contract).toContain(AUTHOR_NOTE_GUIDANCE);
-    expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual(
-      expect.arrayContaining(['translation.search', 'translation.read'])
-    );
+    expect(wire.stable.contract).not.toContain(AUTHOR_NOTE_GUIDANCE);
+    expect(wire.stable.contract).not.toContain('translation.search');
+    expect(wire.stable.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'knowledge.search',
+      'knowledge.read',
+      'skills.list',
+      'skills.load',
+    ]);
     expect(wire.input.source).not.toHaveProperty('referencePolicy');
     expect(wire.prompt.messages[0].content[0].text).toBe(custom.replace('{{char}}', 'Mira'));
     expect(wire.input.task).not.toContain('Korean');

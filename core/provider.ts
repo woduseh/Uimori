@@ -1,5 +1,6 @@
 import { createKnowledgeBrowser } from './knowledge-browse.js';
 import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
+import { readAccess, type ReadFamily } from './read-access.js';
 import { createHash } from 'node:crypto';
 import {
   conversationSummary,
@@ -26,6 +27,7 @@ import { packageImages } from './package-images.js';
 import { candidateTerms, createCandidateSearch } from './candidate-search.js';
 
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
+const MAIN_READ_FAMILIES: readonly ReadFamily[] = ['knowledge', 'skills', 'story'];
 export const CATALOG_SUMMARY_TOKENS = 80;
 export const CATALOG_TOKENS = 6_000;
 export const KNOWLEDGE_READ_TOKENS = 2_000;
@@ -36,9 +38,6 @@ export type ReadBudget = {
   tokenizer: TokenizerProfileId;
   ranges?: (number | null)[];
 };
-export const CATALOG_READ_GUIDANCE =
-  'Catalog entries marked loading "pinned" are already in the input in full: do not read them again. The other entries are summaries of references whose full text is not in the input. When one of those bears on this request, read its full text first: fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference, and request independently needed references together. Wait for earlier results only when they decide the next read. References already delivered in full need no second read. Use knowledge.search when the catalog does not identify the entry you need: exact names favor normal search, mode=relevant ranks lexical matches, and mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read.';
-
 const metadata = ({ text: _text, chatId: _chatId, loreFolder: _loreFolder, ...item }: Resource) =>
   item;
 const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
@@ -50,29 +49,22 @@ const summary = (text: string, profile?: TokenizerProfileId) =>
 const catalogEntry = (
   item: Resource,
   allowedIds: Set<string>,
-  pinnedBodiesDelivered: boolean,
   profile?: TokenizerProfileId
-): Omit<Resource, 'text' | 'chatId'> => {
-  const pinned = item.loading === 'pinned';
-  return {
-    id: item.id,
-    revision: item.revision,
-    kind: item.kind,
-    title: item.title,
-    description: pinned && pinnedBodiesDelivered ? '' : summary(item.description, profile),
-    ...(item.sourceKind ? { sourceKind: item.sourceKind } : {}),
-    ...(pinned ? { loading: 'pinned' as const } : {}),
-    ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
-  };
-};
+): Omit<Resource, 'text' | 'chatId'> => ({
+  id: item.id,
+  revision: item.revision,
+  kind: item.kind,
+  title: item.title,
+  description: summary(item.description, profile),
+  ...(item.sourceKind ? { sourceKind: item.sourceKind } : {}),
+  ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
+});
 export function resourceCatalog(
   resources: readonly Resource[],
   {
-    pinnedBodiesDelivered = true,
     tokenizer,
     skipOversized = false,
   }: {
-    pinnedBodiesDelivered?: boolean;
     tokenizer?: TokenizerProfileId;
     skipOversized?: boolean;
   } = {}
@@ -80,7 +72,7 @@ export function resourceCatalog(
   const allowedIds = new Set(resources.map((item) => item.id));
   const catalog: MainInput['catalog'] = [];
   for (const resource of resources) {
-    const entry = catalogEntry(resource, allowedIds, pinnedBodiesDelivered, tokenizer);
+    const entry = catalogEntry(resource, allowedIds, tokenizer);
     catalog.push(entry);
     if (countTextTokens(JSON.stringify(catalog), tokenizer) > CATALOG_TOKENS) {
       catalog.pop();
@@ -97,9 +89,10 @@ export function resourceCatalog(
           catalogPage: {
             total: resources.length,
             listed,
-            remaining: resources.some((item) => item.kind === 'skill')
-              ? 'Use knowledge.search or skills.list with pagination to discover the full approved scope.'
-              : 'Use knowledge.search with pagination to discover the full approved scope.',
+            remaining: `Use ${[
+              ...(resources.some((item) => item.kind !== 'skill') ? ['knowledge.search'] : []),
+              ...(resources.some((item) => item.kind === 'skill') ? ['skills.list'] : []),
+            ].join(' or ')} with pagination to discover the full approved scope.`,
           },
         }
       : {}),
@@ -169,10 +162,40 @@ export function pinnedSlotSources(
     return sources.filter((item) => !['bot', 'persona', 'instruction'].includes(item.kind));
   return [];
 }
+export type MainReadOptions = {
+  delivery?: 'writer' | 'direct';
+  families?: readonly ReadFamily[];
+};
+function writerDeliveredReferences(
+  snapshot: RunSnapshot,
+  packages: readonly ResolvedPackage[],
+  resources: readonly Resource[]
+): string[] {
+  if (snapshot.contextPlan?.status === 'pending') return [];
+  const byId = new Map(resources.map((item) => [item.id, item]));
+  return [
+    ...packages
+      .flatMap((pkg) => pkg.selectedLore)
+      .filter((item) => !item.nativeRisuPosition && item.text)
+      .map((item) => item.id),
+    ...(snapshot.loreContext?.entries ?? [])
+      .filter((entry) => {
+        const resource = byId.get(entry.id);
+        return (
+          resource?.revision === entry.revision &&
+          entry.start === 0 &&
+          entry.end === resource.text.length &&
+          entry.text === resource.text
+        );
+      })
+      .map((entry) => entry.id),
+  ];
+}
 export function buildMainInput(
   snapshot: RunSnapshot,
   results: readonly ToolEvent[] = [],
-  packages?: readonly ResolvedPackage[]
+  packages?: readonly ResolvedPackage[],
+  reads: MainReadOptions = {}
 ): MainInput {
   if (
     snapshot.promptCompilation &&
@@ -189,7 +212,7 @@ export function buildMainInput(
     history: [],
     catalog: [],
     prefetch: [],
-    tools: [...ALLOWED_TOOLS],
+    tools: [],
     results: structuredClone([...results]),
   };
   const packageData = packageContextFromCompiled(packages);
@@ -298,7 +321,6 @@ export function buildMainInput(
       text: projectStoryUiText(text),
       contentHash,
     }));
-  input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);
     input.history = input.history.filter((entry) => kept.has(entry.revision));
@@ -313,8 +335,31 @@ export function buildMainInput(
     selectLogicalHistory(snapshot, input.history),
     false
   );
+  const writer = (reads.delivery ?? 'writer') === 'writer';
+  const access = readAccess(
+    {
+      references: resources,
+      deliveredReferences: new Set([
+        ...(input.pinnedSources ?? []).map((item) => item.id),
+        ...(writer ? writerDeliveredReferences(snapshot, packages, resources) : []),
+      ]),
+      scenes: snapshot.history,
+      deliveredScenes: new Set(
+        writer && snapshot.promptCompilation
+          ? snapshot.promptCompilation.messages.flatMap((message) =>
+              message.provenance.origin !== 'prompt' && message.provenance.sourceRevision
+                ? [message.provenance.sourceRevision]
+                : []
+            )
+          : input.history.map((entry) => entry.revision)
+      ),
+    },
+    reads.families ?? MAIN_READ_FAMILIES
+  );
+  input.tools = access.tools;
+  const listed = access.catalog;
   const rankedIds = createCandidateSearch(
-    resources.map((item) => ({
+    listed.map((item) => ({
       id: item.id,
       title: item.title,
       text: `${item.id} ${item.description}`,
@@ -324,11 +369,11 @@ export function buildMainInput(
     ...visibleHistory.slice(-3).map((entry) => ({ text: entry.text, weight: 0.5 })),
     ...(input.contextSummary ? [{ text: input.contextSummary.text, weight: 0.5 }] : []),
   ]);
-  const byId = new Map(resources.map((item) => [item.id, item]));
+  const byId = new Map(listed.map((item) => [item.id, item]));
   const rankedSet = new Set(rankedIds);
   const catalogResources = [
     ...rankedIds.map((id) => byId.get(id)!),
-    ...resources.filter((item) => !rankedSet.has(item.id)),
+    ...listed.filter((item) => !rankedSet.has(item.id)),
   ];
   Object.assign(
     input,

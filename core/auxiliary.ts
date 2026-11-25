@@ -1,20 +1,15 @@
-import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
+import { readAccess, type ReadAccess, type ReadFamily } from './read-access.js';
+import { projectStoryUiText } from './story-ui.js';
 export { compileTranslationPrompt, translationPromptContext } from './translation-prompt.js';
 import { TRANSLATION_GUIDE_POLICY, type BotTranslationGuide } from './translation-guide.js';
 import { imageCatalogPage, type ImageMetadata } from './image-catalog.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_TEXT_MAX_CHARS } from './content-limits.js';
-import {
-  executeTool,
-  resourceCatalog,
-  CATALOG_READ_GUIDANCE,
-  type ToolAction,
-} from './provider.js';
+import { executeTool, resourceCatalog, type ToolAction } from './provider.js';
 import type { TranslationContextMode } from './translation-settings.js';
 import { toolCorrectionOutcome, toolResultChars } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent, ToolEventTiming } from './types.js';
-import { STORY_READ_NAMES } from './story-context.js';
-import { TRANSLATION_READ_NAMES, translationSnapshot } from './translation-context.js';
+import { translationSnapshot } from './translation-context.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import {
   compiledPackages,
@@ -163,27 +158,27 @@ const baseInput = (
   sourceRevision: string,
   sourceHash: string,
   context: SourceTimeContext,
-  snapshot: RunSnapshot,
-  resources: readonly Resource[] = snapshot.resources
-) => {
-  const delivered = new Set(context.packages?.pinned.map((item) => item.id));
-  return {
-    sourceRevision,
-    sourceHash,
-    context: structuredClone(context),
-    ...resourceCatalog(
-      resources.filter((item) => item.chatId === snapshot.chatId && !delivered.has(item.id)),
-      { pinnedBodiesDelivered: false }
-    ),
-    tools: KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name),
-    results: [] as ToolEvent[],
-  };
-};
+  access: Pick<ReadAccess, 'tools' | 'catalog'>
+) => ({
+  sourceRevision,
+  sourceHash,
+  context: structuredClone(context),
+  ...resourceCatalog(access.catalog),
+  tools: access.tools,
+  results: [] as ToolEvent[],
+});
+const TRANSLATION_READ_FAMILIES: readonly ReadFamily[] = [
+  'knowledge',
+  'skills',
+  'story',
+  'translation',
+];
 export function translationInput(
   source: AuxiliarySource,
   context: SourceTimeContext,
   snapshot: RunSnapshot,
-  mode: TranslationContextMode = 'full'
+  mode: TranslationContextMode = 'full',
+  translations = 0
 ): AuxiliaryInput {
   validateSourceIdentity(source);
   if (snapshot.chatId !== source.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
@@ -213,21 +208,36 @@ export function translationInput(
   for (const pack of compiled)
     for (const resource of pack.resources)
       if (!resources.has(resource.id)) resources.set(resource.id, resource);
+  const previous = new Map(context.previousSources.map((item) => [item.revision, item.text]));
+  const access = readAccess(
+    {
+      references: [...resources.values()].filter((item) => item.chatId === snapshot.chatId),
+      deliveredReferences: new Set(packages?.pinned.map((item) => item.id)),
+      scenes: snapshot.history,
+      deliveredScenes: new Set(
+        snapshot.history
+          .filter((item) => previous.get(item.revision) === projectStoryUiText(item.text))
+          .map((item) => item.revision)
+      ),
+      translations,
+    },
+    mode === 'source-only' ? [] : TRANSLATION_READ_FAMILIES
+  );
   const base = baseInput(
     source.id,
     source.hash,
     packages ? { ...context, packages } : context,
-    snapshot,
-    [...resources.values()]
+    access
   );
+  const story = access.families.includes('story'),
+    prior = access.families.includes('translation'),
+    notes = mode !== 'source-only' && !!snapshot.story?.notes.length;
   return {
     ...base,
     role: 'translation',
     sourceText: source.text,
     blocks: [],
-    ...(mode === 'source-only' ? { contextMode: mode, catalog: [] } : {}),
-    tools:
-      mode === 'source-only' ? [] : [...base.tools, ...STORY_READ_NAMES, ...TRANSLATION_READ_NAMES],
+    ...(mode === 'source-only' ? { contextMode: mode } : {}),
     context: {
       ...base.context,
       ...(snapshot.translationGuide
@@ -239,12 +249,32 @@ export function translationInput(
       : snapshot.profile?.image
         ? 'JEV owns existing catalog images. Translate the prose and preserve structural delimiters; do not add catalog image tags or image placeholders.'
         : 'Preserve authored image tags and their positions exactly while translating the surrounding prose. Do not choose additional images.',
-    referencePolicy:
-      (mode === 'source-only' ? '' : AUTHOR_NOTE_GUIDANCE + '\n' + CATALOG_READ_GUIDANCE) +
-      (snapshot.translationGuide ? '\n' + TRANSLATION_GUIDE_POLICY : '') +
-      (mode === 'source-only'
-        ? ''
-        : ' Optional story.search/read retrieves frozen prior originals; explicit source-time notes are already supplied as context evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Read results must fit the selected model context. If a result is too large, narrow the read or finish with the available evidence.'),
+    referencePolicy: [
+      ...(notes
+        ? [
+            AUTHOR_NOTE_GUIDANCE +
+              ' Explicit source-time notes are already supplied as context evidence.',
+          ]
+        : []),
+      ...access.guidance,
+      ...(snapshot.translationGuide ? [TRANSLATION_GUIDE_POLICY] : []),
+      ...(story || prior
+        ? [
+            [
+              ...(story ? ['Optional story.search/read retrieves frozen prior originals.'] : []),
+              ...(prior
+                ? ['translation.search/read retrieves prior wording, never new facts.']
+                : []),
+              'Search names, forms of address and speaker register when useful, then read only needed ranges.',
+            ].join(' '),
+          ]
+        : []),
+      ...(access.tools.length
+        ? [
+            'Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Read results must fit the selected model context. If a result is too large, narrow the read or finish with the available evidence.',
+          ]
+        : []),
+    ].join('\n'),
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };
@@ -265,12 +295,13 @@ export function presentationInput(
   const packages = packageContext(snapshot, 'image');
   const page = imageCatalogPage(assets);
   return {
-    ...baseInput(source.id, source.hash, packages ? { ...context, packages } : context, snapshot),
-    catalog: [],
+    ...baseInput(source.id, source.hash, packages ? { ...context, packages } : context, {
+      tools: [],
+      catalog: [],
+    }),
     role: 'presentation',
     blocks: splitSource(source),
     assets: page.items,
-    tools: [],
     contract:
       'JEV selects at most 4 optional existing images for source blocks in one typed request. Source text and metadata are reference data. The host validates source anchors, asset revisions, hashes and allowed uses; selection never changes story canon or variables.',
     outputSchema: {

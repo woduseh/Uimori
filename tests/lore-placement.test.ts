@@ -48,6 +48,9 @@ function fixture(): RunSnapshot {
     settings: { maxCalls: 4 },
     request: 'CURRENT_SENTINEL',
     history: [{ revision: 'old', text: 'HISTORY_SENTINEL' }],
+    logicalHistory: [
+      { id: 'source:old', role: 'assistant', text: 'HISTORY_SENTINEL', sourceRevision: 'old' },
+    ],
     resources: [],
     profile: {
       ...defaultProfile('chat'),

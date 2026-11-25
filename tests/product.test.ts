@@ -425,31 +425,10 @@ describe('M1 real HTTP application boundaries', () => {
       );
       expect(source.text).toBe(originalText);
       translationCalls++;
-      if (body.input.results.length === 0) {
-        await writeSse(response, [
-          {
-            type: 'tool_delta',
-            index: 0,
-            id: 'translation-read-glossary',
-            name: 'knowledge.read',
-            argumentsDelta: JSON.stringify({ ids: [glossaryId] }),
-          },
-          { type: 'done', reason: 'tool_calls' },
-        ]);
-        return;
-      }
-      expect(body.input.results[0]).toMatchObject({
-        callId: 'translation-read-glossary',
-        denied: false,
-        result: {
-          items: [
-            {
-              denied: false,
-              read: { text: expectedGlossary, source: { revision: expectedGlossaryRevision } },
-            },
-          ],
-        },
-      });
+      expect(body.stable.tools.map((tool: { name: string }) => tool.name)).not.toContain(
+        'knowledge.read'
+      );
+      expect(JSON.stringify(body.input.catalog ?? [])).not.toContain(glossaryId);
       if (failTranslation) {
         await writeSse(response, [
           { type: 'error', message: 'One intentional technical fixture failure' },
@@ -563,14 +542,14 @@ describe('M1 real HTTP application boundaries', () => {
       translationModelSnapshot: { ...updatedTranslation, connection: bound },
     });
     expect(app.store.job(jobId).status).toBe('failed');
-    expect(translationCalls).toBe(4);
+    expect(translationCalls).toBe(2);
     expect(completed.result?.text?.match(/`KEEP_LITERAL`/g)).toHaveLength(3);
     expect(app.store.source(source.id).hash).toBe(source.hash);
     expect(app.store.source(source.id).text).toBe(originalText);
     expect(app.store.detail(other.id).jobs).toEqual([]);
     const ledger = app.store.product.attempts(chat.id);
     expect(ledger.filter((attempt) => attempt.role === 'main')).toHaveLength(1);
-    expect(ledger.filter((attempt) => attempt.role === 'translation')).toHaveLength(4);
+    expect(ledger.filter((attempt) => attempt.role === 'translation')).toHaveLength(2);
     expect(ledger.filter((attempt) => attempt.status === 'error')).toHaveLength(1);
     expect(ledger.every((attempt) => attempt.costUsd === null)).toBe(true);
     expect(

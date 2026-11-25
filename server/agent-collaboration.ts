@@ -17,7 +17,13 @@ import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { outlineContract } from '../core/outline.js';
-import { buildMainInput, executeTool, knowledgeReadResults } from '../core/provider.js';
+import {
+  buildMainInput,
+  executeTool,
+  knowledgeReadResults,
+  type MainReadOptions,
+} from '../core/provider.js';
+import { CATALOG_READ_GUIDANCE, READ_FAMILIES } from '../core/read-access.js';
 import {
   executeProvider,
   type Json,
@@ -35,6 +41,11 @@ const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Js
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
 const CONTRACT = `You advise the main writer on the assigned question, using your advisor instructions and the available context. Offer the judgments, interpretations, alternatives or short illustrative fragments that help answer it, in whatever form and depth make the advice useful, and say which evidence or assumption a material claim rests on. Distinguish established source facts and character beliefs from inference and proposed fiction. Your tools are read-only: advice does not save fiction, change canonical state or draw randomness, and the main writer decides what to use and writes the final prose. When consultationContext is present, its references are completed exchanges selected from this run: earlier advice is another advisor's proposal, read results keep their source and error boundaries, and a draft is uncommitted writing to examine. Weigh the evidence, disagreements, failures and truncation; repeated opinions are not independent confirmation. Only the provided draft and references are available to you, not the writer's other working drafts.`;
 
+const advisorReads = (agent: AgentDefinition): MainReadOptions => ({
+  delivery: 'direct',
+  families: READ_FAMILIES.filter((family) => (agent.tools as string[]).includes(family)),
+});
+
 export function buildAgentProviderRequest(
   snapshot: RunSnapshot,
   agent: AgentDefinition,
@@ -45,13 +56,9 @@ export function buildAgentProviderRequest(
   previousConsultations: readonly AgentAdvice[] = [],
   consultationContext?: AgentConsultationContext
 ): ProviderRequest {
-  const input = buildMainInput(snapshot);
+  const input = buildMainInput(snapshot, [], undefined, advisorReads(agent));
   const collaboration = snapshot.profile!.promptPresets!.main!.program.collaboration!;
-  const tools = MAIN_READ_TOOLS.filter(
-    (tool) =>
-      input.tools.includes(tool.name) &&
-      agent.tools.some((scope) => tool.name.startsWith(`${scope}.`))
-  );
+  const tools = MAIN_READ_TOOLS.filter((tool) => input.tools.includes(tool.name));
   const sharedOptions = agentSharedOptions(snapshot);
   const controls = Object.fromEntries(sharedOptions.map(({ id, value }) => [id, value]));
   const previous = previousConsultations.filter(
@@ -68,14 +75,22 @@ export function buildAgentProviderRequest(
     role: 'main',
     ...modelRequestFields(target),
     stable: {
-      contract: `${CONTRACT}\n${CONTEXT_DERIVED_GUIDANCE}\n${CONTEXT_RETRIEVAL_GUIDANCE}\n${AUTHOR_NOTE_GUIDANCE}${input.outline ? `\nFor advice about the planned writing unit: ${outlineContract(input.outline)}` : ''}\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
+      contract: `${[
+        CONTRACT,
+        CONTEXT_DERIVED_GUIDANCE,
+        ...(tools.length || consultationContext ? [CONTEXT_RETRIEVAL_GUIDANCE] : []),
+        ...(input.tools.includes('knowledge.read') ? [CATALOG_READ_GUIDANCE] : []),
+        AUTHOR_NOTE_GUIDANCE,
+      ].join(
+        '\n'
+      )}${input.outline ? `\nFor advice about the planned writing unit: ${outlineContract(input.outline)}` : ''}\n\nShared instructions:\n${collaboration.sharedInstructions}\n\nAdvisor instructions:\n${agent.instructions}`,
       tools: structuredClone(tools),
     },
     generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: {
       history: asJson(input.history),
-      catalog: asJson(tools.length ? input.catalog : []),
+      catalog: asJson(input.catalog),
       source: asJson({
         request: snapshot.request,
         parentRevision: snapshot.parentRevision,
@@ -339,7 +354,7 @@ export function createAgentCollaboration(
         previousByAgent.get(agent.id),
         consultationContext
       );
-      const input = buildMainInput(snapshot, results);
+      const input = buildMainInput(snapshot, results, undefined, advisorReads(agent));
       await hooks.onInput({
         ...input,
         agentId: agent.id,

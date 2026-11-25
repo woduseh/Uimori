@@ -473,6 +473,8 @@ test.each(['missing-scene', 'budget'] as const)(
     const store = database();
     const chat = createFixtureChat(store, mode);
     source(store, chat.id, 'A'.repeat(16000));
+    source(store, chat.id, 'A later scene.');
+    source(store, chat.id, 'The scene before the target.');
     let count = 0;
     const server = await loopbackProvider(async (req, res) => {
       count++;

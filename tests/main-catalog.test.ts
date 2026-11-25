@@ -5,11 +5,12 @@ import {
   buildMainInput,
   resourceCatalog,
   CATALOG_TOKENS,
-  CATALOG_READ_GUIDANCE,
   CATALOG_SUMMARY_TOKENS,
   executeTool,
   KNOWLEDGE_READ_TOKENS,
 } from '../core/provider.js';
+import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
+import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { defaultProfile, type Connection } from '../core/product.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
@@ -63,31 +64,62 @@ function snapshot(resources: Resource[]): RunSnapshot {
   };
 }
 
-test('the catalog summarises a discoverable entry and lists a pinned one without a summary', () => {
+const retained = (resource: Resource, end = resource.text.length) => ({
+  id: resource.id,
+  revision: resource.revision,
+  hash: sourceHash(resource.text.slice(0, end)),
+  title: resource.title,
+  start: 0,
+  end,
+  text: resource.text.slice(0, end),
+  origin: { sourceRevision: 'earlier', sourceHash: 'earlier', runId: 'run', callId: 'read' },
+  lastUsed: '',
+});
+function withRetained(fixed: RunSnapshot, entries: ReturnType<typeof retained>[]): RunSnapshot {
+  return {
+    ...fixed,
+    loreContext: {
+      version: 1,
+      policy: DEFAULT_LORE_CONTEXT,
+      canonHash: 'canon',
+      dependencies: [],
+      entries,
+      stats: {
+        retainedChars: 0,
+        retainedTokens: 0,
+        retainedEntries: entries.length,
+        appendedChars: 0,
+        droppedEntries: 0,
+        reasons: [],
+      },
+    },
+  };
+}
+
+test('the catalog summarises the entries left to read and leaves delivered ones out', () => {
   const discoverable = lore(1, {
-    relatedIds: ['lore-2', 'absent-id'],
+    relatedIds: ['lore-2', 'lore-3', 'absent-id'],
     loreContext: { placement: 'scene', group: 'harbor', order: 1 },
   });
   const pinned = lore(2, {
     loading: 'pinned',
     loreContext: { placement: 'scene', group: 'harbor', order: 2 },
   });
-  const [first, second] = buildMainInput(snapshot([discoverable, pinned])).catalog;
+  const delivered = lore(3);
+  const input = buildMainInput(
+    withRetained(snapshot([discoverable, pinned, delivered]), [retained(delivered)])
+  );
+  const [first, second] = input.catalog;
   expect(countTextTokens(first.description)).toBeLessThanOrEqual(CATALOG_SUMMARY_TOKENS);
   expect(first.description.endsWith('…')).toBe(true);
   expect(discoverable.description.startsWith(first.description.slice(0, -1))).toBe(true);
   expect(first.relatedIds).toEqual(['lore-2']);
   expect(first).not.toHaveProperty('loreContext');
   expect(first).not.toHaveProperty('loading');
-  expect(second).toMatchObject({
-    id: 'lore-2',
-    title: 'Reference 2',
-    kind: 'lore',
-    sourceKind: 'module',
-    loading: 'pinned',
-    description: '',
-  });
-  expect(second).not.toHaveProperty('loreContext');
+  expect(second).toMatchObject({ id: 'lore-2', title: 'Reference 2', sourceKind: 'module' });
+  expect(second.description).toBe(first.description.replaceAll('1', '2'));
+  expect(second).not.toHaveProperty('loading');
+  expect(input.catalog.map((item) => item.id)).toEqual(['lore-1', 'lore-2']);
 });
 
 test('a catalog past the token budget lists a prefix and points at the read tools', () => {
@@ -122,7 +154,16 @@ test('the request contract asks for a read only while the catalog lists a discov
     buildMainProviderRequest(snapshot(resources)).request.stable.contract;
   expect(contract([lore(1)])).toContain(CATALOG_READ_GUIDANCE);
   expect(contract([])).not.toContain(CATALOG_READ_GUIDANCE);
-  expect(contract([lore(1, { loading: 'pinned' })])).not.toContain(CATALOG_READ_GUIDANCE);
+  const full = lore(1),
+    request = (entry: ReturnType<typeof retained>) =>
+      buildMainProviderRequest(withRetained(snapshot([full]), [entry])).request;
+  const delivered = request(retained(full));
+  expect(delivered.stable.contract).not.toContain(CATALOG_READ_GUIDANCE);
+  expect(delivered.stable.tools.map((tool) => tool.name)).not.toContain('knowledge.read');
+  expect(delivered.input.catalog).toEqual([]);
+  const excerpt = request(retained(full, 5));
+  expect(excerpt.stable.contract).toContain(CATALOG_READ_GUIDANCE);
+  expect(excerpt.input.catalog).toMatchObject([{ id: 'lore-1' }]);
 });
 
 test('knowledge search points directly to an exact late body match without changing metadata-only hits or scope', () => {

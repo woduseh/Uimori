@@ -2,6 +2,7 @@ import { nativePrompt } from './fixtures/native-prompt.js';
 import { prepareNativeRisuTranslationPrompt } from '../server/risu-native-preset.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
+import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
@@ -179,6 +180,16 @@ describe('whole-source authored translation prompts', () => {
   });
   test('actual loopback requests preserve composed messages across source-time tools and freeze later mutations', async () => {
     const seed = bundle();
+    seed.snapshot.resources.push({
+      id: 'keeper',
+      chatId: seed.snapshot.chatId,
+      kind: 'lore',
+      revision: 1,
+      title: 'Keeper',
+      description: 'The lighthouse keeper.',
+      text: 'The keeper is called 등대지기.',
+      loading: 'discoverable',
+    });
     let calls = 0;
     const local = await loopbackProvider(async (request, response) => {
       const body = JSON.parse(request.body);
@@ -243,7 +254,9 @@ describe('whole-source authored translation prompts', () => {
     });
     expect(local.requests).toHaveLength(2);
     const bodies = local.requests.map((request) => JSON.parse(request.body));
-    expect(bodies[0].stable.contract).toContain(AUTHOR_NOTE_GUIDANCE);
+    expect(bodies[0].stable.contract).toContain(CATALOG_READ_GUIDANCE);
+    expect(bodies[0].stable.contract).not.toContain(AUTHOR_NOTE_GUIDANCE);
+    expect(bodies[1].stable).toEqual(bodies[0].stable);
     expect(bodies[0].input.source).not.toHaveProperty('referencePolicy');
     expect(bodies[0].prompt.values).toEqual({ style: '1' });
     expect(bodies[1].prompt).toEqual(bodies[0].prompt);

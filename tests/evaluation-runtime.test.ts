@@ -703,7 +703,7 @@ test('evaluated translation permits reference reads, unwraps structured submissi
       if (!body.input.some((item) => item.type === 'function_call_output')) {
         await send(
           target,
-          [call(body, 'translation.search', { query: 'keeper' }, 'wording')],
+          [call(body, 'knowledge.read', { ids: [state.lore.id] }, 'wording')],
           true
         );
         return;

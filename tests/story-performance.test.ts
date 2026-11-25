@@ -361,14 +361,15 @@ function validateOutput(
   expect(
     result.snapshot.resources.filter((resource) => resource.sourceKind === 'lore')
   ).toHaveLength(counts.loreCount);
-  expect(result.input.catalog).toHaveLength(
-    result.input.catalogPage?.listed ?? result.snapshot.resources.length
-  );
+  const delivered = new Set((result.input.pinnedSources ?? []).map((item) => item.id));
+  const unread = result.snapshot.resources.filter((resource) => !delivered.has(resource.id));
+  expect(result.input.catalog).toHaveLength(result.input.catalogPage?.listed ?? unread.length);
+  expect(result.input.catalog.every((item) => !delivered.has(item.id))).toBe(true);
   expect(result.input.catalog.every((item) => !Object.hasOwn(item, 'text'))).toBe(true);
   if (counts.loreCount > 100) {
-    expect(result.input.catalogPage).toMatchObject({ total: result.snapshot.resources.length });
+    expect(result.input.catalogPage).toMatchObject({ total: unread.length });
     expect(result.input.catalogPage!.listed).toBeGreaterThan(0);
-    expect(result.input.catalogPage!.listed).toBeLessThan(result.snapshot.resources.length);
+    expect(result.input.catalogPage!.listed).toBeLessThan(unread.length);
     expect(countTextTokens(JSON.stringify(result.input.catalog))).toBeLessThanOrEqual(
       CATALOG_TOKENS
     );

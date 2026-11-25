@@ -110,6 +110,7 @@ export type AuxiliaryOutcome = {
 };
 export type AuxiliaryStoreBridge = {
   captureTranslationReferences?: (snapshot: RunSnapshot) => Disposable & {
+    count: number;
     load: (id?: string) => readonly TranslationReference[];
   };
   load: (jobId: string) => MaybePromise<AuxiliaryBundle>;
@@ -463,7 +464,13 @@ export async function runAuxiliaryJob(
   const assets = bundle.assets ?? [];
   const input =
     job.kind === 'translation'
-      ? translationInput(source, context, snapshot, mode)
+      ? translationInput(
+          source,
+          context,
+          snapshot,
+          mode,
+          references?.count ?? bundle.translationReferences?.length ?? 0
+        )
       : presentationInput(imageSource, context, snapshot, assets);
   const protectedTranslation =
     job.kind === 'translation' ? prepareStoryUiTranslation(source.text) : undefined;
@@ -538,7 +545,6 @@ export async function runAuxiliaryJob(
                   ...wire,
                   requestLore: requestLore(executionSnapshot, body, wire, {
                     pinned: input.context.packages?.pinned ?? [],
-                    catalog: input.catalog,
                     sourceOnly: mode === 'source-only',
                   }),
                 }

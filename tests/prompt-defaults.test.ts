@@ -97,9 +97,8 @@ describe('single prompt program defaults at real native encoder boundaries', () 
         };
       const built = buildMainProviderRequest(await prepareNativeRisuRun(seed));
       request = built.request;
-      expect(built.request.stable.contract).toBe(
-        '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE
-      );
+      expect(built.request.stable.contract).toBe('');
+      expect(built.request.stable.tools).toEqual([]);
       expect(
         (built.request.prompt!.messages[0].content[0] as { type: 'text'; text: string }).text
       ).toBe(custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT);
@@ -109,11 +108,11 @@ describe('single prompt program defaults at real native encoder boundaries', () 
       const target = snapshot(protocol).profile!.models.main!;
       const preview = encodeMainPreview({ ...request!, modelId: target.modelId }, target);
       for (const guidance of [CONTEXT_DERIVED_GUIDANCE, CONTEXT_RETRIEVAL_GUIDANCE])
-        expect(JSON.stringify(preview.body).split(guidance), protocol).toHaveLength(2);
+        expect(JSON.stringify(preview.body), protocol).not.toContain(guidance);
       expect(JSON.stringify(preview.body).split('Pinned module evidence.'), protocol).toHaveLength(
         2
       );
-      expect(JSON.stringify(preview.body), protocol).toContain('package:module:module:body');
+      expect(JSON.stringify(preview.body), protocol).not.toContain('package:module:module:body');
     }
     expect(request).toEqual(beforeEncoding);
   });

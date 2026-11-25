@@ -10,18 +10,14 @@ import {
   CONTEXT_DERIVED_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
 } from '../core/context-summary-policy.js';
-import { KNOWLEDGE_TOOL_NAMES, MAIN_READ_TOOLS, SKILL_TOOL_NAMES } from '../core/read-tools.js';
+import { MAIN_READ_TOOLS } from '../core/read-tools.js';
+import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 import { MAIN_SHELL_TOOL } from '../core/main-shell.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
 import { nativeRisuPending } from './risu-native-run.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
-import {
-  buildMainInput,
-  CATALOG_READ_GUIDANCE,
-  roleResources,
-  type MainInput,
-} from '../core/provider.js';
+import { buildMainInput, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import { isGeminiProtocol, type Connection, type ModelPreset } from '../core/product.js';
 import {
@@ -104,11 +100,7 @@ export function buildMainProviderRequest(
       : undefined);
   const input = buildMainInput(fixed, options.results ?? []),
     terminal = storySubmissionEnabled(fixed);
-  const references = input.catalogPage ? roleResources(fixed) : input.catalog;
-  if (!references.some((item) => item.kind === 'skill'))
-    input.tools = input.tools.filter((name) => !SKILL_TOOL_NAMES.includes(name));
-  if (!references.some((item) => item.kind !== 'skill' && item.loading !== 'pinned'))
-    input.tools = input.tools.filter((name) => !KNOWLEDGE_TOOL_NAMES.includes(name));
+  const readTools = [...input.tools];
 
   const collaboration = fixed.profile?.promptPresets?.main?.program.collaboration;
   const agentTools: ProviderTool[] = collaboration?.enabled
@@ -154,8 +146,21 @@ export function buildMainProviderRequest(
   if (terminal) input.tools = [...input.tools, STORY_SUBMIT_TOOL.name];
   if (evaluation)
     input.tools = [...input.tools, ...evaluation.definitions.map((tool) => tool.name)];
-  let contract =
-    input.contract + '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE;
+  const shell = options.shell ?? !!process.env.UIMORI_SHELL_ROOT;
+  let contract = input.contract;
+  if (
+    input.contextSummary ||
+    collaboration?.enabled ||
+    (fixed.storyGuide?.config.enabled && fixed.storyGuide.brief)
+  )
+    contract += '\n' + CONTEXT_DERIVED_GUIDANCE;
+  if (
+    readTools.length ||
+    shell ||
+    (fixed.promptCompilation &&
+      fixed.loreContext?.entries.some((entry) => entry.retention !== 'selection'))
+  )
+    contract += '\n' + CONTEXT_RETRIEVAL_GUIDANCE;
   if (fixed.settings.storyUi) {
     contract += '\n\nUser-enabled story interface capability:\n' + storyUiPrompt();
     if (input.imagePlacement?.owner === 'jev')
@@ -175,9 +180,8 @@ export function buildMainProviderRequest(
   if (evaluation)
     contract +=
       '\nThe selected evaluation tool set is scoped to this model preset and this run. Complete this run by calling eval_submit_artifact alone with the finished artifact in content and userFacingNotice as separate metadata. Ordinary final text does not complete the run.';
-  const knowledge = input.tools.includes('knowledge.read');
+  const knowledge = readTools.includes('knowledge.read');
   if (knowledge) contract += '\n' + CATALOG_READ_GUIDANCE;
-  const shell = options.shell ?? !!process.env.UIMORI_SHELL_ROOT;
   if (shell) {
     input.tools.push(MAIN_SHELL_TOOL.name);
     if (knowledge)

@@ -103,7 +103,7 @@ test('native depth/end/reverse-depth preserve role and position once while norma
     ).not.toContain(`"text":"${value}"`);
   }
   expect(messages.map((message) => message.text).join('\n')).toContain('NORMAL');
-  expect(buildMainInput(snapshot).catalog.some((item) => item.id.includes('lore-0'))).toBe(true);
+  expect(buildMainInput(snapshot).catalog.some((item) => item.id.includes('lore-0'))).toBe(false);
 });
 
 test('conditional native positions use frozen lore selection and pinned budgets without retired prefill', async () => {

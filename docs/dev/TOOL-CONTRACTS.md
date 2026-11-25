@@ -6,7 +6,17 @@ A tool's contract is its description and input schema: arguments, defaults, limi
 
 ## Read tools
 
-The main writer and the translation role use the definitions in `core/read-tools.ts` (`knowledge.search`, `knowledge.read`, `skills.list`, `skills.load`) and `core/story-read-tools.ts` (`story.search`, `story.read`). The main writer's request leaves out the two `skills.*` tools when its approved scope holds no skill resource (`server/main-request.ts`, `tests/main-request.test.ts`). Advisors receive the subset enabled for them, and role-specific source scope still applies. `tests/context-tools.test.ts`, `tests/story-context.test.ts`, `tests/translation-context.test.ts` and `tests/main-catalog.test.ts` enforce them.
+The main writer and the translation role use the definitions in `core/read-tools.ts` (`knowledge.search`, `knowledge.read`, `skills.list`, `skills.load`) and `core/story-read-tools.ts` (`story.search`, `story.read`); translation adds `translation.search` and `translation.read`. Advisors receive the families enabled for them, and role-specific source scope still applies. `tests/context-tools.test.ts`, `tests/story-context.test.ts`, `tests/translation-context.test.ts` and `tests/main-catalog.test.ts` enforce them.
+
+`readAccess` in `core/read-access.ts` is the only place that decides which read pairs, catalog entries and catalog guidance a request carries; the main writer (`buildMainInput`), translation (`translationInput`), the story guide and advisors all call it. A pair is offered only while it has something to return that the request does not already deliver: a lore entry or skill whose text is not in the input, a scene that `story.*` can reach (not hidden from context) and that is not in the input, or an earlier translation in scope. The catalog lists only undelivered entries of the offered families, so it carries no `loading` marker. Delivery differs by runtime and is decided by the caller:
+
+- The writer's compiled prompt delivers pinned bodies, model-selected lore and retained lore whose full current text is kept (`writerDeliveredReferences`), and the scenes its compiled messages carry by `sourceRevision`. A scene cut by compaction or by a preset's chat range is outside the input.
+- The story guide and advisors (`delivery: 'direct'`) send pinned bodies and the compacted history directly, so retained and selected lore stay readable for them.
+- Translation delivers the package bodies in its source-time context and the previous scenes it shows in full; an excerpted previous scene stays readable.
+
+The list depends only on the frozen Run snapshot, never on this run's results, so every round, continuation and Batch resume of one run sends the same tools. It changes between requests of a chat only when the snapshot does: `story.*` appears once compaction or a chat range first leaves a scene out, and `knowledge.*` disappears while every reference is delivered, for example when retained lore covers the last discoverable entry. Each change rewrites the provider's cached prefix once. A model that calls a tool its request did not offer gets no correction round, and the attempt fails: the provider decoders reject the unknown name (`UNKNOWN_TOOL`, `ANTHROPIC_UNKNOWN_TOOL`, `CODEX_TOOL_NOT_ALLOWED`), the story guide returns `STORY_GUIDE_INVALID_READ`, advisors `ADVISOR_TOOL_NOT_ALLOWED`, and a translation read outside its list is denied as not allowed.
+
+`data.exec` is not gated: besides the frozen references and history it exports the live library and other chats, so it always has data outside the input.
 
 - Explicit user notes are already pinned to the Run and delivered through host context. There is no separate `notes.list/read` model API.
 - `story.read` selects by `sceneNumber` within its returned `sceneScope`. Internal revision IDs are returned provenance, not a second selector.
@@ -64,7 +74,7 @@ Page sizes, defaults and budgets are stated in each tool's description and schem
 
 Constraints on the writer's catalog and reads:
 
-- The initial catalog only selects discovery metadata. The complete approved corpus stays reachable through search, browse and known-ID reads, and `catalogPage.total` and scoped relations refer to that corpus. Catalog selection does not alter authored prompt order, JEV selection, retained lore or read permissions.
+- The initial catalog only selects discovery metadata for entries left to read. The complete approved corpus stays reachable through search, browse and known-ID reads; `catalogPage.total` and catalog relations count the undelivered entries. Catalog selection does not alter authored prompt order, JEV selection, retained lore or read permissions, and the request lore record takes its titles from the role's resources, not from the catalog (`requestLore`).
 - For a context above the minimum, the main model loop may give `knowledge.read` a larger page than its default, taken from the measured headroom below the compaction threshold and shared by the results in one response. Final request admission and compaction remain authoritative.
 - A `knowledge.read` receipt records the tokenizer, the budget and the returned ranges in `readBudget`. Source verification uses those frozen ranges instead of recomputing past cuts with a tokenizer that may have changed. A receipt without `readBudget` is not re-verified and never carries lore into later context.
 

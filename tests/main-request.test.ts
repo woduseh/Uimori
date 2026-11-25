@@ -25,6 +25,19 @@ import type { Store } from '../server/store.js';
 import * as chatVariables from '../server/chat-variables.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
+import { NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
+import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
+import {
+  CONTEXT_DERIVED_GUIDANCE,
+  CONTEXT_RETRIEVAL_GUIDANCE,
+} from '../core/context-summary-policy.js';
+import { seedContextPlan } from '../server/context-planning.js';
+import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
+import {
+  createAgentCollaboration,
+  createAgentDefinition,
+  type AgentDefinition,
+} from '../core/agent-collaboration.js';
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -110,26 +123,104 @@ async function snapshot(
     profile,
   });
 }
-test('reference tools are offered only while a reference is left unread', async () => {
-  const build = async (loading?: 'pinned' | 'discoverable') => {
-    const current = await snapshot();
-    current.resources = loading ? [{ ...current.resources[0]!, loading }] : [];
+async function withCompactedScene(work: RunSnapshot): Promise<RunSnapshot> {
+  const text = 'SYNTHETIC_COMPACTED_SCENE';
+  work.history = [{ revision: 'compacted', text, contentHash: memoryHash(text) }];
+  work.parentRevision = 'compacted';
+  await refreshNativeSnapshot(work);
+  const plan = seedContextPlan(work).contextPlan!;
+  work.contextPlan = {
+    ...plan,
+    status: 'ready',
+    compacted: [{ revision: 'compacted', hash: memoryHash(text) }],
+    recentSourceRevisions: [],
+    summary: 'SYNTHETIC_SUMMARY',
+  };
+  delete work.promptCompilation;
+  return work;
+}
+test('read tools, catalog and read guidance follow what is left outside the input', async () => {
+  const build = async (current: RunSnapshot) => {
     delete current.promptCompilation;
-    const { request } = buildMainProviderRequest(current);
+    const { request } = buildMainProviderRequest(current, { shell: false });
+    const host = request.prompt!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
+      .content[0] as { type: 'text'; text: string };
     return {
       tools: request.stable.tools.map((tool) => tool.name),
       contract: request.stable.contract,
+      catalog: (
+        JSON.parse(host.text.slice(host.text.indexOf('{'))) as { catalog: { id: string }[] }
+      ).catalog,
     };
   };
-  for (const delivered of [await build(), await build('pinned')]) {
-    expect(delivered.tools).not.toContain('knowledge.read');
-    expect(delivered.tools).not.toContain('knowledge.search');
-    expect(delivered.tools).toContain('story.read');
-    expect(delivered.contract).not.toContain('knowledge.read');
-  }
-  const unread = await build('discoverable');
-  expect(unread.tools).toEqual(expect.arrayContaining(['knowledge.search', 'knowledge.read']));
-  expect(unread.contract).toContain('marked loading "pinned" are already in the input in full');
+  const empty = await snapshot();
+  empty.resources = [];
+  const first = await build(empty);
+  expect(first.tools).toEqual([]);
+  expect(first.contract).toBe('');
+
+  const pinned = await snapshot();
+  pinned.resources = [];
+  pinned.profile!.packages = [nativeContent({ name: 'Bot', description: 'SYNTHETIC_BOT' })];
+  pinned.profile!.packageAttachments = [{ id: 'synthetic-risu', revision: 1, role: 'bot' }];
+  await refreshNativeSnapshot(pinned);
+  const delivered = await build(pinned);
+  expect(delivered.tools).toEqual([]);
+  expect(delivered.contract).not.toContain(CATALOG_READ_GUIDANCE);
+  expect(delivered.catalog).toEqual([]);
+
+  const unread = await build(await snapshot());
+  expect(unread.tools).toEqual(['knowledge.search', 'knowledge.read']);
+  expect(unread.catalog.map((item) => item.id)).toEqual(['synthetic-reference']);
+  expect(unread.contract).toContain(CATALOG_READ_GUIDANCE);
+  expect(unread.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
+  expect(unread.contract).not.toContain(CONTEXT_DERIVED_GUIDANCE);
+
+  const compacted = await build(await withCompactedScene(await snapshot()));
+  expect(compacted.tools).toEqual([
+    'knowledge.search',
+    'knowledge.read',
+    'story.search',
+    'story.read',
+  ]);
+  expect(compacted.contract).toContain(CONTEXT_DERIVED_GUIDANCE);
+});
+test('a scene is outside the input only while the compiled prompt leaves it out', async () => {
+  const work = await snapshot();
+  work.resources = [];
+  const text = 'SYNTHETIC_RECENT_SCENE';
+  work.history = [{ revision: 'recent', text, contentHash: memoryHash(text) }];
+  work.logicalHistory = [
+    {
+      id: 'source:recent',
+      role: 'assistant',
+      text,
+      sourceRevision: 'recent',
+      sourceHash: memoryHash(text),
+    },
+  ];
+  work.parentRevision = 'recent';
+  await refreshNativeSnapshot(work);
+  const tools = (current: RunSnapshot) =>
+    buildMainProviderRequest(current, { shell: false }).request.stable.tools.map(
+      (tool) => tool.name
+    );
+  expect(tools(compileSnapshotPrompt(work))).toEqual([]);
+  const ranged = structuredClone(work);
+  ranged.profile!.promptPresets!.main!.program = nativePrompt('NO_HISTORY', {
+    customPromptTemplateToggle: 'writing_mode=Mode=text',
+    promptTemplate: [
+      { type: 'plain', role: 'system', text: 'NO_HISTORY' },
+      { type: 'chat', rangeStart: 1, rangeEnd: 'end' },
+    ],
+  });
+  await refreshNativeSnapshot(ranged);
+  expect(tools(compileSnapshotPrompt(ranged))).toEqual(['story.search', 'story.read']);
+  const hidden = structuredClone(work);
+  hidden.history[0] = { ...hidden.history[0]!, sceneContext: { sceneEnabled: false } } as never;
+  hidden.logicalHistory = [];
+  await refreshNativeSnapshot(hidden);
+  expect(tools(compileSnapshotPrompt(hidden))).toEqual([]);
 });
 test('Story UI guidance is an opted-in execution contract, not reference-data instructions', async () => {
   const off = await snapshot();
@@ -1176,7 +1267,8 @@ describe('Recoverable read failures in the real main runner', () => {
         ]);
       });
       closes.push(server.close);
-      const work = await snapshot(`${server.origin}/v1/responses`);
+      const fresh = await snapshot(`${server.origin}/v1/responses`);
+      const work = name === 'story.read' ? await withCompactedScene(fresh) : fresh;
       const log = hooks(server.origin);
       expect(await runMain(work, log.value)).toMatchObject({
         status: 'completed',
@@ -1189,6 +1281,9 @@ describe('Recoverable read failures in the real main runner', () => {
       });
       expect(server.requests).toHaveLength(2);
       expect(server.requests[1].body).toContain(code);
+      const [first, second] = server.requests.map((request) => JSON.parse(request.body));
+      expect(second.tools).toEqual(first.tools);
+      expect(second.messages[0]).toEqual(first.messages[0]);
     }
   );
 
@@ -1210,4 +1305,32 @@ describe('Recoverable read failures in the real main runner', () => {
     });
     expect(calls).toBe(8);
   });
+});
+
+test('an advisor sees the catalog only while one of its own read tools can use it', async () => {
+  const work = await withCompactedScene(await snapshot());
+  const agent = (tools: AgentDefinition['tools']) => ({
+    ...createAgentDefinition('custom', 'advisor'),
+    tools,
+  });
+  work.profile!.promptPresets!.main!.program.collaboration = {
+    ...createAgentCollaboration(),
+    enabled: true,
+    agents: [agent(['story'])],
+  };
+  const fixed = compileSnapshotPrompt(work);
+  const request = (tools: AgentDefinition['tools']) =>
+    buildAgentProviderRequest(fixed, agent(tools), fixed.profile!.models.main!, 'Who is there?');
+  const story = request(['story']);
+  expect(story.stable.tools.map((tool) => tool.name)).toEqual(['story.search', 'story.read']);
+  expect(story.input.catalog).toEqual([]);
+  expect(story.stable.contract).not.toContain(CATALOG_READ_GUIDANCE);
+  const knowledge = request(['knowledge']);
+  expect(knowledge.stable.tools.map((tool) => tool.name)).toEqual([
+    'knowledge.search',
+    'knowledge.read',
+  ]);
+  expect(knowledge.input.catalog).toMatchObject([{ id: 'synthetic-reference' }]);
+  expect(knowledge.stable.contract).toContain(CATALOG_READ_GUIDANCE);
+  expect(request(['notes']).stable.tools).toEqual([]);
 });
