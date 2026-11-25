@@ -270,7 +270,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'editor.read',
     description:
-      'Read what the user has open in the editor, as captured when this request was sent, including changes that are not saved yet. Use it for the structure and exact typed values of the draft; for ordinary facts in it, data.search with scope=editor is shorter. Without path it returns a compact overview. Follow a returned JSON Pointer path for a field, object or array, and page with fields, offset/limit or textOffset/textLimit. inputOrigin tells whether the content is the saved revision or an unsaved draft. This never saves the draft, and a later saved version is not substituted. Images in the editor are not interpreted.',
+      'Read what the user has open in the editor, as captured when this request was sent, including changes that are not saved yet. Use it for the structure and exact typed values of the draft; for ordinary facts in it, data.search with scope=editor is shorter. Without path it returns a compact overview. Follow a returned JSON Pointer path for a field, object or array, and page with fields, offset/limit or textOffset/textLimit. inputOrigin tells whether the content is the saved revision or an unsaved draft. This never saves the draft, and a later saved version is not substituted. To change the resource, patch its saved revision with guards and paths from resource.read: unsaved indexes and text can differ from the saved ones, and the user reconciles the draft with your save in the editor. Images in the editor are not interpreted.',
     inputSchema: schema({
       path: described(
         str,

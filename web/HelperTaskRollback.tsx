@@ -47,7 +47,8 @@ export function uncoveredKinds(changes: readonly HelperChange[]) {
 }
 
 const restorable = (unit: HelperRollbackUnit) => unit.status === 'restorable';
-const unsaved = (unit: HelperRollbackUnit) => !!unit.touches && hasUnsavedInput(unit.touches);
+const unsaved = (unit: HelperRollbackUnit) =>
+  !!unit.touches && unit.touches.domain !== 'resource' && hasUnsavedInput(unit.touches);
 
 function reasonText(unit: HelperRollbackUnit) {
   if (unit.status === 'restored') return t('helperRollback.alreadyRestored');

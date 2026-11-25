@@ -60,10 +60,10 @@ export const messages = {
     zh: '保存正在编辑的资料',
   },
   'editorHelper.unsavedNote': {
-    ko: '도우미는 저장하지 않은 입력까지 읽지만, 이 자료를 고치려면 먼저 저장해야 해요.',
-    en: 'The assistant reads your unsaved input, but it can change this resource only after you save.',
-    ja: 'アシスタントは未保存の入力も読みますが、この資料を直すには先に保存が必要です。',
-    zh: '助手会读取未保存的输入，但要修改此资料必须先保存。',
+    ko: '도우미는 저장하지 않은 입력까지 읽어요. 도우미가 이 자료를 고치면 저장본만 바뀌고 입력은 그대로 남아요. 그때는 편집기에서 바뀐 저장본을 확인하고 입력을 정리해요.',
+    en: 'The assistant reads your unsaved input. If it changes this resource, only the saved version changes and your input stays; the editor then shows the changed saved version for you to review.',
+    ja: 'アシスタントは未保存の入力も読みます。この資料を直すと保存版だけが変わり、入力はそのまま残ります。そのときは編集画面で変わった保存版を確認して入力を整理します。',
+    zh: '助手会读取未保存的输入。它修改此资料时只改动已保存版本，您的输入会保留。之后可在编辑器中查看更改后的已保存版本并整理输入。',
   },
   'editorHelper.suggestions': {
     ko: '추천 요청',

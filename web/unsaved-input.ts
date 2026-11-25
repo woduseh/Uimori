@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { HelperRollbackTouch } from '../core/helper.js';
-import { editorContextChanged, hasUnsavedResourceEditor } from './resource-editor.js';
+import { editorContextChanged } from './resource-editor.js';
 
 export type UnsavedInputTarget =
   | { domain: 'scene'; sourceId: string; field: 'original' | 'translation' }
@@ -24,8 +24,7 @@ export function useUnsavedInput(target: UnsavedInputTarget | null) {
   }, [key]);
 }
 
-export function hasUnsavedInput(touch: HelperRollbackTouch) {
-  if (touch.domain === 'resource') return hasUnsavedResourceEditor(touch.kind, touch.id);
+export function hasUnsavedInput(touch: Exclude<HelperRollbackTouch, { domain: 'resource' }>) {
   return [...open.values()].some((target) =>
     touch.domain === 'scene'
       ? target.domain === 'scene' &&

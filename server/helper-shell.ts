@@ -813,13 +813,6 @@ export class HelperShell {
     const target = task.files.get(rel);
     if (!target || !existsSync(path) || realpathSync(path) !== path)
       throw new Error('SHELL_FILE_NOT_EDITABLE');
-    if (
-      target.kind === 'resource' &&
-      task.task.snapshot.editor?.targetId === target.id &&
-      task.task.snapshot.editor.model &&
-      task.task.snapshot.editor.source !== 'saved'
-    )
-      throw new Error('EDITOR_SAVE_REQUIRED');
     const content = readFileSync(path, 'utf8');
     if (Buffer.byteLength(content) > 16_000_000) throw new Error('SHELL_APPLY_TOO_LARGE');
     const digest = sha(content);

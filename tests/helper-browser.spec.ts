@@ -2759,7 +2759,7 @@ test('HROLLBACK04 a rollback refreshes other cards and each completion shows its
   await expect(notice).toBeVisible();
 });
 
-test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor shows the restored content', async ({
+test('HROLLBACK03 undoing a resource under an unsaved editor draft keeps the draft and reports the changed saved version', async ({
   page,
   request,
 }) => {
@@ -2822,35 +2822,28 @@ test('HROLLBACK03 an unsaved editor draft blocks its unit and a clean editor sho
   const panel = await openEditorHelper();
   const results = panel.getByTestId('helper-task-results');
   const card = results.locator('.helper-change', { hasText: changedTitle });
-  await expect(card.locator('.helper-rollback-status')).toHaveText(
-    '열린 편집기에 저장하지 않은 입력이 있어 되돌리지 않아요. 저장하거나 취소한 뒤 되돌려 주세요.'
-  );
-  await expect(
-    results.getByRole('button', { name: `${changedTitle} 되돌리기`, exact: true })
-  ).toBeDisabled();
+  await expect(card.locator('.helper-rollback-status')).toHaveCount(0);
   await results.getByRole('button', { name: '모두 되돌리기', exact: true }).click();
   const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
   await expect(
     dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
-  ).toHaveText(['다른 자료']);
-  await expect(
-    dialog.getByRole('region', { name: '그대로 둘 대상' }).getByRole('listitem')
-  ).toContainText(changedTitle);
-  await dialog.getByRole('button', { name: '변경 1개 되돌리기', exact: true }).click();
+  ).toHaveText([changedTitle, '다른 자료']);
+  await expect(dialog.getByRole('region', { name: '그대로 둘 대상' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: '변경 2개 되돌리기', exact: true }).click();
   await expect(dialog).toBeHidden();
-  expect(state.rollbackPosts).toEqual([{ unit: 'resource:content:bot-other' }]);
-  await expect(draft).toHaveValue('지키려는 미저장 입력');
-  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(changedTitle);
-
-  await draft.fill(changedTitle);
-  const action = results.getByRole('button', { name: `${changedTitle} 되돌리기`, exact: true });
-  await expect(action).toBeEnabled();
-  await action.click();
-  await dialog.getByRole('button', { name: '되돌리기', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(state.rollbackPosts).toHaveLength(2);
-  await expect(draft).toHaveValue(original);
+  expect(state.rollbackPosts).toEqual([{}]);
+  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(original);
   await expect(card.locator('.helper-rollback-status')).toHaveText('되돌렸어요');
+  await expect(draft).toHaveValue('지키려는 미저장 입력');
+  const status = page.getByRole('alert').filter({ hasText: '저장된 자료가 변경됐어요.' });
+  await expect(status).toContainText('현재 입력은 유지돼요.');
+  await status.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
+  await expect(review.getByRole('region', { name: '현재 저장본' })).toContainText(original);
+  await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(review).toBeHidden();
+  await expect(draft).toHaveValue('지키려는 미저장 입력');
+  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(original);
 });
 
 const REVIEW_SHOTS = 'output/helper-review';
@@ -3870,7 +3863,7 @@ test('EHELP06 unsaved edits go with the request, are named in the chip and save 
   await expect(chips.locator('.helper-editor-unsaved')).toHaveText('저장 전');
   await expect(
     panel.getByText(
-      '도우미는 저장하지 않은 입력까지 읽지만, 이 자료를 고치려면 먼저 저장해야 해요.',
+      '도우미는 저장하지 않은 입력까지 읽어요. 도우미가 이 자료를 고치면 저장본만 바뀌고 입력은 그대로 남아요. 그때는 편집기에서 바뀐 저장본을 확인하고 입력을 정리해요.',
       { exact: true }
     )
   ).toBeVisible();
@@ -3987,6 +3980,57 @@ test('EHELP07 a helper save to the open resource shows the new text with no phan
       .getByRole('complementary', { name: '로어 목록', exact: true })
       .getByRole('button', { name: '항구', exact: true })
   ).toHaveAttribute('aria-current', 'true');
+});
+
+test('EHELP09 a helper save under an unsaved draft keeps the draft and sends the next save through the conflict review', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const title = `EHELP09 ${randomUUID().slice(0, 8)}`;
+  const bot = await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await openLore(editor, '항구');
+  const body = editor.getByRole('textbox', { name: '로어 본문', exact: true });
+  await body.fill('항구는 사용자가 아직 저장하지 않은 글이에요.');
+  await editor.getByRole('button', { name: '항구 도우미에게 묻기', exact: true }).click();
+  const panel = page.locator('#helper-panel');
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('항구 로어를 다듬어 줘');
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(lastEditorPost(state).editor).toMatchObject({ source: 'unsaved' });
+  const current = (await (await request.get(`/api/content/${bot.id}`)).json()) as Content;
+  const model = editableResource('content', current) as ContentEditModel;
+  const card = structuredClone(model.package.nativeRisu.card) as Record<string, any>;
+  card.character_book.entries[1].content = '항구에는 도우미가 저장한 글이 있어요.';
+  const helperSave = await request.put(`/api/content/${bot.id}`, {
+    data: {
+      ...model,
+      package: nativeContent(card, { images: model.package.images }),
+      expectedRevision: current.revision,
+    },
+  });
+  expect(helperSave.ok(), await helperSave.text()).toBe(true);
+  const task = state.current().tasks[0]!;
+  state.emit('resource.updated');
+  state.complete(task);
+  const status = editor.getByRole('alert').filter({ hasText: '저장된 자료가 변경됐어요.' });
+  await expect(status).toContainText('현재 입력은 유지돼요.');
+  await expectCodeFieldValue(body, '항구는 사용자가 아직 저장하지 않은 글이에요.');
+  await panel
+    .locator('.helper-context-chips')
+    .getByRole('button', { name: '편집 중인 자료 저장', exact: true })
+    .click();
+  const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
+  await expect(review.getByRole('region', { name: '현재 저장본' })).toBeVisible();
+  await editorShot(page, 'helper-save-under-draft-1440-light');
+  await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expectCodeFieldValue(body, '항구는 사용자가 아직 저장하지 않은 글이에요.');
+  const stored = await (await request.get(`/api/content/${bot.id}`)).json();
+  expect(JSON.stringify(stored.package)).toContain('항구에는 도우미가 저장한 글이 있어요.');
+  expect(JSON.stringify(stored.package)).not.toContain('사용자가 아직 저장하지 않은');
 });
 
 test('EHELP08 item and field actions in a named palette in dark and light', async ({

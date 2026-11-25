@@ -286,7 +286,7 @@ test('the request route validates the editor focus and the model receives it in 
   }
 });
 
-test('an unsaved editor is analysis input and only mutations of that same resource are refused', async () => {
+test('an unsaved editor is analysis input and a patch of that resource saves its saved revision', async () => {
   const f = fixture();
   const saved = f.store.product.content(fixtureBotInput('편집 중인 자료'));
   const other = f.store.product.content(fixtureBotInput('다른 자료'));
@@ -321,17 +321,18 @@ test('an unsaved editor is analysis input and only mutations of that same resour
     model: draft,
   });
   await Promise.all(f.work);
-  expect(readResource(f.store, 'content', saved.id).revision).toBe(saved.revision);
-  expect(readResource(f.store, 'content', other.id)).toMatchObject({
-    title: '변경된 제목',
-    revision: other.revision + 1,
-  });
+  for (const resource of [saved, other])
+    expect(readResource(f.store, 'content', resource.id)).toMatchObject({
+      title: '변경된 제목',
+      revision: resource.revision + 1,
+    });
+  expect(draft.title).toBe('편집 중인 자료');
   expect(f.workspace.task(task.id).status).toBe('completed');
   expect(
     f.store.db
       .prepare('SELECT COUNT(*) AS count FROM helper_operations WHERE task_id=?')
       .get(task.id)?.count
-  ).toBe(1);
+  ).toBe(2);
   expect(() =>
     f.runtime.enqueue(f.conversation.id, 'draft-target', '다른 자료의 제목을 바꿔줘', {
       kind: 'content',
@@ -344,57 +345,145 @@ test('an unsaved editor is analysis input and only mutations of that same resour
   ).toThrow('같은 요청 키');
 });
 
-test('current prompt draft protection follows the actual saved target even when the caller supplies another ID', async () => {
-  const f = fixture();
-  const saved = readResource(f.store, 'prompt-workspace', 'current');
-  const model = editableResource('prompt-workspace', saved);
-  mockSend((request, _options, index) => {
-    if (index === 0)
-      return {
-        ...structuredClone(success),
-        status: 'tool_calls',
-        toolCalls: [undefined, 'current', 'another-id'].map((id, index) => ({
-          id: `workspace-${index}`,
-          name: 'app.call',
-          arguments: {
-            name: 'resource.save',
-            arguments: {
-              kind: 'prompt-workspace',
-              ...(id === undefined ? {} : { id }),
-              expectedRevision: saved.revision,
-              model: model as transport.Json,
-            },
-          },
-        })),
-      };
-    expect(request.input.results).toMatchObject([
-      { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
-      { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
-      { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
-    ]);
-    return structuredClone(success);
+describe('a helper save under an unsaved editor draft overwrites neither side', () => {
+  const descriptionPath = '/package/nativeRisu/card/description';
+  const description = (store: Store, id: string) =>
+    (readResource(store, 'content', id) as Content).package!.nativeRisu!.card.description;
+  const editorOf = (resource: Content, model: ReturnType<typeof editableResource>) => ({
+    kind: 'content' as const,
+    source: 'unsaved' as const,
+    targetId: resource.id,
+    revision: resource.revision,
+    title: resource.title,
+    model,
   });
-  const task = f.runtime.enqueue(
-    f.conversation.id,
-    'workspace-draft-target',
-    '현재 프롬프트를 저장해줘',
-    {
-      kind: 'prompt-workspace',
-      source: 'unsaved',
-      targetId: 'current',
-      revision: saved.revision,
-      title: '현재 프롬프트',
-      model,
-    }
-  );
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  expect(readResource(f.store, 'prompt-workspace', 'current')).toEqual(saved);
-  expect(
-    f.store.db
-      .prepare('SELECT COUNT(*) AS count FROM helper_operations WHERE task_id=?')
-      .get(task.id)
-  ).toEqual({ count: 0 });
+  const patchCall = (id: string, resource: Content, revision: number, value: string) => ({
+    id,
+    name: 'app.call',
+    arguments: {
+      name: 'resource.patch',
+      arguments: {
+        kind: 'content',
+        id: resource.id,
+        expectedRevision: revision,
+        changes: [{ path: descriptionPath, op: 'set', value }],
+      },
+    },
+  });
+  const userSave = (store: Store, resource: Content, base: number, model: unknown) =>
+    saveResource(store, {
+      kind: 'content',
+      id: resource.id,
+      expectedRevision: base,
+      model: model as never,
+    });
+  const withDescription = (model: ReturnType<typeof editableResource>, value: string) => {
+    const next = structuredClone(model) as any;
+    next.package.nativeRisu.card.description = value;
+    return next as ReturnType<typeof editableResource>;
+  };
+
+  test('when the helper saves first, the user save of the older draft is refused as stale', async () => {
+    const f = fixture();
+    const resource = f.store.product.content(
+      fixtureBotInput('초안 자료', '저장본 설명')
+    ) as Content;
+    const draft = withDescription(
+      editableResource('content', readResource(f.store, 'content', resource.id)),
+      '사용자의 미저장 설명'
+    );
+    const kept = structuredClone(draft);
+    mockSend((request, _options, index) => {
+      if (index === 0)
+        return {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          toolCalls: [patchCall('helper-save', resource, resource.revision, '도우미 설명')],
+        };
+      expect(request.input.results).toMatchObject([{ denied: false }]);
+      return structuredClone(success);
+    });
+    const task = f.runtime.enqueue(
+      f.conversation.id,
+      'helper-first',
+      '설명을 고쳐줘',
+      editorOf(resource, draft)
+    );
+    await Promise.all(f.work);
+    expect(f.workspace.task(task.id)).toMatchObject({
+      status: 'completed',
+      snapshot: { seededOperations: ['editor.read', 'resource.read', 'resource.patch'] },
+    });
+    expect(description(f.store, resource.id)).toBe('도우미 설명');
+    expect(() => userSave(f.store, resource, resource.revision, draft)).toThrow(
+      expect.objectContaining({ statusCode: 409 })
+    );
+    expect(description(f.store, resource.id)).toBe('도우미 설명');
+    expect(draft).toEqual(kept);
+  });
+
+  test('when the user saves first, the helper write guarded by the older revision is refused and succeeds after a re-read', async () => {
+    const f = fixture();
+    const resource = f.store.product.content(
+      fixtureBotInput('초안 자료', '저장본 설명')
+    ) as Content;
+    const base = editableResource('content', readResource(f.store, 'content', resource.id));
+    const draft = withDescription(base, '사용자가 저장할 설명');
+    let userRevision = 0;
+    mockSend((request, _options, index) => {
+      if (index === 0) {
+        userRevision = userSave(f.store, resource, resource.revision, draft).saved.revision;
+        return {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          toolCalls: [patchCall('stale', resource, resource.revision, '도우미 설명')],
+        };
+      }
+      if (index === 1) {
+        expect(request.input.results).toMatchObject([
+          { denied: true, result: { code: 'SOURCE_CONFLICT' } },
+        ]);
+        expect(description(f.store, resource.id)).toBe('사용자가 저장할 설명');
+        return {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          toolCalls: [
+            {
+              id: 'reread',
+              name: 'app.call',
+              arguments: {
+                name: 'resource.read',
+                arguments: { kind: 'content', id: resource.id, path: descriptionPath },
+              },
+            },
+          ],
+        };
+      }
+      if (index === 2) {
+        expect(request.input.results.at(-1)).toMatchObject({
+          denied: false,
+          result: { revision: userRevision },
+        });
+        return {
+          ...structuredClone(success),
+          status: 'tool_calls',
+          toolCalls: [patchCall('fresh', resource, userRevision, '사용자가 저장할 설명 + 도우미')],
+        };
+      }
+      expect(request.input.results.at(-1)).toMatchObject({ callId: 'fresh', denied: false });
+      return structuredClone(success);
+    });
+    const task = f.runtime.enqueue(
+      f.conversation.id,
+      'user-first',
+      '설명을 고쳐줘',
+      editorOf(resource, draft)
+    );
+    await Promise.all(f.work);
+    expect(f.workspace.task(task.id).status).toBe('completed');
+    expect(readResource(f.store, 'content', resource.id).revision).toBe(userRevision + 1);
+    expect(description(f.store, resource.id)).toBe('사용자가 저장할 설명 + 도우미');
+  });
 });
 function mockSend(
   action?: (

@@ -313,7 +313,7 @@ export function helperContract(session: { chat: boolean; shell: boolean }) {
     `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. The owner undid the changes in source.revertedChanges and declined the held calls in source.declinedCalls: do not make them again unless the request asks for them. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs.${session.chat ? ` ${AUTHOR_NOTE_GUIDANCE}` : ''}`,
     `source already holds, as of the task start: ${session.chat ? 'writing (head, packages with the owning bot as role=bot, author notes, and chat: title, revisions, settings, effective main model and prompt, original-work reference, folder and the latest scene with its editTarget), selection with its editTarget, the outline brief, ' : ''}editor (with focus: the section, item, field, selection and diagnostics the user is looking at, which says where to work and is not a permission), usageDate (today in the calendar usage.read uses) and knownOperations with their schemas. Use these instead of reading them again, and read live state only for what source lacks or after a change.`,
     `Choose and combine the tools suited to the task: app operations${session.shell ? ', data.exec for workspace search and transformation, or shell workspace files described in INDEX.md' : ''}. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Put independent reads in one response as several calls; the host runs adjacent reads together. Prefer one call that covers several targets over repeated calls: resource.read paths, resource.readMany, data.read refs, resource.patchMany, scene.patchMany, chat.lore patchMany and settings.update updates. Use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.`,
-    `Edit saved targets using their recorded revisions and preserve unrelated fields. ${session.shell ? 'For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts.' : 'Follow the save contract of each operation.'} Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.`,
+    `Edit saved targets using their recorded revisions and preserve unrelated fields. ${session.shell ? 'For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts.' : 'Follow the save contract of each operation.'} Reconcile conflicts against the latest version and report changes from successful receipts. When editor.hasUnsavedInput is true, every save still changes the saved revision, never the draft: take expectedRevision, paths, anchors and replaced text from resource.read or a library data.search of the saved resource, not from editor.read or scope=editor, whose indexes and text can differ; the draft stays open and the editor has the user compare it with your save, so say in the reply that their unsaved input was kept. For translation guides, preserve established terms and distinguish proposed choices from authored facts.`,
     "Before writing, repairing or previewing a Story UI block, read the STORY-UI-REFERENCE guide in one call with limit 20000; it is the writer's own reference. In your reply use Markdown for text and tables; include an <a2ui> block only to preview Story UI content meant for a scene or bot, or to draw what Markdown cannot, such as a relationship graph or a chart. Blocks in your reply render read-only.",
     'For Risu code in bots, modules and presets (CBS, Lua triggers, regex, toggles), check it with the code.* operations before and after editing, and take what Uimori supports from the guides CBS-REFERENCE, RISU-LUA-API, RISU-RUNTIME-INTEROP and RISU-PRESET-FIELDS rather than from Risu memory.',
     `${session.chat ? 'For questions about an original work, use the configured edition, references and spoiler position, and distinguish source evidence from model knowledge. ' : ''}Cite web evidence only after a search returns it.`,
@@ -565,7 +565,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
   const stopped =
     status === 401 ||
     status === 403 ||
-    /^(EDITOR_SAVE_REQUIRED|CURRENT_HELPER_TASK|HELPER_EFFECTS_ALREADY_COMMITTED|TASK_NOT_|MODEL_CALL_BUDGET)/u.test(
+    /^(CURRENT_HELPER_TASK|HELPER_EFFECTS_ALREADY_COMMITTED|TASK_NOT_|MODEL_CALL_BUDGET)/u.test(
       code
     );
   const invalidArguments =
@@ -2973,23 +2973,6 @@ export class HelperRuntime {
         : task;
     const { chatId: _chatId, ...appArgs } = args;
     const toolArgs = traits.direct ? args : appArgs;
-    const editor = task.snapshot.editor;
-    const resourceOperation = helperResourceOperation(name, toolArgs);
-    const mutationTargets =
-      resourceOperation && !resourceOperation.readOnly
-        ? (resourceOperation.targets ??
-          (resourceOperation.target ? [resourceOperation.target] : []))
-        : [];
-    if (
-      editor?.targetId &&
-      editor.model &&
-      editor.source !== 'saved' &&
-      mutationTargets.some((target) => target.kind === editor.kind && target.id === editor.targetId)
-    )
-      throw new HttpError(
-        409,
-        'EDITOR_SAVE_REQUIRED: Save the editor draft before editing this resource.'
-      );
     const confirmation = helperConfirmationGate(
       this.store,
       this.workspace,

@@ -88,7 +88,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
 
 - **Async persistence and transactional clear**: Typing asynchronously overwrites only the latest device-local draft in IndexedDB (never syncing whole resources to `localStorage`), showing recovery-saved status only after confirmed persistence. Saving, canceling, or reverting compares the save identifier inside one IndexedDB transaction so another tab's later unsaved edits are never wiped.
 - **Partial path updates**: Regular form edits allocate new objects only along the changed path and skip unchanged subtrees during dirty checks, avoiding cloning or JSON-serializing large cards/presets on every keystroke while preserving raw JSON apply and save-boundary validation.
-- **Helper pending queue**: On a helper request, a saved resource sends only its ID and revision for server-side capture at admission, while an unsaved resource sends editor input for analysis (must be saved first before helper edits, without blocking other resources). Helper input and pending requests share the IndexedDB recovery store; persistence failures retain input and allow retrying or sending without recovery storage.
+- **Helper pending queue**: On a helper request, a saved resource sends only its ID and revision for server-side capture at admission, while an unsaved resource sends editor input for analysis; helper edits still target the saved revision and reach the open draft only as an editor conflict ([Editor context](HELPER-TOOLS.md#editor-context)). Helper input and pending requests share the IndexedDB recovery store; persistence failures retain input and allow retrying or sending without recovery storage.
 
 ### Concurrency control and idempotency guarantees
 
@@ -117,7 +117,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
 ### Helper turn rollback
 
 - **Shared save paths**: Helper turn rollback (contract and skip reasons in [HELPER-TOOLS](HELPER-TOOLS.md#rolling-back-a-helper-task)) calls normal save functions so revision checks, translation invalidation, cross-window refresh, and single-step `resource_undo` match user saves.
-- **Client unsaved-draft guard**: Because the server cannot see unsaved editor input, the client checks `touches` via `hasUnsavedResourceEditor` and the shared unsaved-input registry (original/translation, outline, author notes); any new editor for a rollback-eligible domain must register in `unsaved-input`.
+- **Client unsaved-draft guard**: Because the server cannot see unsaved editor input, the client checks scene, outline and notes `touches` against the shared unsaved-input registry (original/translation, outline, author notes); any new editor for such a domain must register in `unsaved-input`. Resource touches are not checked, because a resource editor keeps its draft through its own conflict state.
 - **Partial submission, refresh, and verification**: When any unit is blocked, `HelperTaskRollback` sends remaining units individually, then refreshes open views through the `resource.updated`, theme or preset and `task.rolled-back` events the rollback writes, which reach every tab as `helper` frames, through `OUTLINE_REFRESH_EVENT` (outlines), and through server chat events (scenes/author notes). Verified by `HROLLBACK01`–`HROLLBACK03` in `tests/helper-browser.spec.ts`.
 
 ### Helper partial edits and string replacement algorithm

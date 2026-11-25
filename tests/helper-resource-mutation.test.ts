@@ -562,7 +562,7 @@ test('batch save rolls back every member if its durable receipt fails', () => {
     });
 });
 
-test('runtime blocks the whole batch when its second target has an unsaved editor', async () => {
+test('a batch whose second target has an unsaved editor saves the saved revisions of both', async () => {
   const f = fixture();
   const contents = ['첫 자료', '둘째 자료'].map((title) =>
     f.store.product.content(fixtureBotInput(title))
@@ -586,12 +586,12 @@ test('runtime blocks the whole batch when its second target has an unsaved edito
   const events = f.workspace.events(f.conversation.id);
   expect(events.find((event) => event.kind === 'tool.finished')?.data).toMatchObject({
     name: 'resource.patchMany',
-    denied: true,
+    denied: false,
   });
-  expect(vi.mocked(transport.executeProvider).mock.calls[1][1].input.results).toMatchObject([
-    { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
-  ]);
   for (const content of contents)
-    expect(readResource(f.store, 'content', content.id)).toEqual(content);
-  expect(f.store.db.prepare('SELECT * FROM helper_operations').all()).toHaveLength(0);
+    expect(readResource(f.store, 'content', content.id)).toMatchObject({
+      title: `${content.title} 변경`,
+      revision: content.revision + 1,
+    });
+  expect(f.store.db.prepare('SELECT * FROM helper_operations').all()).toHaveLength(1);
 });

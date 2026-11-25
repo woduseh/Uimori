@@ -161,16 +161,6 @@ function context(session: ResourceEditorSession | null): ActiveEditorContext | n
   };
 }
 export const getActiveEditorContext = () => context(activeSession());
-export function hasUnsavedResourceEditor(kind: string, id: string) {
-  return [...sessions.values()].some((session) => {
-    const state = session.snapshot();
-    return (
-      session.options.kind === kind &&
-      (kind === 'prompt-workspace' ? id === 'current' : state.document.targetId === id) &&
-      (state.dirty || state.saving || state.creationPending)
-    );
-  });
-}
 export function captureActiveEditorContext():
   | (NonNullable<ReturnType<ResourceEditorSession['captureForHelper']>> & { focus?: EditorFocus })
   | null {
