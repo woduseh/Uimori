@@ -7,7 +7,7 @@ import {
   reviewSections,
   reviewTotals,
 } from '../web/change-review.js';
-import { editorFieldChanges } from '../web/editor-values.js';
+import { editorFieldChanges, revertEditorChange } from '../web/editor-values.js';
 import { contentChangeSection, type ChangedSection } from '../web/studio-sections.js';
 import {
   changedLineMarks,
@@ -64,6 +64,84 @@ test('review sections hold one open card per change, fold duplicate title paths 
   expect(name!.related.map((change) => change.path)).toEqual(['/title']);
   expect(new Set(sections.flatMap((section) => section.cards.map((card) => card.id))).size).toBe(3);
   expect(reviewTotals(sections)).toEqual({ sections: 2, items: 3, added: 4, removed: 2 });
+});
+
+test('a renamed card folds every title mirror into the name card and reverting it restores them all', () => {
+  const before = {
+    title: 'Card',
+    package: { title: 'Card', identity: { name: 'Card' }, nativeRisu: { card: { name: 'Card' } } },
+  };
+  const after = {
+    title: 'Renamed',
+    package: {
+      title: 'Renamed',
+      identity: { name: 'Renamed' },
+      nativeRisu: { card: { name: 'Renamed' } },
+    },
+  };
+  const [basic] = reviewSections(changed(['basic']), editorFieldChanges(before, after), sectionOf);
+  expect(basic!.cards.map((card) => card.change.path)).toEqual(['/package/nativeRisu/card/name']);
+  const [name] = basic!.cards;
+  expect(name!.related.map((change) => change.path).toSorted()).toEqual([
+    '/package/identity/name',
+    '/package/title',
+    '/title',
+  ]);
+  expect(
+    [name!.change, ...name!.related].reduce(
+      (current, change) => revertEditorChange(current, before, change),
+      after as unknown
+    )
+  ).toEqual(before);
+});
+
+test('unrelated fields edited to the same text stay separate cards', () => {
+  const sections = reviewSections(
+    changed(['basic']),
+    editorFieldChanges(
+      model({ description: '같은 글', creator_notes: '같은 글' }),
+      model({ description: '새 글', creator_notes: '새 글' })
+    ),
+    sectionOf
+  );
+  expect(sections[0]!.cards.map((card) => [card.change.path, card.related.length])).toEqual([
+    ['/package/nativeRisu/card/description', 0],
+    ['/package/nativeRisu/card/creator_notes', 0],
+  ]);
+});
+
+test('saved projections of the greetings and the card text stay with the field they come from', () => {
+  const saved = (first: string, notes: string, body: string) => ({
+    title: 'Card',
+    description: notes,
+    text: body,
+    package: {
+      starts: [{ id: 'start-0', title: '기본 첫 메시지', mode: 'authored', text: first }],
+      nativeRisu: {
+        card: { name: 'Card', first_mes: first, creator_notes: notes, description: body },
+      },
+    },
+  });
+  const sections = reviewSections(
+    changed(['basic', 'greetings']),
+    editorFieldChanges(saved('안녕', '메모', '본문'), saved('반가워', '새 메모', '새 본문')),
+    sectionOf
+  );
+  expect(
+    sections.map((section) => [
+      section.id,
+      section.cards.map((card) => [card.change.path, card.related.map((change) => change.path)]),
+    ])
+  ).toEqual([
+    [
+      'basic',
+      [
+        ['/package/nativeRisu/card/creator_notes', ['/description']],
+        ['/package/nativeRisu/card/description', ['/text']],
+      ],
+    ],
+    ['greetings', [['/package/nativeRisu/card/first_mes', ['/package/starts']]]],
+  ]);
 });
 
 test('change targets pick the editor item and code field each kind uses', () => {
