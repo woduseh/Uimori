@@ -544,6 +544,17 @@ describe('built server process boundary', () => {
       const directory = await mkdtemp(join(tmpdir(), '서사 M0 batch-restart '));
       let instance = await startChild(directory);
       const bot = fixtureBotInput('Batch callback fixture');
+      bot.package.nativeRisu.card.character_book = {
+        entries: [
+          {
+            keys: ['harbor'],
+            comment: 'Synthetic harbor',
+            content: 'A blue bell hangs beside the synthetic harbor.',
+            enabled: true,
+          },
+        ],
+      };
+      bot.package.loreActivation = { mode: 'discoverable' };
       bot.package.nativeRisu.card.extensions = {
         risuai: {
           triggerscript: [
