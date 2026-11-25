@@ -5,7 +5,7 @@ import { createAgentCollaboration, createAgentDefinition } from '../core/agent-c
 import { MOBILE_HEIGHT, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { waitForContentSave, waitForResourceSave } from './fixtures/resource-save.js';
-import { editLibraryContent, navigationAction, selectPackageSection } from './ui-navigation.js';
+import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
 
 async function post<T>(request: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await request.post(path, { data });
@@ -38,7 +38,7 @@ async function openPrompt(page: Page, preset: PromptPreset) {
       program,
     });
     const editor = await openPrompt(page, preset);
-    await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
+    await selectEditorSection(editor, '변수와 토글');
     const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
     const add = definitions
       .getByRole('button', { name: '그룹 추가', exact: true })
@@ -142,7 +142,7 @@ async function openPrompt(page: Page, preset: PromptPreset) {
       program,
     });
     const editor = await openPrompt(page, preset);
-    await editor.getByRole('tab', { name: '협업', exact: true }).click();
+    await selectEditorSection(editor, '협업');
     const collaboration = editor.getByRole('region', { name: '에이전트 협업' });
     const shared = collaboration.getByLabel('함께 따를 지침', { exact: true });
     await shared.fill('삭제 확인 중에도 유지할 공유 지침');
@@ -229,7 +229,7 @@ async function openPrompt(page: Page, preset: PromptPreset) {
     await navigationAction(page, '서재');
     await editLibraryContent(page, content.title);
     const save = page.getByRole('button', { name: '변경사항 저장', exact: true });
-    await selectPackageSection(page, '에셋');
+    await selectEditorSection(page, '에셋');
     const library = page.getByTestId('library-panel');
     const images = library.getByLabel('Risu 이미지 목록', { exact: true });
     await images.getByRole('button', { name: '유지할 이미지', exact: true }).click();

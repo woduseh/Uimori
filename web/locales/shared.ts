@@ -47,6 +47,12 @@ export const messages = {
     ja: '{label} {count, number}件',
     zh: '{label} {count, number}项',
   },
+  'shared.selectEditorSection': {
+    ko: '편집 영역 선택',
+    en: 'Choose editing section',
+    ja: '編集セクションを選択',
+    zh: '选择编辑区域',
+  },
   'shared.close': {
     ko: '{title} 닫기',
     en: 'Close {title}',

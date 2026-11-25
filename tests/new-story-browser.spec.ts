@@ -1,4 +1,4 @@
-import { setCurrentModels, editorTab } from './ui-navigation.js';
+import { setCurrentModels, selectEditorSection } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -852,9 +852,9 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   const library = page.getByTestId('library-panel');
   await expect(library.getByLabel('Risu 자료 이름')).toHaveValue(title);
   await expect(library.getByTestId('package-fields')).toHaveCount(0);
-  await editorTab(library, '첫 메시지').click();
+  await selectEditorSection(library, '첫 메시지');
   await library.getByLabel('기본 첫 메시지', { exact: true }).fill('<selector> Edited');
-  await library.getByRole('tab', { name: '고급 설정', exact: true }).click();
+  await selectEditorSection(library, '고급 설정');
   await library.getByRole('button', { name: 'JSON 소스', exact: true }).click();
   await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
   const save = library.getByRole('button', { name: '변경사항 저장', exact: true });

@@ -4,7 +4,7 @@ import type { Content, PromptPreset } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
-import { editLibraryContent, navigationAction } from './ui-navigation.js';
+import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
 
 function latch() {
   let resolve!: () => void;
@@ -111,7 +111,7 @@ for (const { flow, viewport } of flows) {
       await editLibraryContent(page, title);
     }
     const editor = page.getByTestId(prompt ? 'prompt-editor' : 'library-panel');
-    if (prompt) await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+    if (prompt) await selectEditorSection(editor, '기본 옵션');
     const name = editor.getByLabel(prompt ? '프롬프트 이름' : 'Risu 자료 이름', { exact: true });
     await name.fill(`${title} edited`);
     const guard = page.getByRole(flow === 'global-navigation' ? 'dialog' : 'alertdialog', {
@@ -133,11 +133,11 @@ for (const { flow, viewport } of flows) {
     };
     let raw: Locator;
     if (prompt) {
-      await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+      await selectEditorSection(editor, '정규식');
       await editor.getByText('고급 JSON 편집', { exact: true }).click();
       raw = editor.getByLabel('Risu 정규식 JSON', { exact: true });
     } else {
-      await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
+      await selectEditorSection(editor, '고급 설정');
       await editor
         .getByRole('group', { name: '고급 설정 영역', exact: true })
         .getByRole('button', { name: 'JSON 소스', exact: true })
@@ -216,12 +216,12 @@ test('LEAVE multiple prompt roles stay open without saving only the current role
   const editor = page.getByTestId('prompt-editor');
   const mainTitle = `Unwritten main ${randomUUID()}`;
   const translationTitle = `Unwritten translation ${randomUUID()}`;
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   const title = editor.getByLabel('프롬프트 이름', { exact: true });
   const role = editor.getByLabel('프롬프트 역할', { exact: true });
   await title.fill(mainTitle);
   await role.selectOption('translation');
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await expect(role).toHaveValue('translation');
   await title.fill(translationTitle);
   const saves: string[] = [];
@@ -239,11 +239,11 @@ test('LEAVE multiple prompt roles stay open without saving only the current role
   await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
   await expect(title).toHaveValue(translationTitle);
   await role.selectOption('main');
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await expect(role).toHaveValue('main');
   await expect(title).toHaveValue(mainTitle);
   await role.selectOption('translation');
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await expect(title).toHaveValue(translationTitle);
   expect(saves).toHaveLength(0);
 });

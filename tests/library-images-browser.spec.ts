@@ -1,6 +1,6 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, selectEditorSection } from './ui-navigation.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { RisuContent } from '../core/risu-content.js';
@@ -8,7 +8,7 @@ import type { LibraryOrganization } from '../core/library-organization.js';
 import type { Content } from '../core/product.js';
 import type { ChatDetail } from '../core/types.js';
 import { packageImageThumbnailUrl } from '../core/package-images.js';
-import { revealLibraryEditor, selectPackageSection } from './ui-navigation.js';
+import { revealLibraryEditor } from './ui-navigation.js';
 
 async function choosePortraitAction(portrait: Locator, name: string) {
   await portrait.getByLabel('대표 이미지 변경', { exact: true }).click();
@@ -223,7 +223,7 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   const reused = await save(page, library, unset);
   expect(reused.package!.portraitImageId).toBe('inline');
   expect(reused.package!.images![0].allowedUse).toBe('both');
-  await selectPackageSection(page, '에셋');
+  await selectEditorSection(page, '에셋');
   await library
     .getByLabel('Risu 이미지 목록', { exact: true })
     .getByRole('button')
@@ -444,7 +444,7 @@ test('LIMG04 shared module references show current names and portraits while kee
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   const library = await edit(page, parent);
-  await selectPackageSection(page, '고급 설정');
+  await selectEditorSection(page, '고급 설정');
   await library.getByRole('button', { name: '함께 쓰는 모듈', exact: true }).click();
   const features = library.getByLabel('패키지 모듈과 기능 편집', { exact: true });
   const current = features.locator('.package-module-row').filter({

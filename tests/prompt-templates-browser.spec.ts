@@ -3,7 +3,7 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { PromptPreset } from '../core/product.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, selectEditorSection } from './ui-navigation.js';
 
 const titles = ['Phēmē RP', 'Phēmē 소설', 'Hermēneía'];
 
@@ -156,7 +156,7 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     });
     await expect(dialog).toBeHidden();
     const editor = page.getByTestId('prompt-editor');
-    await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+    await selectEditorSection(editor, '기본 옵션');
     await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
     await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toHaveValue(role);
     const placed = (await (
@@ -339,7 +339,7 @@ for (const action of ['save', 'clone', 'add'] as const) {
     if (action === 'save') {
       await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
       const editor = page.getByTestId('prompt-editor');
-      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await selectEditorSection(editor, '기본 옵션');
       await editor.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} saved`);
     } else if (action === 'add') {
       await panel.getByRole('button', { name: '템플릿', exact: true }).click();

@@ -12,10 +12,11 @@ import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
-import { EditorFrame } from './EditorFrame.js';
+import { EditorStudio, useStudioSection } from './EditorStudio.js';
+import { presetSections } from './resource-sections.js';
 import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
-import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
@@ -34,8 +35,10 @@ import {
   ResourceEditorProvider,
   ResourceEditorStatus,
   ResourceEditorActions,
+  ResourceEditorMenuActions,
   requestResourceConflictReview,
   useResourceEditor,
+  useResourceEditorCommands,
   useEditorSaveCommand,
 } from './resource-editor.js';
 import { editableResource, type PromptEditModel } from '../core/resource-editing.js';
@@ -115,6 +118,10 @@ export function PromptEditor({
   const session = selectedSessions[role];
   const shared = useResourceEditor<PromptEditModel>(session);
   const { model, state, setModel } = shared;
+  const commands = useResourceEditorCommands(shared);
+  const sectionId = useId();
+  const sections = presetSections(model.program, role === 'main');
+  const [section, selectSection] = useStudioSection('prompt', sections, 'blocks', !!initialPreset);
   const anchor = useResourceAnchor('prompt-preset', state.document.targetId);
   const base: PromptPreset | null = state.document.targetId
     ? {
@@ -291,10 +298,14 @@ export function PromptEditor({
           className="primary native-editor-save"
           onClick={() => void save(!!draft.base)}
         />
-        {draft.base && (
-          <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
-            <div className="action-menu-group">
-              {draft.base && (
+        {(draft.base || commands.canDiscard) && (
+          <ActionMenu
+            label={t('prompts.uiManagePrompts')}
+            className={`prompt-management-menu${draft.base ? '' : ' editor-phone-menu'}`}
+          >
+            <ResourceEditorMenuActions commands={commands} />
+            {draft.base && (
+              <div className="action-menu-group">
                 <button
                   type="button"
                   className="secondary"
@@ -306,18 +317,18 @@ export function PromptEditor({
                   <CopyIcon size={18} aria-hidden="true" />
                   {t('prompts.uiSaveACopy')}
                 </button>
-              )}
-              <RisuExportButton
-                kind="prompt-presets"
-                id={draft.base.id}
-                revision={draft.base.revision}
-                title={draft.base.title}
-                disabled={busy || draft.dirty || pendingTemplate}
-                onError={setExportError}
-              />
-            </div>
-            <div className="action-menu-group">
-              {draft.base && (
+                <RisuExportButton
+                  kind="prompt-presets"
+                  id={draft.base.id}
+                  revision={draft.base.revision}
+                  title={draft.base.title}
+                  disabled={busy || draft.dirty || pendingTemplate}
+                  onError={setExportError}
+                />
+              </div>
+            )}
+            {draft.base && (
+              <div className="action-menu-group">
                 <DeleteButton
                   path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
                   revision={draft.base.revision}
@@ -348,8 +359,8 @@ export function PromptEditor({
                     setStatus(uiMessage('prompts.uiPromptDeleted'));
                   }}
                 />
-              )}
-            </div>
+              </div>
+            )}
           </ActionMenu>
         )}
       </div>
@@ -421,7 +432,12 @@ export function PromptEditor({
         data-testid="prompt-editor"
         aria-label={t('prompts.uiFullPromptEditor')}
       >
-        <EditorFrame
+        <EditorStudio
+          label={t('native.text_a8a8b42c1a')}
+          sections={sections}
+          value={section}
+          onSelect={selectSection}
+          idPrefix={sectionId}
           header={
             <div className="prompt-editor-heading">
               {heading}
@@ -436,7 +452,7 @@ export function PromptEditor({
                   onChange={(event) => edit({ title: event.target.value })}
                 />
               </h2>
-              <ResourceEditorActions value={shared} hideSyncError />
+              <ResourceEditorActions value={shared} commands={commands} hideSyncError />
               {saveActions}
               {headingTrailing}
             </div>
@@ -454,6 +470,9 @@ export function PromptEditor({
               <NativeRisuPresetEditor
                 key={`${role}:${session.options.editorKey}`}
                 anchor={anchor}
+                section={section}
+                onSelect={selectSection}
+                idPrefix={sectionId}
                 program={draft.program}
                 metadata={initialPreset !== undefined ? metadata : undefined}
                 values={model.values}
@@ -490,7 +509,7 @@ export function PromptEditor({
             message={error ? translateMessage(error) : ''}
             onDismiss={() => setError('')}
           />
-        </EditorFrame>
+        </EditorStudio>
       </section>
     </ResourceEditorProvider>
   );

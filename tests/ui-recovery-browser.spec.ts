@@ -12,7 +12,7 @@ import {
 } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { editLibraryContent, navigationAction, editorTab } from './ui-navigation.js';
+import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
 
 async function post<T>(request: APIRequestContext, path: string, data: unknown): Promise<T> {
   const response = await request.post(path, { data });
@@ -20,7 +20,12 @@ async function post<T>(request: APIRequestContext, path: string, data: unknown):
   return response.json();
 }
 
-async function editorFits(page: Page, editor: Locator, save: Locator, formMaxWidth = 960) {
+async function editorFits(
+  page: Page,
+  editor: Locator,
+  save: Locator,
+  formMaxWidth: number | 'fill' = 960
+) {
   await expect(editor).toBeVisible();
   await expect(save).toBeVisible();
   expect(
@@ -45,20 +50,27 @@ async function editorFits(page: Page, editor: Locator, save: Locator, formMaxWid
     const workspace = editor.locator('.native-editor');
     const layout = await workspace.evaluate((node) => {
       const rect = node.getBoundingClientRect();
-      const parent = node.closest('.library-page')!.getBoundingClientRect();
-      return {
-        width: rect.width,
-        centerOffset: rect.x + rect.width / 2 - parent.x - parent.width / 2,
-      };
+      const canvas = node.closest<HTMLElement>('.editor-studio-canvas')!;
+      const bounds = canvas.getBoundingClientRect();
+      const start = bounds.left + Number.parseFloat(getComputedStyle(canvas).paddingLeft);
+      return { left: rect.left - start, right: bounds.left + canvas.clientWidth - rect.right };
     });
-    expect(layout.width).toBeLessThanOrEqual(1300);
-    expect(Math.abs(layout.centerOffset)).toBeLessThanOrEqual(2);
+    expect(Math.abs(layout.left), 'editor starts at the canvas edge').toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.right), 'editor fills the canvas width').toBeLessThanOrEqual(1);
     const form = workspace.locator('.native-section-body:visible').first();
     if (await form.count()) {
       const body = await form.boundingBox();
       const outer = await workspace.boundingBox();
-      expect(body!.width).toBeLessThanOrEqual(formMaxWidth);
-      expect(Math.abs(body!.x - outer!.x)).toBeLessThanOrEqual(1);
+      if (formMaxWidth === 'fill')
+        expect(
+          Math.abs(body!.width - outer!.width),
+          'list section fills the canvas'
+        ).toBeLessThanOrEqual(1);
+      else expect(body!.width).toBeLessThanOrEqual(formMaxWidth);
+      expect(
+        Math.abs(body!.x + body!.width / 2 - (outer!.x + outer!.width / 2)),
+        'single-column form is centered'
+      ).toBeLessThanOrEqual(2);
     }
   }
 }
@@ -128,7 +140,7 @@ for (const viewport of viewports) {
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
       const save = editor.getByRole('button', { name: '프롬프트 저장', exact: true });
-      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
+      await selectEditorSection(editor, '변수와 토글');
       const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
       const editView = definitions.getByRole('button', { name: '편집', exact: true });
       const previewView = definitions.getByRole('button', { name: '미리보기', exact: true });
@@ -238,8 +250,8 @@ for (const viewport of viewports) {
           .getByRole('alert')
           .filter({ hasText: '잘못 입력된 토글 또는 변수 값을 확인해 주세요.' })
       ).toBeVisible();
-      await editorTab(editor, '구성').click();
-      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
+      await selectEditorSection(editor, '구성');
+      await selectEditorSection(editor, '변수와 토글');
       variableKey = definitions.getByLabel('변수 키', { exact: true });
       await expect(variableKey).toHaveValue('');
       await variableKey.fill('short');
@@ -278,7 +290,7 @@ for (const viewport of viewports) {
           expect(target.height).toBeGreaterThanOrEqual(44);
         }
       }
-      await editorFits(page, editor, save, 1280);
+      await editorFits(page, editor, save, 'fill');
       await page.screenshot({
         path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
       });
@@ -289,8 +301,8 @@ for (const viewport of viewports) {
       const withPendingSource = `${editedSource}\nsecond unknown line`;
       await raw.fill(withPendingSource);
       await expect(save).toBeEnabled();
-      await editorTab(editor, '구성').click();
-      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
+      await selectEditorSection(editor, '구성');
+      await selectEditorSection(editor, '변수와 토글');
       await rawView.click();
       raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       await expect(raw).toHaveValue(withPendingSource);
@@ -390,16 +402,16 @@ for (const viewport of viewports) {
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-basic-${viewport.name}.png`) });
 
-      await editorTab(editor, '첫 메시지').click();
+      await selectEditorSection(editor, '첫 메시지');
       await editor.getByLabel('기본 첫 메시지', { exact: true }).fill(opening);
-      await editor.getByRole('tab', { name: '기본 정보', exact: true }).click();
+      await selectEditorSection(editor, '기본 정보');
       await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(editedName);
-      await editorTab(editor, '첫 메시지').click();
+      await selectEditorSection(editor, '첫 메시지');
       await expect(editor.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue(opening);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 
-      await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
+      await selectEditorSection(editor, '고급 설정');
       const advancedNav = editor.getByRole('group', { name: '고급 설정 영역', exact: true });
       for (const label of [
         '추가 지침',
@@ -522,7 +534,7 @@ for (const viewport of viewports) {
       await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
       await expect(raw).toHaveValue(pendingRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
-      await editorTab(editor, '첫 메시지').click();
+      await selectEditorSection(editor, '첫 메시지');
 
       const responsePromise = nextSave(page);
       await save.click();
@@ -620,17 +632,17 @@ for (const viewport of viewports) {
         editor.getByRole('button', { name: 'RISUP 내보내기', exact: true })
       ).toBeDisabled();
       await page.keyboard.press('Escape');
-      await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await selectEditorSection(editor, '기본 옵션');
       await expect(editor.getByLabel('분위기', { exact: true })).toHaveValue('"1"');
-      await editorTab(editor, '구성').click();
+      await selectEditorSection(editor, '구성');
       await expect(editor.getByLabel('1번 프롬프트 본문', { exact: true })).toHaveValue(body);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`preset-body-${viewport.name}.png`) });
 
-      await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+      await selectEditorSection(editor, '정규식');
       await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited regex {{user}}');
       await page.screenshot({ path: info.outputPath(`preset-regex-${viewport.name}.png`) });
-      await editorTab(editor, '구성').click();
+      await selectEditorSection(editor, '구성');
 
       const responsePromise = nextSave(page);
       await save.click();

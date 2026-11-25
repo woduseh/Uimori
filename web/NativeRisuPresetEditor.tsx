@@ -1,7 +1,7 @@
 import { legacyMessage, useI18n, translateMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useEffect, useId, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import {
   useAnchorArrival,
   type ResourceAnchor,
@@ -21,8 +21,6 @@ import {
   useUnappliedEditorField,
   useEditorSavePreparation,
 } from './resource-editor.js';
-import { SectionNavigation } from './SectionNavigation.js';
-import { EditorFrameTabs } from './EditorFrame.js';
 import { presetSection, promptBlockTypeLabels, type PresetSection } from './resource-sections.js';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
@@ -52,7 +50,13 @@ export function NativeRisuPresetEditor({
   collaboration,
   metadata,
   anchor = null,
+  section,
+  onSelect,
+  idPrefix: id,
 }: {
+  section: Section;
+  onSelect: (section: Section) => void;
+  idPrefix: string;
   anchor?: ResourceAnchorRequest | null;
   program: RisuPrompt;
   onChange: (program: RisuPrompt) => void;
@@ -65,8 +69,6 @@ export function NativeRisuPresetEditor({
   const { t } = useI18n();
   const blockTypes = promptBlockTypeLabels();
   const source = program.nativeRisuPreset.preset;
-  const id = useId();
-  const [section, setSection] = useState<Section>('blocks');
   const [selected, setSelected] = useState(0);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
@@ -107,15 +109,6 @@ export function NativeRisuPresetEditor({
   const items = source.promptTemplate as Record<string, unknown>[];
   const index = Math.min(selected, Math.max(0, items.length - 1));
   const entry = items[index];
-  const sections: { id: Section; title: string; count?: number }[] = [
-    { id: 'blocks', title: t('native.text_a0a7b7b4e4'), count: items.length },
-    { id: 'options', title: t('native.text_a1c1f8f5fe') },
-    { id: 'variables', title: t('native.text_0a13d19d88') },
-    { id: 'regex', title: t('native.text_fc7e4f6228') },
-    ...(collaboration
-      ? [{ id: 'collaboration' as const, title: t('native.text_780d3f6ed3') }]
-      : []),
-  ];
   const anchorSection = (target: ResourceAnchor): Section =>
     target.section === 'prompt' ? 'blocks' : (presetSection(target.path ?? '') ?? 'options');
   useAnchorArrival(
@@ -128,7 +121,7 @@ export function NativeRisuPresetEditor({
     },
     (target) => {
       const next = anchorSection(target);
-      setSection(next);
+      onSelect(next);
       if (next === 'blocks' && target.index !== null) {
         setSelected(target.index);
         setQuery('');
@@ -139,6 +132,7 @@ export function NativeRisuPresetEditor({
     id: id + '-' + key + '-panel',
     role: 'tabpanel' as const,
     'aria-labelledby': id + '-' + key + '-tab',
+    'data-studio-section': key,
     hidden: section !== key,
   });
   function mark(part: string, active: boolean) {
@@ -233,17 +227,6 @@ export function NativeRisuPresetEditor({
       aria-label={t('native.text_f1ab612224')}
       className="native-editor native-risu-preset-editor"
     >
-      <EditorFrameTabs>
-        <SectionNavigation
-          label={t('native.text_a8a8b42c1a')}
-          items={sections}
-          value={section}
-          onSelect={setSection}
-          compact={false}
-          orientation="horizontal"
-          idPrefix={id}
-        />
-      </EditorFrameTabs>
       {error && (
         <NoticeBanner className="native-editor-notice" tone="error">
           {translateMessage(error)}
@@ -545,7 +528,7 @@ export function NativeRisuPresetEditor({
         ) : (
           <div className="native-form-stack">
             <p className="muted">{t('native.noToggles')}</p>
-            <button type="button" className="secondary" onClick={() => setSection('variables')}>
+            <button type="button" className="secondary" onClick={() => onSelect('variables')}>
               {t('native.openVariablesAndToggles')}
             </button>
           </div>

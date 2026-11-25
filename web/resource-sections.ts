@@ -1,4 +1,8 @@
 import { t } from './i18n.js';
+import type { RisuContent } from '../core/risu-content.js';
+import type { RisuPrompt } from '../core/risu-prompt.js';
+import { nativeRisuLore } from '../core/risu-native.js';
+import type { StudioSection } from './EditorStudio.js';
 
 export type ContentSection =
   | 'basic'
@@ -16,6 +20,54 @@ export type ContentAdvancedTab =
   | 'modules'
   | 'source';
 export type PresetSection = 'blocks' | 'options' | 'variables' | 'regex' | 'collaboration';
+
+export function isStandaloneModule(content: RisuContent) {
+  return !Object.keys(content.nativeRisu.card).length && !!content.nativeRisu.module;
+}
+
+export function contentSections(content: RisuContent): StudioSection<ContentSection>[] {
+  const native = content.nativeRisu;
+  const greetings = [
+    native.card.first_mes,
+    ...(Array.isArray(native.card.alternate_greetings) ? native.card.alternate_greetings : []),
+  ];
+  return [
+    { id: 'basic', title: t('native.text_eb7f501b0e') },
+    ...(!isStandaloneModule(content)
+      ? [
+          {
+            id: 'greetings' as const,
+            title: t('native.text_be7723bd53'),
+            count: greetings.length === 1 && !greetings[0] ? 0 : greetings.length,
+          },
+        ]
+      : []),
+    { id: 'lore', title: t('native.text_5ce4911d95'), count: nativeRisuLore(native).length },
+    { id: 'assets', title: t('native.text_b1a821ee46'), count: content.images?.length ?? 0 },
+    { id: 'translation', title: t('native.text_ecc580fe68') },
+    { id: 'appearances', title: t('visuals.defaultAppearances') },
+    { id: 'advanced', title: t('native.text_772fa878ec') },
+  ];
+}
+
+export function presetSections(
+  program: RisuPrompt,
+  collaboration: boolean
+): StudioSection<PresetSection>[] {
+  return [
+    {
+      id: 'blocks',
+      title: t('native.text_a0a7b7b4e4'),
+      count: (program.nativeRisuPreset.preset.promptTemplate as unknown[]).length,
+    },
+    { id: 'options', title: t('native.text_a1c1f8f5fe') },
+    { id: 'variables', title: t('native.text_0a13d19d88') },
+    { id: 'regex', title: t('native.text_fc7e4f6228') },
+    ...(collaboration
+      ? [{ id: 'collaboration' as const, title: t('native.text_780d3f6ed3') }]
+      : []),
+  ];
+}
 
 export function contentSection(
   path: string

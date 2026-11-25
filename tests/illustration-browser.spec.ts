@@ -21,7 +21,7 @@ import {
   openSourceActions,
   selectChatSettingsSection,
   selectSettingsSection,
-  selectPackageSection,
+  selectEditorSection,
 } from './ui-navigation.js';
 
 test.setTimeout(60000);
@@ -1408,9 +1408,9 @@ for (const width of [MOBILE_WIDTH]) {
           return index > 0 ? titles.slice(index - 1, index + 2) : titles;
         })
         .toEqual(['번역 지침', '기본 인물 외형', '고급 설정']);
-      await selectPackageSection(page, '기본 정보');
+      await selectEditorSection(page, '기본 정보');
       await expect(page.getByRole('button', { name: '인물 추가', exact: true })).toBeHidden();
-      await selectPackageSection(page, '기본 인물 외형');
+      await selectEditorSection(page, '기본 인물 외형');
     };
     await open();
     const editor = page.getByRole('region', { name: '기본 인물 외형', exact: true });

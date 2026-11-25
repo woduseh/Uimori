@@ -12,7 +12,12 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { navigationAction, openHelper, editorTab } from './ui-navigation.js';
+import {
+  navigationAction,
+  openHelper,
+  expectEditorSection,
+  selectEditorSection,
+} from './ui-navigation.js';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
@@ -1362,7 +1367,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
     .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
     .click();
   const library = page.getByTestId('library-panel');
-  await expect(editorTab(library, '로어북')).toHaveAttribute('aria-selected', 'true');
+  await expectEditorSection(library, '로어북');
   await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
     'aria-current',
     'true'
@@ -1388,7 +1393,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
     })
   ).toBe(true);
 
-  await library.getByRole('tab', { name: '기본 정보', exact: true }).click();
+  await selectEditorSection(library, '기본 정보');
   const name = library.getByRole('textbox', { name: 'Risu 자료 이름', exact: true });
   await name.fill('저장하지 않은 이름');
   await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
@@ -1400,7 +1405,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
     'true'
   );
   await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
-  await library.getByRole('tab', { name: '기본 정보', exact: true }).click();
+  await selectEditorSection(library, '기본 정보');
   await expect(name).toHaveValue('저장하지 않은 이름');
   const landing = library.locator('.nl-detail');
   expect(await landing.evaluate((node) => getComputedStyle(node).animationName)).toBe('none');

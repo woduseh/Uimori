@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { editorTab } from './ui-navigation.js';
+import { selectEditorSection } from './ui-navigation.js';
 import { startFixtureVite, type FixtureVite } from './fixtures/fixture-vite.js';
 import {
   MOBILE_WIDTH,
@@ -384,21 +384,21 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
     mount();
   });
   const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(page, '기본 옵션');
   const options = editor.locator('.prompt-option-group').first();
   await expect(options).not.toHaveAttribute('open');
   await options.locator('summary').click();
   await editor.getByLabel('Mood', { exact: true }).selectOption('"1"');
-  await editorTab(editor, '구성').click();
+  await selectEditorSection(page, '구성');
   await expect(editor.getByLabel('1번 프롬프트 본문')).toHaveValue('{{getvar::place}}');
   await editor.getByLabel('1번 프롬프트 본문').fill('{{#when::mood::tis::1}}VIVID{{/when}}');
-  await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+  await selectEditorSection(page, '정규식');
   await editor.getByText('고급 JSON 편집', { exact: true }).click();
   await editor.getByLabel('Risu 정규식 JSON').fill('[invalid');
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await editorTab(editor, '구성').click();
+  await selectEditorSection(page, '구성');
   await editor.getByLabel('1번 블록 이름').fill('Try another edit');
-  await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+  await selectEditorSection(page, '정규식');
   await expect(editor.getByLabel('Risu 정규식 JSON')).toHaveValue('[invalid');
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
   const regex = [{ in: '(hello)', out: '$1 {{getvar::place}}', type: 'editinput' }];
@@ -631,7 +631,7 @@ for (const viewport of [
         const { mount } = await import(path);
         mount();
       });
-      await editorTab(page, '로어북').click();
+      await selectEditorSection(page, '로어북');
       await page.getByText('조건, 배치, 원문 설정', { exact: true }).click();
       const keywords = page.getByLabel('로어 키워드', { exact: true });
       await keywords.focus();

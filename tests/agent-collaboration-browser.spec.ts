@@ -4,14 +4,13 @@ import {
   MOBILE_HEIGHT,
   MOBILE_WIDTH,
 } from './fixtures/browser-viewports.js';
-import { setCurrentModels } from './ui-navigation.js';
+import { setCurrentModels, selectEditorSection, navigationAction } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect } from '@playwright/test';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import type { PromptPreset } from '../core/product.js';
-import { navigationAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test('AGENTUI02 saved collaboration options reach the real preview API and translation stays separate on desktop', async ({
@@ -31,7 +30,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
   const editor = page.getByTestId('prompt-editor');
-  await editor.getByRole('tab', { name: '협업', exact: true }).click();
+  await selectEditorSection(editor, '협업');
   const collaboration = editor.getByRole('region', { name: '에이전트 협업' });
   await collaboration.scrollIntoViewIfNeeded();
   await collaboration.getByRole('switch', { name: '협업 사용' }).check();
@@ -125,7 +124,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(detail.runs).toHaveLength(0);
   expect(detail.attempts).toHaveLength(0);
-  await editor.getByRole('tab', { name: '협업', exact: true }).click();
+  await selectEditorSection(editor, '협업');
   await collaboration.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
     true
@@ -156,17 +155,17 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
     enabled: false,
     agents: [{ instructions: '' }],
   });
-  await editor.getByRole('tab', { name: '협업', exact: true }).click();
+  await selectEditorSection(editor, '협업');
   await collaboration.getByRole('switch', { name: '협업 사용' }).check();
   await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
   await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
   await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toBeDisabled();
   const library = page.getByTestId('prompt-library');
   await library.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await library.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
   await expect(editor.getByRole('tab', { name: '협업', exact: true })).toHaveCount(0);
 });
@@ -191,7 +190,7 @@ test('AUDIT2 collaboration keyboard navigation follows the visible vertical orde
   await navigationAction(page, '프롬프트');
   await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
   const editor = page.getByTestId('prompt-editor');
-  await editor.getByRole('tab', { name: '협업', exact: true }).click();
+  await selectEditorSection(editor, '협업');
   const collaboration = editor.getByRole('region', { name: '에이전트 협업' });
   const enabled = collaboration.getByRole('switch', { name: '협업 사용' });
   const agent = collaboration.locator('.ac-agent > summary').first();

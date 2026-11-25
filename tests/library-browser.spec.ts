@@ -14,6 +14,7 @@ import {
   editLibraryContent,
   navigationAction,
   selectContent,
+  selectEditorSection,
 } from './ui-navigation.js';
 
 async function createContent(
@@ -308,7 +309,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await panel.getByLabel('프롬프트 검색', { exact: true }).fill('');
   await chooseFolder(panel, folder.title);
   await panel.getByRole('button', { name: `${prefix} 프롬프트 편집`, exact: true }).click();
-  await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(panel, '기본 옵션');
   await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${prefix} Unsaved`);
   await navigationAction(page, '서재');
   const guard = page.getByRole('dialog', { name: '편집 중인 자료', exact: true });
@@ -330,7 +331,7 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   expect((await organization(request)).items.find((item) => item.id === prompt.id)?.folderId).toBe(
     folder.id
   );
-  await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(panel, '기본 옵션');
   await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${prefix} Discard this draft`);
   await navigationAction(page, '서재');
   await expect(guard).toBeVisible();
@@ -577,7 +578,7 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
       await panel.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       await reading;
       await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
-      await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      await selectEditorSection(panel, '기본 옵션');
       await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} 새 초안`);
       release();
       await page.waitForLoadState('networkidle');
@@ -604,7 +605,7 @@ test('SAVEACK prompt navigation preserves an accepted save when placement and su
   await chooseFolder(panel, folder.title);
   await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
   const editor = page.getByTestId('prompt-editor');
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill(title);
 
   let failSave = true;

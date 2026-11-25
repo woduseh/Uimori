@@ -101,6 +101,7 @@ export function PromptLibrary({
   reload,
   onError,
   onDirtyChange,
+  onEditingChange,
   headerLeading,
   headerTrailing,
   onOpenCurrentPrompts,
@@ -114,6 +115,7 @@ export function PromptLibrary({
   reload: () => Promise<void>;
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onEditingChange?: (editing: boolean) => void;
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
   onOpenCurrentPrompts: () => void;
@@ -236,6 +238,10 @@ export function PromptLibrary({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => {
+    onEditingChange?.(!!editing);
+  }, [editing, onEditingChange]);
+  useEffect(() => () => onEditingChange?.(false), [onEditingChange]);
   useEffect(
     () => () => {
       opening.current?.abort();

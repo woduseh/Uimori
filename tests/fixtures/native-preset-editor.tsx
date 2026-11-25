@@ -1,11 +1,38 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NativeRisuPresetEditor } from '../../web/NativeRisuPresetEditor.js';
 import {
   createNativeRisuPresetProgram,
   nativeRisuPresetSource,
 } from '../../core/risu-native-preset.js';
-import type { PromptValue } from '../../core/risu-prompt.js';
+import type { PromptValue, RisuPrompt } from '../../core/risu-prompt.js';
+import { EditorStudio } from '../../web/EditorStudio.js';
+import { presetSections, type PresetSection } from '../../web/resource-sections.js';
+import { t } from '../../web/i18n.js';
+
+function Studio({
+  program,
+  header,
+  children,
+}: {
+  program: RisuPrompt;
+  header?: ReactNode;
+  children: (section: PresetSection, onSelect: (section: PresetSection) => void) => ReactNode;
+}) {
+  const [section, setSection] = useState<PresetSection>('blocks');
+  return (
+    <EditorStudio
+      header={header}
+      label={t('native.text_a8a8b42c1a')}
+      sections={presetSections(program, false)}
+      value={section}
+      onSelect={setSection}
+      idPrefix="fixture"
+    >
+      {children(section, setSection)}
+    </EditorStudio>
+  );
+}
 
 export function mount() {
   function Harness() {
@@ -23,22 +50,37 @@ export function mount() {
     const [values, setValues] = useState<Record<string, PromptValue>>({});
     const [pending, setPending] = useState(false);
     return (
-      <>
-        <NativeRisuPresetEditor
-          program={program}
-          onChange={setProgram}
-          values={values}
-          onValuesChange={setValues}
-          onPendingDraftChange={setPending}
-        />
-        <button type="button" disabled={pending}>
-          Save
-        </button>
-        <output>{JSON.stringify({ program, values })}</output>
-      </>
+      <Studio
+        program={program}
+        header={
+          <button type="button" disabled={pending}>
+            Save
+          </button>
+        }
+      >
+        {(section, onSelect) => (
+          <>
+            <NativeRisuPresetEditor
+              program={program}
+              onChange={setProgram}
+              values={values}
+              onValuesChange={setValues}
+              onPendingDraftChange={setPending}
+              section={section}
+              onSelect={onSelect}
+              idPrefix="fixture"
+            />
+            <output>{JSON.stringify({ program, values })}</output>
+          </>
+        )}
+      </Studio>
     );
   }
-  createRoot(document.getElementById('mount')!).render(<Harness />);
+  createRoot(document.getElementById('mount')!).render(
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+      <Harness />
+    </div>
+  );
 }
 
 export function mountReorderFixture() {
@@ -57,11 +99,25 @@ export function mountReorderFixture() {
       )
     );
     return (
-      <>
-        <NativeRisuPresetEditor program={program} onChange={setProgram} />
-        <output>{JSON.stringify(program)}</output>
-      </>
+      <Studio program={program}>
+        {(section, onSelect) => (
+          <>
+            <NativeRisuPresetEditor
+              program={program}
+              onChange={setProgram}
+              section={section}
+              onSelect={onSelect}
+              idPrefix="fixture"
+            />
+            <output>{JSON.stringify(program)}</output>
+          </>
+        )}
+      </Studio>
     );
   }
-  createRoot(document.getElementById('mount')!).render(<Harness />);
+  createRoot(document.getElementById('mount')!).render(
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+      <Harness />
+    </div>
+  );
 }

@@ -8,7 +8,7 @@ import {
   MOBILE_WIDTH,
 } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { editLibraryContent, navigationAction, editorTab } from './ui-navigation.js';
+import { editLibraryContent, navigationAction, selectEditorSection } from './ui-navigation.js';
 
 const FOLDER_KEY = '\uf000folder:world';
 
@@ -82,7 +82,7 @@ async function openLoreEditor(page: Page, title: string) {
   await page.getByLabel('서재 검색', { exact: true }).fill(title);
   await editLibraryContent(page, title);
   const editor = page.getByRole('region', { name: '자료 상세', exact: true });
-  await editorTab(editor, '로어북').click();
+  await selectEditorSection(editor, '로어북');
   return editor;
 }
 

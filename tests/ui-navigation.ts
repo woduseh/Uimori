@@ -75,16 +75,49 @@ export async function selectChatSettingsSection(page: Page, name: string) {
   if (await tab.isVisible()) await tab.click();
   else await navigation.getByRole('button', { name, exact: true }).click();
 }
+function escapeRegExp(text: string) {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+function sectionName(name: string) {
+  return new RegExp(`^${escapeRegExp(name)}( \\d+개)?$`, 'u');
+}
 export function editorTab(scope: Page | Locator, name: string) {
-  return scope.getByRole('tab', {
-    name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}( \\d+개)?$`, 'u'),
-  });
+  return scope.getByRole('tab', { name: sectionName(name) });
+}
+export function editorSectionPicker(scope: Page | Locator) {
+  return scope.getByLabel('편집 영역 선택', { exact: true });
 }
 
-export async function selectPackageSection(page: Page, name: string) {
-  const navigation = page.getByLabel('자료 편집 영역', { exact: true });
-  await expect(navigation).toBeVisible();
-  await editorTab(navigation, name).click();
+export async function discardEdits(scope: Page | Locator) {
+  const page = 'viewportSize' in scope ? scope : scope.page();
+  if (compactLayout(page)) await scope.getByLabel(/^(자료 메뉴|프롬프트 관리)$/u).click();
+  await scope.getByRole('button', { name: '편집 취소', exact: true }).click();
+}
+
+export async function expectEditorSection(scope: Page | Locator, name: string) {
+  const tab = editorTab(scope, name);
+  const picker = editorSectionPicker(scope);
+  await expect(tab.or(picker).first()).toBeVisible();
+  if (await tab.isVisible()) await expect(tab).toHaveAttribute('aria-selected', 'true');
+  else
+    await expect(picker.locator('.editor-studio-picker-current')).toHaveText(
+      new RegExp(`^${escapeRegExp(name)}[\\d,]*$`, 'u')
+    );
+}
+
+export async function selectEditorSection(scope: Page | Locator, name: string) {
+  const tab = editorTab(scope, name);
+  const picker = editorSectionPicker(scope);
+  await expect(tab.or(picker).first()).toBeVisible();
+  if (await tab.isVisible()) {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    return;
+  }
+  await picker.click();
+  const option = picker.locator('..').getByRole('button', { name: sectionName(name) });
+  await option.click();
+  await expect(option).toBeHidden();
 }
 
 export async function openChatMenu(page: Page) {

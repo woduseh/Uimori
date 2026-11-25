@@ -8,8 +8,9 @@ import {
   navigationAction,
   openChatSettings,
   selectChatSettingsSection,
-  selectPackageSection,
   selectSettingsSection,
+  selectEditorSection,
+  discardEdits,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
@@ -74,7 +75,7 @@ for (const width of [412]) {
     await page.getByLabel('Risu 자료 이름', { exact: true }).fill(`${original.title} changed`);
     const saved = await save(page);
     expect(saved.title).toBe(`${original.title} changed`);
-    await selectPackageSection(page, '고급 설정');
+    await selectEditorSection(page, '고급 설정');
     await page.getByRole('button', { name: 'JSON 소스', exact: true }).click();
     await page.getByLabel('Risu 원문 편집 대상', { exact: true }).selectOption('card');
     const raw = page.getByLabel('Risu 원문 JSON', { exact: true });
@@ -82,7 +83,7 @@ for (const width of [412]) {
     card.description = 'Saved from raw JSON with no apply step.';
     await raw.fill(JSON.stringify(card, null, 2));
     expect((await save(page)).text).toBe(card.description);
-    await selectPackageSection(page, '기본 정보');
+    await selectEditorSection(page, '기본 정보');
     await page.getByLabel('Risu 자료 이름', { exact: true }).fill('Recovered local input');
     await expect
       .poll(() =>
@@ -110,7 +111,7 @@ for (const width of [412]) {
     await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(
       'Recovered local input'
     );
-    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await discardEdits(page);
     await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(saved.title);
     expect((await (await request.get(`/api/content/${saved.id}`)).json()).title).toBe(saved.title);
     expect(paths.some((path) => path.includes('edit-draft'))).toBe(false);
@@ -129,7 +130,7 @@ test('PERSONAL images retain native alias while display metadata and WebP persis
   await page.setViewportSize({ width: 1440, height: 1000 });
   const original = await createBot(request, `Image metadata ${randomUUID()}`);
   await openEditor(page, original.title);
-  await selectPackageSection(page, '에셋');
+  await selectEditorSection(page, '에셋');
   const image = await sharp({
     create: {
       width: 96,
@@ -356,7 +357,7 @@ test('PERSONAL saving one tab preserves another tab recovery through reload', as
       path: info.outputPath('personal-other-tab-recovery-restored.png'),
       fullPage: true,
     });
-    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await discardEdits(page);
     await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(savedTitle);
     await expect.poll(storedTitle).toBeUndefined();
   } finally {

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptControls } from '../core/risu-prompt.js';
 import type { RisuPresetImportApply } from '../core/risu-preset.js';
-import { navigationAction, editorTab } from './ui-navigation.js';
+import { navigationAction, expectEditorSection, selectEditorSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
@@ -162,8 +162,8 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(dialog).not.toBeVisible();
   const composer = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집', exact: true });
   await expect(composer).toBeVisible();
-  await expect(editorTab(page, '구성')).toHaveAttribute('aria-selected', 'true');
-  await page.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await expectEditorSection(page, '구성');
+  await selectEditorSection(page, '기본 옵션');
   const options = composer.locator('.prompt-option-group').first();
   await expect(options).not.toHaveAttribute('open');
   await options.locator('summary').click();
@@ -182,7 +182,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
       fullPage: true,
     });
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
-  await editorTab(page, '구성').click();
+  await selectEditorSection(page, '구성');
   await expect(composer.getByLabel('1번 프롬프트 본문')).toHaveValue(
     source.promptTemplate[0]!.text!
   );
@@ -198,7 +198,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
     });
     await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   }
-  await page.getByRole('tab', { name: '정규식', exact: true }).click();
+  await selectEditorSection(page, '정규식');
   await composer.getByText('고급 JSON 편집', { exact: true }).click();
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
   await composer.getByLabel('Risu 정규식 JSON', { exact: true }).fill(JSON.stringify(regex));
@@ -208,14 +208,14 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(page.getByText('프롬프트를 저장했어요.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
-  await page.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(page, '기본 옵션');
   await expect(options).toHaveAttribute('open');
   await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
   await expect(composer.getByLabel('Imported Memo', { exact: true })).toHaveValue(
     'First line\nSecond line'
   );
   await expect(composer.getByRole('switch', { name: 'Imported Light' })).not.toBeChecked();
-  await page.getByRole('tab', { name: '정규식', exact: true }).click();
+  await selectEditorSection(page, '정규식');
   await expect
     .poll(async () =>
       JSON.parse(await composer.getByLabel('Risu 정규식 JSON', { exact: true }).inputValue())

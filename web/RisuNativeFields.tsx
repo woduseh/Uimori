@@ -8,7 +8,7 @@ import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
 import type { ResourceModel } from '../core/resource-editing.js';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   useAnchorArrival,
   type ResourceAnchor,
@@ -38,14 +38,14 @@ import { NativeRisuLoreEditor } from './NativeRisuLoreEditor.js';
 import { NativeRisuAssetsEditor } from './NativeRisuAssetsEditor.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
-import { SectionNavigation } from './SectionNavigation.js';
-import { EditorFrameTabs } from './EditorFrame.js';
 import { IconButton } from './IconButton.js';
 import { CodeIcon } from './ui-icons.js';
 import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
 import { markupPreview } from './markup-preview.js';
 import {
   contentSection,
+  contentSections,
+  isStandaloneModule,
   type ContentAdvancedTab,
   type ContentSection,
 } from './resource-sections.js';
@@ -78,17 +78,23 @@ export function RisuNativeFields({
   onDraftChange,
   onPortraitBusy,
   anchor = null,
+  section,
+  onSelect,
+  idPrefix: id,
 }: {
   value: RisuContent;
   onChange: (value: RisuContent) => void;
   onDraftChange?: (dirty: boolean) => void;
   onPortraitBusy: (busy: boolean) => void;
   anchor?: ResourceAnchorRequest | null;
+  section: Section;
+  onSelect: (section: Section) => void;
+  idPrefix: string;
 }) {
   const { t } = useI18n();
 
   const native = value.nativeRisu;
-  const standalone = !Object.keys(native.card).length && !!native.module;
+  const standalone = isStandaloneModule(value);
   const advancedTabs: { id: Advanced; title: string }[] = [
     ...(!standalone ? [{ id: 'instructions' as const, title: t('native.text_22a2af3f54') }] : []),
     { id: 'variables', title: t('native.initialVariablesAndToggles') },
@@ -104,8 +110,7 @@ export function RisuNativeFields({
     { id: 'modules', title: t('native.text_ae90c98d27') },
     { id: 'source', title: t('native.sourceJson') },
   ];
-  const id = useId();
-  const [section, setSection] = useState<Section>('basic');
+  const sections = contentSections(value);
   const [greetingFont, setGreetingFont] = useState(() =>
     readPresentationChoice(GREETING_FONT_KEY, GREETING_FONTS, 'body')
   );
@@ -132,7 +137,7 @@ export function RisuNativeFields({
         : panel;
     },
     (target) => {
-      setSection(anchoredSection(target));
+      onSelect(anchoredSection(target));
       const { advanced, authoring } = anchorSection(target);
       if (advanced) setAdvanced(advanced);
       if (authoring) setAuthoringOpen(true);
@@ -285,23 +290,6 @@ export function RisuNativeFields({
       setError((caught as Error).message);
     }
   }
-  const sections: { id: Section; title: string; count?: number }[] = [
-    { id: 'basic', title: t('native.text_eb7f501b0e') },
-    ...(!standalone
-      ? [
-          {
-            id: 'greetings' as const,
-            title: t('native.text_be7723bd53'),
-            count: greetings.length === 1 && !greetings[0] ? 0 : greetings.length,
-          },
-        ]
-      : []),
-    { id: 'lore', title: t('native.text_5ce4911d95'), count: lore.length },
-    { id: 'assets', title: t('native.text_b1a821ee46'), count: value.images?.length ?? 0 },
-    { id: 'translation', title: t('native.text_ecc580fe68') },
-    { id: 'appearances', title: t('visuals.defaultAppearances') },
-    { id: 'advanced', title: t('native.text_772fa878ec') },
-  ];
   const description = string(standalone ? native.module?.description : native.card.description);
   const creator = string(native.card.creator);
   const version = string(native.card.character_version);
@@ -309,6 +297,7 @@ export function RisuNativeFields({
     id: id + '-' + key + '-panel',
     role: 'tabpanel' as const,
     'aria-labelledby': id + '-' + key + '-tab',
+    'data-studio-section': key,
     hidden: section !== key,
   });
   const rawEditor = section === 'advanced' && activeAdvanced === 'source' && (
@@ -367,17 +356,6 @@ export function RisuNativeFields({
   );
   return (
     <div className="native-editor native-content-editor full">
-      <EditorFrameTabs>
-        <SectionNavigation
-          label={t('native.text_b891876a9a')}
-          items={sections}
-          value={section}
-          onSelect={setSection}
-          compact={false}
-          orientation="horizontal"
-          idPrefix={id}
-        />
-      </EditorFrameTabs>
       {draft && (
         <p className="native-editor-notice" role="status">
           {t('native.text_0b4d698c5c')}{' '}
@@ -385,7 +363,7 @@ export function RisuNativeFields({
             type="button"
             className="ghost"
             onClick={() => {
-              setSection('advanced');
+              onSelect('advanced');
               setAdvanced('source');
             }}
           >

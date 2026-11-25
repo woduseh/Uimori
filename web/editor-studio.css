@@ -1,0 +1,256 @@
+.destination-scroll:has(> .library-page-editing) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.library-page.library-page-editing {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+.library-page-editing > .library-heading[hidden] {
+  display: none;
+}
+.library-page-editing > :is(.resource-editor, .library-prompt-editor),
+.library-prompt-editor > .resource-editor,
+.library-page-editing :is(.library-content-editor, .prompt-editor),
+.editor-studio {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.editor-studio-header {
+  flex: none;
+  background: var(--bg);
+}
+.editor-studio-header > .dismissible-error {
+  margin: 8px 0;
+}
+.library-page-editing .editor-studio-header > :is(.prompt-editor-heading, .library-detail-heading) {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-height: var(--header-h);
+  margin: 0;
+  padding: 6px 0;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.editor-studio-header .library-detail-actions,
+.editor-studio-header .resource-editor-actions {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.editor-studio-header .resource-editor-actions {
+  flex-shrink: 1;
+}
+.editor-studio-header .resource-editor-status {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.editor-studio-header .editor-title-field {
+  order: initial;
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-heading);
+  font-weight: inherit;
+}
+.editor-title-field > input {
+  width: 100%;
+  height: var(--control-h);
+  font-weight: 600;
+}
+.editor-studio-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--studio-rail-w) minmax(0, 1fr);
+}
+.editor-studio-rail {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 16px 12px 24px 0;
+  border-right: var(--hairline) solid var(--line);
+}
+.editor-studio-canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  padding-left: 24px;
+}
+.editor-studio-canvas > :is(.editor-grid, .prompt-editor-fields),
+.editor-studio-canvas .editor-fields,
+.editor-studio-canvas .prompt-composer-frame,
+.editor-studio-canvas .native-editor {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+}
+.editor-studio-canvas > .editor-grid {
+  gap: 16px;
+}
+.editor-studio-canvas .native-section-body {
+  margin-inline: auto;
+}
+.action-menu.editor-studio-picker {
+  padding: 8px 0;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.action-menu.editor-studio-picker > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0 12px;
+  border: var(--hairline) solid var(--border);
+  font-size: var(--font-body);
+  font-weight: 550;
+}
+.editor-studio-picker-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-menu.editor-studio-picker > .action-menu-body {
+  left: 0;
+  right: auto;
+  min-width: 240px;
+}
+@media (min-width: 601px) {
+  .library-page-editing .native-panel-fields:has(> .native-panes:not([hidden])) {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .library-page-editing .native-panes:not([hidden]) {
+    flex: 1 1 0;
+    min-height: 360px;
+  }
+  .library-page-editing .native-panes:not(.native-editor-split, .native-advanced-workspace) {
+    display: flex;
+    flex-direction: column;
+  }
+  .library-page-editing .native-panes > .native-editor-split {
+    flex: 1 1 0;
+  }
+  .library-page-editing
+    :is(.native-panes.native-editor-split, .native-panes > .native-editor-split) {
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .library-page-editing .native-panes :is(.native-item-list, .native-item-detail) {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    min-height: 0;
+  }
+  .library-page-editing .native-panes .native-item-detail > * {
+    flex-shrink: 0;
+  }
+  .library-page-editing .native-advanced-workspace.native-panes {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+@media (min-width: 761px) {
+  .resource-editor-menu-actions,
+  .editor-phone-menu {
+    display: none;
+  }
+  .resource-editor-menu-actions + .action-menu-group {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+}
+@media (max-width: 800px) {
+  .library-page-editing .native-advanced-workspace.native-panes:not([hidden]) {
+    flex: none;
+    min-height: 0;
+  }
+}
+@media (max-width: 760px) {
+  .library-page-editing
+    .editor-studio-header
+    > :is(.prompt-editor-heading, .library-detail-heading) {
+    gap: 8px;
+  }
+  .editor-studio-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editor-studio-canvas {
+    padding-left: 0;
+  }
+  .prompt-editor .native-editor textarea {
+    font-size: var(--font-heading);
+  }
+  .library-page-editing
+    .editor-studio-header
+    > :is(.prompt-editor-heading, .library-detail-heading) {
+    flex-wrap: wrap;
+  }
+  .library-page-editing .editor-studio-header :is(.library-detail-actions, .prompt-save-actions) {
+    display: contents;
+  }
+  .library-page-editing .editor-studio-header .resource-editor-actions:not(:has([role="alert"])),
+  .library-page-editing .editor-studio-header .resource-editor-status {
+    display: contents;
+  }
+  .library-page-editing .editor-studio-header .resource-editor-actions:has([role="alert"]) {
+    order: 1;
+    flex: 1 0 100%;
+  }
+  .library-page-editing .editor-studio-header .resource-editor-status > [role="status"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .library-page-editing .editor-studio-header :is(.resource-editor-discard, .resource-editor-undo) {
+    display: none;
+  }
+  :is(.native-editor-save, .editor-start-chat) {
+    width: var(--control-h);
+    min-width: var(--control-h);
+    padding-inline: 8px;
+  }
+  .native-editor-save .settings-save-content > span,
+  .editor-start-chat > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .native-editor-save .settings-save-label::after {
+    content: none;
+  }
+}
+@media (max-width: 600px) {
+  .library-page-editing
+    .editor-studio-header
+    > :is(.prompt-editor-heading, .library-detail-heading) {
+    gap: 4px;
+  }
+  .library-page-editing .mobile-menu {
+    display: none;
+  }
+}

@@ -17,7 +17,7 @@ import { RisuNativeFields } from './RisuNativeFields.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
-import { EditorFrame } from './EditorFrame.js';
+import { EditorStudio, useStudioSection } from './EditorStudio.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { RisuImport } from './RisuImport.js';
@@ -25,13 +25,16 @@ import {
   ResourceEditorProvider,
   ResourceEditorStatus,
   ResourceEditorActions,
+  ResourceEditorMenuActions,
   ResourceEditorLeaveWarning,
   requestResourceConflictReview,
   discardActiveEditor,
   saveActiveEditor,
   useEditorSaveCommand,
   useResourceEditor,
+  useResourceEditorCommands,
 } from './resource-editor.js';
+import { contentSections } from './resource-sections.js';
 import {
   editableResource,
   type ContentEditModel,
@@ -201,6 +204,7 @@ export function LibraryPanel({
   onInitialContentHandled,
   onTabChange,
   onDirtyChange,
+  onEditingChange,
   recentChatByContent,
   onContinueChat,
   headerLeading,
@@ -220,6 +224,7 @@ export function LibraryPanel({
   onInitialContentHandled?: (id: string) => void;
   onTabChange?: (tab: PrimaryLibraryTab) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onEditingChange?: (editing: boolean) => void;
   recentChatByContent?: Record<string, string>;
   onContinueChat?: (chatId: string) => void;
   headerLeading?: ReactNode;
@@ -329,6 +334,10 @@ export function LibraryPanel({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => {
+    onEditingChange?.(!!editing);
+  }, [editing, onEditingChange]);
+  useEffect(() => () => onEditingChange?.(false), [onEditingChange]);
   useEffect(
     () => () => {
       opening.current++;
@@ -1327,6 +1336,15 @@ function ContentEditor({
   const shared = useResourceEditor<ContentEditModel>(session);
   const { model: value, setModel: setValue, state } = shared;
   const { document, dirty } = state;
+  const commands = useResourceEditorCommands(shared);
+  const sectionId = useId();
+  const sections = contentSections(value.package);
+  const [section, selectSection] = useStudioSection(
+    `content:${value.kind}`,
+    sections,
+    'basic',
+    !!initial
+  );
   const anchor = useResourceAnchor('content', document.targetId);
   const selected = document.targetId
     ? {
@@ -1430,7 +1448,12 @@ function ContentEditor({
         aria-label={t('library.resourceDetails')}
         aria-busy={editorUnavailable}
       >
-        <EditorFrame
+        <EditorStudio
+          label={t('native.text_b891876a9a')}
+          sections={sections}
+          value={section}
+          onSelect={selectSection}
+          idPrefix={sectionId}
           header={
             <div className="library-detail-heading">
               {headerLeading}
@@ -1459,7 +1482,7 @@ function ContentEditor({
                 />
               </h2>
               <div className="library-detail-actions">
-                <ResourceEditorActions value={shared} hideSyncError />
+                <ResourceEditorActions value={shared} commands={commands} hideSyncError />
                 {selected?.kind === 'bot' && onStartStory && (
                   <button
                     type="button"
@@ -1500,6 +1523,7 @@ function ContentEditor({
                   onClick={state.creationPending ? () => void saveContent() : undefined}
                 />
                 <LibraryItemMenu title={t('library.resourceMenu')}>
+                  <ResourceEditorMenuActions commands={commands} />
                   <div className="action-menu-group">
                     {(['bot', 'persona', 'module'] as const)
                       .filter((role) => role !== value.kind)
@@ -1573,6 +1597,9 @@ function ContentEditor({
             <fieldset className="editor-fields full" disabled={editorUnavailable}>
               <RisuNativeFields
                 anchor={anchor}
+                section={section}
+                onSelect={selectSection}
+                idPrefix={sectionId}
                 value={value.package}
                 onChange={(pkg) =>
                   setValue((current) => ({ ...current, title: pkg.title, package: pkg }))
@@ -1594,7 +1621,7 @@ function ContentEditor({
               </NoticeBanner>
             )}
           </form>
-        </EditorFrame>
+        </EditorStudio>
       </section>
     </ResourceEditorProvider>
   );

@@ -2,7 +2,7 @@ import { nativeContent } from './fixtures/native-content.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
-import { createLibraryContent, editLibraryContent } from './ui-navigation.js';
+import { createLibraryContent, editLibraryContent, selectEditorSection } from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { Content } from '../core/product.js';
 
@@ -107,7 +107,7 @@ test('LUSE04 standalone module navigation omits bot-only panes and retains its s
   await panel.getByRole('tab', { name: '모듈', exact: true }).click();
   await panel.getByLabel('서재 검색', { exact: true }).fill(title);
   await editLibraryContent(page, title);
-  await panel.getByRole('tab', { name: '고급 설정', exact: true }).click();
+  await selectEditorSection(panel, '고급 설정');
   const navigation = panel.getByRole('group', { name: '고급 설정 영역', exact: true });
   await expect(navigation.getByRole('button', { name: '추가 지침', exact: true })).toHaveCount(0);
   await expect(

@@ -9,8 +9,8 @@ import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import {
   editLibraryContent,
   navigationAction,
-  selectPackageSection,
   editorTab,
+  selectEditorSection,
 } from './ui-navigation.js';
 import { browserPath } from '../scripts/browser-path.mjs';
 import { waitForContentSave } from './fixtures/resource-save.js';
@@ -52,73 +52,98 @@ async function openBot(page: Page, title: string) {
 
 function frameGeometry(page: Page) {
   return page.evaluate(() => {
+    const element = (selector: string) => document.querySelector<HTMLElement>(selector)!;
     const box = (selector: string) => {
-      const rect = document.querySelector(selector)!.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, width: rect.width };
+      const rect = element(selector).getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
     };
-    const scroll = document.querySelector<HTMLElement>('.destination-scroll')!;
+    const scroll = element('.destination-scroll');
+    const canvas = element('.editor-studio-canvas');
     return {
-      gutter: scroll.offsetWidth - scroll.clientWidth,
-      header: box('.editor-frame-top > :first-child'),
-      tabs: box('.editor-frame-tabs'),
+      header: box('.editor-studio-header > :first-child'),
+      rail: box('.editor-studio-rail'),
+      canvas: box('.editor-studio-canvas'),
       body: box('.library-page [role="tabpanel"]:not([hidden])'),
+      viewport: window.innerHeight,
       outerOverflow: scroll.scrollHeight - scroll.clientHeight,
+      outerScrollTop: scroll.scrollTop,
+      canvasOverflow: canvas.scrollHeight - canvas.clientHeight,
+      canvasScrollTop: canvas.scrollTop,
       documentOverflow: document.documentElement.scrollHeight - window.innerHeight,
     };
   });
 }
 
-async function checkFrame(page: Page, tabs: string[], panes: string[]) {
+async function checkFrame(page: Page, sections: string[], panes: string[]) {
   const first = await frameGeometry(page);
-  for (const name of tabs) {
-    await editorTab(page, name).click();
-    await expect(editorTab(page, name)).toHaveAttribute('aria-selected', 'true');
+  expect(first.canvas.top + first.canvas.height, 'canvas reaches the bottom').toBeCloseTo(
+    first.viewport,
+    0
+  );
+  expect(first.rail.height, 'rail fills the height').toBeCloseTo(first.canvas.height, 0);
+  for (const name of sections) {
+    await selectEditorSection(page, name);
     const current = await frameGeometry(page);
-    expect(current.gutter, `${name} gutter`).toBe(first.gutter);
-    for (const part of ['header', 'tabs'] as const)
+    for (const part of ['header', 'rail', 'canvas'] as const)
       for (const edge of ['left', 'top', 'width'] as const)
         expect(
           Math.abs(current[part][edge] - first[part][edge]),
           `${name} ${part} ${edge}`
         ).toBeLessThanOrEqual(1);
-    expect(
-      Math.abs(current.body.left - current.tabs.left),
-      `${name} body left`
-    ).toBeLessThanOrEqual(1);
+    expect(current.body.left, `${name} body left`).toBeGreaterThanOrEqual(current.canvas.left - 1);
     expect(current.documentOverflow, `${name} document`).toBeLessThanOrEqual(0);
+    expect(current.outerOverflow, `${name} outer scroll`).toBeLessThanOrEqual(0);
+    expect(current.canvasScrollTop, `${name} canvas starts at the top`).toBe(0);
     if (panes.includes(name))
-      expect(current.outerOverflow, `${name} outer scroll`).toBeLessThanOrEqual(1);
+      expect(current.canvasOverflow, `${name} canvas scroll`).toBeLessThanOrEqual(1);
   }
+}
+
+async function seedLongPrompt(request: APIRequestContext, title: string) {
+  const program = createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT, 'main');
+  const blocks = program.nativeRisuPreset.preset.promptTemplate as Record<string, unknown>[];
+  while (blocks.length < 45)
+    blocks.push({
+      type: 'plain',
+      role: 'system',
+      name: `합성 블록 ${blocks.length + 1}`,
+      text: '합성 지시문 '.repeat(40),
+    });
+  const prompt = await request.post('/api/prompt-presets', {
+    data: { title, role: 'main', program, values: {} },
+  });
+  expect(prompt.ok(), await prompt.text()).toBe(true);
 }
 
 for (const [width, height] of [
   [1440, 900],
   [DESKTOP_WIDTH, DESKTOP_HEIGHT],
 ] as const) {
-  test(`EFRAME01 ${width}px resource and prompt editors keep one frame across tabs`, async ({
+  test(`EFRAME01 ${width}px resource and prompt editors keep one frame with a section rail and scroll inside their panes`, async ({
     page,
     request,
   }) => {
     test.setTimeout(60000);
     const title = `EFRAME01 ${width} ${randomUUID().slice(0, 8)}`;
     await seedBot(request, title, ['둘째 인사']);
-    const prompt = await request.post('/api/prompt-presets', {
-      data: {
-        title: `${title} 프롬프트`,
-        role: 'main',
-        program: createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT, 'main'),
-        values: {},
-      },
-    });
-    expect(prompt.ok(), await prompt.text()).toBe(true);
+    await seedLongPrompt(request, `${title} 프롬프트`);
     await page.setViewportSize({ width, height });
     await openBot(page, title);
+    const rail = page.getByRole('tablist', { name: '자료 편집 영역', exact: true });
+    await expect(rail).toHaveAttribute('aria-orientation', 'vertical');
+    await editorTab(rail, '기본 정보').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(editorTab(rail, '첫 메시지')).toBeFocused();
+    await expect(editorTab(rail, '첫 메시지')).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Home');
+    await expect(editorTab(rail, '기본 정보')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByLabel('편집 영역 선택', { exact: true })).toHaveCount(0);
     await checkFrame(
       page,
       ['기본 정보', '첫 메시지', '로어북', '에셋', '번역 지침', '고급 설정'],
       ['첫 메시지', '로어북', '고급 설정']
     );
-    await page.getByRole('tab', { name: '기본 정보', exact: true }).click();
+    await selectEditorSection(page, '기본 정보');
     await navigationAction(page, '프롬프트');
     await page.getByLabel('프롬프트 검색', { exact: true }).fill(`${title} 프롬프트`);
     await page
@@ -128,6 +153,17 @@ for (const [width, height] of [
       `${title} 프롬프트`
     );
     await checkFrame(page, ['구성', '기본 옵션', '변수와 토글', '정규식', '협업'], ['구성']);
+    await selectEditorSection(page, '구성');
+    const list = page.getByRole('complementary', { name: '프롬프트 블록 목록', exact: true });
+    await list.getByRole('button', { name: /^37\. 합성 블록 37/u }).click();
+    const heading = page.locator('.native-item-detail h3');
+    await expect(heading).toHaveText('합성 블록 37');
+    await expect(heading).toBeInViewport();
+    const geometry = await frameGeometry(page);
+    expect(geometry.canvasScrollTop, 'canvas stays at the top').toBe(0);
+    expect(geometry.canvasOverflow, 'canvas does not scroll').toBeLessThanOrEqual(1);
+    expect(geometry.outerScrollTop, 'page stays at the top').toBe(0);
+    expect(await list.evaluate((node) => node.scrollTop), 'list scrolls itself').toBeGreaterThan(0);
   });
 }
 
@@ -139,14 +175,14 @@ test('EFRAME02 save is emphasized only with unsaved changes and chat start stays
   await seedBot(request, title);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
-  const header = page.locator('.editor-frame-top');
+  const header = page.locator('.editor-studio-header');
   const save = header.getByRole('button', { name: '변경사항 저장', exact: true });
   const start = header.getByRole('button', { name: '채팅 시작', exact: true });
   await expect(save).toBeDisabled();
   await expect(start).toBeEnabled();
-  await editorTab(page, '로어북').click();
+  await selectEditorSection(page, '로어북');
   await expect(start).toBeInViewport();
-  await page.getByRole('tab', { name: '기본 정보', exact: true }).click();
+  await selectEditorSection(page, '기본 정보');
   await page.getByLabel('Risu 자료 이름', { exact: true }).fill(`${title} 수정`);
   await expect(header.locator('.resource-editor-status').getByRole('status')).toHaveText(
     '미저장 변경'
@@ -166,7 +202,7 @@ test('EFRAME03 first messages use one label, remember the monospace choice and h
   await seedBot(request, title);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
-  await selectPackageSection(page, '첫 메시지');
+  await selectEditorSection(page, '첫 메시지');
   const text = page.getByLabel('기본 첫 메시지', { exact: true });
   await expect(text).toHaveValue('<div class="intro">{{char}}</div>');
   await expect(page.locator('label').filter({ hasText: '기본 첫 메시지' })).toHaveCount(0);
@@ -180,7 +216,7 @@ test('EFRAME03 first messages use one label, remember the monospace choice and h
   expect(await font()).toMatch(/monospace/);
   expect(await font()).not.toBe(bodyFont);
   await openBot(page, title);
-  await selectPackageSection(page, '첫 메시지');
+  await selectEditorSection(page, '첫 메시지');
   await expect(page.getByRole('button', { name: '고정폭 글꼴', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true'
@@ -197,7 +233,7 @@ test('EFRAME04 dropping image files on the asset area uses the upload validation
   await seedBot(request, title);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
-  await selectPackageSection(page, '에셋');
+  await selectEditorSection(page, '에셋');
   const image = await sharp({
     create: { width: 40, height: 30, channels: 3, background: { r: 200, g: 80, b: 40 } },
   })
@@ -309,12 +345,12 @@ test('EFRAME05 collection tabs name their current counts and follow local edits'
   await expect(tabs.getByRole('tab', { name: '로어북 30개', exact: true })).toBeVisible();
   await expect(tabs.getByRole('tab', { name: '에셋', exact: true })).toHaveText('에셋');
   await expect(tabs.getByRole('tab', { name: '기본 정보', exact: true })).toHaveText('기본 정보');
-  await selectPackageSection(page, '첫 메시지');
+  await selectEditorSection(page, '첫 메시지');
   await page.getByRole('button', { name: '첫 메시지 추가', exact: true }).first().click();
   await expect(tabs.getByRole('tab', { name: '첫 메시지 3개', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '선택한 첫 메시지 삭제', exact: true }).click();
   await expect(tabs.getByRole('tab', { name: '첫 메시지 2개', exact: true })).toBeVisible();
-  await selectPackageSection(page, '에셋');
+  await selectEditorSection(page, '에셋');
   await dropImages(page, ['count_a', 'count_b']);
   await expect(tabs.getByRole('tab', { name: '에셋 2개', exact: true })).toHaveText('에셋2');
 });
@@ -381,7 +417,7 @@ test('EFRAME07 the asset grid keeps its columns, shows an inspector hint and off
   await seedBot(request, title);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
-  await selectPackageSection(page, '에셋');
+  await selectEditorSection(page, '에셋');
   const inspector = page.getByRole('complementary', { name: '선택한 에셋', exact: true });
   await expect(inspector).toHaveText('에셋을 선택하면 이름과 설명을 편집할 수 있어요.');
   await dropImages(page, ['tile_a', 'tile_b', 'tile_c', 'tile_d']);
@@ -455,7 +491,7 @@ test('EFRAME08 first-message previews show readable text instead of template cod
   ]);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
-  await selectPackageSection(page, '첫 메시지');
+  await selectEditorSection(page, '첫 메시지');
   const list = page.getByRole('complementary', { name: '첫 메시지 목록', exact: true });
   const rows = list.locator(':scope > button');
   await expect(rows.nth(0).locator('small')).toHaveText('코드만 있는 메시지');
@@ -487,35 +523,82 @@ test('EFRAME09 prompt blocks show role chips, a block count and per-block charac
   await capture(page, 'eframe09-blocks-1440');
 });
 
-test('EFRAME10 the phone header keeps its height with the inline name and tab counts', async ({
-  page,
-  request,
-}) => {
-  const title = `EFRAME10 ${randomUUID().slice(0, 8)}`;
-  await seedBot(request, title, ['둘째 인사']);
-  await page.setViewportSize({ width: 412, height: 915 });
-  await openBot(page, title);
-  const sizes = await page.evaluate(() => {
-    const height = (selector: string) =>
-      document.querySelector(selector)!.getBoundingClientRect().height;
+function headerRow(page: Page) {
+  return page.locator('.editor-studio-header > .library-detail-heading').evaluate((row) => {
+    const box = row.getBoundingClientRect();
+    const controls = [...row.querySelectorAll<HTMLElement>('button, input, summary')]
+      .filter((node) => node.checkVisibility({ checkVisibilityCSS: true }))
+      .map((node) => {
+        const rect = node.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom, middle: rect.top + rect.height / 2 };
+      })
+      .filter((rect) => rect.bottom - rect.top > 2);
     return {
-      header: height('.editor-frame-top > .library-detail-heading'),
-      tabs: height('.editor-frame-tabs'),
+      height: box.height,
+      controls: controls.length,
+      middles: controls.map((rect) => rect.middle),
       overflow: document.documentElement.scrollWidth - window.innerWidth,
     };
   });
-  expect(sizes.header).toBeLessThanOrEqual(113);
-  expect(sizes.tabs).toBeLessThanOrEqual(56);
-  expect(sizes.overflow).toBeLessThanOrEqual(0);
-  await expect(page.getByLabel('봇 이름', { exact: true })).toBeVisible();
-  await capture(page, 'eframe10-basic-412');
-  await selectPackageSection(page, '첫 메시지');
-  await capture(page, 'eframe10-greetings-412');
-  await selectPackageSection(page, '에셋');
-  await capture(page, 'eframe10-assets-412');
-});
+}
 
-test('EFRAME11 basic info and assets fit every sidebar width without horizontal overflow', async ({
+async function expectOneRow(page: Page, label: string) {
+  const row = await headerRow(page);
+  expect(row.height, `${label} header height`).toBeLessThanOrEqual(59);
+  expect(row.controls, `${label} header controls`).toBeGreaterThanOrEqual(5);
+  expect(
+    Math.max(...row.middles) - Math.min(...row.middles),
+    `${label} controls share one row`
+  ).toBeLessThanOrEqual(2);
+  expect(row.overflow, `${label} horizontal overflow`).toBeLessThanOrEqual(0);
+}
+
+for (const width of [360, 412]) {
+  test(`EFRAME10 ${width}px the phone header stays in one row and sections open from one picker`, async ({
+    page,
+    request,
+  }) => {
+    const title = `EFRAME10 ${width} ${randomUUID().slice(0, 8)}`;
+    await seedBot(request, title, ['둘째 인사']);
+    await page.setViewportSize({ width, height: 844 });
+    await openBot(page, title);
+    await expectOneRow(page, 'saved');
+    await expect(page.getByRole('tab')).toHaveCount(0);
+    const picker = page.getByLabel('편집 영역 선택', { exact: true });
+    expect((await picker.boundingBox())!.height).toBeLessThanOrEqual(44);
+    await expect(picker.locator('.editor-studio-picker-current')).toHaveText('기본 정보');
+    await capture(page, `eframe10-basic-${width}`);
+    await picker.click();
+    const sheet = page.getByRole('navigation', { name: '자료 편집 영역', exact: true });
+    await expect(sheet.getByRole('button', { name: '기본 정보', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    await sheet.getByRole('button', { name: '첫 메시지 2개', exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(picker).toBeFocused();
+    await expect(picker.locator('.editor-studio-picker-current')).toHaveText('첫 메시지2');
+    await expect(page.getByLabel('기본 첫 메시지', { exact: true })).toBeVisible();
+    await capture(page, `eframe10-greetings-${width}`);
+    await page.keyboard.press('Enter');
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(picker).toBeFocused();
+
+    const name = page.getByLabel('봇 이름', { exact: true });
+    await name.fill(`${title} 수정`);
+    await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
+    await expectOneRow(page, 'dirty');
+    await expect(page.getByRole('button', { name: '편집 취소', exact: true })).toHaveCount(0);
+    await page.getByLabel('자료 메뉴', { exact: true }).click();
+    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    await expect(name).toHaveValue(title);
+    await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeDisabled();
+  });
+}
+
+test('EFRAME11 basic info and assets fit every expanded sidebar width without horizontal overflow', async ({
   page,
   request,
 }) => {
@@ -524,26 +607,86 @@ test('EFRAME11 basic info and assets fit every sidebar width without horizontal 
   await seedBot(request, title);
   await page.setViewportSize({ width: 1024, height: 800 });
   await openBot(page, title);
-  await selectPackageSection(page, '에셋');
+  await selectEditorSection(page, '에셋');
   await dropImages(page, ['wide_a', 'wide_b', 'wide_c']);
   const saved = waitForContentSave(page);
   await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   await saved;
   const overflow = () =>
-    page.evaluate(() => ({
-      document: document.documentElement.scrollWidth - window.innerWidth,
-      scroll: (() => {
-        const node = document.querySelector<HTMLElement>('.destination-scroll')!;
+    page.evaluate(() => {
+      const excess = (selector: string) => {
+        const node = document.querySelector<HTMLElement>(selector)!;
         return node.scrollWidth - node.clientWidth;
-      })(),
-    }));
+      };
+      return {
+        document: document.documentElement.scrollWidth - window.innerWidth,
+        scroll: excess('.destination-scroll'),
+        canvas: excess('.editor-studio-canvas'),
+      };
+    });
+  const shell = page.locator('.app-shell');
   for (const width of ['248', '320', '400']) {
     await page.evaluate((value) => localStorage.setItem('uimori:sidebar-width', value), width);
     await openBot(page, title);
+    await expect(shell).toHaveClass(/sidebar-collapsed/);
+    await page.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
+    await expect(shell).not.toHaveClass(/sidebar-collapsed/);
     for (const section of ['기본 정보', '에셋']) {
-      await selectPackageSection(page, section);
-      expect(await overflow(), `${width} ${section}`).toEqual({ document: 0, scroll: 0 });
+      await selectEditorSection(page, section);
+      expect(await overflow(), `${width} ${section}`).toEqual({
+        document: 0,
+        scroll: 0,
+        canvas: 0,
+      });
     }
     await capture(page, `eframe11-assets-sidebar-${width}`);
   }
+});
+
+test('EFRAME12 an open editor collapses the sidebar without changing the saved choice', async ({
+  page,
+  request,
+}) => {
+  const title = `EFRAME12 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title);
+  await seedLongPrompt(request, `${title} 프롬프트`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  const shell = page.locator('.app-shell');
+  const saved = () => page.evaluate(() => localStorage.getItem('uimori:sidebar-collapsed'));
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  const initial = await saved();
+  expect(initial).not.toBe('true');
+
+  await openBot(page, title);
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  expect(await saved()).toBe(initial);
+  await page.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  await expect(page.getByLabel('봇 이름', { exact: true })).toHaveValue(title);
+  await page.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  expect(await saved()).toBe(initial);
+  await page.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  expect(await saved()).toBe(initial);
+
+  await navigationAction(page, '프롬프트');
+  await page.getByLabel('프롬프트 검색', { exact: true }).fill(`${title} 프롬프트`);
+  await page.getByRole('button', { name: `${title} 프롬프트 프롬프트 편집`, exact: true }).click();
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
+  await expect(shell).not.toHaveClass(/sidebar-collapsed/);
+  expect(await saved()).toBe(initial);
+
+  await page.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  expect(await saved()).toBe('true');
+  await navigationAction(page, '서재');
+  await page.getByTestId('library-panel').getByLabel('서재 검색', { exact: true }).fill(title);
+  await editLibraryContent(page, title);
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  await page.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await expect(shell).toHaveClass(/sidebar-collapsed/);
+  expect(await saved()).toBe('true');
 });

@@ -2,7 +2,7 @@ import { expect, test, type Locator } from '@playwright/test';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { isResourceSaveRequest } from './fixtures/resource-save.js';
-import { navigationAction } from './ui-navigation.js';
+import { navigationAction, selectEditorSection } from './ui-navigation.js';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
@@ -347,10 +347,10 @@ test('SHORTCUT07 Ctrl+S in the prompt editor shows what clicking save shows whil
   const title = editor.getByLabel('프롬프트 이름', { exact: true });
   const role = editor.getByLabel('프롬프트 역할', { exact: true });
   const suffix = Date.now();
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await title.fill(`단축키 집필 ${suffix}`);
   await role.selectOption('translation');
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await title.fill(`단축키 번역 ${suffix}`);
   const saves: string[] = [];
   page.on('request', (value) => {
@@ -364,7 +364,7 @@ test('SHORTCUT07 Ctrl+S in the prompt editor shows what clicking save shows whil
   await expect.poll(() => saves.length).toBe(1);
 
   await role.selectOption('main');
-  await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await selectEditorSection(editor, '기본 옵션');
   await expect(title).toHaveValue(`단축키 집필 ${suffix}`);
   await expect(saved).toBeHidden();
   await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();

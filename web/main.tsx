@@ -619,6 +619,8 @@ function App() {
   );
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [panelSidebarExpanded, setPanelSidebarExpanded] = useState(false);
+  const [libraryEditorOpen, setLibraryEditorOpen] = useState(false);
+  const [editorSidebarExpanded, setEditorSidebarExpanded] = useState(false);
   const [readingWidth, setReadingWidth] = useState(() =>
     readPresentationChoice(storageKeys.readingWidth, READING_WIDTHS, 880)
   );
@@ -667,7 +669,10 @@ function App() {
     viewportWidth >= dockBesideRail &&
     viewportWidth < dockBesideSidebar &&
     !panelSidebarExpanded;
-  const sidebarHidden = sidebarCollapsed || (!helperWorkspaceOpen && autoCollapseSidebar);
+  const editorNeedsRoom = !compact && s.destination === 'library' && libraryEditorOpen;
+  const editorCollapsesSidebar = editorNeedsRoom && !editorSidebarExpanded;
+  const sidebarHidden =
+    sidebarCollapsed || (!helperWorkspaceOpen && (autoCollapseSidebar || editorCollapsesSidebar));
   const panelModal =
     viewportWidth < dockBesideRail || (!sidebarHidden && viewportWidth < dockBesideSidebar);
   const shownNavigationWidth =
@@ -679,6 +684,9 @@ function App() {
   useEffect(() => {
     if (!workspacePanelOpen) setPanelSidebarExpanded(false);
   }, [workspacePanelOpen]);
+  useEffect(() => {
+    if (!editorNeedsRoom) setEditorSidebarExpanded(false);
+  }, [editorNeedsRoom]);
   const panelRestorePending = useRef(
     restoredPanel === 'outline' || restoredPanel === 'options' || restoredPanel === 'board'
   );
@@ -1229,11 +1237,15 @@ function App() {
     setPanel('tasks');
   }
   const toggleSidebar = () => {
-    if (!helperWorkspaceOpen && autoCollapseSidebar && !sidebarCollapsed)
+    if (!helperWorkspaceOpen && !sidebarCollapsed && editorNeedsRoom) {
+      setEditorSidebarExpanded(editorCollapsesSidebar);
+      if (autoCollapseSidebar) setPanelSidebarExpanded(true);
+    } else if (!helperWorkspaceOpen && autoCollapseSidebar && !sidebarCollapsed)
       setPanelSidebarExpanded(true);
     else {
       setSidebarCollapsed(!sidebarCollapsed);
       setPanelSidebarExpanded(false);
+      setEditorSidebarExpanded(sidebarCollapsed && editorNeedsRoom);
     }
   };
   const selectChat = useStableHandler(select);
@@ -2023,6 +2035,7 @@ function App() {
                   reload={s.loadLibrary}
                   onError={s.setError}
                   onDirtyChange={setLibraryDirty}
+                  onEditingChange={setLibraryEditorOpen}
                 />
               ) : (
                 workspaceFallback(
@@ -2060,6 +2073,7 @@ function App() {
                 }
                 onTabChange={setLibraryTab}
                 onDirtyChange={setLibraryDirty}
+                onEditingChange={setLibraryEditorOpen}
               />
             )}
             <DismissibleError
