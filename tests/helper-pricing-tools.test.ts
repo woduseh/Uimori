@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import type { ModelPreset } from '../core/product.js';
+import type { WireRecord } from '../core/transport.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -191,17 +192,29 @@ test('backfill prices only the calls recorded without a price and marks them as 
   });
 });
 
-test('helper reads and updates the judgment provider price through the role settings revision', () => {
-  const { store, model } = fixture();
-  const judgmentPricing = {
-    mode: 'manual',
-    rates: { input: 0.042, output: 0, cacheRead: null, cacheWrite: null },
-    sourceUrl: 'https://docs.typesafe.ai/models',
-    checkedAt: '2026-11-25',
+const jevPricing = {
+  mode: 'manual',
+  rates: { input: 0.042, output: 0, cacheRead: null, cacheWrite: null },
+  sourceUrl: 'https://docs.typesafe.ai/models',
+  checkedAt: '2026-11-25',
+};
+const jevTarget = { provider: 'typesafe', modelId: 'jev-latest' };
+
+test('helper reads and updates judgment prices per target through the role settings revision', () => {
+  const { store, model, connection } = fixture();
+  const gatewayTarget = {
+    provider: 'openai-compatible',
+    modelId: 'synthetic/decisions',
+    connectionId: connection.id,
   };
-  const before = call(store, 'model.pricing.read', { judgment: true });
+  const gatewayPricing = {
+    ...jevPricing,
+    rates: { input: 1, output: 0, cacheRead: 0.1, cacheWrite: null },
+  };
+  const before = call(store, 'model.pricing.read', { judgment: true }) as { revision: number };
   expect(before).toMatchObject({
     judgment: true,
+    current: true,
     provider: 'typesafe',
     providerModelId: 'jev-latest',
     providerHost: 'api.typesafe.ai',
@@ -209,57 +222,187 @@ test('helper reads and updates the judgment provider price through the role sett
     rateFields: ['input', 'output'],
     pricing: null,
     effective: null,
+    judgmentTarget: jevTarget,
+    storedTargets: [],
   });
-  const revision = (before as { revision: number }).revision;
+  const revision = before.revision;
   for (const body of [
-    { pricing: { mode: 'manual', rates: judgmentPricing.rates } },
-    {
-      pricing: {
-        ...judgmentPricing,
-        rates: { ...judgmentPricing.rates, cacheRead: 0.01 },
-      },
-    },
+    { pricing: { mode: 'manual', rates: jevPricing.rates } },
+    { pricing: { ...jevPricing, rates: { ...jevPricing.rates, cacheRead: 0.01 } } },
     { pricing: { mode: 'official' } },
-    { pricing: judgmentPricing, modelId: model.id },
+    { pricing: jevPricing, modelId: model.id },
+    { pricing: jevPricing, judgmentTarget: { ...gatewayTarget, connectionId: 'missing' } },
+    { pricing: jevPricing, judgmentTarget: { provider: 'openai', modelId: 'other' } },
+    { pricing: jevPricing, expectedRevision: revision + 1 },
   ])
     expect(() =>
-      call(store, 'model.pricing.update', {
-        judgment: true,
-        expectedRevision: revision,
-        ...body,
-      })
+      call(store, 'model.pricing.update', { judgment: true, expectedRevision: revision, ...body })
     ).toThrow();
-  expect(() =>
+  expect(
     call(store, 'model.pricing.update', {
       judgment: true,
-      expectedRevision: revision + 1,
-      pricing: judgmentPricing,
+      expectedRevision: revision,
+      pricing: jevPricing,
     })
-  ).toThrow();
-  const updated = call(store, 'model.pricing.update', {
-    judgment: true,
-    expectedRevision: revision,
-    pricing: judgmentPricing,
-  });
-  expect(updated).toMatchObject({
+  ).toMatchObject({
     revision: revision + 1,
-    pricing: judgmentPricing,
-    effective: {
-      source: 'manual',
-      rates: judgmentPricing.rates,
-      modelId: 'jev-latest',
-    },
+    current: true,
+    pricing: jevPricing,
+    effective: { source: 'manual', rates: jevPricing.rates, modelId: 'jev-latest' },
   });
-  expect(modelWorkspace(store).judgment).toEqual({
-    provider: 'typesafe',
-    pricing: judgmentPricing,
+  const gateway = call(store, 'model.pricing.update', {
+    judgment: true,
+    judgmentTarget: gatewayTarget,
+    expectedRevision: revision + 1,
+    pricing: gatewayPricing,
+  });
+  expect(gateway).toMatchObject({
+    current: false,
+    provider: 'openai-compatible',
+    connectionTitle: 'Direct provider',
+    providerHost: 'private.example',
+    rateFields: ['input', 'cacheRead', 'output'],
+    pricing: gatewayPricing,
+    storedTargets: [
+      { judgmentTarget: jevTarget, providerHost: 'api.typesafe.ai', pricing: jevPricing },
+      {
+        judgmentTarget: gatewayTarget,
+        connectionTitle: 'Direct provider',
+        pricing: gatewayPricing,
+      },
+    ],
+  });
+  expect(modelWorkspace(store)).toMatchObject({
+    judgment: { provider: 'typesafe' },
+    judgmentPricing: [
+      { ...jevTarget, pricing: jevPricing },
+      { ...gatewayTarget, pricing: gatewayPricing },
+    ],
   });
   expect(store.product.get<ModelPreset>('model', model.id)).toEqual(model);
   call(store, 'model.pricing.update', {
     judgment: true,
-    expectedRevision: revision + 1,
+    expectedRevision: revision + 2,
     pricing: null,
   });
-  expect(modelWorkspace(store).judgment).toEqual({ provider: 'typesafe' });
-  expect(() => call(store, 'model.pricing.backfill', { judgment: true })).toThrow();
+  expect(modelWorkspace(store).judgmentPricing).toEqual([
+    { ...gatewayTarget, pricing: gatewayPricing },
+  ]);
+});
+
+test('judgment backfill prices only the unpriced judgment calls of the matching target, once', () => {
+  const { store, model, connection } = fixture();
+  const chat = createFixtureChat(store, 'Judgment backfill');
+  const call_ = (
+    wire: Partial<WireRecord> & Pick<WireRecord, 'protocol' | 'connectionId' | 'modelId'>,
+    inputTokens: number
+  ) => {
+    const id = store.product.startAttempt(chat.id, null, null, {
+      role: 'main',
+      method: 'POST',
+      url: 'https://provider.invalid',
+      headers: {},
+      body: {},
+      bodySha256: 'synthetic',
+      stablePrefixSha256: 'synthetic',
+      ...wire,
+    });
+    store.product.finishAttempt(id, {
+      status: 'completed',
+      text: '',
+      toolCalls: [],
+      refusal: null,
+      error: null,
+      opaqueState: null,
+      usage: {
+        inputTokens,
+        outputTokens: 0,
+        costUsd: null,
+        priceRevision: null,
+        raw: { input_tokens: inputTokens, output_tokens: 0 },
+      },
+    });
+    return id;
+  };
+  const judgment = { kind: 'main-refusal' as const, inputHash: 'a'.repeat(64) };
+  const jev = {
+    protocol: 'typesafe-systemone-v1' as const,
+    connectionId: 'typesafe-judgment',
+    modelId: 'jev-latest',
+    judgment,
+  };
+  const estimate = (id: string) =>
+    store.db
+      .prepare(
+        "SELECT estimate_status AS status,estimated_usd AS usd,json_extract(response,'$.estimatedCost.notes') AS notes FROM attempts WHERE id=?"
+      )
+      .get(id);
+  const unpricedJev = call_(jev, 1_000_000);
+  const otherTarget = call_(
+    {
+      protocol: 'openai-compatible-decisions-v1',
+      connectionId: connection.id,
+      modelId: 'jev-latest',
+      judgment,
+    },
+    1_000_000
+  );
+  const chatCall = call_(
+    { protocol: 'openai-chat-v1', connectionId: connection.id, modelId: model.modelId },
+    1_000_000
+  );
+  const alreadyPriced = call_(
+    {
+      ...jev,
+      pricingSnapshot: {
+        version: 1,
+        protocol: 'typesafe-systemone-v1',
+        modelId: 'jev-latest',
+        source: 'manual',
+        checkedAt: '2026-11-01',
+        serviceTier: 'default',
+        rates: { input: 0.5, output: 0, cacheRead: null, cacheWrite: null },
+        notes: [],
+      },
+    },
+    1_000_000
+  );
+  expect(() => call(store, 'model.pricing.backfill', { judgment: true })).toThrow(
+    'PRICING_UNAVAILABLE'
+  );
+  const { revision } = call(store, 'model.pricing.read', { judgment: true }) as {
+    revision: number;
+  };
+  call(store, 'model.pricing.update', {
+    judgment: true,
+    expectedRevision: revision,
+    pricing: jevPricing,
+  });
+  call(store, 'model.pricing.update', {
+    modelId: model.id,
+    expectedRevision: model.revision,
+    pricing,
+  });
+  expect(call(store, 'model.pricing.backfill', { judgment: true })).toMatchObject({
+    judgment: true,
+    provider: 'typesafe',
+    unpricedCalls: 1,
+    estimatedCalls: 1,
+    partialCalls: 0,
+    stillUnknownCalls: 0,
+    addedUsd: 0.042,
+  });
+  expect(estimate(unpricedJev)).toEqual({
+    status: 'estimated',
+    usd: 0.042,
+    notes: '["PRICED_AFTER_CALL"]',
+  });
+  expect(estimate(otherTarget)).toMatchObject({ status: 'unavailable', usd: null });
+  expect(estimate(chatCall)).toMatchObject({ status: 'unavailable', usd: null });
+  expect(estimate(alreadyPriced)).toMatchObject({ status: 'estimated', usd: 0.5 });
+  expect(call(store, 'model.pricing.backfill', { judgment: true })).toMatchObject({
+    unpricedCalls: 0,
+    addedUsd: 0,
+  });
+  expect(estimate(unpricedJev)).toMatchObject({ status: 'estimated', usd: 0.042 });
 });

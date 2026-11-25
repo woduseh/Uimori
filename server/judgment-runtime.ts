@@ -1,7 +1,12 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { Connection } from '../core/product.js';
 import type { WireRecord } from '../core/transport.js';
-import { isJudgmentConnection, judgmentPricingSnapshot } from '../core/judgment-settings.js';
+import {
+  isJudgmentConnection,
+  judgmentPriceFor,
+  judgmentPriceTarget,
+  judgmentPricingSnapshot,
+} from '../core/judgment-settings.js';
 import {
   DEFAULT_JUDGMENT_TARGET,
   JudgmentError,
@@ -10,7 +15,7 @@ import {
 } from './judgment.js';
 import { JevCredentialStore } from './jev-credentials.js';
 import { jevSettings } from './jev-settings.js';
-import { judgmentSelection } from './prompt-workspace.js';
+import { judgmentSettings } from './prompt-workspace.js';
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 
@@ -18,8 +23,9 @@ export function judgmentRuntime(
   store: Store,
   legacyCredential?: JudgmentHooks['credential']
 ): Pick<JudgmentHooks, 'target' | 'credential' | 'settings' | 'pricingSnapshot'> {
-  const selection = judgmentSelection(store);
-  const pricingSnapshot = judgmentPricingSnapshot(selection);
+  const { selection, prices } = judgmentSettings(store);
+  const target = judgmentPriceTarget(selection);
+  const pricingSnapshot = judgmentPricingSnapshot(target, judgmentPriceFor(prices, target));
   const pricing = pricingSnapshot ? { pricingSnapshot } : {};
   if (selection.provider === 'typesafe')
     return {

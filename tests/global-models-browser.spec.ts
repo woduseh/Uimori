@@ -992,16 +992,14 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
   ).toHaveText('판단 모델');
 });
 
-test('JDGUI02 registers a judgment provider price with an explicit free output rate and keeps it after reopening', async ({
+test('JDGUI02 keeps a judgment price per provider, restores it when switching back and saves explicit free output', async ({
   page,
   request,
 }, info) => {
   const before = await models(request);
-  const editor = page.getByRole('region', {
-    name: '역할별 모델 설정',
-    exact: true,
-  });
+  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
   const pricing = editor.getByTestId('judgment-pricing-editor');
+  const provider = editor.getByLabel('판단 프로바이더', { exact: true });
   const open = async () => {
     await page.goto('/');
     await navigationAction(page, '설정');
@@ -1013,20 +1011,12 @@ test('JDGUI02 registers a judgment provider price with an explicit free output r
     await pricing.locator('summary').first().click();
   };
   await open();
-  const input = pricing.getByLabel('판단 프로바이더 입력 요금', {
-    exact: true,
-  });
-  const output = pricing.getByLabel('판단 프로바이더 출력 요금', {
-    exact: true,
-  });
-  const save = editor.getByRole('button', {
-    name: '역할별 모델 설정 저장',
-    exact: true,
-  });
+  const input = pricing.getByLabel('판단 프로바이더 입력 요금', { exact: true });
+  const output = pricing.getByLabel('판단 프로바이더 출력 요금', { exact: true });
+  const cacheRead = pricing.getByLabel('판단 프로바이더 캐시 읽기 요금', { exact: true });
+  const save = editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
   await expect(pricing).toContainText('요금 정보가 없어요');
-  await expect(pricing.getByLabel('판단 프로바이더 캐시 읽기 요금', { exact: true })).toHaveCount(
-    0
-  );
+  await expect(cacheRead).toHaveCount(0);
   await input.fill('-1');
   await expect(pricing.getByRole('alert')).toContainText('0 이상');
   await expect(save).toBeDisabled();
@@ -1035,20 +1025,39 @@ test('JDGUI02 registers a judgment provider price with an explicit free output r
   await pricing.getByLabel('요금 출처 URL').fill('https://docs.typesafe.ai/models');
   await pricing.getByLabel('요금 확인일').fill('2026-11-25');
   await expect(pricing.getByRole('alert')).toHaveCount(0);
+
+  await provider.selectOption('openai');
+  await expect(input).toHaveValue('');
+  await expect(cacheRead).toBeVisible();
+  await input.fill('1');
+  await provider.selectOption('typesafe');
+  await expect(input).toHaveValue('0.042');
+  await expect(output).toHaveValue('0');
+  await provider.selectOption('openai');
+  await expect(input).toHaveValue('1');
+  await provider.selectOption('typesafe');
   expect(await models(request)).toEqual(before);
   await save.click();
-  const judgmentPricing = {
+  const jevPricing = {
     mode: 'manual',
     rates: { input: 0.042, cacheRead: null, cacheWrite: null, output: 0 },
     sourceUrl: 'https://docs.typesafe.ai/models',
     checkedAt: '2026-11-25',
+  };
+  const openaiPricing = {
+    mode: 'manual',
+    rates: { input: 1, cacheRead: null, cacheWrite: null, output: null },
   };
   await expect
     .poll(() => models(request))
     .toEqual({
       ...before,
       revision: before.revision + 1,
-      judgment: { provider: 'typesafe', pricing: judgmentPricing },
+      judgment: { provider: 'typesafe' },
+      judgmentPricing: [
+        { provider: 'typesafe', modelId: 'jev-latest', pricing: jevPricing },
+        { provider: 'openai', modelId: 'gpt-6-luna', pricing: openaiPricing },
+      ],
     });
   await expect(save).toBeDisabled();
   await open();
@@ -1071,9 +1080,8 @@ test('JDGUI02 registers a judgment provider price with an explicit free output r
     await page.emulateMedia({ colorScheme: 'light' });
   }
 
-  await editor.getByLabel('판단 프로바이더', { exact: true }).selectOption('openai');
-  await expect(input).toHaveValue('');
-  await expect(pricing.getByLabel('판단 프로바이더 캐시 읽기 요금', { exact: true })).toBeVisible();
+  await provider.selectOption('openai');
+  await expect(input).toHaveValue('1');
+  await expect(cacheRead).toHaveValue('');
 });
-
 preservePromptWorkspace();

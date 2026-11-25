@@ -13,6 +13,11 @@ import {
   DEFAULT_JUDGMENT_SELECTION,
   OFFICIAL_JUDGMENT_MODELS,
   isJudgmentConnection,
+  judgmentPriceFor,
+  judgmentPriceKey,
+  judgmentPriceTarget,
+  type JudgmentPriceEntry,
+  type JudgmentPriceTarget,
   type JudgmentSelection,
 } from '../core/judgment-settings.js';
 import {
@@ -35,11 +40,31 @@ import { JudgmentPricingEditor, judgmentPricingPayload } from './ModelPricingEdi
 import { pricingDraft, type ModelDraft } from './provider-model-draft.js';
 import './settings-actions.css';
 
-type EditableWorkspace = ModelWorkspace & { judgmentPrice: ModelDraft['pricing'] };
+type PriceDraft = { target: JudgmentPriceTarget; draft: ModelDraft['pricing'] };
+type EditableWorkspace = ModelWorkspace & { judgmentPriceDrafts: Record<string, PriceDraft> };
 const editable = (workspace: ModelWorkspace): EditableWorkspace => ({
   ...workspace,
-  judgmentPrice: pricingDraft(workspace.judgment?.pricing),
+  judgmentPriceDrafts: Object.fromEntries(
+    (workspace.judgmentPricing ?? []).map(({ pricing, ...target }) => [
+      judgmentPriceKey(target),
+      { target, draft: pricingDraft(pricing) },
+    ])
+  ),
 });
+function judgmentPricesPayload(
+  workspace: EditableWorkspace,
+  currentKey: string
+): JudgmentPriceEntry[] | null {
+  const entries: JudgmentPriceEntry[] = [];
+  for (const [key, { target, draft }] of Object.entries(workspace.judgmentPriceDrafts)) {
+    const payload = judgmentPricingPayload(target.provider, draft);
+    const pricing =
+      payload === null ? judgmentPriceFor(workspace.judgmentPricing, target) : payload.pricing;
+    if (payload === null && key === currentKey) return null;
+    if (pricing) entries.push({ ...target, pricing });
+  }
+  return entries;
+}
 
 const judgmentProviderNames: Record<string, string> = {
   typesafe: 'TypeSafe AI / JEV',
@@ -83,6 +108,7 @@ export function ModelWorkspaceEditor({
           : editable({
               revision: workspace.revision,
               judgment: workspace.judgment ?? DEFAULT_JUDGMENT_SELECTION,
+              judgmentPricing: workspace.judgmentPricing ?? [],
               summaryLength: workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
               titleModel: workspace.titleModel ?? null,
               helperModel: workspace.helperModel ?? null,
@@ -113,8 +139,10 @@ export function ModelWorkspaceEditor({
       />
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
-  const { pricing: _savedPricing, ...judgment } = draft.judgment ?? DEFAULT_JUDGMENT_SELECTION;
-  const judgmentPrice = judgmentPricingPayload(judgment.provider, draft.judgmentPrice);
+  const judgment = draft.judgment ?? DEFAULT_JUDGMENT_SELECTION;
+  const priceTarget = judgmentPriceTarget(judgment);
+  const priceKey = judgmentPriceKey(priceTarget);
+  const judgmentPrices = judgmentPricesPayload(draft, priceKey);
   const compatible =
     judgment.provider === 'openai-compatible' || judgment.provider === 'typesafe-compatible';
   const judgmentConnections =
@@ -162,7 +190,7 @@ export function ModelWorkspaceEditor({
   const invalid =
     invalidHelperTaskTimeout ||
     invalidPreviousSceneTokens ||
-    judgmentPrice === null ||
+    judgmentPrices === null ||
     (judgmentEdited &&
       judgment.provider !== 'typesafe' &&
       (!judgmentConnection || !judgment.modelId.trim())) ||
@@ -186,7 +214,8 @@ export function ModelWorkspaceEditor({
       {
         expectedRevision: draft.revision,
         routes: draft.routes,
-        judgment: { ...judgment, ...judgmentPrice },
+        judgment,
+        judgmentPricing: judgmentPrices ?? [],
         mainJudgmentEnabled: draft.mainJudgmentEnabled === true,
         mainJudgmentThreshold: draft.mainJudgmentThreshold,
         titleModel: draft.titleModel ?? null,
@@ -226,11 +255,7 @@ export function ModelWorkspaceEditor({
   function changeJudgment(next: JudgmentSelection) {
     if (!draft) return;
     setJudgmentEdited(true);
-    change({
-      ...draft,
-      judgment: next,
-      ...(next.provider === judgment.provider ? {} : { judgmentPrice: pricingDraft() }),
-    });
+    change({ ...draft, judgment: next });
   }
   async function reload() {
     if (lock.current) return;
@@ -803,9 +828,17 @@ export function ModelWorkspaceEditor({
               </>
             )}
             <JudgmentPricingEditor
-              selection={judgment}
-              value={draft.judgmentPrice}
-              onChange={(judgmentPrice) => change({ ...draft, judgmentPrice })}
+              target={priceTarget}
+              value={draft.judgmentPriceDrafts[priceKey]?.draft ?? pricingDraft()}
+              onChange={(price) =>
+                change({
+                  ...draft,
+                  judgmentPriceDrafts: {
+                    ...draft.judgmentPriceDrafts,
+                    [priceKey]: { target: priceTarget, draft: price },
+                  },
+                })
+              }
             />
           </div>
         </details>

@@ -94,6 +94,7 @@ export type ModelWorkspace = {
   helperTaskTimeoutMinutes?: number;
   helperConfirmPaidGeneration?: boolean;
   judgment?: import('./judgment-settings.js').JudgmentSelection;
+  judgmentPricing?: import('./judgment-settings.js').JudgmentPriceEntry[];
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   mainJudgmentThreshold?: number;
   mainJudgmentEnabled?: boolean;
@@ -109,6 +110,7 @@ export type PromptWorkspace = {
   helperTaskTimeoutMinutes?: number;
   helperConfirmPaidGeneration?: boolean;
   judgment?: import('./judgment-settings.js').JudgmentSelection;
+  judgmentPricing?: import('./judgment-settings.js').JudgmentPriceEntry[];
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   mainJudgmentThreshold?: number;
   mainJudgmentEnabled?: boolean;

@@ -191,22 +191,41 @@ test('new explicit Batch snapshot uses entered Batch rates once while preserving
   expect(saved.costUsd).toBe(0.125);
 });
 
-test('judgment calls freeze the saved judgment price, stay unknown without one and are never repriced', async () => {
+test('judgment prices are kept per target, read the earlier single-price shape and freeze the target that ran', async () => {
   const store = database();
   const chat = createFixtureChat(store, 'Synthetic judgment pricing');
-  const judgmentPricing = {
+  const jevPricing = {
     mode: 'manual',
     rates: { input: 0.042, output: 0, cacheRead: null, cacheWrite: null },
     sourceUrl: 'https://docs.typesafe.ai/models',
     checkedAt: '2026-11-25',
   };
-  const saveJudgment = (judgment: unknown) => {
+  const gatewayPricing = {
+    mode: 'manual',
+    rates: { input: 1, output: 0, cacheRead: 0.1, cacheWrite: null },
+    sourceUrl: 'https://gateway.example/pricing',
+    checkedAt: '2026-11-25',
+  };
+  const gateway = store.product.connection({
+    title: 'Synthetic gateway',
+    protocol: 'openai-chat-v1',
+    endpoint: 'https://gateway.example/v1',
+    enabled: true,
+  }) as Connection;
+  const jevTarget = { provider: 'typesafe', modelId: 'jev-latest' };
+  const gatewayTarget = {
+    provider: 'openai-compatible',
+    modelId: 'synthetic/decisions',
+    connectionId: gateway.id,
+  };
+  const gatewaySelection = { ...gatewayTarget, images: false };
+  const save = (changes: Record<string, unknown>) => {
     const current = modelWorkspace(store);
     return updateModelWorkspace(store, {
       expectedRevision: current.revision,
       routes: current.routes,
       translationPolicy: current.translationPolicy,
-      judgment,
+      ...changes,
     });
   };
   const judge = async () => {
@@ -235,56 +254,75 @@ test('judgment calls freeze the saved judgment price, stay unknown without one a
         'SELECT usage_kind AS kind,estimate_status AS status,estimated_usd AS usd FROM attempts WHERE id=?'
       )
       .get(id);
+  const stored = () =>
+    JSON.parse(
+      String(
+        (store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get() as { body: string })
+          .body
+      )
+    );
 
-  expect(modelWorkspace(store).judgment).toEqual({ provider: 'typesafe' });
-  const unpriced = await judge();
-  expect(estimate(unpriced)).toEqual({
-    kind: 'judgment',
-    status: 'unavailable',
-    usd: null,
+  expect(modelWorkspace(store)).toMatchObject({
+    judgment: { provider: 'typesafe' },
+    judgmentPricing: [],
   });
+  const unpriced = await judge();
+  expect(estimate(unpriced)).toEqual({ kind: 'judgment', status: 'unavailable', usd: null });
 
-  expect(() =>
-    saveJudgment({
-      provider: 'typesafe',
-      pricing: {
-        ...judgmentPricing,
-        rates: { ...judgmentPricing.rates, cacheRead: 0.01 },
-      },
-    })
-  ).toThrow('INVALID_MODEL_PRICING');
-  expect(saveJudgment({ provider: 'typesafe', pricing: judgmentPricing }).judgment).toEqual({
-    provider: 'typesafe',
-    pricing: judgmentPricing,
+  store.db
+    .prepare('UPDATE prompt_workspace SET body=? WHERE id=1')
+    .run(JSON.stringify({ ...stored(), judgment: { provider: 'typesafe', pricing: jevPricing } }));
+  expect(modelWorkspace(store)).toMatchObject({
+    judgment: { provider: 'typesafe' },
+    judgmentPricing: [{ ...jevTarget, pricing: jevPricing }],
   });
   const priced = await judge();
-  expect(estimate(priced)).toEqual({
-    kind: 'judgment',
-    status: 'estimated',
-    usd: 0.084,
+  expect(estimate(priced)).toEqual({ kind: 'judgment', status: 'estimated', usd: 0.084 });
+  expect(estimate(unpriced)).toMatchObject({ status: 'unavailable', usd: null });
+
+  expect(() =>
+    save({
+      judgmentPricing: [
+        { ...jevTarget, pricing: { ...jevPricing, rates: { ...jevPricing.rates, cacheRead: 1 } } },
+      ],
+    })
+  ).toThrow('INVALID_MODEL_PRICING');
+  expect(() =>
+    save({
+      judgmentPricing: [
+        { ...jevTarget, pricing: jevPricing },
+        { ...jevTarget, pricing: jevPricing },
+      ],
+    })
+  ).toThrow('JUDGMENT_PRICING_INVALID');
+  save({
+    judgment: gatewaySelection,
+    judgmentPricing: [
+      ...modelWorkspace(store).judgmentPricing!,
+      { ...gatewayTarget, pricing: gatewayPricing },
+    ],
   });
-  expect(estimate(unpriced)).toEqual({
-    kind: 'judgment',
-    status: 'unavailable',
-    usd: null,
+  expect(stored().judgment).toEqual(gatewaySelection);
+  expect(stored().judgmentPricing).toEqual([
+    { ...jevTarget, pricing: jevPricing },
+    { ...gatewayTarget, pricing: gatewayPricing },
+  ]);
+  expect(judgmentRuntime(store).pricingSnapshot).toMatchObject({
+    protocol: 'openai-compatible-decisions-v1',
+    modelId: 'synthetic/decisions',
+    rates: gatewayPricing.rates,
+  });
+  save({ judgment: { provider: 'typesafe' } });
+  expect(judgmentRuntime(store).pricingSnapshot).toMatchObject({
+    protocol: 'typesafe-systemone-v1',
+    rates: jevPricing.rates,
   });
 
-  saveJudgment({
-    provider: 'typesafe',
-    pricing: {
-      ...judgmentPricing,
-      rates: { ...judgmentPricing.rates, input: 1 },
-    },
-  });
+  save({ judgmentPricing: [{ ...gatewayTarget, pricing: gatewayPricing }] });
+  expect(judgmentRuntime(store).pricingSnapshot).toBeUndefined();
+  expect(estimate(await judge())).toMatchObject({ status: 'unavailable', usd: null });
   expect(estimate(priced)).toMatchObject({ status: 'estimated', usd: 0.084 });
-  expect(estimate(await judge())).toMatchObject({
-    status: 'estimated',
-    usd: 2,
-  });
 
-  saveJudgment({ provider: 'typesafe' });
-  expect(estimate(await judge())).toMatchObject({
-    status: 'unavailable',
-    usd: null,
-  });
+  store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('connection',?)").run(gateway.id);
+  expect(save({}).judgmentPricing).toEqual([]);
 });

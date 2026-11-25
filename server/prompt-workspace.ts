@@ -14,7 +14,14 @@ import {
 import {
   DEFAULT_JUDGMENT_SELECTION,
   OFFICIAL_JUDGMENT_MODELS,
+  MAX_JUDGMENT_PRICES,
+  TYPESAFE_JUDGMENT_MODEL,
   isJudgmentConnection,
+  judgmentPriceFor,
+  judgmentPriceKey,
+  judgmentPriceTarget,
+  type JudgmentPriceEntry,
+  type JudgmentPriceTarget,
   type JudgmentPricing,
   type JudgmentSelection,
 } from '../core/judgment-settings.js';
@@ -109,13 +116,16 @@ export function validateCombinationOwner(value: unknown): PromptCombinationOwner
   return { kind: 'workspace', role: roleValue(b.role) };
 }
 
-function validateJudgmentSelection(value: unknown): JudgmentSelection {
-  if (value === undefined) return DEFAULT_JUDGMENT_SELECTION;
+function readJudgmentSelection(value: unknown): {
+  selection: JudgmentSelection;
+  pricing?: JudgmentPricing;
+} {
+  if (value === undefined) return { selection: DEFAULT_JUDGMENT_SELECTION };
   const input = record(value);
   const provider: unknown = input.provider;
   if (provider === 'typesafe') {
     fields(input, ['provider', 'pricing']);
-    return { provider, ...judgmentPricing(input, provider) };
+    return { selection: { provider }, ...legacyJudgmentPricing(input, provider) };
   }
   if (
     provider !== 'openai' &&
@@ -134,25 +144,72 @@ function validateJudgmentSelection(value: unknown): JudgmentSelection {
     throw new HttpError(400, 'JUDGMENT_MODEL_INVALID');
   if (typeof input.images !== 'boolean') throw new HttpError(400, 'JUDGMENT_IMAGES_INVALID');
   return {
-    provider,
-    connectionId,
-    modelId,
-    images: input.images,
-    ...judgmentPricing(input, provider),
+    selection: { provider, connectionId, modelId, images: input.images },
+    ...legacyJudgmentPricing(input, provider),
   };
 }
-function judgmentPricing(
+function validateJudgmentSelection(value: unknown): JudgmentSelection {
+  return readJudgmentSelection(value).selection;
+}
+function legacyJudgmentPricing(
   input: Record<string, unknown>,
   provider: JudgmentSelection['provider']
 ): { pricing?: JudgmentPricing } {
-  if (input.pricing === undefined) return {};
+  return input.pricing === undefined ? {} : { pricing: judgmentPrice(input.pricing, provider) };
+}
+function judgmentPrice(value: unknown, provider: JudgmentSelection['provider']) {
   try {
-    return { pricing: validateJudgmentPricing(input.pricing, provider) };
+    return validateJudgmentPricing(value, provider);
   } catch {
     throw new HttpError(400, 'INVALID_MODEL_PRICING');
   }
 }
-
+export function validateJudgmentPriceTarget(value: unknown): JudgmentPriceTarget {
+  const input = record(value);
+  const provider: unknown = input.provider;
+  if (provider === 'openai-compatible' || provider === 'typesafe-compatible') {
+    fields(input, ['provider', 'modelId', 'connectionId']);
+    return {
+      provider,
+      modelId: text(input.modelId, 'judgment model ID', 200).trim(),
+      connectionId: text(input.connectionId, 'judgment connection ID', 100),
+    };
+  }
+  fields(input, ['provider', 'modelId']);
+  const modelId =
+    provider === 'typesafe'
+      ? TYPESAFE_JUDGMENT_MODEL
+      : provider === 'openai' || provider === 'gemini'
+        ? OFFICIAL_JUDGMENT_MODELS[provider]
+        : undefined;
+  if (!modelId) throw new HttpError(400, 'JUDGMENT_PROVIDER_INVALID');
+  if (input.modelId !== modelId) throw new HttpError(400, 'JUDGMENT_MODEL_INVALID');
+  return { provider: provider as JudgmentPriceTarget['provider'], modelId };
+}
+function validateJudgmentPrices(value: unknown): JudgmentPriceEntry[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_JUDGMENT_PRICES)
+    throw new HttpError(400, 'JUDGMENT_PRICING_INVALID');
+  const keys = new Set<string>();
+  return value.map((item) => {
+    const { pricing, ...target } = record(item);
+    const checked = validateJudgmentPriceTarget(target);
+    const key = judgmentPriceKey(checked);
+    if (keys.has(key)) throw new HttpError(400, 'JUDGMENT_PRICING_INVALID');
+    keys.add(key);
+    return { ...checked, pricing: judgmentPrice(pricing, checked.provider) };
+  });
+}
+function readJudgmentSettings(judgment: unknown, prices: unknown) {
+  const { selection, pricing } = readJudgmentSelection(judgment);
+  const entries = validateJudgmentPrices(prices);
+  const target = judgmentPriceTarget(selection);
+  if (pricing && !judgmentPriceFor(entries, target)) {
+    if (entries.length >= MAX_JUDGMENT_PRICES) throw new HttpError(400, 'JUDGMENT_PRICING_INVALID');
+    entries.push({ ...target, pricing });
+  }
+  return { selection, prices: entries };
+}
 function validateSummaryLength(value: unknown): SummaryLengthSettings {
   if (value === undefined) return { ...DEFAULT_SUMMARY_LENGTH };
   const input = record(value);
@@ -184,6 +241,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'mainJudgmentEnabled',
     'mainJudgmentThreshold',
     'judgment',
+    'judgmentPricing',
     'modelRoutes',
     'titleModel',
     'helperModel',
@@ -212,8 +270,10 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     typeof b.helperConfirmPaidGeneration !== 'boolean'
   )
     throw new HttpError(400, 'HELPER_CONFIRM_PAID_GENERATION_INVALID');
+  const judgment = readJudgmentSettings(b.judgment, b.judgmentPricing);
   return {
-    judgment: validateJudgmentSelection(b.judgment),
+    judgment: judgment.selection,
+    judgmentPricing: judgment.prices,
     mainJudgmentThreshold: mainJudgmentThreshold(b.mainJudgmentThreshold),
     ...(b.mainJudgmentEnabled !== undefined
       ? { mainJudgmentEnabled: b.mainJudgmentEnabled as boolean }
@@ -273,6 +333,11 @@ function savedWorkspace(store: Store): StoredPromptWorkspace {
 
 export function judgmentSelection(store: Store): JudgmentSelection {
   return validateJudgmentSelection(savedWorkspace(store).judgment);
+}
+
+export function judgmentSettings(store: Store) {
+  const saved = savedWorkspace(store);
+  return readJudgmentSettings(saved.judgment, saved.judgmentPricing);
 }
 
 export function initializePromptWorkspaceReferences(store: Store): void {
@@ -384,9 +449,11 @@ export function savePromptWorkspace(store: Store, workspace: PromptWorkspace): v
 
 export function promptWorkspace(store: Store): PromptWorkspace {
   const saved = savedWorkspace(store);
+  const judgment = readJudgmentSettings(saved.judgment, saved.judgmentPricing);
   return {
     ...saved,
-    judgment: validateJudgmentSelection(saved.judgment),
+    judgment: judgment.selection,
+    judgmentPricing: judgment.prices,
     summaryLength: validateSummaryLength(saved.summaryLength),
     main: resolveSelection(store, saved.main, 'main'),
     translation: resolveSelection(store, saved.translation, 'translation'),
@@ -474,6 +541,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
   const current = promptWorkspace(store);
   return {
     judgment: current.judgment,
+    judgmentPricing: current.judgmentPricing ?? [],
     mainJudgmentEnabled: current.mainJudgmentEnabled === true,
     mainJudgmentThreshold: mainJudgmentThreshold(current.mainJudgmentThreshold),
     revision: current.revision,
@@ -497,6 +565,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'mainJudgmentEnabled',
     'mainJudgmentThreshold',
     'judgment',
+    'judgmentPricing',
     'titleModel',
     'helperModel',
     'helperTaskTimeoutMinutes',
@@ -512,6 +581,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     const next = validatePromptWorkspace({
       ...prior,
       ...(Object.hasOwn(input, 'judgment') ? { judgment: input.judgment } : {}),
+      ...(Object.hasOwn(input, 'judgmentPricing')
+        ? { judgmentPricing: input.judgmentPricing }
+        : {}),
       titleModel: Object.hasOwn(input, 'titleModel')
         ? validateTitleModel(input.titleModel)
         : (prior.titleModel ?? null),
@@ -567,10 +639,23 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
         throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
     }
 
+    next.judgmentPricing = next.judgmentPricing?.filter(
+      (entry) => !entry.connectionId || connectionExists(store, entry.connectionId)
+    );
     savePromptWorkspace(store, next);
     recordPromptWorkspaceUpdate(store.db);
     return modelWorkspace(store);
   });
+}
+
+function connectionExists(store: Store, id: string) {
+  try {
+    store.product.get<Connection>('connection', id);
+    return !store.product.isHidden('connection', id);
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404) return false;
+    throw error;
+  }
 }
 
 export function updatePromptWorkspace(

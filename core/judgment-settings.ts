@@ -15,14 +15,16 @@ export type JudgmentProvider = 'typesafe' | ExternalJudgmentProvider;
 export type JudgmentPricing = Extract<ModelPricing, { mode: 'manual' }>;
 
 export type JudgmentSelection =
-  | { provider: 'typesafe'; pricing?: JudgmentPricing }
-  | {
-      provider: ExternalJudgmentProvider;
-      connectionId: string;
-      modelId: string;
-      images: boolean;
-      pricing?: JudgmentPricing;
-    };
+  | { provider: 'typesafe' }
+  | { provider: ExternalJudgmentProvider; connectionId: string; modelId: string; images: boolean };
+
+export type JudgmentPriceTarget = {
+  provider: JudgmentProvider;
+  modelId: string;
+  connectionId?: string;
+};
+export type JudgmentPriceEntry = JudgmentPriceTarget & { pricing: JudgmentPricing };
+export const MAX_JUDGMENT_PRICES = 64;
 
 export const DEFAULT_JUDGMENT_SELECTION: Readonly<
   Extract<JudgmentSelection, { provider: 'typesafe' }>
@@ -56,16 +58,40 @@ export function judgmentPricingRates(provider: JudgmentProvider): (keyof TokenRa
     : ['input', 'output'];
 }
 
+export function judgmentPriceTarget(selection: JudgmentSelection): JudgmentPriceTarget {
+  if (selection.provider === 'typesafe')
+    return { provider: 'typesafe', modelId: TYPESAFE_JUDGMENT_MODEL };
+  return selection.provider === 'openai-compatible' || selection.provider === 'typesafe-compatible'
+    ? {
+        provider: selection.provider,
+        modelId: selection.modelId,
+        connectionId: selection.connectionId,
+      }
+    : { provider: selection.provider, modelId: selection.modelId };
+}
+
+export function judgmentPriceKey(target: JudgmentPriceTarget): string {
+  return JSON.stringify([target.provider, target.modelId, target.connectionId ?? null]);
+}
+
+export function judgmentPriceFor(
+  entries: readonly JudgmentPriceEntry[] | undefined,
+  target: JudgmentPriceTarget
+): JudgmentPricing | undefined {
+  const key = judgmentPriceKey(target);
+  return entries?.find((entry) => judgmentPriceKey(entry) === key)?.pricing;
+}
+
 export function judgmentPricingSnapshot(
-  selection: JudgmentSelection,
+  target: JudgmentPriceTarget,
+  pricing: JudgmentPricing | undefined,
   now = new Date().toISOString()
 ): PricingSnapshot | undefined {
-  const pricing = selection.pricing;
   if (!pricing) return undefined;
   return {
     version: 1,
-    protocol: judgmentProtocol(selection.provider),
-    modelId: selection.provider === 'typesafe' ? TYPESAFE_JUDGMENT_MODEL : selection.modelId,
+    protocol: judgmentProtocol(target.provider),
+    modelId: target.modelId,
     source: 'manual',
     checkedAt: pricing.checkedAt ?? now,
     ...(pricing.sourceUrl ? { sourceUrl: pricing.sourceUrl } : {}),
@@ -74,7 +100,6 @@ export function judgmentPricingSnapshot(
     notes: [],
   };
 }
-
 export function isJudgmentConnection(
   provider: ExternalJudgmentProvider,
   connection: Pick<Connection, 'enabled' | 'protocol' | 'endpoint'>

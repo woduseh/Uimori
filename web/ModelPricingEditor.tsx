@@ -11,8 +11,8 @@ import {
   judgmentPricingRates,
   type JudgmentProtocol,
   judgmentPricingSnapshot,
+  type JudgmentPriceTarget,
   type JudgmentPricing,
-  type JudgmentSelection,
 } from '../core/judgment-settings.js';
 import { ToggleRow } from './ToggleRow.js';
 import { formatUsd, pricingRateLabels, pricingNote, serviceTierLabel } from './pricing-display.js';
@@ -338,7 +338,7 @@ export function ModelPricingEditor({
 }
 
 export function judgmentPricingPayload(
-  provider: JudgmentSelection['provider'],
+  provider: JudgmentPriceTarget['provider'],
   draft: ModelDraft['pricing']
 ): { pricing?: JudgmentPricing } | null {
   const pricing = pricingPayload({
@@ -366,17 +366,17 @@ export function judgmentPricingPayload(
 }
 
 export function JudgmentPricingEditor({
-  selection,
+  target,
   value,
   onChange,
 }: {
-  selection: JudgmentSelection;
+  target: JudgmentPriceTarget;
   value: ModelDraft['pricing'];
   onChange: (pricing: ModelDraft['pricing']) => void;
 }) {
   useI18n();
-  const keys = judgmentPricingRates(selection.provider);
-  const payload = judgmentPricingPayload(selection.provider, value);
+  const keys = judgmentPricingRates(target.provider);
+  const payload = judgmentPricingPayload(target.provider, value);
   return (
     <details className="model-pricing full" data-testid="judgment-pricing-editor">
       <summary>{t('providers.m499')}</summary>
@@ -412,7 +412,7 @@ export function JudgmentPricingEditor({
         ) : (
           <PricingSummary
             rateKeys={keys}
-            snapshot={judgmentPricingSnapshot({ ...selection, pricing: payload.pricing })}
+            snapshot={judgmentPricingSnapshot(target, payload.pricing)}
           />
         )}
       </div>

@@ -7,17 +7,25 @@ import {
 } from '../core/model-pricing.js';
 import {
   DEFAULT_JUDGMENT_SELECTION,
-  TYPESAFE_JUDGMENT_MODEL,
+  judgmentPriceFor,
+  judgmentPriceKey,
+  judgmentPriceTarget,
   judgmentPricingRates,
   judgmentPricingSnapshot,
   judgmentProtocol,
+  type JudgmentPriceEntry,
+  type JudgmentPriceTarget,
   type JudgmentPricing,
 } from '../core/judgment-settings.js';
 import { JEV_ENDPOINT } from './judgment.js';
-import { modelWorkspace, updateModelWorkspace } from './prompt-workspace.js';
+import {
+  modelWorkspace,
+  updateModelWorkspace,
+  validateJudgmentPriceTarget,
+} from './prompt-workspace.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { backfillUnpricedCalls } from './usage-backfill.js';
+import { backfillUnpricedCalls, backfillUnpricedJudgmentCalls } from './usage-backfill.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -35,7 +43,22 @@ const judgment: Json = {
   type: 'boolean',
   const: true,
   description:
-    'true targets the judgment provider chosen in the role settings instead of a saved model. Give either modelId or judgment.',
+    'true targets a judgment provider price instead of a saved model: by default the provider chosen in the role settings, or judgmentTarget. Give either modelId or judgment.',
+};
+const judgmentTarget: Json = {
+  type: 'object',
+  description:
+    'Optional with judgment:true: the judgmentTarget of an entry in storedTargets from model.pricing.read, {provider, modelId} or for compatible formats {provider, modelId, connectionId}. Omit for the provider chosen now.',
+  properties: {
+    provider: {
+      type: 'string',
+      enum: ['typesafe', 'openai', 'gemini', 'openai-compatible', 'typesafe-compatible'],
+    },
+    modelId: { type: 'string', minLength: 1, maxLength: 200 },
+    connectionId: { type: 'string', minLength: 1, maxLength: 100 },
+  },
+  required: ['provider', 'modelId'],
+  additionalProperties: false,
 };
 const rate = { type: ['number', 'null'], minimum: 0, maximum: 1e6 } as Json;
 const rates = schema(
@@ -62,17 +85,18 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   {
     name: 'model.pricing.read',
     description:
-      'Read the pricing saved for one model, or with judgment:true for the judgment provider (lore selection, refusal checks, image placement and similar yes/no or choice calls): its configuration, the rates currently in effect and the revision needed by model.pricing.update. providerHost names the service whose prices apply; credentials and endpoint paths are not included. For the judgment provider, rateFields lists the rates its calls can use. A missing price means unknown, not free. Calls that are already reserved or finished keep the prices they were recorded with; model.pricing.backfill prices the past calls of a saved model that had none.',
-    inputSchema: schema({ modelId, judgment }),
+      'Read the pricing saved for one model, or with judgment:true for a judgment provider (lore selection, refusal checks, image placement and similar yes/no or choice calls): its configuration, the rates currently in effect and the revision needed by model.pricing.update. Judgment prices are kept per target: provider and model, plus the connection for the compatible formats. The result describes the provider chosen now (or judgmentTarget), says whether it is the current one, and lists storedTargets, every target that has a saved price. providerHost names the service whose prices apply; credentials and endpoint paths are not included. rateFields lists the rates a judgment target can use. A missing price means unknown, not free. Calls that are already reserved or finished keep the prices they were recorded with; model.pricing.backfill prices the past calls that had none.',
+    inputSchema: schema({ modelId, judgment, judgmentTarget }),
   },
   {
     name: 'model.pricing.update',
     description:
-      'Change the token prices saved for one model, or with judgment:true for the judgment provider. Read model.pricing.read for expectedRevision and the actual service and protocol, then take rates only from the user or from the official pricing page of that exact service that you actually read; never estimate or guess a price. A manual update requires sourceUrl and checkedAt. Rates are USD per million tokens: null means unknown and 0 means verified free, for example an output price the provider states is free. Record Flex, Batch, cache TTL and long-context rates separately where published, and leave unverified rates unchanged. The judgment provider takes only the rates in rateFields, with no Flex, Batch or long-context rates, and pricing null removes its price. This operation does not browse; use web search for the source. Changes apply to future requests and do not affect model options. Past calls keep the prices they were recorded with; model.pricing.backfill fills in the saved-model calls that were recorded without any price, and judgment calls are never repriced.',
+      'Change the token prices saved for one model, or with judgment:true for the judgment provider. Read model.pricing.read for expectedRevision and the actual service and protocol, then take rates only from the user or from the official pricing page of that exact service that you actually read; never estimate or guess a price. A manual update requires sourceUrl and checkedAt. Rates are USD per million tokens: null means unknown and 0 means verified free, for example an output price the provider states is free. Record Flex, Batch, cache TTL and long-context rates separately where published, and leave unverified rates unchanged. A judgment target takes only the rates in rateFields, with no Flex, Batch or long-context rates; pricing null removes the price of that one target. This operation does not browse; use web search for the source. Changes apply to future requests and do not affect model options. Past calls keep the prices they were recorded with; model.pricing.backfill fills in the ones that were recorded without any price, only when the user asks for it.',
     inputSchema: schema(
       {
         modelId,
         judgment,
+        judgmentTarget,
         expectedRevision: {
           type: 'integer',
           minimum: 0,
@@ -122,8 +146,8 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   {
     name: 'model.pricing.backfill',
     description:
-      'Estimate the cost of past calls of one model that were recorded without any price, using the price saved for the model now. Use it after saving a price when the user wants earlier unknown costs filled in. Only calls with no recorded price and no provider-reported cost change; calls that already have a price keep it. Each filled estimate is marked as priced after the call. The result counts the calls that became estimated or partial, the ones that stay unknown (for example a different service tier) and the USD added to the usage report.',
-    inputSchema: schema({ modelId }, ['modelId']),
+      'Estimate the cost of past calls of one model, or with judgment:true of one judgment target, that were recorded without any price, using the price saved for it now. Use it after saving a price when the user wants earlier unknown costs filled in. Only calls with no recorded price and no provider-reported cost change; calls that already have a price keep it, and a judgment backfill touches only judgment calls of that exact target, never chat calls. Judgment calls whose stored record no longer names their format stay unknown unless they ran on TypeSafe JEV. Each filled estimate is marked as priced after the call, so running it again changes nothing. The result counts the calls that became estimated or partial, the ones that stay unknown (for example a different service tier) and the USD added to the usage report.',
+    inputSchema: schema({ modelId, judgment, judgmentTarget }),
   },
 ];
 
@@ -139,12 +163,12 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
   const args = record(value);
   if (!['model.pricing.read', 'model.pricing.update', 'model.pricing.backfill'].includes(name))
     throw new HttpError(400, 'UNKNOWN_PRICING_TOOL');
-  const target = name === 'model.pricing.backfill' ? ['modelId'] : ['modelId', 'judgment'];
+  const target = ['modelId', 'judgment', 'judgmentTarget'];
   fields(
     args,
     name === 'model.pricing.update' ? [...target, 'expectedRevision', 'pricing'] : target
   );
-  if (args.judgment !== undefined) {
+  if (args.judgment !== undefined || args.judgmentTarget !== undefined) {
     if (args.judgment !== true || args.modelId !== undefined)
       throw new HttpError(400, 'PRICING_TARGET_INVALID: Give either modelId or judgment:true.');
     return judgmentPricingTool(store, name, args);
@@ -190,53 +214,89 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
 }
 
 function judgmentPricingTool(store: Store, name: string, args: Record<string, unknown>) {
+  const current = modelWorkspace(store);
+  const chosen = judgmentPriceTarget(current.judgment ?? DEFAULT_JUDGMENT_SELECTION);
+  const target =
+    args.judgmentTarget === undefined ? chosen : validateJudgmentPriceTarget(args.judgmentTarget);
+  const key = judgmentPriceKey(target);
+  const describe = (entries: JudgmentPriceEntry[] | undefined) =>
+    describeJudgmentTarget(store, target, judgmentPriceFor(entries, target));
+  if (name === 'model.pricing.backfill') {
+    const backfill = backfillUnpricedJudgmentCalls(
+      store,
+      target,
+      judgmentPriceFor(current.judgmentPricing, target)
+    );
+    return { judgment: true, ...describe(current.judgmentPricing), ...backfill };
+  }
   if (name === 'model.pricing.update') {
-    const current = modelWorkspace(store);
-    const { pricing: _previous, ...selection } = current.judgment ?? DEFAULT_JUDGMENT_SELECTION;
+    if (target.connectionId && !describeJudgmentTarget(store, target, undefined).connectionTitle)
+      throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
     let pricing: JudgmentPricing | undefined;
     if (args.pricing !== null) {
       try {
-        pricing = validateJudgmentPricing(args.pricing, selection.provider);
+        pricing = validateJudgmentPricing(args.pricing, target.provider);
       } catch {
         throw new HttpError(400, 'INVALID_MODEL_PRICING');
       }
       if (!pricing.sourceUrl || !pricing.checkedAt)
         throw new HttpError(400, 'PRICING_SOURCE_REQUIRED');
     }
+    const others = (current.judgmentPricing ?? []).filter(
+      (entry) => judgmentPriceKey(entry) !== key
+    );
     updateModelWorkspace(store, {
       expectedRevision: number(args.expectedRevision, 'model workspace revision'),
       routes: current.routes,
       translationPolicy: current.translationPolicy,
-      judgment: pricing ? { ...selection, pricing } : selection,
+      judgmentPricing: pricing ? [...others, { ...target, pricing }] : others,
     });
   }
   const workspace = modelWorkspace(store);
-  const selection = workspace.judgment ?? DEFAULT_JUDGMENT_SELECTION;
+  return {
+    judgment: true,
+    revision: workspace.revision,
+    current: key === judgmentPriceKey(chosen),
+    ...describe(workspace.judgmentPricing),
+    storedTargets: (workspace.judgmentPricing ?? []).map(({ pricing, ...stored }) => {
+      const { effective: _effective, ...summary } = describeJudgmentTarget(store, stored, pricing);
+      return summary;
+    }),
+  };
+}
+
+function describeJudgmentTarget(
+  store: Store,
+  target: JudgmentPriceTarget,
+  pricing: JudgmentPricing | undefined
+) {
   let connection: Connection | undefined;
-  if (selection.provider !== 'typesafe') {
+  if (target.connectionId) {
     try {
-      connection = store.product.get<Connection>('connection', selection.connectionId);
+      connection = store.product.get<Connection>('connection', target.connectionId);
     } catch (error) {
       if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
     }
   }
   return {
-    judgment: true,
-    revision: workspace.revision,
-    provider: selection.provider,
-    providerModelId:
-      selection.provider === 'typesafe' ? TYPESAFE_JUDGMENT_MODEL : selection.modelId,
-    connectionId: selection.provider === 'typesafe' ? null : selection.connectionId,
+    judgmentTarget: target,
+    provider: target.provider,
+    providerModelId: target.modelId,
+    connectionId: target.connectionId ?? null,
     connectionTitle: connection?.title ?? null,
     providerHost:
-      selection.provider === 'typesafe'
+      target.provider === 'typesafe'
         ? hostname(JEV_ENDPOINT)
-        : connection
-          ? hostname(connection.endpoint)
-          : null,
-    protocol: judgmentProtocol(selection.provider),
-    rateFields: judgmentPricingRates(selection.provider),
-    pricing: selection.pricing ?? null,
-    effective: judgmentPricingSnapshot(selection) ?? null,
+        : target.provider === 'openai'
+          ? 'api.openai.com'
+          : target.provider === 'gemini'
+            ? 'generativelanguage.googleapis.com'
+            : connection
+              ? hostname(connection.endpoint)
+              : null,
+    protocol: judgmentProtocol(target.provider),
+    rateFields: judgmentPricingRates(target.provider),
+    pricing: pricing ?? null,
+    effective: judgmentPricingSnapshot(target, pricing) ?? null,
   };
 }
