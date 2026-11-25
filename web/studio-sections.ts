@@ -66,10 +66,13 @@ export function isStandaloneModule(content: RisuContent) {
 }
 const authoredSource = (content: RisuContent) =>
   isStandaloneModule(content) ? content.nativeRisu.module! : content.nativeRisu.card;
-const greetings = (content: RisuContent) => [
-  content.nativeRisu.card.first_mes,
-  ...list(content.nativeRisu.card.alternate_greetings),
-];
+const greetingCount = (content: RisuContent) => {
+  const items = [
+    content.nativeRisu.card.first_mes,
+    ...list(content.nativeRisu.card.alternate_greetings),
+  ];
+  return items.length === 1 && !filled(items[0]) ? 0 : items.length;
+};
 const scripts = (content: RisuContent, card: string, module: string) =>
   list(
     content.nativeRisu.module
@@ -101,11 +104,8 @@ export const contentSectionRegistry: readonly StudioSectionDefinition<
     kinds: CONTENT_KINDS,
     defaultFor: ['bot'],
     available: (content) => !isStandaloneModule(content),
-    hasData: (content) => greetings(content).some(filled),
-    count: (content) => {
-      const items = greetings(content);
-      return items.length === 1 && !items[0] ? 0 : items.length;
-    },
+    hasData: (content) => greetingCount(content) > 0,
+    count: greetingCount,
     owns: matches(/\/(first_mes|alternate_greetings)(\/|$)/u),
     layout: 'list',
   },
@@ -201,6 +201,7 @@ export const contentSectionRegistry: readonly StudioSectionDefinition<
     kinds: CONTENT_KINDS,
     defaultFor: ['bot', 'module'],
     hasData: (content) => scripts(content, 'triggerscript', 'trigger').length > 0,
+    count: (content) => scripts(content, 'triggerscript', 'trigger').length,
     owns: matches(/\/(triggerscript|trigger|lua)(\/|$)/u),
     drafts: ['package.native.triggers'],
     layout: 'canvas',
@@ -212,6 +213,7 @@ export const contentSectionRegistry: readonly StudioSectionDefinition<
     kinds: CONTENT_KINDS,
     defaultFor: ['bot', 'module'],
     hasData: (content) => scripts(content, 'customScripts', 'regex').length > 0,
+    count: (content) => scripts(content, 'customScripts', 'regex').length,
     owns: matches(/\/(customScripts|regex)(\/|$)/u),
     drafts: ['package.native.regex'],
     layout: 'list',
@@ -223,6 +225,7 @@ export const contentSectionRegistry: readonly StudioSectionDefinition<
     kinds: CONTENT_KINDS,
     defaultFor: ['bot'],
     hasData: (content) => !!content.modules?.length,
+    count: (content) => content.modules?.length ?? 0,
     owns: matches(/^\/package\/modules(\/|$)/u),
     layout: 'canvas',
   },
@@ -238,6 +241,11 @@ export const contentSectionRegistry: readonly StudioSectionDefinition<
     layout: 'canvas',
   },
 ];
+
+const presetRegex = (doc: PresetDocument) =>
+  list(
+    doc.program.nativeRisuPreset.preset.regex ?? doc.program.nativeRisuPreset.preset.presetRegex
+  );
 
 export const presetSectionRegistry: readonly StudioSectionDefinition<
   PresetSection,
@@ -279,7 +287,8 @@ export const presetSectionRegistry: readonly StudioSectionDefinition<
     labelKey: 'native.text_fc7e4f6228',
     kinds: ['prompt'],
     defaultFor: ['prompt'],
-    hasData: () => false,
+    hasData: (doc) => presetRegex(doc).length > 0,
+    count: (doc) => presetRegex(doc).length,
     owns: matches(/\/(regex|presetRegex|customScripts)(\/|$)/u),
     drafts: ['prompt.native.regex'],
     layout: 'list',

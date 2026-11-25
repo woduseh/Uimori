@@ -2,9 +2,6 @@
   min-width: 0;
   width: 100%;
 }
-.native-editor .native-regex-panel {
-  max-width: none;
-}
 .native-regex-fields {
   margin: 0;
   padding: 0;

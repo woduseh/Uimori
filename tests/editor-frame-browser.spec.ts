@@ -871,3 +871,75 @@ test('EFRAME14 the rail follows the content kind, keeps sections with data and o
     '에셋',
   ]);
 });
+
+test('EFRAME16 regex list and detail scroll on their own and the rail counts scripts in both editors', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60000);
+  const title = `EFRAME16 ${randomUUID().slice(0, 8)}`;
+  const rules = Array.from({ length: 30 }, (_, i) => ({
+    comment: `규칙 ${i + 1}`,
+    type: 'editdisplay',
+    in: `find${i}`,
+    out: '합성 치환 문장\n'.repeat(120),
+  }));
+  const pkg = nativeContent({
+    name: title,
+    extensions: { risuai: { customScripts: rules, triggerscript: [{ comment: 'a' }, {}] } },
+  });
+  const bot = await request.post('/api/content', {
+    data: { kind: 'bot', title, package: pkg, loading: 'pinned', relatedIds: [] },
+  });
+  expect(bot.ok(), await bot.text()).toBe(true);
+  const program = createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT, 'main');
+  program.nativeRisuPreset.preset.regex = rules;
+  const prompt = await request.post('/api/prompt-presets', {
+    data: { title: `${title} 프롬프트`, role: 'main', program, values: {} },
+  });
+  expect(prompt.ok(), await prompt.text()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const check = async (shot: string) => {
+    await selectEditorSection(page, '정규식');
+    const panel = page.locator('[data-studio-section="regex"]:not([hidden])');
+    const list = panel.getByRole('complementary', { name: '정규식 목록', exact: true });
+    await list.getByRole('button', { name: /^규칙 25/u }).click();
+    const detail = panel.locator('.native-item-detail');
+    await expect(detail.getByLabel('정규식 이름', { exact: true })).toHaveValue('규칙 25');
+    await detail.evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+    const geometry = await frameGeometry(page);
+    expect(
+      await detail.evaluate((node) => node.scrollTop),
+      'detail scrolls itself'
+    ).toBeGreaterThan(0);
+    expect(
+      await list.evaluate((node) => node.scrollHeight - node.clientHeight),
+      'list scrolls itself'
+    ).toBeGreaterThan(0);
+    expect(geometry.canvasScrollTop, 'canvas stays at the top').toBe(0);
+    expect(geometry.outerScrollTop, 'page stays at the top').toBe(0);
+    await expect(list).toBeInViewport({ ratio: 0.9 });
+    const raw = panel.locator('.native-regex-raw > summary');
+    await expect(raw).toBeInViewport();
+    await capture(page, shot);
+    await raw.click();
+    const json = panel.getByLabel('Risu 정규식 JSON', { exact: true });
+    await json.scrollIntoViewIfNeeded();
+    await expect(json).toBeInViewport();
+    await expect(panel.getByRole('button', { name: '편집기에 적용', exact: true })).toBeVisible();
+    await raw.click();
+  };
+
+  await openBot(page, title);
+  const rail = page.getByRole('tablist', { name: '자료 편집 영역', exact: true });
+  await expect(editorTab(rail, '정규식')).toHaveAccessibleName('정규식 30개');
+  await expect(editorTab(rail, '트리거 / Lua')).toHaveAccessibleName('트리거 / Lua 2개');
+  await check('eframe16-content-regex-1440');
+
+  await navigationAction(page, '프롬프트');
+  await page.getByLabel('프롬프트 검색', { exact: true }).fill(`${title} 프롬프트`);
+  await page.getByRole('button', { name: `${title} 프롬프트 프롬프트 편집`, exact: true }).click();
+  await expect(editorTab(page, '정규식')).toHaveAccessibleName('정규식 30개');
+  await check('eframe16-prompt-regex-1440');
+});

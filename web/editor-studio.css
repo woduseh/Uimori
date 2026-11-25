@@ -191,6 +191,35 @@
   .library-page-editing .native-panes .native-item-detail > * {
     flex-shrink: 0;
   }
+  .library-page-editing .native-regex-panel:not([hidden]) {
+    min-height: auto;
+  }
+  .library-page-editing .native-regex-panel > .native-regex-editor,
+  .library-page-editing .native-regex-editor > .native-regex-fields {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 360px;
+  }
+  .library-page-editing .native-regex-editor > .native-regex-raw {
+    flex: none;
+    margin-top: 0;
+  }
+  .library-page-editing .native-regex-fields > .native-editor-split {
+    flex: 1 1 0;
+    grid-template-rows: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+  .library-page-editing .native-regex-editor :is(.native-item-list, .native-item-detail) {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    min-height: 0;
+    max-height: none;
+  }
+  .library-page-editing .native-regex-editor .native-item-detail > * {
+    flex-shrink: 0;
+  }
 }
 @media (min-width: 761px) {
   .resource-editor-menu-actions,

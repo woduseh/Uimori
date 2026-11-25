@@ -2,14 +2,17 @@ import { expect, test } from 'vitest';
 import type { ContentKind } from '../core/product.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
   MODULE_SECTION_ORDER,
   contentSection,
   contentSectionRegistry,
+  contentSections,
   defaultContentSection,
   isAuthoringPath,
   placeSections,
   presetSection,
+  presetSections,
   type ContentSection,
 } from '../web/studio-sections.js';
 
@@ -144,4 +147,34 @@ test('each kind opens on its first default section', () => {
   expect(defaultContentSection(nativeContent({ name: 'Carded' }, {}, 'module'), 'module')).toBe(
     'lore'
   );
+});
+
+test('rail counts cover scripts and linked modules and agree with the data checks', () => {
+  const counts = (content: RisuContent) =>
+    Object.fromEntries(
+      contentSections(content, 'bot', 'basic').map((section) => [section.id, section.count])
+    );
+  const pkg = nativeContent({
+    first_mes: '  \n ',
+    extensions: {
+      risuai: { customScripts: [{ in: 'a', out: 'b' }], triggerscript: [{}, {}] },
+    },
+  });
+  pkg.modules = [{ id: 'linked', revision: 1 }] as unknown as typeof pkg.modules;
+  expect(counts(pkg)).toMatchObject({ greetings: 0, regex: 1, triggers: 2, modules: 1 });
+  const greetings = contentSectionRegistry.find((section) => section.id === 'greetings')!;
+  expect(greetings.hasData(pkg)).toBe(false);
+  const two = nativeContent({ first_mes: ' ', alternate_greetings: [''] });
+  expect(greetings.count!(two)).toBe(2);
+  expect(greetings.hasData(two)).toBe(true);
+  const module = standaloneModule({ regex: [{}, {}, {}], trigger: [{}] });
+  expect(placement(module, 'module').shown).toContain('regex');
+  expect(
+    Object.fromEntries(
+      contentSections(module, 'module', 'lore').map((section) => [section.id, section.count])
+    )
+  ).toMatchObject({ regex: 3, triggers: 1 });
+  const program = createDefaultRisuPrompt('Synthetic', 'main');
+  program.nativeRisuPreset.preset.regex = [{}, {}];
+  expect(presetSections(program, false).find((section) => section.id === 'regex')?.count).toBe(2);
 });

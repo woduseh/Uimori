@@ -630,7 +630,7 @@ export function RisuNativeFields({
           disabled={!!draft}
         />
       </StudioPanel>
-      <StudioPanel section="regex" className="native-section-body native-regex-panel">
+      <StudioPanel section="regex" className="native-panes native-regex-panel">
         <NativeRisuRegexEditor
           value={Array.isArray(regex) ? regex : []}
           draftPath="package.native.regex"

@@ -549,7 +549,7 @@ export function NativeRisuPresetEditor({
           }
         />
       </StudioPanel>
-      <StudioPanel section="regex" className="native-section-body native-regex-panel">
+      <StudioPanel section="regex" className="native-panes native-regex-panel">
         <NativeRisuRegexEditor
           value={(source.regex ?? source.presetRegex ?? []) as unknown[]}
           draftPath="prompt.native.regex"
