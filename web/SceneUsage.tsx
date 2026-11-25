@@ -63,6 +63,7 @@ const contextParts: Record<MainContextPart, { label: () => string; tone: Context
   history: { label: () => t('reader.contextHistory'), tone: 'history' },
   request: { label: () => t('reader.contextRequest'), tone: 'request' },
   tools: { label: () => t('helperUsage.toolSchemas'), tone: 'tools' },
+  toolResults: { label: () => t('helperUsage.toolResults'), tone: 'results' },
   other: { label: () => t('contextBreakdown.other'), tone: 'other' },
 };
 

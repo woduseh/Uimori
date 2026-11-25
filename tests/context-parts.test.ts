@@ -4,7 +4,7 @@ import { createNativeRisuPresetProgram } from '../core/risu-native-preset.js';
 import { compileRisuPrompt } from '../core/risu-prompt.js';
 import type { ProviderRequest } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
-import { mainContextParts } from '../server/context-parts.js';
+import { continuedContextParts, mainContextParts } from '../server/context-parts.js';
 
 const budget = { inputTokenLimit: 200_000, estimator: 'o200k_base-v1' as const };
 const image = {
@@ -163,5 +163,16 @@ describe('main context parts', () => {
       undefined
     );
     expect(mainContextParts(snapshot, { ...request, prompt: undefined }, total)).toBe(undefined);
+  });
+
+  test('a later tool round keeps the first split and counts its growth as tool calls', () => {
+    const { snapshot, request, total } = fixture();
+    const first = mainContextParts(snapshot, request, total)!;
+    const grown = continuedContextParts(first, total + 500);
+    expect(grown).toEqual({ ...first, toolResults: 500 });
+    expect(sum(continuedContextParts(grown, total + 800))).toBe(total + 800);
+    const shrunk = continuedContextParts(first, 1_000);
+    expect(sum(shrunk)).toBe(1_000);
+    expect(shrunk).not.toHaveProperty('toolResults');
   });
 });

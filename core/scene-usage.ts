@@ -35,6 +35,7 @@ export const MAIN_CONTEXT_PARTS = [
   'history',
   'request',
   'tools',
+  'toolResults',
   'other',
 ] as const;
 export type MainContextPart = (typeof MAIN_CONTEXT_PARTS)[number];

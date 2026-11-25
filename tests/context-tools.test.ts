@@ -289,8 +289,17 @@ test('main shell results reach the next request and saved receipts avoid repeati
       },
     ]);
   const sent = rounds();
+  const contexts: { estimatedInputTokens: number; parts?: Record<string, number> }[] = [];
+  observed.value.onAttemptStart = (wire) => {
+    contexts.push(wire.requestContext!);
+    return 'attempt';
+  };
   expect((await runMain(fixed, observed.value)).status).toBe('completed');
   expect(sent).toHaveLength(2);
+  const [first, second] = contexts.map((context) => context.parts!);
+  const grown = contexts[1].estimatedInputTokens - contexts[0].estimatedInputTokens;
+  expect(grown).toBeGreaterThan(0);
+  expect(second).toEqual({ ...first, toolResults: grown });
   expect(executeShell).toHaveBeenCalledTimes(1);
   expect(observed.events).toContainEqual(receipt);
 

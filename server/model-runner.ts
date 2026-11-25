@@ -32,7 +32,8 @@ import {
 import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 import { requestLore } from './request-lore.js';
-import { mainContextParts } from './context-parts.js';
+import type { MainContextParts } from '../core/scene-usage.js';
+import { continuedContextParts, mainContextParts } from './context-parts.js';
 import { requestReceipt } from './request-receipt.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 
@@ -128,6 +129,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   );
   let opaqueState: Json | undefined;
   let continuationPrompt: ProviderRequest['prompt'];
+  let firstContextParts: MainContextParts | undefined;
   let readHeadroomTokens = 0;
   const readTokens = (event: ToolEvent) => estimateContextTokens(event, fixed.contextPlan?.budget);
   const executeMainTool = async (
@@ -568,10 +570,19 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           !wire.requestContext && request.contextBudget
             ? estimateContextTokens(wire.body, request.contextBudget)
             : 0;
-        const parts =
+        const split =
           !wire.requestContext && request.contextBudget
             ? mainContextParts(fixed, request, estimatedInputTokens)
             : undefined;
+        if (split) firstContextParts = split;
+        const parts =
+          split ??
+          (!wire.requestContext &&
+          request.contextBudget &&
+          request.opaqueState != null &&
+          firstContextParts
+            ? continuedContextParts(firstContextParts, estimatedInputTokens)
+            : undefined);
         const requestContext =
           wire.requestContext ??
           (request.contextBudget && {

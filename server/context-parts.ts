@@ -45,6 +45,22 @@ function messagePart(message: LogicalMessage, types: unknown[]): MainContextPart
   return (typeof type === 'string' && blockParts[type]) || 'other';
 }
 
+export function continuedContextParts(first: MainContextParts, total: number): MainContextParts {
+  const before = Object.values(first).reduce((sum, tokens) => sum + (tokens ?? 0), 0);
+  if (total <= before || before <= 0) {
+    const parts: MainContextParts = {};
+    let assigned = 0;
+    for (const part of MAIN_CONTEXT_PARTS) {
+      const share = before > 0 ? Math.floor(((first[part] ?? 0) * total) / before) : 0;
+      if (share > 0) parts[part] = share;
+      assigned += share;
+    }
+    if (total > assigned) parts.other = (parts.other ?? 0) + total - assigned;
+    return parts;
+  }
+  return { ...first, toolResults: (first.toolResults ?? 0) + total - before };
+}
+
 export function mainContextParts(
   snapshot: RunSnapshot,
   request: ProviderRequest,
