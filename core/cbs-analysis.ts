@@ -209,6 +209,10 @@ const variableFunctions: Record<string, [CbsReference['scope'], CbsReference['ac
   getglobalvar: ['global', 'read'],
 };
 
+export function cbsVariableFunctionScope(name: string): CbsReference['scope'] | null {
+  return variableFunctions[normalizeCbsFunctionName(name)]?.[0] ?? null;
+}
+
 const inertLiteralKeywords = new Set(['#pure', '#pure_display', '#puredisplay', '#escape']);
 
 export function analyzeCbs(

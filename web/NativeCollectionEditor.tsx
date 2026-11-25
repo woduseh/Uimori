@@ -1,5 +1,5 @@
 import { useI18n, formatNumber } from './i18n.js';
-import { useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
@@ -14,8 +14,10 @@ export function NativeCollectionEditor({
   onRemove,
   isEmpty,
   actions,
+  focus = null,
   children,
 }: {
+  focus?: { index: number; epoch: number } | null;
   label: string;
   items: { title: string; subtitle?: string }[];
   onAdd: () => void;
@@ -28,8 +30,15 @@ export function NativeCollectionEditor({
 }) {
   const { t } = useI18n();
 
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(focus?.index ?? 0);
   const [query, setQuery] = useState('');
+  const focused = useRef(focus?.epoch);
+  useEffect(() => {
+    if (!focus || focused.current === focus.epoch) return;
+    focused.current = focus.epoch;
+    setSelected(focus.index);
+    setQuery('');
+  }, [focus]);
   const [dragged, setDragged] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     index: number;

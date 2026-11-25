@@ -46,6 +46,15 @@ import {
   UpIcon,
   ForwardIcon,
 } from './ui-icons.js';
+import type { CbsReferenceIndex, CbsVariableUse } from '../core/cbs-references.js';
+import {
+  CbsReferenceList,
+  CbsUseList,
+  cbsFindingLabel,
+  findingsFor,
+  listedUses,
+  type CbsUseLocator,
+} from './CbsReferenceList.js';
 import './native-risu-toggle-editor.css';
 
 const controlTypes: NativeToggleType[] = ['toggle', 'select', 'text', 'textarea'];
@@ -66,7 +75,13 @@ export function NativeRisuToggleEditor({
   onPendingChange,
   prepareSave,
   disabled = false,
+  references,
+  locate,
+  onJump,
 }: {
+  references?: CbsReferenceIndex;
+  locate?: CbsUseLocator;
+  onJump?: (use: CbsVariableUse) => void;
   value: string;
   variables: string;
   program: RisuPrompt;
@@ -142,6 +157,8 @@ export function NativeRisuToggleEditor({
     }
   }, [value, variables]);
   const doc = parseToggleDocument(value);
+  const toggleReferences = (key: string) =>
+    references?.variables.find((entry) => entry.toggle === key) ?? null;
   const groups = [
     ...doc.groups.filter((group) => group.id !== -1),
     ...doc.groups.filter((group) => group.id === -1),
@@ -449,6 +466,19 @@ export function NativeRisuToggleEditor({
             {t('native.text_0d2c2495e1')}
           </button>
         </div>
+        {control && references && locate && onJump && (
+          <div className="nt-uses">
+            <strong>{t('cbsRefs.usesHeading')}</strong>
+            <CbsUseList
+              uses={(() => {
+                const entry = toggleReferences(definition.key);
+                return entry ? listedUses(entry) : [];
+              })()}
+              locate={locate}
+              onJump={onJump}
+            />
+          </div>
+        )}
         <details className="nt-link-info">
           <summary>{t('native.text_d65947b4a0')}</summary>
           <pre>{item.raw}</pre>
@@ -502,6 +532,9 @@ export function NativeRisuToggleEditor({
                 </small>
               )}
             </span>
+            {references && definition && controlTypes.includes(definition.type) && (
+              <ToggleUseSummary references={references} entry={toggleReferences(definition.key)} />
+            )}
             {type !== 'divider' && (
               <span className="nt-kind">{type ? names[type] : t('native.text_8ba13a8495')}</span>
             )}
@@ -653,6 +686,15 @@ export function NativeRisuToggleEditor({
             )
           )}
         {!variables && <p className="muted">{t('native.text_f97e342c2b')}</p>}
+        {references && locate && onJump && (
+          <CbsReferenceList
+            index={references}
+            include={(entry) => entry.toggle === null}
+            locate={locate}
+            onJump={onJump}
+            onAddDefault={(name) => write(() => addDefaultVariable(variables, name), 'variables')}
+          />
+        )}
       </div>
     );
   else
@@ -867,6 +909,19 @@ export function NativeRisuToggleEditor({
             {!current.items.length && !query && mode === 'edit' && (
               <p className="muted nt-empty">{t('native.text_0e9ffc660e')}</p>
             )}
+            {mode === 'edit' &&
+              references &&
+              locate &&
+              onJump &&
+              references.variables.some((entry) => entry.toggle !== null && !entry.defined) && (
+                <CbsReferenceList
+                  index={references}
+                  heading={t('cbsRefs.undefinedToggles')}
+                  include={(entry) => entry.toggle !== null && !entry.defined}
+                  locate={locate}
+                  onJump={onJump}
+                />
+              )}
           </div>
         </div>
       </>
@@ -1063,5 +1118,21 @@ export function NativeRisuToggleEditor({
         </form>
       </Dialog>
     </section>
+  );
+}
+
+function ToggleUseSummary({
+  references,
+  entry,
+}: {
+  references: CbsReferenceIndex;
+  entry: ReturnType<CbsReferenceIndex['variables']['find']> | null;
+}) {
+  const { t } = useI18n();
+  const finding = entry ? findingsFor(references, entry)[0] : undefined;
+  return (
+    <span className="nt-use-count" data-unused={!entry?.reads || undefined}>
+      {finding ? cbsFindingLabel(finding, t) : t('cbsRefs.uses', { count: entry?.reads ?? 0 })}
+    </span>
   );
 }

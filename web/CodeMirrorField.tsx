@@ -39,15 +39,19 @@ import { tags } from '@lezer/highlight';
 import {
   analyzeCbs,
   cbsMatchingRanges,
+  cbsVariableFunctionScope,
   type CbsAnalysis,
   type CbsDiagnostic,
   type CbsFunctionCatalog,
+  type CbsRange,
   type CbsTokenKind,
 } from '../core/cbs-analysis.js';
+import { CODE_FIELD_REVEAL } from './code-field-reveal.js';
 import { api } from './api.js';
 import { t } from './i18n.js';
 import {
   PlainCodeField,
+  type CbsNames,
   type CodeFieldHandoff,
   type CodeFieldProps,
   type CodeLanguage,
@@ -253,7 +257,40 @@ function completionOptions(catalog: CbsFunctionCatalog) {
   return options;
 }
 
+const namesFacet = Facet.define<CbsNames | null, CbsNames | null>({
+  combine: (values) => values.at(-1) ?? null,
+});
+const nameOptionCache = new WeakMap<string[], Completion[]>();
+const nameOptions = (names: string[]) => {
+  let options = nameOptionCache.get(names);
+  if (!options) {
+    options = names.map((label) => ({ label, type: 'variable' }));
+    nameOptionCache.set(names, options);
+  }
+  return options;
+};
+
+function variableNameCompletions(context: CompletionContext): CompletionResult | null {
+  const names = context.state.facet(namesFacet);
+  if (!names) return null;
+  const when = context.matchBefore(/\{\{#when\b[^{}]*?::(var|toggle)::[^:{}]*$/);
+  const call = when ? null : context.matchBefore(/\{\{\s*[\w-]+::[^:{}]*$/);
+  const match = when ?? call;
+  if (!match) return null;
+  const typed = /[^:]*$/.exec(match.text)![0];
+  let options: string[] | null = null;
+  if (when) options = /::toggle::[^:]*$/.test(match.text) ? names.toggles : names.chat;
+  else {
+    const scope = cbsVariableFunctionScope(/^\{\{\s*([\w-]+)/.exec(match.text)![1]!);
+    if (scope) options = names[scope];
+  }
+  const remaining = nameOptions(options ?? []).filter((option) => option.label !== typed);
+  return remaining.length ? { from: context.pos - typed.length, options: remaining } : null;
+}
+
 function cbsCompletions(context: CompletionContext): CompletionResult | null {
+  const variable = variableNameCompletions(context);
+  if (variable) return variable;
   const catalog = context.state.facet(catalogFacet);
   if (!catalog) return null;
   const before = context.matchBefore(/\{\{[#:]?[\w-]*$/);
@@ -367,7 +404,10 @@ function useFieldsetDisabled(host: RefObject<HTMLElement | null>) {
   return disabled;
 }
 
-type EditorProps = CodeFieldProps & { handoff: RefObject<CodeFieldHandoff> };
+type EditorProps = CodeFieldProps & {
+  handoff: RefObject<CodeFieldHandoff>;
+  names?: CbsNames | null;
+};
 
 type EditorSettings = {
   locked: boolean;
@@ -399,9 +439,9 @@ function editorOptions(settings: EditorSettings): Extension {
   ];
 }
 
-export default function CodeMirrorField(props: EditorProps) {
+export default function CodeMirrorField({ names, ...props }: EditorProps) {
   if (lineSeparatorOf(props.value) === null) return <PlainCodeField {...props} />;
-  return <Editor {...props} />;
+  return <Editor {...props} names={names} />;
 }
 
 function Editor({
@@ -416,6 +456,8 @@ function Editor({
   spellCheck,
   font,
   handoff,
+  names = null,
+  name,
   'aria-label': label,
   'aria-describedby': describedBy,
 }: EditorProps) {
@@ -429,7 +471,10 @@ function Editor({
     options: new Compartment(),
     host: new Compartment(),
     catalog: new Compartment(),
+    names: new Compartment(),
   }).current;
+  const namesRef = useRef(names);
+  namesRef.current = names;
   const hostExtension = useRef<Extension>([]);
   const inheritedDisabled = useFieldsetDisabled(host);
   const locked = !!disabled || inheritedDisabled;
@@ -453,6 +498,7 @@ function Editor({
         compartments.host.of(hostExtension.current),
         language === 'lua' ? [] : cbsExtensions,
         compartments.catalog.of(catalogFacet.of(loadedCatalog)),
+        compartments.names.of(namesFacet.of(namesRef.current)),
         compartments.options.of(editorOptions(settingsRef.current)),
         editorTheme,
         EditorView.updateListener.of((update) => {
@@ -513,12 +559,34 @@ function Editor({
   }, [value, createState]);
 
   useEffect(() => {
+    view.current?.dispatch({ effects: compartments.names.reconfigure(namesFacet.of(names)) });
+  }, [compartments, names]);
+
+  useEffect(() => {
     view.current?.dispatch({
       effects: compartments.options.reconfigure(
         editorOptions({ locked, readOnly: !!readOnly, hint, prose, label, describedBy })
       ),
     });
   }, [compartments, locked, readOnly, hint, prose, label, describedBy]);
+
+  useEffect(() => {
+    const field = host.current;
+    if (!field) return;
+    const reveal = (event: Event) => {
+      const editor = view.current;
+      if (!editor) return;
+      const length = editor.state.doc.length;
+      const { from, to } = (event as CustomEvent<CbsRange>).detail;
+      editor.focus();
+      editor.dispatch({
+        selection: { anchor: Math.min(from, length), head: Math.min(to, length) },
+        effects: EditorView.scrollIntoView(Math.min(from, length), { y: 'center' }),
+      });
+    };
+    field.addEventListener(CODE_FIELD_REVEAL, reveal);
+    return () => field.removeEventListener(CODE_FIELD_REVEAL, reveal);
+  }, []);
 
   useEffect(() => {
     const field = host.current;
@@ -535,6 +603,7 @@ function Editor({
     <div
       ref={host}
       className={className ? `code-field ${className}` : 'code-field'}
+      data-code-field={name}
       data-font={font}
       data-language={language}
       data-disabled={locked || undefined}

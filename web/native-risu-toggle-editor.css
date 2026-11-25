@@ -730,3 +730,24 @@
     margin-top: 20px;
   }
 }
+.nt-use-count {
+  font-size: var(--font-small);
+  white-space: nowrap;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.nt-use-count[data-unused] {
+  color: var(--warning);
+}
+.nt-uses {
+  display: grid;
+  gap: 6px;
+  border-top: var(--hairline) solid var(--line);
+  padding-top: 12px;
+}
+.nt-uses > strong {
+  font-size: var(--font-small);
+}
+.native-toggle-editor .cbs-references {
+  margin-top: 16px;
+}

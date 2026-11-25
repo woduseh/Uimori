@@ -298,9 +298,9 @@ export function editDefaultVariable(
   if (line) line.raw = `${key}=${value}`;
   return serializeNativeToggleLines(lines);
 }
-export function addDefaultVariable(source: string) {
+export function addDefaultVariable(source: string, key?: string) {
   const lines = parseNativeToggleLines(source);
-  lines.push(fresh(`${uniqueKey(lines, 'new_variable')}=`, lines));
+  lines.push(fresh(`${key ?? uniqueKey(lines, 'new_variable')}=`, lines));
   return finish(source, lines);
 }
 export function deleteDefaultVariable(source: string, index: number) {

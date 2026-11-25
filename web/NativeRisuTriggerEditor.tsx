@@ -1,6 +1,6 @@
 import { useI18n, translateMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useBufferedEditorState,
   useUnappliedEditorField,
@@ -9,6 +9,7 @@ import {
 import { AddIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { CodeField } from './CodeField.js';
+import { codeFieldName } from './code-field-reveal.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import './native-risu-trigger.css';
 
@@ -23,7 +24,9 @@ export function NativeRisuTriggerEditor({
   onPendingChange,
   prepareSave,
   disabled = false,
+  focus = null,
 }: {
+  focus?: { index: number; epoch: number } | null;
   value: unknown[];
   onChange: (entries: unknown[]) => void;
   draftPath: string;
@@ -33,7 +36,13 @@ export function NativeRisuTriggerEditor({
 }) {
   const { t } = useI18n();
 
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(focus?.index ?? 0);
+  const focused = useRef(focus?.epoch);
+  useEffect(() => {
+    if (!focus || focused.current === focus.epoch) return;
+    focused.current = focus.epoch;
+    setSelected(focus.index);
+  }, [focus]);
   const [draft, setDraft] = useBufferedEditorState<{ index: number; text: string } | null>(
     draftPath,
     null
@@ -204,6 +213,7 @@ export function NativeRisuTriggerEditor({
                     : t('native.text_8601ddaaf9')}
                   <CodeField
                     language="lua"
+                    name={codeFieldName('triggers', index, `effect.${effectIndex}`)}
                     aria-label={
                       effects.length > 1
                         ? t('native.luaNumber', { number: effectIndex + 1 })

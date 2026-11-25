@@ -4,6 +4,7 @@ import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { CodeField } from './CodeField.js';
+import { codeFieldName } from './code-field-reveal.js';
 import {
   AddIcon,
   FolderAddIcon,
@@ -545,6 +546,7 @@ export function NativeRisuLoreEditor({
                   {t('native.text_bf0b828e2d')}
                   <CodeField
                     className="native-main-text"
+                    name={codeFieldName('lore', index, 'content')}
                     aria-label={t('native.text_bf0b828e2d')}
                     value={loreText(entry.content)}
                     onChange={(content) => edit({ content })}

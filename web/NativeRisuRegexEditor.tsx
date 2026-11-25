@@ -1,6 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useI18n, translateMessage } from './i18n.js';
 import { CodeField } from './CodeField.js';
+import { codeFieldName } from './code-field-reveal.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useMemo, useState } from 'react';
 import { NativeCollectionEditor } from './NativeCollectionEditor.js';
@@ -28,7 +29,9 @@ export function NativeRisuRegexEditor({
   onPendingChange,
   prepareSave,
   disabled = false,
+  focus = null,
 }: {
+  focus?: { index: number; epoch: number } | null;
   value: unknown[];
   onChange: (value: unknown[]) => void;
   draftPath: string;
@@ -92,6 +95,7 @@ export function NativeRisuRegexEditor({
     <section className="native-regex-editor" aria-label={t('native.text_840a850378')}>
       <fieldset className="native-regex-fields" disabled={disabled || pending}>
         <NativeCollectionEditor
+          focus={focus}
           label={t('native.text_fc7e4f6228')}
           items={value.map((entry, index) => ({
             title: regexRecord(entry)
@@ -170,6 +174,7 @@ export function NativeRisuRegexEditor({
                   {entry.ableFlag === true && parsed.actions.includes('cbs') ? (
                     <CodeField
                       className="native-regex-find"
+                      name={codeFieldName('regex', index, 'in')}
                       aria-label={t('native.text_605efd02b3')}
                       spellCheck={false}
                       font="mono"
@@ -179,6 +184,7 @@ export function NativeRisuRegexEditor({
                   ) : (
                     <textarea
                       className="native-regex-find"
+                      data-code-field={codeFieldName('regex', index, 'in')}
                       aria-label={t('native.text_605efd02b3')}
                       rows={3}
                       spellCheck={false}
@@ -191,6 +197,7 @@ export function NativeRisuRegexEditor({
                   {t('native.text_dce02ee0f0')}
                   <CodeField
                     className="native-regex-replacement"
+                    name={codeFieldName('regex', index, 'out')}
                     aria-label={t('native.text_0ed674a38e')}
                     spellCheck={false}
                     font="mono"

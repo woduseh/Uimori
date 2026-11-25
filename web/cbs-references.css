@@ -1,0 +1,143 @@
+.cbs-references {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.cbs-references h3,
+.cbs-references h4 {
+  margin: 0;
+}
+.cbs-references h3 {
+  font-size: var(--font-heading);
+}
+.cbs-references h4 {
+  font-size: var(--font-body);
+  font-weight: 600;
+}
+.cbs-references ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cbs-references code,
+.cbs-use-list code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.cbs-missing-defaults {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--warning-bg);
+  border: var(--hairline) solid var(--warning-line);
+  border-radius: var(--radius-control);
+  color: var(--warning);
+}
+.cbs-missing-defaults ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.cbs-missing-defaults li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cbs-reference-list {
+  display: grid;
+  border-top: var(--hairline) solid var(--line);
+}
+.cbs-reference-list > li {
+  border-bottom: var(--hairline) solid var(--line);
+}
+.cbs-reference > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: var(--control-h);
+  padding: 6px 4px;
+  cursor: pointer;
+}
+.cbs-reference-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 160px;
+}
+.cbs-reference-counts {
+  display: inline-flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-variant-numeric: tabular-nums;
+}
+.cbs-tag {
+  padding: 0 6px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-small);
+  color: var(--muted);
+  font-size: var(--font-small);
+  white-space: nowrap;
+}
+.cbs-finding {
+  color: var(--warning);
+  font-size: var(--font-small);
+}
+.cbs-finding[data-certain="false"] {
+  color: var(--muted);
+}
+.cbs-use-list {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.cbs-reference .cbs-use-list,
+.cbs-reference .cbs-use-empty {
+  margin-inline-start: 12px;
+}
+.cbs-use {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  width: 100%;
+  min-height: var(--control-h);
+  padding: 6px 10px;
+  text-align: start;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--text);
+}
+.cbs-use:hover {
+  background: var(--hover);
+}
+.cbs-use-location {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+}
+.cbs-use-location > span:not(:first-child) {
+  color: var(--muted);
+}
+.cbs-use-access {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.cbs-use-empty {
+  margin: 0 0 8px;
+}
+.cbs-dynamic-note {
+  margin: 0;
+  font-size: var(--font-small);
+}

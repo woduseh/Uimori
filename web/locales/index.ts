@@ -31,6 +31,8 @@ import { messages as helperRollback } from './helper-rollback.js';
 import { messages as helperPlan } from './helper-plan.js';
 import { messages as helperConfirmations } from './helper-confirmations.js';
 import { messages as readerSelection } from './reader-selection.js';
+import { messages as cbsReferences } from './cbs-references.js';
+import { messages as draftPreview } from './draft-preview.js';
 import type { UiLocale } from '../../core/ui-locale.js';
 export const messages: Record<string, Record<UiLocale, string>> = {
   ...common,
@@ -66,6 +68,8 @@ export const messages: Record<string, Record<UiLocale, string>> = {
   ...helperPlan,
   ...helperConfirmations,
   ...readerSelection,
+  ...cbsReferences,
+  ...draftPreview,
 };
 export const catalog = (locale: UiLocale): Record<string, string> =>
   Object.fromEntries(Object.entries(messages).map(([key, entry]) => [key, entry[locale]]));

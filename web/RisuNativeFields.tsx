@@ -8,7 +8,7 @@ import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
 import type { ResourceModel } from '../core/resource-editing.js';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useAnchorArrival,
   type ResourceAnchor,
@@ -41,13 +41,24 @@ import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { StudioPanel } from './EditorStudio.js';
 import { NativeRisuTriggerEditor } from './NativeRisuTriggerEditor.js';
 import { IconButton } from './IconButton.js';
-import { CodeField } from './CodeField.js';
-import { CodeIcon } from './ui-icons.js';
+import { CbsNamesContext, CodeField } from './CodeField.js';
+import { CbsReferenceList, cbsUseLocator } from './CbsReferenceList.js';
+import { useCbsNames, useContentReferences } from './cbs-reference-index.js';
+import { codeFieldName, revealCodeField } from './code-field-reveal.js';
+import type { CbsVariableUse } from '../core/cbs-references.js';
+import { CodeIcon, DisplayIcon } from './ui-icons.js';
+import {
+  FirstMessageWorkspace,
+  RisuDraftStartPreview,
+  useDraftPreviewShown,
+} from './RisuDraftStartPreview.js';
+import { useCompactLayout } from './useCompactLayout.js';
 import { readPresentationChoice, writePresentationSetting } from './presentation-settings.js';
 import { markupPreview } from './markup-preview.js';
 import {
   availableSections,
   contentSection,
+  contentSectionLabelKey,
   contentSectionRegistry,
   isAuthoringPath,
   isStandaloneModule,
@@ -65,6 +76,9 @@ const GREETING_FONT_KEY = storageKeys.firstMessageFont;
 const GREETING_FONTS = ['body', 'mono'] as const;
 type SourcePart = 'greetings' | 'lore' | 'regex' | 'triggers' | 'card' | 'module';
 type Section = ContentSection;
+type Jump = { section: Section; index: number; epoch: number };
+const itemSections: readonly Section[] = ['greetings', 'lore', 'regex', 'triggers'];
+let jumpEpoch = 0;
 
 function anchorSection(anchor: ResourceAnchor): Section {
   if (anchor.section === 'lore') return 'lore';
@@ -101,10 +115,60 @@ export function RisuNativeFields({
     readPresentationChoice(GREETING_FONT_KEY, GREETING_FONTS, 'body')
   );
   const requested = anchor?.anchor ?? null;
-  const loreFocus =
+  const anchoredLore =
     requested && anchorSection(requested) === 'lore' && requested.index !== null
       ? { index: requested.index, epoch: requested.epoch }
       : null;
+  const [jump, setJump] = useState<Jump | null>(null);
+  const [previewShown, togglePreview] = useDraftPreviewShown();
+  const compact = useCompactLayout();
+  const previewable = value.revision >= 1;
+  const arrival = useRef<AbortController | null>(null);
+  const defaultsField = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => () => arrival.current?.abort(), []);
+  const anchoredEpoch = anchoredLore?.epoch;
+  useEffect(() => {
+    if (anchoredEpoch !== undefined) setJump(null);
+  }, [anchoredEpoch]);
+  const focusFor = (target: Section) =>
+    jump?.section === target ? { index: jump.index, epoch: jump.epoch } : null;
+  const loreFocus = focusFor('lore') ?? anchoredLore;
+  const references = useContentReferences(native);
+  const names = useCbsNames(references);
+  const locate = cbsUseLocator(t, (target) =>
+    available.includes(target as Section) ? t(contentSectionLabelKey(target as Section)) : target
+  );
+  function jumpTo(use: CbsVariableUse) {
+    const target = use.section as Section;
+    if (!available.includes(target)) return;
+    onSelect(target);
+    if (use.item !== null && itemSections.includes(target))
+      setJump({ section: target, index: use.item, epoch: --jumpEpoch });
+    arrival.current?.abort();
+    arrival.current = new AbortController();
+    revealCodeField(
+      () => document.getElementById(`${id}-${target}-panel`),
+      codeFieldName(target, use.item, use.field),
+      use.range,
+      '.native-item-detail, .nl-detail, .native-trigger-editor',
+      arrival.current.signal
+    );
+  }
+  function addDefault(name: string) {
+    const current = string(
+      standalone ? native.module?.defaultVariables : nativeRisuExtension(native).defaultVariables
+    );
+    const separator = current && !current.endsWith('\n') ? '\n' : '';
+    const next = `${current}${separator}${name}=`;
+    if (standalone) field('defaultVariables', next);
+    else extension('defaultVariables', next);
+    requestAnimationFrame(() => {
+      const element = defaultsField.current;
+      if (!element) return;
+      element.focus();
+      element.setSelectionRange(next.length, next.length);
+    });
+  }
   const anchoredSection = (target: ResourceAnchor) => {
     const wanted = anchorSection(target);
     return available.includes(wanted) ? wanted : 'basic';
@@ -328,326 +392,387 @@ export function RisuNativeFields({
     </div>
   );
   return (
-    <div className="native-editor native-content-editor full">
-      {draft && (
-        <p className="native-editor-notice" role="status">
-          {t('native.text_0b4d698c5c')}{' '}
-          <button type="button" className="ghost" onClick={() => onSelect('source')}>
-            {t('native.text_609d8be788')}
-          </button>
-        </p>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {translateMessage(error)}
-        </p>
-      )}
-      <fieldset disabled={!!draft} className="native-panel-fields">
-        <StudioPanel section="translation" className="native-section-body">
-          <TranslationGuideEditor
-            value={readTranslationGuide(standalone ? native.module! : native.card)}
-            onChange={(guide) =>
-              update({
-                ...native,
-                ...(standalone
-                  ? { module: withTranslationGuide(native.module!, guide) }
-                  : { card: withTranslationGuide(native.card, guide) }),
-              })
-            }
-          />
-        </StudioPanel>
-        <StudioPanel section="appearances" className="native-section-body">
-          <IllustrationAppearanceEditor
-            key={value.id}
-            images={value.images ?? []}
-            value={readIllustrationAppearanceProfiles(standalone ? native.module! : native.card)}
-            onChange={(profiles) =>
-              update({
-                ...native,
-                ...(standalone
-                  ? { module: withIllustrationAppearanceProfiles(native.module!, profiles) }
-                  : { card: withIllustrationAppearanceProfiles(native.card, profiles) }),
-              })
-            }
-          />
-        </StudioPanel>
-        <StudioPanel section="basic" className="native-section-body native-basic-body">
-          <div className="native-overview">
-            <div className="native-overview-main native-description-field">
+    <CbsNamesContext.Provider value={names}>
+      <div className="native-editor native-content-editor full">
+        {draft && (
+          <p className="native-editor-notice" role="status">
+            {t('native.text_0b4d698c5c')}{' '}
+            <button type="button" className="ghost" onClick={() => onSelect('source')}>
+              {t('native.text_609d8be788')}
+            </button>
+          </p>
+        )}
+        {error && (
+          <p className="error" role="alert">
+            {translateMessage(error)}
+          </p>
+        )}
+        <fieldset disabled={!!draft} className="native-panel-fields">
+          <StudioPanel section="translation" className="native-section-body">
+            <TranslationGuideEditor
+              value={readTranslationGuide(standalone ? native.module! : native.card)}
+              onChange={(guide) =>
+                update({
+                  ...native,
+                  ...(standalone
+                    ? { module: withTranslationGuide(native.module!, guide) }
+                    : { card: withTranslationGuide(native.card, guide) }),
+                })
+              }
+            />
+          </StudioPanel>
+          <StudioPanel section="appearances" className="native-section-body">
+            <IllustrationAppearanceEditor
+              key={value.id}
+              images={value.images ?? []}
+              value={readIllustrationAppearanceProfiles(standalone ? native.module! : native.card)}
+              onChange={(profiles) =>
+                update({
+                  ...native,
+                  ...(standalone
+                    ? { module: withIllustrationAppearanceProfiles(native.module!, profiles) }
+                    : { card: withIllustrationAppearanceProfiles(native.card, profiles) }),
+                })
+              }
+            />
+          </StudioPanel>
+          <StudioPanel section="basic" className="native-section-body native-basic-body">
+            <div className="native-overview">
+              <div className="native-overview-main native-description-field">
+                <label>
+                  {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
+                  <CodeField
+                    className="native-description"
+                    name={codeFieldName('basic', null, 'description')}
+                    aria-label={
+                      standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')
+                    }
+                    aria-describedby={`${id}-description-count`}
+                    value={description}
+                    onChange={(next) => field('description', next)}
+                  />
+                </label>
+                <small id={`${id}-description-count`} className="native-field-count">
+                  {t('native.characterCount', { count: description.length })}
+                </small>
+              </div>
+              <div className="native-overview-meta">
+                <PackagePortraitEditor
+                  value={value}
+                  onChange={onChange}
+                  onDirtyChange={setPortraitBusy}
+                >
+                  {overview}
+                </PackagePortraitEditor>
+                {!standalone && (
+                  <section className="native-authoring" aria-labelledby={`${id}-authoring-heading`}>
+                    <h3 id={`${id}-authoring-heading`}>{t('native.text_78def74816')}</h3>
+                    <label>
+                      {t('native.text_d9f63fc805')}
+                      <textarea
+                        aria-label={t('native.text_d9f63fc805')}
+                        rows={4}
+                        value={string(native.card.creator_notes)}
+                        onChange={(e) => field('creator_notes', e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      {t('native.text_59a4b7210d')}
+                      <input value={creator} onChange={(e) => field('creator', e.target.value)} />
+                    </label>
+                    <label>
+                      {t('native.text_f0da897630')}
+                      <input
+                        value={version}
+                        onChange={(e) => field('character_version', e.target.value)}
+                      />
+                    </label>
+                  </section>
+                )}
+              </div>
+            </div>
+          </StudioPanel>
+          {!standalone && (
+            <StudioPanel section="greetings" className="native-panes">
+              <NativeCollectionEditor
+                focus={focusFor('greetings')}
+                label={t('native.text_be7723bd53')}
+                items={greetings.map((message, i) => ({
+                  title:
+                    i === 0
+                      ? t('native.text_104a1f537a')
+                      : t('native.alternateMessage', { number: i }),
+                  subtitle: message
+                    ? markupPreview(message, 55) || t('native.markupOnlyPreview')
+                    : undefined,
+                }))}
+                onAdd={() => writeGreetings([...greetings, ''])}
+                onMove={(i, delta) => {
+                  const next = [...greetings];
+                  [next[i], next[i + delta]] = [next[i + delta], next[i]];
+                  writeGreetings(next);
+                }}
+                onReorder={(from, to) => {
+                  const next = [...greetings];
+                  const [moved] = next.splice(from, 1);
+                  next.splice(to, 0, moved);
+                  writeGreetings(next);
+                }}
+                onRemove={(i) =>
+                  writeGreetings(
+                    greetings.length === 1 ? [''] : greetings.filter((_, n) => n !== i)
+                  )
+                }
+                isEmpty={(i) => !greetings[i]?.trim()}
+                actions={
+                  <>
+                    {previewable && !compact && (
+                      <IconButton
+                        label={t('draftPreview.show')}
+                        icon={DisplayIcon}
+                        aria-pressed={previewShown}
+                        onClick={togglePreview}
+                      />
+                    )}
+                    <IconButton
+                      label={t('native.monospaceText')}
+                      icon={CodeIcon}
+                      aria-pressed={greetingFont === 'mono'}
+                      onClick={() => {
+                        const next = greetingFont === 'mono' ? 'body' : 'mono';
+                        setGreetingFont(next);
+                        writePresentationSetting(GREETING_FONT_KEY, next);
+                      }}
+                    />
+                  </>
+                }
+              >
+                {(i) => {
+                  const editor = (
+                    <CodeField
+                      className="native-main-text"
+                      name={codeFieldName(
+                        'greetings',
+                        i,
+                        i === 0 ? 'first_mes' : 'alternate_greetings'
+                      )}
+                      font={greetingFont}
+                      aria-label={
+                        i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')
+                      }
+                      value={greetings[i] ?? ''}
+                      onChange={(next) =>
+                        writeGreetings(greetings.map((message, n) => (n === i ? next : message)))
+                      }
+                    />
+                  );
+                  if (!previewable || section !== 'greetings') return editor;
+                  return (
+                    <FirstMessageWorkspace
+                      shown={previewShown}
+                      field={editor}
+                      preview={
+                        <RisuDraftStartPreview
+                          contentId={value.id}
+                          revision={value.revision}
+                          native={native}
+                          text={greetings[i] ?? ''}
+                          surfaceKey={`${value.id}:greeting:${i}`}
+                        />
+                      }
+                    />
+                  );
+                }}
+              </NativeCollectionEditor>
+            </StudioPanel>
+          )}
+          <StudioPanel section="lore" className="native-panes">
+            <NativeRisuLoreEditor
+              focus={loreFocus}
+              entries={lore}
+              moduleLore={moduleLore}
+              onChange={writeLore}
+              selectionControl={
+                <label>
+                  {t('native.text_1345bfd1e0')}
+                  <select
+                    value={value.loreActivation?.mode ?? 'model'}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        loreActivation: {
+                          ...value.loreActivation,
+                          mode: e.target.value as 'model' | 'discoverable',
+                        },
+                      })
+                    }
+                  >
+                    <option value="model">{t('native.text_d8aac6a860')}</option>
+                    <option value="discoverable">{t('native.text_f314bfcb7c')}</option>
+                  </select>
+                </label>
+              }
+            />
+          </StudioPanel>
+          <StudioPanel section="assets" className="native-section-body">
+            <NativeRisuAssetsEditor
+              value={value}
+              onChange={onChange}
+              onBusyChange={setAssetsBusy}
+            />
+          </StudioPanel>
+          {!standalone && (
+            <StudioPanel section="instructions" className="native-section-body">
+              <div className="native-form-stack">
+                <label>
+                  {t('native.text_2d2a2c8204')}
+                  <CodeField
+                    name={codeFieldName('instructions', null, 'post_history_instructions')}
+                    aria-label={t('native.text_2d2a2c8204')}
+                    rows={8}
+                    value={string(native.card.post_history_instructions)}
+                    onChange={(next) => field('post_history_instructions', next)}
+                  />
+                </label>
+                <label>
+                  {t('native.text_07b2960ad0')}
+                  <CodeField
+                    name={codeFieldName('instructions', null, 'mes_example')}
+                    aria-label={t('native.text_07b2960ad0')}
+                    rows={8}
+                    value={string(native.card.mes_example)}
+                    onChange={(next) => field('mes_example', next)}
+                  />
+                </label>
+              </div>
+            </StudioPanel>
+          )}
+          <StudioPanel section="variables" className="native-section-body">
+            <div className="native-form-stack">
               <label>
-                {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
-                <CodeField
-                  className="native-description"
-                  aria-label={
-                    standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')
+                {t('native.text_0510e453e9')}
+                <textarea
+                  ref={defaultsField}
+                  rows={8}
+                  value={string(
+                    standalone
+                      ? native.module?.defaultVariables
+                      : nativeRisuExtension(native).defaultVariables
+                  )}
+                  onChange={(e) =>
+                    standalone
+                      ? field('defaultVariables', e.target.value)
+                      : extension('defaultVariables', e.target.value)
                   }
-                  aria-describedby={`${id}-description-count`}
-                  value={description}
-                  onChange={(next) => field('description', next)}
                 />
               </label>
-              <small id={`${id}-description-count`} className="native-field-count">
-                {t('native.characterCount', { count: description.length })}
-              </small>
-            </div>
-            <div className="native-overview-meta">
-              <PackagePortraitEditor
-                value={value}
-                onChange={onChange}
-                onDirtyChange={setPortraitBusy}
-              >
-                {overview}
-              </PackagePortraitEditor>
-              {!standalone && (
-                <section className="native-authoring" aria-labelledby={`${id}-authoring-heading`}>
-                  <h3 id={`${id}-authoring-heading`}>{t('native.text_78def74816')}</h3>
-                  <label>
-                    {t('native.text_d9f63fc805')}
-                    <textarea
-                      aria-label={t('native.text_d9f63fc805')}
-                      rows={4}
-                      value={string(native.card.creator_notes)}
-                      onChange={(e) => field('creator_notes', e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    {t('native.text_59a4b7210d')}
-                    <input value={creator} onChange={(e) => field('creator', e.target.value)} />
-                  </label>
-                  <label>
-                    {t('native.text_f0da897630')}
-                    <input
-                      value={version}
-                      onChange={(e) => field('character_version', e.target.value)}
-                    />
-                  </label>
-                </section>
-              )}
-            </div>
-          </div>
-        </StudioPanel>
-        {!standalone && (
-          <StudioPanel section="greetings" className="native-panes">
-            <NativeCollectionEditor
-              label={t('native.text_be7723bd53')}
-              items={greetings.map((message, i) => ({
-                title:
-                  i === 0
-                    ? t('native.text_104a1f537a')
-                    : t('native.alternateMessage', { number: i }),
-                subtitle: message
-                  ? markupPreview(message, 55) || t('native.markupOnlyPreview')
-                  : undefined,
-              }))}
-              onAdd={() => writeGreetings([...greetings, ''])}
-              onMove={(i, delta) => {
-                const next = [...greetings];
-                [next[i], next[i + delta]] = [next[i + delta], next[i]];
-                writeGreetings(next);
-              }}
-              onReorder={(from, to) => {
-                const next = [...greetings];
-                const [moved] = next.splice(from, 1);
-                next.splice(to, 0, moved);
-                writeGreetings(next);
-              }}
-              onRemove={(i) =>
-                writeGreetings(greetings.length === 1 ? [''] : greetings.filter((_, n) => n !== i))
-              }
-              isEmpty={(i) => !greetings[i]?.trim()}
-              actions={
-                <IconButton
-                  label={t('native.monospaceText')}
-                  icon={CodeIcon}
-                  aria-pressed={greetingFont === 'mono'}
-                  onClick={() => {
-                    const next = greetingFont === 'mono' ? 'body' : 'mono';
-                    setGreetingFont(next);
-                    writePresentationSetting(GREETING_FONT_KEY, next);
-                  }}
-                />
-              }
-            >
-              {(i) => (
-                <CodeField
-                  className="native-main-text"
-                  font={greetingFont}
-                  aria-label={i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
-                  value={greetings[i] ?? ''}
-                  onChange={(next) =>
-                    writeGreetings(greetings.map((message, n) => (n === i ? next : message)))
+              <label>
+                {t('native.text_4c6723bcdd')}
+                <textarea
+                  rows={8}
+                  value={string(
+                    standalone
+                      ? native.module?.customModuleToggle
+                      : nativeRisuExtension(native).toggles
+                  )}
+                  onChange={(e) =>
+                    standalone
+                      ? field('customModuleToggle', e.target.value)
+                      : extension('toggles', e.target.value)
                   }
                 />
-              )}
-            </NativeCollectionEditor>
+              </label>
+              <CbsReferenceList
+                index={references}
+                locate={locate}
+                onJump={jumpTo}
+                onAddDefault={addDefault}
+              />
+            </div>
           </StudioPanel>
-        )}
-        <StudioPanel section="lore" className="native-panes">
-          <NativeRisuLoreEditor
-            focus={loreFocus}
-            entries={lore}
-            moduleLore={moduleLore}
-            onChange={writeLore}
-            selectionControl={
+          <StudioPanel section="display" className="native-section-body">
+            <div className="native-form-stack">
               <label>
-                {t('native.text_1345bfd1e0')}
-                <select
-                  value={value.loreActivation?.mode ?? 'model'}
-                  onChange={(e) =>
+                {t('native.text_50262c6215')}
+                <CodeField
+                  language="html"
+                  className="native-main-text"
+                  name={codeFieldName(
+                    'display',
+                    null,
+                    standalone ? 'backgroundEmbedding' : 'backgroundHTML'
+                  )}
+                  aria-label={t('native.text_50262c6215')}
+                  spellCheck={false}
+                  font="mono"
+                  value={
+                    standalone ? nativeRisuModuleBackground(native) : nativeRisuBackground(native)
+                  }
+                  onChange={(next) =>
+                    standalone
+                      ? field('backgroundEmbedding', next)
+                      : extension('backgroundHTML', next)
+                  }
+                />
+              </label>
+              {value.imageHandoff && (
+                <RisuImageHandoffFields
+                  policy={value.imageHandoff}
+                  selected={value.imageHandoff.ranges
+                    .filter((range) => range.enabled)
+                    .map((range) => range.id)}
+                  onChange={(ids) =>
                     onChange({
                       ...value,
-                      loreActivation: {
-                        ...value.loreActivation,
-                        mode: e.target.value as 'model' | 'discoverable',
+                      imageHandoff: {
+                        ...value.imageHandoff!,
+                        ranges: value.imageHandoff!.ranges.map((range) => ({
+                          ...range,
+                          enabled: ids.includes(range.id),
+                        })),
                       },
                     })
                   }
-                >
-                  <option value="model">{t('native.text_d8aac6a860')}</option>
-                  <option value="discoverable">{t('native.text_f314bfcb7c')}</option>
-                </select>
-              </label>
-            }
-          />
-        </StudioPanel>
-        <StudioPanel section="assets" className="native-section-body">
-          <NativeRisuAssetsEditor value={value} onChange={onChange} onBusyChange={setAssetsBusy} />
-        </StudioPanel>
-        {!standalone && (
-          <StudioPanel section="instructions" className="native-section-body">
-            <div className="native-form-stack">
-              <label>
-                {t('native.text_2d2a2c8204')}
-                <CodeField
-                  aria-label={t('native.text_2d2a2c8204')}
-                  rows={8}
-                  value={string(native.card.post_history_instructions)}
-                  onChange={(next) => field('post_history_instructions', next)}
                 />
-              </label>
-              <label>
-                {t('native.text_07b2960ad0')}
-                <CodeField
-                  aria-label={t('native.text_07b2960ad0')}
-                  rows={8}
-                  value={string(native.card.mes_example)}
-                  onChange={(next) => field('mes_example', next)}
-                />
-              </label>
+              )}
             </div>
           </StudioPanel>
-        )}
-        <StudioPanel section="variables" className="native-section-body">
-          <div className="native-form-stack">
-            <label>
-              {t('native.text_0510e453e9')}
-              <textarea
-                rows={8}
-                value={string(
-                  standalone
-                    ? native.module?.defaultVariables
-                    : nativeRisuExtension(native).defaultVariables
-                )}
-                onChange={(e) =>
-                  standalone
-                    ? field('defaultVariables', e.target.value)
-                    : extension('defaultVariables', e.target.value)
-                }
-              />
-            </label>
-            <label>
-              {t('native.text_4c6723bcdd')}
-              <textarea
-                rows={8}
-                value={string(
-                  standalone
-                    ? native.module?.customModuleToggle
-                    : nativeRisuExtension(native).toggles
-                )}
-                onChange={(e) =>
-                  standalone
-                    ? field('customModuleToggle', e.target.value)
-                    : extension('toggles', e.target.value)
-                }
-              />
-            </label>
-          </div>
-        </StudioPanel>
-        <StudioPanel section="display" className="native-section-body">
-          <div className="native-form-stack">
-            <label>
-              {t('native.text_50262c6215')}
-              <CodeField
-                language="html"
-                className="native-main-text"
-                aria-label={t('native.text_50262c6215')}
-                spellCheck={false}
-                font="mono"
-                value={
-                  standalone ? nativeRisuModuleBackground(native) : nativeRisuBackground(native)
-                }
-                onChange={(next) =>
-                  standalone
-                    ? field('backgroundEmbedding', next)
-                    : extension('backgroundHTML', next)
-                }
-              />
-            </label>
-            {value.imageHandoff && (
-              <RisuImageHandoffFields
-                policy={value.imageHandoff}
-                selected={value.imageHandoff.ranges
-                  .filter((range) => range.enabled)
-                  .map((range) => range.id)}
-                onChange={(ids) =>
-                  onChange({
-                    ...value,
-                    imageHandoff: {
-                      ...value.imageHandoff!,
-                      ranges: value.imageHandoff!.ranges.map((range) => ({
-                        ...range,
-                        enabled: ids.includes(range.id),
-                      })),
-                    },
-                  })
-                }
-              />
-            )}
-          </div>
-        </StudioPanel>
-        <StudioPanel section="modules" className="native-section-body">
-          <PackageFeaturesEditor
-            value={value}
-            onChange={onChange}
-            onDirtyChange={setModulesDirty}
+          <StudioPanel section="modules" className="native-section-body">
+            <PackageFeaturesEditor
+              value={value}
+              onChange={onChange}
+              onDirtyChange={setModulesDirty}
+            />
+          </StudioPanel>
+        </fieldset>
+        <StudioPanel section="triggers" className="native-section-body">
+          <NativeRisuTriggerEditor
+            focus={focusFor('triggers')}
+            value={Array.isArray(triggers) ? triggers : []}
+            draftPath="package.native.triggers"
+            onChange={writeTriggers}
+            prepareSave={(model, entries) => prepareEntries(model, 'triggers', entries)}
+            onPendingChange={setTriggersDirty}
+            disabled={!!draft}
           />
         </StudioPanel>
-      </fieldset>
-      <StudioPanel section="triggers" className="native-section-body">
-        <NativeRisuTriggerEditor
-          value={Array.isArray(triggers) ? triggers : []}
-          draftPath="package.native.triggers"
-          onChange={writeTriggers}
-          prepareSave={(model, entries) => prepareEntries(model, 'triggers', entries)}
-          onPendingChange={setTriggersDirty}
-          disabled={!!draft}
-        />
-      </StudioPanel>
-      <StudioPanel section="regex" className="native-panes native-regex-panel">
-        <NativeRisuRegexEditor
-          value={Array.isArray(regex) ? regex : []}
-          draftPath="package.native.regex"
-          onChange={writeRegex}
-          prepareSave={(model, entries) => prepareEntries(model, 'regex', entries)}
-          onPendingChange={setRegexDirty}
-          disabled={!!draft}
-        />
-      </StudioPanel>
-      <StudioPanel section="source" className="native-section-body">
-        <fieldset className="native-panel-fields" disabled={regexDirty || triggersDirty}>
-          {rawEditor}
-        </fieldset>
-      </StudioPanel>
-    </div>
+        <StudioPanel section="regex" className="native-panes native-regex-panel">
+          <NativeRisuRegexEditor
+            focus={focusFor('regex')}
+            value={Array.isArray(regex) ? regex : []}
+            draftPath="package.native.regex"
+            onChange={writeRegex}
+            prepareSave={(model, entries) => prepareEntries(model, 'regex', entries)}
+            onPendingChange={setRegexDirty}
+            disabled={!!draft}
+          />
+        </StudioPanel>
+        <StudioPanel section="source" className="native-section-body">
+          <fieldset className="native-panel-fields" disabled={regexDirty || triggersDirty}>
+            {rawEditor}
+          </fieldset>
+        </StudioPanel>
+      </div>
+    </CbsNamesContext.Provider>
   );
 }

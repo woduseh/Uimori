@@ -1,8 +1,20 @@
-import { lazy, Suspense, useRef, type RefObject } from 'react';
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useContext,
+  useEffect,
+  useRef,
+  type RefObject,
+} from 'react';
+import type { CbsRange } from '../core/cbs-analysis.js';
 import { PanelErrorBoundary } from './deferredPanel.js';
+import { CODE_FIELD_REVEAL } from './code-field-reveal.js';
 import './code-field.css';
 
 export type CodeLanguage = 'cbs' | 'html' | 'lua';
+export type CbsNames = { chat: string[]; temp: string[]; global: string[]; toggles: string[] };
+export const CbsNamesContext = createContext<CbsNames | null>(null);
 
 export type CodeFieldProps = {
   value: string;
@@ -15,6 +27,7 @@ export type CodeFieldProps = {
   placeholder?: string;
   spellCheck?: boolean;
   font?: 'body' | 'mono';
+  name?: string;
   'aria-label'?: string;
   'aria-describedby'?: string;
 };
@@ -38,8 +51,21 @@ export function PlainCodeField({
   spellCheck,
   font,
   handoff,
+  name,
   ...aria
 }: CodeFieldProps & { handoff?: RefObject<CodeFieldHandoff> }) {
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const element = field.current;
+    if (!element) return;
+    const reveal = (event: Event) => {
+      const { from, to } = (event as CustomEvent<CbsRange>).detail;
+      element.focus();
+      element.setSelectionRange(from, to);
+    };
+    element.addEventListener(CODE_FIELD_REVEAL, reveal);
+    return () => element.removeEventListener(CODE_FIELD_REVEAL, reveal);
+  }, []);
   const remember = (element: HTMLTextAreaElement, focused: boolean) => {
     if (!handoff) return;
     handoff.current = {
@@ -51,6 +77,8 @@ export function PlainCodeField({
   return (
     <textarea
       {...aria}
+      ref={field}
+      data-code-field={name}
       className={className}
       rows={rows}
       disabled={disabled}
@@ -69,11 +97,12 @@ export function PlainCodeField({
 
 export function CodeField(props: CodeFieldProps) {
   const handoff = useRef<CodeFieldHandoff>({ focused: false, selectionStart: 0, selectionEnd: 0 });
+  const names = useContext(CbsNamesContext);
   const plain = <PlainCodeField {...props} handoff={handoff} />;
   return (
     <PanelErrorBoundary fallback={plain}>
       <Suspense fallback={plain}>
-        <CodeMirrorField {...props} handoff={handoff} />
+        <CodeMirrorField {...props} handoff={handoff} names={names} />
       </Suspense>
     </PanelErrorBoundary>
   );
