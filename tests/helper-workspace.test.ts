@@ -219,6 +219,73 @@ test('saved editor references freeze at admission and identical retries survive 
   expect(send).toHaveBeenCalledTimes(1);
 });
 
+test('the request route validates the editor focus and the model receives it in source.editor', async () => {
+  const f = fixture();
+  const saved = f.store.product.content(fixtureBotInput('위치를 보낼 자료', '원래 본문'));
+  let captured: transport.Json | undefined;
+  mockSend((request) => {
+    captured = request.input.source;
+    return structuredClone(success);
+  });
+  const focus = {
+    section: 'lore',
+    item: { index: 1, label: '항구' },
+    field: {
+      section: 'lore',
+      item: 1,
+      field: 'content',
+      label: '로어 본문',
+      language: 'cbs',
+      length: 14,
+      usesCbs: true,
+    },
+    selection: { from: 2, to: 5, text: '에는 ' },
+    diagnostic: {
+      code: 'cbs.unclosed-call',
+      severity: 'error',
+      from: 6,
+      to: 8,
+      line: 1,
+      column: 7,
+    },
+    unsavedSections: ['lore'],
+  };
+  const editor = {
+    kind: 'content',
+    source: 'saved',
+    targetId: saved.id,
+    revision: saved.revision,
+    title: saved.title,
+  };
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    const post = (requestKey: string, payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/helper/conversations/${f.conversation.id}/messages`,
+        payload: { requestKey, text: '이 오류 고쳐 줘', editor: payload },
+      });
+    for (const [key, invalid] of [
+      ['unknown-key', { ...focus, extra: true }],
+      ['selection-without-field', { section: 'lore', selection: focus.selection }],
+      ['selection-text-mismatch', { ...focus, selection: { from: 2, to: 5, text: '에' } }],
+      ['bad-code', { ...focus, diagnostic: { ...focus.diagnostic, code: 'lua.syntax' } }],
+      ['too-many', { ...focus, diagnostics: Array(11).fill(focus.diagnostic) }],
+    ] as const) {
+      const response = await post(key, { ...editor, focus: invalid });
+      expect(response.statusCode, key).toBe(400);
+      expect(response.json().message).toMatch(/^Invalid editor focus/u);
+    }
+    const accepted = await post('valid', { ...editor, focus });
+    expect(accepted.statusCode, accepted.body).toBe(200);
+    await Promise.all(f.work);
+    expect(captured).toMatchObject({ editor: { hasUnsavedInput: false, focus } });
+  } finally {
+    await app.close();
+  }
+});
+
 test('an unsaved editor is analysis input and only mutations of that same resource are refused', async () => {
   const f = fixture();
   const saved = f.store.product.content(fixtureBotInput('편집 중인 자료'));

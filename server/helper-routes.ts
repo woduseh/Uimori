@@ -19,6 +19,15 @@ import {
 } from '../core/content-limits.js';
 import { requestImageUploads } from './request-images.js';
 import { requestFileUploads } from './request-files.js';
+import { parseEditorFocus } from '../core/editor-focus.js';
+
+function editorFocus(value: unknown) {
+  try {
+    return parseEditorFocus(value);
+  } catch (cause) {
+    throw new HttpError(400, (cause as Error).message);
+  }
+}
 
 export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   const store = runtime.workspace;
@@ -321,7 +330,16 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       let editor: HelperEditor | undefined;
       if (body.editor !== undefined) {
         const input = record(body.editor);
-        fields(input, ['targetId', 'revision', 'title', 'kind', 'model', 'source', 'location']);
+        fields(input, [
+          'targetId',
+          'revision',
+          'title',
+          'kind',
+          'model',
+          'source',
+          'location',
+          'focus',
+        ]);
         const location = input.location === undefined ? undefined : record(input.location);
         if (location) {
           fields(location, ['path', 'label']);
@@ -352,6 +370,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
                 },
               }
             : {}),
+          ...(input.focus === undefined ? {} : { focus: editorFocus(input.focus) }),
           ...(input.model === undefined
             ? {}
             : {

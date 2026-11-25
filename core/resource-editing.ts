@@ -24,6 +24,7 @@ export type EditorContext = {
   revision: number | null;
   title: string;
   model?: ResourceModel;
+  focus?: import('./editor-focus.js').EditorFocus;
 };
 export type ResourceSaveResult = {
   saved: SavedResource;

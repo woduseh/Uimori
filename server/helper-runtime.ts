@@ -2561,6 +2561,7 @@ export class HelperRuntime {
                   ...(task.snapshot.editor.location
                     ? { location: task.snapshot.editor.location }
                     : {}),
+                  ...(task.snapshot.editor.focus ? { focus: task.snapshot.editor.focus } : {}),
                 }
               : null,
             selection: task.snapshot.selection
