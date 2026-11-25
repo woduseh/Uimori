@@ -109,8 +109,13 @@ import {
   editorContextChanged,
   captureActiveEditorContext,
   getActiveEditorContext,
+  saveActiveEditor,
   type ActiveEditorContext,
 } from './resource-editor.js';
+import { editorFocusKey, type EditorFocus } from '../core/editor-focus.js';
+import type { ResourceKind } from '../core/resource-editing.js';
+import { editorHelperSuggestions } from './editor-helper.js';
+import { contentSectionRegistry, presetSectionRegistry } from './studio-sections.js';
 import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar, type HelperNavigationActions } from './HelperSessionBar.js';
 import { HelperModelPicker } from './HelperModelPicker.js';
@@ -200,7 +205,15 @@ export type HelperHandoff =
       key: string;
       scope: Extract<HelperScope, { kind: 'chat' }>;
       conversationId?: string;
-    } & HelperSelection);
+    } & HelperSelection)
+  | {
+      kind: 'editor';
+      epoch: number;
+      key: string;
+      scope: HelperScope;
+      conversationId?: string;
+      focus: EditorFocus;
+    };
 type Outbox = Partial<FrozenHelperAttachments> & {
   retryOf?: string;
   resume?: true;
@@ -374,6 +387,32 @@ function storedOutline(scope: string): SelectedOutline | null {
   }
 }
 const selectionRequest = () => t('helpers.reviewSelection');
+function editorFocusParts(kind: ResourceKind, focus: EditorFocus) {
+  const registry: readonly { id: string; labelKey: string }[] =
+    kind === 'content' ? contentSectionRegistry : presetSectionRegistry;
+  const section = registry.find((entry) => entry.id === focus.section);
+  const item = focus.item?.label;
+  const field = focus.field?.label;
+  return {
+    place: section ? t(section.labelKey) : focus.section,
+    detail: [
+      item,
+      field && field !== item ? field : '',
+      focus.selection
+        ? t('editorHelper.focusSelection', { count: focus.selection.to - focus.selection.from })
+        : '',
+      focus.diagnostic
+        ? t('editorHelper.focusError', { line: focus.diagnostic.line })
+        : focus.diagnostics?.length
+          ? t('editorHelper.focusErrors', {
+              count: focus.diagnostics.length + (focus.diagnosticsOmitted ?? 0),
+            })
+          : '',
+    ]
+      .filter(Boolean)
+      .join(', '),
+  };
+}
 
 export const HelperPanel = memo(function HelperPanel(props: Props) {
   useI18n();
@@ -674,6 +713,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const [modelRequired, setModelRequired] = useState<Record<string, boolean>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
+  const [editorAsks, setEditorAsks] = useState<Record<string, string>>({});
+  const [detachedFocus, setDetachedFocus] = useState<Record<string, string>>({});
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const [settingsOwner, setSettingsOwner] = useState<string | null>(null);
   const [discardSettingsOwner, setDiscardSettingsOwner] = useState<string | null>(null);
   const settings = props.open && !!scopeKey && settingsOwner === scopeKey;
@@ -852,6 +894,15 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     setFrozenResources((old) => ({ ...old, [scopeKey]: props.resource ?? null }));
   }, [props.resource, scopeKey]);
   const draft = drafts[scopeKey] ?? local(`helper-input:${scopeKey}`) ?? '';
+  const editorFocus = currentResource ? undefined : displayEditor?.focus;
+  const editorFocusId = editorFocusKey(editorFocus);
+  const shownFocus =
+    editorFocus && detachedFocus[scopeKey] !== editorFocusId ? editorFocus : undefined;
+  const editorUnsaved = !currentResource && !!editor && displayEditor === editor && editor.dirty;
+  const editorSuggestions =
+    shownFocus && editorAsks[scopeKey] === editorFocusId && !draft.trim()
+      ? editorHelperSuggestions(shownFocus)
+      : [];
   const helperWorkspace = usePromptWorkspace();
   const modelRef =
     savedModel && savedModel.revision > (helperWorkspace.workspace?.revision ?? -1)
@@ -995,8 +1046,13 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         };
         setSelections((old) => ({ ...old, [owner.id]: value }));
         saveLocal(`helper-selection:${owner.id}`, JSON.stringify(value));
+      } else if (selected.kind === 'editor') {
+        const key = editorFocusKey(selected.focus);
+        setEditorAsks((old) => ({ ...old, [owner.id]: key }));
+        setDetachedFocus((old) => ({ ...old, [owner.id]: '' }));
+        setComposerFocusRequest((value) => value + 1);
       }
-      if (selected.kind !== 'outline' || selected.target)
+      if (selected.kind !== 'editor' && (selected.kind !== 'outline' || selected.target))
         setDrafts((old) => {
           if (!current()) return old;
           const previous = old[owner.id] ?? local(`helper-input:${owner.id}`) ?? '';
@@ -1137,6 +1193,10 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
         return false;
       }
+      if (captured?.focus && detachedFocus[owner] === editorFocusKey(captured.focus)) {
+        const { focus: _detached, ...rest } = captured;
+        captured = rest;
+      }
     }
     locks.current.add(owner);
     setBusyScopes((old) => ({ ...old, [owner]: true }));
@@ -1192,6 +1252,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         if (declined.length) request.declinedConfirmations = declined;
       }
       setOutbox(owner, request);
+      if (!steerTaskId) setEditorAsks((old) => ({ ...old, [owner]: '' }));
       pendingRequest = request;
       if (!withoutStorage) {
         try {
@@ -1587,6 +1648,18 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     inputFocusPending.current = false;
     if (document.activeElement === closeButton.current) input.current?.focus();
   }, [props.open, inputDisabled]);
+  const focusedComposerRequest = useRef(0);
+  useEffect(() => {
+    if (
+      !props.open ||
+      inputDisabled ||
+      composerFocusRequest === focusedComposerRequest.current ||
+      !matchMedia('(hover: hover) and (pointer: fine)').matches
+    )
+      return;
+    focusedComposerRequest.current = composerFocusRequest;
+    input.current?.focus();
+  }, [props.open, inputDisabled, composerFocusRequest]);
   const steering = Boolean(running && runningSendMode === 'steer' && !attachments.hasAttachments);
   const submitRequest = () => {
     if (outbox) setOutboxDecision(outbox);
@@ -1944,23 +2017,27 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     : t(scope.kind === 'chat' ? 'helpers.chatTitle' : 'helpers.libraryTitle')}
                 </span>
               </p>
-              <ul className="helper-start-list" aria-label={t('helpers.starters')}>
-                {starterKeys[scope.kind].map((key) => (
-                  <li key={key}>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={props.ready === false || !hydrated[scopeKey] || !attachments.ready}
-                      onClick={() => {
-                        editDraft(t(key));
-                        input.current?.focus();
-                      }}
-                    >
-                      {t(key)}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {editorSuggestions.length === 0 && (
+                <ul className="helper-start-list" aria-label={t('helpers.starters')}>
+                  {starterKeys[scope.kind].map((key) => (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          props.ready === false || !hydrated[scopeKey] || !attachments.ready
+                        }
+                        onClick={() => {
+                          editDraft(t(key));
+                          input.current?.focus();
+                        }}
+                      >
+                        {t(key)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           {conversation &&
@@ -2438,6 +2515,28 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             onHover={setMentionIndex}
           />
         )}
+        {editorSuggestions.length > 0 && (
+          <div className="helper-editor-suggestions">
+            {editorUnsaved && <p className="muted">{t('editorHelper.unsavedNote')}</p>}
+            <ul className="helper-start-list" aria-label={t('editorHelper.suggestions')}>
+              {editorSuggestions.map((suggestion) => (
+                <li key={suggestion}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={props.ready === false || !hydrated[scopeKey] || !attachments.ready}
+                    onClick={() => {
+                      editDraft(suggestion);
+                      input.current?.focus();
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <ChatComposer
           className="helper-request-composer"
           onDragOver={(event) => {
@@ -2489,8 +2588,49 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                   <span className="helper-chip-label">
                     {t('helpers.m317', { title: displayEditor.title || t('helpers.m085') })}
                   </span>
+                  {editorUnsaved && (
+                    <>
+                      <span className="helper-chip-badge helper-editor-unsaved">
+                        {t('editorHelper.unsaved')}
+                      </span>
+                      <button
+                        type="button"
+                        className="helper-chip-action"
+                        aria-label={t('editorHelper.saveEditor')}
+                        onClick={() => void saveActiveEditor()}
+                      >
+                        {t('shared.save')}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
+              {shownFocus &&
+                displayEditor &&
+                (() => {
+                  const parts = editorFocusParts(displayEditor.kind, shownFocus);
+                  return (
+                    <div
+                      className="helper-context-chip helper-editor-focus"
+                      data-testid="helper-editor-focus"
+                      aria-label={t('editorHelper.focusLabel')}
+                      role="group"
+                    >
+                      <span className="helper-chip-badge">{parts.place}</span>
+                      {parts.detail && <span className="helper-chip-label">{parts.detail}</span>}
+                      <button
+                        type="button"
+                        className="helper-chip-dismiss"
+                        aria-label={t('editorHelper.focusRemove')}
+                        onClick={() =>
+                          setDetachedFocus((old) => ({ ...old, [scopeKey]: editorFocusId }))
+                        }
+                      >
+                        <X size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })()}
               {selectedOutline && (
                 <div className="helper-context-chip helper-outline-selection">
                   <span className="helper-chip-badge">

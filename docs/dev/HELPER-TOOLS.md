@@ -180,6 +180,15 @@ Outside these operations:
 - The editor target ([Local recovery storage (IndexedDB)](APP-INVARIANTS.md#local-recovery-storage-indexeddb); context only, not a permission boundary per [도우미와 과거 가정 장면](../USAGE.md#도우미와-과거-가정-장면); the prompt library action **도우미에게 묻기** clears when opening an editor, leaving the library, or clearing the target).
 - Reader selections (**도우미에게 물어보기** passes the whole passage as task `selection` and keeps it whole across later turns, `tests/helper-browser.spec.ts`).
 
+## Editor context
+
+`EditorFocus` (`core/editor-focus.ts`) is the shape of where the user is in an open resource editor; `parseEditorFocus` is the request-boundary check (`helper-routes.ts`, `tests/editor-focus.test.ts`, `tests/helper-workspace.test.ts`) and the snapshot passes it unchanged as `source.editor.focus` beside `hasUnsavedInput`. User-facing behavior lives in [편집기에서 도우미에게 묻기](../EDITING.md#편집기에서-도우미에게-묻기).
+
+- One publisher: `web/resource-editor.tsx` builds the focus per editor session from the studio location (`usePublishedEditorLocation`, including `unsavedSections`), the last focused code field's report (`usePublishedEditorField`) and an explicit ask (`useEditorHelperAsk`, the `editor.askHelper` shortcut) that pins the focus until the next field report or a move to another item. `captureActiveEditorContext` adds it to the editor reference the helper composer already sends; there is no second channel. Code fields report on focus, selection and analysis changes after a short debounce, and an ask flushes a pending report first so the shortcut never sends a stale field.
+- Offsets, lines and columns are in the field's LF text, the same text `analyzeCbs` reads; diagnostics are the CBS analysis the field already computed (Lua fields and the plain textarea fallback send none). Only the selection carries text, bounded by `EDITOR_FOCUS_SELECTION_MAX_CHARS`; the field's full draft travels in `editor.model` only when the editor is unsaved, as before.
+- The focus is context, not a permission boundary or a write target: saves still go through `resource.patch` and its revision checks, and `EDITOR_SAVE_REQUIRED` still refuses writes to a resource whose editor draft was sent as unsaved.
+- The composer chip is removable; removal drops the focus from requests until the focus key (`editorFocusKey`) changes. Suggested requests (`web/editor-helper.ts`) only fill the composer, like the empty-conversation starters.
+
 ## Editing saved scenes
 
 Error codes and all-or-nothing saves through the helper runtime are enforced by `tests/helper-scene-runtime.test.ts`. Caller-visible behavior lives in [Editing saved scenes](../HELPER-TOOLS.md#editing-saved-scenes).

@@ -16,6 +16,7 @@ import { validateRisuPrompt, type RisuPrompt, type PromptValue } from '../core/r
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { StudioPanel, useStudioItem } from './EditorStudio.js';
+import { EditorHelperItemAction } from './EditorHelperAction.js';
 import { NativeRisuToggleEditor } from './NativeRisuToggleEditor.js';
 import {
   useBufferedEditorState,
@@ -368,6 +369,11 @@ export function NativeRisuPresetEditor({
               <>
                 <div className="native-detail-heading">
                   <h3>{blockTitle(entry)}</h3>
+                  <EditorHelperItemAction
+                    index={index}
+                    label={blockTitle(entry)}
+                    section="blocks"
+                  />
                   <IconButton
                     label={t('native.text_baea99787c')}
                     icon={UpIcon}

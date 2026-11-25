@@ -15,6 +15,16 @@ export type EditorReveal = EditorJumpTarget & { epoch: number };
 export const codeFieldName = (section: string, item: number | null, field: string) =>
   `${section}:${item ?? ''}:${field}`;
 
+export function codeFieldParts(name: string) {
+  const match = /^([^:]+):(\d*):(.+)$/u.exec(name);
+  if (!match) return null;
+  return {
+    section: match[1]!,
+    item: match[2] ? Number(match[2]) : null,
+    field: match[3]!,
+  };
+}
+
 export function revealCodeField(
   container: () => Element | null,
   name: string,

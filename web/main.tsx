@@ -4,6 +4,8 @@ import { DraftRequestImages } from './RequestImages.js';
 import { downloadArchive } from './archive-download.js';
 import { ReaderEditingContext } from './Bookmarks.js';
 import { ResourceAnchorContext, type ResourceAnchor } from './resource-anchor.js';
+import { EditorHelperContext } from './editor-helper.js';
+import type { EditorFocus } from '../core/editor-focus.js';
 import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -1299,6 +1301,18 @@ function App() {
     setHelperExpanded(false);
     setWorkspacePanel((value) => (value === 'helper' ? null : value));
   }, []);
+  const askEditorHelper = useStableHandler((focus: EditorFocus) => {
+    const scope = helperPanelScope;
+    setHelperHandoff({
+      kind: 'editor',
+      epoch: ++helperHandoffEpoch.current,
+      key: crypto.randomUUID(),
+      scope,
+      conversationId: selectedHelperSession(scope) ?? undefined,
+      focus,
+    });
+    setWorkspacePanel('helper');
+  });
   const outlineReturnToSidecar = useRef(false);
   const [outlineChat, setOutlineChat] = useState<string | null>(null);
   const shownOutlineChat =
@@ -3627,7 +3641,9 @@ function App() {
     <ReadingPreferencesContext value={reading.settings}>
       <TransientNotice message={s.notice} />
       <ReaderEditingContext value={onSourceEditing}>
-        <ResourceAnchorContext value={resourceAnchorRequest}>{workspace}</ResourceAnchorContext>
+        <ResourceAnchorContext value={resourceAnchorRequest}>
+          <EditorHelperContext value={askEditorHelper}>{workspace}</EditorHelperContext>
+        </ResourceAnchorContext>
       </ReaderEditingContext>
       {sceneDeletion && (
         <SceneDeleteDialog

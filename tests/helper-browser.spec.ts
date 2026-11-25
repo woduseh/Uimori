@@ -1,7 +1,7 @@
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type {
   HelperConversation,
@@ -18,7 +18,7 @@ import type { HelperActivityEvent } from '../core/helper-activity.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
-import type { ModelPreset, ModelWorkspace } from '../core/product.js';
+import type { Content, ModelPreset, ModelWorkspace } from '../core/product.js';
 import { messages } from '../web/locales/index.js';
 import { diffText } from '../core/text-diff.js';
 import { longestHelperPollDelay } from '../web/poll-delays.js';
@@ -26,6 +26,13 @@ import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
+import { editLibraryContent, editorChanges, selectEditorSection } from './ui-navigation.js';
+import { nativeContent } from './fixtures/native-content.js';
+import { waitForContentSave } from './fixtures/resource-save.js';
+import { expectCodeFieldValue } from './code-field.js';
+import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
+import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
+import { mkdirSync } from 'node:fs';
 
 test.setTimeout(60000);
 const usage = { modelCalls: 1, inputTokens: 10, outputTokens: 10, costUsd: null };
@@ -3586,4 +3593,443 @@ test('HELPASK01 question cards display selectable options, send the chosen reply
   await expect(card).toHaveAttribute('data-state', 'answered');
   await expect(card).toContainText('이후 대화에서 응답했어요.');
   await expect(card.getByRole('button', { name: /담백하게/ })).toBeDisabled();
+});
+
+const EDITOR_HELPER_SHOTS = 'output/editor-helper';
+type EditorPost = { text: string; editor?: Record<string, any> };
+
+async function seedEditorBot(request: APIRequestContext, title: string) {
+  const response = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title,
+      package: nativeContent({
+        name: title,
+        description: '바닷가 마을의 등대지기 이야기예요.\n{{getvar::mood',
+        first_mes: '안개가 걷히자 등대 불빛이 바다를 훑었어요.',
+        character_book: {
+          entries: [
+            { keys: ['등대'], content: '등대는 마을 북쪽 절벽 위에 있어요.', comment: '등대' },
+            { keys: ['항구'], content: '항구에는 작은 어선이 모여요.', comment: '항구' },
+          ],
+        },
+      }),
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return (await response.json()) as Content;
+}
+
+async function openEditorBot(page: Page, title: string) {
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(title);
+  await editLibraryContent(page, title);
+  return page.getByRole('region', { name: '자료 상세', exact: true });
+}
+
+async function editorShot(page: Page, name: string) {
+  mkdirSync(EDITOR_HELPER_SHOTS, { recursive: true });
+  await page.screenshot({ path: `${EDITOR_HELPER_SHOTS}/${name}.png` });
+}
+
+async function openLore(editor: Locator, name: string) {
+  await selectEditorSection(editor, '로어북');
+  const navigation = editor.getByRole('complementary', { name: '로어 목록', exact: true });
+  if (!(await navigation.isVisible()))
+    await editor.getByRole('button', { name: '로어 목록 보기', exact: true }).click();
+  await navigation.getByRole('button', { name, exact: true }).click();
+}
+
+const lastEditorPost = (state: { posts: unknown[] }) => state.posts.at(-1) as EditorPost;
+const suggestionList = (panel: Locator) =>
+  panel.getByRole('list', { name: '추천 요청', exact: true });
+
+test('EHELP01 a lore entry asks the helper with its location attached, suggestions fill the composer and the chip can be removed', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  const title = `EHELP01 ${randomUUID().slice(0, 8)}`;
+  await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await openLore(editor, '등대');
+  const ask = editor.getByRole('button', { name: '등대 도우미에게 묻기', exact: true });
+  await expect(ask).toBeVisible();
+  await editorShot(page, 'lore-item-action-1440-dark');
+  await ask.click();
+  const panel = page.locator('#helper-panel');
+  const input = panel.getByLabel('도우미에게 요청');
+  await expect(input).toBeEnabled();
+  const chip = panel.getByTestId('helper-editor-focus');
+  await expect(chip).toContainText('로어북');
+  await expect(chip).toContainText('등대');
+  await expect(suggestionList(panel).getByRole('button')).toHaveText([
+    '이 로어 항목의 키워드와 내용이 맞는지 봐 줘',
+    '이 로어 항목 다듬어 줘',
+    '이 로어 항목 더 짧게 줄여 줘',
+    '이 로어 항목 이어서 써 줘',
+  ]);
+  await expect(input).toBeFocused();
+  await editorShot(page, 'lore-docked-chip-suggestions-1440-dark');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await editorShot(page, 'lore-docked-chip-suggestions-1440-light');
+  await suggestionList(panel)
+    .getByRole('button', { name: '이 로어 항목 다듬어 줘', exact: true })
+    .click();
+  await expect(input).toHaveValue('이 로어 항목 다듬어 줘');
+  await expect(suggestionList(panel)).toHaveCount(0);
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(lastEditorPost(state).editor).toMatchObject({
+    kind: 'content',
+    source: 'saved',
+    focus: { section: 'lore', item: { index: 0, label: '등대' } },
+  });
+  await chip.getByRole('button', { name: '도우미가 볼 위치 빼기', exact: true }).click();
+  await expect(chip).toHaveCount(0);
+  await input.fill('전체 자료만 보고 답해 줘');
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(2);
+  expect(lastEditorPost(state).editor).toMatchObject({ kind: 'content', source: 'saved' });
+  expect(lastEditorPost(state).editor?.focus).toBeUndefined();
+});
+
+test('EHELP02 a CBS diagnostic offers a keyboard-reachable fix request with the diagnostic attached', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const title = `EHELP02 ${randomUUID().slice(0, 8)}`;
+  await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  const description = editor.getByRole('textbox', { name: '카드 설명', exact: true });
+  await description.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  const fix = editor.getByRole('button', { name: '도우미에게 고쳐 달라고 하기', exact: true });
+  await expect(fix).toBeVisible();
+  await editorShot(page, 'diagnostic-tooltip-action-1440-light');
+  await page.keyboard.press('Tab');
+  await expect(fix).toBeFocused();
+  await page.keyboard.press('Enter');
+  const panel = page.locator('#helper-panel');
+  const chip = panel.getByTestId('helper-editor-focus');
+  await expect(chip).toContainText('카드 설명');
+  await expect(chip).toContainText('2번째 줄 오류');
+  await expect(suggestionList(panel).getByRole('button').first()).toHaveText('이 오류 고쳐 줘');
+  await editorShot(page, 'diagnostic-docked-1440-light');
+  await suggestionList(panel).getByRole('button', { name: '이 오류 고쳐 줘', exact: true }).click();
+  await panel.getByLabel('도우미에게 요청').press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  const focus = lastEditorPost(state).editor?.focus;
+  expect(focus).toMatchObject({
+    section: 'basic',
+    field: { section: 'basic', item: null, field: 'description', language: 'cbs', usesCbs: true },
+    diagnostic: { code: 'cbs.unclosed-call', severity: 'error', line: 2, column: 1 },
+  });
+  expect(focus.diagnostics).toEqual([focus.diagnostic]);
+});
+
+test('EHELP03 a selection inside a code field asks about just the selected text', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const title = `EHELP03 ${randomUUID().slice(0, 8)}`;
+  await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await openLore(editor, '등대');
+  const body = editor.getByRole('textbox', { name: '로어 본문', exact: true });
+  await body.click();
+  await expect(body).toBeFocused();
+  await expect(page.locator('#helper-panel')).toBeHidden();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.press('Shift+End');
+  const ask = editor.getByRole('button', {
+    name: '로어 본문에서 선택한 부분 도우미에게 묻기',
+    exact: true,
+  });
+  await expect(ask).toBeVisible();
+  await editorShot(page, 'selection-action-1440-light');
+  await ask.click();
+  const panel = page.locator('#helper-panel');
+  await expect(panel.getByTestId('helper-editor-focus')).toContainText('선택 20자');
+  await expect(suggestionList(panel).getByRole('button')).toHaveText([
+    '선택한 부분 다듬어 줘',
+    '선택한 부분 더 짧게 줄여 줘',
+  ]);
+  await editorShot(page, 'selection-docked-1440-light');
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('이 문장을 더 생생하게');
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(lastEditorPost(state).editor?.focus).toMatchObject({
+    section: 'lore',
+    item: { index: 0, label: '등대' },
+    field: { field: 'content', item: 0, label: '로어 본문' },
+    selection: { from: 0, to: 20, text: '등대는 마을 북쪽 절벽 위에 있어요.' },
+  });
+});
+
+test('EHELP04 Alt+I asks the helper about the focused field and is listed with the shortcuts', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const title = `EHELP04 ${randomUUID().slice(0, 8)}`;
+  await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await selectEditorSection(editor, '첫 메시지');
+  await editor.getByRole('textbox', { name: '기본 첫 메시지', exact: true }).click();
+  await page.keyboard.press('Alt+KeyI');
+  const panel = page.locator('#helper-panel');
+  await expect(panel.getByTestId('helper-editor-focus')).toContainText('첫 메시지');
+  await expect(suggestionList(panel).getByRole('button').first()).toHaveText('첫 메시지 다듬어 줘');
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('분위기를 더 살려 줘');
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(lastEditorPost(state).editor?.focus).toMatchObject({
+    section: 'greetings',
+    item: { index: 0 },
+    field: { field: 'first_mes', item: 0 },
+  });
+  await page.keyboard.press('Control+Comma');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  await settings.getByRole('tab', { name: '일반', exact: true }).click();
+  await settings
+    .locator('[id$="-general-display"]')
+    .getByRole('button', { name: '변경', exact: true })
+    .click();
+  await expect(
+    settings
+      .locator('[data-settings-detail]:not([hidden]) .shortcut-settings-row', {
+        hasText: '편집 중인 항목 도우미에게 묻기',
+      })
+      .locator('kbd')
+  ).toHaveText('Alt+I');
+});
+
+test('EHELP05 phone the field action stays visible and opens the helper sheet with the context', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const title = `EHELP05 ${randomUUID().slice(0, 8)}`;
+  await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await openLore(editor, '항구');
+  const ask = editor.getByRole('button', { name: '로어 본문 도우미에게 묻기', exact: true });
+  await expect(ask).toBeVisible();
+  await expect(ask).toHaveCSS('opacity', '1');
+  await editorShot(page, 'phone-field-action-390-light');
+  await ask.click();
+  const panel = page.locator('#helper-panel');
+  await expect(panel.getByTestId('helper-editor-focus')).toContainText('항구');
+  await expect(suggestionList(panel)).toBeVisible();
+  await editorShot(page, 'phone-helper-sheet-390-light');
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await editorShot(page, 'phone-helper-sheet-390-dark');
+  await suggestionList(panel).getByRole('button').first().click();
+  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  expect(lastEditorPost(state).editor?.focus).toMatchObject({
+    section: 'lore',
+    item: { index: 1, label: '항구' },
+    field: { field: 'content', item: 1 },
+  });
+});
+
+test('EHELP06 unsaved edits go with the request, are named in the chip and save from the composer', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const title = `EHELP06 ${randomUUID().slice(0, 8)}`;
+  const bot = await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await openLore(editor, '등대');
+  await editor
+    .getByRole('textbox', { name: '로어 본문', exact: true })
+    .fill('등대는 이제 남쪽 곶에 있어요.');
+  await editor.getByRole('button', { name: '등대 도우미에게 묻기', exact: true }).click();
+  const panel = page.locator('#helper-panel');
+  const chips = panel.locator('.helper-context-chips');
+  await expect(chips.locator('.helper-editor-unsaved')).toHaveText('저장 전');
+  await expect(
+    panel.getByText(
+      '도우미는 저장하지 않은 입력까지 읽지만, 이 자료를 고치려면 먼저 저장해야 해요.',
+      { exact: true }
+    )
+  ).toBeVisible();
+  await editorShot(page, 'unsaved-docked-1440-light');
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('지금 고친 내용이 다른 로어와 맞는지 봐 줘');
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  const sent = lastEditorPost(state).editor!;
+  expect(sent).toMatchObject({
+    source: 'unsaved',
+    focus: { section: 'lore', unsavedSections: ['lore'] },
+  });
+  expect(JSON.stringify(sent.model)).toContain('등대는 이제 남쪽 곶에 있어요.');
+  const saved = waitForContentSave(page);
+  await chips.getByRole('button', { name: '편집 중인 자료 저장', exact: true }).click();
+  await saved;
+  await expect(chips.locator('.helper-editor-unsaved')).toHaveCount(0);
+  const stored = await (await request.get(`/api/content/${bot.id}`)).json();
+  expect(JSON.stringify(stored.package)).toContain('등대는 이제 남쪽 곶에 있어요.');
+});
+
+test('EHELP07 a helper save to the open resource shows the new text with no phantom change and its card opens the item', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const title = `EHELP07 ${randomUUID().slice(0, 8)}`;
+  const bot = await seedEditorBot(request, title);
+  const state = await harness(page);
+  const editor = await openEditorBot(page, title);
+  await openLore(editor, '항구');
+  await editor.getByRole('button', { name: '항구 도우미에게 묻기', exact: true }).click();
+  const panel = page.locator('#helper-panel');
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('항구 로어를 다듬어 줘');
+  await input.press('Control+Enter');
+  await expect.poll(() => state.posts.length).toBe(1);
+  const current = (await (await request.get(`/api/content/${bot.id}`)).json()) as Content;
+  const model = editableResource('content', current) as ContentEditModel;
+  const card = structuredClone(model.package.nativeRisu.card) as Record<string, any>;
+  card.character_book.entries[1].content = '항구에는 새벽마다 작은 어선이 돌아와요.';
+  const changed = await request.put(`/api/content/${bot.id}`, {
+    data: {
+      ...model,
+      package: nativeContent(card, { images: model.package.images }),
+      expectedRevision: current.revision,
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  const task = state.current().tasks[0]!;
+  state.results.set(task.id, {
+    changes: [
+      {
+        domain: 'resource',
+        targetId: bot.id,
+        title,
+        location: {
+          kind: 'resource-list',
+          path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
+          section: 'lore',
+          item: { name: '항구', index: 1 },
+          field: ['content'],
+        },
+        action: 'update',
+        diff: {
+          mode: 'prose',
+          unit: 'word',
+          added: 2,
+          removed: 1,
+          hunks: [
+            {
+              beforeOffset: 0,
+              afterOffset: 0,
+              segments: [
+                { op: 'equal', text: '항구에는 ' },
+                { op: 'insert', text: '새벽마다 ' },
+                { op: 'equal', text: '작은 어선이 ' },
+                { op: 'delete', text: '모여요.' },
+                { op: 'insert', text: '돌아와요.' },
+              ],
+            },
+          ],
+        },
+        anchor: {
+          domain: 'resource',
+          kind: 'content',
+          id: bot.id,
+          path: '/package/nativeRisu/card/character_book/entries/1/content',
+          section: 'lore',
+          index: 1,
+        },
+      } as HelperChange,
+    ],
+  });
+  state.emit('resource.updated');
+  state.complete(task);
+  const body = editor.getByRole('textbox', { name: '로어 본문', exact: true });
+  await expectCodeFieldValue(body, '항구에는 새벽마다 작은 어선이 돌아와요.');
+  await expect(editorChanges(page)).toHaveCount(0);
+  await expect(editor.locator('.section-navigation-changed')).toHaveCount(0);
+  await expect(panel.locator('.helper-editor-unsaved')).toHaveCount(0);
+  await expect(
+    body.locator('xpath=ancestor::*[@data-code-field][1]').locator('[class*="cm-change-"]')
+  ).toHaveCount(0);
+  await editorShot(page, 'after-helper-edit-1440-light');
+  await openLore(editor, '등대');
+  await panel
+    .getByTestId('helper-task-results')
+    .getByRole('button', { name: `${title}, 로어북, 항구, 로어 본문 열기`, exact: true })
+    .click();
+  await expect(
+    editor
+      .getByRole('complementary', { name: '로어 목록', exact: true })
+      .getByRole('button', { name: '항구', exact: true })
+  ).toHaveAttribute('aria-current', 'true');
+});
+
+test('EHELP08 item and field actions in a named palette in dark and light', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(90000);
+  const title = `EHELP08 ${randomUUID().slice(0, 8)}`;
+  await seedEditorBot(request, title);
+  const palette = BUILTIN_PALETTES.find((item) => item.id.endsWith('midnight'))!;
+  const select = async (paletteId: string) => {
+    const catalog = await (await request.get('/api/themes')).json();
+    const changed = await request.post('/api/themes/selection', {
+      data: {
+        dimension: 'palette',
+        scope: 'global',
+        paletteId,
+        expectedRevision: catalog.preferences.revision,
+      },
+    });
+    expect(changed.ok(), await changed.text()).toBe(true);
+  };
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await harness(page);
+  try {
+    await select(palette.id);
+    const editor = await openEditorBot(page, title);
+    await openLore(editor, '등대');
+    await editor.getByRole('textbox', { name: '로어 본문', exact: true }).hover();
+    await expect(
+      editor.getByRole('button', { name: '로어 본문 도우미에게 묻기', exact: true })
+    ).toHaveCSS('opacity', '1');
+    await editorShot(page, 'lore-field-action-1440-midnight-dark');
+    await editor.getByRole('button', { name: '등대 도우미에게 묻기', exact: true }).click();
+    await expect(page.locator('#helper-panel').getByTestId('helper-editor-focus')).toBeVisible();
+    await editorShot(page, 'lore-docked-1440-midnight-dark');
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await editorShot(page, 'lore-docked-1440-midnight-light');
+    await selectEditorSection(editor, '기본 정보');
+    await editor.getByRole('textbox', { name: '카드 설명', exact: true }).hover();
+    await editorShot(page, 'description-field-action-1440-midnight-light');
+  } finally {
+    await select(THEME_PALETTE_ID);
+  }
 });

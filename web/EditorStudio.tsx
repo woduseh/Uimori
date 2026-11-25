@@ -71,9 +71,13 @@ export function StudioPanel({
   );
 }
 
+export function useStudioSectionId(panel?: string) {
+  return useContext(PanelSection) ?? panel ?? null;
+}
+
 export function useStudioItem(index: number | null, label: string, panel?: string) {
   const setItem = useContext(StudioItems);
-  const section = useContext(PanelSection) ?? panel ?? null;
+  const section = useStudioSectionId(panel);
   useEffect(() => {
     if (!setItem || !section) return;
     setItem(section, index === null ? null : { index, label });
@@ -121,8 +125,16 @@ export function EditorStudio<K extends string>({
     });
   }, []);
   const item = items[value];
+  const unsaved = changed.map((section) => section.id).join('\n');
   usePublishedEditorLocation(
-    useMemo(() => (item ? { section: value, item } : { section: value }), [value, item])
+    useMemo(
+      () => ({
+        section: value,
+        ...(item ? { item } : {}),
+        ...(unsaved ? { unsavedSections: unsaved.split('\n') } : {}),
+      }),
+      [value, item, unsaved]
+    )
   );
   useLayoutEffect(() => {
     if (shown.current === value) return;

@@ -94,7 +94,9 @@ for (const viewport of viewports)
       await expect(field.locator('.cm-lintRange-error')).toHaveCount(1);
       await page.keyboard.press('ArrowLeft');
       await field.locator('.cm-lintRange-error').click();
-      await expect(page.locator('.cm-cbs-cursor-diagnostic')).toHaveText('{{를 닫는 }}가 없어요.');
+      await expect(page.locator('.cm-cbs-cursor-diagnostic > span')).toHaveText(
+        '{{를 닫는 }}가 없어요.'
+      );
       await capture(page, `diagnostic-${viewport.name}-${theme}`);
     });
 

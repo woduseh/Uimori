@@ -6,6 +6,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { EditorHelperItemAction } from './EditorHelperAction.js';
 import {
   useBufferedEditorState,
   useUnappliedEditorField,
@@ -542,6 +543,14 @@ export function NativeRisuToggleEditor({
           </button>
           <ActionMenu label={t('native.itemMenu', { title })} viewport>
             <div className="action-menu-group">
+              {type !== 'divider' && (
+                <EditorHelperItemAction
+                  menu
+                  index={item.index}
+                  label={title}
+                  {...(definition?.key ? { id: definition.key } : {})}
+                />
+              )}
               <button
                 type="button"
                 disabled={locked}

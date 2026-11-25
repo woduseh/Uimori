@@ -161,6 +161,12 @@ export const messages = {
     ja: '原稿検索を開く',
     zh: '打开稿件搜索',
   },
+  'shortcuts.action.editorAskHelper': {
+    ko: '편집 중인 항목 도우미에게 묻기',
+    en: 'Ask the assistant about the item being edited',
+    ja: '編集中の項目をアシスタントに質問',
+    zh: '就正在编辑的项目询问助手',
+  },
   'shortcuts.action.helperMode': {
     ko: '도우미 요청 방식 전환',
     en: 'Switch assistant request mode',

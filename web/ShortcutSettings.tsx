@@ -29,6 +29,7 @@ const ACTION_LABELS: Record<ShortcutAction, string> = {
   'rightPanel.toggle': 'shortcuts.action.rightPanelToggle',
   'settings.open': 'shortcuts.action.settingsOpen',
   'editor.save': 'shortcuts.action.editorSave',
+  'editor.askHelper': 'shortcuts.action.editorAskHelper',
   'search.open': 'shortcuts.action.searchOpen',
   'helper.mode': 'shortcuts.action.helperMode',
   'run.stop': 'shortcuts.action.runStop',

@@ -4,6 +4,7 @@ import { IconButton } from './IconButton.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
 import { useStudioItem } from './EditorStudio.js';
+import { EditorHelperItemAction } from './EditorHelperAction.js';
 
 export function NativeCollectionEditor({
   label,
@@ -185,6 +186,7 @@ export function NativeCollectionEditor({
             <div className="native-detail-heading">
               <h3>{items[index].title}</h3>
               {actions}
+              <EditorHelperItemAction index={index} label={items[index].title} />
               {onMove && items.length > 1 && (
                 <>
                   <IconButton

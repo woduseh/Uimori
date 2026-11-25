@@ -49,14 +49,22 @@ import {
   type CbsTokenKind,
 } from '../core/cbs-analysis.js';
 import { CODE_FIELD_REVEAL } from './code-field-reveal.js';
+import {
+  editorFocusDiagnostic,
+  editorFocusDiagnostics,
+  editorFocusSelection,
+} from '../core/editor-focus.js';
 import { changedLineMarks } from './text-diff-rows.js';
 import { api } from './api.js';
 import { t } from './i18n.js';
 import {
+  CODE_FIELD_ASK_DIAGNOSTIC,
   PlainCodeField,
   type CbsNames,
   type CodeFieldHandoff,
+  type CodeFieldHelper,
   type CodeFieldProps,
+  type CodeFieldSnapshot,
   type CodeLanguage,
 } from './CodeField.js';
 
@@ -364,21 +372,38 @@ const cursorDiagnostic = StateField.define<readonly Tooltip[]>({
     const { state } = transaction;
     const selection = state.selection.main;
     if (!selection.empty || completionStatus(state)) return [];
-    let message: string | null = null;
+    let found: { message: string; from: number; to: number } | null = null;
     forEachDiagnostic(state, (diagnostic, from, to) => {
-      if (message === null && from < to && from <= selection.head && selection.head <= to)
-        message = diagnostic.message;
+      if (found === null && from < to && from <= selection.head && selection.head <= to)
+        found = { message: diagnostic.message, from, to };
     });
-    if (message === null) return [];
-    const text: string = message;
+    if (found === null) return [];
+    const { message, from, to }: { message: string; from: number; to: number } = found;
     return [
       {
         pos: selection.head,
         above: false,
-        create: () => {
+        create: (view) => {
           const dom = document.createElement('div');
           dom.className = 'cm-cbs-cursor-diagnostic';
-          dom.textContent = text;
+          const text = document.createElement('span');
+          text.textContent = message;
+          dom.append(text);
+          if (view.dom.closest('[data-editor-helper]')) {
+            const ask = document.createElement('button');
+            ask.type = 'button';
+            ask.className = 'secondary cm-cbs-diagnostic-helper';
+            ask.textContent = t('editorHelper.fixDiagnostic');
+            ask.addEventListener('click', () =>
+              ask.dispatchEvent(
+                new CustomEvent<CbsRange>(CODE_FIELD_ASK_DIAGNOSTIC, {
+                  bubbles: true,
+                  detail: { from, to },
+                })
+              )
+            );
+            dom.append(ask);
+          }
           return { dom };
         },
       },
@@ -570,7 +595,38 @@ function useFieldsetDisabled(host: RefObject<HTMLElement | null>) {
 type EditorProps = CodeFieldProps & {
   handoff: RefObject<CodeFieldHandoff>;
   names?: CbsNames | null;
+  helper?: CodeFieldHelper | null;
 };
+
+const REPORT_DELAY_MS = 150;
+const focused = (view: EditorView) => view.root.activeElement === view.contentDOM;
+
+function fieldSnapshot(state: EditorState, range?: CbsRange): CodeFieldSnapshot {
+  const text = state.doc.sliceString(0, state.doc.length, '\n');
+  const main = state.selection.main;
+  const selection = editorFocusSelection(text, main.from, main.to);
+  const tracked = state.field(analysisField, false);
+  const analysis = !tracked
+    ? null
+    : range && !tracked.current
+      ? analyze(state)
+      : currentAnalysis(state);
+  const listed = analysis ? editorFocusDiagnostics(text, analysis.diagnostics) : null;
+  const picked =
+    range && analysis
+      ? analysis.diagnostics.find(
+          (diagnostic) => diagnostic.from === range.from && diagnostic.to === range.to
+        )
+      : undefined;
+  return {
+    length: text.length,
+    usesCbs: text.includes('{{'),
+    ...(selection ? { selection } : {}),
+    diagnostics: listed?.diagnostics ?? [],
+    diagnosticsOmitted: listed?.omitted ?? 0,
+    ...(picked ? { diagnostic: editorFocusDiagnostic(text, picked) } : {}),
+  };
+}
 
 type EditorSettings = {
   locked: boolean;
@@ -620,12 +676,16 @@ function Editor({
   font,
   handoff,
   names = null,
+  helper = null,
   name,
   base,
   'aria-label': label,
   'aria-describedby': describedBy,
 }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
+  const helperRef = useRef(helper);
+  helperRef.current = helper;
+  const reportTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const view = useRef<EditorView | null>(null);
   const initialValue = useRef(value).current;
   const unacknowledged = useRef<string[]>([]);
@@ -704,6 +764,25 @@ function Editor({
           }
           if (resetAfterComposition.current && !update.view.composing)
             queueMicrotask(() => syncDocument(incoming.current));
+          if (
+            helperRef.current &&
+            focused(update.view) &&
+            (update.selectionSet ||
+              update.focusChanged ||
+              update.docChanged ||
+              update.startState.field(analysisField, false) !==
+                update.state.field(analysisField, false))
+          ) {
+            clearTimeout(reportTimer.current);
+            const flush = () => {
+              clearTimeout(reportTimer.current);
+              helperRef.current?.pending(null);
+              const editor = view.current;
+              if (editor && focused(editor)) helperRef.current?.report(fieldSnapshot(editor.state));
+            };
+            helperRef.current.pending(flush);
+            reportTimer.current = setTimeout(flush, REPORT_DELAY_MS);
+          }
         }),
       ],
     })
@@ -737,6 +816,7 @@ function Editor({
       });
     return () => {
       alive = false;
+      clearTimeout(reportTimer.current);
       editor.destroy();
       view.current = null;
     };
@@ -784,10 +864,30 @@ function Editor({
   }, []);
 
   useEffect(() => {
+    if (!helper) return;
+    helper.controller.current = {
+      snapshot: (range) =>
+        view.current
+          ? fieldSnapshot(view.current.state, range)
+          : { length: 0, usesCbs: false, diagnostics: [], diagnosticsOmitted: 0 },
+    };
+  }, [helper]);
+
+  useEffect(() => {
+    const field = host.current;
+    if (!field) return;
+    const ask = (event: Event) =>
+      helperRef.current?.askDiagnostic((event as CustomEvent<CbsRange>).detail);
+    field.addEventListener(CODE_FIELD_ASK_DIAGNOSTIC, ask);
+    return () => field.removeEventListener(CODE_FIELD_ASK_DIAGNOSTIC, ask);
+  }, []);
+
+  useEffect(() => {
     const field = host.current;
     const owner = field?.closest('label');
     if (!field || !owner) return;
     const focus = (event: MouseEvent) => {
+      if (!(event.target as Element).closest('button')) event.preventDefault();
       if (!field.contains(event.target as Node)) view.current?.focus();
     };
     owner.addEventListener('click', focus);
@@ -804,7 +904,10 @@ function Editor({
       data-disabled={locked || undefined}
       data-readonly={readOnly || undefined}
       data-rows={rows === undefined ? undefined : ''}
+      data-editor-helper={helper ? '' : undefined}
       style={rows === undefined ? undefined : ({ '--code-field-rows': rows } as CSSProperties)}
-    />
+    >
+      {helper?.action}
+    </div>
   );
 }

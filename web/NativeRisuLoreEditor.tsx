@@ -30,6 +30,7 @@ import {
   type LoreDropPosition,
 } from './native-lore-document.js';
 import { useStudioItem } from './EditorStudio.js';
+import { EditorHelperItemAction } from './EditorHelperAction.js';
 import './native-risu-lore.css';
 import './deletion.css';
 
@@ -430,6 +431,7 @@ export function NativeRisuLoreEditor({
               <h3>
                 {folder && <FolderIcon size={20} aria-hidden="true" />} {title}
               </h3>
+              {!folder && <EditorHelperItemAction index={index} label={title} />}
               <IconButton
                 label={folder ? t('native.text_8c30571e79') : t('native.text_f5bff252cf')}
                 icon={UpIcon}

@@ -30,6 +30,7 @@ export const shortcutActions = {
     key: { code: 'KeyS', mod: true },
     when: { ...outsideOverlay, insideOverlay: true },
   },
+  'editor.askHelper': { key: { code: 'KeyI', alt: true }, when: outsideOverlay },
   'search.open': { key: { code: 'KeyF', mod: true, shift: true }, when: outsideOverlay },
   'helper.mode': {
     key: { code: 'KeyM', alt: true },

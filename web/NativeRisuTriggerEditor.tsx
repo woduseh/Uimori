@@ -11,6 +11,8 @@ import { IconButton } from './IconButton.js';
 import { CodeField } from './CodeField.js';
 import { codeFieldName } from './code-field-reveal.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
+import { useStudioItem } from './EditorStudio.js';
+import { EditorHelperItemAction } from './EditorHelperAction.js';
 import './native-risu-trigger.css';
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -60,6 +62,10 @@ export function NativeRisuTriggerEditor({
       (effect) => record(effect) && effect.type === 'triggerlua' && typeof effect.code === 'string'
     );
   const raw = draft?.text ?? JSON.stringify(entry, null, 2) ?? '';
+  useStudioItem(
+    entry === undefined ? null : index,
+    entry === undefined ? '' : triggerTitle(entry, index)
+  );
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
     if (!draft) return model;
@@ -253,6 +259,7 @@ export function NativeRisuTriggerEditor({
       {value.length === 0 && pending && jsonEditor}
       {value.length > 0 && (
         <div className="native-trigger-actions">
+          <EditorHelperItemAction index={index} label={triggerTitle(entry, index)} />
           <button
             type="button"
             className="ghost"

@@ -185,7 +185,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
   await selectEditorSection(page, '구성');
   await expectCodeFieldValue(
-    composer.getByLabel('1번 프롬프트 본문'),
+    composer.getByLabel('1번 프롬프트 본문', { exact: true }),
     source.promptTemplate[0]!.text!
   );
   if (process.env.UIMORI_VISUAL_REVIEW === '1') {

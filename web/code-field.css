@@ -70,3 +70,36 @@
   background-color: var(--error-bg);
   border-radius: var(--radius-small);
 }
+.code-field {
+  position: relative;
+}
+.code-field[data-editor-helper] .cm-line {
+  padding-inline-end: var(--control-h);
+}
+.code-field > .code-field-helper {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
+  z-index: 1;
+  border-color: transparent;
+  color: var(--muted);
+}
+.code-field > .code-field-helper:is(:hover, [data-selection]) {
+  color: var(--accent-text);
+}
+.code-field > .code-field-helper:focus-visible {
+  outline-offset: calc(-2 * var(--focus-ring-width));
+}
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .code-field > .code-field-helper:not([data-selection]) {
+    opacity: 0;
+  }
+  .code-field:is(:hover, :focus-within) > .code-field-helper {
+    opacity: 1;
+  }
+}
+.code-field .cm-cbs-cursor-diagnostic {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}

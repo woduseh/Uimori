@@ -34,6 +34,7 @@ import { messages as readerSelection } from './reader-selection.js';
 import { messages as cbsReferences } from './cbs-references.js';
 import { messages as draftPreview } from './draft-preview.js';
 import { messages as taskTrace } from './task-trace.js';
+import { messages as editorHelper } from './editor-helper.js';
 import type { UiLocale } from '../../core/ui-locale.js';
 export const messages: Record<string, Record<UiLocale, string>> = {
   ...common,
@@ -72,6 +73,7 @@ export const messages: Record<string, Record<UiLocale, string>> = {
   ...cbsReferences,
   ...draftPreview,
   ...taskTrace,
+  ...editorHelper,
 };
 export const catalog = (locale: UiLocale): Record<string, string> =>
   Object.fromEntries(Object.entries(messages).map(([key, entry]) => [key, entry[locale]]));

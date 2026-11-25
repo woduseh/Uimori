@@ -16,6 +16,14 @@ import {
   type SetStateAction,
 } from 'react';
 import type { EditorContext, ResourceModel } from '../core/resource-editing.js';
+import type {
+  EditorFocus,
+  EditorFocusDiagnostic,
+  EditorFocusField,
+  EditorFocusItem,
+  EditorFocusSelection,
+} from '../core/editor-focus.js';
+import { EditorHelperContext, type EditorHelperOpener } from './editor-helper.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { ResourceEditorSession, EditorState } from './resource-editor-session.js';
 import { libraryChangedKey } from './api.js';
@@ -54,19 +62,94 @@ export function ResourceEditorLeaveWarning() {
   ) : null;
 }
 export type EditorLocationItem = { index: number; label: string };
-export type EditorLocation = { section: string; item?: EditorLocationItem };
+export type EditorLocation = {
+  section: string;
+  item?: EditorLocationItem;
+  unsavedSections?: string[];
+};
 export type ActiveEditorContext = EditorContext & {
   editorKey: string;
   dirty: boolean;
   location?: EditorLocation;
 };
+export type EditorFieldReport = EditorFocusField & {
+  selection?: EditorFocusSelection;
+  diagnostics?: EditorFocusDiagnostic[];
+  diagnosticsOmitted?: number;
+};
+export type EditorHelperTarget = {
+  section: string;
+  item?: EditorFocusItem;
+  field?: EditorFieldReport;
+  diagnostic?: EditorFocusDiagnostic;
+  withSelection?: boolean;
+};
 const locations = new WeakMap<ResourceEditorSession, EditorLocation>();
+const fieldReports = new WeakMap<ResourceEditorSession, EditorFieldReport>();
+const pinnedFocus = new WeakMap<ResourceEditorSession, EditorFocus>();
+const pendingReports = new WeakMap<ResourceEditorSession, () => void>();
+function composeFocus(
+  section: string,
+  item: EditorFocusItem | undefined,
+  report: EditorFieldReport | undefined,
+  withSelection: boolean,
+  diagnostic?: EditorFocusDiagnostic
+): EditorFocus {
+  const { selection, diagnostics, diagnosticsOmitted, ...field } = report ?? {};
+  return {
+    section,
+    ...(item ? { item } : {}),
+    ...(report
+      ? {
+          field: field as EditorFocusField,
+          ...(withSelection && selection ? { selection } : {}),
+          ...(diagnostics?.length
+            ? { diagnostics, ...(diagnosticsOmitted ? { diagnosticsOmitted } : {}) }
+            : {}),
+        }
+      : {}),
+    ...(diagnostic ? { diagnostic } : {}),
+  };
+}
+function targetFocus(session: ResourceEditorSession, target: EditorHelperTarget) {
+  const location = locations.get(session);
+  const live = fieldReports.get(session);
+  const shown = location?.section === target.section ? location.item : undefined;
+  const candidate = target.item ?? shown;
+  const report =
+    target.field ??
+    (live?.section === target.section && live.item === (candidate?.index ?? null)
+      ? live
+      : undefined);
+  const item =
+    target.item ??
+    (candidate && (!report || report.item === candidate.index) ? candidate : undefined);
+  return composeFocus(
+    target.section,
+    item,
+    report,
+    target.withSelection ?? true,
+    target.diagnostic
+  );
+}
+function editorFocus(session: ResourceEditorSession): EditorFocus | undefined {
+  const location = locations.get(session);
+  const focus =
+    pinnedFocus.get(session) ??
+    (location ? targetFocus(session, { section: location.section }) : undefined);
+  if (!focus) return undefined;
+  return location?.unsavedSections?.length
+    ? { ...focus, unsavedSections: location.unsavedSections }
+    : focus;
+}
 function context(session: ResourceEditorSession | null): ActiveEditorContext | null {
   const state = session?.snapshot();
   if (!session || !state?.ready) return null;
   const location = locations.get(session);
+  const focus = editorFocus(session);
   return {
     ...(location ? { location } : {}),
+    ...(focus ? { focus } : {}),
     kind: session.options.kind,
     targetId: state.document.targetId,
     revision: state.document.baseRevision,
@@ -88,7 +171,26 @@ export function hasUnsavedResourceEditor(kind: string, id: string) {
     );
   });
 }
-export const captureActiveEditorContext = () => activeSession()?.captureForHelper() ?? null;
+export function captureActiveEditorContext():
+  | (NonNullable<ReturnType<ResourceEditorSession['captureForHelper']>> & { focus?: EditorFocus })
+  | null {
+  const session = activeSession();
+  const captured = session?.captureForHelper();
+  if (!session || !captured) return null;
+  const focus = editorFocus(session);
+  return focus ? { ...captured, focus } : captured;
+}
+function askEditorHelper(
+  session: ResourceEditorSession,
+  open: EditorHelperOpener,
+  target: EditorHelperTarget
+) {
+  pendingReports.get(session)?.();
+  const focus = targetFocus(session, target);
+  pinnedFocus.set(session, focus);
+  changed();
+  open(editorFocus(session) ?? focus);
+}
 export async function discardActiveEditor(editorKey?: string) {
   const session = editorKey
     ? [...sessions.values()].find((item) => item.editorKey === editorKey)
@@ -242,6 +344,17 @@ export function ResourceEditorProvider({
     scope: root,
     active: !!saveButton,
   });
+  const openHelper = useContext(EditorHelperContext);
+  useShortcut(
+    'editor.askHelper',
+    () => {
+      const location = locations.get(value.session);
+      if (!openHelper || !location) return false;
+      value.activate();
+      askEditorHelper(value.session, openHelper, { section: location.section });
+    },
+    { scope: root, active: !!openHelper }
+  );
   useEffect(() => {
     const review = (event: Event) => {
       if ((event as CustomEvent<ResourceEditorSession>).detail === value.session)
@@ -355,8 +468,50 @@ export function usePublishedEditorLocation(location: EditorLocation) {
   useEffect(() => {
     if (!session) return;
     locations.set(session, location);
+    const pinned = pinnedFocus.get(session);
+    if (
+      pinned &&
+      (pinned.section !== location.section ||
+        (location.item && pinned.item && pinned.item.index !== location.item.index))
+    )
+      pinnedFocus.delete(session);
     changed();
   }, [session, location]);
+}
+export function usePublishedEditorField() {
+  const session = useContext(EditorContextValue)?.session;
+  return useMemo(
+    () => ({
+      publish: (report: EditorFieldReport) => {
+        if (!session) return;
+        fieldReports.set(session, report);
+        pinnedFocus.delete(session);
+        changed();
+      },
+      pending: (flush: (() => void) | null) => {
+        if (!session) return;
+        if (flush) pendingReports.set(session, flush);
+        else pendingReports.delete(session);
+      },
+    }),
+    [session]
+  );
+}
+export function useEditorHelperAsk() {
+  const value = useContext(EditorContextValue);
+  const open = useContext(EditorHelperContext);
+  const session = value?.session;
+  const activate = value?.activate;
+  return useMemo(
+    () =>
+      session && activate && open
+        ? (target: EditorHelperTarget) => {
+            activate();
+            askEditorHelper(session, open, target);
+          }
+        : null,
+    [session, activate, open]
+  );
 }
 export function useUnappliedEditorField(path: string, pending: boolean) {
   const session = useContext(EditorContextValue)?.session;

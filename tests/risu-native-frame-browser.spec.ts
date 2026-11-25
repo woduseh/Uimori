@@ -391,8 +391,13 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   await options.locator('summary').click();
   await editor.getByLabel('Mood', { exact: true }).selectOption('"1"');
   await selectEditorSection(page, '구성');
-  await expectCodeFieldValue(editor.getByLabel('1번 프롬프트 본문'), '{{getvar::place}}');
-  await editor.getByLabel('1번 프롬프트 본문').fill('{{#when::mood::tis::1}}VIVID{{/when}}');
+  await expectCodeFieldValue(
+    editor.getByLabel('1번 프롬프트 본문', { exact: true }),
+    '{{getvar::place}}'
+  );
+  await editor
+    .getByLabel('1번 프롬프트 본문', { exact: true })
+    .fill('{{#when::mood::tis::1}}VIVID{{/when}}');
   await selectEditorSection(page, '정규식');
   await editor.getByText('고급 JSON 편집', { exact: true }).click();
   await editor.getByLabel('Risu 정규식 JSON').fill('[invalid');

@@ -1040,3 +1040,15 @@
 .helper-plan-toggle[aria-expanded="true"] > svg {
   transform: rotate(180deg);
 }
+.helper-editor-suggestions {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.helper-editor-suggestions > p {
+  margin: 0;
+  font-size: var(--font-small);
+}
+.helper-editor-unsaved {
+  color: var(--warning);
+}
