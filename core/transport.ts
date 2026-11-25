@@ -169,13 +169,7 @@ export type WireRecord = {
   executionMode?: ModelExecutionMode;
   agentId?: string;
   connectionId: string;
-  protocol:
-    | ProviderConnection['protocol']
-    | 'typesafe-systemone-v1'
-    | 'typesafe-compatible-systemone-v1'
-    | 'openai-decisions-v1'
-    | 'openai-compatible-decisions-v1'
-    | 'gemini-decisions-v1';
+  protocol: ProviderConnection['protocol'] | import('./judgment-settings.js').JudgmentProtocol;
   role: ProviderRole;
   modelId: string;
   method: 'POST' | 'RPC';

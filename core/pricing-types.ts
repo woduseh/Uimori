@@ -23,7 +23,7 @@ export type ModelPricing =
     };
 export type PricingSnapshot = {
   version: 1;
-  protocol: ProviderProtocol;
+  protocol: ProviderProtocol | import('./judgment-settings.js').JudgmentProtocol;
   modelId: string;
   source: 'official' | 'manual' | 'catalog';
   sourceUrl?: string;

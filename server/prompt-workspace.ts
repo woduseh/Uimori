@@ -15,8 +15,10 @@ import {
   DEFAULT_JUDGMENT_SELECTION,
   OFFICIAL_JUDGMENT_MODELS,
   isJudgmentConnection,
+  type JudgmentPricing,
   type JudgmentSelection,
 } from '../core/judgment-settings.js';
+import { validateJudgmentPricing } from '../core/model-pricing.js';
 import type { FastifyInstance } from 'fastify';
 import type {
   ChatProfile,
@@ -112,8 +114,8 @@ function validateJudgmentSelection(value: unknown): JudgmentSelection {
   const input = record(value);
   const provider: unknown = input.provider;
   if (provider === 'typesafe') {
-    fields(input, ['provider']);
-    return DEFAULT_JUDGMENT_SELECTION;
+    fields(input, ['provider', 'pricing']);
+    return { provider, ...judgmentPricing(input, provider) };
   }
   if (
     provider !== 'openai' &&
@@ -122,7 +124,7 @@ function validateJudgmentSelection(value: unknown): JudgmentSelection {
     provider !== 'typesafe-compatible'
   )
     throw new HttpError(400, 'JUDGMENT_PROVIDER_INVALID');
-  fields(input, ['provider', 'connectionId', 'modelId', 'images']);
+  fields(input, ['provider', 'connectionId', 'modelId', 'images', 'pricing']);
   const connectionId = text(input.connectionId, 'judgment connection ID', 100);
   const modelId = text(input.modelId, 'judgment model ID', 200).trim();
   if (
@@ -131,7 +133,24 @@ function validateJudgmentSelection(value: unknown): JudgmentSelection {
   )
     throw new HttpError(400, 'JUDGMENT_MODEL_INVALID');
   if (typeof input.images !== 'boolean') throw new HttpError(400, 'JUDGMENT_IMAGES_INVALID');
-  return { provider, connectionId, modelId, images: input.images };
+  return {
+    provider,
+    connectionId,
+    modelId,
+    images: input.images,
+    ...judgmentPricing(input, provider),
+  };
+}
+function judgmentPricing(
+  input: Record<string, unknown>,
+  provider: JudgmentSelection['provider']
+): { pricing?: JudgmentPricing } {
+  if (input.pricing === undefined) return {};
+  try {
+    return { pricing: validateJudgmentPricing(input.pricing, provider) };
+  } catch {
+    throw new HttpError(400, 'INVALID_MODEL_PRICING');
+  }
 }
 
 function validateSummaryLength(value: unknown): SummaryLengthSettings {

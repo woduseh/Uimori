@@ -1,7 +1,19 @@
 import { t, useI18n, formatNumber, formatDate, translateMessage } from './i18n.js';
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
 import type { PricingSnapshot } from '../core/pricing-types.js';
-import { resolveModelPricing, validateModelPricing } from '../core/model-pricing.js';
+import {
+  resolveModelPricing,
+  validateJudgmentPricing,
+  validateModelPricing,
+} from '../core/model-pricing.js';
+import {
+  JUDGMENT_PROTOCOLS,
+  judgmentPricingRates,
+  type JudgmentProtocol,
+  judgmentPricingSnapshot,
+  type JudgmentPricing,
+  type JudgmentSelection,
+} from '../core/judgment-settings.js';
 import { ToggleRow } from './ToggleRow.js';
 import { formatUsd, pricingRateLabels, pricingNote, serviceTierLabel } from './pricing-display.js';
 import {
@@ -17,13 +29,15 @@ const primaryRates = ['input', 'cacheRead', 'cacheWrite', 'output'] as const;
 function PricingSummary({
   snapshot,
   context = 'current',
+  rateKeys,
 }: {
   snapshot: PricingSnapshot | undefined;
   context?: 'current' | 'attempt';
+  rateKeys?: readonly (keyof RateDraft)[];
 }) {
   useI18n();
   if (!snapshot) return <p className="muted">{t('providers.m474')}</p>;
-  const keys = [
+  const keys = rateKeys ?? [
     ...primaryRates,
     ...(snapshot.rates.cacheWrite1h !== undefined ? ['cacheWrite1h' as const] : []),
   ];
@@ -31,10 +45,12 @@ function PricingSummary({
   return (
     <div className="model-pricing-summary">
       <p className="ui-meta-row">
-        <span>
-          {context === 'attempt' ? t('providers.m475') : t('providers.m476')}:{' '}
-          <strong>{serviceTierLabel(snapshot.serviceTier)}</strong>
-        </span>
+        {!JUDGMENT_PROTOCOLS.includes(snapshot.protocol as JudgmentProtocol) && (
+          <span>
+            {context === 'attempt' ? t('providers.m475') : t('providers.m476')}:{' '}
+            <strong>{serviceTierLabel(snapshot.serviceTier)}</strong>
+          </span>
+        )}
         <span>
           {snapshot.source === 'manual'
             ? t('providers.m477')
@@ -126,10 +142,12 @@ function RateInputs({
   rates,
   label,
   onChange,
+  keys,
 }: {
   rates: RateDraft;
   label: string;
   onChange: (rates: RateDraft) => void;
+  keys?: readonly (keyof RateDraft)[];
 }) {
   useI18n();
   const field = (key: keyof RateDraft) => (
@@ -150,11 +168,13 @@ function RateInputs({
   return (
     <fieldset className="model-pricing-inputs">
       <legend>{t('providers.m596', { value0: label })}</legend>
-      <div className="model-pricing-input-grid">{primaryRates.map(field)}</div>
-      <details className="model-pricing-optional" open={rates.cacheWrite1h !== '' || undefined}>
-        <summary>{t('providers.m491')}</summary>
-        {field('cacheWrite1h')}
-      </details>
+      <div className="model-pricing-input-grid">{(keys ?? primaryRates).map(field)}</div>
+      {!keys && (
+        <details className="model-pricing-optional" open={rates.cacheWrite1h !== '' || undefined}>
+          <summary>{t('providers.m491')}</summary>
+          {field('cacheWrite1h')}
+        </details>
+      )}
     </fieldset>
   );
 }
@@ -311,6 +331,89 @@ export function ModelPricingEditor({
           </p>
         ) : (
           <PricingSummary snapshot={snapshot} />
+        )}
+      </div>
+    </details>
+  );
+}
+
+export function judgmentPricingPayload(
+  provider: JudgmentSelection['provider'],
+  draft: ModelDraft['pricing']
+): { pricing?: JudgmentPricing } | null {
+  const pricing = pricingPayload({
+    ...draft,
+    mode: 'manual',
+    flexEnabled: false,
+    batchEnabled: false,
+    longContext: { ...draft.longContext, aboveInputTokens: '' },
+  });
+  if (pricing.mode !== 'manual') return null;
+  const keys = judgmentPricingRates(provider);
+  const rates = Object.fromEntries(
+    (['input', 'cacheRead', 'cacheWrite', 'output'] as const).map((key) => [
+      key,
+      keys.includes(key) ? pricing.rates[key] : null,
+    ])
+  ) as JudgmentPricing['rates'];
+  if (keys.every((key) => rates[key] === null) && !pricing.sourceUrl && !pricing.checkedAt)
+    return {};
+  try {
+    return { pricing: validateJudgmentPricing({ ...pricing, rates }, provider) };
+  } catch {
+    return null;
+  }
+}
+
+export function JudgmentPricingEditor({
+  selection,
+  value,
+  onChange,
+}: {
+  selection: JudgmentSelection;
+  value: ModelDraft['pricing'];
+  onChange: (pricing: ModelDraft['pricing']) => void;
+}) {
+  useI18n();
+  const keys = judgmentPricingRates(selection.provider);
+  const payload = judgmentPricingPayload(selection.provider, value);
+  return (
+    <details className="model-pricing full" data-testid="judgment-pricing-editor">
+      <summary>{t('providers.m499')}</summary>
+      <div className="model-pricing-body">
+        <RateInputs
+          rates={value.rates}
+          keys={keys}
+          label={t('settings.judgmentProvider')}
+          onChange={(rates) => onChange({ ...value, rates })}
+        />
+        <label>
+          {t('providers.m509')}
+          <input
+            type="url"
+            value={value.sourceUrl}
+            placeholder="https://"
+            onChange={(event) => onChange({ ...value, sourceUrl: event.target.value })}
+          />
+        </label>
+        <label>
+          {t('providers.m510')}
+          <input
+            type="date"
+            value={value.checkedAt.slice(0, 10)}
+            onChange={(event) => onChange({ ...value, checkedAt: event.target.value })}
+          />
+        </label>
+        <small>{t('settings.judgmentPricingHelp')}</small>
+        {payload === null ? (
+          <p className="error" role="alert">
+            {t('settings.judgmentPricingInvalid')}
+          </p>
+        ) : (
+          <PricingSummary
+            rateKeys={keys}
+            snapshot={judgmentPricingSnapshot({ ...selection, pricing: payload.pricing })}
+          />
         )}
       </div>
     </details>

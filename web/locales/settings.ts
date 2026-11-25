@@ -161,6 +161,18 @@ export const messages = {
     ja: '候補画像を送信',
     zh: '发送候选图片',
   },
+  'settings.judgmentPricingHelp': {
+    ko: '판단 호출이 보고한 토큰 사용량에 적용해요. 모르는 요금은 비워 두고, 무료로 확인한 항목만 0을 입력해 주세요. 지난 판단 호출의 비용은 바뀌지 않아요.',
+    en: 'Applied to the token usage that judgment calls report. Leave unknown rates blank and enter 0 only for items confirmed free. Costs of past judgment calls do not change.',
+    ja: '判定呼び出しが報告したトークン使用量に適用します。不明な料金は空欄のままにし、無料と確認した項目だけ0を入力してください。過去の判定呼び出しの費用は変わりません。',
+    zh: '应用于判断调用报告的 token 用量。未知费率请留空，仅对已确认免费的项目输入 0。过去判断调用的费用不会改变。',
+  },
+  'settings.judgmentPricingInvalid': {
+    ko: '요금을 하나 이상 0 이상으로 입력해 주세요. 출처는 HTTPS 주소와 유효한 확인일을 사용해요.',
+    en: 'Enter at least one nonnegative rate. Use an HTTPS source URL and a valid verification date.',
+    ja: '料金を1つ以上、0以上で入力してください。出典にはHTTPS URLと有効な確認日を使用してください。',
+    zh: '请至少输入一项不小于 0 的费率。来源需使用 HTTPS 地址和有效确认日期。',
+  },
   'settings.m0': {
     ko: '역할별 모델 설정을 불러오는 중이에요…',
     en: 'Loading Models by role settings…',

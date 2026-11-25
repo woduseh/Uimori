@@ -1,6 +1,13 @@
 import { PROVIDER_PROTOCOLS, type Connection, type ModelPreset } from './product.js';
 import type { ModelPricing, PricingSnapshot, TokenRates } from './pricing-types.js';
 import { ProviderContractError } from './provider-errors.js';
+import {
+  JUDGMENT_PROTOCOLS,
+  judgmentPricingRates,
+  type JudgmentPricing,
+  type JudgmentProtocol,
+  type JudgmentProvider,
+} from './judgment-settings.js';
 
 const fail = (): never => {
   throw new ProviderContractError('INVALID_MODEL_PRICING');
@@ -99,6 +106,28 @@ export function validateModelPricing(value: unknown): ModelPricing {
   if (Object.hasOwn(b, 'checkedAt')) result.checkedAt = checkedDate(b.checkedAt);
   return result;
 }
+export function validateJudgmentPricing(
+  value: unknown,
+  provider: JudgmentProvider
+): JudgmentPricing {
+  const pricing = validateModelPricing(value);
+  if (
+    pricing.mode !== 'manual' ||
+    Object.keys(pricing).some((key) => !['mode', 'rates', 'sourceUrl', 'checkedAt'].includes(key))
+  )
+    return fail();
+  const allowed = judgmentPricingRates(provider);
+  const rates = pricing.rates;
+  if (
+    (Object.keys(rates) as (keyof TokenRates)[]).some(
+      (key) => !allowed.includes(key) && rates[key] !== null
+    ) ||
+    allowed.every((key) => rates[key] === null)
+  )
+    return fail();
+  const { cacheWrite1h: _cacheWrite1h, ...standard } = rates;
+  return { ...pricing, rates: standard };
+}
 export function validatePricingSnapshot(value: unknown): PricingSnapshot {
   const b = object(value, [
     'version',
@@ -119,7 +148,8 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
   ]);
   if (
     b.version !== 1 ||
-    !PROVIDER_PROTOCOLS.includes(b.protocol as Connection['protocol']) ||
+    (!PROVIDER_PROTOCOLS.includes(b.protocol as Connection['protocol']) &&
+      !JUDGMENT_PROTOCOLS.includes(b.protocol as JudgmentProtocol)) ||
     !['official', 'manual', 'catalog'].includes(String(b.source))
   )
     return fail();
@@ -133,7 +163,7 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
   if (!Array.isArray(b.notes) || b.notes.length > 20) return fail();
   const result: PricingSnapshot = {
     version: 1,
-    protocol: b.protocol as Connection['protocol'],
+    protocol: b.protocol as PricingSnapshot['protocol'],
     modelId: string(b.modelId, 200),
     source: b.source as PricingSnapshot['source'],
     checkedAt,

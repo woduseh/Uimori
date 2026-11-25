@@ -303,6 +303,33 @@ export function applyHelperSettingsMutation(
   args: Record<string, unknown>,
   chatId?: string
 ): unknown {
+  if (name === 'model.pricing.update' && args.judgment !== undefined) {
+    const before = invokeHelperSettingsTool(store, 'model.pricing.read', { judgment: true }) as {
+      pricing: unknown;
+    };
+    const result = invokeHelperSettingsTool(store, name, args, chatId) as {
+      revision: number;
+      providerModelId: string;
+      pricing: unknown;
+    };
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: name,
+      requestedTargets: 1,
+      targets: isDeepStrictEqual(before.pricing, result.pricing)
+        ? []
+        : [
+            {
+              kind: 'settings',
+              id: 'judgment',
+              title: result.providerModelId,
+              revision: result.revision,
+              setting: 'judgment.pricing',
+            },
+          ],
+    });
+    return result;
+  }
   if (name === 'model.pricing.update') {
     const modelId = text(args.modelId, 'saved model ID', 100);
     const before = store.product.get<ModelPreset>('model', modelId);

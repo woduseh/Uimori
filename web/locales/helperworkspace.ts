@@ -863,6 +863,12 @@ export const messages = {
     ja: 'モデル料金',
     zh: '模型价格',
   },
+  'helperResults.judgmentPricing': {
+    ko: '판단 프로바이더 가격',
+    en: 'Judgment provider pricing',
+    ja: '判定プロバイダー料金',
+    zh: '判断提供商价格',
+  },
   'helperResults.vertexLocation': {
     ko: 'Vertex 위치',
     en: 'Vertex location',

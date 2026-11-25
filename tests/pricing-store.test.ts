@@ -6,6 +6,9 @@ import { Store } from '../server/store.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { judgmentRuntime } from '../server/judgment-runtime.js';
+import { judgeMainRefusal, mainJudgmentInput } from '../server/main-judgment.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 
 const owned: { store: Store; directory: string }[] = [];
 const database = () => {
@@ -186,4 +189,102 @@ test('new explicit Batch snapshot uses entered Batch rates once while preserving
   expect(saved.estimatedCost).toMatchObject({ status: 'estimated', usd: 0.0022 });
   expect(saved.estimatedCost?.notes).not.toContain('ANTHROPIC_BATCH_50_PERCENT');
   expect(saved.costUsd).toBe(0.125);
+});
+
+test('judgment calls freeze the saved judgment price, stay unknown without one and are never repriced', async () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'Synthetic judgment pricing');
+  const judgmentPricing = {
+    mode: 'manual',
+    rates: { input: 0.042, output: 0, cacheRead: null, cacheWrite: null },
+    sourceUrl: 'https://docs.typesafe.ai/models',
+    checkedAt: '2026-11-25',
+  };
+  const saveJudgment = (judgment: unknown) => {
+    const current = modelWorkspace(store);
+    return updateModelWorkspace(store, {
+      expectedRevision: current.revision,
+      routes: current.routes,
+      translationPolicy: current.translationPolicy,
+      judgment,
+    });
+  };
+  const judge = async () => {
+    const ids: string[] = [];
+    await judgeMainRefusal(mainJudgmentInput('I cannot help with that.'), {
+      ...judgmentRuntime(store, () => 'mock-key'),
+      signal: new AbortController().signal,
+      fetch: async () =>
+        Response.json({
+          model: 'jev-latest',
+          answers: { explicitRefusal: { type: 'noul', noul: 0.99 } },
+          usage: { input_tokens: 2_000_000, output_tokens: 0 },
+        }),
+      onAttemptStart: (wire) => {
+        const id = store.product.startAttempt(chat.id, null, null, wire);
+        ids.push(id);
+        return id;
+      },
+      onAttemptFinish: (id, result) => store.product.finishAttempt(id, result),
+    });
+    return ids[0]!;
+  };
+  const estimate = (id: string) =>
+    store.db
+      .prepare(
+        'SELECT usage_kind AS kind,estimate_status AS status,estimated_usd AS usd FROM attempts WHERE id=?'
+      )
+      .get(id);
+
+  expect(modelWorkspace(store).judgment).toEqual({ provider: 'typesafe' });
+  const unpriced = await judge();
+  expect(estimate(unpriced)).toEqual({
+    kind: 'judgment',
+    status: 'unavailable',
+    usd: null,
+  });
+
+  expect(() =>
+    saveJudgment({
+      provider: 'typesafe',
+      pricing: {
+        ...judgmentPricing,
+        rates: { ...judgmentPricing.rates, cacheRead: 0.01 },
+      },
+    })
+  ).toThrow('INVALID_MODEL_PRICING');
+  expect(saveJudgment({ provider: 'typesafe', pricing: judgmentPricing }).judgment).toEqual({
+    provider: 'typesafe',
+    pricing: judgmentPricing,
+  });
+  const priced = await judge();
+  expect(estimate(priced)).toEqual({
+    kind: 'judgment',
+    status: 'estimated',
+    usd: 0.084,
+  });
+  expect(estimate(unpriced)).toEqual({
+    kind: 'judgment',
+    status: 'unavailable',
+    usd: null,
+  });
+
+  saveJudgment({
+    provider: 'typesafe',
+    pricing: {
+      ...judgmentPricing,
+      rates: { ...judgmentPricing.rates, input: 1 },
+    },
+  });
+  expect(estimate(priced)).toMatchObject({ status: 'estimated', usd: 0.084 });
+  expect(estimate(await judge())).toMatchObject({
+    status: 'estimated',
+    usd: 2,
+  });
+
+  saveJudgment({ provider: 'typesafe' });
+  expect(estimate(await judge())).toMatchObject({
+    status: 'unavailable',
+    usd: null,
+  });
 });

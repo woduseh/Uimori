@@ -1,4 +1,5 @@
 import { providerCacheUsage } from './provider-cache-usage.js';
+import { JUDGMENT_PROTOCOLS, type JudgmentProtocol } from './judgment-settings.js';
 import type { CostEstimate, PricingLine, PricingSnapshot, TokenRates } from './pricing-types.js';
 
 const count = (value: unknown): number | null =>
@@ -41,8 +42,10 @@ export function estimateCost(
     'google-gemini-v1',
     'anthropic-messages-v1',
   ];
-  if (!supported.includes(pricing.protocol)) return unavailable('PRICING_PROTOCOL_UNSUPPORTED');
   const raw = record(usage.raw);
+  if (JUDGMENT_PROTOCOLS.includes(pricing.protocol as JudgmentProtocol))
+    return judgmentEstimate(pricing, usage, raw);
+  if (!supported.includes(pricing.protocol)) return unavailable('PRICING_PROTOCOL_UNSUPPORTED');
   const traffic = typeof raw.trafficType === 'string' ? raw.trafficType : undefined;
   const reportedTier =
     actualServiceTier ??
@@ -129,22 +132,53 @@ export function estimateCost(
       notes.push('CACHE_WRITE_SPLIT_UNKNOWN');
     }
   }
-  const lines: PricingLine[] = [];
-  const line = (
-    kind: PricingLine['kind'],
-    tokens: number | null,
-    value: number | null | undefined
-  ) => {
-    const rate = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-    const cost =
-      tokens === 0 ? 0 : tokens === null || rate === null ? null : (tokens / 1_000_000) * rate;
-    lines.push({ kind, tokens, rate, usd: cost !== null && Number.isFinite(cost) ? cost : null });
-  };
-  line('input', baseInput, rates.input);
-  line('cacheRead', read, rates.cacheRead);
-  if (responses || anthropic || chatWrites) line('cacheWrite', write, rates.cacheWrite);
-  if (write1h !== undefined) line('cacheWrite1h', write1h, rates.cacheWrite1h);
-  line('output', count(usage.outputTokens), rates.output);
+  const lines: PricingLine[] = [
+    line('input', baseInput, rates.input),
+    line('cacheRead', read, rates.cacheRead),
+  ];
+  if (responses || anthropic || chatWrites) lines.push(line('cacheWrite', write, rates.cacheWrite));
+  if (write1h !== undefined) lines.push(line('cacheWrite1h', write1h, rates.cacheWrite1h));
+  lines.push(line('output', count(usage.outputTokens), rates.output));
+  return total(lines, notes);
+}
+
+function line(
+  kind: PricingLine['kind'],
+  tokens: number | null,
+  value: number | null | undefined
+): PricingLine {
+  const rate = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+  const cost =
+    tokens === 0 ? 0 : tokens === null || rate === null ? null : (tokens / 1_000_000) * rate;
+  return { kind, tokens, rate, usd: cost !== null && Number.isFinite(cost) ? cost : null };
+}
+
+function judgmentEstimate(
+  pricing: PricingSnapshot,
+  usage: { inputTokens: number | null; outputTokens: number | null },
+  raw: Record<string, unknown>
+): CostEstimate {
+  const notes: string[] = [];
+  const input = count(usage.inputTokens);
+  const cached =
+    pricing.protocol === 'openai-decisions-v1' ||
+    pricing.protocol === 'openai-compatible-decisions-v1'
+      ? count(record(raw.input_tokens_details).cached_tokens)
+      : null;
+  const inconsistent = cached !== null && input !== null && cached > input;
+  if (inconsistent) notes.push('INCONSISTENT_INPUT_USAGE');
+  const lines =
+    cached === null || inconsistent
+      ? [line('input', inconsistent ? null : input, pricing.rates.input)]
+      : [
+          line('input', input === null ? null : input - cached, pricing.rates.input),
+          line('cacheRead', cached, pricing.rates.cacheRead),
+        ];
+  lines.push(line('output', count(usage.outputTokens), pricing.rates.output));
+  return total(lines, notes);
+}
+
+function total(lines: PricingLine[], notes: string[]): CostEstimate {
   const known = lines.filter((item) => item.usd !== null);
   const subtotalUsd = known.reduce((sum, item) => sum + item.usd!, 0);
   if (!Number.isFinite(subtotalUsd)) return unavailable('ESTIMATE_OVERFLOW');

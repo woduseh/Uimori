@@ -2,9 +2,12 @@ import { expect, test } from 'vitest';
 import type { Connection, ModelPreset, ProviderProtocol } from '../core/product.js';
 import {
   resolveModelPricing,
+  validateJudgmentPricing,
   validateModelPricing,
   validatePricingSnapshot,
 } from '../core/model-pricing.js';
+import { estimateCost } from '../core/pricing-estimate.js';
+import { judgmentPricingSnapshot } from '../core/judgment-settings.js';
 import type { TokenRates } from '../core/pricing-types.js';
 
 const connection = (protocol: ProviderProtocol, endpoint: string): Connection => ({
@@ -196,4 +199,125 @@ test('legacy official execution snapshots remain readable byte-for-value without
     notes: ['historical'],
   };
   expect(validatePricingSnapshot(legacy)).toEqual(legacy);
+});
+
+const judgmentRates = (
+  input: number | null,
+  output: number | null,
+  cacheRead: number | null = null
+) => ({
+  mode: 'manual' as const,
+  rates: { input, output, cacheRead, cacheWrite: null },
+});
+
+test('judgment calls are priced from the reported input and output tokens with explicit zero output as known', () => {
+  const jev = judgmentPricingSnapshot(
+    { provider: 'typesafe', pricing: judgmentRates(0.042, 0) },
+    at
+  )!;
+  expect(validatePricingSnapshot(jev)).toEqual(jev);
+  expect(jev).toMatchObject({
+    protocol: 'typesafe-systemone-v1',
+    modelId: 'jev-latest',
+  });
+  const usage = {
+    inputTokens: 2_000_000,
+    outputTokens: 0,
+    raw: { input_tokens: 2_000_000 },
+  };
+  expect(estimateCost(jev, usage)).toMatchObject({
+    status: 'estimated',
+    usd: 0.084,
+  });
+  expect(estimateCost(jev, { ...usage, outputTokens: 12 })).toMatchObject({
+    status: 'estimated',
+    usd: 0.084,
+  });
+  const unknownOutput = judgmentPricingSnapshot(
+    { provider: 'typesafe', pricing: judgmentRates(0.042, null) },
+    at
+  )!;
+  expect(estimateCost(unknownOutput, { ...usage, outputTokens: 12 })).toMatchObject({
+    status: 'partial',
+    usd: null,
+    subtotalUsd: 0.084,
+  });
+  expect(estimateCost(undefined, usage)).toMatchObject({
+    status: 'unavailable',
+    usd: null,
+  });
+  expect(estimateCost(jev, { ...usage, inputTokens: null })).toMatchObject({
+    status: 'partial',
+    usd: null,
+    subtotalUsd: 0,
+  });
+});
+
+test('OpenAI Decisions cached input is priced separately only when the response reports it', () => {
+  const selection = {
+    provider: 'openai' as const,
+    connectionId: 'c',
+    modelId: 'gpt-6-luna',
+    images: false,
+  };
+  const priced = judgmentPricingSnapshot({ ...selection, pricing: judgmentRates(1, 0, 0.1) }, at)!;
+  expect(
+    estimateCost(priced, {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      raw: {
+        input_tokens: 1_000_000,
+        input_tokens_details: { cached_tokens: 500_000 },
+      },
+    })
+  ).toMatchObject({ status: 'estimated', usd: 0.55 });
+  expect(
+    estimateCost(priced, {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      raw: { input_tokens: 1 },
+    })
+  ).toMatchObject({ status: 'estimated', usd: 1 });
+  const noCacheRate = judgmentPricingSnapshot({ ...selection, pricing: judgmentRates(1, 0) }, at)!;
+  expect(
+    estimateCost(noCacheRate, {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      raw: { input_tokens_details: { cached_tokens: 500_000 } },
+    })
+  ).toMatchObject({ status: 'partial', usd: null, subtotalUsd: 0.5 });
+});
+
+test('judgment price validation keeps only the rates the provider reports usage for', () => {
+  expect(validateJudgmentPricing(judgmentRates(0.042, 0), 'typesafe')).toEqual(
+    judgmentRates(0.042, 0)
+  );
+  for (const [value, provider] of [
+    [judgmentRates(0.042, 0, 0.01), 'typesafe'],
+    [judgmentRates(0.042, 0, 0.01), 'gemini'],
+    [judgmentRates(null, null), 'typesafe'],
+    [{ mode: 'official' }, 'typesafe'],
+    [{ ...judgmentRates(1, 0), flexRates: r }, 'openai'],
+    [
+      {
+        ...judgmentRates(1, 0),
+        longContext: { aboveInputTokens: 10, rates: r },
+      },
+      'typesafe',
+    ],
+    [
+      {
+        ...judgmentRates(1, 0),
+        rates: { ...judgmentRates(1, 0).rates, cacheWrite: 1 },
+      },
+      'openai',
+    ],
+  ] as const)
+    expect(() => validateJudgmentPricing(value, provider)).toThrow();
+  expect(validateJudgmentPricing(judgmentRates(1, 0, 0.1), 'openai-compatible').rates).toEqual({
+    input: 1,
+    output: 0,
+    cacheRead: 0.1,
+    cacheWrite: null,
+  });
 });

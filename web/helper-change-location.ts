@@ -31,6 +31,7 @@ export const settingsLabels: Record<string, string> = {
   'chat.illustrationProfiles': 'visuals.characterProfiles',
   'chat.illustrationReferences': 'visuals.m028',
   'model.pricing': 'helperResults.modelPricing',
+  'judgment.pricing': 'helperResults.judgmentPricing',
   'vertex.location': 'helperResults.vertexLocation',
   'chat.variables': 'helperResults.chatVariables',
   'chat.options': 'helperResults.chatOptions',

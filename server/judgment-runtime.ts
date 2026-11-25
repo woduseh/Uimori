@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { Connection } from '../core/product.js';
 import type { WireRecord } from '../core/transport.js';
-import { isJudgmentConnection } from '../core/judgment-settings.js';
+import { isJudgmentConnection, judgmentPricingSnapshot } from '../core/judgment-settings.js';
 import {
   DEFAULT_JUDGMENT_TARGET,
   JudgmentError,
@@ -17,10 +17,13 @@ import { HttpError } from './request-validation.js';
 export function judgmentRuntime(
   store: Store,
   legacyCredential?: JudgmentHooks['credential']
-): Pick<JudgmentHooks, 'target' | 'credential' | 'settings'> {
+): Pick<JudgmentHooks, 'target' | 'credential' | 'settings' | 'pricingSnapshot'> {
   const selection = judgmentSelection(store);
+  const pricingSnapshot = judgmentPricingSnapshot(selection);
+  const pricing = pricingSnapshot ? { pricingSnapshot } : {};
   if (selection.provider === 'typesafe')
     return {
+      ...pricing,
       credential: legacyCredential ?? new JevCredentialStore(store.db).resolve,
       settings: jevSettings(store.db),
     };
@@ -33,6 +36,7 @@ export function judgmentRuntime(
   const captured = connection;
   const suffix = selection.provider === 'typesafe-compatible' ? 'systemone' : 'decisions';
   return {
+    ...pricing,
     target: {
       provider: selection.provider,
       connectionId: selection.connectionId,

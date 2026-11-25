@@ -23,7 +23,7 @@ export function backfillUnpricedCalls(store: Store, modelId: string): UsageBackf
     const rows = store.db
       .prepare(
         `SELECT id,input_tokens,output_tokens,raw_usage,json_extract(request,'$.executionMode') AS mode
-         FROM attempts WHERE connection_id=? AND model_id=? AND is_synthetic=0 AND status!='running'
+         FROM attempts WHERE connection_id=? AND model_id=? AND is_synthetic=0 AND usage_kind!='judgment' AND status!='running'
            AND (cost_usd IS NULL OR cost_usd<0) AND COALESCE(estimate_status,'unavailable')='unavailable'
            AND json_type(request,'$.pricingSnapshot') IS NULL`
       )

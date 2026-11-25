@@ -31,7 +31,15 @@ import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { JudgmentPricingEditor, judgmentPricingPayload } from './ModelPricingEditor.js';
+import { pricingDraft, type ModelDraft } from './provider-model-draft.js';
 import './settings-actions.css';
+
+type EditableWorkspace = ModelWorkspace & { judgmentPrice: ModelDraft['pricing'] };
+const editable = (workspace: ModelWorkspace): EditableWorkspace => ({
+  ...workspace,
+  judgmentPrice: pricingDraft(workspace.judgment?.pricing),
+});
 
 const judgmentProviderNames: Record<string, string> = {
   typesafe: 'TypeSafe AI / JEV',
@@ -55,7 +63,7 @@ export function ModelWorkspaceEditor({
   useI18n();
   const { workspace, error, refresh } = usePromptWorkspace();
   const id = useId();
-  const [draft, setDraft] = useState<ModelWorkspace | null>(null);
+  const [draft, setDraft] = useState<EditableWorkspace | null>(null);
   const [dirty, setDirty] = useState(false);
   const [judgmentEdited, setJudgmentEdited] = useState(false);
   const [operation, setOperation] = useState<'save' | 'reload' | null>(null);
@@ -72,7 +80,7 @@ export function ModelWorkspaceEditor({
       setDraft((current) =>
         current && current.revision > workspace.revision
           ? current
-          : {
+          : editable({
               revision: workspace.revision,
               judgment: workspace.judgment ?? DEFAULT_JUDGMENT_SELECTION,
               summaryLength: workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
@@ -86,7 +94,7 @@ export function ModelWorkspaceEditor({
               mainJudgmentEnabled: workspace.mainJudgmentEnabled === true,
               mainJudgmentThreshold: workspace.mainJudgmentThreshold ?? 0.9,
               translationPolicy: workspace.translationPolicy,
-            }
+            })
       );
   }, [workspace, dirty, busy]);
   useEffect(() => {
@@ -105,7 +113,8 @@ export function ModelWorkspaceEditor({
       />
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
-  const judgment = draft.judgment ?? DEFAULT_JUDGMENT_SELECTION;
+  const { pricing: _savedPricing, ...judgment } = draft.judgment ?? DEFAULT_JUDGMENT_SELECTION;
+  const judgmentPrice = judgmentPricingPayload(judgment.provider, draft.judgmentPrice);
   const compatible =
     judgment.provider === 'openai-compatible' || judgment.provider === 'typesafe-compatible';
   const judgmentConnections =
@@ -153,6 +162,7 @@ export function ModelWorkspaceEditor({
   const invalid =
     invalidHelperTaskTimeout ||
     invalidPreviousSceneTokens ||
+    judgmentPrice === null ||
     (judgmentEdited &&
       judgment.provider !== 'typesafe' &&
       (!judgmentConnection || !judgment.modelId.trim())) ||
@@ -176,7 +186,7 @@ export function ModelWorkspaceEditor({
       {
         expectedRevision: draft.revision,
         routes: draft.routes,
-        judgment,
+        judgment: { ...judgment, ...judgmentPrice },
         mainJudgmentEnabled: draft.mainJudgmentEnabled === true,
         mainJudgmentThreshold: draft.mainJudgmentThreshold,
         titleModel: draft.titleModel ?? null,
@@ -191,7 +201,7 @@ export function ModelWorkspaceEditor({
       'PUT'
     )
       .then((accepted) => {
-        setDraft(accepted);
+        setDraft(editable(accepted));
         setJudgmentEdited(false);
         setDirty(false);
         setMessage(uiMessage('settings.m1'));
@@ -208,7 +218,7 @@ export function ModelWorkspaceEditor({
         setOperation(null);
       });
   }
-  function change(next: ModelWorkspace) {
+  function change(next: EditableWorkspace) {
     setDraft(next);
     setDirty(true);
     setMessage('');
@@ -216,7 +226,11 @@ export function ModelWorkspaceEditor({
   function changeJudgment(next: JudgmentSelection) {
     if (!draft) return;
     setJudgmentEdited(true);
-    change({ ...draft, judgment: next });
+    change({
+      ...draft,
+      judgment: next,
+      ...(next.provider === judgment.provider ? {} : { judgmentPrice: pricingDraft() }),
+    });
   }
   async function reload() {
     if (lock.current) return;
@@ -225,7 +239,7 @@ export function ModelWorkspaceEditor({
     setReloadError('');
     try {
       const accepted = await api<ModelWorkspace>('/model-workspace');
-      setDraft(accepted);
+      setDraft(editable(accepted));
       setJudgmentEdited(false);
       setDirty(false);
       setSaveError('');
@@ -788,6 +802,11 @@ export function ModelWorkspaceEditor({
                 </div>
               </>
             )}
+            <JudgmentPricingEditor
+              selection={judgment}
+              value={draft.judgmentPrice}
+              onChange={(judgmentPrice) => change({ ...draft, judgmentPrice })}
+            />
           </div>
         </details>
         <div className="form-actions settings-save-actions full">

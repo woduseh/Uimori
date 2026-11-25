@@ -992,4 +992,88 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
   ).toHaveText('판단 모델');
 });
 
+test('JDGUI02 registers a judgment provider price with an explicit free output rate and keeps it after reopening', async ({
+  page,
+  request,
+}, info) => {
+  const before = await models(request);
+  const editor = page.getByRole('region', {
+    name: '역할별 모델 설정',
+    exact: true,
+  });
+  const pricing = editor.getByTestId('judgment-pricing-editor');
+  const open = async () => {
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '역할별 모델');
+    await editor
+      .locator('summary')
+      .filter({ hasText: /^판단 프로바이더/ })
+      .click();
+    await pricing.locator('summary').first().click();
+  };
+  await open();
+  const input = pricing.getByLabel('판단 프로바이더 입력 요금', {
+    exact: true,
+  });
+  const output = pricing.getByLabel('판단 프로바이더 출력 요금', {
+    exact: true,
+  });
+  const save = editor.getByRole('button', {
+    name: '역할별 모델 설정 저장',
+    exact: true,
+  });
+  await expect(pricing).toContainText('요금 정보가 없어요');
+  await expect(pricing.getByLabel('판단 프로바이더 캐시 읽기 요금', { exact: true })).toHaveCount(
+    0
+  );
+  await input.fill('-1');
+  await expect(pricing.getByRole('alert')).toContainText('0 이상');
+  await expect(save).toBeDisabled();
+  await input.fill('0.042');
+  await output.fill('0');
+  await pricing.getByLabel('요금 출처 URL').fill('https://docs.typesafe.ai/models');
+  await pricing.getByLabel('요금 확인일').fill('2026-11-25');
+  await expect(pricing.getByRole('alert')).toHaveCount(0);
+  expect(await models(request)).toEqual(before);
+  await save.click();
+  const judgmentPricing = {
+    mode: 'manual',
+    rates: { input: 0.042, cacheRead: null, cacheWrite: null, output: 0 },
+    sourceUrl: 'https://docs.typesafe.ai/models',
+    checkedAt: '2026-11-25',
+  };
+  await expect
+    .poll(() => models(request))
+    .toEqual({
+      ...before,
+      revision: before.revision + 1,
+      judgment: { provider: 'typesafe', pricing: judgmentPricing },
+    });
+  await expect(save).toBeDisabled();
+  await open();
+  await expect(input).toHaveValue('0.042');
+  await expect(output).toHaveValue('0');
+  await expect(pricing.getByRole('definition').first()).toContainText('0.042');
+
+  if (visualReview) {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await pricing.scrollIntoViewIfNeeded();
+        await expect(input).toBeInViewport();
+        await page.screenshot({
+          path: info.outputPath(`judgment-pricing-${width}-${colorScheme}.png`),
+        });
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+
+  await editor.getByLabel('판단 프로바이더', { exact: true }).selectOption('openai');
+  await expect(input).toHaveValue('');
+  await expect(pricing.getByLabel('판단 프로바이더 캐시 읽기 요금', { exact: true })).toBeVisible();
+});
+
 preservePromptWorkspace();

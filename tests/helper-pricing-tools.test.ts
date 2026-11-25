@@ -7,6 +7,7 @@ import type { ModelPreset } from '../core/product.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { modelWorkspace } from '../server/prompt-workspace.js';
 
 const owned: { path: string; store: Store }[] = [];
 afterEach(() => {
@@ -188,4 +189,77 @@ test('backfill prices only the calls recorded without a price and marks them as 
     unpricedCalls: 0,
     addedUsd: 0,
   });
+});
+
+test('helper reads and updates the judgment provider price through the role settings revision', () => {
+  const { store, model } = fixture();
+  const judgmentPricing = {
+    mode: 'manual',
+    rates: { input: 0.042, output: 0, cacheRead: null, cacheWrite: null },
+    sourceUrl: 'https://docs.typesafe.ai/models',
+    checkedAt: '2026-11-25',
+  };
+  const before = call(store, 'model.pricing.read', { judgment: true });
+  expect(before).toMatchObject({
+    judgment: true,
+    provider: 'typesafe',
+    providerModelId: 'jev-latest',
+    providerHost: 'api.typesafe.ai',
+    protocol: 'typesafe-systemone-v1',
+    rateFields: ['input', 'output'],
+    pricing: null,
+    effective: null,
+  });
+  const revision = (before as { revision: number }).revision;
+  for (const body of [
+    { pricing: { mode: 'manual', rates: judgmentPricing.rates } },
+    {
+      pricing: {
+        ...judgmentPricing,
+        rates: { ...judgmentPricing.rates, cacheRead: 0.01 },
+      },
+    },
+    { pricing: { mode: 'official' } },
+    { pricing: judgmentPricing, modelId: model.id },
+  ])
+    expect(() =>
+      call(store, 'model.pricing.update', {
+        judgment: true,
+        expectedRevision: revision,
+        ...body,
+      })
+    ).toThrow();
+  expect(() =>
+    call(store, 'model.pricing.update', {
+      judgment: true,
+      expectedRevision: revision + 1,
+      pricing: judgmentPricing,
+    })
+  ).toThrow();
+  const updated = call(store, 'model.pricing.update', {
+    judgment: true,
+    expectedRevision: revision,
+    pricing: judgmentPricing,
+  });
+  expect(updated).toMatchObject({
+    revision: revision + 1,
+    pricing: judgmentPricing,
+    effective: {
+      source: 'manual',
+      rates: judgmentPricing.rates,
+      modelId: 'jev-latest',
+    },
+  });
+  expect(modelWorkspace(store).judgment).toEqual({
+    provider: 'typesafe',
+    pricing: judgmentPricing,
+  });
+  expect(store.product.get<ModelPreset>('model', model.id)).toEqual(model);
+  call(store, 'model.pricing.update', {
+    judgment: true,
+    expectedRevision: revision + 1,
+    pricing: null,
+  });
+  expect(modelWorkspace(store).judgment).toEqual({ provider: 'typesafe' });
+  expect(() => call(store, 'model.pricing.backfill', { judgment: true })).toThrow();
 });

@@ -14,9 +14,11 @@ import {
   decisionAuthorization,
   readDecisionRequest,
 } from './judgment-decisions.js';
+import { judgmentProtocol, TYPESAFE_JUDGMENT_MODEL } from '../core/judgment-settings.js';
+import type { PricingSnapshot } from '../core/pricing-types.js';
 
 export const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
-export const JEV_MODEL = 'jev-latest';
+export const JEV_MODEL = TYPESAFE_JUDGMENT_MODEL;
 export const DEFAULT_JUDGMENT_TARGET = {
   provider: 'typesafe',
   connectionId: 'typesafe-judgment',
@@ -110,6 +112,7 @@ export type JudgmentHooks = {
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => void | Promise<void>;
   credential?: () => string | undefined | Promise<string | undefined>;
+  pricingSnapshot?: PricingSnapshot;
   fetch?: typeof fetch;
   timeoutMs?: number;
   onStarted?: () => void;
@@ -173,7 +176,16 @@ async function executeJudgmentAttempt(
   if (!key || /[\r\n]/u.test(key)) throw new JudgmentError('JEV_CREDENTIAL_REQUIRED');
   if (hooks.signal.aborted) throw new JudgmentError('JEV_CANCELLED');
   const encoded = JSON.stringify(wire.body);
-  const attemptId = await hooks.onAttemptStart(wire);
+  const attemptId = await hooks.onAttemptStart(
+    hooks.pricingSnapshot?.protocol === wire.protocol &&
+      hooks.pricingSnapshot.modelId === wire.modelId
+      ? {
+          ...wire,
+          pricingSnapshot: hooks.pricingSnapshot,
+          pricingStartedAt: new Date().toISOString(),
+        }
+      : wire
+  );
   hooks.onStarted?.();
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -482,16 +494,7 @@ export function buildJudgmentWire(
   if (typesafe && request.assets && Object.keys(request.assets).length)
     headers['TypeSafe-Danger-Zone-Images'] = 'true';
   const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-  const protocol =
-    target.provider === 'typesafe'
-      ? 'typesafe-systemone-v1'
-      : target.provider === 'typesafe-compatible'
-        ? 'typesafe-compatible-systemone-v1'
-        : target.provider === 'openai'
-          ? 'openai-decisions-v1'
-          : target.provider === 'gemini'
-            ? 'gemini-decisions-v1'
-            : 'openai-compatible-decisions-v1';
+  const protocol = judgmentProtocol(target.provider);
   return {
     connectionId: target.connectionId,
     protocol,
