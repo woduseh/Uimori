@@ -17,11 +17,11 @@
 :is(.context-breakdown-segment, .context-breakdown-key)[data-tone="reference"] {
   --usage-part: color-mix(in oklab, var(--warning) 15%, var(--warning-line));
 }
-:is(.context-breakdown-segment, .context-breakdown-key):is(
-  [data-tone="results"],
-  [data-tone="request"]
-) {
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="request"] {
   --usage-part: color-mix(in oklab, var(--success) 85%, var(--success-line));
+}
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="results"] {
+  --usage-part: color-mix(in oklab, var(--success) 45%, var(--info));
 }
 :is(.context-breakdown-segment, .context-breakdown-key)[data-tone="note"] {
   --usage-part: var(--success-line);
