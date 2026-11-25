@@ -244,20 +244,41 @@ const isCodeField = (section: string, field: string) =>
   !!CODE_FIELDS[section]?.includes(field) ||
   (section === 'triggers' && /^effect\.\d+$/u.test(field));
 
+const effectCode = (effects: unknown, index: number) => {
+  const effect = Array.isArray(effects) ? effects[index] : undefined;
+  const code =
+    effect && typeof effect === 'object' ? (effect as { code?: unknown }).code : undefined;
+  return typeof code === 'string' ? code : '';
+};
+
+function effectOffset(change: EditorFieldChange, field: string) {
+  const index = Number(field.slice('effect.'.length));
+  const before = effectCode(change.before, index);
+  const after = effectCode(change.after, index);
+  if (before === after) return null;
+  let offset = 0;
+  while (offset < before.length && before[offset] === after[offset]) offset++;
+  return Math.min(offset, after.length);
+}
+
 export function changeTarget<K extends string>(card: ReviewCard<K>): ChangeTarget<K> {
   const { change, section, view } = card;
   if (change.kind === 'removed' && change.item && !change.field.length)
     return { section, item: null, field: null, offset: null };
   const { item, field } = targetField(change);
   const code = isCodeField(section, field);
+  const effect = change.item?.kind === 'triggers' && change.field.join('/') === 'effect';
   return {
     section,
     item,
     field: code ? field : null,
-    offset:
-      code && view.type === 'text' && 'hunks' in view.diff
-        ? firstChangeOffset(view.diff.hunks)
-        : null,
+    offset: !code
+      ? null
+      : effect
+        ? effectOffset(change, field)
+        : view.type === 'text' && 'hunks' in view.diff
+          ? firstChangeOffset(view.diff.hunks)
+          : null,
   };
 }
 
@@ -333,16 +354,13 @@ export function codeFieldBases(
       change.field.length === 1 &&
       change.field[0] === 'effect'
     ) {
-      const old = Array.isArray(change.before) ? change.before : [];
       const effects = Array.isArray(change.after) ? change.after : [];
       effects.forEach((effect, index) => {
-        const code = (value: unknown) =>
-          value && typeof value === 'object' ? (value as { code?: unknown }).code : undefined;
-        if (typeof code(effect) === 'string' && code(effect) !== code(old[index]))
-          bases.set(
-            codeFieldName(section, change.item!.index, `effect.${index}`),
-            typeof code(old[index]) === 'string' ? (code(old[index]) as string) : ''
-          );
+        const code =
+          effect && typeof effect === 'object' ? (effect as { code?: unknown }).code : undefined;
+        const before = effectCode(change.before, index);
+        if (typeof code === 'string' && code !== before)
+          bases.set(codeFieldName(section, change.item!.index, `effect.${index}`), before);
       });
       continue;
     }

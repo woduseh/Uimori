@@ -205,6 +205,26 @@ test('change targets pick the editor item and code field each kind uses', () => 
   ).toEqual([['lore', null, null]]);
 });
 
+test('moving to a changed trigger script puts the cursor at the change inside its Lua code', () => {
+  const triggers = (code: string) =>
+    model({
+      extensions: {
+        risuai: { triggerscript: [{ comment: 't', effect: [{ type: 'triggerlua', code }] }] },
+      },
+    });
+  const [card] = reviewSections(
+    changed(['triggers']),
+    editorFieldChanges(triggers('local hp = 80\nfoo()'), triggers('local hp = 80\nbar()')),
+    sectionOf
+  )[0]!.cards;
+  expect(changeTarget(card!)).toEqual({
+    section: 'triggers',
+    item: 0,
+    field: 'effect.0',
+    offset: 14,
+  });
+});
+
 test('reverts are offered except for pending sections and image or asset references', () => {
   const sections = reviewSections(
     changed(['basic', 'assets'], ['basic']),

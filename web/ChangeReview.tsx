@@ -1,5 +1,6 @@
 import {
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -65,7 +66,14 @@ function estimatedHeight(card: ReviewCard<string>) {
   return Math.min(4000, 24 + lines * LINE_HEIGHT);
 }
 
-function CardBody({ card, layout }: { card: ReviewCard<string>; layout: TextDiffLayout }) {
+const CardBody = memo(function CardBody({
+  card,
+  layout,
+}: {
+  card: ReviewCard<string>;
+  layout: TextDiffLayout;
+}) {
+  useI18n();
   const { view, change } = card;
   if (view.type === 'text') {
     if ('omitted' in view.diff)
@@ -120,7 +128,7 @@ function CardBody({ card, layout }: { card: ReviewCard<string>; layout: TextDiff
       </p>
     );
   return null;
-}
+});
 
 function CardStats({ card }: { card: ReviewCard<string> }) {
   const { view } = card;
@@ -253,8 +261,11 @@ function ChangeRail({
   onPick: (target: string) => void;
 }) {
   const [roving, setRoving] = useState<string | null>(null);
-  const first = sections[0]?.id ?? null;
-  const active = roving ?? current ?? (first ? `section:${first}` : null);
+  const keys = sections.flatMap((section) => [
+    `section:${section.id}`,
+    ...section.cards.map((card) => card.id),
+  ]);
+  const active = [roving, current].find((key) => key && keys.includes(key)) ?? keys[0] ?? null;
   const move = (event: KeyboardEvent<HTMLElement>) => {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')];

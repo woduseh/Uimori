@@ -69,7 +69,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await panel.getByLabel(/^(봇|페르소나|모듈) 이름$/u).fill(createdTitle);
     await panel.getByLabel('카드 설명', { exact: true }).fill(body);
     await expect(saveState).toHaveText('');
-    await expect(editorChanges(panel)).toHaveAccessibleName('변경 1건');
+    await expect(editorChanges(panel)).toHaveAccessibleName('바뀐 영역 1곳');
     const savedResponse = waitForContentSave(page);
     const register = panel.getByRole('button', { name: '자료 등록', exact: true });
     await expect(register).toHaveText('등록');

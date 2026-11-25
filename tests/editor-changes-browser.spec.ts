@@ -125,13 +125,13 @@ test('EDIT01 the header counts changed sections, the workspace shows every chang
   await expect(editorChanges(header)).toHaveCount(0);
   await page.getByLabel('카드 설명', { exact: true }).fill('고친 카드 설명');
   await page.getByLabel('봇 이름', { exact: true }).fill(`${title} 수정`);
-  await expect(editorChanges(header)).toHaveAccessibleName('변경 1건');
+  await expect(editorChanges(header)).toHaveAccessibleName('바뀐 영역 1곳');
   await selectEditorSection(page, '첫 메시지');
   await page.getByLabel('기본 첫 메시지', { exact: true }).fill('고친 인사');
   await selectEditorSection(page, 'JSON 소스');
   await page.getByLabel('Risu 원문 JSON', { exact: true }).fill('{"unfinished":');
   const chip = editorChanges(header);
-  await expect(chip).toHaveAccessibleName('변경 3건');
+  await expect(chip).toHaveAccessibleName('바뀐 영역 3곳');
   await chip.click();
   const sheet = review(page);
   await expect(sheet).toBeVisible();
@@ -185,7 +185,7 @@ for (const width of [700, 390]) {
     const name = page.getByLabel('봇 이름', { exact: true });
     await name.fill(`${title} 수정`);
     const chip = editorChanges(page);
-    await expect(chip).toHaveAccessibleName('변경 1건');
+    await expect(chip).toHaveAccessibleName('바뀐 영역 1곳');
     await expect(chip.locator('.resource-editor-changes-count')).toHaveText('1');
     await expect(chip.locator('.resource-editor-changes-count')).toBeVisible();
     await expect(page.getByRole('button', { name: '편집 취소', exact: true })).toHaveCount(0);
@@ -328,7 +328,7 @@ test('EDIT05 prompt presets count sections and restore the previous save', async
   const original = await codeFieldValue(body);
   await body.fill('고친 프롬프트 본문');
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} 수정`);
-  await expect(editorChanges(editor)).toHaveAccessibleName('변경 2건');
+  await expect(editorChanges(editor)).toHaveAccessibleName('바뀐 영역 2곳');
   await expect(editorTab(editor, '구성').locator('.section-navigation-changed')).toHaveCount(1);
   await editorChanges(editor).click();
   await expect(review(page).locator('.change-review-rail-section')).toHaveText([
@@ -511,7 +511,7 @@ test('EDIT09 the rail lists five changes across three sections, scrolls to a car
   await openBot(page, title);
   await fiveChanges(page, title);
   const chip = editorChanges(page);
-  await expect(chip).toHaveAccessibleName('변경 3건');
+  await expect(chip).toHaveAccessibleName('바뀐 영역 3곳');
   await chip.click();
   const sheet = review(page);
   const items = rail(page).locator('.change-review-rail-item');
@@ -629,7 +629,7 @@ test('EDIT12 reverting one item removes its card, offers undo once and leaves th
   await sheet
     .getByRole('button', { name: '상태창 / 바꿀 내용 (OUT) 되돌리기', exact: true })
     .click();
-  await expect(chip).toHaveAccessibleName('변경 2건');
+  await expect(chip).toHaveAccessibleName('바뀐 영역 2곳');
   await page.keyboard.press('Escape');
   await selectEditorSection(page, '정규식');
   await expectCodeFieldValue(
@@ -638,6 +638,25 @@ test('EDIT12 reverting one item removes its card, offers undo once and leaves th
   );
   await expect(editorTab(page, '정규식').locator('.section-navigation-changed')).toHaveCount(0);
   await expect(editorTab(page, '로어북').locator('.section-navigation-changed')).toHaveCount(1);
+});
+
+test('EDIT16 reverting the card focused in the rail keeps one rail entry reachable with Tab', async ({
+  page,
+  request,
+}) => {
+  const title = `EDIT16 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title, richCard);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openBot(page, title);
+  await fiveChanges(page, title);
+  await editorChanges(page).click();
+  const sheet = review(page);
+  const harbour = rail(page).getByRole('button', { name: '항구 / 로어 본문', exact: true });
+  await harbour.focus();
+  await expect(harbour).toHaveAttribute('tabindex', '0');
+  await sheet.getByRole('button', { name: '항구 / 로어 본문 되돌리기', exact: true }).click();
+  await expect(harbour).toHaveCount(0);
+  await expect(rail(page).locator('button[tabindex="0"]')).toHaveCount(1);
 });
 
 test('EDIT13 changed sections carry a rail dot and edited code lines a gutter mark until the save', async ({
@@ -752,6 +771,109 @@ test('EDIT14 review screenshots across widths, themes and a named palette', asyn
   await shot(page, 'review-phone-390-light');
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await shot(page, 'review-phone-390-dark');
+});
+
+test('EDIT17 a 100 KB bot with a long status HTML, long lore and a one-line JSON script scrolls its review without long frames', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120000);
+  const title = `EDIT17 ${randomUUID().slice(0, 8)}`;
+  const css = Array.from(
+    { length: 700 },
+    (_, index) =>
+      `.status-panel .row-${index} { display: flex; gap: 6px; color: var(--stat-${index % 12}); }`
+  );
+  const html = Array.from(
+    { length: 500 },
+    (_, index) =>
+      `<div class="row-${index}"><span class="label">항목 ${index}</span><span>{{getvar::stat_${index}}}</span></div>`
+  );
+  const background = `<style>\n${css.join('\n')}\n</style>\n${html.join('\n')}`;
+  const loreText = (index: number) =>
+    Array.from(
+      { length: 12 },
+      (_, line) =>
+        `${index}번 지역의 ${line}번째 기록이에요. 등대지기는 해 질 녘마다 바닷가를 따라 걸으며 불빛을 확인해요.`
+    ).join('\n');
+  const entries = Array.from({ length: 40 }, (_, id) => ({
+    id,
+    keys: [`지역 ${id}`],
+    content: loreText(id),
+    comment: `지역 ${id}`,
+  }));
+  const state = JSON.stringify(
+    Object.fromEntries(Array.from({ length: 300 }, (_, index) => [`stat_${index}`, index * 3]))
+  );
+  const card = (edited: boolean) => ({
+    name: title,
+    description: '처음 쓴 카드 설명',
+    first_mes: '처음 인사',
+    character_book: {
+      entries: entries.map((entry) =>
+        edited && entry.id % 2 === 0
+          ? { ...entry, content: entry.content.replace('불빛을 확인해요', '불빛을 다시 살펴요') }
+          : entry
+      ),
+    },
+    extensions: {
+      risuai: {
+        backgroundHTML: edited
+          ? background.replaceAll(/gap: 6px; color: var\(--stat-3\)/gu, 'gap: 8px; color: red')
+          : background,
+        customScripts: [
+          {
+            comment: '상태 JSON',
+            in: '\\[state\\]',
+            out: edited ? state.replace('"stat_150":450', '"stat_150":451') : state,
+            type: 'editdisplay',
+          },
+        ],
+      },
+    },
+  });
+  const seeded = await seedBot(request, title, card(false));
+  const changed = nativeContent(card(true));
+  const size = JSON.stringify(changed.nativeRisu.card).length;
+  const updated = await request.post('/api/resources/save', {
+    data: {
+      kind: 'content',
+      id: seeded.id,
+      expectedRevision: seeded.revision,
+      model: { ...editableResource('content', seeded), package: changed },
+    },
+  });
+  expect(updated.ok(), await updated.text()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openBot(page, title);
+  await page.getByLabel('자료 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '이전 저장본과 비교', exact: true }).click();
+  const dialog = compareDialog(page);
+  await expect(dialog.locator('.change-review-diff').first()).toBeVisible();
+  const cards = await dialog.locator('.change-review-card').count();
+  const frames = await dialog.locator('.change-review-canvas').evaluate(async (canvas) => {
+    const durations: number[] = [];
+    let last = performance.now();
+    const step = Math.max(200, Math.floor(canvas.clientHeight / 2));
+    while (canvas.scrollTop + canvas.clientHeight < canvas.scrollHeight - 1) {
+      canvas.scrollTop += step;
+      await new Promise(requestAnimationFrame);
+      const now = performance.now();
+      durations.push(now - last);
+      last = now;
+    }
+    durations.sort((a, b) => a - b);
+    return {
+      count: durations.length,
+      median: durations[Math.floor(durations.length / 2)] ?? 0,
+      p95: durations[Math.floor(durations.length * 0.95)] ?? 0,
+      max: durations.at(-1) ?? 0,
+    };
+  });
+  const note = `${Math.round(size / 1024)} KB card, ${cards} cards: ${frames.count} scroll steps, frame median ${frames.median.toFixed(1)}ms, p95 ${frames.p95.toFixed(1)}ms, max ${frames.max.toFixed(1)}ms`;
+  test.info().annotations.push({ type: 'measurement', description: note });
+  console.log(`EDIT17 ${note}`);
+  expect(frames.p95).toBeLessThan(200);
 });
 
 test('EDIT15 three hundred changed lore entries open quickly and render diffs only near the view', async ({

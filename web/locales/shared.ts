@@ -468,10 +468,10 @@ export const messages = {
     zh: '取消编辑',
   },
   'shared.changeCount': {
-    ko: '변경 {count, number}건',
-    en: '{count, plural, one {# change} other {# changes}}',
-    ja: '変更 {count, number}件',
-    zh: '{count, number} 处更改',
+    ko: '바뀐 영역 {count, number}곳',
+    en: '{count, plural, one {# changed section} other {# changed sections}}',
+    ja: '変更した領域 {count, number}件',
+    zh: '{count, number} 个区域有更改',
   },
   'shared.reviewChanges': {
     ko: '변경 검토',
