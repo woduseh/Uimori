@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { docsOnly, versionChanged } from './ci-changes.mjs';
+import { buildFingerprint } from './lib.mjs';
 
 test('a version change between the pushed revisions marks a release candidate', () => {
   const packages = {
@@ -35,6 +36,15 @@ test('root user guides are build inputs and run the full quality steps', () => {
     ['README.md', 'docs/dev/DEVELOPMENT.md', 'docs/READING.md'],
   ])
     assert.equal(docsOnly(files), false);
+});
+
+test('no build input counts as an inert documentation change', async () => {
+  const { files } = await buildFingerprint();
+  assert.ok(files.includes('package.json'));
+  assert.deepEqual(
+    files.filter((file) => docsOnly([file])),
+    []
+  );
 });
 
 test('code, workflow and empty change sets run the full quality steps', () => {

@@ -11,6 +11,8 @@ const localOnlyPaths = ['.claude/settings.local.json', '.claude/worktrees'];
 const caseIdShape = /\b[A-Z][A-Z0-9]*[A-Z]\d{2}(?![\dA-Za-z_])/gu;
 const caseIdMention = /\b([A-Z][A-Z0-9]*[A-Z])(\d{2})(?:[-–]\1?(\d{2}))?(?![\dA-Za-z_])/gu;
 const termsShapedLikeCaseIds = new Set(['BM25']);
+const shellFence = /^(?:sh|bash|shell|zsh|console|powershell|pwsh|ps1)$/u;
+const repositoryCommand = /^(?:node|npm|npx)\s/u;
 const developerGuideHeading =
   /^#{2,6}\s+(?:(?:구현 참고|기술 명세|개발자)|\S.*\s구현 참고)(?:\s|\(|$)/u;
 const guideApiRoute =
@@ -61,16 +63,20 @@ function caseIdErrors(file, content, knownIds) {
   return issues;
 }
 
+function* markdownLines(content) {
+  let fence = null;
+  for (const line of content.split(/\r?\n/u)) {
+    const delimiter = /^\s*(?:```|~~~)\s*(\S*)/u.exec(line);
+    if (delimiter) fence = fence === null ? delimiter[1].toLowerCase() : null;
+    else yield { line, fence };
+  }
+}
+
 function headingAnchors(content) {
   const anchors = new Set();
   const repeats = new Map();
-  let fenced = false;
-  for (const line of content.split(/\r?\n/u)) {
-    if (/^\s*(?:```|~~~)/u.test(line)) {
-      fenced = !fenced;
-      continue;
-    }
-    const heading = fenced ? null : /^#{1,6}\s+(.+?)\s*$/u.exec(line);
+  for (const { line, fence } of markdownLines(content)) {
+    const heading = fence === null ? /^#{1,6}\s+(.+?)\s*$/u.exec(line) : null;
     if (!heading) continue;
     const anchor = heading[1]
       .toLowerCase()
@@ -87,13 +93,8 @@ function headingAnchors(content) {
 function userGuidePurityErrors(file, content) {
   const issues = [];
   const allowedRoutes = operatorGuideApiRoutes.get(basename(file));
-  let fenced = false;
-  for (const line of content.split(/\r?\n/u)) {
-    if (/^\s*(?:```|~~~)/u.test(line)) {
-      fenced = !fenced;
-      continue;
-    }
-    if (fenced) continue;
+  for (const { line, fence } of markdownLines(content)) {
+    if (fence !== null) continue;
     if (developerGuideHeading.test(line))
       issues.push(`${file}: user guide must not contain developer heading "${line.trim()}"`);
     for (const [, code] of line.matchAll(/`([^`\n]+)`/gu)) {
@@ -130,6 +131,18 @@ export function documentationErrors(directory = root) {
       anchorsByFile.set(file, headingAnchors(readFileSync(file, 'utf8')));
     return anchorsByFile.get(file);
   };
+  const missingSourcePaths = (text) =>
+    text.split(/\s+/u).filter((path) => {
+      if (!sourcePath.test(path)) return false;
+      const resolved = resolve(directory, path);
+      if (localOnly.some((local) => resolved === local || resolved.startsWith(local + sep)))
+        return false;
+      return !globSync(path.replace(/<[^>]+>/gu, '*'), { cwd: directory }).length;
+    });
+  const packageFile = resolve(directory, 'package.json');
+  const scripts = existsSync(packageFile)
+    ? (JSON.parse(readFileSync(packageFile, 'utf8')).scripts ?? {})
+    : {};
   for (const file of files) {
     const content = readFileSync(file, 'utf8');
     for (const match of content.matchAll(/\]\(([^\s)]+)(?:\s+[^)]*)?\)/gu)) {
@@ -153,19 +166,17 @@ export function documentationErrors(directory = root) {
     if (file.startsWith(releaseNotes)) continue;
     if (dirname(file) === docsRoot) broken.push(...userGuidePurityErrors(file, content));
     for (const [, code] of content.matchAll(/`([^`\n]+)`/gu)) {
-      for (const path of code.split(/\s+/u)) {
-        if (!sourcePath.test(path)) continue;
-        if (
-          localOnly.some((local) => {
-            const resolved = resolve(directory, path);
-            return resolved === local || resolved.startsWith(local + sep);
-          })
-        )
-          continue;
-        const pattern = path.replace(/<[^>]+>/gu, '*');
-        if (!globSync(pattern, { cwd: directory }).length)
-          broken.push(`${file}: \`${path}\` (no file or directory matches this path)`);
-      }
+      for (const path of missingSourcePaths(code))
+        broken.push(`${file}: \`${path}\` (no file or directory matches this path)`);
+    }
+    for (const { line, fence } of markdownLines(content)) {
+      const command = line.trim();
+      if (!shellFence.test(fence ?? '') || !repositoryCommand.test(command)) continue;
+      const script = /^npm\s+run(?:-script)?\s+([^\s-]\S*)/u.exec(command)?.[1];
+      if (script && !Object.hasOwn(scripts, script))
+        broken.push(`${file}: ${command} (package.json has no script named ${script})`);
+      for (const path of missingSourcePaths(command))
+        broken.push(`${file}: ${command} (no file or directory matches ${path})`);
     }
     if (file.startsWith(developerDocs)) broken.push(...caseIdErrors(file, content, knownCaseIds));
   }
@@ -188,6 +199,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exitCode = 1;
   } else
     console.log(
-      'Documentation links, anchors, source paths, case IDs and verification entry points PASS'
+      'Documentation links, anchors, source paths, fenced commands, case IDs and verification entry points PASS'
     );
 }

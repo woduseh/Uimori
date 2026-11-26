@@ -137,6 +137,55 @@ test('source paths in inline code must exist outside release notes', () => {
   );
 });
 
+test('commands in shell fences must name existing npm scripts and source paths', () => {
+  withDocumentation(
+    {
+      'package.json': JSON.stringify({ scripts: { dev: 'vite', 'verify:browser': 'node x' } }),
+      'README.md': ['1. Start:', '   ```powershell', '   npm ci', '   npm run gone', '   ```'].join(
+        '\n'
+      ),
+      'docs/dev/SPEC.md': [
+        '```powershell',
+        'npm run dev',
+        'npm run verify:browser -- --grep READERREC --workers 1',
+        'npm run verify:gone -- --grep reader',
+        'node scripts/run.mjs .local/uimori.sqlite --since 2026-10-24',
+        'node scripts/gone.mjs --files tests/reading.test.ts tests/gone.test.ts',
+        'node scripts/<name>.mjs',
+        'node scripts/<name>.sh',
+        '# node scripts/commented.mjs',
+        'docker compose --env-file .env.self-host up -d',
+        '```',
+        '```sh',
+        'Error: Cannot find module scripts/output.mjs',
+        'tests/output.test.ts failed',
+        '```',
+        '```text',
+        'node scripts/sample.mjs',
+        'npm run sample',
+        '```',
+        '```',
+        'npm run unlabeled',
+        '```',
+      ].join('\n'),
+      'docs/releases/v0.0.1.md': '```sh\nnode scripts/gone.mjs\nnpm run gone\n```',
+      'scripts/run.mjs': '',
+      'tests/reading.test.ts': '',
+    },
+    (directory) => {
+      const readme = join(directory, 'README.md');
+      const spec = join(directory, 'docs/dev/SPEC.md');
+      assert.deepEqual(documentationErrors(directory), [
+        `${readme}: npm run gone (package.json has no script named gone)`,
+        `${spec}: npm run verify:gone -- --grep reader (package.json has no script named verify:gone)`,
+        `${spec}: node scripts/gone.mjs --files tests/reading.test.ts tests/gone.test.ts (no file or directory matches scripts/gone.mjs)`,
+        `${spec}: node scripts/gone.mjs --files tests/reading.test.ts tests/gone.test.ts (no file or directory matches tests/gone.test.ts)`,
+        `${spec}: node scripts/<name>.sh (no file or directory matches scripts/<name>.sh)`,
+      ]);
+    }
+  );
+});
+
 test('case IDs in developer documents, including ranges, must name existing test cases', () => {
   withDocumentation(
     {
