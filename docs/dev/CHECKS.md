@@ -5,6 +5,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Change or question | Useful checks |
 | --- | --- |
 | Any code change, as a first pass | `npm run check:changed`, or `npm run check:changed -- <base>` for committed branch work; then add the focused checks below that it does not cover |
+| A delegated unit with a fixed scope | `npm run check:unit-diff -- --base <ref> --allow '<glob>'`: fails on paths outside the globs, fewer test cases without `--allow-test-removal`, new `.skip`/`.only`/`.todo`/`.fixme`, and a `package.json` version change |
 | Code behavior | Focused tests, such as `npm test -- tests/<file>.test.ts`; use `npm run quality` for lint and type checks when relevant |
 | UI behavior | The relevant `verify:*` command against a matching build; `verify:browser-smoke` covers basic chat and global prompt settings |
 | Stylesheets under `web/` | `npm test -- tests/style-spacing.test.ts tests/themes.test.ts`; the spacing scale and the startup palette are Vitest checks that the `verify:*` browser runners do not run |

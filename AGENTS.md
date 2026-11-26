@@ -4,7 +4,7 @@ Uimori is a single-user, self-hosted creative-writing app. Favor simple, maintai
 
 Carry an implementation request through to a working result, verification that fits the change, and a local commit. Make routine, reversible decisions yourself, state the assumptions behind them, and keep going. Ask only when missing input or authorization would materially change the outcome, and continue independent work while you wait.
 
-Commit finished, verified work locally without asking. Get the user's go-ahead before a push, a pull request, a release, or a deployment. Do not ask again for a go-ahead the user already gave for the same action.
+Commit finished, verified work locally without asking. Get the user's go-ahead before a push, a pull request, or a deployment, and do not ask again for a go-ahead the user already gave for the same action. A release (a version change, a tag, new release notes, the Oracle release scripts) is the user's alone: an agent never starts one, even with a go-ahead. The PreToolUse hook in `.claude/settings.json` and `.githooks/pre-push` refuse these steps unless the user set `UIMORI_ALLOW_RELEASE=1` for the session or the push.
 
 ## Design judgment
 
