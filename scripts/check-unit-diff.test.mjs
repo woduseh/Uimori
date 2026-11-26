@@ -80,3 +80,15 @@ test('the command exits 1 on a failure and 2 without an allowance', (t) => {
   assert.equal(run('--base', 'HEAD', '--allow', 'tests/**', '--allow-test-removal').status, 0);
   assert.equal(run('--base', 'HEAD').status, 2);
 });
+
+test('removing cases in one file is not offset by adding cases in another', (t) => {
+  const { write, check } = fixture(t);
+  write('tests/a.test.ts', "test('a', () => {});\n");
+  write('tests/b.test.ts', `${twoCases}${twoCases}test('e', () => {});\n`);
+  const result = check({ allow: ['tests/**'] });
+  assert.match(
+    result.failures.join('\n'),
+    /test cases fell from 2 to 6 in tests\/a\.test\.ts \(2 -> 1\)/u
+  );
+  assert.deepEqual(check({ allow: ['tests/**'], allowTestRemoval: true }).failures, []);
+});

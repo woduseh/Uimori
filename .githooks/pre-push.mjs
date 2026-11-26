@@ -11,7 +11,12 @@ export function pushRefusals(lines, { remote, env = process.env, cwd = process.c
     execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   const comparedWith = (localSha, remoteSha) => {
     if (remoteSha && !missing.test(remoteSha)) return remoteSha;
-    for (const ref of [`refs/remotes/${remote}/HEAD`, `refs/remotes/${remote}/main`]) {
+    for (const ref of [
+      `refs/remotes/${remote}/HEAD`,
+      `refs/remotes/${remote}/main`,
+      'refs/remotes/origin/HEAD',
+      'refs/remotes/origin/main',
+    ]) {
       try {
         return git('merge-base', localSha, ref).trim();
       } catch {}
@@ -21,11 +26,11 @@ export function pushRefusals(lines, { remote, env = process.env, cwd = process.c
   const refusals = [];
   for (const line of lines) {
     const [, localSha, remoteRef, remoteSha] = line.trim().split(/\s+/u);
-    if (!localSha || missing.test(localSha)) continue;
     if (remoteRef?.startsWith('refs/tags/')) {
-      refusals.push(`${remoteRef}: pushing a tag publishes a release`);
+      refusals.push(`${remoteRef}: pushing or deleting a tag publishes a release`);
       continue;
     }
+    if (!localSha || missing.test(localSha)) continue;
     const base = comparedWith(localSha, remoteSha);
     if (!base) continue;
     try {

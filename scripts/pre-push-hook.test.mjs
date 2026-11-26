@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { pushRefusals } from '../.githooks/pre-push.mjs';
 
 const hooks = fileURLToPath(new URL('../.githooks', import.meta.url));
 const identity = {
@@ -56,7 +57,22 @@ test('the pre-push hook refuses a version change or a tag unless a person allows
   execFileSync('git', ['-C', work, 'tag', 'v1.0.1']);
   const tag = git(['push', '-q', 'origin', 'v1.0.1']);
   assert.notEqual(tag.status, 0);
-  assert.match(tag.stderr, /refs\/tags\/v1\.0\.1: pushing a tag publishes a release/u);
+  assert.match(tag.stderr, /refs\/tags\/v1\.0\.1: pushing or deleting a tag publishes a release/u);
 
   assert.equal(git(['push', '-q', 'origin', 'main'], { UIMORI_ALLOW_RELEASE: '1' }).status, 0);
+});
+
+test('deleting a remote tag is refused even when the local sha is all zeros', () => {
+  const zeros = '0'.repeat(40);
+  const sha = '1'.repeat(40);
+  const refusals = pushRefusals([`refs/tags/v0.18.1 ${zeros} refs/tags/v0.18.1 ${sha}`], {
+    remote: 'origin',
+    env: {},
+    cwd: process.cwd(),
+  });
+  assert.equal(refusals.length, 1);
+  assert.match(
+    refusals[0],
+    /refs\/tags\/v0\.18\.1: pushing or deleting a tag publishes a release/u
+  );
 });

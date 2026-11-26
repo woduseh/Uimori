@@ -17,6 +17,18 @@ const releaseCommands = [
     /\b(?:tee|cp|mv|Copy-Item|Move-Item|New-Item|Set-Content|Add-Content|Out-File)\b[^|;&\n]*docs[\\/]releases[\\/]/iu,
     'it writes release notes',
   ],
+  [
+    /\bUIMORI_ALLOW_RELEASE=/u,
+    'UIMORI_ALLOW_RELEASE must be set in the user session, not in a command',
+  ],
+  [
+    /\bgit(?:\s+-[cC]\s+\S+)*\s+push\b[^|;&\n]*--no-verify\b/u,
+    'git push --no-verify skips the release hook',
+  ],
+  [
+    /\bgit(?:\s+-[cC]\s+\S+)*\s+push\b[^|;&\n]*(?:--tags\b|refs\/tags\/)/u,
+    'git push of tags publishes a release',
+  ],
 ];
 
 const version = (text) => /"version"\s*:\s*"([^"]*)"/u.exec(text)?.[1] ?? null;

@@ -33,20 +33,36 @@ export function checkUnitDiff({ base, allow, allowTestRemoval = false, cwd = pro
   const after = (file) =>
     existsSync(path.join(cwd, file)) ? readFileSync(path.join(cwd, file), 'utf8') : '';
   const tests = files.filter((file) => testFile.test(file));
-  const total = (read, pattern) =>
-    tests.reduce((sum, file) => sum + (read(file).match(pattern)?.length ?? 0), 0);
-  const cases = { before: total(before, testCase), after: total(after, testCase) };
-  const disabled = { before: total(before, disabledCase), after: total(after, disabledCase) };
+  const count = (text, pattern) => text.match(pattern)?.length ?? 0;
+  const cases = { before: 0, after: 0 };
+  const disabled = { before: 0, after: 0 };
+  const removedIn = [];
+  const disabledIn = [];
+  for (const file of tests) {
+    const previous = before(file);
+    const next = after(file);
+    const previousCases = count(previous, testCase);
+    const nextCases = count(next, testCase);
+    const previousDisabled = count(previous, disabledCase);
+    const nextDisabled = count(next, disabledCase);
+    cases.before += previousCases;
+    cases.after += nextCases;
+    disabled.before += previousDisabled;
+    disabled.after += nextDisabled;
+    if (nextCases < previousCases) removedIn.push(`${file} (${previousCases} -> ${nextCases})`);
+    if (nextDisabled > previousDisabled)
+      disabledIn.push(`${file} (${previousDisabled} -> ${nextDisabled})`);
+  }
   const failures = [];
   const outside = files.filter((file) => !allow.some((glob) => path.posix.matchesGlob(file, glob)));
   if (outside.length) failures.push(`changed outside the allowed paths: ${outside.join(', ')}`);
-  if (cases.after < cases.before && !allowTestRemoval)
+  if (removedIn.length && !allowTestRemoval)
     failures.push(
-      `test cases fell from ${cases.before} to ${cases.after}; pass --allow-test-removal only when removing tests is the task`
+      `test cases fell from ${cases.before} to ${cases.after} in ${removedIn.join(', ')}; pass --allow-test-removal only when removing tests is the task`
     );
-  if (disabled.after > disabled.before)
+  if (disabledIn.length)
     failures.push(
-      `skip, only, todo or fixme markers rose from ${disabled.before} to ${disabled.after}`
+      `skip, only, todo or fixme markers rose from ${disabled.before} to ${disabled.after} in ${disabledIn.join(', ')}`
     );
   if (
     files.includes('package.json') &&

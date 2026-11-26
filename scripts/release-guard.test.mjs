@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { releaseRefusal } from './release-guard.mjs';
+import { releaseRefusal } from '../.claude/hooks/release-guard.mjs';
 
-const hook = fileURLToPath(new URL('./release-guard.mjs', import.meta.url));
+const hook = fileURLToPath(new URL('../.claude/hooks/release-guard.mjs', import.meta.url));
 const shell = (command) => ({ tool_name: 'Bash', tool_input: { command } });
 const noEnvironment = { env: {} };
 
@@ -19,6 +19,11 @@ test('release commands are refused while reads and pushes pass', () => {
     'node scripts/release-oracle.mjs --plan',
     'git show HEAD:notes.md > docs/releases/v0.18.2.md',
     'Copy-Item notes.md docs\\releases\\v0.18.2.md',
+    'UIMORI_ALLOW_RELEASE=1 git push origin v0.18.2',
+    'git push --no-verify origin main',
+    'git -C ../uimori push origin main --no-verify',
+    'git push origin --tags',
+    'git push origin refs/tags/v0.18.2',
   ])
     assert.ok(releaseRefusal(shell(command), noEnvironment), command);
   for (const command of [
