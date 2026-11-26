@@ -28,7 +28,11 @@
         "server/reader*.ts",
         "server/selection-revision.ts",
         "server/source-editing.ts",
-        "server/manuscript-export.ts"
+        "server/manuscript-export.ts",
+        "web/prose.css",
+        "web/reading*.css",
+        "web/reader-*.css",
+        "web/source-edit.css"
       ],
       "specs": [
         { "file": "tests/ui-browser.spec.ts" },
@@ -69,7 +73,14 @@
         "server/main-request.ts",
         "server/request-images.ts",
         "server/request-preview.ts",
-        "server/response-stream.ts"
+        "server/response-stream.ts",
+        "web/cancelled-run.css",
+        "web/composer-more.css",
+        "web/request-images.css",
+        "web/request-message.css",
+        "web/request-preview.css",
+        "web/retry-failure.css",
+        "web/streaming-response.css"
       ],
       "specs": [
         { "file": "tests/product-browser.spec.ts" },
@@ -104,7 +115,9 @@
         "server/chat-overrides.ts",
         "server/chat-variable*.ts",
         "server/agent-collaboration.ts",
-        "server/evaluation-session.ts"
+        "server/evaluation-session.ts",
+        "web/chat-*.css",
+        "web/agent-collaboration.css"
       ],
       "specs": [
         { "file": "tests/chat-settings-browser.spec.ts" },
@@ -126,7 +139,10 @@
         "core/context-*.ts",
         "core/notes.ts",
         "server/context-*.ts",
-        "server/story-notes.ts"
+        "server/story-notes.ts",
+        "web/context.css",
+        "web/context-summary.css",
+        "web/story.css"
       ],
       "specs": [
         { "file": "tests/context-browser.spec.ts" },
@@ -151,7 +167,14 @@
         "server/task-trace.ts",
         "server/run-phase.ts",
         "server/context-parts.ts",
-        "server/execution-diagnostics.ts"
+        "server/execution-diagnostics.ts",
+        "web/context-breakdown.css",
+        "web/model-pricing.css",
+        "web/run-task-details.css",
+        "web/scene-inspector.css",
+        "web/scene-usage.css",
+        "web/task-*.css",
+        "web/turn-activity.css"
       ],
       "specs": [
         { "file": "tests/turn-activity-browser.spec.ts" },
@@ -179,7 +202,15 @@
         "web/CommandPalette.tsx",
         "core/activity-feed.ts",
         "server/activity-feed.ts",
-        "server/chat-organization.ts"
+        "server/chat-organization.ts",
+        "web/activity-navigation.css",
+        "web/bot-navigation.css",
+        "web/bot-tree-navigation.css",
+        "web/command-palette.css",
+        "web/helper-session-navigation.css",
+        "web/shortcut-settings.css",
+        "web/side-panel.css",
+        "web/sidebar.css"
       ],
       "specs": [
         { "file": "tests/organization-browser.spec.ts" },
@@ -201,7 +232,9 @@
         "web/storage-keys.ts",
         "web/optional-storage.ts",
         "server/live-events.ts",
-        "server/chat-event-stream.ts"
+        "server/chat-event-stream.ts",
+        "web/loading-state.css",
+        "web/reader-loading.css"
       ],
       "specs": [
         { "file": "tests/loading-browser.spec.ts" },
@@ -225,7 +258,10 @@
         "core/library-organization.ts",
         "server/library-organization.ts",
         "server/image-*.ts",
-        "server/asset-metadata.ts"
+        "server/asset-metadata.ts",
+        "web/bot-chat-import.css",
+        "web/library-*.css",
+        "web/new-story.css"
       ],
       "specs": [
         { "file": "tests/library-browser.spec.ts", "cases": ["LIBUI08"] },
@@ -249,7 +285,8 @@
         "server/asset-deletion.ts",
         "server/scene-deletion.ts",
         "server/orphan-memory.ts",
-        "server/unused-data*.ts"
+        "server/unused-data*.ts",
+        "web/orphan-memory.css"
       ],
       "specs": [
         { "file": "tests/deletion-browser.spec.ts" },
@@ -287,7 +324,17 @@
         "core/text-diff.ts",
         "server/resource-*.ts",
         "server/risu-native-cbs.ts",
-        "server/risu-native-preview.ts"
+        "server/risu-native-preview.ts",
+        "web/resource-editor.css",
+        "web/editor-studio.css",
+        "web/change-review.css",
+        "web/text-diff.css",
+        "web/save-conflict-dialog.css",
+        "web/native-editor.css",
+        "web/native-risu-*.css",
+        "web/code-field.css",
+        "web/cbs-references.css",
+        "web/risu-draft-preview.css"
       ],
       "specs": [
         { "file": "tests/editor-changes-browser.spec.ts" },
@@ -316,7 +363,11 @@
         "server/package-start.ts",
         "web/Risu*.tsx",
         "web/risu-*.ts",
-        "web/PackageStartPicker.tsx"
+        "web/PackageStartPicker.tsx",
+        "web/risu-*.css",
+        "web/native-editor.css",
+        "web/package-start-picker.css",
+        "web/reading-prose.css"
       ],
       "specs": [
         { "file": "tests/risu-import-browser.spec.ts" },
@@ -348,7 +399,8 @@
         "core/prompt*.ts",
         "server/prompt-*.ts",
         "server/builtin-prompts.ts",
-        "server/chat-generation-defaults.ts"
+        "server/chat-generation-defaults.ts",
+        "web/prompt-*.css"
       ],
       "specs": [
         { "file": "tests/prompt-workspace-browser.spec.ts" },
@@ -374,7 +426,10 @@
         "server/provider-*.ts",
         "server/jev-*.ts",
         "server/credentials.ts",
-        "server/vertex-credentials.ts"
+        "server/vertex-credentials.ts",
+        "web/Provider*.css",
+        "web/JevProviderSettings.css",
+        "web/model-pricing.css"
       ],
       "specs": [
         { "file": "tests/provider-management-browser.spec.ts" },
@@ -419,7 +474,11 @@
         "web/Theme*.tsx",
         "web/theme-*.ts",
         "web/PaletteSettings.tsx",
-        "web/Font*.tsx"
+        "web/Font*.tsx",
+        "web/themes.css",
+        "web/theme-*.css",
+        "web/palettes.css",
+        "web/fonts.css"
       ],
       "specs": [
         { "file": "tests/themes-browser.spec.ts" },
@@ -444,7 +503,9 @@
         "web/story-ui-*.ts*",
         "web/LazyStoryUi.tsx",
         "web/InvalidStoryUi.tsx",
-        "web/StoryBoardPanel.tsx"
+        "web/StoryBoardPanel.tsx",
+        "web/story-ui.css",
+        "web/story-board.css"
       ],
       "specs": [
         { "file": "tests/story-ui-browser.spec.ts" },
@@ -460,7 +521,9 @@
         "server/illustration*.ts",
         "server/novelai-client.ts",
         "web/Illustration*.tsx",
-        "web/illustration-*.ts"
+        "web/illustration-*.ts",
+        "web/illustrations.css",
+        "web/illustration-presets.css"
       ],
       "specs": [
         { "file": "tests/illustration-browser.spec.ts" },
@@ -481,7 +544,9 @@
         "web/useInputTranslation.ts",
         "web/TranslationGuideEditor.tsx",
         "web/AutoTranslationDefaults.tsx",
-        "web/auxiliary-error.ts"
+        "web/auxiliary-error.ts",
+        "web/input-translation.css",
+        "web/translation-guide.css"
       ],
       "specs": [
         { "file": "tests/input-translation-browser.spec.ts" },
@@ -495,7 +560,8 @@
         "core/outline*.ts",
         "server/outline-*.ts",
         "web/OutlinePanel.tsx",
-        "web/outline-helper.ts"
+        "web/outline-helper.ts",
+        "web/outline.css"
       ],
       "specs": [{ "file": "tests/outline-browser.spec.ts" }]
     },
@@ -509,7 +575,12 @@
         "web/useHelper*.ts",
         "web/EditorHelperAction.tsx",
         "web/editor-helper.ts",
-        "runner/uimori.mjs"
+        "runner/uimori.mjs",
+        "web/helper*.css",
+        "web/bot-navigation.css",
+        "web/bot-tree-navigation.css",
+        "web/run-task-details.css",
+        "web/scene-usage.css"
       ],
       "specs": [
         { "file": "tests/helper-flow-browser.spec.ts" },
@@ -549,7 +620,12 @@
         "server/manuscript-search.ts",
         "server/reading-state.ts",
         "server/usage-report.ts",
-        "server/push-*.ts"
+        "server/push-*.ts",
+        "web/scheduled-backups.css",
+        "web/bookmarks.css",
+        "web/manuscript-search.css",
+        "web/push-settings.css",
+        "web/usage-report.css"
       ],
       "specs": [
         { "file": "tests/personal-workspace-browser.spec.ts" },
@@ -571,6 +647,26 @@
         "deploy/self-host.env.example"
       ],
       "specs": [{ "file": "tests/self-host-browser.spec.ts", "launch": { "runner": "self-host" } }]
+    }
+  },
+  "presets": {
+    "browser-smoke": {
+      "title": "Core chat admission and generation with global prompt settings",
+      "specs": ["tests/product-browser.spec.ts", "tests/prompt-workspace-browser.spec.ts"],
+      "grep": "@smoke"
+    },
+    "chat-unification": {
+      "title": "Shared main and helper composer, durable retry ordering, inline editing and diagnostic access",
+      "specs": [
+        "tests/chat-composer-browser.spec.ts",
+        "tests/helper-flow-browser.spec.ts",
+        "tests/helper-composer-browser.spec.ts",
+        "tests/helper-sessions-browser.spec.ts",
+        "tests/run-retry-browser.spec.ts",
+        "tests/request-edit-browser.spec.ts",
+        "tests/loading-browser.spec.ts"
+      ],
+      "grep": "shared composer|HELPUI|HSESSION|failed request edit|REDIT01"
     }
   }
 }

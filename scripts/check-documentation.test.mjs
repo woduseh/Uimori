@@ -312,6 +312,47 @@ test('feature map domains need existing sources and case IDs, known launch optio
   );
 });
 
+test('feature map presets name registered specs and a valid grep under their own name', () => {
+  const withPresets = (presets) => ({
+    'tests/feature-map.json': JSON.stringify({
+      version: 1,
+      domains: {
+        editors: {
+          title: 'Editors',
+          sources: ['server/app.ts'],
+          specs: [{ file: 'tests/reading-browser.spec.ts' }],
+        },
+      },
+      presets,
+    }),
+  });
+  withDocumentation(
+    {
+      'server/app.ts': '',
+      'tests/reading-browser.spec.ts': '',
+      ...withPresets({
+        editors: { title: 'Editors again', specs: ['tests/reading-browser.spec.ts'] },
+        smoke: { title: '', specs: ['tests/gone-browser.spec.ts'], grep: '(', owner: 'x' },
+      }),
+    },
+    (directory, write) => {
+      assert.deepEqual(documentationErrors(directory), [
+        'tests/feature-map.json: preset editors has the name of a domain',
+        'tests/feature-map.json: preset smoke has unknown field owner',
+        'tests/feature-map.json: preset smoke needs a title',
+        'tests/feature-map.json: preset smoke names tests/gone-browser.spec.ts, which no domain registers',
+        'tests/feature-map.json: preset smoke grep is not a regular expression',
+      ]);
+      write(
+        withPresets({
+          smoke: { title: 'Smoke', specs: ['tests/reading-browser.spec.ts'], grep: '@smoke' },
+        })
+      );
+      assert.deepEqual(documentationErrors(directory), []);
+    }
+  );
+});
+
 test('user guides directly under docs forbid developer headings, internal paths, and internal API routes', () => {
   withDocumentation(
     {

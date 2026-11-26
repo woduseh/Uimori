@@ -84,6 +84,41 @@ function launchErrors(where, launch) {
   });
 }
 
+function presetErrors(presets, domains, registered) {
+  if (presets === undefined) return [];
+  if (!isRecord(presets)) return [`${featureMapPath}: presets must be an object`];
+  return Object.entries(presets).flatMap(([name, preset]) => {
+    const where = `preset ${name}`;
+    const issues = [];
+    if (!domainName.test(name))
+      issues.push(`${featureMapPath}: ${where} must be lowercase words joined by hyphens`);
+    if (domains.has(name)) issues.push(`${featureMapPath}: ${where} has the name of a domain`);
+    if (!isRecord(preset)) return [...issues, `${featureMapPath}: ${where} must be an object`];
+    issues.push(...unknownFieldErrors(where, preset, ['title', 'specs', 'grep']));
+    if (typeof preset.title !== 'string' || !preset.title.trim())
+      issues.push(`${featureMapPath}: ${where} needs a title`);
+    if (!Array.isArray(preset.specs) || !preset.specs.length)
+      issues.push(`${featureMapPath}: ${where} needs a list of specs`);
+    else
+      for (const spec of preset.specs)
+        if (!registered.has(spec))
+          issues.push(`${featureMapPath}: ${where} names ${spec}, which no domain registers`);
+    if (preset.grep !== undefined && !isPattern(preset.grep))
+      issues.push(`${featureMapPath}: ${where} grep is not a regular expression`);
+    return issues;
+  });
+}
+
+function isPattern(value) {
+  if (typeof value !== 'string' || !value) return false;
+  try {
+    new RegExp(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function featureMapErrors(directory) {
   const issues = [];
   const domains = new Set();
@@ -98,7 +133,7 @@ function featureMapErrors(directory) {
   }
   if (!isRecord(map) || !isRecord(map.domains))
     return { domains, issues: [`${featureMapPath}: domains must be an object`] };
-  issues.push(...unknownFieldErrors('the map', map, ['version', 'defaults', 'domains']));
+  issues.push(...unknownFieldErrors('the map', map, ['version', 'defaults', 'domains', 'presets']));
   if (map.version !== 1) issues.push(`${featureMapPath}: version must be 1`);
   if (map.defaults !== undefined) {
     if (!isRecord(map.defaults)) issues.push(`${featureMapPath}: defaults must be an object`);
@@ -170,6 +205,7 @@ function featureMapErrors(directory) {
           issues.push(`${featureMapPath}: ${spec} has no test titled with the case ID ${id}`);
     }
   }
+  issues.push(...presetErrors(map.presets, domains, registered));
   for (const spec of globSync('tests/*.spec.ts', { cwd: directory })
     .map((path) => path.split(sep).join('/'))
     .sort())
