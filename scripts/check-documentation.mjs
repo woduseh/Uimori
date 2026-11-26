@@ -32,11 +32,16 @@ function markdownFiles(directory, excluded = []) {
   });
 }
 
+const testTitle =
+  /^\s*(?:test|it)(?:\.(?:skip|only|todo|each|concurrent|fails|fixme|sequential))*\s*\(\s*(?:[`'"])([^`'"]*)/gmu;
+
 function testCaseIds(directory) {
   const ids = new Set();
-  for (const file of globSync('tests/**/*.{ts,tsx,js,mjs}', { cwd: directory }))
-    for (const [id] of readFileSync(resolve(directory, file), 'utf8').matchAll(caseIdShape))
-      ids.add(id);
+  for (const file of globSync('tests/**/*.{ts,tsx,js,mjs}', { cwd: directory })) {
+    for (const [, title] of readFileSync(resolve(directory, file), 'utf8').matchAll(testTitle)) {
+      for (const [id] of title.matchAll(caseIdShape)) ids.add(id);
+    }
+  }
   return ids;
 }
 
@@ -44,6 +49,10 @@ function caseIdErrors(file, content, knownIds) {
   const issues = [];
   for (const [mention, prefix, first, last] of content.matchAll(caseIdMention)) {
     if (termsShapedLikeCaseIds.has(`${prefix}${first}`)) continue;
+    if (last != null && Number(first) > Number(last)) {
+      issues.push(`${file}: ${mention} (case ID range is reversed)`);
+      continue;
+    }
     for (let number = Number(first); number <= Number(last ?? first); number++) {
       const id = `${prefix}${String(number).padStart(first.length, '0')}`;
       if (!knownIds.has(id)) issues.push(`${file}: ${mention} (no test has the case ID ${id})`);
@@ -146,7 +155,13 @@ export function documentationErrors(directory = root) {
     for (const [, code] of content.matchAll(/`([^`\n]+)`/gu)) {
       for (const path of code.split(/\s+/u)) {
         if (!sourcePath.test(path)) continue;
-        if (localOnly.some((local) => resolve(directory, path).startsWith(local))) continue;
+        if (
+          localOnly.some((local) => {
+            const resolved = resolve(directory, path);
+            return resolved === local || resolved.startsWith(local + sep);
+          })
+        )
+          continue;
         const pattern = path.replace(/<[^>]+>/gu, '*');
         if (!globSync(pattern, { cwd: directory }).length)
           broken.push(`${file}: \`${path}\` (no file or directory matches this path)`);

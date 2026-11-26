@@ -142,7 +142,7 @@ test('case IDs in developer documents, including ranges, must name existing test
     {
       'docs/dev/SPEC.md': [
         'Evidence: `tests/editor-browser.spec.ts` CODEFIELD01-03, `--grep PMUI02` and LIBUI08.',
-        'Ranges may repeat the prefix: CBSREF01–CBSREF02. BM25 ranking is not a case.',
+        'Ranges may repeat the prefix: CBSREF01–CBSREF02. BM25 ranking is not a case. Reversed: CODEFIELD04-01.',
       ].join('\n'),
       'docs/GUIDE.md': 'User guides are not checked: LIBUI09.',
       'docs/releases/v0.0.1.md': 'Release notes are not checked: LIBUI09.',
@@ -159,6 +159,25 @@ test('case IDs in developer documents, including ranges, must name existing test
         `${spec}: CODEFIELD01-03 (no test has the case ID CODEFIELD03)`,
         `${spec}: LIBUI08 (no test has the case ID LIBUI08)`,
         `${spec}: CBSREF01–CBSREF02 (no test has the case ID CBSREF02)`,
+        `${spec}: CODEFIELD04-01 (case ID range is reversed)`,
+      ]);
+    }
+  );
+});
+
+test('case IDs only count when they appear in a test title', () => {
+  withDocumentation(
+    {
+      'docs/dev/SPEC.md': 'Still present in a comment: LIBUI08.',
+      'tests/editor-browser.spec.ts': [
+        "test('CODEFIELD01 highlights', () => {});",
+        '// leftover LIBUI08 in a comment should not count',
+      ].join('\n'),
+    },
+    (directory) => {
+      const spec = join(directory, 'docs/dev/SPEC.md');
+      assert.deepEqual(documentationErrors(directory), [
+        `${spec}: LIBUI08 (no test has the case ID LIBUI08)`,
       ]);
     }
   );
