@@ -1,6 +1,6 @@
 import { createKnowledgeBrowser } from './knowledge-browse.js';
 import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
-import { readAccess, type ReadFamily } from './read-access.js';
+import { readAccess, type ReadFamily, type ReadScope } from './read-access.js';
 import { createHash } from 'node:crypto';
 import {
   conversationSummary,
@@ -194,6 +194,46 @@ function writerDeliveredReferences(
       .map((resource) => resource.id),
   ];
 }
+function mainReadScope(
+  snapshot: RunSnapshot,
+  input: MainInput,
+  packages: readonly ResolvedPackage[],
+  resources: readonly Resource[],
+  reads: MainReadOptions
+): ReadScope {
+  const writer = (reads.delivery ?? 'writer') === 'writer';
+  return {
+    references: resources,
+    deliveredReferences: new Set([
+      ...(input.pinnedSources ?? []).map((item) => item.id),
+      ...(writer ? writerDeliveredReferences(snapshot, packages, resources) : []),
+    ]),
+    scenes: snapshot.history,
+    deliveredScenes:
+      reads.sentScenes?.(input.history) ??
+      new Set(
+        writer && snapshot.promptCompilation
+          ? snapshot.promptCompilation.messages.flatMap((message) =>
+              message.role === 'assistant' &&
+              message.provenance.origin !== 'prompt' &&
+              message.provenance.sourceRevision
+                ? [message.provenance.sourceRevision]
+                : []
+            )
+          : input.history.map((entry) => entry.revision)
+      ),
+  };
+}
+export function writerReadScope(snapshot: RunSnapshot): ReadScope {
+  const packages = compiledPackages(snapshot, 'main');
+  return mainReadScope(
+    snapshot,
+    buildMainInput(snapshot, [], packages),
+    packages,
+    collectRoleResources(snapshot, packages),
+    {}
+  );
+}
 export function buildMainInput(
   snapshot: RunSnapshot,
   results: readonly ToolEvent[] = [],
@@ -338,29 +378,8 @@ export function buildMainInput(
     selectLogicalHistory(snapshot, input.history),
     false
   );
-  const writer = (reads.delivery ?? 'writer') === 'writer';
   const access = readAccess(
-    {
-      references: resources,
-      deliveredReferences: new Set([
-        ...(input.pinnedSources ?? []).map((item) => item.id),
-        ...(writer ? writerDeliveredReferences(snapshot, packages, resources) : []),
-      ]),
-      scenes: snapshot.history,
-      deliveredScenes:
-        reads.sentScenes?.(input.history) ??
-        new Set(
-          writer && snapshot.promptCompilation
-            ? snapshot.promptCompilation.messages.flatMap((message) =>
-                message.role === 'assistant' &&
-                message.provenance.origin !== 'prompt' &&
-                message.provenance.sourceRevision
-                  ? [message.provenance.sourceRevision]
-                  : []
-              )
-            : input.history.map((entry) => entry.revision)
-        ),
-    },
+    mainReadScope(snapshot, input, packages, resources, reads),
     reads.families ?? MAIN_READ_FAMILIES
   );
   input.tools = access.tools;

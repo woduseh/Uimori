@@ -111,9 +111,17 @@ test('first attempted exec prepares frozen current data without dumping the save
   expect(readFileSync(join(f.shell.directory, 'current/resources/0.txt'), 'utf8')).toBe(
     'Frozen effective lore🙂'
   );
-  expect(readFileSync(join(f.shell.directory, 'current/resources.jsonl'), 'utf8')).not.toContain(
-    'Frozen effective lore🙂'
-  );
+  const index = readFileSync(join(f.shell.directory, 'current/resources.jsonl'), 'utf8');
+  expect(index).not.toContain('Frozen effective lore🙂');
+  expect(JSON.parse(index)).toMatchObject({ id: 'effective-lore', inPrompt: false });
+  expect(
+    JSON.parse(readFileSync(join(f.shell.directory, 'current/scenes.json'), 'utf8')).map(
+      (scene: { revision: string; inPrompt: boolean }) => [scene.revision, scene.inPrompt]
+    )
+  ).toEqual([
+    ['source-before', true],
+    ['excluded-scene', false],
+  ]);
   expect(readFileSync(join(f.shell.directory, 'current/scenes/1.txt'), 'utf8')).toBe(
     'Excluded original'
   );

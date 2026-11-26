@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { dirname, join, resolve } from 'node:path';
 import { shellExecutionOptions } from '../core/main-shell.js';
-import { roleResources } from '../core/provider.js';
+import { writerReadScope } from '../core/provider.js';
 import { conversationSummary } from '../core/context-projection.js';
 import { editableResource, type ResourceKind } from '../core/resource-editing.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -47,14 +47,19 @@ export class MainShell {
     const ready = join(this.directory, '.main-ready');
     if (existsSync(ready)) return;
     mkdirSync(join(this.directory, 'scratch'), { recursive: true });
-    const resources = roleResources(snapshot);
+    const delivered = writerReadScope(snapshot);
     jsonl(
       join(this.directory, 'current/resources.jsonl'),
-      resources.map((resource, i) => {
+      delivered.references.map((resource, i) => {
         const file = `current/resources/${i}.txt`;
         write(join(this.directory, file), resource.text);
         const { text, ...metadata } = resource;
-        return { ...metadata, file, charCount: text.length };
+        return {
+          ...metadata,
+          file,
+          charCount: text.length,
+          inPrompt: delivered.deliveredReferences.has(resource.id),
+        };
       })
     );
     json(
@@ -63,7 +68,12 @@ export class MainShell {
         const file = `current/scenes/${i}.txt`;
         write(join(this.directory, file), scene.text);
         const { text, ...metadata } = scene;
-        return { ...metadata, file, charCount: text.length };
+        return {
+          ...metadata,
+          file,
+          charCount: text.length,
+          inPrompt: delivered.deliveredScenes.has(scene.revision),
+        };
       })
     );
     json(join(this.directory, 'current/summary.json'), conversationSummary(snapshot) ?? null);
@@ -81,6 +91,7 @@ export class MainShell {
         'Use Bash, rg, jq, Python and Node freely. Print useful excerpts or analysis; no special output format is required.\n' +
         'current/resources.jsonl indexes the frozen effective main-role references; current/resources/*.txt contains their bodies.\n' +
         'current/scenes.json and current/scenes/*.txt contain the full frozen ancestry, including scenes excluded from model context (sceneContext.sceneEnabled=false).\n' +
+        'Entries with inPrompt=true are already in your prompt in full. Do not print them again; search them with rg or jq only when a question needs that, and read inPrompt=false entries when the request needs them.\n' +
         'current/summary.txt and summary.json contain the existing derived summary, not new canon; metadata.json has the request, notes and outline.\n' +
         'Other saved data is available on demand: `uimori export \'{"scope":"library"}\'` or `uimori export \'{"scope":"chats"}\'` writes an index.\n' +
         'Add `"id":"..."` to export one full resource/chat, or `"all":true` to export all of that scope. Re-export to refresh live files.\n' +
