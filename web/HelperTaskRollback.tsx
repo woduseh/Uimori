@@ -78,10 +78,51 @@ function refreshRestored(units: readonly HelperRollbackUnit[]) {
     window.dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
 }
 
-function merge(view: HelperRollbackView | null, units: readonly HelperRollbackUnit[]) {
-  if (!view) return view;
-  const updated = new Map(units.map((unit) => [unit.unit, unit]));
-  return { ...view, units: view.units.map((unit) => updated.get(unit.unit) ?? unit) };
+export function rollbackSelection(value: HelperRollbackView, target: Plan) {
+  const selected =
+    target.unit === null ? value.units : value.units.filter((unit) => unit.unit === target.unit);
+  const restore = value.blocked
+    ? []
+    : selected.filter((unit) => restorable(unit) && !unsaved(unit));
+  const every = value.units.filter(restorable).length === restore.length;
+  return {
+    restore,
+    drafts: selected.filter((unit) => restorable(unit) && unsaved(unit)),
+    kept: selected.filter((unit) => !restorable(unit)),
+    bodies: target.unit === null && every ? [{}] : restore.map((unit) => ({ unit: unit.unit })),
+  };
+}
+
+export function mergeRollbackResults(
+  view: HelperRollbackView | null,
+  results: readonly HelperRollbackUnit[]
+) {
+  const settled = new Map(
+    results.filter((unit) => unit.status !== 'failed').map((unit) => [unit.unit, unit])
+  );
+  if (!view || !settled.size) return view;
+  return { ...view, units: view.units.map((unit) => settled.get(unit.unit) ?? unit) };
+}
+
+export function clearRollbackFailures(
+  failures: Record<string, string>,
+  units: readonly HelperRollbackUnit[]
+) {
+  return Object.fromEntries(
+    Object.entries(failures).filter(([unit]) => !units.some((item) => item.unit === unit))
+  );
+}
+
+export function recordRollbackFailures(
+  failures: Record<string, string>,
+  results: readonly HelperRollbackUnit[]
+) {
+  const failed = results.filter((unit) => unit.status === 'failed');
+  if (!failed.length) return failures;
+  return {
+    ...failures,
+    ...Object.fromEntries(failed.map((unit) => [unit.unit, unit.error ?? ''])),
+  };
 }
 
 export function useHelperRollback({
@@ -184,39 +225,19 @@ export function useHelperRollback({
       if (alive.current) setPreviewFailed(true);
     });
   }
-  function selection(value: HelperRollbackView, target: Plan) {
-    const selected =
-      target.unit === null ? value.units : value.units.filter((unit) => unit.unit === target.unit);
-    const restore = value.blocked
-      ? []
-      : selected.filter((unit) => restorable(unit) && !unsaved(unit));
-    return {
-      restore,
-      drafts: selected.filter((unit) => restorable(unit) && unsaved(unit)),
-      kept: selected.filter((unit) => !restorable(unit)),
-      every: value.units.filter(restorable).length === restore.length,
-    };
-  }
   async function run() {
     if (!plan || !preview || lock.current || unavailable) return;
-    const chosen = selection(preview, plan);
+    const chosen = rollbackSelection(preview, plan);
     if (!chosen.restore.length) return;
     lock.current = true;
     setRunning(true);
     setError('');
     setUnknown(false);
-    setFailures((old) =>
-      Object.fromEntries(
-        Object.entries(old).filter(([unit]) => !chosen.restore.some((item) => item.unit === unit))
-      )
-    );
-    const bodies =
-      plan.unit === null && chosen.every
-        ? [{}]
-        : chosen.restore.map((unit) => ({ unit: unit.unit }));
+    setFailures((old) => clearRollbackFailures(old, chosen.restore));
     const results: HelperRollbackUnit[] = [];
     try {
-      for (const body of bodies) results.push(...(await api<HelperRollbackView>(path, body)).units);
+      for (const body of chosen.bodies)
+        results.push(...(await api<HelperRollbackView>(path, body)).units);
       const count = results.filter((unit) => unit.status === 'restored').length;
       if (alive.current && count) notify(t('helperRollback.done', { count }));
     } catch (cause) {
@@ -229,14 +250,8 @@ export function useHelperRollback({
       refreshRestored(results);
       lock.current = false;
       if (alive.current) {
-        const failed = results.filter((unit) => unit.status === 'failed');
-        if (failed.length)
-          setFailures((old) => ({
-            ...old,
-            ...Object.fromEntries(failed.map((unit) => [unit.unit, unit.error ?? ''])),
-          }));
-        const settled = results.filter((unit) => unit.status !== 'failed');
-        if (settled.length) setView((old) => merge(old, settled));
+        setFailures((old) => recordRollbackFailures(old, results));
+        setView((old) => mergeRollbackResults(old, results));
         setRunning(false);
         setPlan(null);
       }
@@ -302,7 +317,7 @@ export function useHelperRollback({
     ) : null;
   }
 
-  const chosen = plan && preview ? selection(preview, plan) : null;
+  const chosen = plan && preview ? rollbackSelection(preview, plan) : null;
   const uncovered = uncoveredKinds(changes);
   const imageNotice = chosen?.restore.some(
     (unit) => unit.touches?.domain === 'scene' && unit.touches.fields.includes('translation')

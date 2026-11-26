@@ -64,6 +64,51 @@ function messageChange(view: View, event: HelperEvent): HelperMessageMutation {
   };
 }
 
+export function replayMessageEvents(view: View, events: readonly HelperEvent[], through: number) {
+  let replayed = view;
+  for (const event of events)
+    if (event.kind === 'messages.changed' && event.seq <= through)
+      replayed = applyMessageChange(replayed, messageChange(replayed, event));
+  return replayed;
+}
+
+type ViewPage = {
+  messages: HelperMessage[];
+  tasks: HelperTaskView[];
+  conversation: HelperConversation;
+  context?: HelperContextCompactionSummary;
+};
+
+export function mergeHelperView(previous: View | undefined, page: ViewPage): View {
+  const { messages, tasks, conversation: latestConversation, context } = page;
+  const messageIds = new Set(messages.map((message) => message.id));
+  const latestGroups = new Map(
+    messages.map((message) => [message.requestGroupId, message.latestTaskId])
+  );
+  const taskIds = new Set(tasks.map((task) => task.id));
+  return {
+    conversation:
+      previous?.conversation.revision &&
+      previous.conversation.revision > latestConversation.revision
+        ? previous.conversation
+        : latestConversation,
+    messages: [
+      ...(previous?.messages ?? []).filter(
+        (message) =>
+          !messageIds.has(message.id) &&
+          (!message.requestGroupId ||
+            !latestGroups.has(message.requestGroupId) ||
+            latestGroups.get(message.requestGroupId) === message.taskId)
+      ),
+      ...messages,
+    ],
+    tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
+    context: context ?? previous?.context,
+    hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
+    hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
+  };
+}
+
 export function useHelperConversation(open: boolean, conversationId: string | null) {
   useI18n();
   const scopeKey = conversationId ?? '';
@@ -114,21 +159,12 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       const version = ++requestVersion.current;
       versions.current.set(key, version);
       try {
-        const {
-          messages,
-          tasks,
-          conversation: latestConversation,
-          eventCursor,
-          context,
-        } = await api<{
-          messages: HelperMessage[];
-          tasks: HelperTaskView[];
-          conversation: HelperConversation;
-          eventCursor: number;
-          context?: HelperContextCompactionSummary;
-        }>(`/helper/conversations/${id(key)}/view`);
+        const page = await api<ViewPage & { eventCursor: number }>(
+          `/helper/conversations/${id(key)}/view`
+        );
+        const latestConversation = page.conversation;
         if (!alive.current || versions.current.get(key) !== version) return;
-        if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
+        if (!cursors.current.has(key)) cursors.current.set(key, page.eventCursor);
         let previous = cache.current.get(key);
         if (
           (latestConversation.historyRevision ?? 0) < (previous?.conversation.historyRevision ?? 0)
@@ -144,44 +180,17 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
               `/helper/conversations/${id(key)}/events?after=${cursor}`
             );
             if (!alive.current || versions.current.get(key) !== version) return;
-            for (const event of events) {
-              if (
-                event.kind === 'messages.changed' &&
-                event.seq <= (latestConversation.historyRevision ?? 0)
-              )
-                previous = applyMessageChange(previous, messageChange(previous, event));
-            }
+            previous = replayMessageEvents(
+              previous,
+              events,
+              latestConversation.historyRevision ?? 0
+            );
             const nextCursor = events.at(-1)?.seq ?? cursor;
             if (nextCursor <= cursor) break;
             cursor = nextCursor;
           }
         }
-        const messageIds = new Set(messages.map((message) => message.id));
-        const latestGroups = new Map(
-          messages.map((message) => [message.requestGroupId, message.latestTaskId])
-        );
-        const taskIds = new Set(tasks.map((task) => task.id));
-        write(key, {
-          conversation:
-            previous?.conversation.revision &&
-            previous.conversation.revision > latestConversation.revision
-              ? previous.conversation
-              : latestConversation,
-          messages: [
-            ...(previous?.messages ?? []).filter(
-              (message) =>
-                !messageIds.has(message.id) &&
-                (!message.requestGroupId ||
-                  !latestGroups.has(message.requestGroupId) ||
-                  latestGroups.get(message.requestGroupId) === message.taskId)
-            ),
-            ...messages,
-          ],
-          tasks: [...tasks, ...(previous?.tasks ?? []).filter((task) => !taskIds.has(task.id))],
-          context: context ?? previous?.context,
-          hasOlderMessages: messages.length === 100 && (previous?.hasOlderMessages ?? true),
-          hasOlderTasks: tasks.length === 50 && (previous?.hasOlderTasks ?? true),
-        });
+        write(key, mergeHelperView(previous, page));
       } finally {
         if (versions.current.get(key) === version) versions.current.delete(key);
       }
