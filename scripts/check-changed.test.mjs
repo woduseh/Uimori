@@ -162,10 +162,15 @@ test('a hub change runs direct matches and 1-hop importers first, up to a stated
   assert.equal(unlimited.run.length, 40);
   assert.equal(unlimited.notice, undefined);
 
-  assert.deepEqual(checkChanged.parseArguments([], {}), { base: undefined, limit: 30 });
-  assert.deepEqual(checkChanged.parseArguments(['HEAD~1', '--limit', '5'], {}), {
+  assert.deepEqual(checkChanged.parseArguments([], {}), {
+    base: undefined,
+    limit: 30,
+    listJson: false,
+  });
+  assert.deepEqual(checkChanged.parseArguments(['HEAD~1', '--limit', '5', '--list-json'], {}), {
     base: 'HEAD~1',
     limit: 5,
+    listJson: true,
   });
   assert.equal(checkChanged.parseArguments(['--all'], {}).limit, Infinity);
   assert.equal(checkChanged.parseArguments([], { CI: 'true' }).limit, Infinity);

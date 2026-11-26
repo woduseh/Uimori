@@ -13,12 +13,25 @@ export function docsOnly(files) {
   );
 }
 
+export function windowsSensitive(files) {
+  return (
+    !files.length ||
+    files.some(
+      (file) =>
+        !/^(?:web\/|docs\/[^\r\n]+\.md$|README(?:\.ko)?\.md$|AGENTS\.md$|LICENSE$|tests\/[^/]+\.spec\.ts$)/.test(
+          file
+        )
+    )
+  );
+}
+
 export function versionChanged(packageJsonAt, base, head = 'HEAD') {
   return JSON.parse(packageJsonAt(base)).version !== JSON.parse(packageJsonAt(head)).version;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let docs = false;
+  let windows = true;
   let fullBrowser =
     process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' &&
     process.env.UIMORI_BROWSER_INPUT === 'true';
@@ -30,9 +43,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   ) {
     const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
     try {
-      docs = docsOnly(
-        git('diff', '--no-renames', '--name-only', '-z', base, 'HEAD').split('\0').filter(Boolean)
-      );
+      const files = git('diff', '--no-renames', '--name-only', '-z', base, 'HEAD')
+        .split('\0')
+        .filter(Boolean);
+      docs = docsOnly(files);
+      windows = windowsSensitive(files);
     } catch {}
     try {
       fullBrowser = versionChanged((revision) => git('show', `${revision}:package.json`), base);
@@ -40,7 +55,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       fullBrowser = !docs;
     }
   }
-  const result = `docs_only=${docs}\nfull_browser=${fullBrowser}\n`;
+  const result = `docs_only=${docs}\nfull_browser=${fullBrowser}\nwindows_sensitive=${windows}\n`;
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, result);
   process.stdout.write(result);
 }

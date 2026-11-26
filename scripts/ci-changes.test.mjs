@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { docsOnly, versionChanged } from './ci-changes.mjs';
+import { docsOnly, versionChanged, windowsSensitive } from './ci-changes.mjs';
 import { buildFingerprint } from './lib.mjs';
 
 test('a version change between the pushed revisions marks a release candidate', () => {
@@ -46,6 +46,26 @@ test('no build input counts as an inert documentation change', async () => {
     files.filter((file) => docsOnly([file])),
     []
   );
+});
+
+test('only web, documentation and browser spec changes skip the Windows tooling job', () => {
+  for (const files of [
+    ['web/ChatComposer.tsx', 'web/styles.css'],
+    ['docs/READING.md', 'docs/dev/CHECKS.md', 'README.ko.md'],
+    ['tests/chat-composer-browser.spec.ts'],
+  ])
+    assert.equal(windowsSensitive(files), false, files.join(', '));
+  for (const files of [
+    [],
+    ['server/app.ts'],
+    ['web/ChatComposer.tsx', 'core/provider.ts'],
+    ['scripts/build.mjs'],
+    ['tests/server.test.ts'],
+    ['tests/feature-map.json'],
+    ['package-lock.json'],
+    ['.github/workflows/quality.yml'],
+  ])
+    assert.equal(windowsSensitive(files), true, files.join(', '));
 });
 
 test('code, workflow and empty change sets run the full quality steps', () => {

@@ -6,7 +6,7 @@ import { docsOnly } from './ci-changes.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const defaultLimit = 30;
-const usage = 'Usage: node scripts/check-changed.mjs [<base>] [--limit <n>] [--all]';
+const usage = 'Usage: node scripts/check-changed.mjs [<base>] [--limit <n>] [--all] [--list-json]';
 const biomeFile = /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u;
 const typeScriptInput = /(?:\.(?:ts|tsx|mts)|^package\.json|^tsconfig[^/]*\.json)$/u;
 const moduleFile = /^(?:core|server|web|runner|scripts|tests)\/.+\.(?:ts|tsx|mts|js|mjs)$/u;
@@ -21,6 +21,7 @@ const i18nInput = /^(?:web\/|scripts\/check-i18n\.mjs$)/u;
 const userGuide = /^docs\/[^/]+\.md$/u;
 const guideTest = 'tests/app-guides.test.ts';
 const distEntry = /^server\/(?:index|app)\.ts$/u;
+export const distTests = ['tests/background-work.test.ts', 'tests/server.test.ts'];
 const importSpecifier = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"](\.{1,2}\/[^'"]+)['"]/gu;
 
 function unique(values) {
@@ -121,7 +122,7 @@ export function selectChecks(
     fullRequired: files.filter((file) => fullSuiteInput.test(file)),
     notes: files.some((file) => distEntry.test(file))
       ? [
-          'server/index.ts or server/app.ts changed: tests/server.test.ts and tests/background-work.test.ts execute dist, so they check this change only after `npm run build`; then run `npm test -- tests/server.test.ts tests/background-work.test.ts`',
+          `server/index.ts or server/app.ts changed: ${distTests.join(' and ')} execute dist, so they check this change only after \`npm run build\`; then run \`npm test -- ${distTests.join(' ')}\``,
         ]
       : [],
   };
@@ -141,9 +142,11 @@ export function parseArguments(argv, env) {
   let base;
   let limit;
   let all = false;
+  let listJson = false;
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
     if (argument === '--all') all = true;
+    else if (argument === '--list-json') listJson = true;
     else if (argument === '--limit') {
       limit = Number(argv[++index]);
       if (!Number.isInteger(limit) || limit < 1)
@@ -152,7 +155,7 @@ export function parseArguments(argv, env) {
     else base = argument;
   }
   if (all) limit = Infinity;
-  return { base, limit: limit ?? (env.CI === 'true' ? Infinity : defaultLimit) };
+  return { base, limit: limit ?? (env.CI === 'true' ? Infinity : defaultLimit), listJson };
 }
 
 function gitList(directory, ...args) {
@@ -185,6 +188,34 @@ function toolingTestFiles() {
       readdirSync(join(root, directory)).map((name) => `${directory}/${name}`)
     )
     .filter((file) => toolingTestFile.test(file));
+}
+
+function collectChecks(base) {
+  const files = changedFiles(base);
+  const toolingTests = toolingTestFiles();
+  const toolingSources = Object.fromEntries(
+    toolingTests.map((file) => [file, readFileSync(join(root, file), 'utf8')])
+  );
+  const checks = selectChecks(files, testSources(), {
+    exists: (file) => existsSync(join(root, file)),
+    toolingTests,
+    toolingSources,
+  });
+  return { files, checks, toolingSources };
+}
+
+export async function listSelection(base) {
+  const { files, checks } = collectChecks(base);
+  const tests =
+    checks.docsOnly || !checks.vitest.length
+      ? { affected: [] }
+      : await affectedTests(checks.vitest);
+  const { run: affected } = prioritizeTests(
+    tests.affected,
+    { direct: checks.directTests, firstHop: checks.firstHopTests },
+    Infinity
+  );
+  return { base: base ?? 'HEAD', files, ...checks, affectedTests: checks.docsOnly ? [] : affected };
 }
 
 async function affectedTests(related) {
@@ -272,21 +303,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error(error.message);
     process.exit(2);
   }
-  const { base, limit } = options;
-  const files = changedFiles(base);
+  const { base, limit, listJson } = options;
+  if (listJson) {
+    process.stdout.write(`${JSON.stringify(await listSelection(base), null, 2)}\n`);
+    process.exit(0);
+  }
+  const { files, checks, toolingSources } = collectChecks(base);
   if (!files.length) {
     console.log('check:changed: no changed files');
     process.exit(0);
   }
-  const toolingTests = toolingTestFiles();
-  const toolingSources = Object.fromEntries(
-    toolingTests.map((file) => [file, readFileSync(join(root, file), 'utf8')])
-  );
-  const checks = selectChecks(files, testSources(), {
-    exists: (file) => existsSync(join(root, file)),
-    toolingTests,
-    toolingSources,
-  });
   const node = process.execPath;
   const statics = [];
   if (checks.documentation || checks.docsOnly)
