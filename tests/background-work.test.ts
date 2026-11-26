@@ -4,7 +4,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { expect, test } from 'vitest';
-import { assertBuild } from '../scripts/lib.mjs';
+import { assertBuild, localVerificationEnv } from '../scripts/lib.mjs';
 
 test('background terminal storage failure is observed and restart preserves uncertain work without replay', async () => {
   await assertBuild();
@@ -19,9 +19,6 @@ test('background terminal storage failure is observed and restart preserves unce
   )
     throw new Error('Unsafe background fixture cleanup');
   try {
-    const { localVerificationEnv } = await import(
-      new URL('../scripts/lib.mjs', import.meta.url).href
-    );
     const result = await promisify(execFile)(
       process.execPath,
       ['tests/fixtures/background-failure.mjs', join(directory, 'app.sqlite')],

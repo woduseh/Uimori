@@ -173,7 +173,7 @@ export function documentationErrors(directory = root) {
       const command = line.trim();
       if (!shellFence.test(fence ?? '') || !repositoryCommand.test(command)) continue;
       const script = /^npm\s+run(?:-script)?\s+([^\s-]\S*)/u.exec(command)?.[1];
-      if (script && !Object.hasOwn(scripts, script))
+      if (script && !/<[^>]+>/u.test(script) && !Object.hasOwn(scripts, script))
         broken.push(`${file}: ${command} (package.json has no script named ${script})`);
       for (const path of missingSourcePaths(command))
         broken.push(`${file}: ${command} (no file or directory matches ${path})`);
