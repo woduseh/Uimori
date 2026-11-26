@@ -555,8 +555,9 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
   state = await response.json();
   const folder = state.folders.find((entry) => entry.title === `${prefix} Folder`)!;
   await page.route(/\/api\/library(?:\?|$)/, async (route) => {
-    const upstream = await route.fetch();
-    const current = (await upstream.json()) as Library;
+    const upstream = await route.fetch().catch(() => undefined);
+    const current = (await upstream?.json().catch(() => undefined)) as Library | undefined;
+    if (!upstream || !current) return;
     if (!current.organization) throw new Error('Library organization missing');
     await route.fulfill({
       response: upstream,
