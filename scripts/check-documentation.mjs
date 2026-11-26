@@ -37,14 +37,145 @@ function markdownFiles(directory, excluded = []) {
 const testTitle =
   /^\s*(?:test|it)(?:\.(?:skip|only|todo|each|concurrent|fails|fixme|sequential))*\s*\(\s*(?:[`'"])([^`'"]*)/gmu;
 
-function testCaseIds(directory) {
-  const ids = new Set();
-  for (const file of globSync('tests/**/*.{ts,tsx,js,mjs}', { cwd: directory })) {
-    for (const [, title] of readFileSync(resolve(directory, file), 'utf8').matchAll(testTitle)) {
-      for (const [id] of title.matchAll(caseIdShape)) ids.add(id);
-    }
+function addTitleCaseIds(ids, content) {
+  for (const [, title] of content.matchAll(testTitle)) {
+    for (const [id] of title.matchAll(caseIdShape)) ids.add(id);
   }
   return ids;
+}
+
+function testCaseIds(directory) {
+  const ids = new Set();
+  for (const file of globSync('tests/**/*.{ts,tsx,js,mjs}', { cwd: directory }))
+    addTitleCaseIds(ids, readFileSync(resolve(directory, file), 'utf8'));
+  return ids;
+}
+
+const featureMapPath = 'tests/feature-map.json';
+const registeredSpecPath = /^tests\/[^/]+\.spec\.ts$/u;
+const domainName = /^[a-z][a-z0-9-]*$/u;
+const environmentName = /^[A-Z][A-Z0-9_]*$/u;
+const launchOptions = {
+  runner: (value) => value === 'browser-harness' || value === 'self-host',
+  providerFixture: (value) => typeof value === 'boolean',
+  privateMaterials: (value) => typeof value === 'boolean',
+  privateMaterialsEnv: (value) => typeof value === 'string' && environmentName.test(value),
+  requiredEnv: (value) =>
+    Array.isArray(value) &&
+    value.every((name) => typeof name === 'string' && environmentName.test(name)),
+};
+
+const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function unknownFieldErrors(where, value, fields) {
+  return Object.keys(value)
+    .filter((key) => !fields.includes(key))
+    .map((key) => `${featureMapPath}: ${where} has unknown field ${key}`);
+}
+
+function launchErrors(where, launch) {
+  if (!isRecord(launch)) return [`${featureMapPath}: ${where} launch must be an object`];
+  return Object.entries(launch).flatMap(([option, value]) => {
+    if (!Object.hasOwn(launchOptions, option))
+      return [`${featureMapPath}: ${where} launch has unknown option ${option}`];
+    return launchOptions[option](value)
+      ? []
+      : [`${featureMapPath}: ${where} launch.${option} has an invalid value`];
+  });
+}
+
+function featureMapErrors(directory) {
+  const issues = [];
+  const domains = new Set();
+  const file = resolve(directory, featureMapPath);
+  let map = { version: 1, domains: {} };
+  if (existsSync(file)) {
+    try {
+      map = JSON.parse(readFileSync(file, 'utf8'));
+    } catch (error) {
+      return { domains, issues: [`${featureMapPath}: ${error.message}`] };
+    }
+  }
+  if (!isRecord(map) || !isRecord(map.domains))
+    return { domains, issues: [`${featureMapPath}: domains must be an object`] };
+  issues.push(...unknownFieldErrors('the map', map, ['version', 'defaults', 'domains']));
+  if (map.version !== 1) issues.push(`${featureMapPath}: version must be 1`);
+  if (map.defaults !== undefined) {
+    if (!isRecord(map.defaults)) issues.push(`${featureMapPath}: defaults must be an object`);
+    else {
+      issues.push(...unknownFieldErrors('defaults', map.defaults, ['launch']));
+      if (map.defaults.launch !== undefined)
+        issues.push(...launchErrors('defaults', map.defaults.launch));
+    }
+  }
+  const registered = new Map();
+  for (const [name, domain] of Object.entries(map.domains)) {
+    domains.add(name);
+    const where = `domain ${name}`;
+    if (!domainName.test(name))
+      issues.push(`${featureMapPath}: ${where} must be lowercase words joined by hyphens`);
+    if (!isRecord(domain)) {
+      issues.push(`${featureMapPath}: ${where} must be an object`);
+      continue;
+    }
+    issues.push(...unknownFieldErrors(where, domain, ['title', 'sources', 'specs']));
+    if (typeof domain.title !== 'string' || !domain.title.trim())
+      issues.push(`${featureMapPath}: ${where} needs a title`);
+    if (!Array.isArray(domain.sources) || !domain.sources.length)
+      issues.push(`${featureMapPath}: ${where} needs a list of source patterns`);
+    else
+      for (const pattern of domain.sources) {
+        if (
+          typeof pattern !== 'string' ||
+          !sourcePath.test(pattern) ||
+          !globSync(pattern, { cwd: directory }).length
+        )
+          issues.push(`${featureMapPath}: ${where} source ${pattern} matches no file`);
+      }
+    if (!Array.isArray(domain.specs) || !domain.specs.length) {
+      issues.push(`${featureMapPath}: ${where} needs a list of specs`);
+      continue;
+    }
+    for (const entry of domain.specs) {
+      if (!isRecord(entry) || typeof entry.file !== 'string') {
+        issues.push(`${featureMapPath}: ${where} has a spec entry without a file`);
+        continue;
+      }
+      const spec = entry.file;
+      issues.push(...unknownFieldErrors(`${where} ${spec}`, entry, ['file', 'cases', 'launch']));
+      if (registered.has(spec)) {
+        issues.push(
+          `${featureMapPath}: ${spec} is registered in ${registered.get(spec)} and ${name}`
+        );
+        continue;
+      }
+      registered.set(spec, name);
+      const specFile = resolve(directory, spec);
+      if (!registeredSpecPath.test(spec) || !existsSync(specFile)) {
+        issues.push(
+          `${featureMapPath}: ${where} names ${spec}, which is not a file in tests/*.spec.ts`
+        );
+        continue;
+      }
+      if (entry.launch !== undefined)
+        issues.push(...launchErrors(`${where} ${spec}`, entry.launch));
+      if (entry.cases === undefined) continue;
+      if (!Array.isArray(entry.cases)) {
+        issues.push(`${featureMapPath}: ${where} ${spec} cases must be a list`);
+        continue;
+      }
+      const titleIds = addTitleCaseIds(new Set(), readFileSync(specFile, 'utf8'));
+      for (const id of entry.cases)
+        if (!titleIds.has(id))
+          issues.push(`${featureMapPath}: ${spec} has no test titled with the case ID ${id}`);
+    }
+  }
+  for (const spec of globSync('tests/*.spec.ts', { cwd: directory })
+    .map((path) => path.split(sep).join('/'))
+    .sort())
+    if (!registered.has(spec))
+      issues.push(`${featureMapPath}: ${spec} is not registered in any domain`);
+  return { domains, issues };
 }
 
 function caseIdErrors(file, content, knownIds) {
@@ -125,6 +256,8 @@ export function documentationErrors(directory = root) {
   const releaseNotes = resolve(directory, 'docs/releases') + sep;
   const developerDocs = resolve(directory, 'docs/dev') + sep;
   const knownCaseIds = testCaseIds(directory);
+  const featureMap = featureMapErrors(directory);
+  const featureMapFile = resolve(directory, featureMapPath);
   const anchorsByFile = new Map();
   const anchorsIn = (file) => {
     if (!anchorsByFile.has(file))
@@ -156,6 +289,8 @@ export function documentationErrors(directory = root) {
         !anchorsIn(target).has(decodeURIComponent(fragment))
       )
         broken.push(`${file}: ${match[1]} (no heading has the anchor #${fragment})`);
+      else if (fragment && target === featureMapFile && !featureMap.domains.has(fragment))
+        broken.push(`${file}: ${match[1]} (the feature map has no domain ${fragment})`);
       if (
         path &&
         dirname(file) === docsRoot &&
@@ -180,6 +315,7 @@ export function documentationErrors(directory = root) {
     }
     if (file.startsWith(developerDocs)) broken.push(...caseIdErrors(file, content, knownCaseIds));
   }
+  broken.push(...featureMap.issues);
   for (const file of readdirSync(resolve(directory, 'scripts')).filter(
     (name) => name.startsWith('verify-') && name.endsWith('.mjs')
   )) {
@@ -199,6 +335,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exitCode = 1;
   } else
     console.log(
-      'Documentation links, anchors, source paths, fenced commands, case IDs and verification entry points PASS'
+      'Documentation links, anchors, source paths, fenced commands, case IDs, feature map and verification entry points PASS'
     );
 }

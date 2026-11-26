@@ -1,0 +1,576 @@
+{
+  "version": 1,
+  "defaults": {
+    "launch": { "runner": "browser-harness", "providerFixture": true }
+  },
+  "domains": {
+    "reader": {
+      "title": "Reader layout, reading presentation, navigation, selection and source editing",
+      "sources": [
+        "web/SourceReader.tsx",
+        "web/Reader*.tsx",
+        "web/reader-*.ts",
+        "web/reading-*.ts",
+        "web/Prose.tsx",
+        "web/PlainProse.tsx",
+        "web/ReadabilitySettings.tsx",
+        "web/useReadingPreferences.ts",
+        "web/useStory.ts",
+        "web/useBottomFollow.ts",
+        "web/SelectionRevision.tsx",
+        "web/useSelectionRevision.ts",
+        "web/SourceVersions.tsx",
+        "web/ManuscriptExportDialog.tsx",
+        "core/reading-markdown.ts",
+        "core/selection-revision.ts",
+        "core/translation-display.ts",
+        "core/manuscript-export.ts",
+        "server/reader*.ts",
+        "server/selection-revision.ts",
+        "server/source-editing.ts",
+        "server/manuscript-export.ts"
+      ],
+      "specs": [
+        { "file": "tests/ui-browser.spec.ts" },
+        { "file": "tests/reading-browser.spec.ts" },
+        { "file": "tests/reading-markdown-browser.spec.ts" },
+        { "file": "tests/reader-navigation-browser.spec.ts" },
+        { "file": "tests/reader-recovery-browser.spec.ts" },
+        { "file": "tests/reader-selection-browser.spec.ts" },
+        { "file": "tests/reader-visibility-browser.spec.ts" },
+        { "file": "tests/selection-revision-browser.spec.ts" },
+        { "file": "tests/source-edit-focus-browser.spec.ts" },
+        { "file": "tests/writing-tools-browser.spec.ts" }
+      ]
+    },
+    "chat-generation": {
+      "title": "Composer, request admission, generation, response streams and retries",
+      "sources": [
+        "web/ChatComposer.tsx",
+        "web/ComposerMore.tsx",
+        "web/NextRequestStatus.tsx",
+        "web/composer-draft.ts",
+        "web/RequestMessage.tsx",
+        "web/RequestImages.tsx",
+        "web/request-image-draft.ts",
+        "web/RequestPreviewDialog.tsx",
+        "web/StreamingResponse.tsx",
+        "web/response-stream-bridge.ts",
+        "web/RetryFailure.tsx",
+        "web/CancelledRun.tsx",
+        "core/product.ts",
+        "core/request-images.ts",
+        "core/request-preview.ts",
+        "core/response-stream.ts",
+        "server/product-*.ts",
+        "server/composer-run.ts",
+        "server/run-executor.ts",
+        "server/run-retry.ts",
+        "server/main-request.ts",
+        "server/request-images.ts",
+        "server/request-preview.ts",
+        "server/response-stream.ts"
+      ],
+      "specs": [
+        { "file": "tests/product-browser.spec.ts" },
+        { "file": "tests/browser.spec.ts" },
+        { "file": "tests/chat-composer-browser.spec.ts" },
+        { "file": "tests/composer-next-request-browser.spec.ts" },
+        { "file": "tests/request-edit-browser.spec.ts" },
+        { "file": "tests/request-images-browser.spec.ts" },
+        { "file": "tests/request-preview-browser.spec.ts" },
+        { "file": "tests/response-actions-browser.spec.ts" },
+        { "file": "tests/response-stream-browser.spec.ts" },
+        { "file": "tests/run-retry-browser.spec.ts" }
+      ]
+    },
+    "chat-settings": {
+      "title": "Chat settings, creative options, chat variables, model selection, advisors and evaluation tools",
+      "sources": [
+        "web/ChatSettingsPanel.tsx",
+        "web/ChatOptionSettings.tsx",
+        "web/chat-option-draft.ts",
+        "web/ChatPromptOptions.tsx",
+        "web/ChatVariables.tsx",
+        "web/ChatModelPicker.tsx",
+        "web/model-selection.ts",
+        "web/AgentCollaborationEditor.tsx",
+        "core/chat-options.ts",
+        "core/chat-settings.ts",
+        "core/chat-variables.ts",
+        "core/agent-collaboration.ts",
+        "core/evaluation-tool*.ts",
+        "server/chat-options.ts",
+        "server/chat-overrides.ts",
+        "server/chat-variable*.ts",
+        "server/agent-collaboration.ts",
+        "server/evaluation-session.ts"
+      ],
+      "specs": [
+        { "file": "tests/chat-settings-browser.spec.ts" },
+        { "file": "tests/chat-option-recovery-browser.spec.ts" },
+        { "file": "tests/chat-recovery-browser.spec.ts" },
+        { "file": "tests/model-picker-browser.spec.ts" },
+        { "file": "tests/agent-collaboration-browser.spec.ts" },
+        { "file": "tests/evaluation-browser.spec.ts" }
+      ]
+    },
+    "context": {
+      "title": "Context summaries, compaction and story notes",
+      "sources": [
+        "web/ContextPanel.tsx",
+        "web/SummaryEditor.tsx",
+        "web/ContextSummaryStatus.tsx",
+        "web/AuthorNotesEditor.tsx",
+        "web/StoryPanel.tsx",
+        "core/context-*.ts",
+        "core/notes.ts",
+        "server/context-*.ts",
+        "server/story-notes.ts"
+      ],
+      "specs": [
+        { "file": "tests/context-browser.spec.ts" },
+        { "file": "tests/story-browser.spec.ts" }
+      ]
+    },
+    "turn-activity": {
+      "title": "Per-response status, scene inspector, task history and execution traces",
+      "sources": [
+        "web/TurnActivity.tsx",
+        "web/TurnStatus.tsx",
+        "web/SceneInspector.tsx",
+        "web/SceneUsage.tsx",
+        "web/ContextBreakdown.tsx",
+        "web/LazyDiagnostics.tsx",
+        "web/TaskHistory.tsx",
+        "web/TaskTrace.tsx",
+        "web/task-trace.ts",
+        "web/AttemptInspector.tsx",
+        "web/RunTaskDetails.tsx",
+        "core/task-trace.ts",
+        "server/task-trace.ts",
+        "server/run-phase.ts",
+        "server/context-parts.ts",
+        "server/execution-diagnostics.ts"
+      ],
+      "specs": [
+        { "file": "tests/turn-activity-browser.spec.ts" },
+        { "file": "tests/task-trace-browser.spec.ts" },
+        { "file": "tests/scene-diagnostics-browser.spec.ts" }
+      ]
+    },
+    "navigation": {
+      "title": "Left navigation, chat organization, activity inbox, side panel and keyboard shortcuts",
+      "sources": [
+        "web/BotTreeNavigation.tsx",
+        "web/BotNavigation.tsx",
+        "web/NavigationModeTabs.tsx",
+        "web/PinnedChats.tsx",
+        "web/ChatActionMenu.tsx",
+        "web/HelperNavigation.tsx",
+        "web/Activity*.tsx",
+        "web/activity-*.ts",
+        "web/useActivityFeed.ts",
+        "web/SidePanel*.tsx",
+        "web/side-panel.ts",
+        "web/shortcut-bindings.ts",
+        "web/shortcuts.tsx",
+        "web/ShortcutSettings.tsx",
+        "web/CommandPalette.tsx",
+        "core/activity-feed.ts",
+        "server/activity-feed.ts",
+        "server/chat-organization.ts"
+      ],
+      "specs": [
+        { "file": "tests/organization-browser.spec.ts" },
+        { "file": "tests/sidebar-navigation-browser.spec.ts" },
+        { "file": "tests/activity-browser.spec.ts" },
+        { "file": "tests/side-panel-browser.spec.ts" },
+        { "file": "tests/shortcuts-browser.spec.ts" }
+      ]
+    },
+    "loading-and-sync": {
+      "title": "Delayed loading, lazy panels, live events and browser storage",
+      "sources": [
+        "web/LoadingState.tsx",
+        "web/ReaderLoadingState.tsx",
+        "web/deferredPanel.tsx",
+        "web/live-stream.ts",
+        "web/live-frames.ts",
+        "web/poll-delays.ts",
+        "web/storage-keys.ts",
+        "web/optional-storage.ts",
+        "server/live-events.ts",
+        "server/chat-event-stream.ts"
+      ],
+      "specs": [
+        { "file": "tests/loading-browser.spec.ts" },
+        { "file": "tests/workspace-loading-browser.spec.ts" },
+        { "file": "tests/lazy-panels-browser.spec.ts" },
+        { "file": "tests/live-events-browser.spec.ts" },
+        { "file": "tests/browser-storage-browser.spec.ts" }
+      ]
+    },
+    "library": {
+      "title": "Library lists, folders, images, new stories and bot chat import",
+      "sources": [
+        "web/LibraryPanel.tsx",
+        "web/LibraryFolders.tsx",
+        "web/LibraryFolderCover.tsx",
+        "web/library-list*.ts",
+        "web/NewStory.tsx",
+        "web/BotChatImportDialog.tsx",
+        "web/ImageMetadataFields.tsx",
+        "web/AssetMetadataEditor.tsx",
+        "core/library-organization.ts",
+        "server/library-organization.ts",
+        "server/image-*.ts",
+        "server/asset-metadata.ts"
+      ],
+      "specs": [
+        { "file": "tests/library-browser.spec.ts", "cases": ["LIBUI08"] },
+        { "file": "tests/library-images-browser.spec.ts" },
+        { "file": "tests/library-usability-browser.spec.ts" },
+        { "file": "tests/new-story-browser.spec.ts" },
+        { "file": "tests/bot-chat-import-browser.spec.ts" }
+      ]
+    },
+    "deletion": {
+      "title": "Resource, chat and scene deletion and orphan-memory review",
+      "sources": [
+        "web/DeleteButton.tsx",
+        "web/NativeDeleteDialog.tsx",
+        "web/SceneDeleteAction.tsx",
+        "web/OrphanMemoryPanel.tsx",
+        "core/scene-deletion.ts",
+        "core/orphan-memory.ts",
+        "server/library-deletion.ts",
+        "server/chat-deletion.ts",
+        "server/asset-deletion.ts",
+        "server/scene-deletion.ts",
+        "server/orphan-memory.ts",
+        "server/unused-data*.ts"
+      ],
+      "specs": [
+        { "file": "tests/deletion-browser.spec.ts" },
+        { "file": "tests/scene-deletion-browser.spec.ts" },
+        { "file": "tests/orphan-memory-browser.spec.ts" }
+      ]
+    },
+    "resource-editors": {
+      "title": "Resource editors: studio sections, change review, local recovery, Risu code fields, CBS references and first-message preview",
+      "sources": [
+        "web/resource-editor*.ts*",
+        "web/EditorStudio.tsx",
+        "web/studio-sections.ts",
+        "web/EditorChanges.tsx",
+        "web/ChangeReview.tsx",
+        "web/change-review.ts",
+        "web/editor-values.ts",
+        "web/editor-recovery.ts",
+        "web/TextDiffView.tsx",
+        "web/text-diff-rows.ts",
+        "web/SaveConflictDialog.tsx",
+        "web/unsaved-input.ts",
+        "web/RisuNativeFields.tsx",
+        "web/NativeRisu*.tsx",
+        "web/native-*.ts",
+        "web/CodeField.tsx",
+        "web/CodeMirrorField.tsx",
+        "web/CbsReferenceList.tsx",
+        "web/cbs-reference-index.ts",
+        "web/code-field-reveal.ts",
+        "web/RisuDraftStartPreview.tsx",
+        "web/risu-preview-issues.ts",
+        "core/cbs-analysis.ts",
+        "core/cbs-references.ts",
+        "core/text-diff.ts",
+        "server/resource-*.ts",
+        "server/risu-native-cbs.ts",
+        "server/risu-native-preview.ts"
+      ],
+      "specs": [
+        { "file": "tests/editor-changes-browser.spec.ts" },
+        { "file": "tests/editor-frame-browser.spec.ts" },
+        { "file": "tests/editor-leave-browser.spec.ts" },
+        { "file": "tests/ui-recovery-browser.spec.ts" },
+        { "file": "tests/native-lore-browser.spec.ts" },
+        { "file": "tests/native-editor-actions-browser.spec.ts" },
+        {
+          "file": "tests/code-field-browser.spec.ts",
+          "cases": ["CODEFIELD01", "CODEFIELD02", "CODEFIELD03", "CODEFIELD04"]
+        },
+        {
+          "file": "tests/cbs-references-browser.spec.ts",
+          "cases": ["CBSREF01", "CBSREF02", "PREVIEW01", "PREVIEW02"]
+        }
+      ]
+    },
+    "risu": {
+      "title": "Native Risu import, transfer, Lua compatibility, message surfaces and authored frames",
+      "sources": [
+        "core/risu-*.ts",
+        "core/native-transfer*.ts",
+        "server/risu-*.ts",
+        "server/native-transfer*.ts",
+        "server/package-start.ts",
+        "web/Risu*.tsx",
+        "web/risu-*.ts",
+        "web/PackageStartPicker.tsx"
+      ],
+      "specs": [
+        { "file": "tests/risu-import-browser.spec.ts" },
+        { "file": "tests/risu-preset-import-browser.spec.ts" },
+        { "file": "tests/native-transfer-browser.spec.ts" },
+        { "file": "tests/risu-lua-compat-browser.spec.ts" },
+        { "file": "tests/risu-message-surface-browser.spec.ts" },
+        { "file": "tests/risu-native-frame-browser.spec.ts" },
+        {
+          "file": "tests/risu-native-samples-browser.spec.ts",
+          "launch": { "privateMaterials": true, "requiredEnv": ["UIMORI_RISU_SAMPLE_ROOT"] }
+        }
+      ]
+    },
+    "prompts": {
+      "title": "Prompt library, built-in templates, prompt order, prompt workspace and global model defaults",
+      "sources": [
+        "web/PromptLibrary.tsx",
+        "web/PromptEditor.tsx",
+        "web/PromptTemplatesDialog.tsx",
+        "web/PromptWorkspaceEditor.tsx",
+        "web/PromptCombinationManager.tsx",
+        "web/PromptControlFields.tsx",
+        "web/PromptOptionGroup.tsx",
+        "web/prompt-workspace-store.ts",
+        "web/usePromptWorkspace.ts",
+        "web/ModelWorkspaceEditor.tsx",
+        "web/ChatGenerationDefaults.tsx",
+        "core/prompt*.ts",
+        "server/prompt-*.ts",
+        "server/builtin-prompts.ts",
+        "server/chat-generation-defaults.ts"
+      ],
+      "specs": [
+        { "file": "tests/prompt-workspace-browser.spec.ts" },
+        { "file": "tests/prompt-default-list-browser.spec.ts", "cases": ["PDEF01"] },
+        { "file": "tests/prompt-library-refinements-browser.spec.ts" },
+        { "file": "tests/prompt-order-browser.spec.ts" },
+        { "file": "tests/prompt-templates-browser.spec.ts" },
+        { "file": "tests/global-models-browser.spec.ts" }
+      ]
+    },
+    "providers": {
+      "title": "Provider connections, keys and model pricing",
+      "sources": [
+        "web/Provider*.tsx",
+        "web/provider-*.ts",
+        "web/JevProviderSettings.tsx",
+        "web/VertexCredentialUpload.tsx",
+        "web/ModelPricingEditor.tsx",
+        "web/pricing-display.ts",
+        "core/provider-definitions.ts",
+        "core/model-pricing.ts",
+        "core/jev-provider.ts",
+        "server/provider-*.ts",
+        "server/jev-*.ts",
+        "server/credentials.ts",
+        "server/vertex-credentials.ts"
+      ],
+      "specs": [
+        { "file": "tests/provider-management-browser.spec.ts" },
+        { "file": "tests/jev-provider-browser.spec.ts" },
+        { "file": "tests/model-pricing-browser.spec.ts" }
+      ]
+    },
+    "settings": {
+      "title": "Settings dialogs, settings search, save decisions, cross-tab sync and shared input controls",
+      "sources": [
+        "web/RuntimeSettings.tsx",
+        "web/SettingsDetail.tsx",
+        "web/SettingsSearch.tsx",
+        "web/settings-*.ts",
+        "web/useSettings*.ts",
+        "web/presentation-settings.ts",
+        "web/Dialog.tsx",
+        "web/ConfirmDialog.tsx",
+        "web/ActionMenu.tsx"
+      ],
+      "specs": [
+        { "file": "tests/settings-compact-browser.spec.ts" },
+        { "file": "tests/settings-dialog-consistency-browser.spec.ts" },
+        { "file": "tests/settings-polish-browser.spec.ts" },
+        { "file": "tests/settings-save-decisions-browser.spec.ts" },
+        { "file": "tests/settings-search-browser.spec.ts" },
+        { "file": "tests/settings-sync-browser.spec.ts" },
+        { "file": "tests/input-affordances-browser.spec.ts" }
+      ]
+    },
+    "appearance": {
+      "title": "Themes, palettes, fonts and narrative layouts",
+      "sources": [
+        "core/themes.ts",
+        "core/narrative-themes.ts",
+        "core/theme-*.ts",
+        "core/builtin-theme-assets.ts",
+        "core/fonts.ts",
+        "server/themes.ts",
+        "server/theme-assets.ts",
+        "server/fonts.ts",
+        "web/Theme*.tsx",
+        "web/theme-*.ts",
+        "web/PaletteSettings.tsx",
+        "web/Font*.tsx"
+      ],
+      "specs": [
+        { "file": "tests/themes-browser.spec.ts" },
+        { "file": "tests/appearance-customization-browser.spec.ts" },
+        {
+          "file": "tests/narrative-themes-browser.spec.ts",
+          "launch": { "privateMaterialsEnv": "UIMORI_NARRATIVE_DEMO_DIR" }
+        },
+        { "file": "tests/theme-body-scroll-browser.spec.ts" },
+        {
+          "file": "tests/liquid-gallery-browser.spec.ts",
+          "launch": { "privateMaterialsEnv": "UIMORI_GALLERY_DEMO_DIR" }
+        }
+      ]
+    },
+    "story-ui": {
+      "title": "Story UI generation, rendering, settings and bot themes",
+      "sources": [
+        "core/story-ui*.ts",
+        "server/story-ui*.ts",
+        "web/StoryUi*.tsx",
+        "web/story-ui-*.ts*",
+        "web/LazyStoryUi.tsx",
+        "web/InvalidStoryUi.tsx",
+        "web/StoryBoardPanel.tsx"
+      ],
+      "specs": [
+        { "file": "tests/story-ui-browser.spec.ts" },
+        { "file": "tests/story-ui-settings-browser.spec.ts" },
+        { "file": "tests/story-ui-theme-browser.spec.ts" }
+      ]
+    },
+    "illustration": {
+      "title": "Scene illustrations and illustration presets",
+      "sources": [
+        "core/illustration*.ts",
+        "core/novelai-settings.ts",
+        "server/illustration*.ts",
+        "server/novelai-client.ts",
+        "web/Illustration*.tsx",
+        "web/illustration-*.ts"
+      ],
+      "specs": [
+        { "file": "tests/illustration-browser.spec.ts" },
+        { "file": "tests/illustration-presets-browser.spec.ts" }
+      ]
+    },
+    "translation": {
+      "title": "Composer input translation, bot translation guides and auxiliary translation recovery",
+      "sources": [
+        "core/input-translation.ts",
+        "core/translation-*.ts",
+        "core/auxiliary*.ts",
+        "server/input-translation.ts",
+        "server/translation-*.ts",
+        "server/auxiliary-bridge.ts",
+        "server/auto-translation-defaults.ts",
+        "web/InputTranslation.tsx",
+        "web/useInputTranslation.ts",
+        "web/TranslationGuideEditor.tsx",
+        "web/AutoTranslationDefaults.tsx",
+        "web/auxiliary-error.ts"
+      ],
+      "specs": [
+        { "file": "tests/input-translation-browser.spec.ts" },
+        { "file": "tests/translation-guides-browser.spec.ts" },
+        { "file": "tests/auxiliary-recovery-browser.spec.ts" }
+      ]
+    },
+    "outline": {
+      "title": "Outline workspace and writing briefs",
+      "sources": [
+        "core/outline*.ts",
+        "server/outline-*.ts",
+        "web/OutlinePanel.tsx",
+        "web/outline-helper.ts"
+      ],
+      "specs": [{ "file": "tests/outline-browser.spec.ts" }]
+    },
+    "helper": {
+      "title": "Helper conversations, sessions, workspace, attachments, safety, task results and editor bridge",
+      "sources": [
+        "core/helper*.ts",
+        "server/helper-*.ts",
+        "web/Helper*.tsx",
+        "web/helper-*.ts",
+        "web/useHelper*.ts",
+        "web/EditorHelperAction.tsx",
+        "web/editor-helper.ts",
+        "runner/uimori.mjs"
+      ],
+      "specs": [
+        { "file": "tests/helper-flow-browser.spec.ts" },
+        { "file": "tests/helper-safety-browser.spec.ts" },
+        { "file": "tests/helper-editor-bridge-browser.spec.ts" },
+        { "file": "tests/helper-composer-browser.spec.ts" },
+        { "file": "tests/helper-attachments-browser.spec.ts" },
+        { "file": "tests/helper-live-browser.spec.ts" },
+        { "file": "tests/helper-message-prose-browser.spec.ts" },
+        { "file": "tests/helper-recovery-browser.spec.ts" },
+        { "file": "tests/helper-sessions-browser.spec.ts" },
+        { "file": "tests/helper-task-results-browser.spec.ts" },
+        { "file": "tests/helper-workspace-browser.spec.ts" }
+      ]
+    },
+    "personal-workspace": {
+      "title": "Ordinary saves and recovery, backups, manuscript search, bookmarks, usage, PWA and push",
+      "sources": [
+        "web/BackupSettings.tsx",
+        "web/BackupFileImport.tsx",
+        "web/backup-file.ts",
+        "web/ManuscriptSearch.tsx",
+        "web/Bookmarks.tsx",
+        "web/Usage*.tsx",
+        "web/InstallApp.tsx",
+        "web/pwa.ts",
+        "web/public/sw.js",
+        "web/PushSettings.tsx",
+        "core/backups.ts",
+        "core/chat-backup.ts",
+        "core/manuscript-search.ts",
+        "core/reading-state.ts",
+        "core/push.ts",
+        "server/backup-service.ts",
+        "server/database-backup.ts",
+        "server/chat-backup.ts",
+        "server/manuscript-search.ts",
+        "server/reading-state.ts",
+        "server/usage-report.ts",
+        "server/push-*.ts"
+      ],
+      "specs": [
+        { "file": "tests/personal-workspace-browser.spec.ts" },
+        { "file": "tests/personal-features-browser.spec.ts" },
+        { "file": "tests/bookmark-confirmations-browser.spec.ts" },
+        { "file": "tests/push-browser.spec.ts" }
+      ]
+    },
+    "i18n": {
+      "title": "UI languages and localized display formats",
+      "sources": ["web/i18n.ts", "web/LanguageSelect.tsx", "web/locales/*", "core/ui-locale.ts"],
+      "specs": [{ "file": "tests/i18n-browser.spec.ts" }]
+    },
+    "self-host": {
+      "title": "Personal self-host over HTTPS with session gate and cross-device events",
+      "sources": [
+        "server/access-session.ts",
+        "web/SessionGate.tsx",
+        "deploy/self-host.env.example"
+      ],
+      "specs": [{ "file": "tests/self-host-browser.spec.ts", "launch": { "runner": "self-host" } }]
+    }
+  }
+}

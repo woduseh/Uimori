@@ -32,6 +32,23 @@ function withDocumentation(files, check) {
   }
 }
 
+function featureMap(domains) {
+  return { 'tests/feature-map.json': JSON.stringify({ version: 1, domains }) };
+}
+
+function oneDomainMap(...specs) {
+  return {
+    'server/app.ts': '',
+    ...featureMap({
+      editors: {
+        title: 'Editors',
+        sources: ['server/app.ts'],
+        specs: specs.map((file) => ({ file })),
+      },
+    }),
+  };
+}
+
 test('current documentation links, anchors, source paths and verification entry points resolve', () => {
   assert.deepEqual(documentationErrors(), []);
 });
@@ -196,6 +213,7 @@ test('case IDs in developer documents, including ranges, must name existing test
       ].join('\n'),
       'docs/GUIDE.md': 'User guides are not checked: LIBUI09.',
       'docs/releases/v0.0.1.md': 'Release notes are not checked: LIBUI09.',
+      ...oneDomainMap('tests/editor-browser.spec.ts'),
       'tests/editor-browser.spec.ts': [
         "test('CODEFIELD01 highlights', () => {});",
         "test('CODEFIELD02 saves', () => {});",
@@ -219,6 +237,7 @@ test('case IDs only count when they appear in a test title', () => {
   withDocumentation(
     {
       'docs/dev/SPEC.md': 'Still present in a comment: LIBUI08.',
+      ...oneDomainMap('tests/editor-browser.spec.ts'),
       'tests/editor-browser.spec.ts': [
         "test('CODEFIELD01 highlights', () => {});",
         '// leftover LIBUI08 in a comment should not count',
@@ -228,6 +247,66 @@ test('case IDs only count when they appear in a test title', () => {
       const spec = join(directory, 'docs/dev/SPEC.md');
       assert.deepEqual(documentationErrors(directory), [
         `${spec}: LIBUI08 (no test has the case ID LIBUI08)`,
+      ]);
+    }
+  );
+});
+
+test('every spec file must be registered in the feature map, and registered specs must exist', () => {
+  withDocumentation(
+    {
+      ...oneDomainMap('tests/reading-browser.spec.ts', 'tests/gone-browser.spec.ts'),
+      'tests/reading-browser.spec.ts': '',
+      'tests/orphan-browser.spec.ts': '',
+      'tests/reading.test.ts': '',
+    },
+    (directory, write) => {
+      assert.deepEqual(documentationErrors(directory), [
+        'tests/feature-map.json: domain editors names tests/gone-browser.spec.ts, which is not a file in tests/*.spec.ts',
+        'tests/feature-map.json: tests/orphan-browser.spec.ts is not registered in any domain',
+      ]);
+      write(oneDomainMap('tests/reading-browser.spec.ts', 'tests/orphan-browser.spec.ts'));
+      assert.deepEqual(documentationErrors(directory), []);
+    }
+  );
+});
+
+test('feature map domains need existing sources and case IDs, known launch options and one home per spec', () => {
+  withDocumentation(
+    {
+      'server/reader.ts': '',
+      ...featureMap({
+        reader: {
+          title: 'Reader',
+          sources: ['server/reader*.ts', 'server/gone-*.ts'],
+          specs: [
+            { file: 'tests/reading-browser.spec.ts', cases: ['READ01', 'READ02'] },
+            { file: 'tests/self-host-browser.spec.ts', launch: { runner: 'remote', retries: 2 } },
+          ],
+        },
+        Settings: {
+          title: '',
+          sources: ['server/reader.ts'],
+          specs: [{ file: 'tests/reading-browser.spec.ts', owner: 'nobody' }],
+        },
+      }),
+      'docs/dev/SPEC.md':
+        '[reader](../../tests/feature-map.json#reader), [gone](../../tests/feature-map.json#gone)',
+      'tests/reading-browser.spec.ts': "test('READ01 opens', () => {});\n// READ02 in a comment",
+      'tests/self-host-browser.spec.ts': '',
+    },
+    (directory) => {
+      const spec = join(directory, 'docs/dev/SPEC.md');
+      assert.deepEqual(documentationErrors(directory), [
+        `${spec}: ../../tests/feature-map.json#gone (the feature map has no domain gone)`,
+        'tests/feature-map.json: domain reader source server/gone-*.ts matches no file',
+        'tests/feature-map.json: tests/reading-browser.spec.ts has no test titled with the case ID READ02',
+        'tests/feature-map.json: domain reader tests/self-host-browser.spec.ts launch.runner has an invalid value',
+        'tests/feature-map.json: domain reader tests/self-host-browser.spec.ts launch has unknown option retries',
+        'tests/feature-map.json: domain Settings must be lowercase words joined by hyphens',
+        'tests/feature-map.json: domain Settings needs a title',
+        'tests/feature-map.json: domain Settings tests/reading-browser.spec.ts has unknown field owner',
+        'tests/feature-map.json: tests/reading-browser.spec.ts is registered in reader and Settings',
       ]);
     }
   );
