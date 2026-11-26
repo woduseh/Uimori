@@ -108,6 +108,38 @@ test('the allowlist matches whole comment text regardless of layout and reports 
   );
 });
 
+test('selected files limit the scan and the stale-entry report to those files', () => {
+  withRepository(
+    {
+      'core/changed.ts': '// Narration in the changed file.\nexport const a = 1;\n',
+      'core/untouched.ts': '// Narration elsewhere.\nexport const b = 1;\n',
+      'third_party/vendor.ts': '// Outside the checked directories.\n',
+      'web/node_modules/pkg/index.js': '// Installed code is not checked.\n',
+      'docs/GUIDE.md': '# Guide\n',
+    },
+    (directory) => {
+      const allowlist = [
+        { file: 'core/deleted.ts', comment: 'Chromium rounds.', system: 'Chromium' },
+        { file: 'core/elsewhere.ts', comment: 'Safari clamps.', system: 'Safari' },
+      ];
+      assert.deepEqual(
+        commentErrors(directory, allowlist, [
+          'core/changed.ts',
+          'core/deleted.ts',
+          'third_party/vendor.ts',
+          'web/node_modules/pkg/index.js',
+          'docs/GUIDE.md',
+        ]),
+        [
+          'core/changed.ts:1: // Narration in the changed file.',
+          `${allowlistPath}: no matching comment in core/deleted.ts; remove the entry: Chromium rounds.`,
+        ]
+      );
+      assert.deepEqual(commentErrors(directory, [], []), []);
+    }
+  );
+});
+
 test('every allowlist entry names the external system it describes', () => {
   withRepository(
     {

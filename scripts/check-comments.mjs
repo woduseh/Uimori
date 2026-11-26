@@ -146,16 +146,33 @@ export function readAllowlist(directory = root) {
   return entries;
 }
 
-export function commentErrors(directory = root, allowlist = readAllowlist(directory)) {
+function checkedPath(path) {
+  const segments = path.split('/');
+  return (
+    sourceExtension.test(path) &&
+    (segments.length === 1 ||
+      (checkedDirectories.includes(segments[0]) &&
+        !segments.slice(1, -1).some((segment) => skippedDirectories.has(segment))))
+  );
+}
+
+export function commentErrors(directory = root, allowlist = readAllowlist(directory), selected) {
+  const selectedPaths = selected && new Set(selected.map((path) => path.replaceAll('\\', '/')));
   const unused = new Map(
-    allowlist.map((entry) => [`${entry.file}\n${normalized(entry.comment)}`, entry])
+    allowlist
+      .filter((entry) => !selectedPaths || selectedPaths.has(entry.file))
+      .map((entry) => [`${entry.file}\n${normalized(entry.comment)}`, entry])
   );
   const allowed = new Set(unused.keys());
   const errors = [];
-  const files = [
-    ...sourceFiles(directory, false),
-    ...checkedDirectories.flatMap((name) => sourceFiles(join(directory, name))),
-  ];
+  const files = selectedPaths
+    ? [...selectedPaths]
+        .filter((path) => checkedPath(path) && existsSync(join(directory, path)))
+        .map((path) => join(directory, path))
+    : [
+        ...sourceFiles(directory, false),
+        ...checkedDirectories.flatMap((name) => sourceFiles(join(directory, name))),
+      ];
   for (const file of files) {
     const path = relative(directory, file).replaceAll('\\', '/');
     const text = readFileSync(file, 'utf8');
@@ -184,7 +201,8 @@ export function commentErrors(directory = root, allowlist = readAllowlist(direct
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const errors = commentErrors();
+  const selected = process.argv.slice(2);
+  const errors = commentErrors(root, readAllowlist(), selected.length ? selected : undefined);
   if (errors.length) {
     console.error(`${errors.join('\n')}\n\n${errors.length} comment(s) not allowed.\n${remedy}`);
     process.exitCode = 1;

@@ -1,15 +1,57 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, extname, join } from 'node:path';
+import { basename, extname, join, posix, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { docsOnly } from './ci-changes.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const defaultLimit = 30;
+const usage = 'Usage: node scripts/check-changed.mjs [<base>] [--limit <n>] [--all]';
 const biomeFile = /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u;
 const typeScriptInput = /(?:\.(?:ts|tsx|mts)|^package\.json|^tsconfig[^/]*\.json)$/u;
 const moduleFile = /^(?:core|server|web|runner|scripts|tests)\/.+\.(?:ts|tsx|mts|js|mjs)$/u;
+const moduleExtension = /\.(?:[cm]?[jt]sx?)$/u;
+const commentSource = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|css)$/u;
+const vitestFile = /^tests\/.+\.test\.ts$/u;
+const toolingTestFile = /^(?:scripts\/[^/]+\.test\.mjs|tests\/[^/]+\.node\.test\.mjs)$/u;
+const fullSuiteInput =
+  /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u;
+const fullCommentScan = /^scripts\/(?:check-comments\.mjs|comment-allowlist\.json)$/u;
+const i18nInput = /^(?:web\/|scripts\/check-i18n\.mjs$)/u;
+const userGuide = /^docs\/[^/]+\.md$/u;
+const guideTest = 'tests/app-guides.test.ts';
+const distEntry = /^server\/(?:index|app)\.ts$/u;
+const importSpecifier = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"](\.{1,2}\/[^'"]+)['"]/gu;
 
-export function selectChecks(files, testSources) {
+function unique(values) {
+  return [...new Set(values)];
+}
+
+function withoutExtension(file) {
+  return file.replace(moduleExtension, '');
+}
+
+function importsAny(test, source, stems) {
+  return [...source.matchAll(importSpecifier)].some(([, specifier]) =>
+    stems.has(withoutExtension(posix.join(posix.dirname(test), specifier)))
+  );
+}
+
+function selectToolingTests(files, toolingTests) {
+  const selected = [];
+  for (const file of files) {
+    if (toolingTestFile.test(file)) {
+      if (toolingTests.includes(file)) selected.push(file);
+    } else if (file.startsWith('scripts/')) {
+      const paired = `${file.replace(/\.[^./]+$/u, '')}.test.mjs`;
+      if (!/^scripts\/[^/]+$/u.test(file) || !toolingTests.includes(paired)) return 'all';
+      selected.push(paired);
+    }
+  }
+  return unique(selected).sort();
+}
+
+export function selectChecks(files, testSources, { exists = () => true, toolingTests = [] } = {}) {
   const modules = files.filter((file) => moduleFile.test(file));
   const markers = files
     .filter((file) => !moduleFile.test(file))
@@ -17,34 +59,87 @@ export function selectChecks(files, testSources) {
       const extension = extname(file);
       return [basename(file), ...(extension ? [`'${extension}'`, `"${extension}"`] : [])];
     });
-  const namedTests = Object.entries(testSources)
-    .filter(
-      ([test, source]) =>
-        !modules.includes(test) && markers.some((marker) => source.includes(marker))
-    )
-    .map(([test]) => test)
-    .sort();
+  const tests = Object.keys(testSources).sort();
+  const namedTests = tests.filter(
+    (test) =>
+      !modules.includes(test) && markers.some((marker) => testSources[test].includes(marker))
+  );
+  const guideTests =
+    files.some((file) => userGuide.test(file)) && tests.includes(guideTest) ? [guideTest] : [];
+  const moduleNames = new Set(modules.map((file) => basename(withoutExtension(file))));
+  const directTests = unique([
+    ...modules.filter((file) => vitestFile.test(file) && exists(file)),
+    ...namedTests,
+    ...guideTests,
+    ...tests.filter((test) => moduleNames.has(basename(test, '.test.ts'))),
+  ]).sort();
+  const moduleStems = new Set(modules.map(withoutExtension));
+  const firstHopTests = tests.filter(
+    (test) => !directTests.includes(test) && importsAny(test, testSources[test], moduleStems)
+  );
   return {
     docsOnly: docsOnly(files),
     documentation: files.some((file) => file.endsWith('.md')),
-    biome: files.filter((file) => biomeFile.test(file)),
+    biome: files.filter((file) => biomeFile.test(file) && exists(file)),
     typeScript: files.some((file) => typeScriptInput.test(file)),
-    vitest: [...modules, ...namedTests],
+    comments: files.some((file) => fullCommentScan.test(file))
+      ? 'all'
+      : files.filter((file) => commentSource.test(file)),
+    i18n: files.some((file) => i18nInput.test(file)),
+    vitest: unique([...modules, ...namedTests, ...guideTests]),
+    directTests,
+    firstHopTests,
+    tooling: selectToolingTests(files, toolingTests),
+    fullRequired: files.filter((file) => fullSuiteInput.test(file)),
+    notes: files.some((file) => distEntry.test(file))
+      ? [
+          'server/index.ts or server/app.ts changed: tests/server.test.ts and tests/background-work.test.ts execute dist, so they check this change only after `npm run build`; then run `npm test -- tests/server.test.ts tests/background-work.test.ts`',
+        ]
+      : [],
   };
 }
 
-function gitList(...args) {
-  return execFileSync('git', [...args, '-z'], { cwd: root, encoding: 'utf8' })
+export function prioritizeTests(affected, { direct, firstHop }, limit) {
+  const ordered = unique([...direct, ...firstHop, ...[...affected].sort()]);
+  if (ordered.length <= limit) return { run: ordered, total: ordered.length };
+  return {
+    run: ordered.slice(0, limit),
+    total: ordered.length,
+    notice: `${ordered.length} affected test files; ran ${limit} prioritized (direct matches and 1-hop importers first). Run the full \`npm test\` before finishing, or rerun with --all`,
+  };
+}
+
+export function parseArguments(argv, env) {
+  let base;
+  let limit;
+  let all = false;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (argument === '--all') all = true;
+    else if (argument === '--limit') {
+      limit = Number(argv[++index]);
+      if (!Number.isInteger(limit) || limit < 1)
+        throw new Error(`--limit needs a positive integer\n${usage}`);
+    } else if (argument.startsWith('-') || base !== undefined) throw new Error(usage);
+    else base = argument;
+  }
+  if (all) limit = Infinity;
+  return { base, limit: limit ?? (env.CI === 'true' ? Infinity : defaultLimit) };
+}
+
+function gitList(directory, ...args) {
+  return execFileSync('git', [...args, '-z'], { cwd: directory, encoding: 'utf8' })
     .split('\0')
     .filter(Boolean);
 }
 
-function changedFiles(base) {
-  const files = new Set([
-    ...gitList('diff', '--no-renames', '--name-only', base ?? 'HEAD'),
-    ...gitList('ls-files', '--others', '--exclude-standard'),
-  ]);
-  return [...files].filter((file) => existsSync(join(root, file))).sort();
+export function changedFiles(base, directory = root) {
+  return [
+    ...new Set([
+      ...gitList(directory, 'diff', '--no-renames', '--name-only', base ?? 'HEAD'),
+      ...gitList(directory, 'ls-files', '--others', '--exclude-standard'),
+    ]),
+  ].sort();
 }
 
 function testSources() {
@@ -56,28 +151,117 @@ function testSources() {
   );
 }
 
+function toolingTestFiles() {
+  return ['scripts', 'tests']
+    .flatMap((directory) =>
+      readdirSync(join(root, directory)).map((name) => `${directory}/${name}`)
+    )
+    .filter((file) => toolingTestFile.test(file));
+}
+
+async function affectedTests(related) {
+  const { createVitest } = await import('vitest/node');
+  const vitest = await createVitest({ root, related, watch: false, run: true });
+  try {
+    const name = (spec) => relative(root, spec.moduleId).replaceAll('\\', '/');
+    return {
+      affected: unique((await vitest.getRelevantTestSpecifications()).map(name)),
+      all: unique((await vitest.globTestSpecifications()).map(name)),
+    };
+  } finally {
+    await vitest.close();
+  }
+}
+
 function run(label, command, args) {
-  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8' });
-  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trimEnd();
-  if (result.status === 0) return { label, ok: true, output };
-  return { label, ok: false, output: output.split('\n').slice(-80).join('\n') };
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { cwd: root });
+    let output = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk) => {
+      output += chunk;
+    });
+    child.stderr.setEncoding('utf8').on('data', (chunk) => {
+      output += chunk;
+    });
+    child.on('error', (error) => resolve({ label, ok: false, output: error.message }));
+    child.on('close', (status) => {
+      output = output.trimEnd();
+      if (status === 0) resolve({ label, ok: true, output });
+      else resolve({ label, ok: false, output: output.split('\n').slice(-80).join('\n') });
+    });
+  });
+}
+
+async function runVitest(checks, listing, limit, notices) {
+  let tests;
+  try {
+    tests = await listing;
+  } catch (error) {
+    return { label: 'vitest', ok: false, output: error.stack ?? String(error) };
+  }
+  const selection = prioritizeTests(
+    tests.affected,
+    { direct: checks.directTests, firstHop: checks.firstHopTests },
+    limit
+  );
+  if (selection.notice) notices.push(selection.notice);
+  if (!selection.run.length) return { label: 'vitest (no related tests)', ok: true, output: '' };
+  const everything =
+    selection.run.length === tests.all.length &&
+    tests.all.every((test) => selection.run.includes(test));
+  const result = await run('vitest', process.execPath, [
+    'node_modules/vitest/vitest.mjs',
+    'run',
+    ...(everything ? [] : selection.run),
+  ]);
+  const testFiles = result.output.match(/Test Files\s+([^\n]+)/u)?.[1]?.trim();
+  const count = selection.notice ? ` ${selection.run.length}/${selection.total}` : '';
+  result.label = `vitest${count}${testFiles ? ` (${testFiles})` : ''}`;
+  return result;
+}
+
+async function runTooling(tooling) {
+  const full = tooling === 'all';
+  if (full) {
+    const build = await run('tooling build', process.execPath, ['scripts/build.mjs']);
+    if (!build.ok) return build;
+  }
+  const result = await run(full ? 'tooling full suite' : 'tooling', process.execPath, [
+    'scripts/test-tooling.mjs',
+    ...(full ? [] : ['--files', ...tooling]),
+  ]);
+  result.label += ` (${result.output.match(/^PASS /gmu)?.length ?? 0} passed)`;
+  return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const files = changedFiles(process.argv[2]);
+  let options;
+  try {
+    options = parseArguments(process.argv.slice(2), process.env);
+  } catch (error) {
+    console.error(error.message);
+    process.exit(2);
+  }
+  const { base, limit } = options;
+  const files = changedFiles(base);
   if (!files.length) {
     console.log('check:changed: no changed files');
     process.exit(0);
   }
-  const checks = selectChecks(files, testSources());
-  const results = [];
+  const checks = selectChecks(files, testSources(), {
+    exists: (file) => existsSync(join(root, file)),
+    toolingTests: toolingTestFiles(),
+  });
+  const node = process.execPath;
+  const statics = [];
   if (checks.documentation || checks.docsOnly)
-    results.push(run('docs', process.execPath, ['scripts/check-documentation.mjs']));
-  results.push(run('diff', 'git', ['diff', '--check', process.argv[2] ?? 'HEAD']));
+    statics.push(run('docs', node, ['scripts/check-documentation.mjs']));
+  statics.push(run('diff', 'git', ['diff', '--check', base ?? 'HEAD']));
+  let listing;
   if (!checks.docsOnly) {
     if (checks.biome.length)
-      results.push(
-        run('biome', process.execPath, [
+      statics.push(
+        run('biome', node, [
           'node_modules/@biomejs/biome/bin/biome',
           'check',
           '--no-errors-on-unmatched',
@@ -86,24 +270,29 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         ])
       );
     if (checks.typeScript)
-      results.push(run('tsc', process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit']));
-    results.push(run('comments', process.execPath, ['scripts/check-comments.mjs']));
-    results.push(run('i18n', process.execPath, ['scripts/check-i18n.mjs']));
-    if (checks.vitest.length) {
-      const vitest = run('vitest', process.execPath, [
-        'node_modules/vitest/vitest.mjs',
-        'related',
-        '--run',
-        '--passWithNoTests',
-        ...checks.vitest,
-      ]);
-      const testFiles = vitest.output.match(/Test Files\s+([^\n]+)/u)?.[1]?.trim();
-      if (testFiles) vitest.label = `vitest (${testFiles})`;
-      results.push(vitest);
-    }
+      statics.push(run('tsc', node, ['node_modules/typescript/bin/tsc', '--noEmit']));
+    if (checks.comments === 'all' || checks.comments.length)
+      statics.push(
+        run('comments', node, [
+          'scripts/check-comments.mjs',
+          ...(checks.comments === 'all' ? [] : checks.comments),
+        ])
+      );
+    if (checks.i18n) statics.push(run('i18n', node, ['scripts/check-i18n.mjs']));
+    if (checks.vitest.length) listing = affectedTests(checks.vitest);
   }
+  const results = await Promise.all(statics);
+  const notices = [];
+  if (listing) results.push(await runVitest(checks, listing, limit, notices));
+  if (!checks.docsOnly && checks.tooling.length) results.push(await runTooling(checks.tooling));
+  if (checks.fullRequired.length)
+    notices.push(
+      `scope: full-required (${checks.fullRequired.join(', ')}); related selection cannot see what these change, so run \`npm run quality:full\` before finishing`
+    );
+  notices.push(...checks.notes);
   for (const failure of results.filter((result) => !result.ok))
     console.error(`--- ${failure.label} FAIL\n${failure.output}`);
+  for (const notice of notices) console.warn(`check:changed: ${notice}`);
   const summary = results.map((result) => `${result.label} ${result.ok ? 'ok' : 'FAIL'}`);
   console.log(`check:changed: ${files.length} files · ${summary.join(' · ')}`);
   process.exitCode = results.every((result) => result.ok) ? 0 : 1;

@@ -1,0 +1,157 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { test } from 'node:test';
+import * as checkChanged from './check-changed.mjs';
+
+const toolingTests = [
+  'scripts/ci-gate.test.mjs',
+  'scripts/doctor.test.mjs',
+  'tests/build-runner.node.test.mjs',
+];
+
+test('a deleted file stays in the change set and only leaves the Biome arguments', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-check-changed-'));
+  try {
+    const git = (...args) =>
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=fixture',
+          '-c',
+          'user.email=fixture@example.invalid',
+          '-c',
+          'core.autocrlf=false',
+          ...args,
+        ],
+        { cwd: directory, encoding: 'utf8' }
+      );
+    git('init', '--quiet');
+    for (const path of ['core/gone.ts', 'docs/dev/GONE.md']) {
+      mkdirSync(dirname(join(directory, path)), { recursive: true });
+      writeFileSync(join(directory, path), 'export {};\n');
+    }
+    git('add', '.');
+    git('commit', '--quiet', '-m', 'fixture');
+    unlinkSync(join(directory, 'core/gone.ts'));
+    unlinkSync(join(directory, 'docs/dev/GONE.md'));
+    assert.deepEqual(checkChanged.changedFiles(undefined, directory), [
+      'core/gone.ts',
+      'docs/dev/GONE.md',
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+
+  const checks = checkChanged.selectChecks(
+    ['core/gone.ts', 'core/kept.ts', 'docs/dev/GONE.md'],
+    {},
+    { exists: (file) => file === 'core/kept.ts' }
+  );
+  assert.deepEqual(checks.biome, ['core/kept.ts']);
+  assert.equal(checks.typeScript, true);
+  assert.equal(checks.documentation, true);
+  assert.deepEqual(checks.vitest, ['core/gone.ts', 'core/kept.ts']);
+});
+
+test('a scripts change runs its paired tooling test, or the whole tooling suite without one', () => {
+  const tooling = (files) => checkChanged.selectChecks(files, {}, { toolingTests }).tooling;
+  assert.deepEqual(tooling(['scripts/doctor.mjs']), ['scripts/doctor.test.mjs']);
+  assert.deepEqual(tooling(['scripts/ci-gate.test.mjs']), ['scripts/ci-gate.test.mjs']);
+  assert.deepEqual(tooling(['tests/build-runner.node.test.mjs']), [
+    'tests/build-runner.node.test.mjs',
+  ]);
+  assert.equal(tooling(['scripts/doctor.mjs', 'scripts/lib.mjs']), 'all');
+  assert.deepEqual(tooling(['core/provider.ts']), []);
+});
+
+test('global configuration changes are reported as needing the full suite', () => {
+  for (const file of [
+    'package.json',
+    'package-lock.json',
+    'vitest.config.ts',
+    'tsconfig.json',
+    'tsconfig.web.json',
+    'biome.json',
+    'scripts/build.mjs',
+    'scripts/build-runner.mjs',
+  ])
+    assert.deepEqual(checkChanged.selectChecks([file], {}).fullRequired, [file], file);
+  assert.deepEqual(checkChanged.selectChecks(['core/provider.ts'], {}).fullRequired, []);
+});
+
+test('a hub change runs direct matches and 1-hop importers first, up to a stated limit', () => {
+  const sources = {
+    'tests/hub.test.ts': "import { other } from '../core/other.js';",
+    'tests/hub-user.test.ts': "import { hub } from '../core/hub.js';",
+    'tests/lazy-user.test.ts': "const { hub } = await import('../core/hub.js');",
+    'tests/unrelated.test.ts': "import { other } from '../core/other.js';",
+  };
+  const checks = checkChanged.selectChecks(['core/hub.ts'], sources);
+  assert.deepEqual(checks.directTests, ['tests/hub.test.ts']);
+  assert.deepEqual(checks.firstHopTests, ['tests/hub-user.test.ts', 'tests/lazy-user.test.ts']);
+
+  const affected = Array.from({ length: 40 }, (_, index) => `tests/t${index + 10}.test.ts`);
+  const limited = checkChanged.prioritizeTests(
+    affected,
+    { direct: ['tests/t49.test.ts'], firstHop: ['tests/t48.test.ts'] },
+    30
+  );
+  assert.equal(limited.total, 40);
+  assert.equal(limited.run.length, 30);
+  assert.deepEqual(limited.run.slice(0, 3), [
+    'tests/t49.test.ts',
+    'tests/t48.test.ts',
+    'tests/t10.test.ts',
+  ]);
+  assert.match(limited.notice, /40 affected/u);
+  assert.match(limited.notice, /30/u);
+  assert.match(limited.notice, /npm test/u);
+  const unlimited = checkChanged.prioritizeTests(affected, { direct: [], firstHop: [] }, Infinity);
+  assert.equal(unlimited.run.length, 40);
+  assert.equal(unlimited.notice, undefined);
+
+  assert.deepEqual(checkChanged.parseArguments([], {}), { base: undefined, limit: 30 });
+  assert.deepEqual(checkChanged.parseArguments(['HEAD~1', '--limit', '5'], {}), {
+    base: 'HEAD~1',
+    limit: 5,
+  });
+  assert.equal(checkChanged.parseArguments(['--all'], {}).limit, Infinity);
+  assert.equal(checkChanged.parseArguments([], { CI: 'true' }).limit, Infinity);
+});
+
+test('comments check only the changed files, and i18n runs only for web or locale changes', () => {
+  const checks = checkChanged.selectChecks(['core/a.ts', 'web/b.tsx'], {});
+  assert.deepEqual(checks.comments, ['core/a.ts', 'web/b.tsx']);
+  assert.equal(checks.i18n, true);
+  assert.equal(checkChanged.selectChecks(['core/a.ts'], {}).i18n, false);
+  assert.equal(checkChanged.selectChecks(['web/locales/settings.ts'], {}).i18n, true);
+  assert.equal(checkChanged.selectChecks(['scripts/check-i18n.mjs'], {}).i18n, true);
+  assert.equal(
+    checkChanged.selectChecks(['core/a.ts', 'scripts/comment-allowlist.json'], {}).comments,
+    'all'
+  );
+});
+
+test('root user guides select the guide test, and server entry changes say the dist tests need a build', () => {
+  const sources = { 'tests/app-guides.test.ts': "readdirSync('docs')" };
+  assert.ok(
+    checkChanged
+      .selectChecks(['docs/READING.md'], sources)
+      .vitest.includes('tests/app-guides.test.ts')
+  );
+  assert.ok(
+    !checkChanged
+      .selectChecks(['docs/dev/CHECKS.md'], sources)
+      .vitest.includes('tests/app-guides.test.ts')
+  );
+  for (const file of ['server/index.ts', 'server/app.ts']) {
+    const notes = checkChanged.selectChecks([file], {}).notes.join('\n');
+    assert.match(notes, /tests\/server\.test\.ts/u, file);
+    assert.match(notes, /tests\/background-work\.test\.ts/u, file);
+    assert.match(notes, /npm run build/u, file);
+  }
+});
