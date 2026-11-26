@@ -1,4 +1,9 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+vi.mock('../web/unsaved-input.js', () => ({
+  hasUnsavedInput: (touch: { domain: string }) => touch.domain === 'outline',
+  useUnsavedInputVersion: () => 0,
+}));
 import type { HelperRollbackUnit, HelperRollbackView } from '../core/helper.js';
 import {
   clearRollbackFailures,
@@ -66,4 +71,16 @@ test('a run whose every unit failed leaves the view and earlier failures untouch
     a: '',
     b: 'locked',
   });
+});
+
+test('an unsaved draft is left out of a full rollback request so only saved units are sent', () => {
+  const view: HelperRollbackView = {
+    taskId: 'task',
+    blocked: null,
+    units: [unit('a'), { ...unit('b'), touches: { domain: 'outline', chatId: 'chat' } }, unit('c')],
+  };
+  const chosen = rollbackSelection(view, { unit: null });
+  expect(chosen.restore.map((item) => item.unit)).toEqual(['a', 'c']);
+  expect(chosen.drafts.map((item) => item.unit)).toEqual(['b']);
+  expect(chosen.bodies).toEqual([{ unit: 'a' }, { unit: 'c' }]);
 });

@@ -58,7 +58,24 @@ export async function measureArtifacts(directory) {
       seconds[file] = Math.max(0.1, Math.round(elapsed / 100) / 10);
     }
   }
-  return { commit: first.commit, allFiles: first.allFiles, seconds };
+  return {
+    commit: first.commit,
+    allFiles: first.allFiles,
+    seconds,
+    shardTotal: total,
+    inventoryCount: inventories.size,
+    reportCount: reports.size,
+  };
+}
+
+export function assertCompleteLinuxRun(measured) {
+  if (
+    measured.inventoryCount !== measured.shardTotal ||
+    measured.reportCount !== measured.shardTotal
+  )
+    throw new Error(
+      `Write requires a complete set of ${measured.shardTotal} Linux shard inventories and reports (received ${measured.inventoryCount} inventories and ${measured.reportCount} reports)`
+    );
 }
 
 export function mergeTimings(ledger, measured, sourceRuns) {
@@ -90,12 +107,17 @@ async function updateTimings(args) {
     else throw new Error(usage);
   }
   if (!directory) throw new Error(usage);
+  if (runs.length > 1)
+    throw new Error(
+      'Pass a single --run <id>; this command reads one artifact directory from one run'
+    );
   if (output === ledgerFile && !runs.length)
     throw new Error(
       'Name the GitHub Actions run with --run <id> before writing the committed ledger'
     );
   const ledger = JSON.parse(await readFile(ledgerFile, 'utf8'));
   const measured = await measureArtifacts(directory);
+  if (output === ledgerFile) assertCompleteLinuxRun(measured);
   const merged = mergeTimings(ledger, measured, runs);
   const removed = Object.keys(ledger.seconds).filter((file) => !(file in merged.seconds));
   console.error(

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { buildMainInput, CATALOG_TOKENS, executeTool } from '../core/provider.js';
@@ -217,17 +216,8 @@ function grow(f: Fixture, counts: Counts, dimension: Dimension, larger: number):
   return { ...counts, [dimension]: larger };
 }
 
-type Timing = {
-  contextMs: number;
-  storySearchMs: number;
-  sourceRoundtripMs: number;
-  loreReadMs: number;
-  assetMetadataMs: number;
-  totalMs: number;
-};
 function measuredPath(f: Fixture, counts: Counts) {
   const { store, chatId, head, firstRevision } = f;
-  const start = performance.now();
   const current = store.chat(chatId);
   const profile = store.product.snapshot(chatId);
   const snapshot: RunSnapshot = {
@@ -242,13 +232,11 @@ function measuredPath(f: Fixture, counts: Counts) {
   };
   snapshot.story = store.story.prepare(snapshot);
   const input = buildMainInput(snapshot);
-  const contextEnd = performance.now();
   const search = executeTool(snapshot, {
     callId: 'old-search',
     name: 'story.search',
     args: { query: 'old-source-end!!', limit: 5 },
   });
-  const searchEnd = performance.now();
   const firstSceneNumber =
     snapshot.history.findIndex((item) => item.revision === firstRevision) + 1;
   let offset: number | null = 0;
@@ -270,7 +258,6 @@ function measuredPath(f: Fixture, counts: Counts) {
     offset = result.nextOffset;
     pages++;
   }
-  const readEnd = performance.now();
   const loreSearch = executeTool(snapshot, {
     callId: 'lore-search',
     name: 'knowledge.search',
@@ -288,7 +275,6 @@ function measuredPath(f: Fixture, counts: Counts) {
       limit: 4096,
     },
   });
-  const loreEnd = performance.now();
   const assets = store.product.assets(chatId);
   const assetSearch = searchAssets(assets, {
     chatId,
@@ -316,7 +302,6 @@ function measuredPath(f: Fixture, counts: Counts) {
     outfit: 'space-suit',
     location: 'harbor',
   });
-  const end = performance.now();
   return {
     input,
     snapshot,
@@ -328,14 +313,6 @@ function measuredPath(f: Fixture, counts: Counts) {
     assetSearch,
     selected,
     missing,
-    timing: {
-      contextMs: contextEnd - start,
-      storySearchMs: searchEnd - contextEnd,
-      sourceRoundtripMs: readEnd - searchEnd,
-      loreReadMs: loreEnd - readEnd,
-      assetMetadataMs: end - loreEnd,
-      totalMs: end - start,
-    } satisfies Timing,
   };
 }
 type MeasuredPath = ReturnType<typeof measuredPath>;
@@ -388,9 +365,6 @@ function validateOutput(result: MeasuredPath, f: Fixture, counts: Counts) {
   expect(metadata).not.toMatch(/"(?:url|bytes|base64)":/);
   expect(metadata).not.toContain(pixel);
   expect(JSON.stringify(result.input)).not.toContain('asset-marker-');
-  expect(Object.values(result.timing).every((value) => Number.isFinite(value) && value >= 0)).toBe(
-    true
-  );
 }
 function expectGrowthKeepsActivePath(
   dimension: Dimension,

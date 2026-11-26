@@ -89,3 +89,15 @@ test('hasOlderMessages stays true only while the latest page is full and older h
   expect(mergeHelperView(known(false), page(100)).hasOlderMessages).toBe(false);
   expect(mergeHelperView(known(true), page(99)).hasOlderMessages).toBe(false);
 });
+
+test('a refresh keeps a newer local conversation revision', () => {
+  const known = view([message(1)], 1, false);
+  known.conversation = { ...known.conversation, revision: 5 };
+  const merged = mergeHelperView(known, {
+    messages: [message(1)],
+    tasks: [],
+    conversation: conversation(1),
+  });
+  expect(merged.conversation.revision).toBe(5);
+  expect(merged.conversation.historyRevision).toBe(1);
+});

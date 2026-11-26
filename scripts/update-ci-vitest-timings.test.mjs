@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { formatLedger, measureArtifacts, mergeTimings } from './update-ci-vitest-timings.mjs';
+import {
+  assertCompleteLinuxRun,
+  formatLedger,
+  measureArtifacts,
+  mergeTimings,
+} from './update-ci-vitest-timings.mjs';
 
 const script = fileURLToPath(new URL('./update-ci-vitest-timings.mjs', import.meta.url));
 const committedLedger = fileURLToPath(new URL('./ci-vitest-timings.json', import.meta.url));
@@ -86,4 +91,24 @@ test('keys for test files that are no longer collected are removed', async (t) =
 test('formatted output keeps the committed ledger layout', () => {
   const text = readFileSync(committedLedger, 'utf8');
   assert.equal(formatLedger(JSON.parse(text)), text);
+});
+
+test('writing the committed ledger requires every Linux shard report', async (t) => {
+  const measured = await measureArtifacts(artifacts(t));
+  assert.equal(measured.shardTotal, 2);
+  assert.equal(measured.reportCount, 1);
+  assert.throws(() => assertCompleteLinuxRun(measured), /complete set of 2 Linux shard/);
+  const directory = artifacts(t);
+  const output = path.join(directory, 'proposed.json');
+  const manyRuns = spawnSync(
+    process.execPath,
+    [script, directory, '--run', '1', '--run', '2', '--output', output],
+    {
+      encoding: 'utf8',
+      windowsHide: true,
+    }
+  );
+  assert.equal(manyRuns.status, 1);
+  assert.match(manyRuns.stderr, /single --run/);
+  assert.equal(existsSync(output), false);
 });
