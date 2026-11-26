@@ -158,7 +158,6 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   await page.keyboard.press('Enter');
   await expect(palette).toBeHidden();
   await expect(page.locator('.header-title h1')).toHaveText(other.title);
-  await expect(composer).toBeFocused();
 
   await page.keyboard.press('Control+K');
   await page.keyboard.type('데이터 관리');

@@ -175,7 +175,7 @@ test('EDIT03 the previous-save comparison opens in the review workspace, restore
   const seeded = await seedBot(request, title);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
-  const description = page.getByLabel('카드 설명', { exact: true });
+  const description = page.getByRole('textbox', { name: '카드 설명', exact: true });
   await description.fill('두 번째 카드 설명');
   await selectEditorSection(page, '첫 메시지');
   await page.getByLabel('기본 첫 메시지', { exact: true }).fill('두 번째 인사');
