@@ -9,7 +9,7 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 3. Build from the shared controls, Lucide icons and style tokens. A value the tokens do not cover enters as a new token in `web/style.css`, not as an ad hoc number. Review an external UI kit only against a concrete missing behavior.
 4. Distinguish the states listed under [states](#states-and-feedback) and place feedback in the region it describes.
 5. Preserve drafts, selections, reading position and focus across menus, panels, responsive changes and failures. Respect [reading preferences](../READING.md).
-6. Check the changed flow with realistic Korean text and relevant data and state variations at the affected widths and themes. Inspect actual screenshots as well as interaction results. Use [DEVELOPMENT](DEVELOPMENT.md#verification) to select checks.
+6. Check the changed flow with realistic Korean text and relevant data and state variations at the affected widths and themes. Inspect actual screenshots as well as interaction results. Use [CHECKS](CHECKS.md) to select checks.
 7. Update the owning component, style or feature document for adopted conventions, and this document only for app-wide ones. Keep investigation history and temporary proposals out of standing instructions.
 
 ## Means of unity

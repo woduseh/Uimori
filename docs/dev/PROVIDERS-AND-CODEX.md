@@ -240,7 +240,7 @@ Authoritative option definitions live in `modelCapability` and `validateModelOpt
 
 ### Implementation
 
-Settings and runtime coverage are in `tests/evaluation-settings.test.ts` and `tests/evaluation-runtime.test.ts`. `npm run verify:evaluation` exercises the settings UI with synthetic data. Select checks according to [DEVELOPMENT](DEVELOPMENT.md#verification).
+Settings and runtime coverage are in `tests/evaluation-settings.test.ts` and `tests/evaluation-runtime.test.ts`. `npm run verify:evaluation` exercises the settings UI with synthetic data. Select checks according to [CHECKS](CHECKS.md).
 
 ### Codex main native turns
 
@@ -317,7 +317,7 @@ Real main Codex Runs keep evaluation definitions, bootstrap and artifact process
 ### Verification and testing
 
 - Non-1:1 test suites: `tests/codex-image.test.ts`, `tests/novelai-illustration.test.ts` (`fetch` interception covering payloads, captions/5×5 grid, reference canvas fitting, Anlas/V5 gauge parsing, status classification, token boundaries, zero auto-retry, and prompt reuse), and storage/queue/API contract suites (`tests/illustration-core.test.ts`, `tests/illustration-store.test.ts`, `tests/illustration-retry.test.ts`, `tests/illustration-api.test.ts`).
-- Browser integration command: `npm run verify:illustration` (supports `--visual`; see [DEVELOPMENT](DEVELOPMENT.md#verification)).
+- Browser integration command: `npm run verify:illustration` (supports `--visual`; see [DEVELOPMENT](DEVELOPMENT.md#verification-runners)).
 
 ## Input translation
 

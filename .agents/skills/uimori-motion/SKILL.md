@@ -56,7 +56,7 @@ durations or easing; check the result in the running app.
 
 ## Verification
 
-Choose checks for the affected behavior using `docs/dev/DEVELOPMENT.md`. Reuse
+Choose checks for the affected behavior using `docs/dev/CHECKS.md`. Reuse
 existing browser coverage and add only meaningful missing cases. Relevant risks
 include focus and Escape handling, repeated open/close, nested confirmations,
 menu placement, small viewports and reduced-motion preferences. Inspect rendered

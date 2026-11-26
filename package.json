@@ -20,6 +20,7 @@
     "lint:architecture": "biome lint core server web --only=style/noRestrictedImports --error-on-warnings",
     "quality": "biome check . --error-on-warnings && tsc --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs",
     "quality:full": "npm run quality && npm run test:tooling && npm test",
+    "check:changed": "node scripts/check-changed.mjs",
     "release:check": "node scripts/release-check.mjs",
     "release:oracle": "node scripts/release-oracle.mjs",
     "release:smoke": "node scripts/oracle-smoke.mjs",
