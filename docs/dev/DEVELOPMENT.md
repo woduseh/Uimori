@@ -72,7 +72,7 @@ One runner of the shared harness executes at a time on a machine, across checkou
 
 `summary.json` records the worker count and each server's URL and DB under `servers`; each server's log is under `servers/<n>/server.log`. A direct `npx playwright test` without the harness still uses one worker and `UIMORI_BASE_URL`/`UIMORI_DB`.
 
-`tests/server.test.ts` checks independent server processes, ports and SQLite databases from one build, including restart persistence, and fails with "Run npm run build" when the build does not match the source. `tests/background-work.test.ts` also executes `dist`, through `tests/fixtures/background-failure.mjs`, without that build check. No extra Git checkouts are needed.
+`tests/server.test.ts` checks independent server processes, ports and SQLite databases from one build, including restart persistence, and fails with "Run npm run build" when the build does not match the source. `tests/background-work.test.ts` also executes `dist`, through `tests/fixtures/background-failure.mjs`, and runs the same build check first. No extra Git checkouts are needed.
 
 After a matching build, `node --expose-gc scripts/benchmark-native-preparation.mjs` compares sequential and batched native text preparation for 10, 50 and 100 messages, three times each. It checks identical outputs and records elapsed time, Worker calls, sampled process RSS and cancellation latency under `output/benchmarks/`. These synthetic measurements exclude callbacks and provider work.
 

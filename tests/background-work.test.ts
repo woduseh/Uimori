@@ -4,8 +4,10 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { expect, test } from 'vitest';
+import { assertBuild } from '../scripts/lib.mjs';
 
 test('background terminal storage failure is observed and restart preserves uncertain work without replay', async () => {
+  await assertBuild();
   const root = await realpath(tmpdir());
   const directory = await mkdtemp(join(root, 'uimori-background-work-'));
   const target = resolve(directory),
