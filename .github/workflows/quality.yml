@@ -25,6 +25,7 @@ jobs:
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
       full_browser: ${{ steps.changes.outputs.full_browser }}
+      windows_sensitive: ${{ steps.changes.outputs.windows_sensitive }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -66,8 +67,7 @@ jobs:
   tests:
     name: tests (${{ matrix.shard }}/4)
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    # The deployment target is Linux. Windows-sensitive files also run in the tooling job.
+    if: needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -83,9 +83,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci --no-audit --no-fund
-      # Some Vitest files launch dist/server/index.js. Each isolated runner builds once.
-      - run: npm run build
-      - run: node scripts/ci-vitest.mjs ${{ matrix.shard }}/4
+      - run: node scripts/ci-vitest.mjs ${{ matrix.shard }}/4 --exclude-dist
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -95,9 +93,36 @@ jobs:
           overwrite: true
           retention-days: 7
 
+  tests-pr:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true' && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/ci-vitest.mjs 1/1 --exclude-dist --impact-base "$UIMORI_IMPACT_BASE"
+        env:
+          UIMORI_IMPACT_BASE: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ci-vitest-1
+          path: output/ci/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
   tooling:
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && (github.event_name != 'pull_request' || needs.changes.outputs.windows_sensitive == 'true')
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -122,11 +147,11 @@ jobs:
           overwrite: true
           retention-days: 7
 
-  linux-core:
+  linux-browser-core:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -137,48 +162,28 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - name: Install managed Chromium
-        run: |
-          npx playwright install --with-deps --no-shell chromium
-          node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
-      - name: Reader recovery
-        run: npm run verify:browser -- --grep READERREC
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: linux-core-diagnostics
-          path: output/playwright/
-          if-no-files-found: error
-          overwrite: true
-          retention-days: 7
-
-  selfhost:
-    needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - run: npm run build
+      - run: node scripts/ci-vitest.mjs 1/1 --dist-only
       - name: Install managed Chromium
         run: |
           npx playwright install --with-deps --no-shell chromium
           node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
       - run: npm run verify:selfhost
       - run: npm run verify:browser-smoke
+      - name: Reader recovery
+        run: npm run verify:browser -- --grep READERREC
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: selfhost-diagnostics
-          path: output/playwright/
+          name: ci-vitest-dist
+          path: output/ci/
           if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-browser-core-diagnostics
+          path: output/playwright/
           overwrite: true
           retention-days: 7
 
@@ -186,8 +191,7 @@ jobs:
     name: browser-full (${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.full_browser == 'true'
-    runs-on: windows-latest
-    # Includes browser installation and serial long-reader cases on hosted Windows.
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -205,7 +209,7 @@ jobs:
       - run: npm run build
       - name: Install managed Chromium
         run: |
-          npx playwright install --no-shell chromium
+          npx playwright install --with-deps --no-shell chromium
           node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
       - run: npm run verify:browser -- --shard ${{ matrix.shard }}/3
         env:
@@ -228,7 +232,7 @@ jobs:
 
   # Stable check name. Skips are accepted only for the declared docs/manual paths.
   quality:
-    needs: [changes, static, tests, tooling, linux-core, selfhost, browser-full]
+    needs: [changes, static, tests, tests-pr, tooling, linux-browser-core, browser-full]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -249,6 +253,7 @@ jobs:
           UIMORI_CI_NEEDS: ${{ toJSON(needs) }}
           UIMORI_DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           UIMORI_FULL_BROWSER: ${{ needs.changes.outputs.full_browser }}
+          UIMORI_WINDOWS_SENSITIVE: ${{ needs.changes.outputs.windows_sensitive }}
       - uses: actions/download-artifact@v8
         if: needs.changes.outputs.docs_only != 'true'
         with:

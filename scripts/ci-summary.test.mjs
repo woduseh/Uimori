@@ -18,8 +18,13 @@ function vitestFixture() {
     shard: `${i + 1}/4`,
     allFiles,
     files: [file],
+    selection: { scope: 'full' },
   }));
-  const reports = allFiles.map((file) => ({
+  const reports = allFiles.map(passingReport);
+  return { inventories, reports };
+}
+function passingReport(file) {
+  return {
     success: true,
     numFailedTests: 0,
     numFailedTestSuites: 0,
@@ -28,26 +33,32 @@ function vitestFixture() {
     numTotalTests: 1,
     startTime: 100,
     testResults: [{ name: `C:\\runner\\repo\\${file.replaceAll('/', '\\')}`, endTime: 200 }],
-  }));
-  return { inventories, reports };
+  };
 }
-function jobFixture(docs = false, full = false) {
+function pullRequestFixture(files, scope = 'impact') {
+  const report = files.length && {
+    ...passingReport(files[0]),
+    numPassedTests: files.length,
+    numTotalTests: files.length,
+    testResults: files.flatMap((file) => passingReport(file).testResults),
+  };
+  return {
+    inventories: [{ commit: sha, shard: '1/1', allFiles: files, files, selection: { scope } }],
+    reports: [report || undefined],
+  };
+}
+function jobFixture({ docs = false, full = false, pullRequest = false, windows = true } = {}) {
+  const ran = (condition) => (!docs && condition ? 'success' : 'skipped');
   return Object.fromEntries(
-    ['changes', 'static', 'tests', 'tooling', 'linux-core', 'selfhost', 'browser-full'].map(
-      (job) => [
-        job,
-        {
-          result:
-            job === 'browser-full'
-              ? full
-                ? 'success'
-                : 'skipped'
-              : docs && !['changes', 'static'].includes(job)
-                ? 'skipped'
-                : 'success',
-        },
-      ]
-    )
+    Object.entries({
+      changes: 'success',
+      static: 'success',
+      tests: ran(!pullRequest),
+      'tests-pr': ran(pullRequest),
+      tooling: ran(!pullRequest || windows),
+      'linux-browser-core': ran(true),
+      'browser-full': full ? 'success' : 'skipped',
+    }).map(([job, result]) => [job, { result }])
   );
 }
 
@@ -60,18 +71,66 @@ test('matrix indices and cross-platform paths are explicit', () => {
 });
 
 test('aggregate job cannot pass a failed, cancelled, omitted or unexpectedly skipped dependency', () => {
-  assert.equal(assertJobResults(jobFixture()).coverage, 'full-required');
-  assert.equal(assertJobResults(jobFixture(true), { docsOnly: true }).coverage, 'docs-only');
-  assert.equal(assertJobResults(jobFixture(false, true), { fullBrowser: true }).status, 'PASS');
+  for (const event of ['push', 'workflow_dispatch', undefined]) {
+    assert.equal(assertJobResults(jobFixture(), { event }).coverage, 'full-required');
+    assert.equal(
+      assertJobResults(jobFixture({ docs: true }), { docsOnly: true, event }).coverage,
+      'docs-only'
+    );
+    assert.equal(
+      assertJobResults(jobFixture({ full: true }), { fullBrowser: true, event }).status,
+      'PASS'
+    );
+    const skippedTooling = jobFixture();
+    skippedTooling.tooling.result = 'skipped';
+    assert.throws(
+      () => assertJobResults(skippedTooling, { event, windowsSensitive: false }),
+      /tooling: expected success/
+    );
+    assert.throws(
+      () => assertJobResults(jobFixture({ pullRequest: true }), { event }),
+      /tests: expected success/
+    );
+  }
   for (const state of ['failure', 'cancelled', 'skipped', undefined]) {
     const jobs = jobFixture();
     jobs.tests.result = state;
     assert.throws(() => assertJobResults(jobs));
   }
+  const unexpectedPr = jobFixture();
+  unexpectedPr['tests-pr'].result = 'success';
+  assert.throws(() => assertJobResults(unexpectedPr, { event: 'push' }), /tests-pr/);
   assert.throws(() => assertJobResults(jobFixture(), { fullBrowser: true }));
   const missing = jobFixture();
-  delete missing.selfhost;
+  delete missing['linux-browser-core'];
   assert.throws(() => assertJobResults(missing));
+});
+
+test('pull requests require the impact job and Windows tooling only for Windows-sensitive changes', () => {
+  const event = 'pull_request';
+  for (const windows of [true, false]) {
+    const options = { event, windowsSensitive: windows };
+    assert.equal(
+      assertJobResults(jobFixture({ pullRequest: true, windows }), options).coverage,
+      'impact'
+    );
+    assert.throws(
+      () => assertJobResults(jobFixture({ pullRequest: true, windows: !windows }), options),
+      /tooling/
+    );
+    assert.throws(() => assertJobResults(jobFixture(), options), /tests: expected skipped/);
+    for (const job of ['tests-pr', 'linux-browser-core', 'static'])
+      for (const state of ['failure', 'cancelled', 'skipped', undefined]) {
+        const jobs = jobFixture({ pullRequest: true, windows });
+        jobs[job].result = state;
+        assert.throws(() => assertJobResults(jobs, options), new RegExp(job));
+      }
+  }
+  assert.equal(
+    assertJobResults(jobFixture({ docs: true, pullRequest: true }), { event, docsOnly: true })
+      .coverage,
+    'docs-only'
+  );
 });
 
 test('partition requires exact union, not just matching counts', () => {
@@ -116,6 +175,88 @@ test('stale or incomplete shard evidence is not accepted', () => {
     damage(fixture);
     assert.throws(() => summarizeVitest(fixture.inventories, fixture.reports, sha));
   }
+});
+
+test('main and manual runs accept only four complete full-scope shards', () => {
+  for (const event of ['push', 'workflow_dispatch', undefined]) {
+    assert.equal(summarizeVitest(...Object.values(vitestFixture()), sha, { event }).files, 4);
+    for (const damage of [
+      ({ inventories }) => {
+        inventories[2].selection.scope = 'impact';
+      },
+      ({ inventories }) => {
+        delete inventories[0].selection;
+      },
+      ({ reports }) => {
+        reports[3] = undefined;
+      },
+      ({ inventories, reports }) => {
+        inventories.splice(1);
+        reports.splice(1);
+      },
+    ]) {
+      const fixture = vitestFixture();
+      damage(fixture);
+      assert.throws(() => summarizeVitest(fixture.inventories, fixture.reports, sha, { event }));
+    }
+    const { inventories, reports } = pullRequestFixture([]);
+    assert.throws(() => summarizeVitest(inventories, reports, sha, { event }));
+  }
+});
+
+test('a pull request passes without a report only when the impact selection is empty', () => {
+  const event = 'pull_request';
+  const empty = pullRequestFixture([]);
+  assert.deepEqual(summarizeVitest(empty.inventories, empty.reports, sha, { event }), {
+    status: 'PASS',
+    commit: sha,
+    coverage: 'impact',
+    files: 0,
+    passed: 0,
+    skipped: 0,
+    shards: [],
+  });
+  const selected = ['tests/a.test.ts', 'tests/b.test.ts'];
+  for (const scope of ['impact', 'full-required']) {
+    const fixture = pullRequestFixture(selected, scope);
+    const summary = summarizeVitest(fixture.inventories, fixture.reports, sha, { event });
+    assert.equal(summary.coverage, scope);
+    assert.equal(summary.files, 2);
+    assert.equal(summary.passed, 2);
+  }
+  for (const damage of [
+    ({ reports }) => {
+      reports[0] = undefined;
+    },
+    ({ reports }) => {
+      reports[0].testResults.pop();
+    },
+    ({ reports }) => {
+      reports[0].success = false;
+    },
+    ({ inventories }) => {
+      inventories[0].commit = 'b'.repeat(40);
+    },
+    ({ inventories }) => {
+      inventories[0].shard = '1/4';
+    },
+  ]) {
+    const fixture = pullRequestFixture(selected);
+    damage(fixture);
+    assert.throws(() => summarizeVitest(fixture.inventories, fixture.reports, sha, { event }));
+  }
+  for (const scope of ['full-required', 'full']) {
+    const fixture = pullRequestFixture([], scope);
+    assert.throws(() => summarizeVitest(fixture.inventories, fixture.reports, sha, { event }));
+  }
+  const inconsistent = pullRequestFixture(selected);
+  inconsistent.inventories[0].files = [];
+  inconsistent.reports[0] = undefined;
+  assert.throws(() =>
+    summarizeVitest(inconsistent.inventories, inconsistent.reports, sha, { event })
+  );
+  const fourShards = vitestFixture();
+  assert.throws(() => summarizeVitest(fourShards.inventories, fourShards.reports, sha, { event }));
 });
 
 test('browser inventory spans nested suites/projects and aggregate detects a lost scenario', () => {

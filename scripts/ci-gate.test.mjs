@@ -138,6 +138,19 @@ test('docs-only success and missing, skipped, duplicated shards cannot authorize
   );
 });
 
+test('an impact-only job set cannot stand in for the four full Vitest shards', async () => {
+  const values = ['static', 'tooling', 'linux-browser-core', 'quality', 'tests-pr'].map((name) => ({
+    name,
+    status: 'completed',
+    conclusion: 'success',
+  }));
+  await assert.rejects(requireCi(context, lookup({ pages: [values] }).execute), (error) => {
+    for (let shard = 1; shard <= 4; shard++)
+      assert.ok(error.message.includes(`- tests (${shard}/4): missing`));
+    return true;
+  });
+});
+
 test('job diagnostics report every failed, pending, missing and duplicated required job', async () => {
   const values = jobs();
   values[0].conclusion = 'failure';
@@ -145,13 +158,13 @@ test('job diagnostics report every failed, pending, missing and duplicated requi
   values[2].status = 'in_progress';
   values[2].conclusion = null;
   values.pop();
-  values.push({ ...values[3] });
+  values.push({ ...values[4] });
   await assert.rejects(requireCi(context, lookup({ pages: [values] }).execute), (error) => {
     for (const detail of [
       'static: status=completed, conclusion=failure',
       'tooling: status=completed, conclusion=skipped',
-      'linux-core: status=in_progress, conclusion=none',
-      'selfhost: duplicate (2 matches',
+      'linux-browser-core: status=in_progress, conclusion=none',
+      'tests (1/4): duplicate (2 matches',
       'tests (4/4): missing',
       'A docs-only or partial run cannot authorize deployment.',
     ])
@@ -278,7 +291,7 @@ test('a missing later job page keeps run context without treating unobserved job
   await assert.rejects(requireCi(context, execute), (error) => {
     assertRunDetails(error);
     assert.match(error.message, /Missing GitHub jobs page/);
-    assert.ok(!error.message.includes('selfhost: missing'));
+    assert.ok(!error.message.includes('quality: missing'));
     return true;
   });
   assert.equal(calls.length, 4);

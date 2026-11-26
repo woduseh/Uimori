@@ -7,8 +7,7 @@ export const browserShards = 3;
 export const requiredJobs = [
   'static',
   'tooling',
-  'linux-core',
-  'selfhost',
+  'linux-browser-core',
   'quality',
   ...Array.from({ length: vitestShards }, (_, i) => `tests (${i + 1}/${vitestShards})`),
 ];
@@ -29,15 +28,29 @@ export function testFile(value) {
   return result;
 }
 
-export function assertJobResults(needs, { docsOnly = false, fullBrowser = false } = {}) {
-  const expected = { changes: 'success', static: 'success' };
-  for (const job of ['tests', 'tooling', 'linux-core', 'selfhost'])
-    expected[job] = docsOnly ? 'skipped' : 'success';
-  expected['browser-full'] = fullBrowser ? 'success' : 'skipped';
+export function assertJobResults(
+  needs,
+  { docsOnly = false, fullBrowser = false, event, windowsSensitive = true } = {}
+) {
+  const pullRequest = event === 'pull_request';
+  const ran = (condition) => (!docsOnly && condition ? 'success' : 'skipped');
+  const expected = {
+    changes: 'success',
+    static: 'success',
+    tests: ran(!pullRequest),
+    'tests-pr': ran(pullRequest),
+    tooling: ran(!pullRequest || windowsSensitive),
+    'linux-browser-core': ran(true),
+    'browser-full': fullBrowser ? 'success' : 'skipped',
+  };
   for (const [job, result] of Object.entries(expected))
     if (needs[job]?.result !== result)
       throw new Error(`${job}: expected ${result}, received ${needs[job]?.result ?? 'missing'}`);
-  return { status: 'PASS', coverage: docsOnly ? 'docs-only' : 'full-required', fullBrowser };
+  return {
+    status: 'PASS',
+    coverage: docsOnly ? 'docs-only' : pullRequest ? 'impact' : 'full-required',
+    fullBrowser,
+  };
 }
 
 export function assertPartition(expected, parts) {
@@ -106,18 +119,37 @@ export function summarizeBrowser(reports, expectedSha) {
   };
 }
 
-export function summarizeVitest(inventories, reports, expectedSha) {
-  if (inventories.length !== vitestShards || reports.length !== vitestShards)
-    throw new Error('Missing Vitest shard report');
+export function vitestShardCount(event) {
+  return event === 'pull_request' ? 1 : vitestShards;
+}
+
+export function summarizeVitest(inventories, reports, expectedSha, { event } = {}) {
+  const pullRequest = event === 'pull_request';
+  const total = vitestShardCount(event);
+  if (inventories.length !== total) throw new Error('Missing Vitest shard inventory');
   const expected = inventories[0].allFiles;
-  const parts = inventories.map((inventory, i) => {
+  for (const [i, inventory] of inventories.entries())
     if (
-      inventory.shard !== `${i + 1}/${vitestShards}` ||
+      inventory.shard !== `${i + 1}/${total}` ||
       inventory.commit !== expectedSha ||
-      JSON.stringify(inventory.allFiles) !== JSON.stringify(expected)
+      JSON.stringify(inventory.allFiles) !== JSON.stringify(expected) ||
+      (!pullRequest && inventory.selection?.scope !== 'full')
     )
       throw new Error('Shard identity or full collection differs');
-    const report = reports[i];
+  const coverage = pullRequest ? inventories[0].selection?.scope : 'full';
+  if (coverage === 'impact' && !inventories[0].files?.length && !expected.length)
+    return {
+      status: 'PASS',
+      commit: expectedSha,
+      coverage,
+      files: 0,
+      passed: 0,
+      skipped: 0,
+      shards: [],
+    };
+  if (reports.length !== total || reports.some((report) => !report))
+    throw new Error('Missing Vitest shard report');
+  const parts = reports.map((report, i) => {
     if (
       report.success !== true ||
       report.numFailedTests ||
@@ -132,13 +164,13 @@ export function summarizeVitest(inventories, reports, expectedSha) {
       !report.numTotalTests
     )
       throw new Error(`Vitest shard ${i + 1} has no complete test counts`);
-    const actual = report.testResults.map((result) => testFile(result.name));
-    return actual;
+    return report.testResults.map((result) => testFile(result.name));
   });
   const files = assertPartition(expected, parts);
   return {
     status: 'PASS',
     commit: expectedSha,
+    coverage,
     files,
     passed: reports.reduce((sum, report) => sum + report.numPassedTests, 0),
     skipped: reports.reduce((sum, report) => sum + report.numPendingTests, 0),
@@ -159,22 +191,31 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           assertJobResults(JSON.parse(process.env.UIMORI_CI_NEEDS ?? '{}'), {
             docsOnly: process.env.UIMORI_DOCS_ONLY === 'true',
             fullBrowser: process.env.UIMORI_FULL_BROWSER === 'true',
+            event: process.env.GITHUB_EVENT_NAME,
+            windowsSensitive: process.env.UIMORI_WINDOWS_SENSITIVE !== 'false',
           })
         )
       );
     } else if (mode === 'vitest') {
       const directory = process.argv[3] ?? 'output/ci';
+      const event = process.env.GITHUB_EVENT_NAME;
       const load = async (name) => JSON.parse(await readFile(path.join(directory, name), 'utf8'));
+      const loadIfPresent = (name) =>
+        load(name).catch((error) => {
+          if (error.code === 'ENOENT') return undefined;
+          throw error;
+        });
       const inventories = [],
         reports = [];
-      for (let i = 1; i <= vitestShards; i++) {
+      for (let i = 1; i <= vitestShardCount(event); i++) {
         inventories.push(await load(`vitest-${i}-inventory.json`));
-        reports.push(await load(`vitest-${i}.json`));
+        reports.push(await loadIfPresent(`vitest-${i}.json`));
       }
       const summary = summarizeVitest(
         inventories,
         reports,
-        process.env.GITHUB_SHA ?? inventories[0].commit
+        process.env.GITHUB_SHA ?? inventories[0].commit,
+        { event }
       );
       await writeFile(
         path.join(directory, 'summary.json'),
