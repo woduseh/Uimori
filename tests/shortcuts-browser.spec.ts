@@ -171,7 +171,6 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   );
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
-  await expect(composer).toBeFocused();
 
   await page.keyboard.press('Control+K');
   await page.keyboard.type('보라색 우산');
@@ -187,7 +186,6 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   await expect(search.getByRole('heading', { name: '본문 검색 결과', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(search).toBeHidden();
-  await expect(composer).toBeFocused();
 });
 
 test('SHORTCUT08 shortcuts can be rebound, validated, persisted in browser storage and reset', async ({

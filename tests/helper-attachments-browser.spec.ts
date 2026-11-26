@@ -204,6 +204,7 @@ test('HATT02 image paste and drop drafts survive sidecar, workspace, conversatio
   await sessionPicker(page).selectOption(otherId);
   await expect(draftImages(page)).toHaveCount(0);
   await expect(draftFiles(page)).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '파일 첨부', exact: true })).toBeEnabled();
   await picker(page).setInputFiles(textFile('다른 대화 자료.txt'));
   await expect(draftFiles(page)).toContainText('다른 대화 자료.txt');
   await sessionPicker(page).selectOption(first);
