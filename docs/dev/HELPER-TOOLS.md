@@ -130,7 +130,7 @@ Read-only refusals, the reviewed read-operation set, task-list mode reporting, a
 
 ## Confirmation before deletion or paid generation
 
-Defaults, `helperConfirmPaidGeneration`, exact-argument single-use grants across restarts, latest-task scoping, argument release, and deletion cleanup are enforced by `tests/helper-confirmation.test.ts` and `HCONFIRM01` in `tests/helper-browser.spec.ts`.
+Defaults, `helperConfirmPaidGeneration`, exact-argument single-use grants across restarts, latest-task scoping, argument release, and deletion cleanup are enforced by `tests/helper-confirmation.test.ts` and `HCONFIRM01` in `tests/helper-safety-browser.spec.ts`.
 
 - Neither an HTTP provider loop nor a native Codex turn can pause mid-tool-call for user input: `helperConfirmationGate` refuses a held call with `CONFIRMATION_REQUIRED`, emits `confirmation.required` (surfaced as `HelperConfirmation`), lets the turn finish, and accepts `confirmations: [id]` on the next request (`confirmation.used`). Because all state lives in SQLite, reloads and restarts lose nothing and declining simply omits the grant; the next request reports the decline to the model ([review strip](#review-strip-and-what-the-next-task-learns)).
 - A confirmation binds to the conversation, target chat, operation, and exact arguments (revision guards included); a grant is consumed at dispatch even if the save fails, a replayed call identity never consumes it twice, and the granted request carries `source.confirmedCalls` so the next task can repeat arguments verbatim.
@@ -146,7 +146,7 @@ Defaults, `helperConfirmPaidGeneration`, exact-argument single-use grants across
 ## Choice question cards and `@` target references
 
 - `helper.ask` is a read-only tool available in both `apply` and `plan` modes. Like confirmations, it never blocks an open provider loop: it records a durable `question.asked` event returned as `question` on task results and ends the turn cleanly (`tests/helper-tool-contracts.test.ts`, `HELPASK01`).
-- `@` target references (capped at `MAX_HELPER_REFERENCES`) store only `{ kind, id }` pointers in the task snapshot—never mutable titles or prose—and resolve live metadata on read and in `source.referencedTargets`, so deleted scenes and resources drop cleanly (`HELPMENTION01`).
+- `@` target references (capped at `MAX_HELPER_REFERENCES`) store only `{ kind, id }` pointers in the task snapshot—never mutable titles or prose—and resolve live metadata on read and in `source.referencedTargets`, so deleted scenes and resources drop cleanly (`EHELP01`).
 
 ## Linux data workspace
 
@@ -179,7 +179,7 @@ Constraints on changing these operations:
 Outside these operations:
 
 - The editor target ([Local recovery storage (IndexedDB)](APP-INVARIANTS.md#local-recovery-storage-indexeddb); context only, not a permission boundary per [도우미와 과거 가정 장면](../USAGE.md#도우미와-과거-가정-장면); the prompt library action **도우미에게 묻기** clears when opening an editor, leaving the library, or clearing the target).
-- Reader selections (**도우미에게 물어보기** passes the whole passage as task `selection` and keeps it whole across later turns, `tests/helper-browser.spec.ts`).
+- Reader selections (**도우미에게 물어보기** passes the whole passage as task `selection` and keeps it whole across later turns, `tests/helper-composer-browser.spec.ts`).
 
 ## Editor context
 
@@ -249,7 +249,7 @@ Constraints on changing these operations:
 - Model arguments never carry mutation identity (derived by the host from task + provider call ID; new call ID = new operation). Authorization and final reply shape live once in `helperContract`, not per operation ([Mutations](TOOL-CONTRACTS.md#mutations), [Names, descriptions and parameters](TOOL-CONTRACTS.md#names-descriptions-and-parameters)), and the provider tool list stays fixed across continuations ([Provider continuation state](TOOL-CONTRACTS.md#provider-continuation-state)).
 - Native tool history preserves the provider's `app.call` envelope while classification, compaction, and activity inspect the inner operation.
 - `HELPER_READ_TOO_LARGE` withholds (never truncates) only reads exceeding the model's input budget; there is no fixed per-read or per-round token cap (accumulated reads go through compaction), and confirmed write results are never replaced.
-- Composer recovery (`tests/helper-recovery-browser.spec.ts`, `tests/helper-browser.spec.ts`, [Local recovery storage (IndexedDB)](APP-INVARIANTS.md#local-recovery-storage-indexeddb)): a read failure is not an empty store and never overwrites drafts/selections/unacknowledged requests; an accepted request clears only if the stored value still matches, and post-acceptance cleanup/refresh failures are not failed sends. Creation, copy, and project flows share pending-request handling ([Creating a new helper session](#creating-a-new-helper-session)).
+- Composer recovery (`tests/helper-recovery-browser.spec.ts`, [Local recovery storage (IndexedDB)](APP-INVARIANTS.md#local-recovery-storage-indexeddb)): a read failure is not an empty store and never overwrites drafts/selections/unacknowledged requests; an accepted request clears only if the stored value still matches, and post-acceptance cleanup/refresh failures are not failed sends. Creation, copy, and project flows share pending-request handling ([Creating a new helper session](#creating-a-new-helper-session)).
 
 Outside these operations:
 
@@ -271,7 +271,7 @@ User-facing behavior lives in [Helper and past what-if scenes](../USAGE.md#도�
 
 ## Activity and additions to a running task
 
-Addition delivery (**현재 작업에 추가**, `steer`), call limits (`HELPER_TASK_LIMITS`, `HELPER_TOOL_CALL_LIMIT`), and bounded activity projections are enforced by `tests/helper-workspace.test.ts` and `tests/helper-browser.spec.ts` (limit values summarized in [실행 한도와 주요 정책 요약](../CODEX.md#실행-한도와-주요-정책-요약)).
+Addition delivery (**현재 작업에 추가**, `steer`), call limits (`HELPER_TASK_LIMITS`, `HELPER_TOOL_CALL_LIMIT`), and bounded activity projections are enforced by `tests/helper-workspace.test.ts` and `tests/helper-flow-browser.spec.ts` (limit values summarized in [실행 한도와 주요 정책 요약](../CODEX.md#실행-한도와-주요-정책-요약)).
 
 Recorded state semantics:
 
@@ -386,7 +386,7 @@ Contracts are enforced by `tests/helper-chat-lifecycle-tools.test.ts`.
 
 ## Accounting and summary preparation
 
-Exact recent-turn retention, checkpoint invalidation on retry, lazy snapshot loading, single attempt-completion counting, and paused reads in hidden views are enforced by `tests/helper-compaction.test.ts`, `tests/helper-data-runtime.test.ts`, and `tests/helper-browser.spec.ts`. Related specs: [재사용·실패·복원](../CONTEXT-LIMITS.md#재사용실패복원), [수동 정리와 요약 편집](../CONTEXT-LIMITS.md#수동-정리와-요약-편집), [도우미 기록과 화면 전환](../EXECUTION.md#도우미-기록과-화면-전환), [문제 확인과 실행 상세](../DIAGNOSTICS.md), [App Server communication and turn lifecycle](PROVIDERS-AND-CODEX.md#app-server-communication-and-turn-lifecycle), and [Evidence and metrics](HELPER-EVALUATION.md#evidence-and-metrics).
+Exact recent-turn retention, checkpoint invalidation on retry, lazy snapshot loading, single attempt-completion counting, and paused reads in hidden views are enforced by `tests/helper-compaction.test.ts` and `tests/helper-data-runtime.test.ts`. Related specs: [재사용·실패·복원](../CONTEXT-LIMITS.md#재사용실패복원), [수동 정리와 요약 편집](../CONTEXT-LIMITS.md#수동-정리와-요약-편집), [도우미 기록과 화면 전환](../EXECUTION.md#도우미-기록과-화면-전환), [문제 확인과 실행 상세](../DIAGNOSTICS.md), [App Server communication and turn lifecycle](PROVIDERS-AND-CODEX.md#app-server-communication-and-turn-lifecycle), and [Evidence and metrics](HELPER-EVALUATION.md#evidence-and-metrics).
 
 - Host compaction triggers only under context pressure (`HELPER_COMPACTION_INPUT_RATIO`) to preserve exact evidence as long as it fits—never earlier for model size, cost, or repeated reads, and with no claim about provider cost or cache reuse.
 - Component estimates in `input.measured` are serialized separately for diagnosis and need not sum to the encoded request estimate.

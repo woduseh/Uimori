@@ -7,7 +7,8 @@ await runBrowserVerification({
   timeout: 240000,
   files: [
     'tests/chat-composer-browser.spec.ts',
-    'tests/helper-browser.spec.ts',
+    'tests/helper-flow-browser.spec.ts',
+    'tests/helper-composer-browser.spec.ts',
     'tests/helper-sessions-browser.spec.ts',
     'tests/run-retry-browser.spec.ts',
     'tests/request-edit-browser.spec.ts',
