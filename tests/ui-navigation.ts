@@ -116,7 +116,7 @@ export async function expectEditorSection(scope: Page | Locator, name: string) {
     );
 }
 
-export async function editorSectionPlacement(scope: Page | Locator) {
+async function editorSectionPlacement(scope: Page | Locator) {
   const studio = scope.locator('.editor-studio').first();
   await expect(studio).toBeVisible();
   return studio.evaluate((node) => {

@@ -4,9 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const sourcePath =
-  /^(?:\.agents|\.github|core|deploy|docs|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
+  /^(?:\.agents|\.claude|\.githooks|\.github|core|deploy|docs|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
 const internalGuidePath =
-  /^(?:\.agents|\.github|core|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
+  /^(?:\.agents|\.claude|\.githooks|\.github|core|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
+const localOnlyPaths = ['.claude/settings.local.json', '.claude/worktrees'];
+const caseIdShape = /\b[A-Z][A-Z0-9]*[A-Z]\d{2}(?![\dA-Za-z_])/gu;
+const caseIdMention = /\b([A-Z][A-Z0-9]*[A-Z])(\d{2})(?:[-–]\1?(\d{2}))?(?![\dA-Za-z_])/gu;
+const termsShapedLikeCaseIds = new Set(['BM25']);
 const developerGuideHeading =
   /^#{2,6}\s+(?:(?:구현 참고|기술 명세|개발자)|\S.*\s구현 참고)(?:\s|\(|$)/u;
 const guideApiRoute =
@@ -18,11 +22,34 @@ const operatorGuideApiRoutes = new Map([
   ['UPDATES.md', new Set(['/api/maintenance'])],
 ]);
 
-function markdownFiles(directory) {
+function markdownFiles(directory, excluded = []) {
+  if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const file = resolve(directory, entry.name);
-    return entry.isDirectory() ? markdownFiles(file) : entry.name.endsWith('.md') ? [file] : [];
+    if (excluded.includes(file)) return [];
+    if (entry.isDirectory()) return markdownFiles(file, excluded);
+    return entry.name.endsWith('.md') ? [file] : [];
   });
+}
+
+function testCaseIds(directory) {
+  const ids = new Set();
+  for (const file of globSync('tests/**/*.{ts,tsx,js,mjs}', { cwd: directory }))
+    for (const [id] of readFileSync(resolve(directory, file), 'utf8').matchAll(caseIdShape))
+      ids.add(id);
+  return ids;
+}
+
+function caseIdErrors(file, content, knownIds) {
+  const issues = [];
+  for (const [mention, prefix, first, last] of content.matchAll(caseIdMention)) {
+    if (termsShapedLikeCaseIds.has(`${prefix}${first}`)) continue;
+    for (let number = Number(first); number <= Number(last ?? first); number++) {
+      const id = `${prefix}${String(number).padStart(first.length, '0')}`;
+      if (!knownIds.has(id)) issues.push(`${file}: ${mention} (no test has the case ID ${id})`);
+    }
+  }
+  return issues;
 }
 
 function headingAnchors(content) {
@@ -78,11 +105,16 @@ function userGuidePurityErrors(file, content) {
 export function documentationErrors(directory = root) {
   const broken = [];
   const docsRoot = resolve(directory, 'docs');
+  const localOnly = localOnlyPaths.map((path) => resolve(directory, path));
   const files = [
     ...['README.md', 'README.ko.md', 'AGENTS.md'].map((file) => resolve(directory, file)),
     ...markdownFiles(docsRoot),
+    ...markdownFiles(resolve(directory, '.claude'), localOnly),
+    ...markdownFiles(resolve(directory, '.githooks')),
   ];
   const releaseNotes = resolve(directory, 'docs/releases') + sep;
+  const developerDocs = resolve(directory, 'docs/dev') + sep;
+  const knownCaseIds = testCaseIds(directory);
   const anchorsByFile = new Map();
   const anchorsIn = (file) => {
     if (!anchorsByFile.has(file))
@@ -112,11 +144,15 @@ export function documentationErrors(directory = root) {
     if (file.startsWith(releaseNotes)) continue;
     if (dirname(file) === docsRoot) broken.push(...userGuidePurityErrors(file, content));
     for (const [, code] of content.matchAll(/`([^`\n]+)`/gu)) {
-      if (!sourcePath.test(code)) continue;
-      const pattern = code.replace(/<[^>]+>/gu, '*');
-      if (!globSync(pattern, { cwd: directory }).length)
-        broken.push(`${file}: \`${code}\` (no file or directory matches this path)`);
+      for (const path of code.split(/\s+/u)) {
+        if (!sourcePath.test(path)) continue;
+        if (localOnly.some((local) => resolve(directory, path).startsWith(local))) continue;
+        const pattern = path.replace(/<[^>]+>/gu, '*');
+        if (!globSync(pattern, { cwd: directory }).length)
+          broken.push(`${file}: \`${path}\` (no file or directory matches this path)`);
+      }
     }
+    if (file.startsWith(developerDocs)) broken.push(...caseIdErrors(file, content, knownCaseIds));
   }
   for (const file of readdirSync(resolve(directory, 'scripts')).filter(
     (name) => name.startsWith('verify-') && name.endsWith('.mjs')
@@ -136,5 +172,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(broken.join('\n'));
     process.exitCode = 1;
   } else
-    console.log('Documentation links, anchors, source paths and verification entry points PASS');
+    console.log(
+      'Documentation links, anchors, source paths, case IDs and verification entry points PASS'
+    );
 }

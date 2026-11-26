@@ -9,6 +9,9 @@ function withDocumentation(files, check) {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-doc-links-'));
   try {
     for (const child of [
+      '.claude/hooks',
+      '.claude/worktrees/copy/docs',
+      '.githooks',
       'docs/dev',
       'docs/releases',
       'fixtures',
@@ -103,8 +106,16 @@ test('source paths in inline code must exist outside release notes', () => {
         'Add `tests/<feature>.test.ts` next to the others; run `npm test -- tests/gone.test.ts`.',
         'Removed: `server/gone.ts`, `server/*-gone.ts`, `scripts/<name>.sh`.',
         'Not source paths: `data/gone.db`, `uimori call`.',
+        'Run `node scripts/run.mjs --files tests/reading.test.ts output/report`.',
+        'Hooks: `.claude/hooks/guard.mjs`, `.githooks/pre-push`, `.githooks/gone`.',
+        'Local only: `.claude/settings.local.json`, `.claude/worktrees/other/README.md`.',
       ].join('\n'),
       'docs/releases/v0.0.1.md': 'This release removed `server/gone.ts`.',
+      '.claude/hooks/guard.mjs': '',
+      '.claude/hooks/GUIDE.md': '[lost](../missing.md), `scripts/gone.mjs`.',
+      '.claude/worktrees/copy/docs/OLD.md': '[lost](missing.md), `server/gone.ts`.',
+      '.githooks/pre-push': '',
+      'scripts/run.mjs': '',
       'server/app.ts': '',
       'server/store.ts': '',
       'server/chat-routes.ts': '',
@@ -112,10 +123,42 @@ test('source paths in inline code must exist outside release notes', () => {
     },
     (directory) => {
       const spec = join(directory, 'docs/dev/SPEC.md');
+      const hookGuide = join(directory, '.claude/hooks/GUIDE.md');
       assert.deepEqual(documentationErrors(directory), [
+        `${spec}: \`tests/gone.test.ts\` (no file or directory matches this path)`,
         `${spec}: \`server/gone.ts\` (no file or directory matches this path)`,
         `${spec}: \`server/*-gone.ts\` (no file or directory matches this path)`,
         `${spec}: \`scripts/<name>.sh\` (no file or directory matches this path)`,
+        `${spec}: \`.githooks/gone\` (no file or directory matches this path)`,
+        `${hookGuide}: ../missing.md`,
+        `${hookGuide}: \`scripts/gone.mjs\` (no file or directory matches this path)`,
+      ]);
+    }
+  );
+});
+
+test('case IDs in developer documents, including ranges, must name existing test cases', () => {
+  withDocumentation(
+    {
+      'docs/dev/SPEC.md': [
+        'Evidence: `tests/editor-browser.spec.ts` CODEFIELD01-03, `--grep PMUI02` and LIBUI08.',
+        'Ranges may repeat the prefix: CBSREF01–CBSREF02. BM25 ranking is not a case.',
+      ].join('\n'),
+      'docs/GUIDE.md': 'User guides are not checked: LIBUI09.',
+      'docs/releases/v0.0.1.md': 'Release notes are not checked: LIBUI09.',
+      'tests/editor-browser.spec.ts': [
+        "test('CODEFIELD01 highlights', () => {});",
+        "test('CODEFIELD02 saves', () => {});",
+        "test('PMUI02 opens', () => {});",
+        "test('CBSREF01 expands', () => {});",
+      ].join('\n'),
+    },
+    (directory) => {
+      const spec = join(directory, 'docs/dev/SPEC.md');
+      assert.deepEqual(documentationErrors(directory), [
+        `${spec}: CODEFIELD01-03 (no test has the case ID CODEFIELD03)`,
+        `${spec}: LIBUI08 (no test has the case ID LIBUI08)`,
+        `${spec}: CBSREF01–CBSREF02 (no test has the case ID CBSREF02)`,
       ]);
     }
   );
