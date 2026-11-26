@@ -5,6 +5,7 @@ import './context-breakdown.css';
 
 export type ContextTone =
   | 'instructions'
+  | 'app'
   | 'tools'
   | 'history'
   | 'summary'

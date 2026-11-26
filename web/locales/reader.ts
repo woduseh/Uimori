@@ -1925,6 +1925,12 @@ export const messages = {
     ja: '今回のリクエスト',
     zh: '本次请求',
   },
+  'reader.contextAppInstructions': {
+    ko: '앱 지시문',
+    en: 'App instructions',
+    ja: 'アプリの指示',
+    zh: '应用指令',
+  },
   'reader.contextTable': {
     ko: '컨텍스트 구분',
     en: 'Context breakdown',

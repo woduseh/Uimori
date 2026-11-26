@@ -128,6 +128,7 @@ describe('main context parts', () => {
     const parts = mainContextParts(snapshot, request, total)!;
     expect(Object.keys(parts).sort()).toEqual(
       [
+        'appInstructions',
         'authorNote',
         'botDescription',
         'history',
@@ -146,6 +147,9 @@ describe('main context parts', () => {
     expect(parts.history!).toBeGreaterThan(parts.summary!);
     expect(parts.botDescription!).toBeGreaterThan(
       estimateContextTokens('미라는 등대를 지키는 사람이에요. '.repeat(30), budget)
+    );
+    expect(parts.appInstructions!).toBeGreaterThan(
+      estimateContextTokens(`Host context:\n${JSON.stringify({ brief })}`, budget)
     );
   });
 

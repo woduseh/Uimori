@@ -34,6 +34,7 @@ export const MAIN_CONTEXT_PARTS = [
   'summary',
   'history',
   'request',
+  'appInstructions',
   'tools',
   'toolResults',
   'other',

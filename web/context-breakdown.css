@@ -5,6 +5,9 @@
 :is(.context-breakdown-segment, .context-breakdown-key)[data-tone="instructions"] {
   --usage-part: var(--muted);
 }
+:is(.context-breakdown-segment, .context-breakdown-key)[data-tone="app"] {
+  --usage-part: color-mix(in oklab, var(--muted) 55%, var(--info-line));
+}
 :is(.context-breakdown-segment, .context-breakdown-key)[data-tone="tools"] {
   --usage-part: var(--input-border);
 }

@@ -33,12 +33,12 @@ function blockTypes(snapshot: RunSnapshot): unknown[] {
   );
 }
 
-function messagePart(message: LogicalMessage, types: unknown[]): MainContextPart | 'host' {
+function messagePart(message: LogicalMessage, types: unknown[]): MainContextPart {
   const { blockId, origin, sourceMessageId } = message.provenance;
   if (origin === 'current') return 'request';
   if (sourceMessageId === 'context-summary') return 'summary';
   if (origin === 'history') return 'history';
-  if (blockId === NATIVE_HOST_CONTEXT_ID) return 'host';
+  if (blockId === NATIVE_HOST_CONTEXT_ID) return 'appInstructions';
   if (LORE_MESSAGES.test(blockId)) return 'lore';
   const index = BLOCK_ID.exec(blockId)?.[1];
   const type = index === undefined ? undefined : types[Number(index) - 1];
@@ -69,11 +69,13 @@ export function mainContextParts(
   if (!request.prompt || request.opaqueState != null || !request.contextBudget) return undefined;
   const budget = request.contextBudget;
   const types = blockTypes(snapshot);
-  const texts = new Map<MainContextPart, string[]>();
+  const texts = new Map<MainContextPart, string[]>([
+    ['appInstructions', [request.stable.contract]],
+  ]);
   const images = new Map<MainContextPart, number>();
   for (const message of request.prompt.messages) {
     const part = messagePart(message, types);
-    if (part === 'host' || part === 'other') continue;
+    if (part === 'other') continue;
     for (const content of message.content) {
       if (content.type === 'text') texts.set(part, [...(texts.get(part) ?? []), content.text]);
       else if (content.type === 'image')
