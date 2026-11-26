@@ -49,7 +49,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:copy` | Warning-only scan and JSON review inventory of literal i18n and JSX explanations; see [UI-GALLERY](UI-GALLERY.md#copy-review-warnings). No browser, provider calls, or build required. |
 | `npm run check:i18n` | ICU syntax, locale keys/arguments, missing translations and unused keys ([rule](APP-INVARIANTS.md#ui-language-i18n)); part of `quality`. `-- --candidates` also lists static Korean and dynamic-call review candidates. See [UI language](../I18N.md). |
 | `npm run verify:i18n` | Four UI languages, re-entry, reader recovery, retained editor state and model inputs, mobile/pseudo text, accessible names, manifest and restarted-worker synthetic push. Requires a matching build. |
-| `npm run benchmark:story` | Repeated long-story performance measurements. |
+| `npm run benchmark:story` | Repeated long-story timing at large fixture sizes (`tests/story-performance.manual.ts`, outside the default `npm test` collection); writes `story-performance.json` under `output/benchmarks/`. The same functional contracts run at minimal size in `tests/story-scale-invariants.test.ts`. |
 | `npm run eval:helper` | Lists the small helper behavior cases. After building, `-- --synthetic` checks the runner; explicit live configuration is described in [Helper evaluation](HELPER-EVALUATION.md). |
 
 Feature runners using the [shared browser harness](../../scripts/browser-verification.mjs) accept `--grep <pattern>` to narrow their existing selection and `--visual` to enable extra visual checks:

@@ -307,7 +307,6 @@
     "tests/story-guide-routes.test.ts": 0.5,
     "tests/story-guide-runtime.test.ts": 5.8,
     "tests/story-guide-store.test.ts": 1.2,
-    "tests/story-performance.test.ts": 4.9,
     "tests/story-scene-anchors.test.ts": 0.4,
     "tests/story-storage.test.ts": 0.1,
     "tests/story-ui-actions.test.ts": 3.5,
