@@ -37,21 +37,49 @@ function importsAny(test, source, stems) {
   );
 }
 
-function selectToolingTests(files, toolingTests) {
+const hookFile = /^(?:\.githooks|\.claude\/hooks)\//u;
+
+function selectToolingTests(files, toolingTests, toolingSources = {}) {
   const selected = [];
+  const stems = new Set();
+  let unmatched = false;
   for (const file of files) {
     if (toolingTestFile.test(file)) {
       if (toolingTests.includes(file)) selected.push(file);
-    } else if (file.startsWith('scripts/')) {
-      const paired = `${file.replace(/\.[^./]+$/u, '')}.test.mjs`;
-      if (!/^scripts\/[^/]+$/u.test(file) || !toolingTests.includes(paired)) return 'all';
-      selected.push(paired);
+      continue;
     }
+    if (!file.startsWith('scripts/') && !hookFile.test(file)) continue;
+    stems.add(withoutExtension(file));
+    if (file.startsWith('scripts/') && /^scripts\/[^/]+$/u.test(file)) {
+      const paired = `${file.replace(/\.[^./]+$/u, '')}.test.mjs`;
+      if (toolingTests.includes(paired)) selected.push(paired);
+      else unmatched = true;
+    } else if (file.startsWith('scripts/')) unmatched = true;
   }
-  return unique(selected).sort();
+  if (unmatched) return 'all';
+  for (const test of toolingTests) {
+    const source = toolingSources[test];
+    if (source && importsAny(test, source, stems)) selected.push(test);
+  }
+  const chosen = unique(selected).sort();
+  if (stems.size && !chosen.length) return 'all';
+  return chosen;
 }
 
-export function selectChecks(files, testSources, { exists = () => true, toolingTests = [] } = {}) {
+export function toolingNeedsBuild(tooling, sources = {}) {
+  if (tooling === 'all') return true;
+  return tooling.some((file) => /\bdist\//u.test(sources[file] ?? ''));
+}
+
+export function vitestRelatedFiles(files, exists) {
+  return files.filter((file) => exists(file));
+}
+
+export function selectChecks(
+  files,
+  testSources,
+  { exists = () => true, toolingTests = [], toolingSources = {} } = {}
+) {
   const modules = files.filter((file) => moduleFile.test(file));
   const markers = files
     .filter((file) => !moduleFile.test(file))
@@ -89,7 +117,7 @@ export function selectChecks(files, testSources, { exists = () => true, toolingT
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
     firstHopTests,
-    tooling: selectToolingTests(files, toolingTests),
+    tooling: selectToolingTests(files, toolingTests, toolingSources),
     fullRequired: files.filter((file) => fullSuiteInput.test(file)),
     notes: files.some((file) => distEntry.test(file))
       ? [
@@ -160,8 +188,10 @@ function toolingTestFiles() {
 }
 
 async function affectedTests(related) {
+  const existing = vitestRelatedFiles(related, (file) => existsSync(join(root, file)));
+  if (!existing.length) return { affected: [], all: [] };
   const { createVitest } = await import('vitest/node');
-  const vitest = await createVitest({ root, related, watch: false, run: true });
+  const vitest = await createVitest({ root, related: existing, watch: false, run: true });
   try {
     const name = (spec) => relative(root, spec.moduleId).replaceAll('\\', '/');
     return {
@@ -220,9 +250,9 @@ async function runVitest(checks, listing, limit, notices) {
   return result;
 }
 
-async function runTooling(tooling) {
+async function runTooling(tooling, sources = {}) {
   const full = tooling === 'all';
-  if (full) {
+  if (toolingNeedsBuild(tooling, sources)) {
     const build = await run('tooling build', process.execPath, ['scripts/build.mjs']);
     if (!build.ok) return build;
   }
@@ -248,9 +278,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log('check:changed: no changed files');
     process.exit(0);
   }
+  const toolingTests = toolingTestFiles();
+  const toolingSources = Object.fromEntries(
+    toolingTests.map((file) => [file, readFileSync(join(root, file), 'utf8')])
+  );
   const checks = selectChecks(files, testSources(), {
     exists: (file) => existsSync(join(root, file)),
-    toolingTests: toolingTestFiles(),
+    toolingTests,
+    toolingSources,
   });
   const node = process.execPath;
   const statics = [];
@@ -284,7 +319,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const results = await Promise.all(statics);
   const notices = [];
   if (listing) results.push(await runVitest(checks, listing, limit, notices));
-  if (!checks.docsOnly && checks.tooling.length) results.push(await runTooling(checks.tooling));
+  if (!checks.docsOnly && checks.tooling.length)
+    results.push(await runTooling(checks.tooling, toolingSources));
   if (checks.fullRequired.length)
     notices.push(
       `scope: full-required (${checks.fullRequired.join(', ')}); related selection cannot see what these change, so run \`npm run quality:full\` before finishing`

@@ -58,7 +58,15 @@ test('a deleted file stays in the change set and only leaves the Biome arguments
 });
 
 test('a scripts change runs its paired tooling test, or the whole tooling suite without one', () => {
-  const tooling = (files) => checkChanged.selectChecks(files, {}, { toolingTests }).tooling;
+  const tooling = (files, toolingSources = {}, extraTests = []) =>
+    checkChanged.selectChecks(
+      files,
+      {},
+      {
+        toolingTests: [...toolingTests, ...extraTests],
+        toolingSources,
+      }
+    ).tooling;
   assert.deepEqual(tooling(['scripts/doctor.mjs']), ['scripts/doctor.test.mjs']);
   assert.deepEqual(tooling(['scripts/ci-gate.test.mjs']), ['scripts/ci-gate.test.mjs']);
   assert.deepEqual(tooling(['tests/build-runner.node.test.mjs']), [
@@ -66,6 +74,46 @@ test('a scripts change runs its paired tooling test, or the whole tooling suite 
   ]);
   assert.equal(tooling(['scripts/doctor.mjs', 'scripts/lib.mjs']), 'all');
   assert.deepEqual(tooling(['core/provider.ts']), []);
+  const importers = {
+    'scripts/ci-changes.test.mjs': "import { docsOnly } from './ci-changes.mjs';",
+    'scripts/check-changed.test.mjs': "import { docsOnly } from './ci-changes.mjs';",
+    'scripts/pre-push-hook.test.mjs': "import { docsOnly } from './ci-changes.mjs';",
+  };
+  const extra = Object.keys(importers);
+  assert.deepEqual(tooling(['scripts/ci-changes.mjs'], importers, extra), [
+    'scripts/check-changed.test.mjs',
+    'scripts/ci-changes.test.mjs',
+    'scripts/pre-push-hook.test.mjs',
+  ]);
+  assert.deepEqual(
+    tooling(
+      ['.githooks/pre-push.mjs'],
+      { 'scripts/pre-push-hook.test.mjs': "import '../.githooks/pre-push.mjs';" },
+      extra
+    ),
+    ['scripts/pre-push-hook.test.mjs']
+  );
+  assert.equal(tooling(['.claude/hooks/release-guard.mjs']), 'all');
+  assert.equal(checkChanged.toolingNeedsBuild('all'), true);
+  assert.equal(
+    checkChanged.toolingNeedsBuild(['scripts/perf-ledger.test.mjs'], {
+      'scripts/perf-ledger.test.mjs': "import '../dist/server/app.js';",
+    }),
+    true
+  );
+  assert.equal(
+    checkChanged.toolingNeedsBuild(['scripts/doctor.test.mjs'], {
+      'scripts/doctor.test.mjs': "import { doctor } from './doctor.mjs';",
+    }),
+    false
+  );
+  assert.deepEqual(
+    checkChanged.vitestRelatedFiles(
+      ['core/gone.ts', 'core/kept.ts'],
+      (file) => file === 'core/kept.ts'
+    ),
+    ['core/kept.ts']
+  );
 });
 
 test('global configuration changes are reported as needing the full suite', () => {

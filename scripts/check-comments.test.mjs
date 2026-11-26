@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { allowlistPath, commentErrors, readAllowlist, remedy } from './check-comments.mjs';
 
@@ -136,6 +136,21 @@ test('selected files limit the scan and the stale-entry report to those files', 
         ]
       );
       assert.deepEqual(commentErrors(directory, [], []), []);
+      const expected = [
+        'core/changed.ts:1: // Narration in the changed file.',
+        `${allowlistPath}: no matching comment in core/deleted.ts; remove the entry: Chromium rounds.`,
+      ];
+      assert.deepEqual(
+        commentErrors(directory, allowlist, ['./core/changed.ts', 'core/deleted.ts']),
+        expected
+      );
+      assert.deepEqual(
+        commentErrors(directory, allowlist, [
+          resolve(directory, 'core/changed.ts'),
+          'core/deleted.ts',
+        ]),
+        expected
+      );
     }
   );
 });

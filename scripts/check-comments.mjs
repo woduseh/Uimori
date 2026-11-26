@@ -146,6 +146,10 @@ export function readAllowlist(directory = root) {
   return entries;
 }
 
+function repoPath(directory, path) {
+  return relative(directory, resolve(directory, path)).replaceAll('\\', '/');
+}
+
 function checkedPath(path) {
   const segments = path.split('/');
   return (
@@ -157,7 +161,7 @@ function checkedPath(path) {
 }
 
 export function commentErrors(directory = root, allowlist = readAllowlist(directory), selected) {
-  const selectedPaths = selected && new Set(selected.map((path) => path.replaceAll('\\', '/')));
+  const selectedPaths = selected && new Set(selected.map((path) => repoPath(directory, path)));
   const unused = new Map(
     allowlist
       .filter((entry) => !selectedPaths || selectedPaths.has(entry.file))
