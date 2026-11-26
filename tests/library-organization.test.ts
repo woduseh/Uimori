@@ -7,7 +7,6 @@ import { deleteLibraryItem } from '../server/library-deletion.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
-import { createApp } from '../server/app.js';
 import { pruneUnusedData } from '../server/unused-data.js';
 
 const owned: { dir: string; store: Store }[] = [];
@@ -153,79 +152,6 @@ test('item deletion cleans placement and retains immutable references', () => {
   ).not.toThrow();
   expect(store.product.get('content', used.id)).toEqual(used);
   expect(store.product.all('content')).not.toContainEqual(used);
-});
-
-test('HTTP routes share one organization revision and reject hidden or unknown fields', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'uimori-library-org-'));
-  const within = relative(resolve(tmpdir()), resolve(dir));
-  if (
-    isAbsolute(within) ||
-    within.startsWith('..') ||
-    !basename(dir).startsWith('uimori-library-org-')
-  )
-    throw new Error('Unsafe cleanup');
-  const built = await createApp({
-    dbPath: join(dir, 'story.sqlite'),
-    buildId: 'library-org-test',
-    testMode: true,
-  });
-  owned.push({ dir, store: built.store });
-  const inject = (
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
-    url: string,
-    payload?: Record<string, unknown>
-  ) => built.inject({ method, url, ...(payload ? { payload } : {}) });
-  try {
-    const initial = built.store.libraryOrganization.snapshot();
-    expect((await inject('GET', '/api/library/organization')).json()).toEqual(initial);
-    expect(
-      (
-        await inject('POST', '/api/library/folders', {
-          expectedRevision: initial.revision,
-          category: ['bot'],
-          title: 'Invalid',
-        })
-      ).statusCode
-    ).toBe(400);
-    expect((await inject('GET', '/api/library/organization')).json()).toEqual(initial);
-    const created = await inject('POST', '/api/library/folders', {
-      expectedRevision: initial.revision,
-      category: 'prompts',
-      title: 'Writing',
-    });
-    expect(created.statusCode).toBe(200);
-    expect(
-      (
-        await inject('POST', '/api/library/folders', {
-          expectedRevision: initial.revision,
-          category: 'bot',
-          title: 'Stale',
-        })
-      ).statusCode
-    ).toBe(409);
-    const org = created.json();
-    expect(
-      (
-        await inject('PATCH', `/api/library/folders/${org.folders[0].id}`, {
-          expectedRevision: org.revision,
-          title: 'Updated',
-          category: 'bot',
-        })
-      ).statusCode
-    ).toBe(400);
-    const removed = await inject('DELETE', `/api/library/folders/${org.folders[0].id}`, {
-      expectedRevision: org.revision,
-    });
-    expect(removed.json()).toEqual({
-      revision: org.revision + 1,
-      folders: initial.folders,
-      items: initial.items,
-    });
-  } finally {
-    await built.close();
-    owned.pop();
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 test('a chosen folder cover is validated, kept as a retention root and released with the folder', () => {

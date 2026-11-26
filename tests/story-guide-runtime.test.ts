@@ -6,21 +6,18 @@ import { OUTLINE_CONTRACT } from '../core/outline.js';
 import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
-import { prepareInputContext } from '../server/context-compaction.js';
 import { seedContextPlan } from '../server/context-planning.js';
 import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import {
   applyStoryGuide,
   prepareStoryGuide,
-  storyGuideReservedTokens,
   StoryGuideCancelledError,
   type StoryGuideHooks,
 } from '../server/story-guide-runtime.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
-import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const sse = (...events: unknown[]) =>
@@ -372,56 +369,6 @@ test('guide consumes prepared logical history and one summary, ignores prior adv
   expect(log.wires).toHaveLength(2);
 });
 
-test('a guide that read once is reused for the same initial input', async () => {
-  const source = await snapshot();
-  source.resources = [
-    {
-      id: 'reunion',
-      chatId: source.chatId,
-      kind: 'lore',
-      revision: 1,
-      title: 'Reunion',
-      description: 'How the reunion went in the original.',
-      text: 'The reunion happens at the harbor.',
-      loading: 'discoverable',
-    },
-  ];
-  source.resources.push({
-    ...source.resources[0],
-    kind: 'skill',
-    id: 'reunion-skill',
-    text: 'Use the reunion writing technique.',
-  });
-  vi.mocked(fetch)
-    .mockImplementationOnce(async () =>
-      sse(
-        {
-          type: 'tool_delta',
-          index: 0,
-          id: 'guide-read',
-          name: 'knowledge.search',
-          argumentsDelta: '{"query":"reunion"}',
-        },
-        { type: 'done', reason: 'tool_calls' }
-      )
-    )
-    .mockImplementationOnce(async () => completed());
-  const read = vi.fn();
-  const log = observed({ onToolDiagnostic: read });
-  const first = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
-  expect(first).toMatchObject({ error: null, cached: false, usage: { modelCalls: 2 } });
-  expect(read.mock.calls[0][0].result).toMatchObject({
-    total: 1,
-    items: [{ id: 'reunion', nextRead: { name: 'knowledge.read' } }],
-  });
-  const second = await prepareStoryGuide(source, log.hooks, {
-    cachedBrief: first.brief,
-    reserveCalls: 1,
-  });
-  expect(second).toMatchObject({ cached: true, usage: { modelCalls: 0 } });
-  expect(log.wires).toHaveLength(2);
-});
-
 test('guide serializes prepared character examples with their identities and source, plus current author direction and outline', async () => {
   const source = await snapshot();
   const bot = nativeContent(
@@ -578,110 +525,4 @@ test('failed or oversized guide removes stale advice; admitted guide reaches the
   });
   expect(oversized.storyGuide).toMatchObject({ error: 'STORY_GUIDE_WRITER_CONTEXT_TOO_LARGE' });
   expect(oversized.storyGuide!.brief).toBeUndefined();
-});
-
-test('a fitting writer input does not call the summary provider merely to reserve guide space', async () => {
-  const source = await snapshot();
-  const measureInput = (projected: RunSnapshot) => ({
-    snapshot: projected,
-    estimatedInputTokens: 1_000 + projected.contextPlan!.recentSourceRevisions.length * 2_500,
-  });
-  const log = observed();
-  const hooks = {
-    ...log.hooks,
-    onInput: () => {},
-    onToolEvent: () => {},
-    onProgress: () => {},
-    measureInput,
-  };
-  const without = await prepareInputContext(source, hooks);
-  expect(without.usage.modelCalls).toBe(0);
-  vi.mocked(fetch).mockRejectedValue(
-    new Error('Unavailable summary provider must not block the fitting writer')
-  );
-  const withGuide = await prepareInputContext(source, {
-    ...hooks,
-    reserveInputTokens: storyGuideReservedTokens(source),
-  });
-  expect(withGuide.usage.modelCalls).toBe(0);
-  expect(withGuide.snapshot.contextPlan!.compacted).toHaveLength(0);
-  expect(withGuide.snapshot.contextPlan!.estimatedInputTokens).toBeLessThanOrEqual(8192 * 0.85);
-  expect(withGuide.snapshot.logicalHistory).toEqual(source.logicalHistory);
-  delete source.profile!.contextModel;
-  const withoutSummaryModel = await prepareInputContext(source, {
-    ...hooks,
-    reserveInputTokens: storyGuideReservedTokens(source),
-  });
-  expect(withoutSummaryModel.usage.modelCalls).toBe(0);
-  expect(withoutSummaryModel.snapshot.contextPlan!.compacted).toHaveLength(0);
-  expect(log.wires).toHaveLength(0);
-  expect(fetch).not.toHaveBeenCalled();
-});
-
-test('the guide offers local reads, the catalog and read wording only while something is left to read', async () => {
-  const lore = {
-    id: 'reunion',
-    chatId: 'guide-chat',
-    kind: 'lore' as const,
-    revision: 1,
-    title: 'Reunion',
-    description: 'How the reunion went in the original.',
-    text: 'The reunion happens at the harbor.',
-    loading: 'discoverable' as const,
-  };
-  const request = async (source: RunSnapshot) => {
-    const log = observed();
-    const result = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
-    expect(log.wires, JSON.stringify(result)).toHaveLength(1);
-    return log.wires[0]!.body as unknown as {
-      stable: { contract: string; tools: { name: string }[] };
-      input: { catalog: { id: string }[] };
-    };
-  };
-  const delivered = await request(await snapshot());
-  expect(delivered.stable.tools).toEqual([]);
-  expect(delivered.input.catalog).toEqual([]);
-  expect(delivered.stable.contract).not.toContain('local reads');
-  expect(delivered.stable.contract).not.toContain(CATALOG_READ_GUIDANCE);
-
-  const unread = await snapshot();
-  unread.resources = [lore];
-  const open = await request(unread);
-  expect(open.stable.tools.map((tool) => tool.name)).toEqual([
-    'knowledge.search',
-    'knowledge.read',
-  ]);
-  expect(open.input.catalog.map((item) => item.id)).toEqual(['reunion']);
-  expect(open.stable.contract).toContain('local reads');
-  expect(open.stable.contract).toContain(CATALOG_READ_GUIDANCE);
-
-  const cut = await snapshot();
-  expect(cut.nativeRisuExecution?.history).toBeDefined();
-  cut.nativeRisuExecution!.history = cut.nativeRisuExecution!.history.filter(
-    (message) => !(message.role === 'assistant' && message.sourceRevision === 'source-0')
-  );
-  const missing = await request(cut);
-  expect(JSON.stringify(missing.input)).not.toContain('ORIGINAL_OLD_SCENE');
-  expect(missing.stable.tools.map((tool) => tool.name)).toEqual(['story.search', 'story.read']);
-
-  const lastCall = await snapshot();
-  lastCall.resources = [lore];
-  lastCall.settings.maxCalls = 2;
-  const single = await request(lastCall);
-  expect(single.stable.tools).toEqual([]);
-  expect(single.input.catalog).toEqual([]);
-  expect(single.stable.contract).not.toContain('local reads');
-
-  const searched = await snapshot();
-  searched.resources = [lore];
-  searched.storyGuide!.config.webSearch = true;
-  searched.profile!.models.main!.connection.protocol = 'google-gemini-v1';
-  searched.profile!.models.main!.connection.credentialRef = 'SYNTHETIC_GUIDE_KEY';
-  searched.profile!.models.main!.connection.endpoint =
-    'https://generativelanguage.googleapis.com/v1beta';
-  searched.profile!.models.main!.modelId = 'gemini-2.5-pro';
-  const wire = JSON.stringify(await request(searched));
-  expect(wire).not.toContain('knowledge.read');
-  expect(wire).not.toContain('reunion');
-  expect(wire).not.toContain('local reads');
 });

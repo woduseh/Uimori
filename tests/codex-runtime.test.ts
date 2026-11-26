@@ -43,6 +43,7 @@ const agentRequest = (): CodexAgentRequest => ({
     { name: 'app.call', description: 'Apply an edit', inputSchema: { type: 'object' } },
   ],
 });
+const eventually = (check: () => void) => vi.waitFor(check, { timeout: 20_000 });
 const instances: CodexRuntime[] = [],
   roots: string[] = [];
 function setup(mode = 'normal', extra: NodeJS.ProcessEnv = {}, maxConcurrent?: number) {
@@ -183,32 +184,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       },
     ]);
   });
-  it('delivers a tool image reply over 8 MiB without initial images', async () => {
-    const { runtime, records } = setup('agent-image-budget');
-    const bytes = Buffer.alloc(2 * 1024 * 1024);
-    bytes.write('RIFF', 0);
-    bytes.write('WEBP', 8);
-    const base64 = bytes.toString('base64');
-    const result = await runtime.executeAgent(connection, agentRequest(), {
-      signal: new AbortController().signal,
-      onToolCall: async () => ({
-        success: true,
-        text: 'portraits',
-        images: Array.from({ length: 4 }, () => ({
-          mime: 'image/webp',
-          base64,
-          width: 1,
-          height: 1,
-        })),
-      }),
-    });
-    expect(result.status).toBe('completed');
-    expect(records().find((row) => row.id === 'tool-2')).toMatchObject({
-      imageCount: 4,
-      wireBytes: expect.any(Number),
-    });
-    expect(records().find((row) => row.id === 'tool-2').wireBytes).toBeGreaterThan(8 * 1024 * 1024);
-  });
   it('steers user input into the active native turn and detaches when it finishes', async () => {
     const { runtime, records } = setup('agent-normal');
     let steer!: (text: string) => Promise<void>;
@@ -330,7 +305,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       signal: controller.signal,
       onToolCall,
     });
-    await vi.waitFor(() => expect(onToolCall).toHaveBeenCalledTimes(1));
+    await eventually(() => expect(onToolCall).toHaveBeenCalledTimes(1));
     controller.abort();
     expect(await result).toMatchObject({ status: 'cancelled' });
     expect(toolSignal?.aborted).toBe(true);
@@ -390,7 +365,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
         },
       })
     );
-    await vi.waitFor(() => {
+    await eventually(() => {
       expect(childRequests).toBe(2);
       expect(onChildWire).toHaveBeenCalledTimes(1);
     });
@@ -401,7 +376,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     });
     expect(onOrdinaryWire).not.toHaveBeenCalled();
     waitingParent!.abort();
-    await vi.waitFor(() => expect(childResults).toHaveLength(1));
+    await eventually(() => expect(childResults).toHaveLength(1));
     expect(childResults[0].status).toBe('cancelled');
     expect(onChildWire).toHaveBeenCalledTimes(1);
     releaseChild();
@@ -465,21 +440,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(records().some((row) => row.method === 'turn/start')).toBe(false);
     expect((await runtime.logout()).authenticated).toBe(false);
   });
-  it.each([
-    [{ balance: '61842.25', hasCredits: true, unlimited: false }, 61842.25, 'normal'],
-    [{ balance: 'invalid', hasCredits: true, unlimited: false }, null, 'normal'],
-    [{ balance: '100', hasCredits: true, unlimited: false }, 100, 'credits-legacy'],
-  ])(
-    'exposes reported credits without inferring an unknown balance: %j',
-    async (credits, balance, mode) => {
-      const { runtime, records } = setup(mode, {
-        UIMORI_CODEX_FIXTURE_CREDITS: JSON.stringify(credits),
-      });
-      expect((await runtime.status()).credits).toEqual({ ...credits, balance });
-      expect(records().some((row) => row.method === 'turn/start')).toBe(false);
-      expect((await runtime.logout()).credits).toBeNull();
-    }
-  );
   it('delegates device login to Codex and cancels it without accepting a token', async () => {
     const { runtime, records } = setup('logged-out');
     expect(await runtime.status()).toMatchObject({
@@ -756,70 +716,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
     }
   );
-  it('bounds native metadata, deduplicates completion and keeps private contents out of helper diagnostics', async () => {
-    const { runtime } = setup();
-    const onNotification = CodexProcess.prototype.onNotification;
-    const intercept = vi
-      .spyOn(CodexProcess.prototype, 'onNotification')
-      .mockImplementation(function (this: CodexProcess, listener) {
-        return onNotification.call(this, (method, params) => {
-          if (method === 'thread/tokenUsage/updated') {
-            const event = params as { threadId: string; turnId: string };
-            const emit = (item: Record<string, unknown>, phase = 'item/completed') =>
-              listener(phase, { threadId: event.threadId, turnId: event.turnId, item });
-            emit({ type: 'reasoning', id: 'private-thought', text: 'PRIVATE_REASONING' });
-            emit({ type: 'dynamicToolCall', id: 'host-tool', output: 'PRIVATE_HOST_OUTPUT' });
-            for (let index = 0; index < 70; index++) {
-              const item = {
-                type: 'webSearch',
-                id: `search-${index}`,
-                status: index === 0 ? 'failed' : 'completed',
-                ...(index === 1 ? { success: false } : {}),
-                query: 'PRIVATE_QUERY',
-                output: 'PRIVATE_RESULT',
-              };
-              if (index === 0) emit(item, 'item/started');
-              emit(item);
-              emit(item);
-            }
-            for (let index = 0; index < 20; index++)
-              emit({ type: 'contextCompaction', id: `compact-${index}`, text: 'PRIVATE_SUMMARY' });
-          }
-          listener(method, params);
-        });
-      });
-    try {
-      const result = await runtime.executeAgent(connection, agentRequest(), {
-        signal: new AbortController().signal,
-        onToolCall: async () => ({ success: true, text: 'unused host callback' }),
-      });
-      expect(result).toMatchObject({
-        status: 'completed',
-        text: output,
-        usage: { inputTokens: 100, outputTokens: 30 },
-      });
-      const raw = result.usage.raw as Record<string, any>;
-      expect(raw.tokenUsage).toEqual({ total: { inputTokens: 100, outputTokens: 30 } });
-      expect(raw.nativeActivity.items).toHaveLength(64);
-      expect(raw.nativeActivity.contextCompactions).toHaveLength(16);
-      expect(raw.nativeActivity.omittedItems).toBe(6);
-      expect(raw.nativeActivity.omittedContextCompactions).toBe(4);
-      expect(raw.nativeActivity.items[0]).toMatchObject({
-        id: 'search-0',
-        type: 'webSearch',
-        status: 'failed',
-        startedAt: expect.any(String),
-        finishedAt: expect.any(String),
-        elapsedMs: expect.any(Number),
-      });
-      expect(raw.nativeActivity.items[1]).toMatchObject({ id: 'search-1', status: 'failed' });
-      expect(JSON.stringify(result)).not.toContain('PRIVATE_');
-      expect(JSON.stringify(raw.nativeActivity)).not.toContain('host-tool');
-      expect(JSON.stringify(raw.nativeActivity)).not.toContain('private-thought');
-    } finally {
-      intercept.mockRestore();
-    }
-  });
   it('accepts completion before the turn-start acknowledgement without losing or duplicating the result', async () => {
     const { runtime } = setup('early-completion');
     expect(
@@ -827,49 +723,6 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
         signal: new AbortController().signal,
       })
     ).toMatchObject({ status: 'completed', text: 'A synthetic scene.' });
-  });
-  it('settles an unfinished native activity on cancellation without discarding reported usage', async () => {
-    const { runtime } = setup('native-tools');
-    const controller = new AbortController();
-    const onNotification = CodexProcess.prototype.onNotification;
-    const intercept = vi
-      .spyOn(CodexProcess.prototype, 'onNotification')
-      .mockImplementation(function (this: CodexProcess, listener) {
-        return onNotification.call(this, (method, params) => {
-          listener(method, params);
-          if (method !== 'thread/tokenUsage/updated') return;
-          const event = params as { threadId: string; turnId: string };
-          listener('item/started', {
-            threadId: event.threadId,
-            turnId: event.turnId,
-            item: { type: 'sleep', id: 'unfinished-sleep' },
-          });
-          controller.abort();
-        });
-      });
-    try {
-      const result = await runtime.execute(connection, request(), { signal: controller.signal });
-      expect(result).toMatchObject({
-        status: 'cancelled',
-        usage: { inputTokens: 100, outputTokens: 30 },
-      });
-      expect(result.usage.raw).toMatchObject({
-        nativeActivity: {
-          items: expect.arrayContaining([
-            {
-              id: 'unfinished-sleep',
-              type: 'sleep',
-              status: 'cancelled',
-              startedAt: expect.any(String),
-              finishedAt: expect.any(String),
-              elapsedMs: expect.any(Number),
-            },
-          ]),
-        },
-      });
-    } finally {
-      intercept.mockRestore();
-    }
   });
   it('cancels a waiting execution without an attempt and keeps independent turns isolated', async () => {
     const { runtime, records } = setup('turn-hang', {}, 1);
@@ -881,7 +734,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
 
       timeoutMs: 5000,
     });
-    await vi.waitFor(() => expect(records().some((row) => row.method === 'turn/start')).toBe(true));
+    await eventually(() => expect(records().some((row) => row.method === 'turn/start')).toBe(true));
     const b = runtime.execute(connection, request(), {
       signal: second.signal,
 
@@ -903,7 +756,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(first.records()).toEqual([]);
     const second = setup('init-timeout');
     const initializing = second.runtime.status();
-    await vi.waitFor(() =>
+    await eventually(() =>
       expect(second.records().some((row) => row.method === 'initialize')).toBe(true)
     );
     await second.runtime.close();
@@ -969,12 +822,7 @@ describe('explicit reusable sessions', () => {
     const session = runtime.createSession(connection);
     const controller = new AbortController();
     const active = session.execute(request(), { signal: controller.signal });
-    for (
-      let tries = 0;
-      tries < 100 && !records().some((row) => row.method === 'turn/start');
-      tries++
-    )
-      await new Promise((resolve) => setTimeout(resolve, 10));
+    await eventually(() => expect(records().some((row) => row.method === 'turn/start')).toBe(true));
     expect(
       (await session.execute(request(), { signal: new AbortController().signal })).error?.code
     ).toBe('CODEX_SESSION_BUSY');

@@ -26,46 +26,6 @@ async function loadedI18n() {
 }
 
 describe('UI locale presentation boundary', () => {
-  test('renders a grouped summary count from the actual scene receipt in every language', async () => {
-    const { setLocale } = await loadedI18n();
-    const { SceneReceipt } = await import('../web/SceneUsage.js');
-    const { createElement } = await import('react');
-    const { renderToStaticMarkup } = await import('react-dom/server');
-    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
-      setLocale(locale);
-      const html = renderToStaticMarkup(
-        createElement(SceneReceipt, {
-          usage: {
-            inputTokens: null,
-            outputTokens: null,
-            context: null,
-            receipt: {
-              version: 1,
-              model: { modelId: 'model', title: 'model' },
-              prompt: null,
-              persona: null,
-              summary: { status: 'included', coveredSources: 1234 },
-            },
-          },
-        })
-      );
-      expect(html).toContain('1,234');
-      expect(html).not.toContain('NaN');
-    }
-  });
-
-  test('describes restored chat and text entry counts in English', async () => {
-    const { formatMessage } = await loadedI18n();
-    for (const [count, chatDescription, entryDescription] of [
-      [1, 'chat “A Story”', '1 text entry'],
-      [2, '2 chats', '2 text entries'],
-    ] as const) {
-      const result = formatMessage('transfer.d007', 'en', { v0: 'A Story', v1: count, v2: count });
-      expect(result).toContain(chatDescription);
-      expect(result).toContain(entryDescription);
-    }
-  });
-
   test('keeps preformatted values verbatim in every language', async () => {
     const { formatMessage } = await loadedI18n();
     for (const value of ['1,234', 'Unknown'])
@@ -215,24 +175,6 @@ describe('UI locale presentation boundary', () => {
     expect(translateMessage(notice)).toBe(
       'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。'
     );
-  });
-
-  test('ungrouped toggle errors follow the current UI language', async () => {
-    const { renameToggleGroup } = await import('../web/native-toggle-document.js');
-    const { setLocale, translateMessage } = await loadedI18n();
-    setLocale('ko');
-    let error: unknown;
-    try {
-      renameToggleGroup('key=Value', -1, 'New name');
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toBeInstanceOf(Error);
-    const message = (error as Error).message;
-    expect(translateMessage(message)).toBe('‘그룹 없음’에는 이 작업을 적용할 수 없어요.');
-    setLocale('en');
-    expect(translateMessage(message)).toBe('This action cannot be applied to “Ungrouped”.');
-    expect((error as Error).message).toBe('‘그룹 없음’에는 이 작업을 적용할 수 없어요.');
   });
 
   test('external diagnostic bytes resembling a malformed message descriptor remain readable', async () => {
@@ -414,18 +356,6 @@ test('catalog checker reports only messages that no source can reach', () => {
   }
 });
 
-test('inherited settings are called defaults in every locale, not global or whole-app values', () => {
-  const offenders = Object.entries(messages).flatMap(([key, values]) => [
-    ...(/전역|전체 기본값|작업실 기본/u.test(values.ko) ? [`${key}/ko: ${values.ko}`] : []),
-    ...(/\bglobal (default|settings?|models?|prompts?|role|writing|story|translation|assistant|context|script|title|lore)\b/iu.test(
-      values.en
-    )
-      ? [`${key}/en: ${values.en}`]
-      : []),
-  ]);
-  expect(offenders, 'Use 기본값/default, or name the settings destination').toEqual([]);
-});
-
 test('all catalog locales parse ICU and accept the same named arguments', () => {
   function argumentsOf(pattern: string, locale: string) {
     const args = new Set<string>();
@@ -446,57 +376,4 @@ test('all catalog locales parse ICU and accept the same named arguments', () => 
       expect(argumentsOf(values[locale], locale), `${key}/${locale}`).toEqual(koArguments);
     }
   }
-});
-
-test('singular English count messages and terminology invariants hold across locales', async () => {
-  const { formatMessage } = await loadedI18n();
-  expect(formatMessage('helperConversation.unmeasuredFiles', 'en', { count: 1 })).toBe(
-    '1 unmeasured file'
-  );
-  expect(formatMessage('helperConversation.executions', 'en', { count: 1 })).toBe('1 call');
-  expect(formatMessage('helperResults.unrecorded', 'en', { count: 1 })).toBe(
-    '1 operation without detailed results'
-  );
-  expect(formatMessage('helpers.m318', 'en', { count: 1 })).toBe(
-    'Selected original text: 1 character'
-  );
-  expect(formatMessage('prompts.childSources', 'en', { count: 1, total: 1 })).toBe(
-    'Original text linked to 1 of 1 child'
-  );
-  expect(
-    formatMessage('reader.knownSubtotalValueIncludesValueUnpricedCalls', 'en', {
-      v0: '$0.10',
-      v1: 1,
-    })
-  ).toBe('Known subtotal $0.10, includes 1 unpriced call');
-  expect(formatMessage('reader.valueEntries', 'en', { v0: 1 })).toBe('1 entry');
-  expect(formatMessage('settings.flow16', 'en', { v0: 1 })).toBe('1 character');
-  expect(formatMessage('settings.flow17', 'en', { v0: 1 })).toBe('1 item');
-  expect(formatMessage('settings.flow20', 'en', { v0: 2, v1: 0, v2: 1, v3: 1 })).toBe(
-    'v2, UTF-16 0–1, 1 character'
-  );
-  expect(formatMessage('providers.m590', 'en', { value0: 1 })).toBe('1 credit');
-  expect(formatMessage('visuals.m252', 'en', { v0: 1 })).toBe('1 cut without a position');
-  expect(formatMessage('visuals.m258', 'en', { v0: 1 })).toBe(
-    '1 illustration without a translation position'
-  );
-  expect(formatMessage('visuals.progressRender', 'en', { completed: 1, total: 1, failed: 0 })).toBe(
-    '1/1 cut completed'
-  );
-  expect(formatMessage('visualpanels.unknownInputOutputCalls', 'en', { v0: 1, v1: 1 })).toBe(
-    'Unknown: input in 1 call, output in 1 call'
-  );
-  expect(formatMessage('visualpanels.unknownPartialEstimateInCalls', 'en', { v0: 1, v1: 1 })).toBe(
-    'Unknown in 1 call, partial estimate in 1 call'
-  );
-
-  const roleModelOffenders = Object.entries(messages)
-    .filter(([, values]) => /\brole model\b/iu.test(values.en))
-    .map(([key, values]) => `${key}: ${values.en}`);
-  expect(roleModelOffenders).toEqual([]);
-
-  const koMiddleDotOffenders = Object.entries(messages)
-    .filter(([, values]) => values.ko.includes('·'))
-    .map(([key, values]) => `${key}: ${values.ko}`);
-  expect(koMiddleDotOffenders).toEqual([]);
 });

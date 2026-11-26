@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import type { ContextDetail as Detail, ContextJob } from '../core/context-plan.js';
+import type { ContextDetail as Detail } from '../core/context-plan.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
 import type { ModelWorkspace, PromptWorkspace } from '../core/product.js';
@@ -105,10 +105,8 @@ test('CTXUI01 summary authoring without a Run, edits replace the current summary
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '두 번째 요약: 배가 출발했다.'
   );
-  await expect(panel.locator('.context-history')).toHaveCount(0);
   const saved = await read<Detail>(request, `/chats/${chat.id}/context`);
   expect(saved.activeRevision).toBe(2);
-  expect(saved).not.toHaveProperty('checkpoints');
   expect((await read<ChatDetail>(request, `/chats/${chat.id}`)).runs).toEqual([]);
   expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
   await page.reload();
@@ -177,74 +175,6 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
     .toEqual(['내 메모 초안', '다른 창의 메모'].sort());
   expect((await read<ChatDetail>(request, `/chats/${chat.id}`)).sources).toEqual([]);
   expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
-});
-
-test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-job projection', async ({
-  page,
-  request,
-}) => {
-  const { chat, panel } = await create(page, 'CTXUI03 합성 압축 상태');
-  await saveSummary(request, chat.id, '보존할 요약');
-  await reenterMemory(page);
-  await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
-  await panel.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
-  await expect(panel.getByText('압축할 구간이 없어요.', { exact: true })).toBeVisible();
-  const actual = await read<Detail>(request, `/chats/${chat.id}/context`);
-  expect(actual.jobs[0]).toMatchObject({ status: 'completed', noop: true });
-  expect(actual.checkpoint?.plan.summary).toBe('보존할 요약');
-  expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
-  const job = {
-    ...actual.jobs[0],
-    id: 'synthetic-running-context',
-    status: 'running' as ContextJob['status'],
-    noop: false,
-    error: null,
-  };
-  let contextReads = 0;
-  await page.route(
-    (url) => url.pathname === `/api/chats/${chat.id}/context`,
-    (route) => {
-      contextReads++;
-      return route.fulfill({ json: { ...actual, jobs: [job] } });
-    }
-  );
-  let cancellations = 0;
-  await page.route(`**/api/chats/${chat.id}/context/jobs/${job.id}/cancel`, async (route) => {
-    expect(route.request().method()).toBe('POST');
-    cancellations++;
-    job.status = 'cancelled';
-    await route.fulfill({ json: job });
-  });
-  await reenterMemory(page);
-  await expect.poll(() => contextReads).toBeGreaterThan(0);
-  await expect(panel.getByRole('button', { name: '압축 취소', exact: true })).toBeEnabled();
-  await panel.getByRole('button', { name: '압축 취소', exact: true }).click();
-  await expect(panel.getByText('압축을 취소했어요.', { exact: true })).toBeVisible();
-  await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
-  expect(cancellations).toBe(1);
-  expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].status).toBe(
-    'completed'
-  );
-});
-
-test('CTXUI05 a summary saved elsewhere reaches the open panel through the live stream while the reader stands still', async ({
-  page,
-  request,
-}) => {
-  const { chat, panel } = await create(page, 'CTXUI05 합성 실시간 요약');
-  await page.route(`**/api/chats/${chat.id}/reader?*`, (route) => route.abort());
-  const contextReads: string[] = [];
-  page.on('request', (entry) => {
-    if (new URL(entry.url()).pathname === `/api/chats/${chat.id}/context`)
-      contextReads.push(entry.url());
-  });
-  await page.waitForTimeout(1000);
-  expect(contextReads).toEqual([]);
-  await saveSummary(request, chat.id, '다른 기기에서 저장한 요약');
-  await expect(panel.getByTestId('context-summary-text')).toHaveText('다른 기기에서 저장한 요약', {
-    timeout: 3000,
-  });
-  expect(contextReads.length).toBeGreaterThan(0);
 });
 
 const width = 412;

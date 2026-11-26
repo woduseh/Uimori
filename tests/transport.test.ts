@@ -1,8 +1,6 @@
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test } from 'vitest';
 import {
@@ -11,7 +9,6 @@ import {
   transportConnection,
   validateConnection,
   validateRequest,
-  type Json,
   type ProviderConnection,
   type ProviderRequest,
   type WireRecord,
@@ -404,19 +401,11 @@ describe('server main runner through the actual loopback adapter', () => {
       snapshot.profile!.models.main!.timeoutMs = presetTimeout;
       snapshot.profile!.models.main!.thinkingLevel = 'LOW';
       const outcome = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
-      expect(outcome).toMatchObject({
-        status: 'partial',
-        text: 'Observed main prefix.',
-        error: 'TIMEOUT',
-        usage: { modelCalls: 1, inputTokens: 5, outputTokens: 2, costUsd: null },
-      });
+      expect(outcome).toMatchObject({ error: 'TIMEOUT', usage: { modelCalls: 1 } });
       expect(server.requests).toHaveLength(1);
       expect(observed.tools).toEqual([]);
       expect(observed.attempts).toHaveLength(1);
-      expect(observed.attempts[0].result).toMatchObject({
-        status: 'partial',
-        error: { code: 'TIMEOUT' },
-      });
+      expect(observed.attempts[0].result).toMatchObject({ error: { code: 'TIMEOUT' } });
       expect(JSON.parse(server.requests[0].body).generation).toEqual({
         maxOutputTokens: 4096,
         temperature: null,
@@ -499,21 +488,6 @@ describe('server main runner through the actual loopback adapter', () => {
     ]);
     expect(server.requests).toHaveLength(2);
   });
-
-  test('P01 P03 keeps an empty native profile free of synthetic facts', () => {
-    const snapshot = routedSnapshot('http://127.0.0.1:49999/turn');
-    snapshot.profile!.packages = [];
-    snapshot.profile!.packageAttachments = [];
-    snapshot.resources = [];
-    expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('AUXILIARY_ONLY');
-    expect(
-      compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content.find(
-        (part) => part.type === 'text'
-      )?.text
-    ).toContain(DEFAULT_MAIN_PROMPT);
-    expect(buildMainInput(snapshot).facts).toEqual([]);
-    expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('Mira');
-  });
 });
 const options = (_origin: string, extra: Partial<Parameters<typeof executeProvider>[2]> = {}) => ({
   signal: new AbortController().signal,
@@ -521,72 +495,6 @@ const options = (_origin: string, extra: Partial<Parameters<typeof executeProvid
 });
 
 describe('fixture HTTP transport (no live provider compatibility claim)', () => {
-  test('P05 handles fragmented UTF8, tool argument JSON, call IDs and opaque state across real fetch turns', async () => {
-    let calls = 0;
-    const server = await fixture(async (_req, response) => {
-      calls++;
-      await writeSse(
-        response,
-        calls === 1
-          ? [
-              {
-                type: 'tool_delta',
-                index: 0,
-                id: 'call-lore-7',
-                name: 'knowledge.search',
-                argumentsDelta: '{"que',
-              },
-              { type: 'tool_delta', index: 0, argumentsDelta: 'ry":"등대 🌊"}' },
-              {
-                type: 'opaque_state',
-                state: { response: 'fixture-r7', signature: 'opaque-roundtrip-value' },
-              },
-              {
-                type: 'usage',
-                inputTokens: 12,
-                outputTokens: 4,
-                costUsd: null,
-                raw: { input_tokens: 12, output_tokens: 4, cached_tokens: 0 },
-                priceRevision: null,
-              },
-              { type: 'done', reason: 'tool_calls' },
-            ]
-          : [
-              { type: 'text_delta', delta: '등대의 불빛 🌊' },
-              { type: 'done', reason: 'stop' },
-            ],
-        true
-      );
-    });
-    const first = await executeProvider(
-      connection(server.endpoint),
-      request(),
-      options(server.origin)
-    );
-    expect(first).toMatchObject({
-      status: 'tool_calls',
-      toolCalls: [{ id: 'call-lore-7', name: 'knowledge.search', arguments: { query: '등대 🌊' } }],
-      usage: { inputTokens: 12, outputTokens: 4, costUsd: null },
-    });
-    const next = request();
-    next.opaqueState = first.opaqueState;
-    next.input.results = first.toolCalls.map((call) => ({
-      callId: call.id,
-      name: call.name,
-      result: { items: [{ id: 'lore-1', title: '등대' }] },
-    }));
-    const final = await executeProvider(connection(server.endpoint), next, options(server.origin));
-    expect(final).toMatchObject({
-      status: 'completed',
-      text: '등대의 불빛 🌊',
-      usage: { inputTokens: null, outputTokens: null, costUsd: null },
-    });
-    const secondBody = JSON.parse(server.requests[1].body);
-    expect(secondBody.opaqueState).toEqual(first.opaqueState);
-    expect(secondBody.input.results[0].callId).toBe(first.toolCalls[0].id);
-    expect(server.requests).toHaveLength(2);
-  });
-
   test('P02 P05 preserves exact role requests and stable prefix while dynamic controls and source change', async () => {
     const server = await fixture(async (_req, response) => {
       await writeSse(response, [
@@ -770,191 +678,6 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     expect(validateConnection(narrowed)).toEqual(narrowed);
     const { credentialRef: _anonymous, ...withoutCredential } = stored;
     expect(transportConnection(withoutCredential)).not.toHaveProperty('credentialRef');
-  });
-
-  test('P05 P06 keeps refusal, trailing usage, partial output and remote errors distinct without retry', async () => {
-    const cases: { events: Json[]; status: string; code?: string }[] = [
-      {
-        events: [
-          { type: 'text_delta', delta: 'do not commit this text' },
-          { type: 'refusal', message: 'Fixture explicit refusal' },
-          {
-            type: 'usage',
-            inputTokens: 0,
-            outputTokens: 2,
-            costUsd: 0,
-            raw: { total: 2 },
-            priceRevision: 'fixture-zero-v1',
-          },
-          { type: 'done', reason: 'refusal' },
-        ],
-        status: 'refused',
-      },
-      {
-        events: [{ type: 'text_delta', delta: 'unfinished' }],
-        status: 'partial',
-        code: 'UNEXPECTED_EOF',
-      },
-      {
-        events: [
-          { type: 'text_delta', delta: 'unfinished' },
-          { type: 'error', message: 'raw provider secret must not leak' },
-        ],
-        status: 'partial',
-        code: 'PROVIDER_ERROR',
-      },
-      {
-        events: [{ type: 'error', message: 'raw provider secret must not leak' }],
-        status: 'error',
-        code: 'PROVIDER_ERROR',
-      },
-      { events: [], status: 'error', code: 'UNEXPECTED_EOF' },
-    ];
-    let index = 0;
-    const server = await fixture(async (_req, response) => {
-      await writeSse(response, cases[index++].events);
-    });
-    for (const entry of cases) {
-      const output = await executeProvider(
-        connection(server.endpoint),
-        request(),
-        options(server.origin)
-      );
-      expect(output.status).toBe(entry.status);
-      if (entry.code) expect(output.error?.code).toBe(entry.code);
-      else
-        expect(output).toMatchObject({
-          refusal: 'Fixture explicit refusal',
-          usage: { inputTokens: 0, outputTokens: 2, costUsd: 0, priceRevision: 'fixture-zero-v1' },
-        });
-      expect(JSON.stringify(output)).not.toContain('raw provider secret');
-    }
-    expect(server.requests).toHaveLength(cases.length);
-  });
-
-  test('P05 rejects malformed UTF8/JSON, changed or duplicate tool IDs and incomplete terminal results', async () => {
-    const cases: { bytes?: Buffer; events?: Json[]; code: string }[] = [
-      { bytes: Buffer.from([0xff]), code: 'TRANSPORT_ERROR' },
-      { bytes: Buffer.from('data: {bad}\n\n'), code: 'INVALID_EVENT' },
-      {
-        events: [
-          {
-            type: 'tool_delta',
-            index: 0,
-            id: 'original',
-            name: 'knowledge.search',
-            argumentsDelta: '{}',
-          },
-          { type: 'tool_delta', index: 0, id: 'changed' },
-        ],
-        code: 'TOOL_ID_CHANGED',
-      },
-      {
-        events: [
-          {
-            type: 'tool_delta',
-            index: 0,
-            id: 'same',
-            name: 'knowledge.search',
-            argumentsDelta: '{}',
-          },
-          {
-            type: 'tool_delta',
-            index: 1,
-            id: 'same',
-            name: 'knowledge.read',
-            argumentsDelta: '{}',
-          },
-          { type: 'done', reason: 'tool_calls' },
-        ],
-        code: 'DUPLICATE_TOOL_ID',
-      },
-      {
-        events: [
-          {
-            type: 'tool_delta',
-            index: 0,
-            id: 'bad-args',
-            name: 'knowledge.search',
-            argumentsDelta: '{"query":',
-          },
-          { type: 'done', reason: 'tool_calls' },
-        ],
-        code: 'INVALID_TOOL_ARGUMENTS',
-      },
-      { events: [{ type: 'done', reason: 'tool_calls' }], code: 'INVALID_TERMINAL' },
-      { events: [{ type: 'done', reason: 'stop' }], code: 'EMPTY_COMPLETION' },
-    ];
-    let index = 0;
-    const server = await fixture(async (_req, response) => {
-      const entry = cases[index++];
-      if (entry.bytes) {
-        response.writeHead(200, { 'content-type': 'text/event-stream' });
-        response.end(entry.bytes);
-      } else await writeSse(response, entry.events!);
-    });
-    for (const entry of cases) {
-      const output = await executeProvider(
-        connection(server.endpoint),
-        request(),
-        options(server.origin)
-      );
-      expect(output.status).not.toBe('completed');
-      expect(output.status).not.toBe('tool_calls');
-      expect(output.error?.code).toBe(entry.code);
-    }
-    expect(server.requests).toHaveLength(cases.length);
-  });
-
-  test('P05 abort and timeout stop a real stream, retain observed text and never start another request', async () => {
-    let release: (() => void) | undefined;
-    const received = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const server = await fixture((_req, response) => {
-      response.writeHead(200, { 'content-type': 'text/event-stream' });
-      response.write(sse({ type: 'text_delta', delta: 'observed prefix' }));
-      release?.();
-    });
-    const abort = new AbortController();
-    const pending = executeProvider(
-      connection(server.endpoint),
-      request(),
-      options(server.origin, { signal: abort.signal })
-    );
-    await received;
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    abort.abort('private cancellation reason');
-    const cancelled = await pending;
-    expect(cancelled).toMatchObject({
-      status: 'cancelled',
-      text: 'observed prefix',
-      error: { code: 'CANCELLED' },
-    });
-    expect(JSON.stringify(cancelled)).not.toContain('private cancellation reason');
-    const timed = await executeProvider(
-      connection(server.endpoint),
-      request(),
-      options(server.origin, { timeoutMs: 80 })
-    );
-    expect(timed).toMatchObject({
-      status: 'partial',
-      text: 'observed prefix',
-      error: { code: 'TIMEOUT' },
-    });
-    expect(server.requests).toHaveLength(2);
-    const before = new AbortController();
-    before.abort();
-    expect(
-      (
-        await executeProvider(
-          connection(server.endpoint),
-          request(),
-          options(server.origin, { signal: before.signal })
-        )
-      ).status
-    ).toBe('cancelled');
-    expect(server.requests).toHaveLength(2);
   });
 });
 

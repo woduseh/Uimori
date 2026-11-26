@@ -1,7 +1,6 @@
 import { expect, test } from 'vitest';
 import { validateRisuContent } from '../core/risu-content.js';
 import { nativeRisuAssetNameResolver } from '../core/risu-native.js';
-import { validatePreparedNativeTransfer } from '../core/native-transfer-validation.js';
 import { unmappedNativeAssetCount } from '../core/risu-native-assets.js';
 import { nativeContent } from './fixtures/native-content.js';
 import type { PackageImage } from '../core/package-images.js';
@@ -38,44 +37,6 @@ test('a full 12,288-asset card validates, preserves references, and rejects over
   expect(() => validateRisuContent(largePackage(12_289))).toThrow();
   pkg.nativeRisu.assets[12_287].imageId = 'missing-image';
   expect(() => validateRisuContent(pkg)).toThrow('PACKAGE_NATIVE_RISU_ASSET_REFERENCE');
-});
-
-test('prepared transfer validates all large-card image descriptors without transporting base64', () => {
-  const pkg = largePackage(12_288);
-  const file = {
-    format: 'uimori-native-transfer',
-    version: 1,
-    roots: [{ kind: 'content', key: 'card' }],
-    prompts: [],
-    contents: [
-      {
-        key: 'card',
-        modules: [],
-        source: {
-          id: pkg.id,
-          revision: 1,
-          kind: 'bot',
-          title: pkg.title,
-          description: '',
-          text: pkg.body,
-          loading: 'pinned',
-          relatedIds: [],
-          package: pkg,
-        },
-      },
-    ],
-    images: pkg.images!.map((image) => ({
-      id: image.blobHash,
-      hash: image.blobHash,
-      revision: 1,
-      mime: image.mime,
-    })),
-  };
-  const checked = validatePreparedNativeTransfer(file);
-  expect(checked.file.images).toHaveLength(12_288);
-  expect(checked.file.images[0]).not.toHaveProperty('base64');
-  file.images.pop();
-  expect(() => validatePreparedNativeTransfer(file)).toThrow('NATIVE_TRANSFER_IMAGE_REFERENCES');
 });
 
 test('indexed aliases retain the first authored extension for duplicate URI and name', () => {

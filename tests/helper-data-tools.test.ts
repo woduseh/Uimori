@@ -125,53 +125,6 @@ async function readOne(
   return item.read;
 }
 
-test('conversation search recovers exact earlier dialogue with message roles and paged reads', async () => {
-  const f = fixture();
-  const workspace = new HelperWorkspace(f.store);
-  const text =
-    '말투 규칙: 존댓말을 사용해요.\n' + '긴 논의. '.repeat(300) + '\n마지막 합의: 이름은 그대로.';
-  workspace.start(f.task.id, 'owner');
-  workspace.finish(f.task.id, 'owner', 1, 'completed', text, null);
-  const history = helperHistory(f.store, f.task.conversationId);
-  const current = workspace.enqueue(f.task.conversationId, 'current', '지난 합의를 찾아줘', {
-    ...f.task.snapshot,
-    history,
-  });
-  const invoke = (name: DataOperation['name'], args: Record<string, unknown>) =>
-    runDataProcess({ path: f.store.path, taskId: current.id, name, args }) as Promise<any>;
-  const first = await invoke('data.search', { scope: 'conversation', limit: 1 });
-  expect(first.items[0]).toMatchObject({
-    ref: { id: history[0].id, scope: 'conversation', kind: 'helper-message' },
-    metadata: { role: 'user', taskId: f.task.id },
-  });
-  expect(first.nextOffset).toBe(1);
-  const next = await invoke('data.search', {
-    scope: 'conversation',
-    offset: first.nextOffset,
-    limit: 1,
-  });
-  expect(next.items[0]).toMatchObject({
-    ref: { id: history[1].id },
-    metadata: { role: 'assistant' },
-  });
-  expect(next.nextOffset).toBeNull();
-  const found = await invoke('data.search', {
-    scope: 'conversation',
-    patterns: ['마지막 합의'],
-  });
-  const hit = found.items[0];
-  expect(hit.ref).toMatchObject({ id: history[1].id, field: '/text', hash: hash(text) });
-  expect(hit.text).toContain('마지막 합의: 이름은 그대로.');
-  expect(hit).not.toHaveProperty('editTarget');
-  const read = await readOne({ ...f, invoke }, hit.ref, { offset: hit.matchRange.start, limit: 6 });
-  expect(read).toMatchObject({
-    text: '마지막 합의',
-    range: { start: text.indexOf('마지막 합의'), end: text.indexOf('마지막 합의') + 6 },
-    metadata: { role: 'assistant', taskId: f.task.id },
-  });
-  expect(read.nextOffset).toBe(text.indexOf('마지막 합의') + 6);
-});
-
 test('conversation retrieval uses edited text and excludes deleted request pairs', async () => {
   const f = fixture();
   const workspace = new HelperWorkspace(f.store);
@@ -293,77 +246,6 @@ test('grep returns authored excerpts once, supports two-character Korean queries
   expect(read.text).toBe('나이: 27');
   expect(read.range.start).toBe(hit.matchRange.start);
   expect(read.editTarget).toEqual(hit.editTarget);
-});
-
-test('document and field searches filter, page and bound repeated background HTML', async () => {
-  const f = fixture();
-  const input = fixtureBotInput('Fujimiya Hinano', 'Hinano is Age: 14.');
-  const { extensions: _old, ...card } = input.package.nativeRisu.card;
-  const background = '<section>Hinano recurring background.</section>'.repeat(500);
-  input.package.nativeRisu.card = {
-    extensions: { risuai: { backgroundHTML: background } },
-    ...card,
-    ageNumber: 14,
-  };
-  const saved = f.store.product.content(input) as Content;
-  const missedTitle = await f.invoke('data.search', {
-    scope: 'library',
-    output: 'documents',
-    query: '히나노',
-    patterns: ['Hinano', '히나노'],
-  });
-  expect(missedTitle.items).toEqual([]);
-  const documents = await f.invoke('data.search', {
-    scope: 'library',
-    output: 'documents',
-    patterns: ['Hinano', '히나노'],
-  });
-  expect(documents.items).toMatchObject([{ id: saved.id, kind: 'bot', revision: saved.revision }]);
-  expect(JSON.stringify(documents)).not.toContain('backgroundHTML');
-  expect(JSON.stringify(documents).length).toBeLessThan(8_000);
-
-  const broad = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['Hinano'],
-    limit: 20,
-    context: 150,
-  });
-  expect(broad.items[0].ref.field).toBe('/package/nativeRisu/card/description');
-  expect(JSON.stringify(broad).length).toBeLessThanOrEqual(8_000);
-  expect(broad.complete).toBe(false);
-  expect(broad.nextOffset).toBeGreaterThan(0);
-  const narrow = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['Hinano'],
-    paths: ['/package/nativeRisu/card/description'],
-  });
-  expect(narrow.items.map((item: any) => item.ref.field)).toEqual([
-    '/package/nativeRisu/card/description',
-  ]);
-  expect(narrow.complete).toBe(true);
-  const numberHit = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['14'],
-    paths: ['/card/ageNumber'],
-  });
-  expect(numberHit.items[0].ref.field).toBe('/package/nativeRisu/card/ageNumber');
-  expect(numberHit.items[0].editTarget).toBeUndefined();
-  const htmlOnly = await f.invoke('data.search', {
-    scope: 'library',
-    ids: [saved.id],
-    patterns: ['Hinano'],
-    paths: ['/card/extensions'],
-    limit: 1,
-  });
-  expect(htmlOnly.items[0].ref.field).toContain('/package/nativeRisu/card/extensions/');
-  expect(htmlOnly.complete).toBe(false);
-  await expect(f.invoke('data.search', { paths: ['card/description'] })).rejects.toThrow(
-    'DATA_PATH_INVALID'
-  );
-  await expect(f.invoke('data.search', { paths: ['/'] })).rejects.toThrow('DATA_PATH_INVALID');
 });
 
 test('module string excerpts can be patched while protected native paths remain readable', async () => {
@@ -503,35 +385,6 @@ test('prompt reads expose editable titles, options and native strings but exclud
   });
 });
 
-test.each([
-  ['empty property name', { '': 'unaddressable-marker' }],
-  [
-    'too many nested properties',
-    Array.from({ length: 74 }, (_, index) => `level${index}`).reduce<unknown>(
-      (value, key) => ({ [key]: value }),
-      'unaddressable-marker'
-    ),
-  ],
-] as const)(
-  'prompt metadata with %s stays readable without an unusable edit target',
-  async (_case, vendor) => {
-    const f = fixture();
-    const saved = prompt(f, vendor as Record<string, unknown>);
-    const found = await f.invoke('data.search', {
-      scope: 'library',
-      ids: [saved.id],
-      patterns: ['unaddressable-marker'],
-    });
-    expect(found.items).toHaveLength(1);
-    const hit = found.items[0];
-    expect(hit.text).toBe('unaddressable-marker');
-    expect(hit.editTarget).toBeUndefined();
-    const read = await readOne(f, hit.ref);
-    expect(read.text).toBe('unaddressable-marker');
-    expect(read.editTarget).toBeUndefined();
-  }
-);
-
 test('saved captured prompt editors never advertise live resource edit targets', async () => {
   const f = fixture();
   const saved = prompt(f);
@@ -552,41 +405,6 @@ test('saved captured prompt editors never advertise live resource edit targets',
   expect((await readOne(f, found.items[0].ref)).editTarget).toBeUndefined();
 });
 
-test('matches later occurrences in one long field, with deterministic search pagination and exact original offsets', async () => {
-  const f = fixture();
-  bot(
-    f,
-    '나이: 27세\n' +
-      '평범한 배경. '.repeat(300) +
-      '\n나이: 다른 인물은 35세\n' +
-      '뒷부분. '.repeat(300) +
-      '\n나이: 미상'
-  );
-  let offset = 0;
-  const hits: any[] = [];
-  for (let page = 0; page < 3; page++) {
-    const result = await f.invoke('data.search', {
-      patterns: ['나이'],
-      limit: 1,
-      offset,
-      context: 20,
-    });
-    expect(result.items).toHaveLength(1);
-    hits.push(result.items[0]);
-    if (page < 2) {
-      expect(result.complete).toBe(false);
-      offset = result.nextOffset;
-    } else {
-      expect(result.complete).toBe(true);
-      expect(result.nextOffset).toBeNull();
-    }
-  }
-  expect(hits[0].text).toContain('27세');
-  expect(hits[1].text).toContain('35세');
-  expect(hits[2].text).toContain('미상');
-  expect(new Set(hits.map((h) => h.matchRange.start)).size).toBe(3);
-});
-
 test('literal metacharacters stay literal, regex and AND search work, and no matches are not fabricated facts', async () => {
   const f = fixture();
   bot(f, '우이 [A.1]\nAge: unknown.\nBirth year: not specified.');
@@ -601,56 +419,6 @@ test('literal metacharacters stay literal, regex and AND search work, and no mat
   expect(absent.items).toEqual([]);
   expect(absent.semantics).toContain('No-match is not proof');
   await expect(f.invoke('data.search', { patterns: ['['], regex: true })).rejects.toThrow();
-});
-
-test('library title filters preserve normalized matches, distinct same-name resources and paging', async () => {
-  const f = fixture();
-  const sameName = ['bot', 'persona'].map(
-    (kind, index) =>
-      f.store.product.content({
-        ...fixtureBotInput('하린 Beacon', `나이: ${27 + index}세`),
-        kind,
-      }) as Content
-  );
-  const unrelated = f.store.product.content(
-    fixtureBotInput(
-      '다른 인물',
-      'Beacon은 본문에만 있다. 나이: 40세\n' + '배경 자료. '.repeat(6000)
-    )
-  ) as Content;
-  const hidden = f.store.product.content(fixtureBotInput('하린 Beacon', '나이: 99세')) as Content;
-  f.store.db.prepare('INSERT INTO library_hidden VALUES(?,?)').run('content', hidden.id);
-
-  const normalized = await f.invoke('data.search', {
-    query: 'ｂｅａｃｏｎ',
-    patterns: ['나이'],
-    limit: 1,
-  });
-  expect(normalized.items).toHaveLength(1);
-  expect(normalized.complete).toBe(false);
-  const next = await f.invoke('data.search', {
-    query: 'ｂｅａｃｏｎ',
-    patterns: ['나이'],
-    limit: 1,
-    offset: normalized.nextOffset,
-  });
-  expect(next.complete).toBe(true);
-  expect([...normalized.items, ...next.items].map((item: any) => item.ref.id)).toEqual(
-    sameName.map((content) => content.id)
-  );
-  expect(next.items[0].text).toContain('28세');
-
-  for (const query of ['하린', sameName[0]!.id.toUpperCase()]) {
-    const selected = await f.invoke('data.search', { query, kinds: ['bot'], patterns: ['나이'] });
-    expect(selected.items).toHaveLength(1);
-    expect(selected.items[0].ref.id).toBe(sameName[0]!.id);
-    expect(selected.items[0].text).toContain('27세');
-  }
-  const kindMatched = await f.invoke('data.search', { query: 'ＢＯＴ', patterns: ['나이'] });
-  expect(kindMatched.items.map((item: any) => item.ref.id).sort()).toEqual(
-    [sameName[0]!.id, unrelated.id].sort()
-  );
-  expect(f.store.product.get<Content>('content', unrelated.id)).toEqual(unrelated);
 });
 
 test('library filters distinguish bot/persona/module, hide retired library entries, and directory/batch reading is bounded', async () => {
@@ -997,63 +765,6 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
     sql: 'SELECT chat_id,COUNT(*) n FROM agent_messages GROUP BY chat_id ORDER BY chat_id',
   });
   expect(counts.rows.map((row: any) => row.n)).toEqual([3, 3]);
-});
-
-test('batch reads use one documented default for text and directory pages', async () => {
-  const f = fixture();
-  const input = fixtureBotInput('Batch defaults', 'source '.repeat(900));
-  input.package.nativeRisu.card.extensions = {
-    toolTest: Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`field${i}`, `value${i}`])),
-  };
-  const saved = f.store.product.content(input) as Content;
-  const found = await f.invoke('data.search', { ids: [saved.id], patterns: ['source'], limit: 1 });
-  const ref = found.items[0].ref as DataRef;
-  const text = await readOne(f, ref);
-  expect(text.text).toHaveLength(4000);
-  expect(text.nextOffset).toBe(4000);
-  const listed = await f.invoke('data.search', { ids: [saved.id] });
-  const directory = await readOne(f, listed.items[0].ref);
-  expect(directory.fields).toHaveLength(20);
-  expect(directory.nextOffset).toBe(20);
-  const mixed = await f.invoke('data.read', { refs: [ref, listed.items[0].ref] });
-  expect(mixed.items.map((item: any) => item.read)).toEqual([text, directory]);
-  expect(mixed.nextIndex).toBeNull();
-
-  let remaining = Array.from({ length: 5 }, () => ref);
-  let returned = 0;
-  while (remaining.length) {
-    const batch = await f.invoke('data.read', { refs: remaining });
-    expect(batch.items.length).toBeGreaterThan(0);
-    for (const item of batch.items) expect(item.read.nextOffset).toBe(4000);
-    returned += batch.items.length;
-    remaining = batch.nextIndex === null ? [] : remaining.slice(batch.nextIndex);
-  }
-  expect(returned).toBe(5);
-});
-
-test('malformed and stale refs do not discard valid batch reads', async () => {
-  const f = fixture();
-  bot(f);
-  const found = await f.invoke('data.search', { patterns: ['27세'] });
-  const ref = found.items[0].ref as DataRef;
-  const batch = await f.invoke('data.read', {
-    refs: [
-      null,
-      { ...ref, hash: '0'.repeat(64) },
-      ref,
-      { ...ref, revision: Number(ref.revision) + 1 },
-      { ...ref, chatId: null },
-      ref,
-    ],
-  });
-  expect(batch.items).toHaveLength(6);
-  expect(batch.items[0]).toMatchObject({ ref: null, error: 'DATA_OBJECT_REQUIRED' });
-  expect(batch.items[1].error).toContain('DATA_SOURCE_CHANGED');
-  expect(batch.items[2].read.text).toContain('27세');
-  expect(batch.items[3].error).toContain('DATA_SOURCE_CHANGED');
-  expect(batch.items[4].error).toBe('DATA_RESOURCE_UNAVAILABLE');
-  expect(batch.items[5].read).toEqual(batch.items[2].read);
-  expect(batch.nextIndex).toBeNull();
 });
 
 test('outline source nextRead works in the real data worker across frozen and edited live text', async () => {

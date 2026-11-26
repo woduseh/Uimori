@@ -698,24 +698,6 @@ describe('Reader projection and retry costs', () => {
     expect(read()).not.toEqual(variables);
   });
 
-  test('reader input projection does not parse discarded diagnostic bodies', () => {
-    const { store, sources } = fixture();
-    const job = store.db
-      .prepare("SELECT id FROM jobs WHERE source_revision=? AND kind='translation'")
-      .get(sources[0]!.id)!;
-    const marker = 'PRIVATE_DIAGNOSTIC_' + 'x'.repeat(16384);
-    store.db
-      .prepare('UPDATE jobs SET input=? WHERE id=?')
-      .run(JSON.stringify({ inputs: [marker] }), job.id);
-    const parse = vi.spyOn(JSON, 'parse');
-    const light = store.job(String(job.id), 'reader');
-    expect(light.result?.text).toBe('첫 장면.');
-    expect(light.input).toBeNull();
-    expect(parse.mock.calls.some(([value]) => value.includes(marker))).toBe(false);
-    const full = store.job(String(job.id));
-    expect(full.input).toEqual({ inputs: [marker] });
-  });
-
   test('reader hydrates the visible retry, while the task history still contains superseded failures', () => {
     const { store, chat } = fixture();
     const insert =

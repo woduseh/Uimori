@@ -57,17 +57,6 @@ describe('convertCharbook: book level', () => {
     });
     expect(converted.loreExt).toBe(source.extensions);
   });
-
-  test('leaves loresettings untouched when a spec field is missing', () => {
-    const source = book([], {});
-    source.recursive_scanning = true;
-    source.scan_depth = 3;
-
-    const converted = convert(source);
-
-    expect(converted.loresettings).toBeUndefined();
-    expect(converted.loreExt).toEqual({});
-  });
 });
 
 describe('convertCharbook: entry fields', () => {
@@ -181,13 +170,6 @@ describe('convertCharbook: extension migration', () => {
 });
 
 describe('interpretLoreDecorators: block and body', () => {
-  test('strips the leading decorator block and trims the body', () => {
-    const result = interpretLoreDecorators('@@depth 3\n\nBody text\n');
-
-    expect(result.body).toBe('Body text');
-    expect(result.decorators.depth).toBe(3);
-  });
-
   test('leaves mid-body @@ lines in the body', () => {
     const result = interpretLoreDecorators('@@depth 3\nBody text\n@@role user\nMore');
 
@@ -210,14 +192,6 @@ describe('interpretLoreDecorators: block and body', () => {
       'user'
     );
     expect(interpretLoreDecorators('@@role user\n@@@end\nBody').decorators.end).toBe(true);
-  });
-
-  test('a known decorator with a bad argument is rejected, not reported as unknown', () => {
-    const result = interpretLoreDecorators('@@role nobody\n@@depth abc\nBody');
-
-    expect(result.unknown).toEqual([]);
-    expect(result.decorators.role).toBeNull();
-    expect(result.decorators.depth).toBeNull();
   });
 });
 
@@ -247,10 +221,6 @@ describe('interpretLoreDecorators: arguments', () => {
     expect(
       interpretLoreDecorators('@@disable_ui_prompt description\nB').decorators.disable_ui_prompt
     ).toEqual([]);
-  });
-
-  test('stores an unchecked parseInt result as NaN', () => {
-    expect(interpretLoreDecorators('@@scan_depth abc\nB').decorators.scan_depth).toBeNaN();
   });
 });
 

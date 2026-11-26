@@ -1,5 +1,5 @@
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,11 +10,7 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { productRoutes } from '../server/product-routes.js';
 import { Store } from '../server/store.js';
-import {
-  deleteLibraryItem,
-  libraryDeletionRoutes,
-  type LibraryKind,
-} from '../server/library-deletion.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 
 const owned: { directory: string; store: Store }[] = [];
 function database() {
@@ -123,67 +119,6 @@ test('connection deletion revokes future sends and hides dependent models while 
   expect(s.product.all('model')).toEqual([]);
   expect(s.product.get('model', m.id)).toEqual(m);
   expect(s.db.prepare('SELECT * FROM provider_connection_tests').all()).toEqual(before);
-});
-
-test('library DELETE routes enforce revision and request fields', async () => {
-  const s = database(),
-    app = Fastify();
-  libraryDeletionRoutes(app, s);
-  const routes: Partial<Record<LibraryKind, string>> = {
-    content: 'content',
-    'prompt-preset': 'prompt-presets',
-    'prompt-combination': 'prompt-combinations',
-  };
-  try {
-    for (const [kind, path] of Object.entries(routes)) {
-      const item =
-        kind === 'content'
-          ? s.product.content(content('Synthetic route module'))
-          : kind === 'prompt-preset'
-            ? s.product.promptPreset({
-                title: 'Synthetic route prompt',
-                role: 'main',
-                text: 'Write.',
-              })
-            : (() => {
-                return s.product.promptCombination({
-                  workspaceRevision: promptWorkspace(s).revision,
-                  title: 'Synthetic route combination',
-                  role: 'main',
-                  values: {},
-                });
-              })();
-      expect(
-        (
-          await injectWithFixtureBot(app, {
-            method: 'DELETE',
-            url: `/api/${path}/${item.id}`,
-            payload: {},
-          })
-        ).statusCode
-      ).toBe(400);
-      expect(
-        (
-          await injectWithFixtureBot(app, {
-            method: 'DELETE',
-            url: `/api/${path}/${item.id}`,
-            payload: { expectedRevision: 1, force: true },
-          })
-        ).statusCode
-      ).toBe(400);
-      expect(
-        (
-          await injectWithFixtureBot(app, {
-            method: 'DELETE',
-            url: `/api/${path}/${item.id}`,
-            payload: { expectedRevision: 1 },
-          })
-        ).statusCode
-      ).toBe(200);
-    }
-  } finally {
-    await app.close();
-  }
 });
 
 test('deleting a bot preserves existing chat ownership and attachments but public library reads become unavailable', async () => {

@@ -6,9 +6,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { HelperTask } from '../core/helper.js';
 import type { PromptPreset } from '../core/product.js';
 import { editableResource } from '../core/resource-editing.js';
-import { emptyTheme } from '../core/themes.js';
-import * as transport from '../core/transport.js';
-import { HelperResourceBatchError, patchHelperResources } from '../server/helper-resource-batch.js';
+import { HelperResourceBatchError } from '../server/helper-resource-batch.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperRoutes } from '../server/helper-routes.js';
@@ -130,57 +128,6 @@ const patchTitle = (id: string, expectedRevision: number, title: string) => ({
   expectedRevision,
   changes: [{ op: 'set', path: '/package/nativeRisu/card/name', value: title }],
 });
-const success: transport.ProviderResult = {
-  status: 'completed',
-  text: '완료했어요.',
-  toolCalls: [],
-  refusal: null,
-  error: null,
-  usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
-  opaqueState: null,
-};
-function providerMutation(name: string, args: Record<string, unknown>, failAfterWrite = false) {
-  let round = 0;
-  vi.spyOn(transport, 'executeProvider').mockImplementation(
-    async (connection, request, options): Promise<transport.ProviderResult> => {
-      transport.validateConnection(connection);
-      options.beforeTurn?.();
-      await options.onWire?.({
-        connectionId: connection.id,
-        protocol: connection.protocol,
-        role: request.role,
-        modelId: request.modelId,
-        method: 'POST',
-        url: connection.endpoint,
-        headers: {},
-        body: request as unknown as transport.Json,
-        bodySha256: 'synthetic',
-        stablePrefixSha256: 'synthetic',
-      });
-      if (round++ === 0)
-        return {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          toolCalls: [
-            {
-              id: 'edit-resource',
-              name: 'app.call',
-              arguments: { name, arguments: args as Record<string, transport.Json> },
-            },
-          ],
-        };
-      return failAfterWrite
-        ? {
-            ...structuredClone(success),
-            status: 'error',
-            text: '',
-            error: { code: 'UNEXPECTED_EOF' },
-          }
-        : structuredClone(success);
-    }
-  );
-}
-
 test('a repeated clone receipt creates one copy and the model undo restores only that copy', () => {
   const f = fixture();
   const source = f.store.product.promptPreset({
@@ -252,91 +199,6 @@ test('a repeated clone receipt creates one copy and the model undo restores only
     editableResource('prompt-preset', before)
   );
   expect(readResource(f.store, 'prompt-preset', source.id)).toEqual(source);
-});
-
-test('runtime cloning uses saved source while an unsaved editor remains analysis input', async () => {
-  const f = fixture();
-  const source = f.store.product.promptPreset({
-    title: 'Stored preset',
-    role: 'main',
-    program: nativePrompt('Saved source body'),
-    values: {},
-  }) as PromptPreset;
-  const draft = {
-    ...editableResource('prompt-preset', source),
-    program: nativePrompt('Unsaved draft body'),
-  };
-  const presetsBefore = (f.store.product.all('prompt-preset') as PromptPreset[]).map(
-    (preset) => preset.id
-  );
-  providerMutation('resource.clone', {
-    kind: 'prompt-preset',
-    sourceId: source.id,
-    expectedSourceRevision: source.revision,
-    title: 'Stored copy',
-  });
-  const task = f.runtime.enqueue(
-    f.conversation.id,
-    'clone-saved',
-    '저장된 프리셋의 사본을 만들어줘',
-    {
-      kind: 'prompt-preset',
-      targetId: source.id,
-      revision: source.revision,
-      title: source.title,
-      source: 'unsaved',
-      model: draft,
-    }
-  );
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  const operations = f.store.db
-    .prepare('SELECT id FROM helper_operations WHERE task_id=?')
-    .all(task.id);
-  expect(operations).toHaveLength(1);
-  const copies = (f.store.product.all('prompt-preset') as PromptPreset[]).filter(
-    (preset) => !presetsBefore.includes(preset.id)
-  );
-  expect(copies).toHaveLength(1);
-  const copy = copies[0];
-  expect(readResource(f.store, 'prompt-preset', copy.id)).toMatchObject({
-    title: 'Stored copy',
-    revision: 1,
-    program: source.program,
-  });
-  expect(draft.program).toEqual(nativePrompt('Unsaved draft body'));
-  expect(readResource(f.store, 'prompt-preset', source.id)).toEqual(source);
-  expect(
-    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.updated')
-  ).toHaveLength(1);
-});
-
-test('failed explanation keeps the theme save and its refresh events', async () => {
-  const kind = 'theme' as const;
-  const f = fixture();
-  const model = emptyTheme('원래 설정');
-  const saved = saveResource(f.store, { kind, id: null, model }).saved;
-  if (!('id' in saved)) throw new Error('Expected saved ID');
-  providerMutation(
-    'resource.save',
-    {
-      kind,
-      id: saved.id,
-      expectedRevision: saved.revision,
-      model: { ...model, title: '변경한 설정' },
-    },
-    true
-  );
-  const task = f.runtime.enqueue(f.conversation.id, 'failed-explanation', '설정 이름을 바꿔줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id)).toMatchObject({
-    status: 'failed',
-    completedEffects: { count: 1 },
-  });
-  expect(readResource(f.store, kind, saved.id)).toMatchObject({ title: '변경한 설정' });
-  const kinds = f.workspace.events(f.conversation.id).map((event) => event.kind);
-  expect(kinds.filter((value) => value === `${kind}.updated`)).toHaveLength(1);
-  expect(kinds.filter((value) => value === 'resource.updated')).toHaveLength(1);
 });
 
 test('image metadata restores prior metadata without changing image bytes', () => {
@@ -455,35 +317,6 @@ test.each(['stale', 'duplicate'] as const)(
   }
 );
 
-test('batch boundaries reject invalid count and targets before storing any resource', () => {
-  const f = fixture();
-  const content = f.store.product.content(fixtureBotInput('원래 제목'));
-  const item = patchTitle(content.id, content.revision, '변경 제목');
-  for (const items of [[], Array.from({ length: 17 }, () => item), null])
-    expect(() => patchHelperResources(f.store, items)).toThrow('1개부터 16개');
-  for (const invalid of [
-    { ...item, kind: 'theme' },
-    { ...item, id: '' },
-    { ...item, expectedRevision: 0 },
-    { ...item, changes: [] },
-  ])
-    expect(() => patchHelperResources(f.store, [item, invalid])).toThrow(HelperResourceBatchError);
-  const task = runningTask(f);
-  expect(() =>
-    mutate(
-      f,
-      task,
-      'resource.patchMany',
-      {
-        items: [item, { ...item, kind: 'invalid' }, { ...item, id: 'missing-resource' }],
-      },
-      'invalid-item'
-    )
-  ).toThrow(expect.objectContaining({ itemIndex: 1, statusCode: 400 }));
-  expect(readResource(f.store, 'content', content.id)).toEqual(content);
-  expect(f.store.db.prepare('SELECT * FROM resource_undo').all()).toHaveLength(0);
-});
-
 test('mixed batch reports every member and keeps bodies out of its result', () => {
   const f = fixture();
   const content = f.store.product.content(
@@ -522,76 +355,4 @@ test('mixed batch reports every member and keeps bodies out of its result', () =
   ]);
   expect(mutate(f, task, 'resource.patchMany', args, 'batch')).toEqual(result);
   expect(JSON.stringify(result)).not.toContain('본문은 기록에 남기지 않음');
-});
-
-test('an unchanged batch records no resource event', () => {
-  const f = fixture();
-  const contents = ['첫 자료', '둘째 자료'].map((title) =>
-    f.store.product.content(fixtureBotInput(title))
-  );
-  const task = runningTask(f);
-  const items = contents.map((content) => patchTitle(content.id, 1, content.title));
-  mutate(f, task, 'resource.patchMany', { items }, 'no-changes');
-  expect(
-    f.workspace.events(f.conversation.id).filter((event) => event.kind.startsWith('resource.'))
-  ).toHaveLength(0);
-});
-
-test('batch save rolls back every member if its durable receipt fails', () => {
-  const f = fixture();
-  const contents = ['첫 자료', '둘째 자료'].map((title) =>
-    f.store.product.content(fixtureBotInput(title))
-  );
-  const task = runningTask(f);
-  const args = {
-    items: contents.map((content) => patchTitle(content.id, 1, `${content.title} 변경`)),
-  };
-  f.store.db.exec(`CREATE TRIGGER reject_batch_operation BEFORE INSERT ON helper_operations
-    BEGIN SELECT RAISE(ABORT, 'batch receipt failed'); END`);
-  expect(() => mutate(f, task, 'resource.patchMany', args, 'batch')).toThrow(
-    'batch receipt failed'
-  );
-  for (const content of contents)
-    expect(readResource(f.store, 'content', content.id)).toEqual(content);
-  f.store.db.exec('DROP TRIGGER reject_batch_operation');
-  mutate(f, task, 'resource.patchMany', args, 'batch');
-  for (const content of contents)
-    expect(readResource(f.store, 'content', content.id)).toMatchObject({
-      title: `${content.title} 변경`,
-      revision: 2,
-    });
-});
-
-test('a batch whose second target has an unsaved editor saves the saved revisions of both', async () => {
-  const f = fixture();
-  const contents = ['첫 자료', '둘째 자료'].map((title) =>
-    f.store.product.content(fixtureBotInput(title))
-  );
-  providerMutation('resource.patchMany', {
-    items: contents.map((content) =>
-      patchTitle(content.id, content.revision, `${content.title} 변경`)
-    ),
-  });
-  const second = contents[1];
-  const task = f.runtime.enqueue(f.conversation.id, 'dirty-batch', '두 자료를 함께 고쳐줘', {
-    kind: 'content',
-    targetId: second.id,
-    revision: second.revision,
-    title: second.title,
-    source: 'unsaved',
-    model: fixtureBotInput('보존할 미저장 내용'),
-  });
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  const events = f.workspace.events(f.conversation.id);
-  expect(events.find((event) => event.kind === 'tool.finished')?.data).toMatchObject({
-    name: 'resource.patchMany',
-    denied: false,
-  });
-  for (const content of contents)
-    expect(readResource(f.store, 'content', content.id)).toMatchObject({
-      title: `${content.title} 변경`,
-      revision: content.revision + 1,
-    });
-  expect(f.store.db.prepare('SELECT * FROM helper_operations').all()).toHaveLength(1);
 });

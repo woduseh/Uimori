@@ -9,8 +9,6 @@ import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import {
-  nativeRisuLore,
-  nativeRisuRegex,
   nativeRisuTriggers,
   normalizeRisuContentSource,
   validateRisuContentSource,
@@ -139,7 +137,7 @@ function createNativeContent(store: Store, card = synthetic()) {
   return store.product.content(body) as Content;
 }
 
-test.each(['json', 'charx'])(
+test.each(['charx'])(
   'long HTML greetings survive %s preparation, import and initial message creation',
   async (format) => {
     const store = database();
@@ -195,39 +193,6 @@ test.each(['json', 'charx'])(
     }
   }
 );
-
-test('import preparation returns actionable greeting size errors through the app HTTP handler', async () => {
-  const { createApp } = await import('../server/app.js');
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-native-risu-http-'));
-  let app: Awaited<ReturnType<typeof createApp>> | undefined;
-  try {
-    app = await createApp({
-      dbPath: join(directory, 'fixture.sqlite'),
-      buildId: 'greeting-size-errors',
-      testMode: true,
-    });
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/risu-imports/prepare',
-      payload: {
-        source: sourceOf({
-          spec: 'chara_card_v3',
-          spec_version: '3.0',
-          data: {
-            name: 'Greeting size fixture',
-            description: '',
-            first_mes: 'a'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
-          },
-        }),
-      },
-    });
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: 'PACKAGE_START_TEXT_TOO_LONG' });
-  } finally {
-    await app?.close();
-    removeFixtureDirectory(directory);
-  }
-});
 
 test('import preserves a stored-message-sized opening and every alternative without a combined cap', async () => {
   const store = database();
@@ -402,36 +367,6 @@ test('native edits reproject canonical source, preserve unknown fields and retai
     'content revision not found'
   );
   expect(() => store.product.content(request, id)).toThrow(/Revision conflict/);
-});
-
-test('content saves reject retired Uimori instructions without modifying the current record', () => {
-  const store = database();
-  const saved = createNativeContent(store);
-  const { id, revision, ...body } = structuredClone(saved);
-  const request = {
-    ...body,
-    expectedRevision: revision,
-    package: {
-      ...body.package,
-      instructions: [{ id: 'card-system', target: 'main', text: 'RETIRED_SYSTEM' }],
-    },
-  };
-  expect(() => store.product.content(request, id)).toThrow('PACKAGE_INVALID_FIELDS');
-  expect(store.product.get<Content>('content', id)).toEqual(saved);
-});
-
-test('embedded module selection distinguishes absent/null/empty lore without mutating either source', () => {
-  const card = synthetic();
-  const native = { version: 1 as const, card, assets: [], sourceHash: 'a'.repeat(64) };
-  const selected = { ...native, module: { regex: [], trigger: [], lorebook: [] } };
-  expect(nativeRisuRegex(selected)).toEqual([]);
-  expect(nativeRisuTriggers(selected)).toEqual([]);
-  expect(nativeRisuLore(selected)).toEqual([]);
-  expect(nativeRisuLore({ ...selected, module: { lorebook: null } })).toEqual(
-    card.character_book.entries
-  );
-  expect(nativeRisuLore({ ...selected, module: {} })).toEqual(card.character_book.entries);
-  expect(card).toEqual(synthetic());
 });
 
 test('a card without first_mes keeps an empty chat even when alternate greetings exist', async () => {

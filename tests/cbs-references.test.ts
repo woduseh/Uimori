@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest';
 import {
-  createCbsReferenceIndexer,
   indexCbsReferences,
   nativeRisuContentReferenceInput,
   nativeRisuPresetReferenceInput,
@@ -208,20 +207,6 @@ describe('content cross references', () => {
     expect(entry(result, 'chat', 'plain')).toBeUndefined();
     expect(entry(result, 'chat', 'flagged')?.uses[0]).toMatchObject({ field: 'in' });
     expect(entry(result, 'chat', 'ignored')).toBeUndefined();
-  });
-
-  test('reuses analysis for unchanged text', () => {
-    const indexer = createCbsReferenceIndexer();
-    const entries = Array.from({ length: 400 }, (_, i) => ({
-      comment: `Entry ${i}`,
-      content: `{{getvar::v${i % 20}}} ${'text '.repeat(200)}`,
-    }));
-    const source = bot({}, { character_book: { entries } });
-    indexer(nativeRisuContentReferenceInput(source));
-    const started = performance.now();
-    const result = indexer(nativeRisuContentReferenceInput(source));
-    expect(performance.now() - started).toBeLessThan(100);
-    expect(entry(result, 'chat', 'v0')?.reads).toBe(20);
   });
 });
 

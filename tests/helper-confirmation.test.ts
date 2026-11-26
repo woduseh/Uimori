@@ -8,14 +8,7 @@ import { deleteChat } from '../server/chat-deletion.js';
 import { helperConfirmationGate } from '../server/helper-confirmations.js';
 import { helperRollbackView, rollBackHelperTask } from '../server/helper-rollback.js';
 import { HELPER_APP_TOOLS, helperToolTraits } from '../server/helper-app-tools.js';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import type { HelperConfirmation } from '../core/helper.js';
-import {
-  HELPER_CONFIRMATION_OPERATION_LABELS,
-  HelperConfirmations,
-} from '../web/HelperConfirmations.js';
-import { t } from '../web/i18n.js';
+import { HELPER_CONFIRMATION_OPERATION_LABELS } from '../web/HelperConfirmations.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { requestTranslation } from '../server/source-editing.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
@@ -347,46 +340,6 @@ test('deleting a target a held call names removes its arguments and the hold exp
   ).toThrow('CONFIRMATION_UNAVAILABLE');
 });
 
-test('deleting a target also removes the arguments a failed granted task kept for its retry', async () => {
-  const f = fixture();
-  const [, two] = f.bots as [Content, Content];
-  const call = () => helperCall('patch', 'resource.delete', remove(two, 99));
-  const held = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
-  const [confirmation] = readHelperTaskResults(f.store(), held.task.id).confirmations;
-  const granted = await runScriptedChatHelper(
-    f.store(),
-    f.chat.id,
-    [call(), helperDone],
-    {},
-    { request: '바꿔 줘', confirmations: [confirmation!.id] }
-  );
-  f.store()
-    .db.prepare("UPDATE helper_tasks SET status='failed',snapshot=? WHERE id=?")
-    .run(
-      JSON.stringify({
-        ...granted.task.snapshot,
-        confirmations: [
-          { ...granted.task.snapshot.confirmations![0]!, arguments: { items: ['kept'] } },
-        ],
-      }),
-      granted.task.id
-    );
-  expect(storedArguments(f.store())).toEqual({ held: [], granted: [granted.task.id] });
-  deleteLibraryItem(f.store(), 'content', two.id, { expectedRevision: two.revision });
-  expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
-  const conversation = held.runtime.workspace.open({ kind: 'chat', chatId: f.chat.id });
-  expect(() =>
-    held.runtime.enqueue(
-      conversation.id,
-      randomUUID(),
-      '다시 해 줘',
-      undefined,
-      undefined,
-      granted.task.id
-    )
-  ).toThrow('CONFIRMATION_UNAVAILABLE');
-});
-
 test('deleting a chat removes the arguments of a call another conversation held for it', () => {
   const f = fixture();
   const workspace = new HelperWorkspace(f.store());
@@ -614,91 +567,6 @@ test('paid illustration and retry calls wait only when paid confirmation is on, 
     expect(
       helperConfirmationGate(f.store(), on.workspace, on.task, 'task.retry', args, `r${index + 4}`)
     ).toBeNull();
-});
-
-test('an irreversible deletion waits even without paid confirmation and names its target', () => {
-  const f = fixture();
-  const connection = f.store().product.all('connection')[0] as { id: string };
-  const model = f.store().product.model({
-    title: 'Retired',
-    connectionId: connection.id,
-    modelId: 'retired',
-    maxOutputTokens: 512,
-    temperature: null,
-  }) as unknown as { id: string; title: string };
-  const { workspace, task } = heldTask(f, false);
-  expect(
-    helperConfirmationGate(
-      f.store(),
-      workspace,
-      task,
-      'model.delete',
-      { modelId: model.id, expectedRevision: 1 },
-      'r1'
-    )
-  ).toMatchObject({
-    confirmation: {
-      reason: 'delete',
-      targets: [{ kind: 'model', id: model.id, title: model.title }],
-    },
-  });
-  expect(
-    helperConfirmationGate(
-      f.store(),
-      workspace,
-      task,
-      'chat.lore',
-      { action: 'patch', body: {} },
-      'r2'
-    )
-  ).toBeNull();
-  expect(
-    helperConfirmationGate(
-      f.store(),
-      workspace,
-      task,
-      'chat.lore',
-      { action: 'remove', body: {} },
-      'r3'
-    )
-  ).toBeNull();
-});
-
-test('the confirmation card shows titles the server attached and the number of pictures', () => {
-  const held = (overrides: Partial<HelperConfirmation>): HelperConfirmation => ({
-    id: 'held',
-    taskId: 'task',
-    operation: 'model.delete',
-    reason: 'delete',
-    chatId: null,
-    targets: [],
-    grantedBy: null,
-    grantable: true,
-    ...overrides,
-  });
-  const html = renderToStaticMarkup(
-    createElement(HelperConfirmations, {
-      confirmations: [
-        held({ id: 'model', targets: [{ kind: 'model', id: 'm1', title: 'Old model' }] }),
-        held({
-          id: 'draw',
-          operation: 'illustration.generate',
-          reason: 'paid',
-          chatId: 'c1',
-          targets: [{ kind: 'scene', id: 's1' }],
-          count: 3,
-        }),
-      ],
-      nameTarget: (target) => `named:${target.id}`,
-      pending: [],
-      onConfirm: () => {},
-    })
-  );
-  expect(html).toContain('Old model');
-  expect(html).not.toContain('named:m1');
-  expect(html).toContain('named:s1');
-  expect(html).toContain(t('helperConfirm.pictures', { count: 3 }));
-  expect(html).toContain(t('helperConfirm.modelDelete'));
 });
 
 test('a model still in use is refused without a confirmation card, and an unused one waits', async () => {

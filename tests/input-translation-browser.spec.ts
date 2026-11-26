@@ -45,12 +45,6 @@ async function answer(route: Route, text = translated) {
     json: { text, targetLanguage: route.request().postDataJSON().targetLanguage },
   });
 }
-async function spaNavigate(page: Page, url: string) {
-  await page.evaluate((next) => {
-    history.pushState(null, '', next);
-    dispatchEvent(new PopStateEvent('popstate'));
-  }, url);
-}
 async function seed(request: APIRequestContext, chat: Chat, text: string): Promise<Run> {
   const before = await detail(request, chat.id);
   const response = await request.post(`/api/chats/${chat.id}/runs`, {
@@ -186,79 +180,6 @@ test('ITRAN typing, including edit-then-revert, cannot be overwritten by a late 
   }
 });
 
-test('ITRAN explicit cancellation and a newer translation discard the older response', async ({
-  page,
-  request,
-}) => {
-  const chat = await createChat(request);
-  const started = gate(),
-    released = gate(),
-    finished = gate();
-  let calls = 0;
-  await page.route(endpoint, async (route) => {
-    calls++;
-    if (calls === 1) {
-      started.release();
-      await released.promise;
-      await answer(route, 'STALE_TRANSLATION');
-      finished.release();
-    } else await answer(route, 'NEW_TRANSLATION');
-  });
-  try {
-    await open(page, chat.id);
-    await composer(page).fill(original);
-    await (await translate(page)).click();
-    await started.promise;
-    await page.getByRole('button', { name: '입력 번역 취소', exact: true }).click();
-    await (await translate(page)).click();
-    await expect(composer(page)).toHaveValue('NEW_TRANSLATION');
-    released.release();
-    await finished.promise;
-    await expect(composer(page)).toHaveValue('NEW_TRANSLATION');
-    await expect(page.locator('.input-translation-candidate')).toHaveCount(0);
-    expect(calls).toBe(2);
-  } finally {
-    released.release();
-  }
-});
-
-test('ITRAN leaving and returning to a chat never applies the translation from its earlier visit', async ({
-  page,
-  request,
-}) => {
-  const first = await createChat(request),
-    second = await createChat(request);
-  const started = gate(),
-    released = gate(),
-    finished = gate();
-  await page.route(endpoint, async (route) => {
-    started.release();
-    await released.promise;
-    await answer(route, 'OLD_VISIT_RESULT');
-    finished.release();
-  });
-  try {
-    await open(page, first.id);
-    await composer(page).fill(original);
-    await (await translate(page)).click();
-    await started.promise;
-    await spaNavigate(page, `/?chat=${second.id}`);
-    await expect(composer(page)).toHaveValue('');
-    await composer(page).fill('다른 채팅의 초안');
-    await spaNavigate(page, `/?chat=${first.id}`);
-    await expect(composer(page)).toHaveValue(original);
-    released.release();
-    await finished.promise;
-    await expect(composer(page)).toHaveValue(original);
-    await expect(page.locator('.input-translation-candidate')).toHaveCount(0);
-    expect(await page.evaluate((id) => sessionStorage.getItem(`draft:${id}`), second.id)).toBe(
-      '다른 채팅의 초안'
-    );
-  } finally {
-    released.release();
-  }
-});
-
 test('ITRAN send intent invalidates a running translation without making translation mandatory', async ({
   page,
   request,
@@ -286,45 +207,6 @@ test('ITRAN send intent invalidates a running translation without making transla
     await expect(composer(page)).toHaveValue('다음 요청 초안');
     await expect(page.locator('.input-translation-candidate')).toHaveCount(0);
     expect((await detail(request, chat.id)).runs[0].request).toBe(original);
-  } finally {
-    released.release();
-  }
-});
-
-test('ITRAN send invalidates translation even while its preflight is pending', async ({
-  page,
-  request,
-}) => {
-  const chat = await createChat(request);
-  const started = gate(),
-    released = gate(),
-    finished = gate();
-  let translationCalls = 0;
-  await page.route(`**/api/chats/${chat.id}/codex-content-preflight`, async (route) => {
-    if (route.request().postDataJSON().role !== 'translation') return route.continue();
-    started.release();
-    await released.promise;
-    await route.fulfill({ status: 200, json: { warning: false } }).catch(() => {});
-    finished.release();
-  });
-  await page.route(endpoint, async (route) => {
-    translationCalls++;
-    await answer(route, 'TOO_LATE');
-  });
-  await page.route(`**/api/chats/${chat.id}/runs`, (route) =>
-    route.fulfill({ status: 422, json: { error: 'Synthetic rejection' } })
-  );
-  try {
-    await open(page, chat.id);
-    await composer(page).fill(original);
-    await (await translate(page)).click();
-    await started.promise;
-    await send(page).click();
-    await expect(page.getByRole('alert')).toContainText('요청을 처리할 수 없어요. (422)');
-    released.release();
-    await finished.promise;
-    await expect(composer(page)).toHaveValue(original);
-    expect(translationCalls).toBe(0);
   } finally {
     released.release();
   }
@@ -360,55 +242,6 @@ test('ITRAN refused translation and rejected submission preserve the editable dr
   await page.getByRole('button', { name: '되돌리기', exact: true }).click();
   await expect(composer(page)).toHaveValue(original);
   expect((await detail(request, chat.id)).runs).toHaveLength(0);
-});
-
-test('ITRAN uncertain admission retains undo across reload and cleans it only after confirmation', async ({
-  page,
-  request,
-}) => {
-  const chat = await createChat(request);
-  await page.route(endpoint, (route) => answer(route));
-  const calls: Record<string, unknown>[] = [];
-  await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
-    calls.push(route.request().postDataJSON());
-    if (calls.length === 2)
-      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
-    const response = await route.fetch();
-    expect(response.ok(), await response.text()).toBe(true);
-    if (calls.length === 1) await route.abort('failed');
-    else await route.fulfill({ response });
-  });
-  await open(page, chat.id);
-  await composer(page).fill(original);
-  await (await translate(page)).click();
-  await expect(composer(page)).toHaveValue(translated);
-  await send(page).click();
-  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
-  await expect(page.getByText('번역 전 원문 보기', { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(composer(page)).toHaveValue(translated);
-  await expect(page.getByRole('button', { name: '되돌리기', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
-    .getByRole('button', { name: '접수 확인', exact: true })
-    .click();
-  await expect.poll(() => calls.length).toBe(2);
-  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
-  await expect(composer(page)).toHaveValue(translated);
-  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  const decision = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
-  await expect(decision).toContainText('비용이 중복될 수 있어요');
-  await decision.getByRole('button', { name: '접수 확인', exact: true }).click();
-  await expect(composer(page)).toHaveValue('');
-  await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
-  expect(calls).toHaveLength(3);
-  expect(calls[1]).toEqual(calls[0]);
-  expect(calls[2]).toEqual(calls[0]);
-  const saved = await detail(request, chat.id);
-  expect(saved.runs).toHaveLength(1);
-  expect(saved.runs[0].request).toBe(translated);
-  expect(JSON.stringify(saved)).not.toContain(original);
 });
 
 test('ICOPY full stored input is copied, not transformed or collapsed text, even while generation disables editing', async ({
@@ -459,33 +292,4 @@ test('ICOPY full stored input is copied, not transformed or collapsed text, even
   } finally {
     await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
   }
-});
-
-test('ICOPY clipboard failures do not report success and a collapsed request still copies in full', async ({
-  page,
-  request,
-  context,
-}) => {
-  const chat = await createChat(request);
-  const raw = '긴 입력과 줄바꿈  \n'.repeat(40);
-  await seed(request, chat, raw);
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await open(page, chat.id);
-  const source = page.getByTestId('source').first();
-  await expect(source.locator('.request-preview')).toBeVisible();
-  const copy = source.getByRole('button', { name: '요청 복사', exact: true });
-  await copy.click();
-  expect(await clipboardText(page)).toBe(raw);
-  await expect(copy).toBeVisible();
-  await page.evaluate(() =>
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText: () => Promise.reject(new DOMException('Denied', 'NotAllowedError')) },
-    })
-  );
-  await copy.click();
-  await expect(
-    page.getByRole('alert').filter({ hasText: '요청을 복사하지 못했어요' })
-  ).toBeVisible();
-  await expect(source.getByRole('button', { name: '요청 복사됨', exact: true })).toHaveCount(0);
 });

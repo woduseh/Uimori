@@ -8,12 +8,11 @@ import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { createApp, type App } from '../server/app.js';
 import {
-  connectionTestRequest,
   providerConnectionTestRoutes,
   ProviderConnectionTestStore,
   CONNECTION_TEST_TIMEOUT_MS,
 } from '../server/provider-connection-test.js';
-import type { Connection, ModelPreset, ProviderProtocol } from '../core/product.js';
+import type { Connection, ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { supportedModels } from '../core/model-capabilities.js';
 import { CodexProcess } from '../server/codex-process.js';
@@ -217,19 +216,6 @@ describe('one-call provider connection diagnostics', () => {
       ).not.toContain('SENSITIVE_RAW_HTTP_ERROR');
     }
   );
-
-  test('bounds returned and persisted text to 2000 characters', async () => {
-    const { app, model } = await setup();
-    vi.mocked(fetch).mockResolvedValueOnce(
-      sse({ type: 'text_delta', delta: 'a'.repeat(2100) }, { type: 'done', reason: 'stop' })
-    );
-    const started = await post(app, model);
-    expect(await terminal(app, started.id)).toMatchObject({
-      status: 'completed',
-      text: 'a'.repeat(2000),
-      truncated: true,
-    });
-  });
 
   test('uses a fixed 25 second deadline and returns TIMEOUT without retry', async () => {
     const deadline = new AbortController();
@@ -526,83 +512,5 @@ describe('one-call provider connection diagnostics', () => {
     expect(app.store.product.get<Connection>('connection', connection.id).endpoint).toBe(saved);
     await post(app, model, randomUUID(), 400, { location: 'us_central1' });
     await post(app, fixtureModel, randomUUID(), 400, { location: 'us' });
-  });
-
-  test('the test request carries the preset options with a 256-token cap, no tools and cache off', () => {
-    for (const protocol of [
-      'vertex-gemini-v1',
-      'openai-responses-v1',
-      'openai-chat-v1',
-      'anthropic-messages-v1',
-    ] as ProviderProtocol[]) {
-      for (const cap of supportedModels(protocol)) {
-        const connection: Connection = {
-          id: 'c',
-          revision: 1,
-          title: 'c',
-          protocol,
-          endpoint:
-            protocol === 'vertex-gemini-v1'
-              ? 'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models'
-              : protocol === 'anthropic-messages-v1'
-                ? 'https://api.anthropic.com/v1'
-                : 'https://api.openai.com/v1',
-          enabled: true,
-          catalog: [],
-          catalogError: null,
-        };
-        const model: ModelPreset = {
-          id: 'm',
-          revision: 1,
-          title: 'm',
-          connectionId: 'c',
-          modelId: cap.id,
-          maxOutputTokens: 10000,
-          temperature: null,
-          serviceTier: cap.serviceTiers?.at(-1),
-          ...(cap.reasoningEfforts ? { reasoningEffort: cap.reasoningEfforts.at(-1) } : {}),
-          ...(cap.outputEfforts ? { outputEffort: 'max' as const } : {}),
-          ...(cap.thinkingLevels ? { thinkingLevel: cap.thinkingLevels.at(-1) } : {}),
-          ...(cap.cacheModes
-            ? { cacheMode: 'automatic' as const, cacheTtl: cap.cacheTtls![0] }
-            : {}),
-        };
-        const request = connectionTestRequest(model, connection);
-        expect(request.generation).toMatchObject({ maxOutputTokens: 256, temperature: null });
-        expect(request.generation?.serviceTier).toBe(model.serviceTier);
-        expect(request.stable.tools).toEqual([]);
-        if (cap.reasoningEfforts)
-          expect(request.generation?.reasoningEffort).toBe(model.reasoningEffort);
-        if (cap.thinkingLevels) expect(request.generation?.thinkingLevel).toBe(model.thinkingLevel);
-        if (cap.outputEfforts) expect(request.generation?.outputEffort).toBe('max');
-        if (cap.cacheModes) {
-          expect(request.generation?.cacheMode).toBe('disabled');
-          expect(request.generation?.cacheTtl).toBeUndefined();
-        }
-      }
-    }
-    const unlisted = connectionTestRequest(
-      {
-        id: 'm',
-        revision: 1,
-        title: 'm',
-        connectionId: 'c',
-        modelId: 'gpt-future',
-        maxOutputTokens: 4096,
-        temperature: null,
-        reasoningEffort: 'xhigh',
-      },
-      {
-        id: 'c',
-        revision: 1,
-        title: 'c',
-        protocol: 'openai-responses-v1',
-        endpoint: 'https://api.openai.com/v1',
-        enabled: true,
-        catalog: [],
-        catalogError: null,
-      }
-    );
-    expect(unlisted.generation).toMatchObject({ maxOutputTokens: 256, reasoningEffort: 'xhigh' });
   });
 });

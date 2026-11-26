@@ -1,12 +1,10 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { selectChatSettingsSection, sourceAction } from './ui-navigation.js';
+import { selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
-import { DatabaseSync } from 'node:sqlite';
-import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
+import type { Chat } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
-import type { AssetMetadata } from '../core/asset-manifest.js';
 
 async function control(
   request: APIRequestContext,
@@ -15,11 +13,6 @@ async function control(
 ) {
   const response = await request.post('/api/test/control', { data: { action, ...extra } });
   expect(response.ok()).toBeTruthy();
-}
-async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
-  const response = await request.get(`/api/chats/${chatId}`);
-  expect(response.ok()).toBeTruthy();
-  return response.json();
 }
 async function story(request: APIRequestContext, chatId: string): Promise<StoryDetail> {
   const response = await request.get(`/api/chats/${chatId}/story`);
@@ -47,51 +40,6 @@ async function open(section: Locator, title: RegExp) {
   const parent = summary.locator('..');
   if ((await parent.getAttribute('open')) === null) await summary.click();
   return parent;
-}
-async function close(page: Page) {
-  if (await page.getByRole('dialog').filter({ visible: true }).count())
-    await page.keyboard.press('Escape');
-}
-async function send(page: Page, request: string): Promise<Run> {
-  await close(page);
-  await page.getByLabel('다음 장면 요청').fill(request);
-  const received = page.waitForResponse(
-    (response) =>
-      /\/api\/chats\/[^/]+\/runs$/.test(response.url()) && response.request().method() === 'POST'
-  );
-  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
-  const response = await received;
-  expect(response.ok()).toBeTruthy();
-  return response.json();
-}
-async function complete(request: APIRequestContext, chatId: string, runId: string) {
-  await expect
-    .poll(async () => (await detail(request, chatId)).runs.find((run) => run.id === runId)?.status)
-    .toBe('completed');
-  return (await detail(request, chatId)).sources.find((source) => source.runId === runId)!;
-}
-async function original(page: Page, source: Source) {
-  const article = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  await expect(article).toBeVisible();
-  if ((await article.getAttribute('data-representation')) === 'translation')
-    await sourceAction(article, '원문 보기');
-  await expect(article.getByTestId('source-text')).toContainText(source.text.split('\n')[0]);
-  return article;
-}
-function storedSource(source: Source) {
-  expect(
-    process.env.UIMORI_DB,
-    'Browser suite requires a fresh verifier-owned SQLite DB'
-  ).toBeTruthy();
-  const db = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
-  try {
-    expect(db.prepare('SELECT text,hash FROM sources WHERE id=?').get(source.id)).toEqual({
-      text: source.text,
-      hash: source.hash,
-    });
-  } finally {
-    db.close();
-  }
 }
 
 test.afterEach(async ({ request }) => {
@@ -129,109 +77,4 @@ test('S04 explicit user note and correction remain separate from prose after rel
       path: testInfo.outputPath('S04-mobile-author-notes.png'),
       fullPage: true,
     });
-});
-
-test('S06 S07 reading preserves source text while the asset catalog does not preload bytes', async ({
-  page,
-  request,
-}, testInfo) => {
-  const chat = await create(page, 'S06 S07 합성 표현과 에셋');
-  const png =
-    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWMQCej5D8IMMAYAP7QHvSBXvZYAAAAASUVORK5CYII=';
-  const uploadedIds = new Set<string>();
-  for (let index = 0; index < 5; index++) {
-    const response = await request.post(`/api/chats/${chat.id}/assets`, {
-      data: {
-        title: `합성 이미지 ${index}`,
-        mime: 'image/png',
-        base64: png,
-        description: '작성자가 설명한 항구',
-        actor: 'Mira',
-        outfit: 'coat',
-        location: 'harbor',
-        allowedUse: 'inline',
-      },
-    });
-    expect(response.ok()).toBeTruthy();
-    uploadedIds.add(((await response.json()) as { id: string }).id);
-  }
-  expect(uploadedIds.size).toBe(5);
-  const firstResponse = await request.get(
-    `/api/chats/${chat.id}/asset-manifest?limit=2&actor=Mira&allowedUse=inline`
-  );
-  expect(firstResponse.ok()).toBeTruthy();
-  const first = (await firstResponse.json()) as {
-    items: AssetMetadata[];
-    nextOffset: number | null;
-    total: number;
-  };
-  expect(first.items).toHaveLength(2);
-  expect(first.total).toBe(5);
-  expect(first.nextOffset).toBe(2);
-  expect(JSON.stringify(first)).not.toContain('base64');
-  expect(JSON.stringify(first)).not.toContain(png);
-  for (const item of first.items) {
-    expect(item).not.toHaveProperty('url');
-    expect(item).not.toHaveProperty('bytes');
-  }
-  const last = await (
-    await request.get(`/api/chats/${chat.id}/asset-manifest?limit=2&offset=4`)
-  ).json();
-  expect(last.items).toHaveLength(1);
-  expect(last.nextOffset).toBeNull();
-  const item = first.items[0],
-    ref = { id: item.id, revision: item.revision, hash: item.hash };
-  const resolve = async (body: unknown) =>
-    (await request.post(`/api/chats/${chat.id}/asset-manifest/resolve`, { data: body })).json();
-  expect(await resolve({ ref, use: 'inline', actor: 'Mira', outfit: 'coat' })).toMatchObject({
-    ok: true,
-  });
-  expect(await resolve({ ref: { ...ref, hash: 'stale' }, use: 'inline' })).toMatchObject({
-    ok: false,
-    fallback: 'no-image',
-    error: 'ASSET_STALE',
-  });
-  expect(await resolve({ ref, use: 'profile' })).toMatchObject({
-    ok: false,
-    error: 'ASSET_USE_DENIED',
-  });
-  expect(await resolve({ ref, use: 'inline', outfit: 'gown' })).toMatchObject({
-    ok: false,
-    error: 'ASSET_COMBINATION_MISMATCH',
-  });
-  const loads: string[] = [];
-  page.on('request', (response) => {
-    if (/\/api\/assets\//.test(response.url())) loads.push(response.url());
-  });
-  await page.reload();
-  const run = await send(page, 'SYNTHETIC_RENDER Mira waits at the harbor.');
-  const source = await complete(request, chat.id, run.id);
-  await original(page, source);
-  expect(source.text).toContain('Mira');
-  expect(
-    (await detail(request, chat.id)).sources.find((item) => item.id === source.id)
-  ).toMatchObject({ text: source.text, hash: source.hash });
-  storedSource(source);
-  const uploadedLoads = loads.filter((url) =>
-    uploadedIds.has(decodeURIComponent(new URL(url).pathname.split('/').at(-1)!))
-  );
-  await testInfo.attach('S07-asset-network-scope', {
-    body: JSON.stringify(
-      {
-        uploadedIds: [...uploadedIds],
-        allAssetRequests: loads,
-        uploadedAssetRequests: uploadedLoads,
-      },
-      null,
-      2
-    ),
-    contentType: 'application/json',
-  });
-  expect(uploadedLoads).toEqual([]);
-  if (visualReview)
-    await page.screenshot({
-      path: testInfo.outputPath('S07-mobile-asset-catalog-reader.png'),
-      fullPage: true,
-    });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

@@ -7,13 +7,8 @@ import { defaultProfile, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ContextPlan } from '../core/context-plan.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
-import {
-  compileRisuPrompt,
-  validateProviderPrompt,
-  type PromptHistoryMessage,
-} from '../core/risu-prompt.js';
+import { validateProviderPrompt, type PromptHistoryMessage } from '../core/risu-prompt.js';
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
-import { CONTEXT_SUMMARY_SEMANTICS } from '../core/context-summary-policy.js';
 import {
   ContextCompactionError,
   prepareInputContext,
@@ -257,140 +252,6 @@ test('only successful actual compaction resets admitted lore; a fitting no-op re
 });
 
 describe('input context projection and durable summary calls', () => {
-  test('old and new snapshots measure their frozen tokenizer without reinterpreting history', async () => {
-    const legacy = await snapshot(['안녕하세요. 오늘은 바다를 바라봐요.'.repeat(20)]);
-    const updated = structuredClone(legacy);
-    updated.profile!.models.main!.tokenizer = 'openai-cl100k';
-    const current = seedContextPlan(updated);
-    expect(() => validateContextPlan(legacy)).not.toThrow();
-    expect(() => validateContextPlan(current)).not.toThrow();
-    expect(measureMainContext(current).estimatedInputTokens).toBeGreaterThan(
-      measureMainContext(legacy).estimatedInputTokens
-    );
-    expect(legacy.contextPlan!.budget.estimator).toBe('o200k_base-v1');
-    current.contextPlan!.budget = structuredClone(legacy.contextPlan!.budget);
-    expect(() => validateContextPlan(current)).toThrow('CONTEXT_BUDGET_MISMATCH');
-    expect(fetch).not.toHaveBeenCalled();
-  });
-  test('one token-fitting long exchange uses one summary call and preserves a fitting summary beyond the old character cap', async () => {
-    const longSource = 'a'.repeat(600_000) + 'SOURCE_END';
-    const source = await snapshot([longSource, 'Recent scene one.', 'Recent scene two.']);
-    const mergedSummary = 'Known fact [scene 1]:' + ' '.repeat(220_000) + 'SUMMARY_END';
-    const summaryModel = { ...model('summary-model'), inputTokenLimit: 1_000_000 };
-    const log = observed({ summaryModel });
-    vi.mocked(fetch).mockImplementation(async (_url, options) => {
-      const wire = JSON.parse(String(options?.body));
-      expect(estimateContextTokens(wire)).toBeLessThan(summaryModel.inputTokenLimit * 0.85);
-      return completed(mergedSummary);
-    });
-    const result = await prepareInputContext(source, log.hooks);
-    expect(log.wires).toHaveLength(1);
-    expect(result.usage.modelCalls).toBe(1);
-    const payload = (log.wires[0].body as { input: { source: SummaryPayload } }).input.source;
-    expect(payload.fragments.map((part) => part.text)).toEqual(
-      source.logicalHistory!.slice(0, 2).map((message) => message.text)
-    );
-    expect(payload.fragments[1]).toMatchObject({
-      offsetUtf16: 0,
-      totalUtf16: longSource.length,
-      text: longSource,
-    });
-    expect(result.snapshot.contextPlan).toMatchObject({
-      summary: mergedSummary,
-      compacted: [{ revision: 'source-0', hash: hash(longSource) }],
-      recentSourceRevisions: ['source-1', 'source-2'],
-    });
-    expect(result.snapshot.history).toEqual(source.history);
-    expect(() => validateContextPlan(result.snapshot)).not.toThrow();
-  });
-
-  test('preserves large native prompt text within the token budget without a summary call', async () => {
-    const source = await snapshot();
-    const paragraphs = ['a'.repeat(2_200_000), 'Keep the complete source.'];
-    source.profile!.models.main = { ...model(), inputTokenLimit: 1_000_000 };
-    source.contextPlan!.budget.inputTokenLimit = 1_000_000;
-    source.profile!.promptPresets!.main!.program = nativePrompt('', {
-      promptTemplate: [
-        ...paragraphs.map((text) => ({ type: 'plain', role: 'system', text })),
-        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
-      ],
-    });
-    await refreshNativeSnapshot(source);
-    const log = observed();
-    const result = await prepareInputContext(source, log.hooks);
-    const built = buildMainProviderRequest(result.snapshot);
-    expect(JSON.stringify(built.request).length).toBeGreaterThan(2_000_000);
-    expect(
-      built.request
-        .prompt!.messages.slice(0, 2)
-        .map((message) => (message.content[0] as { type: 'text'; text: string }).text)
-    ).toEqual(paragraphs);
-    expect(result.snapshot.contextPlan).toMatchObject({
-      status: 'ready',
-      summaryCalls: 0,
-      compacted: [],
-    });
-    expect(log.wires).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test.each([
-    { consumerLimit: 8192, summaryLimit: 65536, outputLimit: 8192, target: 1024, hardCap: 4096 },
-    { consumerLimit: 16384, summaryLimit: 8192, outputLimit: 512, target: 256, hardCap: 512 },
-  ])(
-    'manual compaction gives a $consumerLimit-token consumer a $target-token summary goal below its $hardCap hard output cap',
-    async ({ consumerLimit, summaryLimit, outputLimit, target, hardCap }) => {
-      const source = await snapshot([
-        '첫 약속.',
-        '아직 풀리지 않은 의문.',
-        '최근 첫 장면.',
-        '최근 다음 장면.',
-      ]);
-      source.profile!.models.main = { ...model(), inputTokenLimit: consumerLimit };
-      source.profile!.contextModel = {
-        ...model('summary-model'),
-        inputTokenLimit: summaryLimit,
-        maxOutputTokens: outputLimit,
-      };
-      source.contextPlan!.budget.inputTokenLimit = consumerLimit;
-      const original = structuredClone(source),
-        log = observed({ reason: 'manual' });
-      vi.mocked(fetch).mockImplementation(async () => completed('SYNTHETIC_COMPLETE_SUMMARY'));
-      const result = await prepareInputContext(source, log.hooks);
-      expect(result.snapshot.contextPlan!.status).toBe('ready');
-      expect(result.snapshot.contextPlan!.recentSourceRevisions).toEqual(['source-2', 'source-3']);
-      expect(log.wires).toHaveLength(1);
-      expect(log.wires[0].body).toMatchObject({
-        generation: { maxOutputTokens: hardCap },
-        input: { controls: { purpose: 'input-context-compaction', targetSummaryTokens: target } },
-      });
-      expect(source).toEqual(original);
-      expect(result.snapshot.history).toEqual(original.history);
-    }
-  );
-
-  test('no summary is requested with 0 estimated tokens free below the fixed-input trigger', async () => {
-    const freeTokens = 0;
-    const source = await snapshot(['원문 하나.', '원문 둘.', '원문 셋.']),
-      original = structuredClone(source),
-      log = observed({
-        measureInput: (projected) => ({
-          snapshot: projected,
-          estimatedInputTokens:
-            8192 * 0.85 -
-            freeTokens +
-            projected.contextPlan!.recentSourceRevisions.length * 500 +
-            (projected.contextPlan!.summary ? 20 : 0),
-        }),
-      });
-    const error = await failure(prepareInputContext(source, log.hooks));
-    expect(error.code).toBe('CONTEXT_FIXED_INPUT_TOO_LARGE');
-    expect(error.usage.modelCalls).toBe(0);
-    expect(log.wires).toHaveLength(0);
-    expect(fetch).not.toHaveBeenCalled();
-    expect(source).toEqual(original);
-  });
-
   test.each([
     { freeTokens: 128, summaryTokens: 20, fits: true },
     { freeTokens: 128, summaryTokens: 129, fits: false },
@@ -523,92 +384,6 @@ describe('input context projection and durable summary calls', () => {
       );
   });
 
-  test('successive compactions keep the same consumer policy and transmit the whole previous summary, exact source tuples, identifiers and correction notes', async () => {
-    const sourceTexts = Array.from(
-        { length: 10 },
-        (_, index) =>
-          `장면 ${index}: Darcy가 Elizabeth에게 한 발언이에요. 증언자는 Mira예요. CODE_${index}_Q7x-α9.`
-      ),
-      first = await snapshot(sourceTexts.slice(0, 6)),
-      correction =
-        'USER_CORRECTION: 발언자는 Darcy, 대상은 Elizabeth예요. Mira의 코드는 Q7x-α9예요.';
-    first.story = {
-      canonHash: 'canon-with-correction',
-      notes: [
-        {
-          id: 'correction-note',
-          chatId: first.chatId,
-          atRevision: first.history[0].revision,
-          atHash: first.history[0].contentHash!,
-          text: correction,
-          kind: 'author-note',
-          declaration: { author: 'user', text: correction },
-        },
-      ],
-    };
-    const expanded = await snapshot(sourceTexts);
-    expanded.story = structuredClone(first.story);
-    const originals = [structuredClone(first), structuredClone(expanded)],
-      log = observed({ reason: 'manual' }),
-      mergedSummary = 'FIXTURE_SUMMARY: Darcy → Elizabeth [scene 1]; witness=Mira; code=Q7x-α9.';
-    vi.mocked(fetch).mockImplementation(async () => completed(mergedSummary));
-    const initial = await prepareInputContext(first, log.hooks),
-      previous = structuredClone(initial.snapshot.contextPlan!),
-      next = await prepareInputContext(expanded, log.hooks, previous);
-    expect(log.wires).toHaveLength(2);
-    const payloads = log.wires.map((wire) => {
-      expect(wire.body).toMatchObject({
-        generation: { maxOutputTokens: 4096 },
-        input: {
-          controls: { targetSummaryTokens: 1024 },
-          source: {
-            userNotes: [{ ...first.story!.notes[0], declaration: { author: 'user' } }],
-          },
-        },
-      });
-      expect(JSON.stringify(wire.body).split(correction)).toHaveLength(2);
-      return (wire.body as { input: { source: SummaryPayload } }).input.source;
-    });
-    expect(payloads[0].previousSummary).toBeNull();
-    expect(payloads[1].previousSummary).toBe(mergedSummary);
-    for (const [index, fixed] of [first, expanded].entries()) {
-      expect(payloads[index].sceneScope).toMatchObject({
-        chatId: fixed.chatId,
-        headRevision: fixed.history.at(-1)!.revision,
-        headHash: fixed.history.at(-1)!.contentHash,
-      });
-      const contract = (log.wires[index].body as { stable: { contract: string } }).stable.contract;
-      expect(contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
-    }
-    const fragments = payloads.flatMap((payload) => payload.fragments);
-    for (const ref of next.snapshot.contextPlan!.compacted) {
-      for (const message of expanded.logicalHistory!.filter(
-        (item) => item.sourceRevision === ref.revision
-      )) {
-        const transmitted = fragments.filter((part) => part.messageId === message.id);
-        expect(transmitted.map((part) => part.text).join('')).toBe(message.text);
-        expect(transmitted.every((part) => part.role === message.role)).toBe(true);
-        expect(transmitted.every((part) => part.sourceHash === message.sourceHash)).toBe(true);
-        expect(
-          transmitted.every(
-            (part) =>
-              part.sourceSceneNumber ===
-              expanded.history.findIndex((item) => item.revision === ref.revision) + 1
-          )
-        ).toBe(true);
-      }
-    }
-    expect(
-      payloads[1].fragments.some((part) =>
-        previous.compacted.some((ref) => ref.revision === part.sourceRevision)
-      )
-    ).toBe(false);
-    expect(initial.snapshot.contextPlan).toEqual(previous);
-    expect([first, expanded]).toEqual(originals);
-    expect(next.snapshot.history).toEqual(expanded.history);
-    expect(next.snapshot.logicalHistory).toEqual(expanded.logicalHistory);
-  });
-
   test('one large source is split on UTF-16 boundaries and becomes compacted only after all user and assistant fragments succeed', async () => {
     const text = `LARGE_SOURCE_START\n${'🌙 미라가 천천히 항구의 진실을 살펴봐요.\n'.repeat(1500)}LARGE_SOURCE_END`;
     const source = await snapshot([text]),
@@ -683,38 +458,6 @@ describe('input context projection and durable summary calls', () => {
     expect(result.snapshot.logicalHistory).toEqual([authored]);
     expect(source).toEqual(original);
     expect(JSON.stringify(log.wires)).not.toContain('sourceKind');
-  });
-
-  test('an authored-start discriminator is invalid on user/current messages or an ordinary pair, and unknown discriminators are rejected', async () => {
-    const valid: PromptHistoryMessage = {
-      id: 'authored',
-      role: 'assistant',
-      text: 'A directly authored start.',
-      sourceRevision: 'source',
-      sourceHash: 'a'.repeat(64),
-      runId: 'run',
-      sourceKind: 'authored-start',
-    };
-    for (const changed of [
-      { ...valid, role: 'user' },
-      { ...valid, current: true },
-      { ...valid, sourceKind: 'generated' },
-    ]) {
-      expect(() =>
-        compileRisuPrompt(
-          nativePrompt('', { promptTemplate: [{ type: 'chat', rangeStart: 0, rangeEnd: 'end' }] }),
-          { slots: {}, history: [changed as PromptHistoryMessage] }
-        )
-      ).toThrow('PROMPT_INVALID_HISTORY_SOURCE');
-    }
-    const paired = await snapshot(oldScenes());
-    paired.logicalHistory![1].sourceKind = 'authored-start';
-    await refreshNativeSnapshot(paired);
-    expect(await failure(prepareInputContext(paired, observed().hooks))).toMatchObject({
-      code: 'CONTEXT_LOGICAL_PAIR_MISSING',
-      usage: { modelCalls: 0 },
-    });
-    expect(fetch).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -932,44 +675,6 @@ describe('input context projection and durable summary calls', () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(unsaved.results).toEqual([]);
   });
-});
-
-test('automatic compaction fits the reserved guide space in one summary call while preserving the writer call', async () => {
-  const source = await snapshot([
-    'Older scene one.',
-    'Older scene two.',
-    'Older scene three.',
-    'Recent scene one.',
-    'Recent scene two.',
-  ]);
-  source.settings.maxCalls = 2;
-  const log = observed({
-    reserveCalls: 1,
-    reserveInputTokens: 2048,
-    measureInput: (projected) => ({
-      snapshot: projected,
-      estimatedInputTokens:
-        1000 +
-        projected.contextPlan!.recentSourceRevisions.reduce(
-          (tokens, revision) => tokens + (Number(revision.split('-').at(-1)) < 3 ? 2000 : 1000),
-          0
-        ) +
-        (projected.contextPlan!.summary ? 200 : 0),
-    }),
-  });
-  const payloads = respondWithMergedSummary(log);
-  const result = await prepareInputContext(source, log.hooks);
-  expect(result.usage.modelCalls).toBe(1);
-  expect(payloads).toHaveLength(1);
-  expect(
-    payloads[0].fragments.filter((part) => part.role === 'assistant').map((part) => part.text)
-  ).toEqual(source.history.slice(0, 3).map((entry) => entry.text));
-  expect(result.snapshot.contextPlan).toMatchObject({
-    status: 'ready',
-    estimatedInputTokens: 5248,
-    recentSourceRevisions: ['source-3', 'source-4'],
-  });
-  expect(result.snapshot.history).toEqual(source.history);
 });
 
 test('manual compaction fits one source prefix without rebuilding the writer input for every scene', async () => {

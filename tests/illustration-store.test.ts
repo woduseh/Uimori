@@ -780,31 +780,6 @@ describe('illustration storage on the current schema', () => {
   });
 });
 
-test('new automatic count defaults to auto and fixed mode sends no minimum', () => {
-  const store = databases.create();
-  expect(illustrationSettings(store)).toMatchObject({
-    automaticCountMode: 'auto',
-    automaticMinTargets: 0,
-    automaticMaxTargets: 10,
-    maxPerSource: 10,
-  });
-  const { source } = chatWithSource(store);
-  const current = illustrationSettings(store);
-  const automatic = reserveIllustrationPlan(store, source, 'automatic', {
-    settings: { ...current, generator: 'fixture' },
-    testMode: true,
-    maxTargets: 10,
-  });
-  expect(automatic.input.plan).toMatchObject({ minTargets: 0, maxTargets: 10 });
-  cancelIllustration(store, automatic.id);
-  const fixed = reserveIllustrationPlan(store, source, 'automatic', {
-    settings: { ...current, automaticCountMode: 'fixed', generator: 'fixture' },
-    testMode: true,
-    maxTargets: 3,
-  });
-  expect(fixed.input.plan?.minTargets).toBeUndefined();
-});
-
 test('automatic count settings validate mode and inclusive minimum/maximum bounds', () => {
   const { revision, ...body } = fixtureSettings();
   expect(

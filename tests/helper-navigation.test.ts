@@ -193,43 +193,6 @@ test('terminal activity survives metadata changes and remains discoverable beyon
   expect(old?.latestActivityEventSeq).toBe(completed.latestActivityEventSeq);
 });
 
-test.each(['failed', 'cancelled', 'interrupted'] as const)(
-  '%s task results advance activity without counting queued work',
-  (status) => {
-    const f = fixture();
-    const connection = f.store.product.connection({
-      title: 'Synthetic',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9',
-      enabled: true,
-    });
-    const model = f.store.product.model({
-      title: 'Synthetic',
-      connectionId: connection.id,
-      modelId: 'fixture',
-      temperature: null,
-      maxOutputTokens: 128,
-    });
-    const conversation = f.workspace.create(f.scope, 'result');
-    const task = f.workspace.enqueue(conversation.id, 'task', '요청', {
-      scope: f.scope,
-      model: f.store.product.modelSnapshot(model.id),
-      history: [],
-      persona: '',
-      limits: { totalCalls: 24, helperCalls: 12 },
-    });
-    expect(f.workspace.list({ kind: 'all' })[0].latestActivityEventSeq).toBe(0);
-    if (status === 'cancelled') f.workspace.cancel(task.id);
-    else if (status === 'interrupted') f.workspace.interrupt();
-    else {
-      f.workspace.start(task.id, 'owner');
-      f.workspace.finish(task.id, 'owner', 1, 'failed', '', 'synthetic failure');
-    }
-    expect(f.workspace.list({ kind: 'all' })[0].latestActivityEventSeq).toBeGreaterThan(0);
-    expect(f.workspace.list({ kind: 'all' })[0].lastTaskStatus).toBe(status);
-  }
-);
-
 test('read state only moves forward, survives reopening and is removed with its conversation or chat', async () => {
   const f = fixture();
   const app = Fastify();

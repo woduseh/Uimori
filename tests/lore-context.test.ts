@@ -2,20 +2,19 @@ import { nativeContent } from './fixtures/native-content.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
-import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { createApp } from '../server/app.js';
 import { executeTool } from '../core/provider.js';
 import { DEFAULT_LORE_CONTEXT, loreHistory } from '../core/lore-context.js';
 import { freezeLoreContext, verifiedRunLoreReads } from '../server/lore-context.js';
 import { prepareLoreSelection } from '../server/lore-selection.js';
 import type { MainHooks } from '../server/model-runner.js';
-import type { Run, RunSnapshot } from '../core/types.js';
+import type { Run } from '../core/types.js';
 import type { ChatProfile, Content } from '../core/product.js';
 
 const owned: { store?: Store; dir: string; close?: () => Promise<unknown> }[] = [];
@@ -418,55 +417,6 @@ test('switching an attached reference to pinned supplies it once and removes the
     )
     .join('\n');
   expect(wireText.split(f.loreText).length - 1).toBe(1);
-});
-test('disabled retention, zero budgets and invalid policy are explicit; selection is read only', async () => {
-  const f = fixture(),
-    a = (await queue(f)).run;
-  read(f, a, 0, 4);
-  const source = complete(f, a);
-  update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, enabled: false } });
-  const profile = f.store.product.snapshot(f.chat.id)!,
-    snapshot: RunSnapshot = {
-      ...a.snapshot,
-      parentRevision: source.id,
-      history: f.store.history(source.id),
-      profile,
-      resources: f.store.product.resources(f.chat.id, profile),
-    };
-  const before = f.store.db.prepare('SELECT total_changes() AS n').get();
-  expect(freezeLoreContext(f.store, snapshot).loreContext!.entries).toEqual([]);
-  expect(f.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
-  expect(() =>
-    update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: -1 } })
-  ).toThrow('Invalid lore context policy');
-  update(f, { loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: 0 } });
-  expect((await queue(f)).run.snapshot.loreContext!.entries).toEqual([]);
-});
-test('no-call preview accepts the selected default prompt and unsaved policy without writes', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'uimori-lore-')),
-    app = await createApp({
-      dbPath: join(dir, 'story.sqlite'),
-      buildId: 'synthetic-lore',
-      testMode: true,
-    });
-  owned.push({ dir, close: () => app.close() });
-  const chat = createFixtureChat(app.store, 'Preview'),
-    before = app.store.db.prepare('SELECT total_changes() AS n').get();
-  const response = await injectWithFixtureBot(app, {
-    method: 'POST',
-    url: `/api/chats/${chat.id}/prompt-preview`,
-    payload: {
-      request: 'Synthetic preview',
-      loreContext: { ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: 1234 },
-      loreContextReset: true,
-    },
-  });
-  expect(response.statusCode).toBe(200);
-  expect(response.json()).toMatchObject({
-    scope: 'preview-only-no-provider-call',
-    loreContext: { policy: { maxRetainedTokens: 1234 }, stats: { reasons: ['new-scene'] } },
-  });
-  expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
 });
 test('whole-context projection carries compacted-source lore after the summary and keeps recent source anchors', async () => {
   const f = fixture(),

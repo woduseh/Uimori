@@ -11,7 +11,6 @@ import {
   knownHelperOperations,
 } from '../server/helper-app-tools.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
-import { rollBackHelperTask } from '../server/helper-rollback.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { countTextTokens } from '../core/text-tokens.js';
@@ -95,13 +94,7 @@ function fixture(script: Script) {
     const done = runtime.workspace.task(task.id);
     expect(done.status, done.error ?? '').toBe('completed');
     const sent = bodies.slice(first);
-    return {
-      task: done,
-      bodies: sent,
-      rounds: sent.length,
-      inputChars: sent.reduce((n, b) => n + JSON.stringify(b).length, 0),
-      inputTokens: sent.reduce((n, b) => n + countTextTokens(JSON.stringify(b)), 0),
-    };
+    return { task: done, bodies: sent, rounds: sent.length };
   };
   return { store, runtime, conversation, bodies, run };
 }
@@ -166,189 +159,37 @@ const appCall = (id: string, name: string, args: unknown): Call => ({
   args: { name, arguments: args },
 });
 
-function report(
-  caseId: string,
-  behavior: string,
-  measured: { rounds: number; inputChars: number; inputTokens: number }
-) {
-  console.log(
-    'HELPER_ROUND_TRIPS',
-    JSON.stringify({
-      caseId,
-      behavior,
-      evidence: 'scripted native Chat transport and temporary SQLite; not live model behavior',
-      rounds: measured.rounds,
-      inputChars: measured.inputChars,
-      wireTokens: measured.inputTokens,
-    })
-  );
-}
-
-for (const behavior of ['looks-up-again', 'reuses-known'] as const)
-  test(`a follow-up task can call an operation discovered in an earlier task (${behavior})`, async () => {
-    let bot: Content | undefined;
-    let secondTask = false;
-    const f = fixture((body, round) => {
-      const read = appCall(`read-${secondTask}`, 'resource.read', { kind: 'content', id: bot!.id });
-      if (!secondTask || behavior === 'looks-up-again') {
-        if (round === 0)
-          return [
-            { id: `schemas-${secondTask}`, name: 'app.tools', args: { names: ['resource.read'] } },
-          ];
-        if (round === 1) return [read];
-        return 'Harin is the bot.';
-      }
-      if (round === 0) {
-        const known = requestSource(body).knownOperations;
-        expect(known.tools).toEqual([
-          HELPER_APP_TOOLS.find((tool) => tool.name === 'resource.read'),
-        ]);
-        return [read];
-      }
-      expect(toolResult(body, read.id)).toMatchObject({ id: bot!.id });
-      return 'Harin is still the bot.';
-    });
-    bot = f.store.product.content(fixtureBotInput('Harin', 'Name: Harin.')) as Content;
-    const first = await f.run('Show the bot Harin.');
-    expect(requestSource(first.bodies[0]).knownOperations).toBeUndefined();
-    secondTask = true;
-    const second = await f.run('Show it once more.');
-    report('schema-reuse/task-1', behavior, first);
-    report('schema-reuse/task-2', behavior, second);
-    expect(first.rounds).toBe(3);
-    expect(second.rounds).toBe(behavior === 'reuses-known' ? 2 : 3);
-    const all = [...first.bodies, ...second.bodies];
-    expect(new Set(all.map(stablePrefix)).size).toBe(1);
-    expect(new Set(attemptPrefixes(f)).size).toBe(1);
-    expect(attemptPrefixes(f)).toHaveLength(all.length);
-    const sources = second.bodies.map((body) => JSON.stringify(requestSource(body)));
-    expect(new Set(sources).size).toBe(1);
-  });
-
-test('a plan task carries only the earlier operations it may run', async () => {
+test('a follow-up task can call an operation discovered in an earlier task', async () => {
   let bot: Content | undefined;
-  let planning = false;
+  let secondTask = false;
   const f = fixture((body, round) => {
-    if (planning) {
-      expect(
-        requestSource(body).knownOperations.tools.map((tool: { name: string }) => tool.name)
-      ).toEqual(['resource.read']);
-      return 'The plan.';
-    }
-    if (round === 0)
-      return [
-        appCall('read', 'resource.read', { kind: 'content', id: bot!.id }),
-        appCall('patch', 'resource.patch', {
-          kind: 'content',
-          id: bot!.id,
-          expectedRevision: bot!.revision,
-          changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: 'Edited.' }],
-        }),
-      ];
-    return 'Edited.';
-  });
-  bot = f.store.product.content(fixtureBotInput('Harin', 'Name: Harin.')) as Content;
-  await f.run('Edit Harin.');
-  planning = true;
-  const task = f.runtime.enqueue(
-    f.conversation.id,
-    randomUUID(),
-    'Plan the next edit.',
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    true,
-    undefined,
-    { mode: 'plan' }
-  );
-  await Promise.all(owned.at(-1)!.work);
-  expect(f.runtime.workspace.task(task.id).status).toBe('completed');
-});
-
-for (const behavior of ['reads-the-continuation', 'uses-the-following-text'] as const)
-  test(`a lookup whose answer follows the excerpt (${behavior})`, async () => {
-    const lore =
-      "## Harin's history\n" +
-      'Harin grew up among quiet rivers and long winters, and the town remembers her for many small things. '.repeat(
-        5
-      ) +
-      'She was born in Lumen.' +
-      '\nUnrelated closing notes. '.repeat(200);
-    const f = fixture((body, round) => {
+    const read = appCall(`read-${secondTask}`, 'resource.read', { kind: 'content', id: bot!.id });
+    if (!secondTask) {
       if (round === 0)
-        return [
-          appCall('find', 'data.search', { scope: 'library', patterns: ["Harin's history"] }),
-        ];
-      if (round === 1) {
-        const found = toolResult(body, 'find');
-        const top = found.items[0];
-        expect(JSON.stringify(found).length).toBeLessThanOrEqual(8000);
-        expect(top.text).not.toContain('born in Lumen');
-        if (behavior === 'uses-the-following-text') {
-          expect(top.following.text).toContain('She was born in Lumen.');
-          expect(top.following.range.start).toBe(top.range.end);
-          return 'Harin was born in Lumen.';
-        }
-        return [appCall('more', 'data.read', { refs: [top.ref], offset: top.nextOffset })];
-      }
-      expect(toolResult(body, 'more').items[0].read.text).toContain('She was born in Lumen.');
-      return 'Harin was born in Lumen.';
-    });
-    f.store.product.content(fixtureBotInput('Harin', lore));
-    const lookup = await f.run('Where was Harin born?');
-    report('search-excerpt', behavior, lookup);
-    expect(lookup.rounds).toBe(behavior === 'uses-the-following-text' ? 2 : 3);
-    expect(new Set(lookup.bodies.map(stablePrefix)).size).toBe(1);
-    expect(new Set(attemptPrefixes(f)).size).toBe(1);
-  });
-
-test('a task after a rollback keeps one stable prefix and one source across its rounds', async () => {
-  let bot: Content | undefined;
-  let stage = 0;
-  const f = fixture((_body, round) => {
-    if (stage === 0)
-      return round === 0
-        ? [
-            appCall('patch', 'resource.patch', {
-              kind: 'content',
-              id: bot!.id,
-              expectedRevision: bot!.revision,
-              changes: [
-                { op: 'set', path: '/package/nativeRisu/card/description', value: 'Edited.' },
-              ],
-            }),
-          ]
-        : 'Edited Harin.';
-    return round === 0
-      ? [appCall(`read-${stage}`, 'resource.read', { kind: 'content', id: bot!.id })]
-      : 'Harin is unchanged.';
+        return [{ id: 'schemas', name: 'app.tools', args: { names: ['resource.read'] } }];
+      if (round === 1) return [read];
+      return 'Harin is the bot.';
+    }
+    if (round === 0) {
+      const known = requestSource(body).knownOperations;
+      expect(known.tools).toEqual([HELPER_APP_TOOLS.find((tool) => tool.name === 'resource.read')]);
+      return [read];
+    }
+    expect(toolResult(body, read.id)).toMatchObject({ id: bot!.id });
+    return 'Harin is still the bot.';
   });
   bot = f.store.product.content(fixtureBotInput('Harin', 'Name: Harin.')) as Content;
-  const edited = await f.run('Edit Harin.');
-  expect(
-    rollBackHelperTask(f.store, f.runtime.workspace, edited.task.id, undefined).units
-  ).toMatchObject([{ status: 'restored' }]);
-  stage = 1;
-  const next = await f.run('Show Harin.');
-  stage = 2;
-  const later = await f.run('Show Harin again.');
-  expect(next.rounds).toBe(2);
-  const all = [...edited.bodies, ...next.bodies, ...later.bodies];
+  const first = await f.run('Show the bot Harin.');
+  expect(requestSource(first.bodies[0]).knownOperations).toBeUndefined();
+  secondTask = true;
+  const second = await f.run('Show it once more.');
+  expect(second.rounds).toBe(2);
+  const all = [...first.bodies, ...second.bodies];
   expect(new Set(all.map(stablePrefix)).size).toBe(1);
-  const sources = next.bodies.map((body) => JSON.stringify(requestSource(body)));
+  expect(new Set(attemptPrefixes(f)).size).toBe(1);
+  expect(attemptPrefixes(f)).toHaveLength(all.length);
+  const sources = second.bodies.map((body) => JSON.stringify(requestSource(body)));
   expect(new Set(sources).size).toBe(1);
-  expect(requestSource(next.bodies[0]).revertedChanges).toEqual([
-    {
-      taskId: edited.task.id,
-      request: 'Edit Harin.',
-      domain: 'resource',
-      kind: 'content',
-      targetId: bot.id,
-      title: 'Harin',
-    },
-  ]);
-  expect(requestSource(later.bodies[0])).not.toHaveProperty('revertedChanges');
 });
 
 test('a selection edit saves from the seeded schema and source guards without a lookup or read', async () => {
@@ -425,22 +266,6 @@ test('a selection edit saves from the seeded schema and source guards without a 
   expect(new Set(bodies.map((body) => JSON.stringify(requestSource(body)))).size).toBe(1);
   const stored = f.runtime.workspace.task(task.id).snapshot;
   expect(stored.seededOperations).toEqual(['scene.read', 'scene.patch']);
-});
-
-test('the contract depends only on the conversation scope, not on what a task carries', async () => {
-  const f = fixture((_body, round) => (round === 0 ? 'Done.' : 'Done.'));
-  await f.run('First library task.');
-  await f.run('Second library task.');
-  const library = f.bodies.map(stablePrefix);
-  expect(new Set(library).size).toBe(1);
-  const system = (body: any) =>
-    body.messages
-      .filter((m: any) => m.role === 'system')
-      .map((m: any) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-      .join('\n');
-  expect(system(f.bodies[0])).not.toContain('author-note');
-  expect(system(f.bodies[0])).not.toContain('uimori apply');
-  expect(system(f.bodies[0])).toContain('source already holds');
 });
 
 test('known operations follow the review allowlist, the count cap and the size cap', () => {

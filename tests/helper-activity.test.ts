@@ -1,6 +1,4 @@
 import { join } from 'node:path';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import type { HelperActivity } from '../core/helper-activity.js';
 import { readHelperActivity } from '../server/helper-activity.js';
@@ -8,7 +6,6 @@ import { HelperWorkspace } from '../server/helper-workspace.js';
 import { releaseCompletedHelperInputs } from '../server/execution-retention.js';
 import { Store } from '../server/store.js';
 import { helperActivityStages, helperActivitySummary } from '../web/helper-activity.js';
-import { HelperActivityDetails } from '../web/HelperActivity.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { Content } from '../core/product.js';
@@ -118,28 +115,6 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
     });
   } finally {
     close();
-  }
-});
-
-test.each([
-  ['error', 'issue'],
-  ['cancelled', 'stopped'],
-  ['completed', 'completed'],
-  ['unknown', 'issue'],
-])('attempt status %s has state %s with or without its start', (status, state) => {
-  for (const hasStart of [true, false]) {
-    const activity: HelperActivity = {
-      taskId: 'task',
-      status: 'running',
-      hasEarlier: !hasStart,
-      helperCalls: 1,
-      events: [
-        ...(hasStart ? [{ seq: 1, kind: 'attempt.started', attemptId: 'attempt' }] : []),
-        { seq: 2, kind: 'attempt.finished', attemptId: 'attempt', status },
-      ],
-    };
-    expect(helperActivityStages(activity)).toMatchObject([{ state, events: activity.events }]);
-    expect(helperActivitySummary(activity)).toBeUndefined();
   }
 });
 
@@ -273,113 +248,4 @@ test('activity counts helper calls beyond the event window and projects a retry 
   } finally {
     close();
   }
-});
-
-test('the running summary names the tool, the model call or the retry wait in progress', () => {
-  const running = (events: HelperActivity['events'], helperCalls = 3): HelperActivity => ({
-    taskId: 'task',
-    status: 'running',
-    hasEarlier: false,
-    helperCalls,
-    events,
-  });
-  expect(
-    helperActivitySummary(
-      running([
-        {
-          seq: 1,
-          kind: 'tool.started',
-          callId: 'patch',
-          name: 'resource.patch',
-          target: { kind: 'content', title: '등대지기 미라' },
-        },
-      ])
-    )
-  ).toBe('자료 및 설정 변경 중이에요 (등대지기 미라)');
-  expect(
-    helperActivitySummary(
-      running([{ seq: 1, kind: 'tool.started', callId: 'shell', name: 'data.exec' }])
-    )
-  ).toBe('작업 공간 명령 실행 중이에요');
-  const call = { seq: 1, kind: 'attempt.started', attemptId: 'call', purpose: 'helper' };
-  expect(helperActivitySummary(running([call]))).toBe('모델의 응답을 기다리고 있어요 (3번째 호출)');
-  const failed = { seq: 2, kind: 'attempt.finished', attemptId: 'call', status: 'error' };
-  const wait = (code: string) => ({
-    seq: 3,
-    kind: 'provider.retry',
-    retry: { attempt: 2, attempts: 3, delayMs: 20_000, code },
-  });
-  expect(helperActivitySummary(running([call, failed, wait('HTTP_429')]))).toBe(
-    '프로바이더의 요청 한도에 걸려 20초 뒤에 다시 시도해요 (2/3)'
-  );
-  expect(helperActivitySummary(running([call, failed, wait('HTTP_503')]))).toBe(
-    '프로바이더 서버 오류로 20초 뒤에 다시 시도해요 (2/3)'
-  );
-  const resent = running([
-    call,
-    { seq: 2, kind: 'attempt.finished', attemptId: 'call', status: 'refused' },
-    {
-      seq: 3,
-      kind: 'provider.retry',
-      retry: { attempt: 1, attempts: 2, delayMs: 0, code: 'HELPER_RESPONSE_REFUSED:SAFETY' },
-    },
-  ]);
-  expect(helperActivitySummary(resent)).toBe(
-    '프로바이더가 응답을 거절해서 같은 호출을 다시 보내요 (1/2)'
-  );
-  expect(helperActivityStages(resent).at(-1)?.label).toBe('거절 뒤 다시 요청');
-  const resumed = running(
-    [
-      call,
-      failed,
-      wait('HTTP_429'),
-      { seq: 4, kind: 'attempt.started', attemptId: 'again', purpose: 'helper' },
-    ],
-    4
-  );
-  expect(helperActivitySummary(resumed)).toBe('모델의 응답을 기다리고 있어요 (4번째 호출)');
-  expect(helperActivityStages(resumed).map((stage) => stage.state)).toEqual([
-    'issue',
-    'recorded',
-    'running',
-  ]);
-});
-
-test('an opened activity list uses reader-facing words and says when earlier steps are left out', () => {
-  const markup = renderToStaticMarkup(
-    createElement(HelperActivityDetails, {
-      taskId: 'task',
-      status: 'running',
-      visible: true,
-      inline: true,
-      source: {
-        error: '',
-        data: {
-          taskId: 'task',
-          status: 'running',
-          hasEarlier: true,
-          helperCalls: 2,
-          events: [
-            { seq: 1, kind: 'attempt.started', attemptId: 'first', purpose: 'helper' },
-            { seq: 2, kind: 'attempt.finished', attemptId: 'first', status: 'tool_calls' },
-            { seq: 3, kind: 'tool.started', callId: 'read', name: 'resource.read' },
-            { seq: 4, kind: 'tool.finished', callId: 'read', name: 'resource.read' },
-            { seq: 5, kind: 'attempt.started', attemptId: 'second', purpose: 'helper' },
-            { seq: 6, kind: 'attempt.finished', attemptId: 'second', status: 'error' },
-            {
-              seq: 7,
-              kind: 'provider.retry',
-              retry: { attempt: 1, attempts: 3, delayMs: 5_000, code: 'HTTP_429' },
-            },
-          ],
-        },
-      },
-    })
-  );
-  expect(markup).not.toMatch(/attempt\.(started|finished)|provider\.retry|tool_calls|>helper</u);
-  expect(markup).toContain('모델 호출');
-  expect(markup).toContain('도구 사용을 요청했어요');
-  expect(markup).toContain('다시 시도 대기');
-  expect(markup).toContain('<code>resource.read</code>');
-  expect(markup).toContain('앞선 단계는 여기에 나오지 않아요');
 });

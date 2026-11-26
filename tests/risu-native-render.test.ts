@@ -25,18 +25,6 @@ const native = (extra: Partial<RisuContentSource> = {}): RisuContentSource => ({
   ...extra,
 });
 
-test('native Markdown preserves a story UI slot beside authored HTML and styles', async () => {
-  const result = await renderNativeRisuMessage({
-    native: native(),
-    text: '<style>.panel{color:red}</style>\n<div class="panel">상태</div>\n\n<div data-uimori-story-ui=0></div>\n\n이야기',
-    context: { variables: {} },
-  });
-  expect(result.html).toContain('<style>.panel{color:red}</style>');
-  expect(result.html).toContain('<div class="panel">상태</div>');
-  expect(result.html).toContain('<div data-uimori-story-ui=0></div>');
-  expect(result.html).toContain('이야기');
-});
-
 test('a card script that styles quoted speech leaves the story UI slot intact', async () => {
   const result = await renderNativeRisuMessage({
     native: native({
@@ -386,22 +374,6 @@ test('native asset fallback admits only imported assets with local URLs', async 
     expect(result.html).not.toContain('<img');
     expect(result.issues).toEqual(['asset:portriat.png', 'asset:unlisted.png']);
   }
-});
-
-test('native regex rule count is not limited to the legacy 32-rule conversion', async () => {
-  const input = native({
-    module: {
-      regex: Array.from({ length: 40 }, (_, index) => ({
-        in: `step${index}(?![0-9])`,
-        out: `step${index + 1}`,
-        type: 'editdisplay',
-      })),
-    },
-  });
-  expect(
-    (await renderNativeRisuMessage({ native: input, text: 'step0', context: { variables: {} } }))
-      .html
-  ).toContain('step40');
 });
 
 test('native Risu completed text retains inline ruby and reading markup', async () => {

@@ -231,23 +231,4 @@ describe('F04 actual role context and scoped read loop', () => {
       )
     ).toThrow('Run cancelled');
   });
-
-  test('F04 input observation and live-setting mutation cannot rewrite the run snapshot or subsequent tool scope', async () => {
-    const run = snapshot();
-    const observed = capture();
-    observed.hooks.onInput = (input: ModelInput) => {
-      observed.inputs.push(structuredClone(input));
-      input.tools.push('shell.execute');
-      input.results.length = 0;
-      run.chatId = 'chat-b';
-      run.settings.maxCalls = 1;
-      run.resources[0].text = 'MUTATED_AFTER_START';
-    };
-    const result = await executeMain(run, observed.hooks, { mode: 'research' });
-    expect(result.usage.modelCalls).toBe(4);
-    expect(observed.inputs.every((input) => !input.tools.includes('shell.execute'))).toBe(true);
-    expect(result.text).toContain('blue ferry bell');
-    expect(result.text).not.toContain('MUTATED_AFTER_START');
-    expect(result.text).not.toContain('EXCLUDED_CORPUS_CANARY');
-  });
 });

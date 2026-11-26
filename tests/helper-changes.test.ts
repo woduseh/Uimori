@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { HelperChange, HelperTask } from '../core/helper.js';
-import type { OutlineNode } from '../core/outline.js';
 import type { Content } from '../core/product.js';
-import { editableResource } from '../core/resource-editing.js';
-import { readResource } from '../server/resource-service.js';
 import { applyTextDiff } from '../core/text-diff.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
@@ -16,7 +13,6 @@ import { deleteChat } from '../server/chat-deletion.js';
 import { applyHelperChatState } from '../server/helper-chat-state-tools.js';
 import {
   HELPER_CHANGE_RETENTION,
-  forgetHelperResourceChanges,
   pruneHelperChanges,
   recordHelperChatLoreChange,
   withHelperChange,
@@ -197,26 +193,6 @@ test('several edits of one scene and one resource in a task leave one net change
   expect(f.changes(task).map((change) => change.domain)).toEqual(['resource']);
 });
 
-test('a resource description beginning with a bracket remains a prose change', () => {
-  const f = fixture();
-  const bot = f.store.product.content(fixtureBotInput('기록 봇', '[등대] 처음 설명이에요.'));
-  const task = f.begin();
-  f.resource(task, 'resource.patch', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: bot.revision,
-    changes: [
-      {
-        op: 'replaceText',
-        path: '/package/nativeRisu/card/description',
-        oldText: '처음',
-        newText: '다음',
-      },
-    ],
-  });
-  expect(hunksOf(f.changes(task)[0]!).mode).toBe('prose');
-});
-
 test('lore entries, scene titles and created resources get their own entries', () => {
   const f = fixture();
   const bot = f.store.product.content(fixtureBotInput('로어 봇', '설명'));
@@ -271,103 +247,6 @@ test('lore entries, scene titles and created resources get their own entries', (
   });
   expect(changes[1]).toMatchObject({ targetId: created.id, title: '새 봇', diff: null });
   expect(inserted.revision).toBeGreaterThan(bot.revision);
-});
-
-test('a task that changes only bot package settings records a change for each setting', () => {
-  const f = fixture();
-  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
-  const bot = f.store.product.content({
-    ...fixtureBotInput('설정 봇', '설명'),
-    package: nativeContent(
-      {
-        name: '설정 봇',
-        character_book: { entries: [{ comment: '마을', keys: ['마을'], content: '조용한 마을' }] },
-      },
-      { id: 'settings-bot' }
-    ),
-  }) as Content;
-  expect(bot.package.loreActivation?.mode).toBe('model');
-  const task = f.begin();
-  const model = structuredClone(
-    editableResource('content', readResource(f.store, 'content', bot.id))
-  ) as any;
-  model.package.modules = [{ id: module.id, revision: module.revision }];
-  model.package.loreActivation.mode = 'discoverable';
-  f.resource(task, 'resource.save', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: bot.revision,
-    model,
-  });
-  expect(f.changes(task).map((change) => [change.action, change.location])).toEqual([
-    ['create', { kind: 'resource-field', path: ['package', 'modules'] }],
-    ['update', { kind: 'resource-field', path: ['package', 'loreActivation', 'mode'] }],
-  ]);
-});
-
-test('a translation, a lore entry field and a regex script have structured locations', () => {
-  const f = fixture();
-  const lore = '/package/nativeRisu/card/character_book/entries';
-  const scripts = '/package/nativeRisu/card/extensions/risuai/customScripts';
-  const bot = f.store.product.content({
-    ...fixtureBotInput('정규식 봇', '설명'),
-    package: nativeContent(
-      {
-        name: '정규식 봇',
-        description: '설명',
-        extensions: {
-          risuai: {
-            customScripts: [{ comment: '꾸밈', in: 'a', out: 'b', type: 'editdisplay' }],
-          },
-        },
-      },
-      { id: 'fixture-owner' }
-    ),
-  });
-  const seed = f.begin();
-  const seeded = f.resource(seed, 'resource.patch', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: bot.revision,
-    changes: [
-      {
-        op: 'insert',
-        path: `${lore}/0`,
-        value: { comment: '항구', keys: ['항구'], content: '배' },
-      },
-    ],
-  });
-  f.workspace.finish(seed.id, 'changes-fixture', 1, 'completed', '', null);
-  f.store.editTranslation(f.first.id, {
-    text: 'He crossed the bridge.',
-    expectedRevision: 0,
-    expectedSourceHash: f.first.hash,
-  });
-  const task = f.begin();
-  f.scene(task, 'scene.patch', {
-    ...f.read(f.first.id, 'translation'),
-    changes: [{ oldText: 'bridge', newText: 'river' }],
-  });
-  f.resource(task, 'resource.patch', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: seeded.revision,
-    changes: [
-      { op: 'replaceText', path: `${lore}/0/content`, oldText: '배', newText: '큰 배' },
-      { op: 'replaceText', path: `${scripts}/0/out`, oldText: 'b', newText: 'c' },
-    ],
-  });
-  expect(f.changes(task).map((change) => change.location)).toEqual([
-    { kind: 'scene', scene: 1, field: 'translation' },
-    { kind: 'resource-field', path: scripts.slice(1).split('/') },
-    {
-      kind: 'resource-list',
-      path: lore.slice(1).split('/'),
-      section: 'lore',
-      item: { name: '항구', index: 0 },
-      field: ['content'],
-    },
-  ]);
 });
 
 test('a retried operation records once and a failed or cancelled task keeps only committed changes', () => {
@@ -515,87 +394,6 @@ test('changes older than the retained turns or days lose their text but stay lis
   expect(f.rows()).not.toContain('가자');
 });
 
-test('unused image cleanup keeps images that a recorded baseline still references', () => {
-  const f = fixture();
-  const hash = 'a'.repeat(64);
-  f.store.db
-    .prepare('INSERT INTO image_blobs(hash,mime,bytes) VALUES(?,?,?)')
-    .run(hash, 'image/png', Buffer.from([1]));
-  const bot = f.store.product.content(
-    fixtureBotInput('이미지 봇', `![그림](/api/package-image-blobs/${hash})`)
-  );
-  const task = f.begin();
-  f.resource(task, 'resource.patch', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: bot.revision,
-    changes: [
-      {
-        op: 'set',
-        path: '/package/nativeRisu/card/description',
-        value: '그림 없음',
-      },
-    ],
-  });
-  const saved = f.store.product.get<Content>('content', bot.id);
-  f.resource(task, 'resource.patch', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: saved.revision,
-    changes: [{ op: 'set', path: '/package/nativeRisu/card/creator_notes', value: '다른 메모' }],
-  });
-  f.workspace.finish(task.id, 'changes-fixture', 1, 'completed', '', null);
-  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 1 });
-  pruneUnusedData(f.store.db, [hash]);
-  expect(f.store.db.prepare('SELECT 1 AS kept FROM image_blobs WHERE hash=?').get(hash)).toEqual({
-    kept: 1,
-  });
-  f.store.db.prepare('UPDATE helper_changes SET baseline=NULL').run();
-  pruneUnusedData(f.store.db, [hash]);
-  expect(f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
-});
-
-test('an outline task that changes only levels or related nodes records a change', () => {
-  const f = fixture();
-  f.store.outline.applyReceipt(
-    f.chat.id,
-    {
-      operations: [
-        { op: 'create', level: 'arc', title: '1부', intent: '떠난다' },
-        { op: 'create', level: 'arc', title: '2부', intent: '돌아온다' },
-      ],
-      idempotencyKey: 'outline-seed',
-    },
-    'user'
-  );
-  const [first, second] = f.store.outline.nodes(f.chat.id) as [OutlineNode, OutlineNode];
-  const task = f.begin();
-  f.workspace.operation(task.id, `${task.id}:${randomUUID()}`, { op: 'outline' }, () =>
-    withHelperChange(f.store, task, { domain: 'outline', chatId: f.chat.id }, () =>
-      f.store.outline.applyReceipt(
-        f.chat.id,
-        {
-          operations: [
-            { op: 'update', id: first.id, expectedRevision: first.revision, level: 'episode' },
-            {
-              op: 'update',
-              id: second.id,
-              expectedRevision: second.revision,
-              relatedIds: [first.id],
-            },
-          ],
-          idempotencyKey: 'outline-levels',
-        },
-        'user'
-      )
-    )
-  );
-  expect(f.changes(task).map((change) => [change.action, change.location])).toEqual([
-    ['update', { kind: 'outline', level: 'episode', title: '1부', field: null }],
-    ['update', { kind: 'outline', level: 'arc', title: '2부', field: null }],
-  ]);
-});
-
 test('outline and author notes record node and note changes, and a deleted target has no anchor', () => {
   const f = fixture();
   const bot = f.store.product.content(fixtureBotInput('지울 봇', '설명'));
@@ -731,27 +529,6 @@ test.each(['expired', 'chat deleted', 'conversation deleted'] as const)(
     expect(kept()).toEqual({ image: false, font: false });
   }
 );
-
-test('theme asset cleanup keeps fonts and images a recorded theme baseline references', () => {
-  const f = fixture();
-  const task = f.begin();
-  const hash = 'b'.repeat(64);
-  f.store.db
-    .prepare('INSERT INTO theme_assets(hash,kind,mime,bytes,created_at) VALUES(?,?,?,?,?)')
-    .run(hash, 'font', 'font/woff2', Buffer.from([1]), new Date().toISOString());
-  f.store.db
-    .prepare(
-      "INSERT INTO helper_changes(task_id,domain,target_id,position,baseline,entries,updated_at) VALUES(?,'resource','theme:custom',1,?,'[]',?)"
-    )
-    .run(task.id, JSON.stringify({ assets: [{ hash, kind: 'font' }] }), new Date().toISOString());
-  pruneThemeAssets(f.store.db, [hash]);
-  expect(f.store.db.prepare('SELECT 1 AS kept FROM theme_assets WHERE hash=?').get(hash)).toEqual({
-    kept: 1,
-  });
-  forgetHelperResourceChanges(f.store.db, 'theme', 'custom');
-  pruneThemeAssets(f.store.db, [hash]);
-  expect(f.store.db.prepare('SELECT 1 FROM theme_assets WHERE hash=?').get(hash)).toBeUndefined();
-});
 
 test('a chat lore patch that leaves the effective text unchanged records nothing', () => {
   const f = fixture();

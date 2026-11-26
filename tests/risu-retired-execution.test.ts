@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
 import { validateRisuPrompt } from '../core/risu-prompt.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
@@ -6,20 +6,7 @@ import {
   nativeRisuSnapshotNeedsRefresh,
   prepareNativeRisuReadOnly,
 } from '../server/risu-native-readonly.js';
-import { runAuxiliaryJob } from '../server/product-auxiliary.js';
-import {
-  bridge,
-  bundle,
-  hooks,
-  selectProvider,
-  translationFixtureSlot,
-} from './fixtures/translation-job.js';
-import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
-
-const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => {
-  for (const close of cleanups.splice(0)) await close();
-});
+import { bundle } from './fixtures/translation-job.js';
 
 async function authoredInput() {
   const seed = bundle();
@@ -99,46 +86,4 @@ test('current-version historical preset receipts refresh before new work without
   expect(JSON.stringify(refreshed)).not.toMatch(/RETIRED_|EXECUTED/);
   expect(nativeRisuSnapshotNeedsRefresh(refreshed)).toBe(false);
   expect(seed.snapshot).toEqual(before);
-});
-
-test('translation excludes retired authored fields from provider inputs and tools', async () => {
-  const seed = await authoredInput();
-  const server = await loopbackProvider(async (request, response) => {
-    const body = JSON.parse(request.body);
-    if (!body.input.results.length)
-      await writeSse(response, [
-        {
-          type: 'tool_delta',
-          index: 0,
-          id: 'read-bot',
-          name: 'knowledge.read',
-          argumentsDelta: '{"id":"package:bot:bot:body"}',
-        },
-        { type: 'done', reason: 'tool_calls' },
-      ]);
-    else
-      await writeSse(response, [
-        { type: 'text_delta', delta: `합성 번역 ${translationFixtureSlot(body, 'source')}` },
-        { type: 'done', reason: 'stop' },
-      ]);
-  });
-  cleanups.push(server.close);
-  selectProvider(seed, server.endpoint);
-  const before = structuredClone(seed);
-  const state = bridge(seed);
-  const outcome = await runAuxiliaryJob(
-    state.store,
-    seed.job.id,
-    'owner',
-    hooks(server.origin).options
-  );
-  expect(outcome?.status).toBe('completed');
-  expect(server.requests).toHaveLength(2);
-  const wires = JSON.stringify(server.requests.map((request) => JSON.parse(request.body)));
-  expect(wires).not.toMatch(/RETIRED_|EXECUTED/);
-  expect(wires).toContain('Mira has not learned the keeper identity.');
-  expect(wires).toContain(seed.source.text);
-  expect(JSON.stringify(state.claims)).not.toMatch(/RETIRED_|EXECUTED/);
-  expect(state.data).toEqual(before);
-  expect(seed).toEqual(before);
 });

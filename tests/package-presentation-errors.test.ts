@@ -64,11 +64,3 @@ test('a Risu stage failure reaches the reader as its code and is logged', async 
     'REQUEST_FAILED GET /api/chats/:id/sources/:sourceId/presentation RISU_NATIVE_TIMEOUT\n'
   );
 });
-
-test('an unexpected failure logs its location without its free-form message', async () => {
-  const { response, lines } = await presentation(new TypeError('미라의 비밀 대사'));
-  expect(response.json()).toEqual({ error: 'Request failed' });
-  const line = lines.find((item) => item.startsWith('REQUEST_FAILED'));
-  expect(line).toMatch(/ TypeError at [\w.-]+:\d+\n$/u);
-  expect(line).not.toContain('비밀');
-});

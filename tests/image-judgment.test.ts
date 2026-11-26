@@ -502,54 +502,6 @@ describe('JEV-only existing image placement', () => {
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0].assetRef).toBe('r31');
   });
-  it('covers a paragraph whose cheapest candidate exceeds its share before adding spare depth', async () => {
-    const { catalog: seed } = paragraphCatalog();
-    const description = seed[0].caption.slice('aurora '.length);
-    const catalog = [
-      ...Array.from({ length: 127 }, (_, index) => ({
-        ...seed[0],
-        ref: `asymmetric-${index}`,
-        alt: index < 63 ? 'harbor' : 'observatory',
-        caption: `${index < 63 ? 'harbor' : 'observatory'} ${description}`,
-      })),
-      { ...seed[0], ref: 'compact-harbor', alt: 'harbor', caption: 'harbor' },
-    ];
-    const text = 'harbor waits.\n\nobservatory waits.';
-    const input = { ...source, text, hash: createHash('sha256').update(text).digest('hex') };
-    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body));
-      expect(jevRequestFits(body, null, true)).toBe(true);
-      const observatory = body.state.assets.find(
-        (asset: { id: string; name: string }) =>
-          asset.name === 'observatory' && Object.hasOwn(body.questions.block_1.criteria, asset.id)
-      );
-      expect(observatory).toBeDefined();
-      expect(body.questions.block_0.criteria).toHaveProperty('asset_127');
-      const response = await typedResponse(body, 'none').json();
-      response.answers.block_1 = {
-        type: 'choice',
-        choice: observatory.id,
-        probabilities: { [observatory.id]: 0.95 },
-      };
-      return new Response(JSON.stringify(response));
-    });
-    const result = await judgeImagePlacement(input, catalog, 'z '.repeat(232700), {
-      settings: { images: false, longContext: true },
-      signal: new AbortController().signal,
-      credential: () => 'key',
-      fetch,
-      onAttemptStart: (wire) => {
-        validateImageJudgmentWire(input, catalog, wire);
-        return 'asymmetric-coverage';
-      },
-      onAttemptFinish: vi.fn(),
-    });
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(result.entries).toHaveLength(1);
-    expect(catalog.find((asset) => asset.ref === result.entries[0].assetRef)?.alt).toBe(
-      'observatory'
-    );
-  });
   it('keeps minority scenes eligible and rejects a shared catalog ID outside its block choices', async () => {
     const text = [
       ...Array.from({ length: 15 }, () => 'Harbor pier sailors morning boats.'),

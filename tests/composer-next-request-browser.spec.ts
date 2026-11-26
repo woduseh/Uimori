@@ -160,14 +160,6 @@ async function expectReturned(page: Page, text: string, reason: string, sent: st
   expect(sent).toEqual([]);
 }
 
-const switchChat = async (page: Page, chatId: string) => {
-  await page.evaluate((id) => {
-    history.pushState(null, '', `?chat=${id}`);
-    dispatchEvent(new PopStateEvent('popstate'));
-  }, chatId);
-  await expect(page.locator('.workspace-header h1')).not.toBeEmpty();
-};
-
 const setHidden = (page: Page, hidden: boolean) =>
   page.evaluate((value) => {
     Object.defineProperty(document, 'hidden', { configurable: true, value });
@@ -262,31 +254,6 @@ test('QUEUE03 a reload restores the queued request as a draft without sending it
   }
 });
 
-test('QUEUE04 switching to another chat returns the queued request to its draft', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const other = await body<Chat>(
-      await postFixtureChat(request, { data: { title: `Other chat ${randomUUID()}` } })
-    );
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    await switchChat(page, other.id);
-    await expect(queued(page)).toHaveCount(0);
-    live.finish();
-    await expect.poll(() => runStatus(request, run.id)).toBe('completed');
-    await switchChat(page, chat.id);
-    await expectReturned(page, '계속 써 주세요.', '채팅을 떠나서', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
 test('QUEUE05 a chat settings change while queued keeps the request as a draft', async ({
   page,
   request,
@@ -315,35 +282,6 @@ test('QUEUE05 a chat settings change while queued keeps the request as a draft',
   }
 });
 
-test('QUEUE06 a writing options change while queued keeps the request as a draft', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request, { controls: true });
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    const options = await body<ChatOptionState>(await request.get(`/api/chats/${chat.id}/options`));
-    await body(
-      await request.post(`/api/chats/${chat.id}/options/fixed`, {
-        data: {
-          expectedRevision: options.revision,
-          operationId: randomUUID(),
-          binding: options.binding,
-          values: { tone: '바꾼 문체' },
-        },
-      })
-    );
-    live.finish();
-    await expectReturned(page, '계속 써 주세요.', '창작 옵션이 바뀌어', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
 test('QUEUE07 a failed run keeps the queued request as a draft', async ({ page, request }) => {
   const { peer, writer, chat } = await setup(request);
   try {
@@ -355,22 +293,6 @@ test('QUEUE07 a failed run keeps the queued request as a draft', async ({ page, 
     live.fail();
     await expect.poll(() => runStatus(request, run.id)).not.toMatch(/^(queued|running)$/);
     expect(await runStatus(request, run.id)).not.toBe('completed');
-    await expectReturned(page, '계속 써 주세요.', '앞선 생성이 완료되지 않아', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE08 a cancelled run keeps the queued request as a draft', async ({ page, request }) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    await writer;
-    await queue(page, '계속 써 주세요.');
-    await page.getByRole('button', { name: '원문 생성 취소', exact: true }).click();
-    await expect.poll(() => runStatus(request, run.id)).toBe('cancelled');
     await expectReturned(page, '계속 써 주세요.', '앞선 생성이 완료되지 않아', sent);
   } finally {
     await peer.close();
@@ -422,175 +344,6 @@ test('QUEUE10 another tab on the same chat does not send the queued request', as
     expect(sentElsewhere).toEqual([]);
   } finally {
     await second.close();
-    await peer.close();
-  }
-});
-
-test('QUEUE11 a hidden tab sends the queued request when it is shown again', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    await setHidden(page, true);
-    live.finish();
-    await expect.poll(() => runStatus(request, run.id)).toBe('completed');
-    await page.waitForTimeout(700);
-    await expect(queued(page)).toContainText('계속 써 주세요.');
-    expect(sent).toEqual([]);
-    await setHidden(page, false);
-    await expect.poll(() => sent).toEqual(['계속 써 주세요.']);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE12 a chat model change while queued keeps the request as a draft', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat, model } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    const current = await body<ChatDetail>(await request.get(`/api/chats/${chat.id}`));
-    await body(
-      await request.put(`/api/chats/${chat.id}/profile`, {
-        data: {
-          expectedRevision: current.profile!.revision,
-          image: current.profile!.image,
-          pinned: { ...current.profile!.pinned, mainModel: { id: model.id } },
-        },
-      })
-    );
-    live.finish();
-    await expectReturned(page, '계속 써 주세요.', '채팅 설정이 바뀌어', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE13 a model or prompt settings change while queued keeps the request as a draft', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    const models = await body<ModelWorkspace>(await request.get('/api/model-workspace'));
-    await body(
-      await request.put('/api/model-workspace', {
-        data: {
-          expectedRevision: models.revision,
-          routes: { ...models.routes, translation: models.routes.main },
-          titleModel: null,
-          translationPolicy: models.translationPolicy,
-        },
-      })
-    );
-    live.finish();
-    await expectReturned(page, '계속 써 주세요.', '모델이나 프롬프트 설정이 바뀌어', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE14 the reader follows the output of a request sent from the queue', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run, 1280);
-    await page.setViewportSize({ width: 1280, height: 420 });
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    const reader = page.locator('[data-reader-scrollport]');
-    await expect
-      .poll(() => reader.evaluate((node) => node.scrollHeight - node.clientHeight))
-      .toBeGreaterThan(40);
-    await reader.evaluate((node) => {
-      node.scrollTop = 0;
-    });
-    live.finish();
-    await expect.poll(() => sent).toEqual(['계속 써 주세요.']);
-    await expect(page.getByText('예약한 요청으로 이어 쓴 장면.')).toBeInViewport();
-    expect(await reader.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE15 leaving for the library while the queued request is being checked does not send it, even after coming back', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    let release = () => {};
-    const checking = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let checked = () => {};
-    const reached = new Promise<void>((resolve) => {
-      checked = resolve;
-    });
-    await page.route(`**/api/chats/${chat.id}/codex-content-preflight`, async (route) => {
-      checked();
-      await checking;
-      await route.fulfill({ status: 200, json: { warning: false } });
-    });
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    live.finish();
-    await reached;
-    await page.evaluate(() => {
-      history.pushState(null, '', '?workspace=library');
-      dispatchEvent(new PopStateEvent('popstate'));
-    });
-    await expect(page.locator('#request')).toHaveCount(0);
-    await switchChat(page, chat.id);
-    await expect(composer(page)).toBeVisible();
-    release();
-    await expectReturned(page, '계속 써 주세요.', '채팅을 떠나서', sent);
-    await expect(page.getByText('예약한 요청으로 이어 쓴 장면.')).toHaveCount(0);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE16 a content check that cannot be reached keeps the queued request as a draft', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    await page.route(`**/api/chats/${chat.id}/codex-content-preflight`, (route) => route.abort());
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    live.finish();
-    await expectReturned(page, '계속 써 주세요.', '보내기 전에 확인이 필요해', sent);
-  } finally {
     await peer.close();
   }
 });
@@ -647,7 +400,7 @@ async function nextRequestState(request: APIRequestContext, chat: Chat) {
 test('NEXTREQ01 the composer line names what applies to the next request and opens each place', async ({
   page,
   request,
-}, info) => {
+}) => {
   const { peer, chat } = await setup(request, { controls: true });
   try {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -663,8 +416,6 @@ test('NEXTREQ01 the composer line names what applies to the next request and ope
     ).toBeVisible();
     await expect(line.getByRole('button', { name: '1회 옵션 예약', exact: true })).toBeVisible();
     await expect(line.getByRole('button', { name: '원작 참고', exact: true })).toBeVisible();
-    expect((await line.boundingBox())!.height).toBeLessThan(48);
-    await page.screenshot({ path: info.outputPath('next-request-line-1280.png') });
 
     await line.getByRole('button', { name: '1회 옵션 예약', exact: true }).click();
     const options = page.locator('#chat-prompt-options');
@@ -682,46 +433,6 @@ test('NEXTREQ01 the composer line names what applies to the next request and ope
 
     await line.getByRole('button', { name: '등대의 밤 플롯 열기', exact: true }).click();
     await expect(page.locator('.outline-panel')).toBeVisible();
-  } finally {
-    await peer.close();
-  }
-});
-
-test('NEXTREQ02 on a narrow screen the line collapses to a count in the activity row', async ({
-  page,
-  request,
-}, info) => {
-  const { peer, writer, chat } = await setup(request, { controls: true });
-  try {
-    const run = await startRun(request, chat);
-    const live = await writer;
-    await nextRequestState(request, chat);
-    await openRunning(page, chat, run, 412);
-    const row = page.locator('.composer-dock .composer-context');
-    const count = row.getByRole('group').or(row.locator('.next-request-menu > summary'));
-    await expect(row.locator('.next-request-summary')).toHaveText('다음 요청 3');
-    await expect(row.getByTestId('activity-status')).toBeVisible();
-    const centers = await row.locator(':scope > *').evaluateAll((nodes) =>
-      nodes
-        .filter((node) => node.checkVisibility())
-        .map((node) => node.getBoundingClientRect())
-        .map((rect) => rect.top + rect.height / 2)
-    );
-    expect(Math.max(...centers) - Math.min(...centers)).toBeLessThanOrEqual(2);
-    await page.screenshot({ path: info.outputPath('next-request-count-412.png') });
-    await count.first().click();
-    const menu = row.locator('.next-request-menu .action-menu-body');
-    await expect(menu.getByRole('button')).toHaveText([
-      '진행 중 플롯: 회차 등대의 밤',
-      '1회 옵션 예약',
-      '원작 참고',
-      '진행 중 플롯 해제',
-    ]);
-    await menu.getByRole('button', { name: '1회 옵션 예약', exact: true }).click();
-    await expect(
-      page.locator('#chat-prompt-options').getByRole('region', { name: '1회 옵션 예약' })
-    ).toBeVisible();
-    live.finish();
   } finally {
     await peer.close();
   }

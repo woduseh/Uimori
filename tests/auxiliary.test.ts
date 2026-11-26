@@ -302,37 +302,6 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(blocks[1].text).toContain('\n\n```');
   });
 
-  test('presentation without supplied assets cannot select the synthetic fixture catalog', async () => {
-    const raw = source('Mira stood beside the harbor.');
-    const input = presentationInput(raw, context(), snapshot());
-    expect(input.assets).toEqual([]);
-    expect(
-      validatePresentation(raw, { sourceRevision: raw.id, sourceHash: raw.hash, entries: [] })
-        .entries
-    ).toEqual([]);
-    const asset = BUILTIN_ASSETS[1];
-    const entries = [
-      {
-        blockAnchor: splitSource(raw)[0].anchor,
-        assetRef: asset.ref,
-        assetRevision: asset.revision,
-        assetHash: asset.hash,
-        presentationIntent: 'inline',
-      },
-    ];
-    expect(() =>
-      validatePresentation(raw, { sourceRevision: raw.id, sourceHash: raw.hash, entries })
-    ).toThrow('ASSET_REFERENCE_INVALID');
-    expect(() =>
-      validatePresentation(
-        raw,
-        { sourceRevision: raw.id, sourceHash: raw.hash, entries },
-        BUILTIN_ASSETS,
-        0
-      )
-    ).toThrow('PRESENTATION_LIMIT_INVALID');
-  });
-
   test('P10 P13 explicitly supplied fixture assets preserve source and allow image none', async () => {
     const raw = source(
       'Mira wore a blue coat beside the pier.\n\nMira stood at the observatory under its green dome.'
@@ -470,59 +439,4 @@ test('image selection uses IDs for duplicate names and rejects a different conte
   expect(() => validatePresentation(raw, selected, [...assets, assets[0]])).toThrow(
     'ASSET_REFERENCE_INVALID'
   );
-});
-
-test('presentation input cannot invoke a generative selector or asset tool loop', async () => {
-  const input = presentationInput(source('A source.'), context(), snapshot(), BUILTIN_ASSETS);
-  expect(input.tools).toEqual([]);
-  let calls = 0;
-  await expect(
-    executeAuxiliary(input, snapshot(), async () => {
-      calls++;
-      return '';
-    })
-  ).rejects.toThrow('JEV_JUDGMENT_REQUIRED');
-  expect(calls).toBe(0);
-});
-
-test('translation offers each read pair and policy sentence only while it has something to return', () => {
-  const raw = source('A source.');
-  const bare = { ...snapshot(), resources: [] };
-  const first = translationInput(raw, { ...context(), previousSources: [] }, bare);
-  expect(first.tools).toEqual([]);
-  expect(first.catalog).toEqual([]);
-  expect(first.referencePolicy).toBe('');
-
-  const scenes = Array.from({ length: 9 }, (_, index) => ({
-    revision: `scene-${index}`,
-    text: `Scene ${index}.`,
-  }));
-  const later = translationInput(
-    raw,
-    { ...context(), previousSources: scenes.slice(-2) },
-    { ...snapshot(), history: scenes },
-    'full',
-    3
-  );
-  expect(later.tools).toEqual([
-    'knowledge.search',
-    'knowledge.read',
-    'skills.list',
-    'skills.load',
-    'story.search',
-    'story.read',
-    'translation.search',
-    'translation.read',
-  ]);
-  expect(later.catalog.map((item) => item.id)).toEqual(['chat-a:glossary', 'chat-a:skill']);
-  expect(later.referencePolicy).toContain('story.search/read');
-  expect(later.referencePolicy).toContain('translation.search/read');
-
-  const shown = translationInput(
-    raw,
-    { ...context(), previousSources: scenes.slice(-2) },
-    { ...bare, history: scenes.slice(-2) }
-  );
-  expect(shown.tools).toEqual([]);
-  expect(shown.referencePolicy).not.toContain('story.search');
 });

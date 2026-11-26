@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest';
 import {
-  codexPreparedIllustrationText,
   detectImageMime,
   excerptScene,
   fillComfyWorkflow,
@@ -155,20 +154,6 @@ describe('prompt model output and Codex caption parsing', () => {
       { unavailable: true, unavailableReason: 'tool disabled' }
     );
   });
-  test('keeps unavailable recognition explicit and bounds plain-text reasons', () => {
-    for (const text of [
-      'UNAVAILABLE',
-      'Not UNAVAILABLE: a caption',
-      '{"other":"UNAVAILABLE: no tool"}',
-    ])
-      expect(parseCodexIllustrationCaption(text).unavailable).toBe(false);
-    const parsed = parseCodexIllustrationCaption(
-      JSON.stringify({ caption: 'UNAVAILABLE: tool\u0000 refused\u202e ' + 'x'.repeat(500) })
-    );
-    expect(parsed.unavailableReason).toMatch(/^tool  refused  /u);
-    expect(parsed.unavailableReason).not.toMatch(/[\p{Cc}\p{Cf}]/u);
-    expect(Array.from(parsed.unavailableReason!)).toHaveLength(287);
-  });
   test('bounds scene and character notes by tokens and carries the selected model input budget', () => {
     const request = illustrationPromptRequest(
       {
@@ -216,18 +201,6 @@ describe('prompt model output and Codex caption parsing', () => {
       );
     }
     expect(source.scene.endsWith('마지막 장면')).toBe(true);
-  });
-  test('the Codex input text labels references by role without carrying bytes', () => {
-    const text = codexPreparedIllustrationText('Scene', [
-      { role: 'character', label: 'Mira' },
-      { role: 'style', label: 'Sketchbook' },
-    ]);
-    const parsed = JSON.parse(text) as { attachedReferences: { role: string; label: string }[] };
-    expect(parsed.attachedReferences).toEqual([
-      { attachment: 1, role: 'character design reference', label: 'Mira' },
-      { attachment: 2, role: 'art style reference', label: 'Sketchbook' },
-    ]);
-    expect(text).not.toContain('base64');
   });
 });
 

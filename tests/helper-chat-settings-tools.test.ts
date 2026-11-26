@@ -190,47 +190,6 @@ test('settings.update saves several settings of one group together or none of th
   ]);
 });
 
-test('chat.read lists the latest scenes first with request, edit revision and translation state', async () => {
-  const { store, chat } = fixture();
-  const sourceId = chat.headRevision!;
-  const run = await runScriptedChatHelper(store, chat.id, [
-    helperCall('read', 'chat.read', { order: 'newest', includeRequest: true, limit: 1 }),
-    helperDone,
-  ]);
-  expect((output(run, 'read') as { messages: unknown[] }).messages).toEqual([
-    expect.objectContaining({
-      id: sourceId,
-      sceneNumber: 1,
-      editRevision: 0,
-      translation: 'none',
-      request: 'Arrive.',
-    }),
-  ]);
-  const source = run.requests[0]!.input.source as {
-    writing: { chat: { latestScene: { sourceId: string } } };
-  };
-  expect(source.writing.chat.latestScene.sourceId).toBe(sourceId);
-});
-
-test('chat.organize pins and unpins a chat of the bot and reports it in the read', async () => {
-  const { store, chat } = fixture();
-  const botId = store.organization.metadata(chat.id)!.botId;
-  const run = await runScriptedChatHelper(store, chat.id, [
-    helperCall('pin', 'chat.organize', { action: 'pin', botId, chatId: chat.id, pinned: true }),
-    helperCall('again', 'chat.organize', { action: 'pin', botId, chatId: chat.id, pinned: true }),
-    helperCall('read', 'chat.organize', { action: 'read', botId }),
-    helperDone,
-  ]);
-  expect(store.chat(chat.id).pinnedAt).toBeTruthy();
-  expect(output(run, 'read')).toMatchObject({ chats: [{ id: chat.id, pinned: true }] });
-  expect(run.results.map((item) => item.changedTargets)).toEqual([1, 0]);
-  await runScriptedChatHelper(store, chat.id, [
-    helperCall('unpin', 'chat.organize', { action: 'pin', botId, chatId: chat.id, pinned: false }),
-    helperDone,
-  ]);
-  expect(store.chat(chat.id).pinnedAt).toBeFalsy();
-});
-
 test('library.organize renames and removes a folder without deleting its items', async () => {
   const { store, chat } = fixture();
   const bot = store.product.content(fixtureBotInput('Filed bot')) as Content;

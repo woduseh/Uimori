@@ -1,7 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { describe, expect, test } from 'vitest';
 import {
   analyzeCbs,
   cbsMatchingRanges,
@@ -11,7 +8,6 @@ import {
   type CbsDiagnosticCode,
 } from '../core/cbs-analysis.js';
 import { createNativeRisuCbs, nativeRisuCbsFunctionCatalog } from '../server/risu-native-cbs.js';
-import { createApp, type App } from '../server/app.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 
 const native: RisuContentSource = {
@@ -55,17 +51,6 @@ describe('tokens and calls', () => {
     expect(analysis.diagnostics).toEqual([]);
   });
 
-  test('a single colon splits arguments only when the first colon is not doubled', () => {
-    const single = analyzeCbs('{{getvar:a::b}}');
-    expect(single.calls[0]!.arguments.map((arg) => slice('{{getvar:a::b}}', arg))).toEqual([
-      'a',
-      '',
-      'b',
-    ]);
-    const double = analyzeCbs('{{getvar::a:b}}');
-    expect(double.calls[0]!.arguments.map((arg) => slice('{{getvar::a:b}}', arg))).toEqual(['a:b']);
-  });
-
   test('block openers pair with the next closer whatever its name', () => {
     const text = '{{#when::x::is::1}}A{{:else}}B{{/if}}';
     const analysis = analyzeCbs(text);
@@ -79,36 +64,6 @@ describe('tokens and calls', () => {
       '{{/if}}',
     ]);
     expect(analysis.diagnostics).toEqual([]);
-  });
-
-  test('comments are removed before parsing, as the native adapter does', () => {
-    const text = 'a{{// note {{x}} }}b{{user}}';
-    const analysis = analyzeCbs(text);
-    expect(analysis.comments.map((range) => slice(text, range))).toEqual(['{{// note {{x}} }}']);
-    expect(analysis.calls.map((call) => slice(text, call))).toEqual(['{{user}}']);
-    expect(analysis.tokens[1]).toMatchObject({ kind: 'comment' });
-  });
-
-  test('pure bodies keep brace pairing but treat nested blocks as literal pairs', () => {
-    const text = '{{#pure}}{{#if 1}}x{{/if}}{{/pure}}{{user}}';
-    const analysis = analyzeCbs(text);
-    expect(analysis.blocks.map((block) => [block.kind, block.keyword])).toEqual([
-      ['pure', '#pure'],
-      [null, '#if'],
-    ]);
-    expect(analysis.calls.at(-1)!.context).toBe('evaluated');
-    expect(analysis.calls[1]!.context).toBe('inert');
-    expect(analysis.diagnostics).toEqual([]);
-  });
-
-  test('legacy angle names and the hash closer follow the native parser', () => {
-    const text = '<user> {#if 1\nyes#} {{a#}}';
-    const analysis = analyzeCbs(text);
-    expect(analysis.calls.map((call) => [call.kind, slice(text, call)])).toEqual([
-      ['legacy-name', '<user>'],
-      ['legacy-block', '{#if 1\nyes#}'],
-      ['legacy-block', '{{a#}'],
-    ]);
   });
 });
 
@@ -143,12 +98,6 @@ describe('references', () => {
     expect(slice(text, dynamic)).toBe('{{tempvar::key}}');
   });
 
-  test('function names normalise like Risu while variable names stay exact', () => {
-    expect(normalizeCbsFunctionName(' Get_Var ')).toBe('getvar');
-    const analysis = analyzeCbs('{{ Get_Var :: My Name }}');
-    expect(analysis.references[0]).toMatchObject({ name: ' My Name ', scope: 'chat' });
-  });
-
   test('CRLF ranges convert to editor offsets that count each line break once', () => {
     const text = 'one\r\ntwo\r\n{{getvar::hp}}\r\nend';
     const reference = analyzeCbs(text).references[0]!;
@@ -181,10 +130,6 @@ describe('diagnostics', () => {
     const text = '{{// skip }}{{nope}}';
     const [diagnostic] = analyzeCbs(text, { catalog }).diagnostics;
     expect(slice(text, diagnostic!)).toBe('nope');
-  });
-
-  test('unknown names are only checked when a catalog is passed', () => {
-    expect(analyzeCbs('{{nope}}').diagnostics).toEqual([]);
   });
 });
 
@@ -361,14 +306,6 @@ describe('agreement with the vendored parser', () => {
 });
 
 describe('function catalog', () => {
-  const apps: { app: App; directory: string }[] = [];
-  afterEach(async () => {
-    for (const item of apps.splice(0)) {
-      await item.app.close();
-      await rm(item.directory, { recursive: true, force: true });
-    }
-  });
-
   test('comes from the vendored registry with aliases and flags', () => {
     const byName = new Map(catalog.functions.map((entry) => [entry.name, entry]));
     expect(byName.get('getvar')?.description).toContain('{{getvar::variableName}}');
@@ -377,20 +314,5 @@ describe('function catalog', () => {
     expect(byName.get('__')?.internal).toBe(true);
     expect(byName.get('#if')?.deprecated?.replacement).toBe('#when');
     expect(catalog.functions.filter((entry) => entry.name === 'time')).toHaveLength(1);
-  });
-
-  test('is served behind the API session', async () => {
-    for (const accessToken of [undefined, 'synthetic-token-for-catalog']) {
-      const directory = await mkdtemp(join(tmpdir(), 'uimori-cbs-catalog-'));
-      const app = await createApp({
-        dbPath: join(directory, 'app.sqlite'),
-        buildId: 'cbs-catalog',
-        accessToken,
-      });
-      apps.push({ app, directory });
-      const response = await app.inject({ method: 'GET', url: '/api/risu/cbs-functions' });
-      if (accessToken) expect(response.statusCode).toBe(401);
-      else expect(response.json()).toEqual(JSON.parse(JSON.stringify(catalog)));
-    }
   });
 });

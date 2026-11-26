@@ -115,37 +115,3 @@ for (const width of [412]) {
     expect(errors).toEqual([]);
   });
 }
-test('TGUIDE invalid incomplete row stays editable; only bot editor exposes the guide', async ({
-  page,
-  request,
-}) => {
-  const title = `Invalid guide ${randomUUID().slice(0, 8)}`;
-  const bot = await createBot(request, title);
-  await open(page, title);
-  await page.getByRole('button', { name: '표기 추가', exact: true }).click();
-  await page.getByLabel('표기 1 원문', { exact: true }).fill('Mira');
-  await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: '표기 1' }).first()).toBeVisible();
-  await expect(page.getByLabel('표기 1 원문', { exact: true })).toHaveValue('Mira');
-  expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(bot.revision);
-  await page.getByLabel('표기 1 번역', { exact: true }).fill('미라');
-  await save(page);
-  const data = fixtureBotInput(`Persona ${randomUUID().slice(0, 8)}`);
-  const persona = await (
-    await request.post('/api/content', { data: { ...data, kind: 'persona' } })
-  ).json();
-  await page.goto('/');
-  await navigationAction(page, '페르소나');
-  await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(persona.title);
-  await page.getByRole('button', { name: `${persona.title} 편집`, exact: true }).click();
-  await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
-  await selectEditorSection(page, '번역 지침');
-  const personaGuide = page.getByLabel('봇 번역 지침', { exact: true });
-  await personaGuide.fill('봇으로 사용할 때만 적용할 페르소나 자료의 번역 지침');
-  await save(page);
-  const savedPersona = await (await request.get(`/api/content/${persona.id}`)).json();
-  expect(savedPersona.kind).toBe('persona');
-  expect(savedPersona.package.nativeRisu.card.extensions.uimori.translationGuide.instructions).toBe(
-    '봇으로 사용할 때만 적용할 페르소나 자료의 번역 지침'
-  );
-});

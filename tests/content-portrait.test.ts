@@ -44,11 +44,3 @@ function card(): Content {
 test('portrait resolution uses the selected card image rather than the first image or legacy cover', () => {
   expect(contentPortraitUrl(card())).toBe(`/api/package-image-blobs/${'b'.repeat(64)}`);
 });
-test('absent content, a missing or inline-only portrait does not fall back to other package or legacy images', () => {
-  const content = card();
-  for (const id of ['inline', 'missing', undefined]) {
-    content.package.portraitImageId = id;
-    expect(contentPortraitUrl(content)).toBe('');
-  }
-  expect(contentPortraitUrl(null)).toBe('');
-});

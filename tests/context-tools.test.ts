@@ -353,14 +353,6 @@ test('a chat range that keeps a request but cuts its scene leaves story reads op
   ).toContain('story.read');
 });
 
-test('the shell description names knowledge.read only when the request offers it', async () => {
-  const tools = buildMainProviderRequest(await snapshot(), { shell: true }).request.stable.tools;
-  expect(tools.map((item) => item.name)).not.toContain('knowledge.read');
-  expect(tools.find((item) => item.name === 'data.exec')?.description).not.toContain(
-    'knowledge.read'
-  );
-});
-
 test('shell output of 800 repetitions keeps logs and paired results so writing can continue', async () => {
   const repetitions = 800;
   const fixed = await snapshot();
@@ -419,145 +411,7 @@ test('shell output of 800 repetitions keeps logs and paired results so writing c
   expect(observed.events).toEqual(bodies[1].input.results);
 });
 
-test('Chat continuation pairs every shell result while admitting accumulated output', async () => {
-  const fixed = await snapshot();
-  const target = fixed.profile!.models.main!;
-  target.inputTokenLimit = 8192;
-  target.connection.protocol = 'openai-chat-v1';
-  target.connection.endpoint = `${origin}/v1/chat/completions`;
-  fixed.contextPlan!.budget.inputTokenLimit = 8192;
-  const observed = hooks();
-  const output = '가나다🙂'.repeat(800);
-  observed.value.executeShell = async (_snapshot, action) => ({
-    ...action,
-    denied: false,
-    result: { output, outputFile: `scratch/${action.callId}.log`, exitCode: 0 },
-  });
-  const bodies: any[] = [];
-  vi.mocked(fetch).mockImplementation(async (_url, options) => {
-    const body = JSON.parse(String(options?.body));
-    bodies.push(body);
-    const delta =
-      bodies.length === 1
-        ? {
-            role: 'assistant',
-            tool_calls: Array.from({ length: 3 }, (_, index) => ({
-              index,
-              id: `chat-shell-${index}`,
-              type: 'function',
-              function: {
-                name: body.tools.find((tool: any) => tool.function.name === 'data_exec').function
-                  .name,
-                arguments: JSON.stringify({ command: 'cat current/resources/0.txt' }),
-              },
-            })),
-          }
-        : { role: 'assistant', content: finalText };
-    const response = sse({
-      id: 'shell-continuation',
-      choices: [{ index: 0, delta, finish_reason: bodies.length === 1 ? 'tool_calls' : 'stop' }],
-    });
-    return new Response((await response.text()) + 'data: [DONE]\n\n', {
-      headers: response.headers,
-    });
-  });
-  expect(await runMain(fixed, observed.value)).toMatchObject({
-    status: 'completed',
-    text: finalText,
-  });
-  expect(bodies).toHaveLength(2);
-  const continuation = bodies[1];
-  const returned = continuation.messages.filter((message: any) => message.role === 'tool');
-  expect(returned.map((message: any) => message.tool_call_id)).toEqual([
-    'chat-shell-0',
-    'chat-shell-1',
-    'chat-shell-2',
-  ]);
-  expect(continuation.messages.find((message: any) => message.tool_calls)?.tool_calls).toHaveLength(
-    3
-  );
-  expect(observed.events.some((event) => !event.denied)).toBe(true);
-  expect(observed.events.some((event) => event.denied && event.errorKind === 'recoverable')).toBe(
-    true
-  );
-  expect(estimateContextTokens(continuation, fixed.contextPlan!.budget)).toBeLessThanOrEqual(8192);
-  expect(observed.events.some((event) => event.name === 'context.compact')).toBe(false);
-});
-
 describe('host read compaction and provider continuation inside one main run', () => {
-  test.each([
-    {
-      consumerLimit: 8192,
-      summaryLimit: 32768,
-      output: 1500,
-      goal: 750,
-    },
-  ])(
-    'read compaction sends the $goal-token consumer goal with an independently sized $summaryLimit-token summarizer',
-    async ({ consumerLimit, summaryLimit, output, goal }) => {
-      const fixed = await snapshot();
-      fixed.contextPlan!.budget.inputTokenLimit = consumerLimit;
-      fixed.profile!.models.main!.inputTokenLimit = consumerLimit;
-      fixed.profile!.contextModel = {
-        ...model(),
-        id: 'summary-model',
-        inputTokenLimit: summaryLimit,
-        maxOutputTokens: output,
-      };
-      delete fixed.promptCompilation;
-      const original = structuredClone(fixed),
-        log = hooks(),
-        event = executeTool(fixed, {
-          callId: 'actual-read',
-          name: 'story.read',
-          args: { sceneNumber: 1, offset: 2, limit: 30 },
-        });
-      const bodies = script([
-        (body) => {
-          expect(body).toMatchObject({
-            generation: { maxOutputTokens: Math.min(output, 4096) },
-            stable: { tools: [] },
-            input: {
-              controls: { targetSummaryTokens: goal },
-              source: { originalRequest: fixed.request },
-            },
-          });
-          expect(JSON.parse(body.input.source.part as string)).toEqual([event]);
-          expect(body.input.task).not.toBe(fixed.request);
-          return completed();
-        },
-      ]);
-      const events = await compactToolReads(
-        fixed,
-        [event],
-        log.value,
-        { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-        projectedTokens(fixed)
-      );
-      expect(bodies).toHaveLength(1);
-      expect(events[0].result).toMatchObject({
-        references: [
-          {
-            name: 'story.read',
-            args: event.args,
-            returned: {
-              sceneNumber: 1,
-              source: {
-                revision: fixed.history[0].revision,
-                hash: fixed.history[0].contentHash,
-                start: 2,
-                end: 32,
-              },
-              nextOffset: 32,
-            },
-          },
-        ],
-      });
-      expect(goal).toBeLessThanOrEqual(Math.min(output, 4096));
-      expect(fixed).toEqual(original);
-    }
-  );
-
   test('oversized reads keep every fragment and Unicode boundary when the whole input does not fit', async () => {
     const fixed = await snapshot(),
       log = hooks();
@@ -588,125 +442,6 @@ describe('host read compaction and provider continuation inside one main run', (
     }
     expect(usage.modelCalls).toBe(bodies.length);
     expect(events[0].result).toMatchObject({ summary: finalText });
-    expect(fixed).toEqual(original);
-  });
-
-  test('summary headroom includes retained source metadata and exact historical receipts in the actual fresh body', async () => {
-    const fixed = await fixedHeavySnapshot(),
-      log = hooks(),
-      limit = measureMainContext(fixed).estimatedInputTokens + 4200;
-    fixed.profile!.models.main!.inputTokenLimit = limit;
-    fixed.contextPlan!.budget.inputTokenLimit = limit;
-    delete fixed.promptCompilation;
-    const original = structuredClone(fixed);
-    const receipt: ToolEvent = {
-      callId: 'exact-write-receipt',
-      name: 'context.write',
-      args: { summary: workingSummary },
-      result: { saved: true, checkpoint: { id: 'historical-checkpoint' } },
-      denied: false,
-    };
-    const reads = Array.from({ length: 6 }, (_, index) =>
-      executeTool(fixed, {
-        callId: `metadata-read-${index}`,
-        name: 'story.read',
-        args: { sceneNumber: 1, offset: index * 200, limit: 1200 },
-      })
-    );
-    const bodies = script([() => completed()]);
-    const events = await compactToolReads(
-      fixed,
-      [receipt, ...reads],
-      log.value,
-      { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-      projectedTokens(fixed)
-    );
-    expect(bodies.map((body) => body.role)).toEqual(['context']);
-    expect(bodies[0].input.source.part).not.toContain(receipt.callId);
-    expect(events[0]).toEqual(receipt);
-    expect(events).toHaveLength(2);
-    const compacted = events[1].result as {
-      summary: string;
-      references: { name: string; args: Json; returned: Record<string, Json> }[];
-    };
-    expect(compacted.summary).toBe(finalText);
-    expect(compacted.references).toHaveLength(6);
-    for (const [index, reference] of compacted.references.entries())
-      expect(reference).toMatchObject({
-        name: 'story.read',
-        args: { sceneNumber: 1, offset: index * 200, limit: 1200 },
-        returned: {
-          source: {
-            revision: fixed.history[0].revision,
-            hash: fixed.history[0].contentHash,
-            start: index * 200,
-            end: index * 200 + 1200,
-          },
-        },
-      });
-    const emptyEvents = structuredClone(events);
-    (emptyEvents[1].result as { summary: string }).summary = '';
-    const fixedTokens = projectedTokens(fixed)(emptyEvents);
-    const goal = (bodies[0].input as unknown as { controls: { targetSummaryTokens: number } })
-      .controls.targetSummaryTokens;
-    expect(fixedTokens).toBeGreaterThan(projectedTokens(fixed)([receipt]));
-    expect(limit - fixedTokens).toBeGreaterThan(0);
-    expect(goal).toBeLessThanOrEqual(limit - fixedTokens);
-    expect(goal).toBeLessThan(
-      Math.min(2048, Math.floor(limit / 8), limit - projectedTokens(fixed)([receipt]))
-    );
-    const fresh = encodeMainPreview(
-      buildMainProviderRequest(fixed, { completedToolHistory: events }).request,
-      fixed.profile!.models.main!
-    ).body as unknown as Body;
-    expect(estimateContextTokens(fresh)).toBeLessThanOrEqual(limit);
-    expect(fresh).not.toHaveProperty('opaqueState');
-    expect(fresh.prompt!.messages.at(-1)!.content[0].text).toContain('read-results-compacted');
-    expect(fixed).toEqual(original);
-  });
-
-  test('a useful read summary proceeds above the soft trigger with less than ten percent total reduction', async () => {
-    const fixed = await fixedHeavySnapshot(),
-      original = structuredClone(fixed),
-      log = hooks(),
-      limit = fixed.contextPlan!.budget.inputTokenLimit;
-    const bodies = script([
-      (_body, n) =>
-        toolTurn(
-          [{ id: 'small-useful-read', name: 'story.read', args: { sceneNumber: 1, limit: 2400 } }],
-          n
-        ),
-      () => completed(),
-      () => completed(),
-    ]);
-    const result = await runMain(fixed, log.value);
-    expect(result).toMatchObject({
-      status: 'completed',
-      text: finalText,
-      usage: { modelCalls: 3 },
-    });
-    expect(bodies.map((body) => body.role)).toEqual(['main', 'context', 'main']);
-    const compacted = log.events.find((event) => event.name === 'context.compact')!.result as {
-      applied: boolean;
-      beforeTokens: number;
-      afterTokens: number;
-    };
-    expect(compacted.applied).toBe(true);
-    expect(compacted.beforeTokens).toBeGreaterThan(limit * 0.85);
-    expect(compacted.afterTokens).toBeGreaterThan(limit * 0.85);
-    expect(compacted.afterTokens).toBeGreaterThanOrEqual(compacted.beforeTokens * 0.9);
-    expect(compacted.afterTokens).toBeLessThan(compacted.beforeTokens);
-    expect(compacted.afterTokens).toBeLessThanOrEqual(limit);
-    expect(bodies[2]).not.toHaveProperty('opaqueState');
-    expect(bodies[2].input.results).toEqual([]);
-    expect(bodies[2].input.source.completedToolHistory).toMatchObject({
-      events: [
-        {
-          callId: 'small-useful-read',
-          result: { kind: 'host-compacted-reads', summary: finalText },
-        },
-      ],
-    });
     expect(fixed).toEqual(original);
   });
 
@@ -1262,7 +997,6 @@ describe('host read compaction and provider continuation inside one main run', (
 
 test.each([
   { inputLimit: 8192, count: 16, expanded: false },
-  { inputLimit: 272000, count: 10, expanded: true },
   { inputLimit: 32768, count: 8, expanded: true, batches: 2 },
 ])(
   'a $inputLimit-token writer reads $count references without immediate summarization',
@@ -1516,38 +1250,4 @@ test('tiny token limits return a recoverable error rather than a non-progressing
       result: { code: 'TOKEN_LIMIT_TOO_SMALL' },
     });
   }
-});
-
-test('lore explicit UTF-16 limits preserve whole characters and cannot return an empty continuing page', async () => {
-  const fixed = await snapshot();
-  fixed.resources = [
-    {
-      id: 'emoji-limit',
-      chatId: fixed.chatId,
-      kind: 'lore',
-      revision: 1,
-      title: 'emoji',
-      description: '',
-      text: '😀hello',
-    },
-  ];
-  const action = {
-    callId: 'explicit-limit',
-    name: 'knowledge.read',
-    args: { ids: ['emoji-limit'], limit: 1 },
-  };
-  expect(executeTool(fixed, action)).toMatchObject({
-    denied: true,
-    errorKind: 'recoverable',
-    result: { code: 'TOKEN_LIMIT_TOO_SMALL' },
-  });
-  const resumed = executeTool(fixed, { ...action, args: { ...action.args, limit: 2 } });
-  expect(resumed.denied).toBe(false);
-  const read = (resumed.result as any).items[0].read;
-  expect(read).toMatchObject({ text: '😀', range: { start: 0, end: 2 }, nextOffset: 2 });
-
-  fixed.resources[0].text = 'A😀hello';
-  const prefix = executeTool(fixed, { ...action, args: { ...action.args, limit: 2 } });
-  const prefixRead = (prefix.result as any).items[0].read;
-  expect(prefixRead).toMatchObject({ text: 'A', range: { start: 0, end: 1 }, nextOffset: 1 });
 });

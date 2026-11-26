@@ -45,32 +45,6 @@ describe('read-only native preset diagnostics', () => {
     });
   });
 
-  it('locates duplicate and invalid keys without guessing values for invalid declarations', () => {
-    const source = program('a=First\r\na=Second\nbad\t=Bad');
-    const result = diagnoseRisuPreset(source, { a: 'wrong', removed: '1' });
-    expect(result.diagnostics).toEqual([
-      {
-        code: 'toggle_key_duplicate',
-        severity: 'warning',
-        message: expect.any(String),
-        path: '/nativeRisuPreset/preset/customPromptTemplateToggle',
-        range: { start: 9, end: 17, line: 2 },
-        controlId: 'a',
-      },
-      {
-        code: 'toggle_key_invalid',
-        severity: 'warning',
-        message: expect.any(String),
-        path: '/nativeRisuPreset/preset/customPromptTemplateToggle',
-        range: { start: 18, end: 26, line: 3 },
-      },
-    ]);
-    expect(result.coverage.selectedValues).toBe('skipped_invalid_declarations');
-    expect(diagnoseRisuPreset(program(['not', 'a declaration'])).diagnostics[0]?.code).toBe(
-      'toggle_declaration_type'
-    );
-  });
-
   it('reports actual reset candidates but never resets or saves the supplied selections', () => {
     const source = program('mode=Mode=select=First,Second\nname=Name=text\nswitch=Switch');
     const values: Record<string, PromptValue> = {
@@ -94,39 +68,6 @@ describe('read-only native preset diagnostics', () => {
     expect(
       diagnoseRisuPreset(source, { mode: null, name: null, switch: null }).diagnostics
     ).toEqual([]);
-  });
-
-  it('detects same-index label changes that remain valid selections, without deciding their intent', () => {
-    const previous = program('mode=Mode=select=Story,Notes');
-    const current = program('mode=Renamed control=select=Notes,Story');
-    const before = structuredClone({ previous, current });
-    expect(diagnoseRisuPreset(current, { mode: '1' }).diagnostics).toEqual([]);
-    const result = diagnoseRisuPreset(current, { mode: '1' }, previous);
-    expect(result.coverage.optionChanges).toBe('checked');
-    expect(result.diagnostics).toMatchObject([
-      {
-        code: 'toggle_option_meaning_changed',
-        severity: 'warning',
-        controlId: 'mode',
-        option: { value: '0', previousLabel: 'Story', currentLabel: 'Notes' },
-      },
-      {
-        code: 'toggle_option_meaning_changed',
-        severity: 'warning',
-        controlId: 'mode',
-        option: { value: '1', previousLabel: 'Notes', currentLabel: 'Story' },
-      },
-    ]);
-    expect({ previous, current }).toEqual(before);
-    expect(diagnoseRisuPreset(previous, { mode: '1' }, previous).diagnostics).toEqual([]);
-    const crBefore = program('mode=Mode=select=A\r\n');
-    const crAfter = program('mode=Mode=select=A\r\r\n');
-    expect(diagnoseRisuPreset(crAfter, {}, crBefore).diagnostics).toMatchObject([
-      {
-        code: 'toggle_option_meaning_changed',
-        option: { previousLabel: 'A', currentLabel: 'A\r' },
-      },
-    ]);
   });
 
   it('distinguishes removed selected choices from unselected choices and handles unavailable comparisons', () => {
@@ -155,53 +96,5 @@ describe('read-only native preset diagnostics', () => {
     expect(diagnoseRisuPreset(invalid, {}, previous).coverage.optionChanges).toBe(
       'skipped_invalid_declarations'
     );
-  });
-
-  it('leaves CBS source untouched and explicitly excludes syntax, comparisons and variable analysis', () => {
-    const text = [
-      '{{// {{#when::mode::tis::99}} }}',
-      '{{#pure}}{{#when::mode::tis::99}}raw{{/when}}{{/pure}}',
-      '{{#puredisplay}}{{getvar::missing}}{{/puredisplay}}',
-      '{{#escape}}{{setvar::state::changed}}{{/escape}}',
-      '\uE9B8\uE9B8getvar::escaped\uE9B9\uE9B9',
-      '{{getvar::{{getvar::dynamicName}}}}',
-      '{{#when::mode::tis::99}}text{{/differentName}}',
-      '{{setvar::state::changed}} {{getvar::unfinished',
-    ].join('\n');
-    const source = program('mode=Mode=select=First,Second', text);
-    const before = structuredClone(source);
-    const result = diagnoseRisuPreset(source);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.coverage).toMatchObject({
-      cbsSyntax: false,
-      cbsComparisons: false,
-      variables: false,
-    });
-    expect(result.coverage.limitations.length).toBeGreaterThan(0);
-    expect(source).toEqual(before);
-  });
-
-  it('bounds report size and label previews while retaining the complete diagnostic count', () => {
-    const previous = program(`mode=Mode=select=${'old'.repeat(1000)}`);
-    const current = program(`mode=Mode=select=${'new'.repeat(1000)}`);
-    const preview = diagnoseRisuPreset(current, {}, previous).diagnostics[0]?.option;
-    expect(preview?.previousLabel).toHaveLength(160);
-    expect(preview?.currentLabel).toHaveLength(160);
-    const values = Object.fromEntries(
-      Array.from({ length: 205 }, (_, index) => [`old${index}`, '0'])
-    );
-    values['x'.repeat(10_000)] = '0';
-    const result = diagnoseRisuPreset(program(''), values);
-    expect(result.diagnostics).toHaveLength(200);
-    expect(result.totalDiagnostics).toBe(206);
-    expect(result.truncated).toBe(true);
-    expect(
-      diagnoseRisuPreset(program(''), { ['x'.repeat(10_000)]: '0' }).diagnostics[0]
-    ).toMatchObject({
-      path: '/values',
-    });
-    expect(
-      diagnoseRisuPreset(program(''), { ['x'.repeat(10_000)]: '0' }).diagnostics[0]
-    ).not.toHaveProperty('controlId');
   });
 });

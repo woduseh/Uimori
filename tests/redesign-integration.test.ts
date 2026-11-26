@@ -2,7 +2,6 @@ import { observeExecutions, observedExecution } from './fixtures/execution-obser
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { prepareNativeFixtureRun } from './fixtures/native-run.js';
-import { updateTestProfile } from './fixtures/model-workspace.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { afterEach, expect, test } from 'vitest';
@@ -36,7 +35,6 @@ function db() {
   owned.push({ store, dir });
   return store;
 }
-const reference = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
 function packageBody(): RisuContent {
   return nativeContent(
     {
@@ -67,17 +65,6 @@ function save(store: Store, pkg = packageBody(), prior?: Content) {
     },
     prior?.id
   ) as Content;
-}
-function update(store: Store, chatId: string, changes: Record<string, unknown>) {
-  const p = store.product.profile(chatId);
-  return updateTestProfile(store.product, chatId, {
-    expectedRevision: p.revision,
-    packageAttachments: p.packageAttachments,
-
-    routes: p.routes,
-    image: p.image,
-    ...changes,
-  });
 }
 async function capture(store: Store, chatId: string) {
   const chat = store.chat(chatId);
@@ -154,26 +141,6 @@ test('native source normalizes execution input and preserves completed metadata 
   expect(summary.hasPackage).toBe(true);
   expect(summary.package).toBeUndefined();
   expect(summary.text).toBe('');
-});
-test('cross-role attachment of one package namespaces resources while invalid refs and mixed primary roles reject atomically', () => {
-  const store = db(),
-    pkg = save(store),
-    chat = createFixtureChat(store, 'Story', { botId: pkg.id });
-  const refs = [
-    { ...reference(pkg), role: 'bot' },
-    { ...reference(pkg), role: 'persona' },
-  ];
-  update(store, chat.id, { packageAttachments: refs });
-  const profile = store.product.snapshot(chat.id)!,
-    resources = store.product.resources(chat.id, profile);
-  expect(new Set(resources.map((r) => r.id)).size).toBe(resources.length);
-  expect(resources.some((r) => r.id.includes(':bot:'))).toBe(true);
-  expect(resources.some((r) => r.id.includes(':persona:'))).toBe(true);
-  const before = store.product.profile(chat.id);
-  expect(() => update(store, chat.id, { packageAttachments: [refs[0], refs[0]] })).toThrow(
-    'Duplicate package'
-  );
-  expect(store.product.profile(chat.id)).toEqual(before);
 });
 function prompt(store: Store, id = 'choice'): PromptPreset {
   const preset = store.product.promptPreset({

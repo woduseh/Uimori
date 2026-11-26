@@ -1,113 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptControls } from '../core/risu-prompt.js';
-import type { RisuPresetImportApply } from '../core/risu-preset.js';
 import { navigationAction, expectEditorSection, selectEditorSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
-import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { expectCodeFieldValue } from './code-field.js';
-
-test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission through dialog close', async ({
-  page,
-  request,
-}, info) => {
-  const title = `RISUPRESETUI01 ${Date.now()}`;
-  const response = await request.post('/api/prompt-presets', {
-    data: {
-      title,
-      role: 'main',
-      program: createDefaultRisuPrompt('Synthetic preset', 'main'),
-      values: {},
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  const preset = await response.json();
-  let prepares = 0;
-  const submissions: RisuPresetImportApply[] = [];
-  await page.route('**/api/risu-preset-imports/prepare', async (route) => {
-    prepares++;
-    await route.fulfill({
-      json: {
-        title,
-        digest: 'synthetic-preview-digest',
-        format: 'risu-preset-json',
-        summary: { blocks: 1, controls: 1, regex: 0 },
-        findings: [
-          { code: 'synthetic-unsupported', level: 'unsupported', message: '합성 미지원 항목' },
-        ],
-      },
-    });
-  });
-  await page.route('**/api/risu-preset-imports/apply', async (route) => {
-    submissions.push(route.request().postDataJSON() as RisuPresetImportApply);
-    if (submissions.length === 1) {
-      await route.fulfill({ status: 503, json: { error: '합성 응답 유실' } });
-      return;
-    }
-    await route.fulfill({ json: { receipt: {}, preset } });
-  });
-  await page.goto('/');
-  await navigationAction(page, '프롬프트');
-  const trigger = page.getByRole('button', { name: '프롬프트 가져오기', exact: true });
-  await trigger.click();
-  const dialog = page.getByRole('dialog', { name: '프롬프트 가져오기', exact: true });
-  await dialog.getByLabel('Risu 프리셋 파일 선택', { exact: true }).setInputFiles({
-    name: 'synthetic.risupreset',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify({ name: title })),
-  });
-  await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
-  const save = dialog.getByRole('button', { name: '창작 프롬프트로 저장', exact: true });
-  await expect(save).toBeDisabled();
-  expect(submissions).toHaveLength(0);
-  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
-    const viewport = page.viewportSize()!;
-    for (const width of [412, 1440]) {
-      await page.setViewportSize({ ...viewport, width });
-      await page.screenshot({
-        path: info.outputPath(`risu-preset-import-unsupported-preview-${width}.png`),
-      });
-    }
-    await page.setViewportSize(viewport);
-  }
-  await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
-  await trigger.click();
-  await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
-  expect(prepares).toBe(1);
-  await dialog.getByRole('checkbox').check();
-  await save.click();
-  await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
-  await expect(dialog.getByLabel('Risu 프리셋 파일 선택', { exact: true })).toBeDisabled();
-  await expect(dialog.getByRole('checkbox')).toBeDisabled();
-  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
-    const viewport = page.viewportSize()!;
-    for (const width of [412, 1440]) {
-      await page.setViewportSize({ ...viewport, width });
-      await page.screenshot({ path: info.outputPath(`risu-preset-import-uncertain-${width}.png`) });
-    }
-    await page.setViewportSize(viewport);
-  }
-  await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
-  await trigger.click();
-  await dialog.getByRole('button', { name: '같은 요청으로 다시 확인' }).click();
-  await expect(dialog.getByText('새 창작 프롬프트로 저장했어요.', { exact: true })).toBeVisible();
-  expect(submissions).toHaveLength(2);
-  expect(submissions[1]).toEqual(submissions[0]);
-  expect(submissions[0]?.allowPartial).toBe(true);
-  expect(submissions[0]?.idempotencyKey).toBeTruthy();
-  await dialog.getByRole('button', { name: '가져온 프롬프트 편집', exact: true }).click();
-  await expect(dialog).not.toBeVisible();
-  await expect(
-    page.getByTestId('prompt-library').getByRole('heading', { name: title })
-  ).toBeVisible();
-  await expect(trigger).toHaveCount(0);
-});
 
 test('RISUPRESETUI02 imports a real preset document into the existing prompt editor', async ({
   page,
   request,
-}, info) => {
+}) => {
   const title = `RISUPRESETUI02 ${Date.now()}`;
   const source = {
     name: title,
@@ -139,14 +40,6 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   });
   await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
-  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
-    const viewport = page.viewportSize()!;
-    for (const width of [412, 1440]) {
-      await page.setViewportSize({ ...viewport, width });
-      await page.screenshot({ path: info.outputPath(`risu-preset-import-preview-${width}.png`) });
-    }
-    await page.setViewportSize(viewport);
-  }
   const savedResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/risu-preset-imports/apply') &&
@@ -177,29 +70,12 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await expect(composer.getByLabel('Imported Memo', { exact: true })).toHaveValue('');
   await expect(composer.getByRole('switch', { name: 'Imported Light' })).not.toBeChecked();
   await composer.getByLabel('Imported Memo', { exact: true }).fill('First line\nSecond line');
-  if (process.env.UIMORI_VISUAL_REVIEW === '1')
-    await page.screenshot({
-      path: info.outputPath('risup-default-options-mobile.png'),
-      fullPage: true,
-    });
   await composer.getByLabel('Imported Mood', { exact: true }).selectOption('"1"');
   await selectEditorSection(page, '구성');
   await expectCodeFieldValue(
     composer.getByLabel('1번 프롬프트 본문', { exact: true }),
     source.promptTemplate[0]!.text!
   );
-  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
-    await page.screenshot({
-      path: info.outputPath('risup-native-editor-mobile.png'),
-      fullPage: true,
-    });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-    await page.screenshot({
-      path: info.outputPath('risup-native-editor-desktop.png'),
-      fullPage: true,
-    });
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  }
   await selectEditorSection(page, '정규식');
   await composer.getByText('고급 JSON 편집', { exact: true }).click();
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];

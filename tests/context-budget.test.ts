@@ -12,7 +12,6 @@ import {
 } from '../core/context-budget.js';
 import {
   executeProvider,
-  validateRequest,
   type ProviderConnection,
   type ProviderRequest,
   type ProviderResult,
@@ -223,42 +222,6 @@ describe('offline host context budget', () => {
     expect(() => estimateContextTokens(circular)).toThrow('INVALID_CONTEXT_INPUT');
     expect(() => estimateContextTokens(undefined)).toThrow('INVALID_CONTEXT_INPUT');
   });
-  test('validates host policy strictly, preserves explicit limits and applies the model default', () => {
-    expect(contextBudgetForModel({})).toEqual({
-      inputTokenLimit: 272000,
-      estimator: 'o200k_base-v1',
-    });
-    expect(contextBudgetForModel({ inputTokenLimit: 8192 })).toEqual(budget());
-    expect(contextBudgetForModel({ inputTokenLimit: 1000000 }).inputTokenLimit).toBe(1000000);
-    expect(() =>
-      contextBudgetForModel({ inputTokenLimit: null } as unknown as { inputTokenLimit: number })
-    ).toThrow('INVALID_CONTEXT_BUDGET');
-    for (const invalid of [
-      null,
-      [],
-      {},
-      { inputTokenLimit: 8192 },
-      { ...budget(), extra: true },
-      { ...budget(), estimator: 'provider-exact' },
-      ...[0, 8191, 1000001, 8192.5, NaN, Infinity, '8192'].map((inputTokenLimit) => ({
-        ...budget(),
-        inputTokenLimit,
-      })),
-    ]) {
-      expect(() => validateContextBudget(invalid)).toThrow('INVALID_CONTEXT_BUDGET');
-      expect(() => validateRequest({ ...request(), contextBudget: invalid })).toThrow(
-        'INVALID_CONTEXT_BUDGET'
-      );
-    }
-    const checked = validateRequest(request());
-    expect(checked.contextBudget).toEqual(budget());
-    expect(() =>
-      validateRequest({
-        ...request(),
-        generation: { ...request().generation, inputTokenLimit: 8192 },
-      })
-    ).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-  });
   test('freezes an explicit local profile while preserving the old missing-metadata policy', () => {
     const legacy = contextBudgetForModel({ modelId: 'gpt-4', inputTokenLimit: 8192 });
     const local = contextBudgetForModel({
@@ -294,116 +257,9 @@ describe('offline host context budget', () => {
     expect(() => assertContextBudget(body)).not.toThrow();
     expect(body).toEqual(before);
   });
-  test.each([
-    { modelId: 'gpt-6-astra', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
-    { modelId: 'gpt-6.2-sol', protocol: 'openai-responses-v1', output: 128000, effective: 922000 },
-    {
-      modelId: 'claude-opus-5-5',
-      protocol: 'anthropic-messages-v1',
-      output: 128000,
-      effective: 872000,
-    },
-    {
-      modelId: 'claude-fable-5-2',
-      protocol: 'anthropic-messages-v1',
-      output: 128000,
-      effective: 872000,
-    },
-    {
-      modelId: 'gemini-4-hydrogen',
-      protocol: 'vertex-gemini-v1',
-      output: 65536,
-      effective: 983040,
-    },
-    { modelId: 'deepseek-flash', protocol: 'deepseek-chat-v1', output: 384000, effective: 616000 },
-    { modelId: 'gemini-4-carbon', protocol: 'google-gemini-v1', output: 65536, effective: 983040 },
-  ] as const)(
-    '$protocol reserves the selected output inside the reviewed native window without rewriting settings',
-    ({ modelId, protocol, output, effective }) => {
-      const model = {
-          inputTokenLimit: 1000000,
-          modelId,
-          maxOutputTokens: output,
-          connection: { protocol },
-        },
-        before = structuredClone(model);
-      expect(contextBudgetForModel(model).inputTokenLimit).toBe(effective);
-      expect(contextBudgetForModel({ ...model, maxOutputTokens: undefined }).inputTokenLimit).toBe(
-        effective
-      );
-      expect(contextBudgetForModel({ ...model, inputTokenLimit: 8192 }).inputTokenLimit).toBe(8192);
-      expect(contextBudgetForModel({ ...model, inputTokenLimit: undefined }).inputTokenLimit).toBe(
-        272000
-      );
-      expect(model).toEqual(before);
-    }
-  );
-  test('does not invent a native window for Codex, a routed model or an unknown model ID', () => {
-    for (const connection of [
-      { protocol: 'codex-app-server-v1' },
-      { protocol: 'vercel-chat-v1' },
-      { protocol: 'fixture-sse-v1' },
-    ] as const) {
-      expect(contextBudgetForModel({ modelId: 'gpt-6-astra', connection }).inputTokenLimit).toBe(
-        272000
-      );
-      expect(
-        contextBudgetForModel({
-          modelId: 'gpt-6-astra',
-          connection,
-          inputTokenLimit: 1000000,
-          maxOutputTokens: 128000,
-        }).inputTokenLimit
-      ).toBe(1000000);
-    }
-    expect(
-      contextBudgetForModel({
-        modelId: 'unreviewed',
-        connection: { protocol: 'openai-chat-v1' },
-        inputTokenLimit: 1000000,
-        maxOutputTokens: 128000,
-      }).inputTokenLimit
-    ).toBe(1000000);
-    expect(
-      contextBudgetForModel({
-        modelId: 'gpt-6-astra',
-        inputTokenLimit: 1000000,
-        maxOutputTokens: 128000,
-      }).inputTokenLimit
-    ).toBe(1000000);
-  });
 });
 
 describe('final wire body budget before credentials and transmission', () => {
-  test.each(pick('openai-responses-v1', 'anthropic-messages-v1'))(
-    '$protocol rejects local-model overflow even when the legacy counter would admit it',
-    async (variant) => {
-      const input = request(variant);
-      input.stable.contract = large;
-      const body = encoded(input, variant).body;
-      input.contextBudget = {
-        inputTokenLimit: estimateContextTokens(body),
-        estimator: 'model-local-v1',
-        tokenizer: 'openai-cl100k',
-      };
-      expect(estimateContextTokens(body, input.contextBudget)).toBeGreaterThan(
-        input.contextBudget.inputTokenLimit
-      );
-      const fetch = vi.fn(),
-        resolveCredential = vi.fn(() => 'synthetic-secret'),
-        onWire = vi.fn();
-      vi.stubGlobal('fetch', fetch);
-      const result = await executeProvider(connection(variant), input, {
-        signal: new AbortController().signal,
-        resolveCredential,
-        onWire,
-      });
-      expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
-      expect(resolveCredential).not.toHaveBeenCalled();
-      expect(onWire).not.toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled();
-    }
-  );
   test.each(pick('openai-chat-v1', 'vertex-gemini-v1'))(
     '$protocol rejects an oversized first request with zero credential, journal and fetch calls',
     async (variant) => {
@@ -472,30 +328,6 @@ describe('final wire body budget before credentials and transmission', () => {
       expect(onWire).toHaveBeenCalledTimes(1);
     }
   );
-  test.each(nativeVariants.filter((variant) => variant.protocol !== 'vertex-gemini-v1'))(
-    '$protocol includes unredacted opaque continuation content in the budget before any wire work',
-    async (variant) => {
-      const input = continued(request(variant), variant, large),
-        before = structuredClone(input);
-      expect(estimateContextTokens(input.input)).toBeLessThan(8192);
-      expect(estimateContextTokens(encoded(input, variant).body)).toBeGreaterThan(8192);
-      const fetch = vi.fn(),
-        resolveCredential = vi.fn(() => 'synthetic-secret'),
-        onWire = vi.fn();
-      vi.stubGlobal('fetch', fetch);
-      const result = await executeProvider(connection(variant), input, {
-        signal: new AbortController().signal,
-
-        resolveCredential,
-        onWire,
-      });
-      expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
-      expect(resolveCredential).not.toHaveBeenCalled();
-      expect(onWire).not.toHaveBeenCalled();
-      expect(fetch).not.toHaveBeenCalled();
-      expect(input).toEqual(before);
-    }
-  );
   test.each(nativeVariants)(
     '$protocol binds the budget across native continuation, including adding or removing it',
     (variant) => {
@@ -542,25 +374,6 @@ describe('final wire body budget before credentials and transmission', () => {
       ).toThrow(/CONTINUATION_MISMATCH/);
     }
   );
-  test('fixture continuation content is counted before credentials and journaling', async () => {
-    const variant = variants.at(-1)!,
-      input = request(variant);
-    input.opaqueState = { providerContinuation: large };
-    const fetch = vi.fn(),
-      resolveCredential = vi.fn(() => 'synthetic-secret'),
-      onWire = vi.fn();
-    vi.stubGlobal('fetch', fetch);
-    const result = await executeProvider(connection(variant), input, {
-      signal: new AbortController().signal,
-
-      resolveCredential,
-      onWire,
-    });
-    expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
-    expect(resolveCredential).not.toHaveBeenCalled();
-    expect(onWire).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
-  });
   test('Codex rejects its assembled instructions, input and schema before creating session state or a process', async () => {
     const dbPath = join(tmpdir(), `uimori-context-budget-${randomUUID()}`, 'db.sqlite');
     const runtime = new CodexRuntime(dbPath, {

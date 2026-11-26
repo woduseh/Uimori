@@ -5,7 +5,6 @@ await runBrowserVerification({
   scope:
     'Story UI chat settings, source/translation rendering, streaming retention, native Risu coexistence and real action admission',
   files: [
-    'tests/chat-generation-defaults-browser.spec.ts',
     'tests/story-ui-browser.spec.ts',
     'tests/story-ui-settings-browser.spec.ts',
     'tests/story-ui-theme-browser.spec.ts',

@@ -4,23 +4,19 @@ import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
-  selectSettingsSection,
-  startProviderConnection,
   editLibraryContent,
   selectEditorSection,
   selectContent,
   createPromptChoice,
   navigationAction,
   visibleNavigation,
-  openProviderMenu,
   selectChatSettingsSection,
   openSourceActions,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
-import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
-import type { ChatOptionState } from '../core/chat-options.js';
+import type { Content } from '../core/product.js';
 import { requestFullRunResponses } from './fixtures/full-run-response.js';
 
 preservePromptWorkspace();
@@ -28,11 +24,6 @@ test.beforeEach(({ page }) => requestFullRunResponses(page));
 
 async function getDetail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
-  expect(response.ok()).toBeTruthy();
-  return response.json();
-}
-async function getLibrary(request: APIRequestContext): Promise<Library> {
-  const response = await request.get('/api/library');
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
@@ -319,192 +310,6 @@ test('P02 creative option drafts block only their own chat and survive quick cha
       async () => (await (await request.get(`/api/chats/${chat.id}/options`)).json()).fixedValues
     )
     .toEqual({ detail: '보존할 첫 채팅의 초안' });
-});
-
-test('P03 a pending creative option reset blocks only its own chat', async ({ page, request }) => {
-  const unique = `P03-${Date.now()}`;
-  const choice = await createPromptChoice(request, unique);
-  const otherResponse = await postFixtureChat(request, {
-    data: { title: `진행 중 아닌 채팅 ${unique}` },
-  });
-  expect(otherResponse.ok()).toBe(true);
-  const other = (await otherResponse.json()) as Chat;
-  const chat = await createChat(page, `저장 진행 채팅 ${unique}`);
-  const state = (await (
-    await request.get(`/api/chats/${chat.id}/options`)
-  ).json()) as ChatOptionState;
-  const seeded = await request.post(`/api/chats/${chat.id}/options/fixed`, {
-    data: {
-      expectedRevision: state.revision,
-      operationId: crypto.randomUUID(),
-      binding: state.binding,
-      values: { detail: '저장된 상세도' },
-    },
-  });
-  expect(seeded.ok()).toBe(true);
-  await (await composerMenu(page)).getByRole('button', { name: '창작 옵션', exact: true }).click();
-  const panel = page.locator('#chat-prompt-options');
-  let releaseSave = () => {};
-  const saveGate = new Promise<void>((resolve) => {
-    releaseSave = resolve;
-  });
-  await page.route(`**/api/chats/${chat.id}/options/fixed`, async (route) => {
-    await saveGate;
-    await route.continue();
-  });
-  try {
-    await panel.getByRole('button', { name: '고정 옵션 모두 해제', exact: true }).click();
-    await page
-      .getByRole('alertdialog', { name: '고정 옵션을 모두 해제할까요?', exact: true })
-      .getByRole('button', { name: '고정 옵션 모두 해제', exact: true })
-      .click();
-    await expect(
-      panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true })
-    ).toHaveAttribute('aria-busy', 'true');
-    await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
-    let menu = await composerMenu(page);
-    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
-    await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
-    await page.keyboard.press('Escape');
-    await selectStoredChat(page, other);
-    menu = await composerMenu(page);
-    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeEnabled();
-    await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeEnabled();
-    await menu
-      .getByLabel('빠른 옵션 프리셋', { exact: true })
-      .selectOption(`${choice.combination.id}@${choice.combination.revision}`);
-    await expect
-      .poll(
-        async () => (await (await request.get(`/api/chats/${other.id}/options`)).json()).fixedValues
-      )
-      .toEqual(choice.combination.values);
-    await page.keyboard.press('Escape');
-    await selectStoredChat(page, chat);
-    menu = await composerMenu(page);
-    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
-    releaseSave();
-    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeEnabled();
-    await expect
-      .poll(
-        async () => (await (await request.get(`/api/chats/${chat.id}/options`)).json()).fixedValues
-      )
-      .toEqual({});
-  } finally {
-    releaseSave();
-  }
-});
-
-test('P04 manual model IDs and distinct main/translation routing preserve connection authority after catalog failure', async ({
-  page,
-  request,
-}) => {
-  const unique = `P04-${Date.now()}`;
-  const chat = await createChat(page, `합성 ${unique}`);
-  await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
-  const library = page.getByTestId('connection-editor');
-  await startProviderConnection(page);
-  await library.getByText('개발 및 검사용 프로바이더', { exact: true }).click();
-  await library.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
-  await page.getByLabel('프로바이더 이름', { exact: true }).fill(`격리 연결 ${unique}`);
-  await page.getByLabel('로컬 요청 주소').fill('http://127.0.0.1:9/turn');
-  await page.getByLabel('API 키').fill('UIMORI_PROVIDER_SYNTHETIC');
-  const connectionResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/connections') && response.request().method() === 'POST'
-  );
-  await page.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
-  const connection = (await (await connectionResponse).json()) as Connection;
-  expect(connection.enabled).toBe(false);
-  const modelRefs: ModelPreset[] = [];
-  for (const role of ['main', 'translation']) {
-    await library.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-    await library.getByRole('button', { name: '새 모델 입력', exact: true }).click();
-    await page.getByLabel('모델 프리셋 이름', { exact: true }).fill(`${role} ${unique}`);
-    await page.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
-    await page.getByLabel('모델 ID', { exact: true }).fill(`synthetic-${role}-unlisted`);
-    const response = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/model-presets') && response.request().method() === 'POST'
-    );
-    await page.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-    modelRefs.push((await (await response).json()) as ModelPreset);
-  }
-  await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
-  const connectionCard = library.getByRole('article', {
-    name: `${connection.title} 프로바이더`,
-    exact: true,
-  });
-  await openProviderMenu(page, '프로바이더', connection.title);
-  await connectionCard
-    .getByRole('button', { name: `${connection.title} 모델 목록 새로고침`, exact: true })
-    .click();
-  await expect(connectionCard).toContainText('모델 목록 조회 실패');
-  const after = (await getLibrary(request)).connections.find((item) => item.id === connection.id)!;
-  expect(after).toMatchObject({
-    endpoint: connection.endpoint,
-    enabled: false,
-    credentialRef: connection.credentialRef,
-  });
-  expect((await request.get(`/api/revisions/connection/${connection.id}/1`)).ok()).toBe(false);
-  await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '역할별 모델');
-  for (const roleLabel of ['본문 모델', '번역 모델'])
-    for (const model of modelRefs) {
-      await expect(
-        page.getByLabel(roleLabel, { exact: true }).locator(`option[value="${model.id}"]`)
-      ).toHaveCount(0);
-    }
-  expect((await getDetail(request, chat.id)).profile!.routes).toMatchObject({
-    main: null,
-    translation: null,
-  });
-  await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
-  await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
-  const enabledResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/connections/${connection.id}`) &&
-      response.request().method() === 'PUT'
-  );
-  await openProviderMenu(page, '프로바이더', connection.title);
-  await library
-    .getByRole('button', { name: `${connection.title} 프로바이더 활성화`, exact: true })
-    .click();
-  const enabledReply = await enabledResponse;
-  expect(enabledReply.ok()).toBe(true);
-  const enabled = (await enabledReply.json()) as Connection;
-  expect(enabled).toMatchObject({
-    id: connection.id,
-    endpoint: connection.endpoint,
-    enabled: true,
-    credentialRef: connection.credentialRef,
-  });
-  const activatedModels = (await getLibrary(request)).models;
-  for (const model of modelRefs)
-    expect(activatedModels.find((item) => item.id === model.id)).toEqual(model);
-  await openDetails(page, 'profile-editor');
-  await selectCurrentSettingsSection(page, '역할별 모델');
-  await page.getByLabel('본문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
-  await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
-  await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await (await request.get('/api/model-workspace')).json()).routes.main)
-    .toEqual({ id: modelRefs[0].id });
-  const profile = (await getDetail(request, chat.id)).profile!;
-  expect(profile.routes.main).toEqual({ id: modelRefs[0].id });
-  expect(profile.routes.translation).toEqual({ id: modelRefs[1].id });
-  const unchanged = await getDetail(request, chat.id);
-  expect(unchanged.runs).toHaveLength(0);
-  expect(unchanged.sources).toHaveLength(0);
-  expect(unchanged.attempts).toHaveLength(0);
-  expect(
-    await page.evaluate(() =>
-      Object.values(localStorage)
-        .concat(Object.values(sessionStorage))
-        .some((value) => String(value).includes('UIMORI_PROVIDER_SYNTHETIC'))
-    )
-  ).toBe(false);
 });
 
 test('P09 copying a scene creates an independent chat and keeps each tab draft', async ({

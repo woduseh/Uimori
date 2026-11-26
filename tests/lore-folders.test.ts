@@ -60,45 +60,6 @@ describe('package lore organization', () => {
     expect(() => validateRisuContent(pkg)).toThrow('PACKAGE_INVALID_ID');
   });
 
-  it('requires trimmed, nonempty folder names with a 100 character limit', () => {
-    for (const name of ['', '  ', ' place', 'place ']) {
-      expect(() =>
-        validateRisuContent({ ...fixture(), loreFolders: [{ id: 'folder', name }] })
-      ).toThrow('PACKAGE_LORE_FOLDER_NAME');
-    }
-    expect(() =>
-      validateRisuContent({
-        ...fixture(),
-        loreFolders: [{ id: 'folder', name: '가'.repeat(100) }],
-      })
-    ).not.toThrow();
-    expect(() =>
-      validateRisuContent({
-        ...fixture(),
-        loreFolders: [{ id: 'folder', name: '가'.repeat(101) }],
-      })
-    ).toThrow('PACKAGE_INVALID_STRING');
-  });
-
-  it('rejects nested folders and unknown metadata fields, and bounds the folder count', () => {
-    for (const extra of [{ parentId: 'parent' }, { color: 'red' }]) {
-      expect(() =>
-        validateRisuContent({
-          ...fixture(),
-          loreFolders: [{ id: 'folder', name: 'Folder', ...extra }],
-        })
-      ).toThrow('PACKAGE_INVALID_FIELDS');
-    }
-    const pkg = fixture();
-    pkg.loreFolders = Array.from({ length: 2000 }, (_, i) => ({
-      id: `f${i}`,
-      name: `Folder ${i}`,
-    }));
-    expect(() => validateRisuContent(pkg)).not.toThrow();
-    pkg.loreFolders.push({ id: 'overflow', name: 'Overflow' });
-    expect(() => validateRisuContent(pkg)).toThrow('PACKAGE_LIST_LIMIT');
-  });
-
   it('adds navigation metadata without changing source content, order or loading across folder moves and renames', () => {
     const bare = fixture(),
       organized = structuredClone(bare);

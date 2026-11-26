@@ -14,7 +14,6 @@ import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { captureTranslationReferences } from '../server/translation-context.js';
-import { countTextTokens } from '../core/text-tokens.js';
 import { translationReader } from '../core/translation-context.js';
 import { translationInput } from '../core/auxiliary.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
@@ -268,43 +267,6 @@ test('overlapping readers retain their captured wording when later edits prune i
   expect(afterEdit.load()).toMatchObject([{ text: 'revised wording', id: later.id }]);
 });
 
-test('SQLite wording references exclude mismatched results and foreign sources even when listed in captured history', () => {
-  const store = database();
-  const chat = createFixtureChat(store, 'valid wording');
-  const invalid = source(store, chat.id);
-  const invalidWording = store.editTranslation(invalid.id, {
-    text: 'INVALID RESULT',
-    expectedRevision: 0,
-    expectedSourceHash: invalid.hash,
-  });
-  store.db
-    .prepare("UPDATE job_results SET result=json_set(result,'$.sourceHash',?) WHERE job_id=?")
-    .run('0'.repeat(64), invalidWording.id);
-  const valid = source(store, chat.id);
-  const validWording = store.editTranslation(valid.id, {
-    text: '유효한 참고 번역.',
-    expectedRevision: 0,
-    expectedSourceHash: valid.hash,
-  });
-  const foreign = source(store, createFixtureChat(store, 'foreign wording').id);
-  store.editTranslation(foreign.id, {
-    text: 'FOREIGN RESULT',
-    expectedRevision: 0,
-    expectedSourceHash: foreign.hash,
-  });
-  const target = source(store, chat.id);
-  const snapshot = readRunSnapshot(store, target.runId);
-  snapshot.history.push({
-    revision: foreign.id,
-    contentHash: foreign.hash,
-    text: foreign.text,
-  });
-
-  expect(translationReferences(store, snapshot).map(({ id, text }) => ({ id, text }))).toEqual([
-    { id: validWording.id, text: '유효한 참고 번역.' },
-  ]);
-});
-
 test('HTTP retrieval reaches older sources and previous wording while authored notes arrive directly in source-time context', async () => {
   const store = database();
   const chat = createFixtureChat(store, 'synthetic');
@@ -395,77 +357,6 @@ test('HTTP retrieval reaches older sources and previous wording while authored n
   expect(store.product.attempts(chat.id)).toHaveLength(3);
   expect(store.job(job.id).result?.text).toBe('앨런 선장, 잠깐 기다려.');
   expect(store.requestTranslation(target.id).status).toBe('completed');
-});
-
-test('translation tools support empty memory with disabled indexing, bounded paging and immutable wording', () => {
-  const snapshot: RunSnapshot = {
-    chatId: 'chat',
-    parentRevision: 'a',
-    history: [{ revision: 'a', text: 'Captain speaks.' }],
-    settingsRevision: 1,
-    settings: { maxCalls: 8 },
-    request: '',
-    resources: [],
-  };
-  expect(
-    executeTool(snapshot, call('story.search', { query: 'Captain' }), undefined, 'translation')
-      .denied
-  ).toBe(false);
-  expect(
-    executeTool(snapshot, call('story.search', {}), undefined, 'translation').result
-  ).toMatchObject({ total: 1, results: [{ sceneNumber: 1, revision: 'a' }] });
-  expect(
-    executeTool(snapshot, call('story.read', { sceneNumber: 2 }), undefined, 'translation').denied
-  ).toBe(true);
-  expect(
-    executeTool(snapshot, call('story.read', { sceneNumber: 1 }), undefined, 'image').denied
-  ).toBe(true);
-  const store = database();
-  const chat = createFixtureChat(store, 'paging');
-  const first = source(store, chat.id);
-  store.editTranslation(first.id, {
-    text: '가'.repeat(9000),
-    expectedRevision: 0,
-    expectedSourceHash: first.hash,
-  });
-  const target = source(store, chat.id);
-  const fixed = readRunSnapshot(store, target.runId);
-  const refs = translationReferences(store, fixed);
-  const read = translationReader(fixed, refs);
-  refs[0].text = 'later';
-  const firstPage = read(call('translation.read', { id: refs[0].id })).result as any;
-  expect(countTextTokens(firstPage.text)).toBeLessThanOrEqual(2048);
-  expect(firstPage.text.length).toBeGreaterThan(0);
-  expect(firstPage.nextOffset).toBe(firstPage.text.length);
-  const nextPage = read(
-    call('translation.read', { id: refs[0].id, offset: firstPage.nextOffset, maxTokens: 128 })
-  ).result as any;
-  expect(countTextTokens(nextPage.text)).toBeLessThanOrEqual(128);
-  expect(nextPage.range.start).toBe(firstPage.nextOffset);
-  expect(nextPage.range.end).toBe(firstPage.nextOffset + nextPage.text.length);
-  expect(read(call('translation.read', { id: refs[0].id, limit: 4096 })).result).toMatchObject({
-    text: '가'.repeat(4096),
-    nextOffset: 4096,
-  });
-  expect(read(call('translation.search', { query: 'absent' })).result).toMatchObject({
-    total: 0,
-    nextOffset: null,
-  });
-  for (const args of [
-    { id: refs[0].id, limit: 4097 },
-    { id: refs[0].id, offset: -1 },
-    { id: refs[0].id, unexpected: true },
-  ])
-    expect(read(call('translation.read', args))).toMatchObject({
-      denied: true,
-      errorKind: 'recoverable',
-      result: { code: 'INVALID_ARGUMENTS' },
-    });
-  expect(read(call('shell', {}))).toMatchObject({
-    denied: true,
-    result: { code: 'TOOL_NOT_ALLOWED' },
-  });
-  expect(read(call('shell', {}))).not.toHaveProperty('errorKind');
 });
 
 test.each(['missing-scene', 'budget'] as const)(

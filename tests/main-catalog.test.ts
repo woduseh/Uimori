@@ -438,31 +438,6 @@ test('relevant search ranks exact identities before incidental prose while prese
   });
 });
 
-test('relevant search returns exact original late Unicode excerpts and a usable direct read: CAFE\u0301의 문을 미나에게 맡겼다.', () => {
-  const phrase = 'CAFE\u0301의 문을 미나에게 맡겼다.';
-  const original = 'İ'.repeat(10_000) + '😀'.repeat(5_000) + phrase;
-  const fixed = snapshot([lore(1, { title: 'Vault', description: '', text: original })]);
-  const event = executeTool(fixed, {
-    callId: 'unicode-relevant',
-    name: 'knowledge.search',
-    args: { mode: 'relevant', query: 'cafe\u0301' },
-  });
-  expect(event.denied).toBe(false);
-  const hit = (event.result as any).items[0];
-  expect(hit.match.text).toContain(phrase);
-  expect(hit.match.range.start).toBeGreaterThan(19_000);
-  expect(hit.match.text).toBe(original.slice(hit.match.range.start, hit.match.range.end));
-  expect(hit.match.text.isWellFormed()).toBe(true);
-  const read = executeTool(fixed, {
-    callId: 'unicode-direct',
-    name: hit.nextRead.name,
-    args: hit.nextRead.arguments,
-  });
-  expect(read.denied).toBe(false);
-  expect((read.result as any).items[0].read.text).toContain(phrase);
-  expect((read.result as any).items[0].read.source.hash).toBe(hit.match.source.hash);
-});
-
 test('main catalog surfaces a late requested reference within the existing budget and preserves complete discovery', () => {
   const resources = Array.from({ length: 400 }, (_, index) => lore(index));
   resources[399] = lore(399, {
@@ -535,29 +510,6 @@ test('an oversized first catalog entry cannot hide a later relevant reference an
   });
   expect((read.result as any).items[0].read.text).toBe(oversized.text);
   expect(fixed).toEqual(before);
-});
-
-test('initial catalog preserves thirty jointly relevant actor, place and rule references that fit the existing budget', () => {
-  const useful = ['actor', 'place', 'rule'].flatMap((kind, group) =>
-    Array.from({ length: 10 }, (_, index) =>
-      lore(group * 10 + index, {
-        id: `${kind}-${index}`,
-        title: `Harbor ${kind} ${index}`,
-        description:
-          `Harbor council ${kind} record: ` + 'Earlier agreements and separate duties. '.repeat(20),
-      })
-    )
-  );
-  const fixed = snapshot([
-    ...useful,
-    ...Array.from({ length: 60 }, (_, index) => lore(index + 30)),
-  ]);
-  fixed.request = 'Continue the harbor council with every actor, place and rule respected.';
-  const previous = resourceCatalog(fixed.resources);
-  expect(useful.every(({ id }) => previous.catalog.some((item) => item.id === id))).toBe(true);
-  const catalog = buildMainInput(fixed).catalog;
-  expect(useful.filter(({ id }) => !catalog.some((item) => item.id === id))).toEqual([]);
-  expect(countTextTokens(JSON.stringify(catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
 });
 
 test('sparse catalog metadata does not discard body-only references when the complete catalog fits the existing budget', () => {

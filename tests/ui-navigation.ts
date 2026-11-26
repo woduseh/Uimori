@@ -381,12 +381,6 @@ export async function openChatSettings(page: Page) {
 function compactLayout(page: Page) {
   return (page.viewportSize()?.width ?? MOBILE_WIDTH) <= 760;
 }
-export async function resizeViewport(page: Page, size: { width: number; height: number }) {
-  await page.setViewportSize(size);
-  await expect(page.locator('#workspace-sidebar [data-testid="bot-navigation"]')).toHaveCount(
-    compactLayout(page) ? 0 : 1
-  );
-}
 export async function openHelper(page: Page) {
   const opener = page
     .locator('.workspace-header, .library-heading')

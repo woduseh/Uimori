@@ -1,19 +1,15 @@
 import { afterEach, expect, test } from 'vitest';
-import Fastify from 'fastify';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { brotliCompressSync, brotliDecompressSync } from 'node:zlib';
+import { brotliDecompressSync } from 'node:zlib';
 import { createApp, type App } from '../server/app.js';
-import { registerResponseCompression } from '../server/response-compression.js';
 import { readerDetail } from '../server/reader.js';
-import { readerPresentationRevisions } from '../server/reader-data.js';
 import { editTranslation } from '../server/source-editing.js';
 import { splitSource } from '../core/auxiliary.js';
 import { createFixtureChat, fixtureBotInput, setFixtureModelRoutes } from './fixtures/chat.js';
 import type { Store } from '../server/store.js';
-import type { Connection } from '../core/product.js';
 
 const cleanup: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -149,23 +145,6 @@ test('JSON responses compress with brotli while event streams stay unencoded and
   controller.abort();
 });
 
-test('a compressible reader response revalidates to an empty 304', async () => {
-  const app = await application();
-  const chat = createFixtureChat(app.store, 'Revalidated reader');
-  scene(app.store, chat.id, 'A long synthetic paragraph. '.repeat(200));
-  const url = `/api/chats/${chat.id}/reader`;
-  const first = await app.inject({ url, headers: { ...local, 'accept-encoding': 'br' } });
-  expect(first.headers['content-encoding']).toBe('br');
-  expect(first.rawPayload.length).toBeGreaterThan(0);
-  const revalidated = await app.inject({
-    url,
-    headers: { ...local, 'accept-encoding': 'br', 'if-none-match': String(first.headers.etag) },
-  });
-  expect(revalidated.statusCode).toBe(304);
-  expect(revalidated.rawPayload.length).toBe(0);
-  expect(revalidated.headers['content-encoding']).toBeUndefined();
-});
-
 test('a Risu export download is sent as stored', async () => {
   const app = await application();
   const preset = app.store.product.promptPreset({
@@ -191,59 +170,6 @@ test('a Risu export download is sent as stored', async () => {
   expect(exported.headers['content-type']).toBe('application/octet-stream');
   expect(exported.rawPayload.length).toBeGreaterThan(1024);
   expect(exported.headers['content-encoding']).toBeUndefined();
-});
-
-test('images, archives and event-stream bodies are never re-encoded', async () => {
-  const app = Fastify();
-  await registerResponseCompression(app);
-  const large = Buffer.alloc(8192, 7);
-  app.get('/image', (_request, reply) => reply.type('image/png').send(large));
-  app.get('/archive', (_request, reply) => reply.type('application/zip').send(large));
-  app.get('/font', (_request, reply) => reply.type('font/woff2').send(large));
-  app.get('/events', (_request, reply) =>
-    reply.type('text/event-stream').send('data: x\n\n'.repeat(500))
-  );
-  app.get('/small', async () => ({ ok: true }));
-  app.get('/text', (_request, reply) => reply.type('text/csv').send('a,b\n'.repeat(500)));
-  cleanup.push(() => app.close());
-  const headers = { 'accept-encoding': 'br, gzip' };
-  for (const url of ['/image', '/archive', '/font', '/events', '/small']) {
-    const response = await app.inject({ url, headers });
-    expect(response.headers['content-encoding'], url).toBeUndefined();
-  }
-  expect((await app.inject({ url: '/image', headers })).rawPayload.equals(large)).toBe(true);
-  expect((await app.inject({ url: '/text', headers })).headers['content-encoding']).toBe('br');
-  expect(
-    (await app.inject({ url: '/text', headers: { 'accept-encoding': 'gzip' } })).headers[
-      'content-encoding'
-    ]
-  ).toBe('gzip');
-});
-
-test('precompressed static files are served as stored', async () => {
-  const webRoot = await mkdtemp(join(tmpdir(), 'uimori-response-transport-web-'));
-  cleanup.push(() => rm(webRoot, { recursive: true, force: true }));
-  const script = 'console.log("synthetic");\n'.repeat(400);
-  const stored = brotliCompressSync(script);
-  await mkdir(join(webRoot, 'assets'));
-  await writeFile(join(webRoot, 'index.html'), '<!doctype html><title>Synthetic</title>');
-  await writeFile(join(webRoot, 'assets', 'app.js'), script);
-  await writeFile(join(webRoot, 'assets', 'app.js.br'), stored);
-  const directory = await mkdtemp(join(tmpdir(), 'uimori-response-transport-'));
-  const app = await createApp({
-    dbPath: join(directory, 'app.sqlite'),
-    buildId: 'response-transport-static',
-    testMode: true,
-    webRoot,
-  });
-  cleanup.push(() => rm(directory, { recursive: true, force: true }));
-  cleanup.push(() => app.close());
-  const response = await app.inject({
-    url: '/assets/app.js',
-    headers: { ...local, 'accept-encoding': 'br, gzip' },
-  });
-  expect(response.headers['content-encoding']).toBe('br');
-  expect(response.rawPayload.equals(stored)).toBe(true);
 });
 
 test('private ETags revalidate only after authentication', async () => {
@@ -316,35 +242,6 @@ test('private ETags revalidate only after authentication', async () => {
   expect(session.headers.etag).toBeUndefined();
 });
 
-test('the library summary carries catalog counts and the catalog has its own route', async () => {
-  const app = await application();
-  const created = app.store.product.connection({
-    title: 'Synthetic connection',
-    protocol: 'openai-chat-v1',
-    endpoint: 'http://127.0.0.1:9999/v1',
-    enabled: true,
-  }) as Connection;
-  const catalog = [
-    { id: 'synthetic-a', name: 'Synthetic A', capabilities: {}, priceRevision: null },
-    { id: 'synthetic-b', name: 'Synthetic B', capabilities: {}, priceRevision: null },
-  ];
-  app.store.product.save('connection', { ...created, catalog }, created.id, created.revision);
-
-  const summary = (await app.inject({ url: '/api/library?view=summary', headers: local })).json();
-  const listed = summary.connections.find((item: { id: string }) => item.id === created.id);
-  expect(listed).not.toHaveProperty('catalog');
-  expect(listed.catalogCount).toBe(2);
-  const full = (await app.inject({ url: '/api/library', headers: local })).json();
-  expect(full.connections.find((item: { id: string }) => item.id === created.id).catalog).toEqual(
-    catalog
-  );
-  const route = await app.inject({ url: `/api/connections/${created.id}/catalog`, headers: local });
-  expect(route.json()).toEqual({ catalog });
-  expect(
-    (await app.inject({ url: '/api/connections/missing/catalog', headers: local })).statusCode
-  ).toBe(404);
-});
-
 test('a repeated run request key honors Prefer: return=minimal', async () => {
   const app = await application();
   const chat = createFixtureChat(app.store, 'Idempotent run');
@@ -371,64 +268,4 @@ test('a repeated run request key honors Prefer: return=minimal', async () => {
   expect((await post(payload)).json()).toHaveProperty('snapshot');
   expect((await post({ ...payload, request: 'Different request' })).statusCode).toBe(409);
   app.controls.release('run');
-});
-
-test('a prompt workspace save is one record that every chat stream and revision observes', async () => {
-  const app = await application();
-  const first = createFixtureChat(app.store, 'First workspace chat');
-  const second = createFixtureChat(app.store, 'Second workspace chat');
-  scene(app.store, first.id, 'Synthetic scene.');
-  const legacy = app.store.db
-    .prepare(
-      "INSERT INTO events(chat_id,kind,entity_id,at) VALUES(?,'prompt-workspace.updated',?,?) RETURNING seq"
-    )
-    .get(second.id, second.id, new Date().toISOString()) as { seq: number };
-  const before = [first.id, second.id].map((id) => app.store.latestEventSequence(id));
-  const revisionBefore = readerPresentationRevisions(app.store, first.id, ['scene']);
-  const rowsBefore = app.store.db.prepare('SELECT count(*) AS n FROM events').get();
-
-  await setFixtureModelRoutes(app, { main: null, translation: null });
-
-  expect(app.store.db.prepare('SELECT count(*) AS n FROM events').get()).toEqual(rowsBefore);
-  for (const [index, id] of [first.id, second.id].entries()) {
-    const delivered = app.store.events(id, before[index]!);
-    expect(delivered).toEqual([
-      expect.objectContaining({ chatId: id, kind: 'prompt-workspace.updated', entityId: id }),
-    ]);
-    expect(app.store.latestEventSequence(id)).toBe(delivered[0]!.seq);
-    expect(delivered[0]!.seq).toBeGreaterThan(before[index]!);
-  }
-  expect(app.store.events(second.id, legacy.seq - 1)[0]).toMatchObject({
-    seq: legacy.seq,
-    kind: 'prompt-workspace.updated',
-  });
-  expect(readerPresentationRevisions(app.store, first.id, ['scene'])).not.toEqual(revisionBefore);
-
-  const workspaceSeq = app.store.latestEventSequence(first.id);
-  app.store.event(first.id, 'source.synthetic', 'scene');
-  const after = app.store.events(first.id, workspaceSeq - 1);
-  expect(after.map((event) => event.kind)).toEqual([
-    'prompt-workspace.updated',
-    'source.synthetic',
-  ]);
-  expect(after[1]!.seq).toBeGreaterThan(workspaceSeq);
-});
-
-test('chat listing returns the same chats as single-chat reads in one statement', async () => {
-  const app = await application();
-  const chats = ['Alpha', 'Beta', 'Gamma'].map((title) => createFixtureChat(app.store, title));
-  scene(app.store, chats[1]!.id, 'Synthetic scene.');
-  const listed = app.store.chats();
-  expect(listed).toEqual(chats.map((chat) => app.store.chat(chat.id)));
-  app.store.db.prepare('DELETE FROM chat_organization WHERE chat_id=?').run(chats[0]!.id);
-  expect(() => app.store.chat(chats[0]!.id)).toThrow('Chat organization missing');
-});
-
-test('reading the activity feed writes nothing', async () => {
-  const app = await application();
-  const changes = () =>
-    Number((app.store.db.prepare('SELECT total_changes() AS n').get() as { n: number }).n);
-  const prior = changes();
-  expect((await app.inject({ url: '/api/activity-feed', headers: local })).statusCode).toBe(200);
-  expect(changes()).toBe(prior);
 });

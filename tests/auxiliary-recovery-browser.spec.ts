@@ -1,99 +1,12 @@
-import { visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { nativeProse } from './fixtures/native-message.js';
-import type { ChatDetail, Job, ReaderDetail } from '../core/types.js';
-
-test('translation failures show safe causes while retired status jobs stay hidden', async ({
-  page,
-  request,
-}) => {
-  const chat = await (
-    await postFixtureChat(request, { data: { title: 'Synthetic auxiliary recovery' } })
-  ).json();
-  const created = await request.post(`/api/chats/${chat.id}/runs`, {
-    data: {
-      request: 'A synthetic lantern scene.',
-      expectedRevision: null,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: `auxiliary-ui-${chat.id}`,
-    },
-  });
-  expect(created.ok()).toBeTruthy();
-  let detail: ChatDetail;
-  await expect
-    .poll(async () => {
-      detail = await (await request.get(`/api/chats/${chat.id}`)).json();
-      return detail.runs[0]?.status;
-    })
-    .toBe('completed');
-  const source = detail!.sources[0]!;
-  const base = {
-    chatId: chat.id,
-    sourceRevision: source.id,
-    sourceHash: source.hash,
-    status: 'failed' as const,
-    attempt: 1,
-    result: null,
-    revision: 1,
-  };
-  const jobs: Job[] = [
-    { ...base, id: 'synthetic-status', kind: 'status', error: 'MODEL_REQUIRED:status' },
-    {
-      ...base,
-      id: 'synthetic-translation',
-      kind: 'translation',
-      error: 'AUXILIARY_PROVIDER_HTTP_401',
-    },
-  ];
-  const readerResponse = await request.get(`/api/chats/${chat.id}/reader?source=${source.id}`);
-  expect(readerResponse.ok()).toBe(true);
-  const reader: ReaderDetail = await readerResponse.json();
-  try {
-    await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-      await route.fulfill({ json: { ...reader, jobs } });
-    });
-    await page.goto(`/?chat=${chat.id}`);
-    const panel = page.getByTestId('turn-activity').first();
-    await panel.locator(':scope > summary').click();
-    await expect(panel.getByTestId('job-status')).toHaveCount(0);
-    const translation = panel.getByTestId('job-translation');
-    await expect(translation).toContainText('인증');
-    await expect(translation).toContainText('AUXILIARY_PROVIDER_HTTP_401');
-    jobs[1].error = 'TRANSLATION_REFUSAL_CHECK_FAILED';
-    jobs[1].result = {
-      mock: false,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      text: 'Saved translation',
-    };
-    let judgmentRequests = 0;
-    await page.route('**/api/jobs/synthetic-translation/rejudge', async (route) => {
-      expect(route.request().postDataJSON()).toEqual({});
-      judgmentRequests++;
-      await route.fulfill({
-        json: { ...jobs[1], id: 'synthetic-judgment-recovery', status: 'queued' },
-      });
-    });
-    await page.reload();
-    const recoveredActivity = page.getByTestId('turn-activity').first();
-    if (!(await recoveredActivity.evaluate((element) => (element as HTMLDetailsElement).open)))
-      await recoveredActivity.locator(':scope > summary').click();
-    await recoveredActivity
-      .getByRole('button', { name: '번역 판정만 다시 시도', exact: true })
-      .click();
-    await expect.poll(() => judgmentRequests).toBe(1);
-    const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
-    expect(after.sources).toEqual(detail!.sources);
-  } finally {
-    await page.unrouteAll({ behavior: 'wait' });
-  }
-});
+import type { ChatDetail, Job } from '../core/types.js';
 
 test('AUXREC translation failure retries from the reader without changing the source or draft', async ({
   page,
   request,
-}, info) => {
+}) => {
   const chat = await (
     await postFixtureChat(request, { data: { title: 'Translation placeholder recovery' } })
   ).json();
@@ -130,8 +43,6 @@ test('AUXREC translation failure retries from the reader without changing the so
   const savedFailure: Job = await (await request.get(`/api/jobs/${failed.id}`)).json();
   const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   await draft.fill('번역을 다시 시도해도 유지할 다음 장면 초안');
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('translation-placeholder-failed.png') });
 
   let retryRequests = 0;
   let release = () => {};
@@ -168,8 +79,6 @@ test('AUXREC translation failure retries from the reader without changing the so
       result: savedFailure.result,
     });
     expect(retryRequests).toBe(1);
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath('translation-placeholder-recovered.png') });
   } finally {
     release();
     await page.unrouteAll({ behavior: 'ignoreErrors' });

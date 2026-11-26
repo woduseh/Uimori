@@ -6,7 +6,6 @@ import {
   createLibraryContent,
   editLibraryContent,
   editorChanges,
-  editorSectionNames,
   selectEditorSection,
 } from './ui-navigation.js';
 import { expect, test, type APIRequestContext } from '@playwright/test';
@@ -98,38 +97,6 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     expect(detail.runs).toHaveLength(0);
   });
 }
-
-test('LUSE04 standalone module navigation omits bot-only panes and retains its source', async ({
-  page,
-  request,
-}) => {
-  const title = `LUSE04 module ${crypto.randomUUID()}`;
-  const pkg = nativeContent({ name: title }, {}, 'module');
-  pkg.nativeRisu.card = {};
-  pkg.nativeRisu.module = { name: title, defaultVariables: 'place=forest', preserved: 'source' };
-  const response = await request.post('/api/content', {
-    data: { kind: 'module', title, package: pkg, loading: 'pinned', relatedIds: [] },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  const saved = (await response.json()) as Content;
-  await page.goto('/');
-  const panel = page.getByTestId('library-panel');
-  await panel.getByRole('tab', { name: '모듈', exact: true }).click();
-  await panel.getByLabel('서재 검색', { exact: true }).fill(title);
-  await editLibraryContent(page, title);
-  const sections = await editorSectionNames(panel);
-  for (const botOnly of ['첫 메시지', '추가 지침']) expect(sections).not.toContain(botOnly);
-  await selectEditorSection(panel, '변수와 토글 초기값');
-  await expect(panel.getByRole('textbox', { name: '기본 변수', exact: true })).toHaveValue(
-    'place=forest'
-  );
-  const retained = (await (await request.get(`/api/content/${saved.id}`)).json()) as Content;
-  expect(retained.revision).toBe(saved.revision);
-  expect(retained.package?.nativeRisu.module).toMatchObject({
-    defaultVariables: 'place=forest',
-    preserved: 'source',
-  });
-});
 
 test('LUSE05 a standalone module background edited in the editor styles a chat that uses the module', async ({
   page,

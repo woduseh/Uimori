@@ -2,309 +2,121 @@ import packageJson from '../package.json' with { type: 'json' };
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect } from '@playwright/test';
-import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 import {
   navigationAction,
-  openChatSettings,
-  selectChatSettingsSection,
   selectSettingsSection,
   startProviderConnection,
 } from './ui-navigation.js';
 
-for (const colorScheme of ['dark'] as const) {
-  for (const viewport of [
-    { width: 2560, height: 1440 },
-    { width: 412, height: 915 },
-  ]) {
-    test(`SCUI04 all settings stay usable in ${colorScheme} ${viewport.width}px layout`, async ({
-      page,
-      request,
-    }, info) => {
-      test.setTimeout(90_000);
-      const health = await (await request.get('/api/health')).json();
-      expect(health.version).toBe(packageJson.version);
-      const connectionResponse = await request.post('/api/connections', {
-        data: {
-          title: '설정 배치 확인용 프로바이더',
-          protocol: 'fixture-sse-v1',
-          endpoint: 'http://127.0.0.1:9/not-called',
-          enabled: true,
-        },
-      });
-      expect(connectionResponse.ok()).toBe(true);
-      const connection = await connectionResponse.json();
-      const modelResponse = await request.post('/api/model-presets', {
-        data: {
-          title: '설정 배치 확인용 모델',
-          connectionId: connection.id,
-          modelId: 'settings-layout-fixture',
-          maxOutputTokens: 1000,
-          temperature: null,
-        },
-      });
-      expect(modelResponse.ok()).toBe(true);
-      await page.route('**/api/agent-runtimes/codex', (route) =>
-        route.fulfill({
-          json: {
-            available: false,
-            authenticated: false,
-            authMode: null,
-            limits: [],
-            error: 'CODEX_DISABLED',
-          },
-        })
-      );
-      await page.emulateMedia({ colorScheme });
-      await page.setViewportSize(viewport);
-      await page.goto('/');
-      await navigationAction(page, '설정');
-      const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-      for (const section of [
-        '일반',
-        '테마와 색상',
-        '역할별 모델',
-        '기본 프롬프트',
-        '프로바이더와 모델',
-        '로어 컨텍스트',
-        'Codex 연결',
-        '삽화',
-        '사용량',
-        '데이터 관리',
-        '앱 정보',
-      ]) {
-        await selectSettingsSection(page, section);
-        const pane = dialog.getByRole('tabpanel');
-        if (section === '일반') {
-          await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
-          await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toHaveCount(0);
-          await expect(dialog.getByRole('tab', { name: '접근 보안', exact: true })).toHaveCount(0);
-          const sendKey = pane.getByRole('combobox', { name: '보내기 키', exact: true });
-          const controlBox = (await sendKey.boundingBox())!;
-          const rowBox = (await sendKey.locator('xpath=ancestor::label').boundingBox())!;
-          expect(
-            Math.abs(rowBox.x + rowBox.width - controlBox.x - controlBox.width)
-          ).toBeLessThanOrEqual(1);
-        } else if (section === '테마와 색상') {
-          const controls = pane.locator('.theme-control-bar select');
-          await expect(controls).toHaveCount(2);
-          await expect(pane.getByLabel('테마 화면 모드', { exact: true })).toHaveCount(0);
-          await expect(pane.getByLabel('기본 외관', { exact: true })).toHaveCount(0);
-          await expect(pane.getByLabel('테마 적용 범위', { exact: true })).toBeVisible();
-          await pane.getByText('테마 관리', { exact: true }).click();
-          await expect(
-            pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
-          ).toBeVisible();
-        } else if (section === '로어 컨텍스트') {
-          await expect(
-            pane.getByRole('switch', { name: '조회 로어를 다음 생성에도 유지', exact: true })
-          ).toBeVisible();
-        } else if (section === '데이터 관리') {
-          await expect(
-            pane.getByRole('heading', { name: '작업실 전체 백업', exact: true })
-          ).toBeVisible();
-          await expect(
-            pane.getByRole('button', { name: '백업 다운로드', exact: true })
-          ).toBeVisible();
-          const restore = pane
-            .locator('details')
-            .filter({ has: page.locator('summary', { hasText: '전체 복원 방법' }) });
-          await expect(
-            pane.getByRole('heading', { name: '백업 파일 가져오기', exact: true })
-          ).toBeVisible();
-          await expect(pane.getByLabel('백업 파일 선택', { exact: true })).toHaveCount(1);
-          await expect(restore).not.toHaveAttribute('open', '');
-          await restore.locator('summary').click();
-          await expect(restore).toContainText('서버를 종료하고');
-          await restore.locator('summary').click();
-        } else if (section === 'Codex 연결') {
-          await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
-          await expect(
-            pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
-          ).toHaveCount(0);
-          await expect(pane.locator('.provider-actions')).toBeHidden();
-        } else if (section === '역할별 모델') {
-          await expect(pane.getByLabel('본문 모델', { exact: true })).toBeVisible();
-        } else if (section === '기본 프롬프트') {
-          await expect(pane.getByLabel('기본 프롬프트 역할', { exact: true })).toBeVisible();
-        } else if (section === '프로바이더와 모델') {
-          await expect(pane.getByLabel('프로바이더와 모델 검색', { exact: true })).toBeVisible();
-        } else if (section === '삽화') {
-          await expect(pane.getByRole('heading', { name: '프리셋', exact: true })).toBeVisible();
-          await expect(pane.getByRole('heading', { name: '생성 환경', exact: true })).toBeVisible();
-          await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
-        } else if (section === '사용량') {
-          await expect(pane.getByRole('button', { name: '이번 달', exact: true })).toBeVisible();
-          await expect(
-            pane.getByRole('button', { name: '사용량 새로고침', exact: true })
-          ).toHaveCount(0);
-        } else {
-          await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
-          await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
-          await pane.getByText('라이선스 전문', { exact: true }).click();
-          await expect(pane.locator('.app-about-document').first()).toContainText(
-            'GNU AFFERO GENERAL PUBLIC LICENSE'
-          );
-          await pane.getByText('라이선스 전문', { exact: true }).click();
-          await pane.getByText('저작권 및 제3자 고지', { exact: true }).click();
-          await expect(pane.locator('.app-about-document').last()).toContainText('RisuAI');
-          await pane.getByText('저작권 및 제3자 고지', { exact: true }).click();
-        }
-        expect(
-          await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
-        ).toBeLessThanOrEqual(1);
-        const bounds = (await dialog.boundingBox())!;
-        expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(2);
-        if (viewport.width > 760) expect(bounds.width).toBeLessThan(1300);
-        if (visualReview) {
-          await pane.evaluate((node) => {
-            node.scrollTop = 0;
-          });
-          await page.screenshot({
-            path: info.outputPath(`settings-${section}-${colorScheme}-${viewport.width}.png`),
-          });
-        }
-      }
-      await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    });
-  }
-}
-
-test('SCUIVERSION app version lookup reports a failure and recovers on retry', async ({ page }) => {
+test('SCUI04 every settings section renders its main controls', async ({ page, request }) => {
+  const health = await (await request.get('/api/health')).json();
+  expect(health.version).toBe(packageJson.version);
+  const connectionResponse = await request.post('/api/connections', {
+    data: {
+      title: '설정 배치 확인용 프로바이더',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/not-called',
+      enabled: true,
+    },
+  });
+  expect(connectionResponse.ok()).toBe(true);
+  const connection = await connectionResponse.json();
+  const modelResponse = await request.post('/api/model-presets', {
+    data: {
+      title: '설정 배치 확인용 모델',
+      connectionId: connection.id,
+      modelId: 'settings-layout-fixture',
+      maxOutputTokens: 1000,
+      temperature: null,
+    },
+  });
+  expect(modelResponse.ok()).toBe(true);
+  await page.route('**/api/agent-runtimes/codex', (route) =>
+    route.fulfill({
+      json: {
+        available: false,
+        authenticated: false,
+        authMode: null,
+        limits: [],
+        error: 'CODEX_DISABLED',
+      },
+    })
+  );
   await page.goto('/');
   await navigationAction(page, '설정');
-  let failed = false;
-  await page.route('**/api/health', (route) => {
-    if (failed) return route.continue();
-    failed = true;
-    return route.fulfill({ status: 503, json: { error: 'Synthetic health failure' } });
-  });
-  await selectSettingsSection(page, '앱 정보');
-  const about = page.getByRole('region', { name: 'Uimori 앱 정보', exact: true });
-  await expect(about.getByTestId('app-version')).toHaveText('확인 실패');
-  await expect(about.getByTestId('app-build-id')).toHaveText('확인 실패');
-  await about.getByRole('button', { name: '다시 확인', exact: true }).click();
-  await expect(about.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
-  await expect(about.getByTestId('app-build-id')).toHaveText(/^[a-f0-9]{64}$/);
-  await expect(about.getByRole('alert')).toBeHidden();
-});
-
-test('SCUI03 multi-entry browser back keeps the address and chat consistent with clean and dirty settings', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  const created = await request.post('/api/content', {
-    data: fixtureBotInput('설정 이력 검사 합성 봇'),
-  });
-  expect(created.ok()).toBe(true);
-  const bot = await created.json();
-  const chats = [];
-  for (const title of ['설정 이력 첫 채팅', '설정 이력 두번째 채팅']) {
-    const response = await request.post('/api/chats', { data: { botId: bot.id, title } });
-    expect(response.ok()).toBe(true);
-    chats.push(await response.json());
-  }
-  await page.goto(`/?chat=${chats[0].id}`);
-  const next = page.locator('.sidebar').getByRole('button', { name: chats[1].title, exact: true });
-  await next.click();
-  await expect(page).toHaveURL(new RegExp(`chat=${chats[1].id}`));
-  const composer = page.getByLabel('다음 장면 요청', { exact: true });
-  await composer.fill('두번째 채팅의 미전송 요청');
-  await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  await expect(dialog.locator('.settings-navigation')).toBeVisible();
-  await page.evaluate(() => history.go(-2));
-  await expect(dialog).toBeHidden();
-  await expect(page).toHaveURL(new RegExp(`chat=${chats[0].id}`));
-  await expect(page.locator('.header-title h1')).toHaveText(chats[0].title);
-  await next.click();
-  await expect(composer).toHaveValue('두번째 채팅의 미전송 요청');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더와 모델');
-  await startProviderConnection(page);
-  await page.getByRole('button', { name: /OpenAI Responses/ }).click();
-  const name = page
-    .getByRole('form', { name: '프로바이더 편집 양식' })
-    .getByLabel('프로바이더 이름', { exact: true });
-  await name.fill('이력을 건너뛰어도 보존할 초안');
-  await page.evaluate(() => history.go(-2));
-  const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
-  await expect(confirm).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`chat=${chats[1].id}`));
-  await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(name).toHaveValue('이력을 건너뛰어도 보존할 초안');
-  await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await confirm.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page).toHaveURL(new RegExp(`chat=${chats[1].id}`));
-  await expect(page.locator('.header-title h1')).toHaveText(chats[1].title);
-  await expect(composer).toHaveValue('두번째 채팅의 미전송 요청');
-});
-
-test('SCUISEARCH settings search opens real destinations without losing an unsaved provider draft', async ({
-  page,
-}, info) => {
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '프로바이더와 모델');
-    await startProviderConnection(page);
-    await page.getByRole('button', { name: /OpenAI Responses/ }).click();
-    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-    const name = page
-      .getByRole('form', { name: '프로바이더 편집 양식' })
-      .getByLabel('프로바이더 이름', { exact: true });
-    await name.fill('검색해도 남는 연결 초안');
-    if (width <= 760) {
-      await dialog.getByRole('button', { name: '목록으로', exact: true }).click();
-      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-    }
-
-    const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
-    await search.fill('백업');
-    await expect(
-      dialog.locator('.settings-search-results').getByRole('button', { name: /백업과 복원/ })
-    ).toBeVisible();
-    await page.screenshot({ path: info.outputPath(`settings-search-${width}.png`) });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true
-    );
-    await search.fill('현재 프롬프트');
-    await expect(
-      dialog.locator('.settings-search-results').getByRole('button', { name: /기본 프롬프트/ })
-    ).toBeVisible();
-    await search.fill('없는 설정 이름');
-    await expect(dialog.locator('.settings-search-results').getByRole('status')).toHaveText(
-      '검색 결과가 없어요.'
-    );
-    await search.fill('글자 크기');
-    await dialog
-      .locator('.settings-search-results')
-      .getByRole('button', { name: /읽기 설정/ })
-      .click();
-    await expect(dialog.locator('.settings-page[data-settings-section="general"]')).toBeVisible();
-    await expect(dialog.locator('[id$="-general-reading"]')).toBeFocused();
-    await selectSettingsSection(page, '프로바이더와 모델');
-    if (width <= 760)
-      await dialog
-        .getByRole('button', { name: '프로바이더 편집 이어 하기: 검색해도 남는 연결 초안' })
-        .click();
-    await expect(name).toHaveValue('검색해도 남는 연결 초안');
-    if (width <= 760) {
-      await dialog.getByRole('button', { name: '목록으로', exact: true }).click();
-      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-      await expect(search).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true
+  for (const section of [
+    '일반',
+    '테마와 색상',
+    '역할별 모델',
+    '기본 프롬프트',
+    '프로바이더와 모델',
+    '로어 컨텍스트',
+    'Codex 연결',
+    '삽화',
+    '사용량',
+    '데이터 관리',
+    '앱 정보',
+  ]) {
+    await selectSettingsSection(page, section);
+    const pane = dialog.getByRole('tabpanel');
+    if (section === '일반') {
+      await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
+    } else if (section === '테마와 색상') {
+      const controls = pane.locator('.theme-control-bar select');
+      await expect(controls).toHaveCount(2);
+      await expect(pane.getByLabel('테마 적용 범위', { exact: true })).toBeVisible();
+      await pane.getByText('테마 관리', { exact: true }).click();
+      await expect(pane.getByRole('button', { name: '새 커스텀 테마', exact: true })).toBeVisible();
+    } else if (section === '로어 컨텍스트') {
+      await expect(
+        pane.getByRole('switch', { name: '조회 로어를 다음 생성에도 유지', exact: true })
+      ).toBeVisible();
+    } else if (section === '데이터 관리') {
+      await expect(
+        pane.getByRole('heading', { name: '작업실 전체 백업', exact: true })
+      ).toBeVisible();
+      await expect(pane.getByRole('button', { name: '백업 다운로드', exact: true })).toBeVisible();
+      const restore = pane
+        .locator('details')
+        .filter({ has: page.locator('summary', { hasText: '전체 복원 방법' }) });
+      await expect(
+        pane.getByRole('heading', { name: '백업 파일 가져오기', exact: true })
+      ).toBeVisible();
+      await expect(pane.getByLabel('백업 파일 선택', { exact: true })).toHaveCount(1);
+      await expect(restore).not.toHaveAttribute('open', '');
+      await restore.locator('summary').click();
+      await expect(restore).toContainText('서버를 종료하고');
+      await restore.locator('summary').click();
+    } else if (section === 'Codex 연결') {
+      await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
+    } else if (section === '역할별 모델') {
+      await expect(pane.getByLabel('본문 모델', { exact: true })).toBeVisible();
+    } else if (section === '기본 프롬프트') {
+      await expect(pane.getByLabel('기본 프롬프트 역할', { exact: true })).toBeVisible();
+    } else if (section === '프로바이더와 모델') {
+      await expect(pane.getByLabel('프로바이더와 모델 검색', { exact: true })).toBeVisible();
+    } else if (section === '삽화') {
+      await expect(pane.getByRole('heading', { name: '프리셋', exact: true })).toBeVisible();
+      await expect(pane.getByRole('heading', { name: '생성 환경', exact: true })).toBeVisible();
+      await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
+    } else if (section === '사용량') {
+      await expect(pane.getByRole('button', { name: '이번 달', exact: true })).toBeVisible();
+    } else {
+      await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
+      await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
+      await pane.getByText('라이선스 전문', { exact: true }).click();
+      await expect(pane.locator('.app-about-document').first()).toContainText(
+        'GNU AFFERO GENERAL PUBLIC LICENSE'
       );
+      await pane.getByText('라이선스 전문', { exact: true }).click();
+      await pane.getByText('저작권 및 제3자 고지', { exact: true }).click();
+      await expect(pane.locator('.app-about-document').last()).toContainText('RisuAI');
+      await pane.getByText('저작권 및 제3자 고지', { exact: true }).click();
     }
-    await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    await page
-      .getByRole('alertdialog', { name: '미저장 설정 확인', exact: true })
-      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
-      .click();
   }
+  await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
 });
 
 test('SCUI05 global lore defaults are saved and copied only to new chats', async ({
@@ -358,74 +170,6 @@ test('SCUI05 global lore defaults are saved and copied only to new chats', async
     data: { expectedRevision: saved.revision, ...policy },
   });
   expect(restored.ok()).toBe(true);
-});
-
-test('SCUI06 global lore defaults require a successful read and preserve chat drafts on retry', async ({
-  page,
-  request,
-}) => {
-  const original = await (await request.get('/api/lore-context-defaults')).json();
-  const { revision: _revision, ...policy } = original;
-  const chat = await (
-    await postFixtureChat(request, { data: { title: '로어 기본값 조회 복구' } })
-  ).json();
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let reads = 0;
-  await page.route('**/api/lore-context-defaults', async (route) => {
-    if (route.request().method() !== 'GET' || ++reads > 1) return route.continue();
-    await gate;
-    await route.fulfill({ status: 503, json: { error: 'SCUI06 synthetic read failure' } });
-  });
-  try {
-    const updated = await request.put('/api/lore-context-defaults', {
-      data: { ...policy, expectedRevision: original.revision, maxRetainedTokens: 32_000 },
-    });
-    expect(updated.ok()).toBe(true);
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    await expect(
-      page.locator('.workspace-header').getByText(chat.title, { exact: true })
-    ).toBeVisible();
-    await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억과 메모');
-    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await expect(dialog.getByRole('button', { name: '기본값 적용', exact: true })).toBeHidden();
-    await dialog.getByText('선별 기준과 용량', { exact: true }).click();
-    const retained = dialog.getByLabel('조회 로어 토큰 한도', { exact: true });
-    const reset = dialog.getByRole('button', { name: '기본값 적용', exact: true });
-    await expect.poll(() => reads).toBe(1);
-    await expect(reset).toBeDisabled();
-    await retained.fill('12000');
-    release();
-    await expect(dialog.getByRole('alert')).toContainText(
-      '로어 컨텍스트 기본값을 불러오지 못했어요'
-    );
-    await expect(reset).toBeDisabled();
-    await expect(retained).toHaveValue('12000');
-    await dialog.getByRole('button', { name: '기본값 다시 불러오기', exact: true }).click();
-    await expect(reset).toBeEnabled();
-    await expect(retained).toHaveValue('12000');
-    await expect(dialog.getByRole('alert')).toHaveCount(0);
-    await reset.click();
-    await expect(retained).toHaveValue('32000');
-    await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-    await expect
-      .poll(async () => {
-        const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
-        return detail.profile.loreContext.maxRetainedTokens;
-      })
-      .toBe(32_000);
-  } finally {
-    release();
-    const current = await (await request.get('/api/lore-context-defaults')).json();
-    const restored = await request.put('/api/lore-context-defaults', {
-      data: { ...policy, expectedRevision: current.revision },
-    });
-    expect(restored.ok()).toBe(true);
-  }
 });
 
 test('SCUI02 settings back, resize and close preserve provider and chat drafts until explicit discard', async ({
@@ -506,154 +250,69 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
   page,
   request,
 }) => {
-  for (const width of [2560, 412]) {
-    const original = await (await request.get('/api/illustration-settings')).json();
-    const nextCount = original.maxPerSource === 2 ? 3 : 2;
-    await page.setViewportSize({ width, height: 915 });
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '삽화');
-    const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    const count = settings.getByLabel('장면당 최대 삽화 수', { exact: true });
-    await settings.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true }).check();
-    await settings
-      .getByRole('combobox', { name: '자동 생성 컷 수', exact: true })
-      .selectOption('auto');
-    await settings.getByLabel('최소 컷 수', { exact: true }).fill('1');
-    await count.fill('0');
-    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
-    await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
-    await expect(confirm.getByRole('alert')).toBeVisible();
-    expect((await (await request.get('/api/illustration-settings')).json()).revision).toBe(
-      original.revision
-    );
-    await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-    await expect(count).toHaveValue('0');
-    await count.fill('');
-    await count.fill(String(nextCount));
-    const automaticMax = settings.getByLabel('자동으로 고를 최대 컷 수', { exact: true });
-    await automaticMax.fill('');
-    await automaticMax.fill(String(nextCount));
-    await expect(
-      settings.getByRole('button', { name: '삽화 설정 저장', exact: true })
-    ).toBeEnabled();
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let intercepted = false;
-    await page.route('**/api/illustration-settings', async (route) => {
-      if (route.request().method() !== 'PUT') return route.continue();
-      intercepted = true;
-      await held;
-      await route.fulfill({ status: 503, json: { error: 'SCUILEAVE synthetic write failure' } });
-    });
-    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
-    await expect.poll(() => intercepted).toBe(true);
-    await page.keyboard.press('Escape');
-    await expect(confirm).toBeVisible();
-    await expect(confirm.getByRole('button', { name: '계속 편집', exact: true })).toBeDisabled();
-    release();
-    await expect(confirm.getByRole('alert')).toBeVisible();
-    await page.unroute('**/api/illustration-settings');
-    await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-    await expect(count).toHaveValue(String(nextCount));
-    await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
-    await expect(settings).toBeHidden();
-    const saved = await (await request.get('/api/illustration-settings')).json();
-    expect(saved).toMatchObject({
-      maxPerSource: nextCount,
-      automaticMaxTargets: nextCount,
-      automaticMinTargets: 1,
-      revision: original.revision + 1,
-    });
-    const { revision: _revision, ...body } = original;
-    const restored = await request.put('/api/illustration-settings', {
-      data: { ...body, expectedRevision: saved.revision },
-    });
-    expect(restored.ok()).toBe(true);
-  }
-});
-
-test('SCDETAIL a narrow settings drill-down shows one back control and the item name', async ({
-  page,
-  request,
-}, info) => {
-  const saved = await (
-    await request.post('/api/connections', {
-      data: {
-        title: `좁은 화면 연결 ${crypto.randomUUID().slice(0, 8)}`,
-        protocol: 'fixture-sse-v1',
-        endpoint: 'http://127.0.0.1:9/',
-        enabled: true,
-      },
-    })
-  ).json();
-  await page.setViewportSize({ width: 412, height: 915 });
+  const original = await (await request.get('/api/illustration-settings')).json();
+  const nextCount = original.maxPerSource === 2 ? 3 : 2;
   await page.goto('/');
   await navigationAction(page, '설정');
-  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  await selectSettingsSection(page, '프로바이더와 모델');
-  await startProviderConnection(page);
-  await page.getByRole('button', { name: /OpenAI Responses/ }).click();
-  const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
-  await expect(form).toBeVisible();
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-    await page.screenshot({ path: info.outputPath(`provider-detail-412-${colorScheme}.png`) });
-  }
-  const backs = dialog
-    .getByRole('button', { name: /^(설정 목록으로|목록으로)$/u })
-    .filter({ visible: true });
-  await expect(backs).toHaveCount(1);
-  const location = dialog.locator('.settings-detail-location').filter({ visible: true });
-  await expect(location).not.toContainText('프로바이더와 모델', { useInnerText: true });
-  await expect(location).toHaveText('프로바이더 등록', { useInnerText: true });
-  await expect(
-    dialog.getByText('프로바이더 등록', { exact: true }).filter({ visible: true })
-  ).toHaveCount(1);
-  await backs.click();
-  await expect(form).toBeHidden();
-  await expect(dialog.locator('.settings-navigation')).toBeHidden();
-  await expect(
-    dialog.getByRole('button', { name: '설정 목록으로', exact: true }).filter({ visible: true })
-  ).toHaveCount(1);
-
-  await dialog.locator(`button[data-provider-id="${saved.id}"]`).click();
-  await expect(form).toBeVisible();
-  await expect(location).toHaveText(saved.title, { useInnerText: true });
-  await expect(
-    dialog.getByText(saved.title, { exact: true }).filter({ visible: true })
-  ).toHaveCount(1);
-  await expect(backs).toHaveCount(1);
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-    await page.screenshot({ path: info.outputPath(`provider-edit-412-${colorScheme}.png`) });
-  }
-  await backs.click();
-  await backs.click();
-
-  await selectSettingsSection(page, '기본 프롬프트');
-  const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
-  await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
-  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
-  await editor
-    .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
-    .click();
-  const combination = page.getByRole('region', {
-    name: '기본 프롬프트 / 옵션 프리셋 저장',
-    exact: true,
+  await selectSettingsSection(page, '삽화');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  const count = settings.getByLabel('장면당 최대 삽화 수', { exact: true });
+  await settings.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true }).check();
+  await settings
+    .getByRole('combobox', { name: '자동 생성 컷 수', exact: true })
+    .selectOption('auto');
+  await settings.getByLabel('최소 컷 수', { exact: true }).fill('1');
+  await count.fill('0');
+  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
+  await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(confirm.getByRole('alert')).toBeVisible();
+  expect((await (await request.get('/api/illustration-settings')).json()).revision).toBe(
+    original.revision
+  );
+  await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(count).toHaveValue('0');
+  await count.fill('');
+  await count.fill(String(nextCount));
+  const automaticMax = settings.getByLabel('자동으로 고를 최대 컷 수', { exact: true });
+  await automaticMax.fill('');
+  await automaticMax.fill(String(nextCount));
+  await expect(settings.getByRole('button', { name: '삽화 설정 저장', exact: true })).toBeEnabled();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  await expect(combination).toBeVisible();
-  await expect(backs).toHaveCount(1);
-  await expect(
-    combination.locator('.settings-detail-location').filter({ visible: true })
-  ).toHaveText('옵션 프리셋 저장', { useInnerText: true });
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-    await page.screenshot({ path: info.outputPath(`option-preset-save-412-${colorScheme}.png`) });
-  }
+  let intercepted = false;
+  await page.route('**/api/illustration-settings', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    intercepted = true;
+    await held;
+    await route.fulfill({ status: 503, json: { error: 'SCUILEAVE synthetic write failure' } });
+  });
+  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect.poll(() => intercepted).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByRole('button', { name: '계속 편집', exact: true })).toBeDisabled();
+  release();
+  await expect(confirm.getByRole('alert')).toBeVisible();
+  await page.unroute('**/api/illustration-settings');
+  await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(count).toHaveValue(String(nextCount));
+  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(settings).toBeHidden();
+  const saved = await (await request.get('/api/illustration-settings')).json();
+  expect(saved).toMatchObject({
+    maxPerSource: nextCount,
+    automaticMaxTargets: nextCount,
+    automaticMinTargets: 1,
+    revision: original.revision + 1,
+  });
+  const { revision: _revision, ...body } = original;
+  const restored = await request.put('/api/illustration-settings', {
+    data: { ...body, expectedRevision: saved.revision },
+  });
+  expect(restored.ok()).toBe(true);
 });

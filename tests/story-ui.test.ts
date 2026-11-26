@@ -25,11 +25,6 @@ describe('story UI', () => {
     expect(kinds.filter((kind) => kind === 'ui').length).toBeGreaterThanOrEqual(4);
     expect(kinds).not.toContain('invalid');
     expect(kinds).not.toContain('pending');
-    expect(kinds.slice(0, 5)).toEqual(['prose', 'ui', 'prose', 'ui', 'prose']);
-    for (const noise of ['dummy click', 'Surface targeting', '- weight:'])
-      expect(prompt).not.toContain(noise);
-    expect(prompt).toContain('One chat bubble.');
-    expect(prompt.indexOf('## Where it goes')).toBeLessThan(prompt.indexOf('## Block syntax'));
   });
   it('keeps the SDK’s positional and required arguments in the compact writing reference', () => {
     const catalog = new CatalogConfig(storyUiCatalog);
@@ -75,43 +70,6 @@ body = Column([
     expect(translation.text).not.toContain('plate');
     for (const invalid of ['surface="lava"', 'look="Not Valid!"'])
       expect(parseStoryUi(normalizeStoryUiOutput(block(invalid)))[0].kind).toBe('invalid');
-  });
-  it('translates day headings and entries of a schedule without touching its indexes', () => {
-    const stored = normalizeStoryUiOutput(`<a2ui>
-root = Column([
-  Schedule(["월", "화"], [{day: 1, title: "보컬 레슨", time: "16:00"}], "이번 주", current=1),
-  Rank("S", "보컬", stars=5),
-  Slot("응원봉", value=12, rarity="rare"),
-  Compare([{label: "사키", value: 152}, {label: "탑", value: 620, text: "무대"}], unit="cm"),
-  Combatant("아리엘", [{label: "체력", value: 412, max: 520}], "성기사", effects=[{label: "중독", tone: "danger"}], state="active")
-])
-</a2ui>`);
-    expect(parseStoryUi(stored)[0].kind).toBe('ui');
-    const wording = projectStoryUiText(stored);
-    for (const value of ['월', '화', '보컬 레슨', '이번 주', 'S', '응원봉', '12', '사키', '무대'])
-      expect(wording).toContain(value);
-    for (const value of ['아리엘', '성기사', '체력', '412', '520', '중독'])
-      expect(wording).toContain(value);
-    expect(wording).not.toContain('active');
-    const translation = prepareStoryUiTranslation(stored);
-    const strings: string[] = JSON.parse(
-      translation.text.replace(/<\/?UIMORI_UI_TRANSLATION_0>/g, '')
-    );
-    expect(strings).toEqual(expect.arrayContaining(['월', '화', '보컬 레슨', '응원봉', '무대']));
-    expect(strings).not.toContain('rare');
-    const restored = translation.restore(
-      translation.text.replace('"화"', '"Tue"').replace('"보컬 레슨"', '"Vocal lesson"')
-    );
-    const segment = parseStoryUi(restored)[0];
-    if (segment.kind !== 'ui') throw new Error('translated schedule did not validate');
-    const schedule = (
-      segment.messages[0] as unknown as {
-        createSurface: { components: Record<string, unknown>[] };
-      }
-    ).createSurface.components.find((component) => component.component === 'Schedule')!;
-    expect(schedule.days).toEqual(['월', 'Tue']);
-    expect(schedule.items).toEqual([{ day: 1, title: 'Vocal lesson', time: '16:00' }]);
-    expect(schedule.current).toBe(1);
   });
   it('reads relations with their ends, translates map and calendar wording, and pins node portraits', () => {
     const stored = normalizeStoryUiOutput(

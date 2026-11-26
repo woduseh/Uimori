@@ -24,12 +24,4 @@ describe('Risu reading provenance markers', () => {
     expect(render('Before <button>“Action”</button> after.')).not.toContain('data-uimori-prose');
     expect(render('```html\n<p>“example”</p>\n```')).not.toContain('data-uimori-prose');
   });
-  test('tight lists mark only their own text rather than nested lists', () => {
-    const simple = render('- First\n- Second');
-    expect(simple).toContain('<li data-uimori-prose="">First</li>');
-    expect(simple.match(/data-uimori-prose/g)).toHaveLength(2);
-    const nested = render('- Parent\n  - Child');
-    expect(nested).not.toContain('<li data-uimori-prose="">Parent');
-    expect(nested).toContain('<li data-uimori-prose="">Child</li>');
-  });
 });

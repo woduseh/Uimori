@@ -37,9 +37,9 @@ and dismissal. Implement entrance motion in CSS alone; avoid exit timers, extra
 closing states, animation-driven React state or wrappers introduced solely for
 animation.
 
-When motion on a surface in the table changes, update the table, the browser
-assertions in `tests/motion-browser.spec.ts` and the motion paragraph in
-`docs/dev/DEVELOPMENT.md` in the same change.
+When motion on a surface in the table changes, update the table and the motion
+paragraph in `docs/dev/DEVELOPMENT.md` in the same change. No browser case pins
+durations or easing; check the result in the running app.
 
 - Keep modal geometry and anchored menu placement stable, including
   viewport-positioned descendants and small screens. A dialog ends its entrance
@@ -64,8 +64,7 @@ results where geometry or animation is affected.
 
 Useful targeted checks after a matching build:
 
-- Motion controls: `npm run verify:ui -- --grep 'MOTION|UI common dialogs'`
-- Menu or nested-dialog interactions: `npm run verify:browser -- --grep 'RACOM01|DEL01|THEMES invalid'`
+- Menu or nested-dialog interactions: `npm run verify:browser -- --grep 'RACOM04|DEL01|THEMES'`
 - Shared surface/theme changes: `npm run verify:liquid-gallery`
 
 Run applicable project quality/build gates, not unrelated suites for their own

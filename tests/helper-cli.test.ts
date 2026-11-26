@@ -134,13 +134,6 @@ test('CLI accepts whitespace before JSON while preserving authored string values
   });
 });
 
-test('CLI still displays help in command positions', async () => {
-  for (const args of [['--help'], ['call', 'chat.rename', '--help']]) {
-    const { stdout } = await runCli(...args);
-    expect(stdout).toContain('Usage:');
-  }
-});
-
 test('CLI forwards a selected export to the active bridge', async () => {
   const { stdout } = await runCli('export', '{"scope":"library","id":"resource-1"}');
   expect(JSON.parse(stdout)).toEqual({

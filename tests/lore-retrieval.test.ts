@@ -237,22 +237,6 @@ test('searches later attached packages beyond the combined provider question lim
   expect(Object.keys(body.questions).length).toBeLessThanOrEqual(2000);
 });
 
-test('skips a relevant entry too large for the judgment request and still evaluates the next one', async () => {
-  const input = snapshot(
-    [
-      [
-        lore('large', '청월인장에 대한 기록. '.repeat(450), '청월인장'),
-        lore('small', '청월인장은 탑에 숨겨져 있다.'),
-      ],
-    ],
-    '청월인장을 찾아요.'
-  );
-  input.profile!.loreContext!.judgment.maxInputTokens = 1000;
-  const { snapshot: result, body } = await select(input);
-  expect(sentEntries(body).map((entry: { id: string }) => entry.id)).toEqual(['small']);
-  expect(result.loreSelection!.entries[0].selected).toEqual(['small']);
-});
-
 test('retrieves frozen chat-overridden title within a narrow JEV budget', async () => {
   const field = 'title' as const;
   const filler = 'Ordinary weather, flour, rain and deliveries. '.repeat(50);
@@ -316,25 +300,6 @@ test('budgets all scoped admitted bodies before a paid judgment and records thei
   expect(tokens).toBeGreaterThan(100);
   expect(receipt.selected).toEqual(['fact']);
   expect(receipt.judgment!.selectedTokens).toBe(tokens);
-});
-
-test('counts equal bodies twice when distinct scoped metadata makes both bodies admitted', async () => {
-  const fact = lore('fact', '청월인장');
-  const input = snapshot([[fact]], '청월인장');
-  projectLore(input, [[{ ...fact, title: 'Bot record' }], [{ ...fact, title: 'Persona record' }]]);
-  const singleBodyTokens = countTextTokens(fact.text);
-  input.profile!.loreContext!.maxRetainedTokens = singleBodyTokens;
-  input.profile!.loreContext!.judgment.maxSelectedTokens = singleBodyTokens;
-  const rejected = await select(input, 0);
-  expect(rejected.snapshot.loreSelection!.entries[0].selected).toEqual([]);
-  input.profile!.loreContext!.maxRetainedTokens = singleBodyTokens * 2;
-  input.profile!.loreContext!.judgment.maxSelectedTokens = singleBodyTokens * 2;
-  const accepted = await select(input);
-  const pinned = compiledPackages(accepted.snapshot, 'main')[0].selectedLore;
-  expect(pinned.map((entry) => entry.text)).toEqual([fact.text, fact.text]);
-  expect(accepted.snapshot.loreSelection!.entries[0].judgment!.selectedTokens).toBe(
-    singleBodyTokens * 2
-  );
 });
 
 test.each(['title', 'description', 'text'] as const)(

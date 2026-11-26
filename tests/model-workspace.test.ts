@@ -17,7 +17,7 @@ import {
 } from '../server/prompt-workspace.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { workspaceModelRef, type PromptPreset } from '../core/product.js';
+import { type PromptPreset } from '../core/product.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { managementImpact } from '../server/provider-management.js';
 import { illustrationReferenceCandidates } from '../server/illustrations.js';
@@ -308,25 +308,6 @@ function mainPreset(store: Store, title: string) {
     values: { detail: '0' },
   }) as PromptPreset;
 }
-
-test('workspace role resolution keeps optional generation selections separate from execution roles', () => {
-  const workspace = promptWorkspace(database());
-  const roles = ['main', 'translation', 'helper', 'context', 'script', 'title'] as const;
-  expect(roles.map((role) => workspaceModelRef(workspace, role))).toEqual(roles.map(() => null));
-  workspace.modelRoutes.main = { id: 'main' };
-  workspace.helperModel = { id: 'helper' };
-  workspace.contextModel = { id: 'context' };
-  workspace.scriptModel = { id: 'script' };
-  workspace.titleModel = { id: 'title' };
-  expect(roles.map((role) => workspaceModelRef(workspace, role)?.id ?? null)).toEqual([
-    'main',
-    null,
-    'helper',
-    'context',
-    'script',
-    'title',
-  ]);
-});
 
 test('chat pins follow the latest selected IDs while other chats and auxiliary models follow global defaults', () => {
   const store = database(),

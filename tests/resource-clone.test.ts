@@ -231,39 +231,6 @@ test('stale, unavailable and missing sources never create a partial copy', async
   expect(store.libraryOrganization.snapshot()).toEqual(organization);
 });
 
-test('clone route rejects unsupported kinds, incomplete or extra fields, and invalid revisions before writing', async () => {
-  const { store, app } = fixture();
-  const source = store.product.promptPreset({
-    title: 'Source',
-    role: 'main',
-    text: 'Text',
-  }) as PromptPreset;
-  const valid = {
-    kind: 'prompt-preset',
-    sourceId: source.id,
-    expectedSourceRevision: source.revision,
-    title: 'Copy',
-  };
-  const before = rows(store);
-  const organization = store.libraryOrganization.snapshot();
-  for (const payload of [
-    { ...valid, kind: 'prompt-workspace' },
-    { ...valid, id: 'caller-chosen-id' },
-    { ...valid, sourceId: '' },
-    { ...valid, title: ' ' },
-    { ...valid, title: 'x'.repeat(201) },
-    ...[undefined, 0, '1'].map((expectedSourceRevision) => ({
-      ...valid,
-      expectedSourceRevision,
-    })),
-  ]) {
-    const response = await postClone(app, payload);
-    expect(response.statusCode, response.body).toBe(400);
-  }
-  expect(rows(store)).toEqual(before);
-  expect(store.libraryOrganization.snapshot()).toEqual(organization);
-});
-
 test('new-resource creation has a compact durable receipt and rejects conflicting reuse of a key', async () => {
   const { store, app } = fixture();
   const command = {

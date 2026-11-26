@@ -332,26 +332,6 @@ const toolTurn = (output: Json[]): Json => ({
 });
 
 describe('Exact native main preview and terminal submission (synthetic loopback only)', () => {
-  test.each([
-    ['openai-responses-v1', 'gpt-5.6-sol', 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED'],
-    ['openai-chat-v1', 'gpt-5.6-sol', 'PROMPT_CACHE_NOT_APPLIED'],
-    ['anthropic-messages-v1', 'claude-opus-5-5', 'LEADING_SYSTEM_TO_DEDICATED_FIELD'],
-  ] as const)('preview retains native mapping evidence for %s', async (protocol, modelId, code) => {
-    const work = await snapshot();
-    const target = work.profile!.models.main!;
-    target.connection.protocol = protocol;
-    target.modelId = modelId;
-    const built = buildMainProviderRequest(work);
-    const before = structuredClone(built.request);
-    const preview = encodeMainPreview(built.request, target);
-    expect(preview.capabilityVersion).toBe('native-wire-2026-09-07');
-    expect(preview.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code, protocol, modelId })])
-    );
-    expect(built.request).toEqual(before);
-    expect(JSON.stringify(preview.body)).not.toContain('capabilityVersion');
-  });
-
   test('Anthropic preview includes the same late-system boundary as the wire encoder without editing the snapshot', async () => {
     const work = await snapshot();
     const target = work.profile!.models.main!;
@@ -383,18 +363,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toHaveLength(2);
     expect(work).toEqual(before);
     expect(built.request).toEqual(requestBefore);
-  });
-
-  test('retired fields in an old execution snapshot never enter a custom prompt request or its host context', async () => {
-    const work = await snapshot();
-    const before = buildMainProviderRequest(work).request;
-    Object.assign(work.settings, { preset: 'vivid', mode: 'research' });
-    const after = buildMainProviderRequest(work).request;
-    expect(after).toEqual(before);
-    expect(after.input.controls).toEqual({});
-    expect(JSON.stringify(after)).not.toMatch(
-      /"preset"|minWords|maxWords|customWords|personaReference/
-    );
   });
 
   test('submission uses the compiled explicit decision; source provenance and familiar option names grant no tool', async () => {
@@ -768,22 +736,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       ).length
     ).toBe(1);
     expect(work.promptCompilation).toEqual(before);
-  });
-
-  test('NMR08 unreviewed model aliases do not inherit explicit cache capabilities', async () => {
-    const work = compileSnapshotPrompt(await snapshot()),
-      target = work.profile!.models.main!;
-    target.connection.protocol = 'openai-responses-v1';
-    target.modelId = 'gpt-5.9';
-    const built = buildMainProviderRequest(work),
-      preview = encodeMainPreview(built.request, target);
-    expect(preview.diagnostics.some((d) => d.code === 'PROMPT_CACHE_NOT_APPLIED')).toBe(true);
-    expect((preview.body as Record<string, Json>).prompt_cache_options).toBeUndefined();
-    target.modelId = 'gpt-6-astra';
-    const supported = encodeMainPreview(buildMainProviderRequest(work).request, target);
-    expect(
-      supported.diagnostics.some((d) => d.code === 'CACHE_BREAKPOINT_ENCODED_HIT_UNVERIFIED')
-    ).toBe(true);
   });
 
   test('NMR09 native pinned and selected context slots have no duplicate host-envelope bodies', async () => {

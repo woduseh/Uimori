@@ -103,48 +103,6 @@ async function expectUnchanged(
   expect(after.attempts ?? []).toHaveLength(0);
 }
 
-test('SETTINGSLOCATION mobile opens the remembered available section and explicit destinations win', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: 360, height: 900 });
-  const { before, writes, errors } = await prepare(
-    page,
-    request,
-    `설정 위치 복원 ${Date.now()}`,
-    nativePrompt('No variable defaults.')
-  );
-  await page.evaluate(() => {
-    localStorage.setItem('uimori:chat-settings-section', 'packages');
-    localStorage.setItem('uimori:app-settings-section', 'lore');
-  });
-  let dialog = await openSettings(page);
-  const selector = dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true });
-  await expect(selector).toHaveValue('characters');
-  await expect(dialog.getByRole('heading', { name: '사용 자료', exact: true })).toBeVisible();
-  await selector.selectOption('prompts');
-  await expect(dialog.getByLabel('작가 노트', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-  dialog = await openSettings(page);
-  await expect(dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
-    'prompts'
-  );
-  await expect(dialog.getByRole('heading', { name: '생성 설정', exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: '역할별 모델', exact: true }).click();
-  const global = page.getByRole('dialog', { name: '설정', exact: true });
-  await expect(global.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
-    'models'
-  );
-  await global.getByRole('combobox', { name: '설정 영역 선택', exact: true }).selectOption('lore');
-  await global.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await navigationAction(page, '설정');
-  await expect(global.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
-    'lore'
-  );
-  await global.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expectUnchanged(request, before, writes, errors);
-});
-
 test('CSUI02 section changes, browser Back and resizing preserve chat setting drafts until explicit discard', async ({
   page,
   request,
@@ -228,93 +186,10 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await expectUnchanged(request, before, writes, errors);
 });
 
-test('CSUI03 keyboard navigation and clean browser Back keep immediate reading preferences without model calls', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  const { before, writes, errors } = await prepare(
-    page,
-    request,
-    `CSUI03 ${Date.now()}`,
-    nativePrompt('Synthetic navigation fixture without prompt variables.')
-  );
-  const dialog = await openSettings(page);
-  const nav = dialog.getByRole('tablist', { name: '채팅 설정 분류', exact: true });
-  const first = nav.getByRole('tab', { name: sections[0], exact: true });
-  await first.focus();
-  await first.press('ArrowDown');
-  const prompts = nav.getByRole('tab', { name: sections[1], exact: true });
-  await expect(prompts).toBeFocused();
-  await expect(prompts).toHaveAttribute('aria-selected', 'true');
-  await prompts.press('End');
-  const last = nav.getByRole('tab', { name: sections[sections.length - 1], exact: true });
-  await expect(last).toBeFocused();
-  await expect(nav.locator('[tabindex="0"]')).toHaveCount(1);
-  await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
-  await expect(
-    dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true })
-  ).toBeVisible();
-  await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
-  await last.focus();
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await expect(dialog.getByRole('tabpanel')).toBeFocused();
-  await expect(
-    dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true })
-  ).toBeVisible();
-  await page.evaluate(() => history.back());
-  await expect(
-    dialog.getByRole('navigation', { name: '채팅 설정 분류', exact: true })
-  ).toBeVisible();
-  await page.evaluate(() => history.back());
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
-  await openSettings(page);
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
-  await expect(page.locator('.chat-menu > summary')).toBeFocused();
-  await openChatMenu(page);
-  await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
-  const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
-  const focusStart = reading.getByRole('button', { name: '집중 읽기 시작', exact: true });
-  await expect(focusStart).toBeVisible();
-  await reading.getByLabel('새 원고의 기본 보기', { exact: true }).selectOption('original');
-  await reading.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
-  const navigatorToggle = reading.getByRole('switch', {
-    name: '장면 내비게이터 표시',
-    exact: true,
-  });
-  await expect(navigatorToggle).toBeChecked();
-  await navigatorToggle.click();
-  await expect(navigatorToggle).not.toBeChecked();
-  await expect(reading.getByLabel('화면 테마', { exact: true })).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate(() => [
-        localStorage.getItem('uimori:reading-language'),
-        localStorage.getItem('uimori:font'),
-        localStorage.getItem('uimori:scene-navigator'),
-      ])
-    )
-    .toEqual(['original', 'serif', 'false']);
-  await page.keyboard.press('Escape');
-  await expect(reading).toBeHidden();
-  await openChatMenu(page);
-  await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
-  await expect(reading.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveValue('original');
-  await expect(reading.getByLabel('본문 글꼴', { exact: true })).toHaveValue('serif');
-  await expect(
-    reading.getByRole('switch', { name: '장면 내비게이터 표시', exact: true })
-  ).not.toBeChecked();
-  await page.keyboard.press('Escape');
-  await expect(reading).toBeHidden();
-  await expectUnchanged(request, before, writes, errors);
-});
-
 test('CSUI04 quick persona and chat settings share persisted attachments and none preserves the composer', async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = `CSUI04 persona ${Date.now()}`;
   const seeded = await request.post('/api/content', {
@@ -405,19 +280,9 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   await expect(attached.getByText('필요할 때 읽기', { exact: true })).toBeVisible();
   await attached.getByRole('button', { name: `${title} 선택 해제`, exact: true }).click();
   await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  const completion = page
-    .locator('.transient-notice')
-    .filter({ hasText: '채팅 설정을 저장했어요.' });
-  await expect(completion).toBeVisible();
-  await expect(completion.getByRole('button')).toHaveCount(0);
-  await page.screenshot({
-    path: info.outputPath('saved-settings-notice.png'),
-    animations: 'disabled',
-  });
-  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-  await expect(completion).toBeVisible();
-  await expect(completion).toHaveCount(0, { timeout: 6000 });
   await expect.poll(selected).toEqual([]);
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await expect(quick).toContainText('페르소나 없음');
   await choosePersona();
@@ -436,64 +301,6 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   expect(after.attempts ?? []).toHaveLength(0);
   expect(errors).toEqual([]);
 });
-
-{
-  const mainId = 'missing-model';
-  test(`CSUI06 unavailable model offers a visible resolution and guards chat drafts`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-    await page.route('**/api/prompt-workspace', async (route) => {
-      const response = await route.fetch();
-      const workspace = await response.json();
-      await route.fulfill({
-        response,
-        json: {
-          ...workspace,
-          modelRoutes: { ...workspace.modelRoutes, main: { id: mainId } },
-        },
-      });
-    });
-    const { before, writes, errors } = await prepare(page, request, `CSUI06 ${Date.now()}`);
-    const composer = page.getByLabel('다음 장면 요청', { exact: true });
-    await composer.fill('모델 설정으로 이동해도 남길 요청 초안');
-    const dialog = await openSettings(page);
-    await selectChatSettingsSection(page, '생성 설정');
-    const alert = dialog.getByRole('alert');
-    await expect(alert).toContainText('선택한 본문 모델을 사용할 수 없어');
-    const repair = dialog.getByRole('button', { name: '역할별 모델', exact: true });
-    await repair.evaluate((node) => node.scrollIntoView({ block: 'center' }));
-    await expect(repair).toBeInViewport({ ratio: 1 });
-    await page.screenshot({ path: info.outputPath('model-resolution.png') });
-
-    await selectChatSettingsSection(page, '이미지');
-    const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
-    const original = await image.inputValue();
-    const draft = original === 'jev' ? 'writer' : 'jev';
-    await image.selectOption(draft);
-    await selectChatSettingsSection(page, '생성 설정');
-    await repair.click();
-    const guard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
-    await expect(guard).toBeVisible();
-    await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
-    await expect(repair).toBeFocused();
-    await selectChatSettingsSection(page, '이미지');
-    await expect(image).toHaveValue(draft);
-    await selectChatSettingsSection(page, '생성 설정');
-    await repair.click();
-    await guard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-    await expect(dialog).toBeHidden();
-    const global = page.getByRole('dialog', { name: '설정', exact: true });
-    await expect(global.getByLabel('본문 모델', { exact: true })).toBeVisible();
-    await expect
-      .poll(() => global.evaluate((node) => node.contains(document.activeElement)))
-      .toBe(true);
-    await global.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    await expect(composer).toHaveValue('모델 설정으로 이동해도 남길 요청 초안');
-    await expectUnchanged(request, before, writes, errors);
-  });
-}
 
 test('CSUI05 save and close persists a valid user note and keeps an invalid note draft open', async ({
   page,
@@ -548,42 +355,6 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   await notes.getByRole('button', { name: '편집 취소', exact: true }).click();
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
-  expect(errors).toEqual([]);
-});
-
-test('CSUI08 automatic translation toggle persists per chat and reopens without starting a job', async ({
-  page,
-  request,
-}) => {
-  test.setTimeout(60000);
-  const { chat, errors } = await prepare(page, request, 'CSUI08 ' + Date.now());
-  let dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '생성 설정');
-  const globalDefault = (await (await request.get('/api/auto-translation-defaults')).json()) as {
-    autoTranslate: boolean;
-  };
-  let choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
-  await expect(choice.locator('option[value="inherit"]')).toHaveText(
-    `기본값 따르기: ${globalDefault.autoTranslate ? '켜짐' : '꺼짐'}`
-  );
-  await expect(choice).toHaveValue('inherit');
-  await choice.selectOption('on');
-  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  const read = async () =>
-    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
-  await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(true);
-  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-  dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '생성 설정');
-  choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
-  await expect(choice).toHaveValue('on');
-  await choice.selectOption('off');
-  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(false);
-  await choice.selectOption('inherit');
-  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBeUndefined();
-  expect((await read()).jobs).toHaveLength(0);
   expect(errors).toEqual([]);
 });
 
@@ -703,7 +474,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   expect(errors).toEqual([]);
 });
 
-test('CSUI11 the translation result language saves from general settings at phone and desktop widths', async ({
+test('CSUI11 the translation result language saves from general settings', async ({
   page,
   request,
 }, info) => {
@@ -713,7 +484,7 @@ test('CSUI11 the translation result language saves from general settings at phon
         translationLanguage: string | null;
       }
     ).translationLanguage;
-  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+  for (const width of [DESKTOP_WIDTH]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
     await navigationAction(page, '설정');

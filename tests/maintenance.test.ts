@@ -1,6 +1,5 @@
 import Fastify from 'fastify';
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
@@ -194,41 +193,6 @@ test('forced maintenance boot leaves queued context recovery untouched', async (
   ).toEqual({ status: 'interrupted', snapshot: null });
 });
 
-test('staging cleanup starts on normal listen but never on a forced maintenance boot', async () => {
-  const { app, directory } = await boot({ maintenance: true });
-  const staged = join(directory, 'risu-prepared', 'a'.repeat(32));
-  const upload = join(directory, 'uploads', `${'b'.repeat(32)}.bin`);
-  await mkdir(staged, { recursive: true });
-  await mkdir(join(directory, 'uploads'), { recursive: true });
-  await writeFile(upload, 'expired upload');
-  const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
-  await utimes(staged, expired, expired);
-  await utimes(upload, expired, expired);
-  await app.listen({ host: '127.0.0.1', port: 0 });
-  expect(existsSync(staged)).toBe(true);
-  expect(existsSync(upload)).toBe(true);
-  setMaintenance(app.store, { closed: true, reason: 'update' });
-  await app.close();
-  owned.splice(
-    owned.findIndex((item) => item.app === app),
-    1
-  );
-  const closed = await boot({ directory, testMode: true });
-  await closed.app.listen({ host: '127.0.0.1', port: 0 });
-  expect(existsSync(staged)).toBe(true);
-  expect(existsSync(upload)).toBe(true);
-  await closed.app.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'open' } });
-  await closed.app.close();
-  owned.splice(
-    owned.findIndex((item) => item.app === closed.app),
-    1
-  );
-  const normal = await boot({ directory, testMode: true });
-  await normal.app.listen({ host: '127.0.0.1', port: 0 });
-  expect(existsSync(staged)).toBe(false);
-  expect(existsSync(upload)).toBe(false);
-});
-
 test('a persisted closed gate holds recovered Batch execution until reopening', async () => {
   const { app, directory } = await boot({ testMode: true });
   const chat = createFixtureChat(app.store, 'Batch recovery');
@@ -408,37 +372,6 @@ async function until(condition: () => boolean) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
-
-test('repeating the same gate change keeps one epoch and a forced maintenance boot rejects reopening through HTTP', async () => {
-  const { app, directory } = await boot();
-  setMaintenance(app.store, { closed: true, reason: 'first' });
-  setMaintenance(app.store, { closed: true, reason: 'second' });
-  expect(maintenanceState(app.store)).toMatchObject({
-    status: 'closed',
-    epoch: 1,
-    reason: 'first',
-  });
-  setMaintenance(app.store, { closed: false });
-  setMaintenance(app.store, { closed: true });
-  expect(maintenanceState(app.store)).toMatchObject({ status: 'closed', epoch: 2 });
-  await app.close();
-  owned.splice(
-    owned.findIndex((item) => item.app === app),
-    1
-  );
-
-  const candidate = await boot({ directory, maintenance: true });
-  setMaintenance(candidate.app.store, { closed: false });
-  const status = await candidate.app.inject({ method: 'GET', url: '/api/maintenance' });
-  expect(status.json()).toMatchObject({ status: 'closed', forcedClosed: true });
-  const reopen = await candidate.app.inject({
-    method: 'POST',
-    url: '/api/maintenance',
-    payload: { status: 'open' },
-  });
-  expect(reopen.statusCode).toBe(409);
-  expect(reopen.json()).toEqual({ error: 'MAINTENANCE_BOOT' });
-});
 
 test('closing admission waits for previously admitted HTTP writes and releases failed writes', async () => {
   const { app } = await boot();

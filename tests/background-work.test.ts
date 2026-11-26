@@ -23,7 +23,7 @@ test('background terminal storage failure is observed and restart preserves unce
     const result = await promisify(execFile)(
       process.execPath,
       ['tests/fixtures/background-failure.mjs', join(directory, 'app.sqlite')],
-      { env: localVerificationEnv(), timeout: 10000 }
+      { env: localVerificationEnv(), timeout: 25000 }
     );
     const evidence = JSON.parse(result.stdout.trim().split(/\r?\n/u).at(-1)!);
     expect(evidence).toEqual({

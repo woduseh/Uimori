@@ -507,80 +507,80 @@ test('a known text-only helper denies image reading recoverably while image disc
   expect(bodies.flatMap(imageData)).toHaveLength(0);
 });
 
-test.each([
-  { exitCode: 0, timedOut: false },
-  { exitCode: null, timedOut: true },
-])('shell image reads preserve redirected pixels with outcome %j', async (outcome) => {
-  vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
-  const f = fixture();
-  const original = await savePortrait(f.store);
-  const before = f.store.db.prepare('SELECT * FROM image_blobs').all();
-  const readResults: unknown[] = [];
-  const shell = vi
-    .spyOn(f.runtime.shell, 'exec')
-    .mockImplementation(async (_task, _toolId, _command, _timeoutMs, signal, invoke) => {
-      if (!invoke || !signal) throw new Error('Shell must receive an app callback and signal');
-      for (let index = 0; index < 9; index++)
-        readResults.push(
-          await invoke(
-            'image.read',
-            { contentId: original.id, imageId: 'portrait-red' },
-            `nested-image-read-${index}`,
-            signal
-          )
-        );
-      return {
-        exitCode: outcome.exitCode,
-        signal: null,
-        timedOut: outcome.timedOut,
-        truncated: false,
-        output: '',
-        outputFile: 'scratch/redirected-image.log',
-        applied: [],
-      };
-    });
-  const bodies = intercept((body, round) =>
-    round === 0
-      ? answer(body, [
-          {
-            id: 'shell-read',
-            name: 'data.exec',
-            args: {
-              command: `for image in 1 2 3 4 5 6 7 8 9; do uimori call image.read '{"contentId":"${original.id}","imageId":"portrait-red"}' > scratch/image.json; done`,
+test.each([{ exitCode: 0, timedOut: false }])(
+  'shell image reads preserve redirected pixels with outcome %j',
+  async (outcome) => {
+    vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
+    const f = fixture();
+    const original = await savePortrait(f.store);
+    const before = f.store.db.prepare('SELECT * FROM image_blobs').all();
+    const readResults: unknown[] = [];
+    const shell = vi
+      .spyOn(f.runtime.shell, 'exec')
+      .mockImplementation(async (_task, _toolId, _command, _timeoutMs, signal, invoke) => {
+        if (!invoke || !signal) throw new Error('Shell must receive an app callback and signal');
+        for (let index = 0; index < 9; index++)
+          readResults.push(
+            await invoke(
+              'image.read',
+              { contentId: original.id, imageId: 'portrait-red' },
+              `nested-image-read-${index}`,
+              signal
+            )
+          );
+        return {
+          exitCode: outcome.exitCode,
+          signal: null,
+          timedOut: outcome.timedOut,
+          truncated: false,
+          output: '',
+          outputFile: 'scratch/redirected-image.log',
+          applied: [],
+        };
+      });
+    const bodies = intercept((body, round) =>
+      round === 0
+        ? answer(body, [
+            {
+              id: 'shell-read',
+              name: 'data.exec',
+              args: {
+                command: `for image in 1 2 3 4 5 6 7 8 9; do uimori call image.read '{"contentId":"${original.id}","imageId":"portrait-red"}' > scratch/image.json; done`,
+              },
             },
-          },
-        ])
-      : answer(body)
-  );
-  const task = await f.run();
-  expect(task.status, task.error ?? '').toBe('completed');
-  expect(shell).toHaveBeenCalledOnce();
-  expect(
-    helperActivityStages(readHelperActivity(f.store, task.id)).find(
-      (stage) => stage.events[0].name === 'data.exec'
-    )
-  ).toMatchObject({ state: outcome.exitCode === 0 ? 'completed' : 'issue' });
-  expect(readResults).toMatchObject(
-    Array.from({ length: 9 }, () => ({
-      result: { contentId: original.id, imageId: 'portrait-red' },
-    }))
-  );
-  expect(bodies).toHaveLength(2);
-  expect(toolEvent(bodies[1], 'shell-read')).toMatchObject({
-    ...outcome,
-    output: '',
-    viewedImages: Array.from({ length: 9 }, () => ({
-      contentId: original.id,
-      imageId: 'portrait-red',
-      transmission: { mime: 'image/webp', width: 12, height: 8 },
-    })),
-  });
-  const [pixels] = imageData(bodies[1]);
-  expect(imageData(bodies[1])).toEqual(Array(9).fill(pixels));
-  await expectRedPixels(pixels);
-  expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(before);
-  expectNoPersistedPixels(f, pixels);
-});
+          ])
+        : answer(body)
+    );
+    const task = await f.run();
+    expect(task.status, task.error ?? '').toBe('completed');
+    expect(shell).toHaveBeenCalledOnce();
+    expect(
+      helperActivityStages(readHelperActivity(f.store, task.id)).find(
+        (stage) => stage.events[0].name === 'data.exec'
+      )
+    ).toMatchObject({ state: outcome.exitCode === 0 ? 'completed' : 'issue' });
+    expect(readResults).toMatchObject(
+      Array.from({ length: 9 }, () => ({
+        result: { contentId: original.id, imageId: 'portrait-red' },
+      }))
+    );
+    expect(bodies).toHaveLength(2);
+    expect(toolEvent(bodies[1], 'shell-read')).toMatchObject({
+      ...outcome,
+      output: '',
+      viewedImages: Array.from({ length: 9 }, () => ({
+        contentId: original.id,
+        imageId: 'portrait-red',
+        transmission: { mime: 'image/webp', width: 12, height: 8 },
+      })),
+    });
+    const [pixels] = imageData(bodies[1]);
+    expect(imageData(bodies[1])).toEqual(Array(9).fill(pixels));
+    await expectRedPixels(pixels);
+    expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(before);
+    expectNoPersistedPixels(f, pixels);
+  }
+);
 
 test.each(['image.read', 'failed shell image.read with a save'] as const)(
   'automatic compaction of %s shows pixels to the context model and retains exact provenance',

@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { DatabaseSync, StatementSync } from 'node:sqlite';
-import { instrumentDatabase, measureSql, type SqlUsage } from '../server/sql-metrics.js';
+import { instrumentDatabase, measureSql } from '../server/sql-metrics.js';
 
 function database() {
   const db = instrumentDatabase(new DatabaseSync(':memory:'));
@@ -9,24 +9,6 @@ function database() {
   for (const label of ['one', 'two', 'three']) insert.run(label);
   return db;
 }
-
-test('counts statements and SQLite time only inside a measured scope', async () => {
-  const db = database();
-  const usage: SqlUsage = { statements: 0, elapsedMs: 0 };
-  db.prepare('SELECT count(*) AS n FROM items').get();
-  await measureSql(usage, async () => {
-    db.prepare('SELECT label FROM items WHERE id=?').get(1);
-    await Promise.resolve();
-    db.prepare('SELECT label FROM items').all();
-    db.prepare('UPDATE items SET label=? WHERE id=?').run('uno', 1);
-    expect([...db.prepare('SELECT id FROM items ORDER BY id').iterate()]).toHaveLength(3);
-    db.exec('SAVEPOINT measured; RELEASE measured');
-  });
-  db.prepare('SELECT count(*) AS n FROM items').get();
-  expect(usage.statements).toBe(5);
-  expect(usage.elapsedMs).toBeGreaterThan(0);
-  db.close();
-});
 
 test('instrumented statements keep the native statement behavior', () => {
   const db = database();

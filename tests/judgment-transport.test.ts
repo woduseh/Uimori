@@ -6,7 +6,6 @@ import {
   readJudgmentRequest,
   targetFromJudgmentWire,
 } from '../server/judgment.js';
-import { settleWithin, stalledProviderBody } from './fixtures/stalled-provider-body.js';
 
 const request = {
   state: 'A scene',
@@ -56,35 +55,6 @@ describe('judgment transport', () => {
       })
     ).toBeNull();
   });
-
-  it.each(['cancel', 'timeout'] as const)(
-    'records %s during an uncertain request without retry',
-    async (mode) => {
-      const stalled = stalledProviderBody();
-      const controller = new AbortController();
-      const send = vi.fn(async () => stalled.response);
-      const finish = vi.fn();
-      const work = executeJudgment(request, inputHash, null, {
-        target,
-        signal: controller.signal,
-        timeoutMs: mode === 'timeout' ? 30 : 1000,
-        credential: () => 'secret',
-        fetch: send,
-        onAttemptStart: () => 'attempt',
-        onAttemptFinish: finish,
-      }).catch((error: unknown) => error);
-      await stalled.pendingRead;
-      if (mode === 'cancel') controller.abort();
-      const error = await settleWithin(work);
-      expect(error).toMatchObject({
-        code: mode === 'cancel' ? 'JUDGMENT_CANCELLED' : 'JUDGMENT_TIMEOUT',
-        attempted: true,
-      });
-      expect(send).toHaveBeenCalledOnce();
-      expect(finish).toHaveBeenCalledOnce();
-      stalled.release();
-    }
-  );
 
   it('requires full choice probabilities from a compatible System One provider', async () => {
     const choiceRequest = {

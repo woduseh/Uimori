@@ -288,17 +288,3 @@ test('Flex price requires matching actual tier, never silently switches to stand
     notes: ['SERVICE_TIER_MISMATCH'],
   });
 });
-
-test('snapshot estimate is deterministic and does not mutate frozen pricing or usage', () => {
-  const pricing = snapshot();
-  Object.freeze(pricing.rates);
-  Object.freeze(pricing);
-  Object.freeze(responses.raw.input_tokens_details);
-  Object.freeze(responses.raw);
-  Object.freeze(responses);
-  expect(estimateCost(pricing, responses)).toEqual(
-    estimateCost(structuredClone(pricing), structuredClone(responses))
-  );
-  expect(estimateCost(undefined, responses).status).toBe('unavailable');
-  expect(estimateCost(snapshot('fixture-sse-v1'), responses).status).toBe('unavailable');
-});

@@ -1,6 +1,1 @@
-import { DEFAULT_WIDTHS } from './browser-viewports.js';
 export const visualReview = process.env.UIMORI_VISUAL_REVIEW === '1';
-
-export function reviewWidths(additional: readonly number[]): readonly number[] {
-  return visualReview ? [...new Set([...additional, ...DEFAULT_WIDTHS])] : DEFAULT_WIDTHS;
-}

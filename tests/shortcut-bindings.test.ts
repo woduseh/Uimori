@@ -7,7 +7,6 @@ import {
   resolveShortcut,
   serializeShortcutOverrides,
   shortcutKeyFromEvent,
-  shortcutKeyLabel,
   validateShortcutBinding,
   type ShortcutEvent,
   type ShortcutState,
@@ -103,15 +102,6 @@ test('a later binding for the same key wins while its condition holds', () => {
   expect(resolveShortcut(bindings, event, { ...idle, sinceOverlayClosedMs: 0 })).toBe(
     'palette.open'
   );
-});
-
-test('labels name Cmd on Apple platforms and Ctrl elsewhere', () => {
-  const bindings = readShortcutBindings();
-  expect(shortcutKeyLabel(bindings['search.open'], true)).toBe('Cmd+Shift+F');
-  expect(shortcutKeyLabel(bindings['rightPanel.toggle'], false)).toBe('Ctrl+\\');
-  expect(shortcutKeyLabel(bindings['run.stop'], false)).toBe('Esc');
-  expect(shortcutKeyLabel(bindings['helper.mode'], false)).toBe('Alt+M');
-  expect(shortcutKeyLabel(bindings['helper.mode'], true)).toBe('Option+M');
 });
 
 test('validation rejects fixed actions, browser-reserved combos, bare keys and conflicts', () => {

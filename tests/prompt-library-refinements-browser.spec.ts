@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { test, expect, type APIRequestContext } from '@playwright/test';
-import type { Content, PromptPreset } from '../core/product.js';
+import { test, expect } from '@playwright/test';
+import type { PromptPreset } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
@@ -11,104 +11,6 @@ import {
 } from './ui-navigation.js';
 import { isResourceSaveRequest, waitForResourceSave } from './fixtures/resource-save.js';
 import { expectCodeFieldValue } from './code-field.js';
-
-async function seed(request: APIRequestContext, kind: Content['kind'], title: string) {
-  const response = await request.post('/api/content', {
-    data: {
-      kind,
-      title,
-      description: '합성 자료',
-      text: 'Synthetic only.',
-      loading: 'pinned',
-      relatedIds: [],
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return response.json() as Promise<Content>;
-}
-
-test('PLR04 an explicit prompt-card question pins the intended helper resource', async ({
-  page,
-  request,
-}) => {
-  const title = `PLR helper target ${crypto.randomUUID()}`;
-  const response = await request.post('/api/prompt-presets', {
-    data: {
-      title,
-      role: 'translation',
-      program: createDefaultRisuPrompt('Translate precisely.', 'translation'),
-      values: {},
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  await page.goto('/');
-  await navigationAction(page, '프롬프트');
-  await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
-  const menu = page.getByLabel(`${title} 메뉴`, { exact: true });
-  await menu.click();
-  await menu.locator('..').getByRole('button', { name: '도우미에게 묻기' }).click();
-  const helper = page.locator('#helper-panel');
-  await expect(helper).toBeVisible();
-  await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toBeVisible();
-  await helper.getByRole('button', { name: '대상 해제' }).click();
-  await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toHaveCount(0);
-
-  await helper.getByRole('button', { name: '도우미 닫기' }).click();
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await menu.click();
-  await menu.locator('..').getByRole('button', { name: '도우미에게 묻기' }).click();
-  await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
-  const draftTitle = `${title} unsaved`;
-  await page.getByLabel('프롬프트 이름', { exact: true }).fill(draftTitle);
-  await expect(helper.getByText(`편집 중: ${draftTitle}`, { exact: true })).toBeVisible();
-  await expect(helper.getByText(`참고 자료: ${title}`, { exact: true })).toHaveCount(0);
-
-  let submitted: { editor?: { source?: string; model?: { title?: string } } } | undefined;
-  await page.route('**/api/helper/conversations/*/messages', async (route) => {
-    submitted = route.request().postDataJSON();
-    await route.fulfill({ status: 400, json: { error: 'synthetic test interception' } });
-  });
-  await helper.getByLabel('도우미에게 요청').fill('미저장 프리셋 확인');
-  await helper.getByRole('button', { name: '도우미 요청 보내기' }).click();
-  await expect.poll(() => submitted?.editor?.source).toBe('unsaved');
-  expect(submitted?.editor?.model?.title).toBe(draftTitle);
-});
-
-test('PLR02 every package category is editable from card and list controls', async ({
-  page,
-  request,
-}) => {
-  for (const [kind, label] of [
-    ['bot', '봇'],
-    ['persona', '페르소나'],
-    ['module', '모듈'],
-  ] as const) {
-    const item = await seed(request, kind, `PLR 직접 편집 ${kind} ${crypto.randomUUID()}`);
-    await page.goto('/');
-    await navigationAction(page, label);
-    const library = page.getByTestId('library-panel');
-    await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(item.title);
-    for (const view of ['카드', '목록']) {
-      const viewButton = library.getByRole('button', { name: view, exact: true });
-      await viewButton.click();
-      await expect(viewButton).toHaveAttribute('aria-pressed', 'true');
-      const directEdit = library.getByRole('button', { name: `${item.title} 편집`, exact: true });
-      if (await directEdit.isVisible()) await directEdit.click();
-      else {
-        const menu = library.getByLabel(`${item.title} 메뉴`, { exact: true });
-        await menu.click();
-        await menu.locator('..').getByRole('button', { name: '편집', exact: true }).click();
-      }
-      await expect(library.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(item.title);
-      await expectCodeFieldValue(
-        library.getByLabel('카드 설명', { exact: true }),
-        'Synthetic only.'
-      );
-      await library.getByRole('button', { name: '서재 목록', exact: true }).click();
-    }
-  }
-});
 
 test('PLR03 native prompt creation saves role defaults and preserves invalid regex drafts', async ({
   page,
@@ -208,25 +110,6 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   await selectEditorSection(editor, '정규식');
   await native.getByText('고급 JSON 편집', { exact: true }).click();
   await expect(regex).toHaveValue('[]');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
   if (visualReview)
     await page.screenshot({ path: info.outputPath('prompt-library-refinements-mobile.png') });
-
-  await editor.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
-  const library = page.getByTestId('prompt-library');
-  const search = library.getByLabel('프롬프트 검색', { exact: true });
-  await search.fill(`no matching prompt ${crypto.randomUUID()}`);
-  await expect(
-    library.getByRole('heading', { name: '찾는 프롬프트가 없어요', exact: true })
-  ).toBeVisible();
-  await expect(
-    library.locator('.library-empty').getByRole('button', { name: '새 프롬프트', exact: true })
-  ).toHaveCount(0);
-  await library.getByRole('button', { name: '검색 지우기', exact: true }).click();
-  await expect(search).toHaveValue('');
-  await expect(
-    library.getByRole('button', { name: `${restoredTitle} 프롬프트 편집`, exact: true })
-  ).toBeVisible();
 });

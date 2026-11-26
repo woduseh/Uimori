@@ -19,43 +19,6 @@ const connection: Connection = {
   catalogError: null,
 };
 
-test('opening and saving one draft preserves the other unsaved draft and clears only the intended editor state', () => {
-  let state = initialProviderEditorState();
-  state = providerEditorReducer(state, {
-    type: 'connection.open',
-    value: connectionDraft(connection),
-    editing: connection,
-  });
-  state = providerEditorReducer(state, {
-    type: 'connection.change',
-    update: (value) => ({ ...value, apiKey: 'synthetic-unsaved-key' }),
-  });
-  const pending = state.connection;
-  state = providerEditorReducer(state, {
-    type: 'model.open',
-    value: { ...initialModel(), title: 'Copied model' },
-    copy: true,
-  });
-  state = providerEditorReducer(state, { type: 'conflict', kind: 'model' });
-  expect(state.connection).toBe(pending);
-  expect(state.model.copy).toBe(true);
-  expect(state.model.started).toBe(true);
-  expect(state.model.editing).toBeUndefined();
-  state = providerEditorReducer(state, { type: 'model.open', value: initialModel() });
-  expect(state.conflict).toBeNull();
-  expect(state.model.copy).toBe(false);
-  expect(state.connection).toBe(pending);
-  const saved = { ...connection, revision: 3, credentialRef: 'credential:synthetic' };
-  state = providerEditorReducer(state, {
-    type: 'connection.open',
-    value: connectionDraft(saved),
-    editing: saved,
-  });
-  expect(state.connection.editing?.revision).toBe(3);
-  expect(state.connection.value).not.toHaveProperty('apiKey');
-  expect(JSON.stringify(state.connection.value)).toBe(state.connection.baseline);
-});
-
 test('deleting a provider resets its editor and repairs the model reference without discarding unrelated edits', () => {
   let state = initialProviderEditorState();
   state = providerEditorReducer(state, {

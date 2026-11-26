@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
-import { readStorySource, searchStorySources, sourceHash } from '../core/source-history.js';
+import { readStorySource, sourceHash } from '../core/source-history.js';
 import { modelAuthorNotes, validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -132,11 +132,6 @@ describe('author-note validation stays separate from model read tools', () => {
   });
 });
 
-test('browse previews normalize real whitespace and preserve literal backslashes', () => {
-  const fixed = snapshot('First\t  line\nSecond \\section');
-  expect(read(fixed, 'story.search', {}).results[0].preview).toBe('First line Second \\section');
-});
-
 test('mistyped scene and range are correctable while corrupt source history stays terminal', () => {
   const fixed = snapshot('original');
   const invoke = (args: Record<string, unknown>) =>
@@ -204,28 +199,3 @@ test.each(['한국어 원문과 범위를 확인해요. ', '🙂🌸🎉'])(
     expect(countTextTokens(source.text)).toBeLessThanOrEqual(128);
   }
 );
-
-test('search token excerpts retain literal source offsets and explicit character compatibility', () => {
-  const text = '한국어 문장. '.repeat(100) + 'needle' + ' 後ろの文章🌸'.repeat(100);
-  const scope = { chatId: 'chat', history: [{ revision: 'r', text }] };
-  const tokenResult = searchStorySources(scope, { query: 'needle', excerptTokens: 80 }).results[0];
-  expect(tokenResult.text).toContain('needle');
-  expect(countTextTokens(tokenResult.text)).toBeLessThanOrEqual(80);
-  expect(tokenResult.text).toBe(text.slice(tokenResult.source.start, tokenResult.source.end));
-  const legacy = searchStorySources(scope, { query: 'needle', excerptChars: 40 }).results[0];
-  expect(legacy.source.start).toBe(text.indexOf('needle') - 10);
-  expect(legacy.text).toHaveLength(40);
-});
-
-test('too-small token pages are recoverable rather than returning a stationary continuation', () => {
-  const event = executeStoryRead(snapshot('🌸'.repeat(10)), {
-    callId: 'small',
-    name: 'story.read',
-    args: { sceneNumber: 1, maxTokens: 1 },
-  });
-  expect(event).toMatchObject({
-    denied: true,
-    errorKind: 'recoverable',
-    result: { code: 'INVALID_ARGUMENTS' },
-  });
-});

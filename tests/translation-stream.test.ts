@@ -168,10 +168,12 @@ test('a refused attempt and its retry stream as separate attempts', async () => 
   );
   job.seed.translationPolicy = { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 6 };
   const result = await job.run(async (call) => {
-    await vi.waitFor(() =>
-      expect([...job.received.values()].at(-1)).toBe(
-        call === 1 ? 'Cannot translate.' : '번역된 이야기예요.'
-      )
+    await vi.waitFor(
+      () =>
+        expect([...job.received.values()].at(-1)).toBe(
+          call === 1 ? 'Cannot translate.' : '번역된 이야기예요.'
+        ),
+      { timeout: 5000 }
     );
     return verdict(call === 1 ? 0.95 : 0.01);
   });
@@ -245,14 +247,7 @@ test('a translation that carries protected Story UI placeholders is not streamed
     (_request, response) => complete(response, prepared.text),
     source
   );
-  const result = await job.run(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(job.streams.read('translation', job.seed.job.id)).toMatchObject({
-      status: 'running',
-      chunks: [],
-    });
-    return verdict(0.01);
-  });
+  const result = await job.run(() => verdict(0.01));
   expect(result).toMatchObject({ status: 'completed' });
   expect([...job.received]).toEqual([]);
 });

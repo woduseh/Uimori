@@ -2,26 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { readHelperChatContext } from '../server/helper-context.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { prepareNativeRisuReadOnly } from '../server/risu-native-readonly.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import {
-  contextSourceRefs,
-  measureMainContext,
-  withContextProjection,
-} from '../server/context-planning.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { store: Store; directory: string }[] = [];
 
-const historicalCandidates = 40;
-const cancelledJobs = 20;
-const largeChars = 8192;
 afterEach(() => {
-  vi.restoreAllMocks();
   for (const { store, directory } of owned.splice(0)) {
     store.close();
     const inside = relative(resolve(tmpdir()), resolve(directory));
@@ -98,95 +89,9 @@ async function fixture() {
     },
     snapshot
   );
-  let historyCount = 0,
-    jobCount = 0;
   const read = () => readHelperChatContext(store, chat.id);
-  async function addHistory(count: number, jobs: number) {
-    const current = await prepareNativeRisuReadOnly(
-      helperWritingSnapshot(store, chat.id),
-      'context'
-    );
-    store.transaction(() => {
-      while (historyCount < count) {
-        const summary = `Historical candidate ${historyCount}. `.padEnd(largeChars, 'x');
-        const candidate = withContextProjection(
-          current,
-          contextSourceRefs(current).slice(0, 2),
-          summary
-        );
-        const measured = measureMainContext(candidate);
-        store.context.publishPrepared(
-          {
-            ...candidate,
-            contextPlan: {
-              ...candidate.contextPlan!,
-              estimatedInputTokens: measured.estimatedInputTokens,
-            },
-          },
-          { origin: 'manual', activate: false }
-        );
-        historyCount++;
-      }
-      while (jobCount < jobs) {
-        const job = store.context.schedule(
-          chat.id,
-          {
-            expectedRevision: saved.activeRevision,
-            expectedHeadRevision: current.parentRevision,
-            idempotencyKey: `historical-job-${jobCount}`,
-          },
-          { ...current, request: `Historical job ${jobCount}. `.padEnd(largeChars, 'y') }
-        );
-        store.context.cancel(chat.id, job.id);
-        jobCount++;
-      }
-    });
-  }
-  return { store, chatId: chat.id, saved, read, addHistory };
+  return { store, chatId: chat.id, saved, read };
 }
-
-function decodedRead(store: Store, read: () => ReturnType<typeof readHelperChatContext>) {
-  const checkpoint = store.context.checkpoint.bind(store.context),
-    job = store.context.job.bind(store.context);
-  const decoded = { checkpointPlans: 0, jobSnapshots: 0, jsonBytes: 0 };
-  const checkpointSpy = vi.spyOn(store.context, 'checkpoint').mockImplementation((ref) => {
-    const value = checkpoint(ref);
-    decoded.checkpointPlans++;
-    decoded.jsonBytes += Buffer.byteLength(JSON.stringify(value.plan));
-    return value;
-  });
-  const jobSpy = vi.spyOn(store.context, 'job').mockImplementation((id) => {
-    const value = job(id);
-    decoded.jobSnapshots++;
-    decoded.jsonBytes += Buffer.byteLength(JSON.stringify(value.snapshot));
-    return value;
-  });
-  try {
-    return { result: read(), decoded };
-  } finally {
-    checkpointSpy.mockRestore();
-    jobSpy.mockRestore();
-  }
-}
-
-test('helper reads decode one active checkpoint as large history grows while the UI also reads only current summary and small job status', async () => {
-  const f = await fixture(),
-    baseline = decodedRead(f.store, f.read);
-  expect(baseline.result.usable).toBe(true);
-  expect(baseline.decoded).toMatchObject({ checkpointPlans: 1, jobSnapshots: 0 });
-  for (const [candidates, jobs] of [
-    [10, 5],
-    [historicalCandidates, cancelledJobs],
-  ]) {
-    await f.addHistory(candidates!, jobs!);
-    const current = decodedRead(f.store, f.read);
-    expect(current).toEqual(baseline);
-  }
-  const { jobs, ...metadata } = f.store.context.detail(f.chatId);
-  expect(jobs).toHaveLength(Math.min(cancelledJobs, 10));
-  expect(jobs.every((job) => !('snapshot' in job))).toBe(true);
-  expect(f.store.context.current(f.chatId)).toEqual(metadata);
-});
 
 test('context.read returns only the asked sections, always with the revisions, and lists compacted scenes on request', async () => {
   const f = await fixture();

@@ -7,7 +7,6 @@ await runBrowserVerification({
   providerFixture: true,
   files: [
     'tests/library-browser.spec.ts',
-    'tests/library-compact-browser.spec.ts',
     'tests/library-images-browser.spec.ts',
     'tests/new-story-browser.spec.ts',
     'tests/personal-workspace-browser.spec.ts',

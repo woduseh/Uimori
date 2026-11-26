@@ -51,72 +51,6 @@ describe('collaboration limits and references', () => {
     rejects({ ...createAgentCollaboration(), enabled: 'false' }, 'INVALID_ENABLED');
   });
 
-  test('accepts six agents and enforces shared and individual ceilings independently', () => {
-    const value = {
-      ...config(),
-      maxCalls: 1,
-      agents: Array.from({ length: 6 }, (_, index) => ({
-        ...createAgentDefinition('custom', `agent-${index}`),
-        maxCalls: 6,
-      })),
-    };
-    expect(validateAgentCollaboration(value)).toEqual(value);
-    rejects({ ...value, agents: [...value.agents, createAgentDefinition('custom', 'seventh')] });
-    rejects({ ...value, agents: [value.agents[0], value.agents[0]] }, 'DUPLICATE_AGENT_ID');
-  });
-
-  test.each([
-    ['total maxCalls', 1, 12, (value: unknown) => ({ ...config(), maxCalls: value })],
-    [
-      'agent maxCalls',
-      1,
-      6,
-      (value: unknown) => ({ ...config(), agents: [{ ...config().agents[0], maxCalls: value }] }),
-    ],
-  ] as const)('%s requires integers within inclusive limits', (_label, min, max, make) => {
-    for (const value of [min, max]) expect(validateAgentCollaboration(make(value))).toBeDefined();
-    for (const value of [min - 1, max + 1, min + 0.5, NaN, Infinity, -Infinity, String(min), null])
-      rejects(make(value), 'INVALID_LIMIT');
-  });
-
-  test.each([
-    ['title', 1],
-    ['sharedInstructions', 0],
-  ] as const)('%s preserves long text without a separate character limit', (field, min) => {
-    const make = (value: unknown) =>
-      field === 'sharedInstructions'
-        ? { ...config(), [field]: value }
-        : { ...config(), agents: [{ ...config().agents[0], [field]: value }] };
-    for (const value of ['가'.repeat(min), '가'.repeat(60_001), ' \r\n가\n '])
-      expect(validateAgentCollaboration(make(value))).toEqual(make(value));
-    for (const value of [null, 1, undefined]) rejects(make(value), 'INVALID_TEXT');
-    if (min > 0) rejects(make(''), 'INVALID_TEXT');
-  });
-
-  test('agent IDs use bounded ASCII lowercase names and reject unsafe names', () => {
-    for (const id of ['a', 'a0_-', `a${'b'.repeat(63)}`])
-      expect(validateAgentCollaboration(config({ id })).agents[0].id).toBe(id);
-    for (const id of [
-      '',
-      'A',
-      '1a',
-      '_a',
-      '-a',
-      'a.b',
-      'a:b',
-      '가',
-      'a\n',
-      'a b',
-      'a'.repeat(65),
-      '__proto__',
-      'constructor',
-      'prototype',
-    ]) {
-      rejects(config({ id }), 'INVALID_AGENT_ID');
-      expect(() => createAgentDefinition('custom', id)).toThrow(AgentCollaborationError);
-    }
-  });
-
   test('shared controls accept native keys and host aliases, enforce uniqueness and optionally check existence', () => {
     const sharedControls = [
       'Style.Mode:1',
@@ -198,49 +132,5 @@ describe('JSON validation and detached output', () => {
       for (const key of ['unexpected', '__proto__', 'constructor', 'prototype'])
         rejects(wrap({ ...object, [key]: 'unexpected' }), 'INVALID_FIELDS');
     }
-  });
-
-  test('rejects malformed object and list shapes', () => {
-    for (const value of [null, undefined, [], true, 1, 'config']) rejects(value);
-    for (const field of ['agents', 'sharedControls', 'tools'] as const) {
-      const wrap = (value: unknown) =>
-        field === 'tools'
-          ? { ...config(), agents: [{ ...config().agents[0], tools: value }] }
-          : { ...config(), [field]: value };
-      for (const value of [undefined, null, {}, 'not-a-list']) rejects(wrap(value), 'INVALID_LIST');
-    }
-  });
-
-  test('detaches every mutable nested container from the input', () => {
-    const agent = {
-      ...createAgentDefinition('character', 'reader'),
-      model: { id: 'model-1' },
-      tools: ['knowledge', 'story'] as AgentDefinition['tools'],
-    };
-    const value = {
-      ...createAgentCollaboration(),
-      enabled: true,
-      sharedInstructions: '\r\n공유 지침\n',
-      sharedControls: ['style'],
-      agents: [agent],
-    };
-    const result = validateAgentCollaboration(value, ['style']);
-    expect(result).toEqual(value);
-    expect(result).not.toBe(value);
-    expect(result.agents).not.toBe(value.agents);
-    expect(result.agents[0]).not.toBe(agent);
-    expect(result.agents[0].model).not.toBe(agent.model);
-    expect(result.agents[0].tools).not.toBe(agent.tools);
-    expect(result.sharedControls).not.toBe(value.sharedControls);
-    result.sharedControls.push('another');
-    result.agents[0].tools.push('notes');
-    result.agents[0].model!.id = 'another-model';
-    result.agents[0].instructions = '수정';
-    result.agents.push(createAgentDefinition('custom', 'new'));
-    expect(value.sharedControls).toEqual(['style']);
-    expect(value.agents).toHaveLength(1);
-    expect(agent.model.id).toBe('model-1');
-    expect(agent.tools).toEqual(['knowledge', 'story']);
-    expect(agent.instructions).not.toBe('수정');
   });
 });

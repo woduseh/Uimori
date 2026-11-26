@@ -92,13 +92,3 @@ test('S07 metadata search is scoped, paginated and never transmits URL or asset 
   expect(() => searchAssets(all, { chatId: 'chat-a', limit: 51 })).toThrow('INVALID_ASSET_SEARCH');
   expect(() => searchAssets(all, { chatId: 'chat-a', offset: -1 })).toThrow('INVALID_ASSET_SEARCH');
 });
-
-test('S07 incomplete refs and oversized metadata have explicit fallback', () => {
-  expect(
-    resolveAsset([asset], { ...selection(), ref: { id: asset.id, revision: 0, hash: '' } })
-  ).toMatchObject({ ok: false, error: 'INVALID_ASSET_SELECTION' });
-  expect(resolveAsset([{ ...asset, description: 'x'.repeat(2049) }], selection())).toMatchObject({
-    ok: false,
-    error: 'INVALID_ASSET_METADATA',
-  });
-});

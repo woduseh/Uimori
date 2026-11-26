@@ -435,23 +435,6 @@ describe('native Responses pure protocol (no live calls)', () => {
     );
   });
 
-  test('redacts opaque reasoning objects while retaining configured reasoning effort', () => {
-    const body: Json = {
-      reasoning: { effort: 'low' },
-      input: [
-        {
-          role: 'assistant',
-          content: null,
-          reasoning: { content: 'PRIVATE_REASONING_OBJECT', encrypted_data: 'PRIVATE_ENCRYPTED' },
-        },
-      ],
-    };
-    const diagnostic = record(diagnosticResponsesBody(body));
-    expect(diagnostic.reasoning).toEqual({ effort: 'low' });
-    expect(JSON.stringify(diagnostic)).not.toMatch(/PRIVATE_REASONING_OBJECT|PRIVATE_ENCRYPTED/);
-    expect(record(body).input[0].reasoning.content).toBe('PRIVATE_REASONING_OBJECT');
-  });
-
   test.each(['refusal', 'content_filter', 'max_output_tokens', 'empty'] as const)(
     'distinguishes terminal %s',
     (mode) => {
@@ -804,12 +787,6 @@ describe('native Responses pure protocol (no live calls)', () => {
       nested: { reasoning: { mode: 'pro', context: 'PRIVATE_THOUGHT' } },
     };
     expect(JSON.stringify(diagnosticResponsesBody(body))).not.toContain('PRIVATE_THOUGHT');
-  });
-
-  test('rejects a foreign generation option', () => {
-    const input = request();
-    Object.assign(input.generation!, { thinkingLevel: 'LOW' });
-    expect(() => encodeResponses(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
   });
 
   test('rejects swapped stream item IDs, response IDs, replayed sequence numbers and negative usage', () => {

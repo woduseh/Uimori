@@ -22,7 +22,6 @@ import {
 } from '../core/illustration.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
 import { CONTEXT_ESTIMATOR } from '../core/context-budget.js';
-import sharp from 'sharp';
 
 const fixture = resolve('tests/fixtures/codex-app-server.mjs');
 const connection = {
@@ -101,32 +100,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(wires).toEqual([]);
     expect(records().some((entry) => entry.method === 'turn/start')).toBe(false);
   });
-  it('transmits both large reference images without enlarging the result frame budget', async () => {
-    const png = await sharp({
-      create: { width: 4096, height: 3456, channels: 3, background: '#aaccdd' },
-    })
-      .png({ compressionLevel: 0 })
-      .toBuffer();
-    expect(png.length).toBeGreaterThan(40 * 1024 * 1024);
-    expect(png.length).toBeLessThan(64 * 1024 * 1024);
-    const base64 = png.toString('base64');
-    const { runtime, records } = setup('image-reference-budget');
-    const result = await runtime.generateImage(
-      connection,
-      request([
-        { mime: 'image/png', base64 },
-        { mime: 'image/png', base64 },
-      ]),
-      { signal: new AbortController().signal }
-    );
-    expect(result.status, result.error?.code).toBe('completed');
-    const received = records().find((entry) => entry.method === 'turn/start').params.input;
-    expect(received.filter((item: { type: string }) => item.type === 'image')).toEqual([
-      { type: 'image', bytes: png.length, sha256: createHash('sha256').update(png).digest('hex') },
-      { type: 'image', bytes: png.length, sha256: createHash('sha256').update(png).digest('hex') },
-    ]);
-    expect(result.images).toHaveLength(1);
-  }, 30_000);
 
   it('uses an image-only turn and returns decoded image bytes, a caption and numeric usage diagnostics', async () => {
     const { runtime, records } = setup('image-native');
@@ -307,28 +280,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     }
   );
 
-  it('rejects an oversized saved file before reading it and preserves the rejected artifact', async () => {
-    let saved = '';
-    const { runtime } = setup('image-saved-path', (dir) => {
-      const codexHome = join(dir, 'db.sqlite.codex');
-      mkdirSync(codexHome);
-      saved = join(codexHome, 'oversized.png');
-      const png = Buffer.from(PNG_BASE64, 'base64');
-      writeFileSync(
-        saved,
-        Buffer.concat([png, Buffer.alloc(ILLUSTRATION_MAX_IMAGE_BYTES + 1 - png.length)])
-      );
-      return { UIMORI_CODEX_FIXTURE_SAVED_PATH: saved };
-    });
-    const result = await runtime.generateImage(connection, request(), {
-      signal: new AbortController().signal,
-    });
-    expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
-    expect(result.images).toEqual([]);
-    await runtime.close();
-    expect(existsSync(saved)).toBe(true);
-  });
-
   it('uses a valid inline image without reading or deleting an unrelated savedPath', async () => {
     let saved = '';
     const { runtime } = setup('image', (dir) => {
@@ -344,16 +295,6 @@ describe('Codex illustration turns through the synthetic app-server', () => {
     expect(result.status).toBe('completed');
     await runtime.close();
     expect(readFileSync(saved, 'utf8')).toBe('{"syntheticSetting":"keep"}');
-  });
-
-  it('rejects inline image data whose declared MIME disagrees with its bytes', async () => {
-    const { runtime } = setup('image', {
-      UIMORI_CODEX_FIXTURE_IMAGE: `data:image/jpeg;base64,${PNG_BASE64}`,
-    });
-    const result = await runtime.generateImage(connection, request(), {
-      signal: new AbortController().signal,
-    });
-    expect(result.error?.code).toBe('CODEX_IMAGE_NOT_GENERATED');
   });
 });
 

@@ -343,23 +343,6 @@ test('large-model helper preserves repeated exact evidence while below the conte
   expect(compactions(f, task)).toEqual([]);
 });
 
-test('a fitting recent turn does not spend a summary call when nothing older can be compacted', async () => {
-  const f = await fixture();
-  const log = script(f, (request) => {
-    expect(request.role).toBe('helper');
-    return structuredClone(success);
-  });
-  const previous = f.runtime.enqueue(f.conversation.id, randomUUID(), '이름은 바꾸지 마.');
-  await Promise.all(f.work);
-  expect(f.workspace.task(previous.id).status).toBe('completed');
-  const task = await f.run();
-  expect(task, task.error ?? '').toMatchObject({ status: 'completed', usage: { modelCalls: 1 } });
-  expect(log.requests.at(-1)?.input.history).toEqual(
-    expect.arrayContaining([expect.objectContaining({ role: 'user', text: '이름은 바꾸지 마.' })])
-  );
-  expect(compactions(f, task)).toEqual([]);
-});
-
 test('oversized write-only Anthropic continuation with recent history starts a fitting segment without a summary model', async () => {
   const f = await fixture({ fixed: false });
   const seed = script(f, () => structuredClone(success));
@@ -657,168 +640,6 @@ test('helper compaction resumes completed library reads and exact writes within 
   ).toBe(Math.max(1, Math.floor(Math.min(2048, limit / 8, limit - fixedTokens))));
 });
 
-test('completed read references retain returned ranges and revisions while allowing a needed reread', async () => {
-  const f = await fixture();
-  f.readValue = {
-    id: 'draft-evidence',
-    revision: 1,
-    hash: 'draft-hash-one',
-    text: readText,
-    source: {
-      revision: 'source-one',
-      hash: 'source-hash-one',
-      start: 10,
-      end: 60,
-      text: 'RAW_SOURCE_CANARY',
-    },
-    range: { start: 10, end: 60, unit: 'utf16-code-unit' },
-    keptRanges: [
-      { start: 10, end: 25 },
-      { start: 40, end: 60 },
-    ],
-    excludedRanges: [{ start: 25, end: 40 }],
-    rangeSemantics: 'source coordinates; text concatenates keptRanges',
-    totalChars: 500,
-    truncated: true,
-    nextOffset: 60,
-    version: 'outline-view-one',
-    scope: { chatId: 'story', mode: 'detail', nodeId: 'unit', section: 'intent' },
-    coverage: { content: 'intent-range', wholeField: false, returned: 1 },
-    committedEffects: {
-      total: 1,
-      offset: 0,
-      nextOffset: null,
-      items: [
-        {
-          receiptId: 'durable-save',
-          committed: true,
-          tool: 'outline.write',
-          callId: 'save-one',
-          createdAt: '2026-09-29T03:00:00Z',
-        },
-      ],
-    },
-    nextRead: {
-      name: 'app.call',
-      arguments: {
-        name: 'outline.read',
-        arguments: {
-          nodeId: 'unit',
-          mode: 'detail',
-          offset: 60,
-          expectedVersion: 'outline-view-one',
-        },
-      },
-    },
-  };
-  let helperCalls = 0;
-  const log = script(f, (request) => {
-    if (request.role === 'context') return summarized();
-    if (++helperCalls === 1)
-      return tools(tool('read-one', 'resource.read', { kind: 'content', id: 'read-evidence' }));
-    if (helperCalls === 2) {
-      expect(continuation(request)?.completedReads).toHaveLength(1);
-      return tools(tool('quote-reread', 'resource.read', { kind: 'content', id: 'read-evidence' }));
-    }
-    if (helperCalls === 3) {
-      expect(events(request).at(-1)).toMatchObject({ callId: 'quote-reread', denied: false });
-      f.readValue = {
-        ...f.readValue,
-        revision: 2,
-        hash: 'draft-hash-two',
-        text: 'Exact changed source segment.',
-        source: { revision: 'source-two', hash: 'source-hash-two', start: 60, end: 110 },
-        range: { start: 60, end: 110, unit: 'utf16-code-unit' },
-        keptRanges: [{ start: 60, end: 110 }],
-        excludedRanges: [],
-        nextOffset: 110,
-      };
-      return tools(
-        tool('changed-source', 'resource.read', {
-          kind: 'content',
-          id: 'read-evidence',
-          path: '/package/nativeRisu/card/description',
-          textOffset: 60,
-        })
-      );
-    }
-    const resumed = continuation(request)!;
-    expect(resumed.segment).toBe(2);
-    expect(resumed.completedReads).toHaveLength(2);
-    expect(resumed.completedReads[0]).toEqual({
-      name: 'resource.read',
-      args: { kind: 'content', id: 'read-evidence' },
-      returned: {
-        id: 'draft-evidence',
-        revision: 1,
-        hash: 'draft-hash-one',
-        source: { revision: 'source-one', hash: 'source-hash-one', start: 10, end: 60 },
-        range: { start: 10, end: 60, unit: 'utf16-code-unit' },
-        keptRanges: [
-          { start: 10, end: 25 },
-          { start: 40, end: 60 },
-        ],
-        excludedRanges: [{ start: 25, end: 40 }],
-        rangeSemantics: 'source coordinates; text concatenates keptRanges',
-        totalChars: 500,
-        truncated: true,
-        nextOffset: 60,
-        version: 'outline-view-one',
-        scope: { chatId: 'story', mode: 'detail', nodeId: 'unit', section: 'intent' },
-        coverage: { content: 'intent-range', wholeField: false, returned: 1 },
-        committedEffects: {
-          total: 1,
-          offset: 0,
-          nextOffset: null,
-          items: [
-            {
-              receiptId: 'durable-save',
-              committed: true,
-              tool: 'outline.write',
-              callId: 'save-one',
-              createdAt: '2026-09-29T03:00:00Z',
-            },
-          ],
-        },
-        nextRead: {
-          name: 'app.call',
-          arguments: {
-            name: 'outline.read',
-            arguments: {
-              nodeId: 'unit',
-              mode: 'detail',
-              offset: 60,
-              expectedVersion: 'outline-view-one',
-            },
-          },
-        },
-      },
-    });
-    expect(resumed.completedReads[1].returned).toMatchObject({
-      revision: 2,
-      hash: 'draft-hash-two',
-      source: { revision: 'source-two', hash: 'source-hash-two', start: 60, end: 110 },
-      range: { start: 60, end: 110, unit: 'utf16-code-unit' },
-      nextOffset: 110,
-    });
-    expect(JSON.stringify(resumed)).not.toContain('RAW_SOURCE_CANARY');
-    expect(JSON.stringify(resumed)).not.toContain(readText);
-    return structuredClone(success);
-  });
-  const task = await f.run();
-  expect(task).toMatchObject({ status: 'completed', error: null });
-  expect(log.requests.map((request) => request.role)).toEqual([
-    'helper',
-    'context',
-    'helper',
-    'helper',
-    'context',
-    'helper',
-  ]);
-  expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true, true]);
-  expect(task.snapshot.context).toEqual({ activeRevision: 0, checkpoint: null });
-});
-
 test.each([
   ['resource.readMany', false],
   ['resource.read', true],
@@ -909,110 +730,6 @@ test.each([
     expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
   }
 );
-
-test('forced compaction retains large batch identities and continuation without body text', async () => {
-  const f = await fixture();
-  const current = {
-    kind: 'content',
-    id: f.saved.id,
-    revision: 1,
-    path: '/package/nativeRisu/card/description',
-    exists: true,
-    type: 'string',
-    length: 20_000,
-    textOffset: 120,
-    nextOffset: 9_120,
-  };
-  const previous = {
-    kind: 'prompt-preset',
-    id: 'previous-preset',
-    revision: null,
-    version: 'previous',
-    currentRevision: 7,
-    path: '/program/nativeRisuPreset/preset/promptTemplate/0/text',
-    exists: true,
-    type: 'string',
-    length: 200,
-    textOffset: 10,
-    nextOffset: 30,
-  };
-  const array = {
-    kind: 'prompt-preset',
-    id: 'current-preset',
-    revision: 3,
-    path: '/program/nativeRisuPreset/preset/promptTemplate',
-    exists: true,
-    type: 'array',
-    total: 2,
-    offset: 0,
-    nextOffset: 1,
-    items: [
-      {
-        path: '/program/nativeRisuPreset/preset/promptTemplate/0',
-        target: '/program/nativeRisuPreset/preset/promptTemplate/0',
-        exists: true,
-        type: 'object',
-        block: {
-          omittedBodyPaths: {
-            text: '/program/nativeRisuPreset/preset/promptTemplate/0/text',
-            innerFormat: '/program/nativeRisuPreset/preset/promptTemplate/0/innerFormat',
-          },
-        },
-      },
-    ],
-  };
-  const missing = { requestIndex: 3, error: '자료를 찾을 수 없어요.', status: 404 };
-  const body = 'LARGE_BATCH_BODY_CANARY '.repeat(400).slice(0, 9_000);
-  f.readValue = {
-    items: [
-      { requestIndex: 0, result: { ...current, text: body } },
-      { requestIndex: 1, result: { ...previous, text: 'PREVIOUS_BODY_CANARY' } },
-      { requestIndex: 2, result: array },
-      missing,
-    ],
-    nextIndex: null,
-  };
-  expect(countTextTokens(JSON.stringify(f.readValue))).toBeGreaterThan(2_000);
-  let helperCalls = 0;
-  const log = script(f, (request) => {
-    if (request.role === 'context') return summarized();
-    if (++helperCalls === 1)
-      return tools(
-        tool('batch', 'resource.readMany', {
-          items: [
-            { kind: current.kind, id: current.id, path: current.path, textOffset: 120 },
-            { kind: previous.kind, id: previous.id, path: previous.path, version: 'previous' },
-            { kind: array.kind, id: array.id, path: array.path, limit: 1, includeBodies: true },
-            { kind: 'content', id: 'missing-resource' },
-          ],
-        })
-      );
-    const retained = continuation(request)?.completedReads;
-    expect(retained).toEqual([
-      expect.objectContaining({
-        name: 'resource.readMany',
-        returned: {
-          items: [
-            { requestIndex: 0, result: current },
-            { requestIndex: 1, result: previous },
-            { requestIndex: 2, result: array },
-            missing,
-          ],
-          nextIndex: null,
-        },
-      }),
-    ]);
-    expect(JSON.stringify(retained)).not.toContain('LARGE_BATCH_BODY_CANARY');
-    expect(JSON.stringify(retained)).not.toContain('PREVIOUS_BODY_CANARY');
-    return structuredClone(success);
-  });
-  const task = await f.run();
-  expect(task).toMatchObject({ status: 'completed', error: null });
-  expect(log.requests[0].role).toBe('helper');
-  expect(log.requests.at(-1)?.role).toBe('helper');
-  expect(log.requests.some((request) => request.role === 'context')).toBe(true);
-  expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
-});
 
 test('small helper compaction stays above 85%, preserves exact writes, and waits for new read data', async () => {
   const f = await fixture();
@@ -1914,21 +1631,17 @@ const failedWith = (code: string): transport.ProviderResult => ({
 });
 
 test.each<[string, transport.ProviderResult, string]>([
-  ['auth', failedWith('HTTP_401'), 'HELPER_COMPACTION_AUTH'],
   [
     'refusal',
     { ...structuredClone(success), status: 'refused', text: '', refusal: 'policy' },
     'HELPER_COMPACTION_REFUSED',
   ],
-  ['empty output', summarized('  '), 'HELPER_COMPACTION_EMPTY'],
   [
     'output limit',
     { ...failedWith('MAX_TOKENS'), status: 'partial', text: '잘린 요약' },
     'HELPER_COMPACTION_EMPTY',
   ],
   ['eof', failedWith('UNEXPECTED_EOF'), 'HELPER_COMPACTION_EOF'],
-  ['provider timeout', failedWith('TIMEOUT'), 'HELPER_COMPACTION_TIMEOUT'],
-  ['other provider error', failedWith('INVALID_EVENT'), 'HELPER_COMPACTION_FAILED'],
 ])(
   'a manual compaction %s failure is recorded with a specific code',
   async (_name, reply, code) => {

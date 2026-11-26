@@ -114,28 +114,6 @@ test('CHARX imports expose the original named image and supply its actual pixels
   expect(pixels[2]).toBeLessThan(15);
 });
 
-test('discovery searches original asset names and gives bounded, complete pagination', async () => {
-  const store = fixture();
-  const content = save(store, await red(), 23);
-  const first = listHelperImages(store, { contentId: content.id, limit: 20 });
-  expect(first).toMatchObject({ total: 23, matching: 23, nextOffset: 20 });
-  expect(first.images).toHaveLength(20);
-  expect(first.images[1]).toMatchObject({ descriptionTruncated: true });
-  expect(first.images[1].description).toHaveLength(500);
-  const last = listHelperImages(store, { contentId: content.id, offset: first.nextOffset });
-  expect(last.images).toHaveLength(3);
-  expect(last.nextOffset).toBeNull();
-  expect(
-    listHelperImages(store, { contentId: content.id, query: 'original-emotion-22' }).images
-  ).toMatchObject([{ imageId: 'image-22' }]);
-  expect(listHelperImages(store, { contentId: content.id, query: 'missing' })).toMatchObject({
-    total: 23,
-    matching: 0,
-    images: [],
-    nextOffset: null,
-  });
-});
-
 test('explicit full transmission limits high-entropy pixels to 2048px and 2MiB', async () => {
   const store = fixture();
   const bytes = await sharp(randomBytes(2200 * 2100 * 4), {

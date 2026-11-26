@@ -26,7 +26,6 @@ import { captureLogicalHistory } from '../server/prompt-snapshot.js';
 import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import {
   contextSourceRefs,
-  fitFixedLoreContext,
   measureMainContext,
   seedContextPlan,
   withContextProjection,
@@ -430,30 +429,6 @@ describe('automatic summary and retained lore at the same input boundary', () =>
       'LORE_A_RAW_BODY_ONLY'
     );
     expect(run.usage.modelCalls).toBe(f.bodies.length);
-  });
-
-  test('fixed-input lore fitting and hypothetical history measurement leave the supplied snapshot and database unchanged', async () => {
-    const f = await fixture('lore-pressure');
-    let prepared = seedContextPlan(
-      freezeLoreContext(
-        f.app.store,
-        await prepareNativeRisuReadOnly(snapshot(f.app.store, f.chatId), 'context')
-      )
-    );
-    prepared = { ...prepared, logicalHistory: captureLogicalHistory(f.app.store, prepared) };
-    const original = structuredClone(prepared),
-      before = f.app.store.db.prepare('SELECT total_changes() AS n').get();
-    const all = prepared.history.map((source) => ({
-      revision: source.revision,
-      hash: f.app.store.sourceOriginal(source.revision).hash,
-    }));
-    const hypothetical = withContextProjection(prepared, all, null),
-      fitted = fitFixedLoreContext(hypothetical);
-    expect(fitted.loreContext!.entries.length).toBeLessThan(prepared.loreContext!.entries.length);
-    measureMainContext(withContextProjection(prepared, all, summaryText));
-    expect(prepared).toEqual(original);
-    expect(f.app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
-    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

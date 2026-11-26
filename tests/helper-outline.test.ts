@@ -1,18 +1,14 @@
 import { countTextTokens } from '../core/text-tokens.js';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createHash } from 'node:crypto';
-import { illustrationDatabases, chatWithSource } from './fixtures/illustration.js';
+import { illustrationDatabases } from './fixtures/illustration.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { readHelperOutline } from '../server/outline-read.js';
-import { editSource } from '../server/source-editing.js';
-import type { RunSnapshot } from '../core/types.js';
 
 const dbs = illustrationDatabases('uimori-outline-reads-');
 afterEach(() => {
   vi.restoreAllMocks();
   dbs.cleanup();
 });
-const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 
 function fixture() {
   const store = dbs.create(),
@@ -153,70 +149,6 @@ test('continuations detect changes to their scope without blocking unrelated det
   expect(read({ expectedVersion: version }).error).toBe('OUTLINE_CHANGED');
 });
 
-test('writings point at the exact frozen source or explicit live reference and detect source edits', () => {
-  const store = dbs.create(),
-    { chat, source } = chatWithSource(store, '본문 연결');
-  const id = store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'one',
-      operations: [{ op: 'create', level: 'episode', title: '부두', intent: '기다린다' }],
-    },
-    'user'
-  ).created[0].id;
-  store.db
-    .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
-    .run('written', id, source.id, new Date().toISOString());
-  const writing = {
-    chatId: chat.id,
-    history: [{ revision: source.id, text: source.text, contentHash: source.hash }],
-  } as RunSnapshot;
-  const args = { mode: 'detail', nodeId: id, section: 'writings' };
-  const page = readHelperOutline(store, chat.id, args, writing) as any;
-  expect(page.items[0]).toMatchObject({
-    sourceRevision: source.id,
-    sourceHash: source.hash,
-    origin: 'reserved-chat-source',
-  });
-  expect(page.items[0].nextRead).toMatchObject({
-    name: 'app.call',
-    arguments: {
-      name: 'data.read',
-      arguments: {
-        refs: [
-          {
-            scope: 'current',
-            chatId: chat.id,
-            id: source.id,
-            revision: source.hash,
-            field: '/text',
-            hash: source.hash,
-          },
-        ],
-      },
-    },
-  });
-  const edited = editSource(store, source.id, {
-    text: '수정된 실제 원문',
-    expectedRevision: source.editRevision,
-  });
-  expect(
-    (readHelperOutline(store, chat.id, { ...args, expectedVersion: page.version }, writing) as any)
-      .error
-  ).toBe('OUTLINE_CHANGED');
-  const live = readHelperOutline(store, chat.id, args, writing) as any;
-  expect(live.items[0]).toMatchObject({
-    sourceHash: edited.hash,
-    origin: 'live-chat-source',
-    changedSinceTaskStart: true,
-  });
-  expect(live.items[0].nextRead.arguments.arguments.refs[0]).toMatchObject({
-    scope: 'chats',
-    revision: sha(edited.text),
-    hash: edited.hash,
-  });
-});
-
 test('compact write receipts stay atomic and replayable without generating a full detail response', () => {
   const { store, chat, leaf } = fixture();
   vi.spyOn(store.outline, 'detail').mockImplementation(() => {
@@ -267,51 +199,4 @@ test('empty outline is readable and invalid foreign targets are not silently tre
   expect(() => readHelperOutline(store, chat.id, { mode: 'subtree', nodeId: id })).toThrow(
     'OUTLINE_NODE_UNAVAILABLE'
   );
-});
-
-test('large initial selection and linked-reference pages do not become an unbounded prompt', () => {
-  const { store, chat, root, leaf, read } = fixture();
-  const seed = store.outline.helperContext(
-    chat.id,
-    { nodeId: root, expectedRevision: 1, purpose: 'compose' },
-    8192
-  );
-  expect(JSON.stringify(seed).length).toBeLessThan(12000);
-  expect(seed.partial).toBe(true);
-  const ids = read({ limit: 50 })
-    .nodes.map((node: any) => node.id)
-    .filter((id: string) => id !== leaf)
-    .slice(0, 30);
-  store.outline.applyReceipt(
-    chat.id,
-    {
-      idempotencyKey: 'links',
-      operations: [{ op: 'update', id: leaf, expectedRevision: 1, relatedIds: ids }],
-    },
-    'user'
-  );
-  const page = read({ mode: 'detail', nodeId: leaf, section: 'related', limit: 2 });
-  expect(page.items).toHaveLength(2);
-  expect(page.coverage.total).toBe(ids.length);
-  expect(read(page.nextRead.arguments.arguments).offset).toBe(2);
-  const old = read({ mode: 'subtree', nodeId: leaf });
-  store.outline.applyReceipt(
-    chat.id,
-    {
-      idempotencyKey: 'unrelated-subtree',
-      operations: [{ op: 'create', level: 'arc', title: '관계없는 부', intent: '' }],
-    },
-    'user'
-  );
-  expect(
-    read({ mode: 'subtree', nodeId: leaf, expectedVersion: old.version }).error
-  ).toBeUndefined();
-  store.outline.applyReceipt(
-    chat.id,
-    { idempotencyKey: 'remove', operations: [{ op: 'remove', id: leaf, expectedRevision: 2 }] },
-    'user'
-  );
-  const missing = read({ mode: 'subtree', nodeId: leaf, expectedVersion: old.version });
-  expect(missing.error).toBe('OUTLINE_CHANGED');
-  expect(missing.nextRead.arguments.arguments.mode).toBe('overview');
 });

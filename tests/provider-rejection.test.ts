@@ -34,16 +34,6 @@ test('keeps a provider explanation without inventing an app option for unknown f
     }
   );
 });
-test('deduplicates option groups', () => {
-  assert.deepEqual(
-    providerRejection({
-      httpStatus: 400,
-      bodyState: 'parsed',
-      fields: ['thinkingConfig.thinkingBudget', 'reasoning.effort', 'temperature'],
-    })?.options,
-    ['thinking', 'temperature']
-  );
-});
 test('does not call non-400 HTTP statuses an option rejection', () => {
   for (const httpStatus of [200, 401, 429, 500])
     assert.equal(

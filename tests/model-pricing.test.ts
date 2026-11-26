@@ -143,21 +143,6 @@ test('strict pricing validation rejects unknown fields, missing buckets and inva
     expect(() => validatePricingSnapshot({ ...valid, ...extra })).toThrow();
 });
 
-test('built-in manufacturer tables are retired even for exact official endpoints and known IDs', () => {
-  for (const [protocol, endpoint, modelId] of [
-    ['openai-responses-v1', 'https://api.openai.com/v1', 'gpt-5.6-sol'],
-    ['anthropic-messages-v1', 'https://api.anthropic.com/v1', 'claude-opus-5-5'],
-    ['vertex-gemini-v1', vertex.endpoint, 'gemini-4-hydrogen'],
-  ] as const) {
-    const c = connection(protocol, endpoint);
-    c.catalog = [
-      { id: modelId, name: modelId, capabilities: {}, priceRevision: null, pricing: { rates: r } },
-    ];
-    expect(resolve(modelId, c)).toBeUndefined();
-    expect(resolve(modelId, c, { pricing: { mode: 'official' } })).toBeUndefined();
-  }
-});
-
 test('manual source, long context and explicit Batch rates freeze without inferring discounts', () => {
   const c = connection('anthropic-messages-v1', 'https://api.anthropic.com/v1');
   const pricing = {

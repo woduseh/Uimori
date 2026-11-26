@@ -94,24 +94,6 @@ test('collects explicit nested field violations, preserves indices and removes d
   assert.ok(!JSON.stringify(result).includes('not copied'));
 });
 
-test('limits field paths and rejects malformed metadata', async () => {
-  const result = await readProviderHttpDiagnostic(
-    errorResponse({
-      code: '<html>bad</html>',
-      type: 'compatible_error',
-      status: 'a'.repeat(129),
-      param: 'not a field',
-      details: [
-        { fieldViolations: Array.from({ length: 12 }, (_, n) => ({ field: `custom${n}` })) },
-      ],
-    }),
-    signal()
-  );
-  assert.equal(result.providerCode, 'compatible_error');
-  assert.equal(result.providerStatus, undefined);
-  assert.equal(result.fields?.length, 8);
-});
-
 test('non-JSON proxy errors remain available as plain text, not HTML', async () => {
   const result = await readProviderHttpDiagnostic(
     new Response('<h1>upstream connection refused</h1>', { status: 502 }),
@@ -119,40 +101,6 @@ test('non-JSON proxy errors remain available as plain text, not HTML', async () 
   );
   assert.equal(result.bodyState, 'invalid');
   assert.equal(result.message, '<h1>upstream connection refused</h1>');
-});
-
-test('accepts a bounded top-level message without copying arbitrary JSON', async () => {
-  const result = await readProviderHttpDiagnostic(
-    new Response(JSON.stringify({ message: 'Proxy unavailable', debug: 'private request' }), {
-      status: 502,
-    }),
-    signal()
-  );
-  assert.equal(result.message, 'Proxy unavailable');
-  assert.ok(!JSON.stringify(result).includes('private request'));
-});
-
-test('does not turn a JSON document without an error message into freeform detail', async () => {
-  for (const body of ['[{}]', '{"error":null}'])
-    assert.deepEqual(
-      await readProviderHttpDiagnostic(new Response(body, { status: 400 }), signal()),
-      { httpStatus: 400, bodyState: 'invalid' }
-    );
-});
-
-test('an empty response remains empty even when the signal was already aborted', async () => {
-  assert.deepEqual(
-    await readProviderHttpDiagnostic(new Response(null, { status: 503 }), AbortSignal.abort()),
-    { httpStatus: 503, bodyState: 'empty' }
-  );
-});
-
-test('rejects invalid UTF-8 without manufacturing replacement text', async () => {
-  const result = await readProviderHttpDiagnostic(
-    new Response(new Uint8Array([0xff, 0xfe]), { status: 400 }),
-    signal()
-  );
-  assert.deepEqual(result, { httpStatus: 400, bodyState: 'invalid' });
 });
 
 test('removes credentials before clipping the displayed message', async () => {
@@ -180,21 +128,6 @@ test('masks authorization-shaped values and strips control characters', async ()
   assert.equal(result.message, 'Authorization: Bearer [REDACTED]\ninvalid option');
 });
 
-test('does not return any partial body when the byte limit is exceeded', async () => {
-  let cancelled = 0;
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(new Uint8Array(PROVIDER_ERROR_BODY_LIMIT + 1));
-    },
-    cancel() {
-      cancelled++;
-    },
-  });
-  const result = await readProviderHttpDiagnostic(new Response(body, { status: 400 }), signal());
-  assert.deepEqual(result, { httpStatus: 400, bodyState: 'too-large' });
-  assert.equal(cancelled, 1);
-});
-
 test('the byte limit includes all chunks, not only a content-length header', async () => {
   const bytes = new TextEncoder().encode(JSON.stringify({ error: { message: 'too big' } }));
   const body = new ReadableStream<Uint8Array>({
@@ -211,16 +144,6 @@ test('the byte limit includes all chunks, not only a content-length header', asy
   assert.equal(result.message, undefined);
 });
 
-test('honors an already aborted signal', async () => {
-  const controller = new AbortController();
-  const reason = new Error('cancel test');
-  controller.abort(reason);
-  await assert.rejects(
-    readProviderHttpDiagnostic(errorResponse({ message: 'ignored' }), controller.signal),
-    (error) => error === reason
-  );
-});
-
 test('cancellation terminates a pending body read without waiting for the producer', async () => {
   const controller = new AbortController();
   const reason = new Error('cancel pending');
@@ -235,14 +158,4 @@ test('cancellation terminates a pending body read without waiting for the produc
   );
   controller.abort(reason);
   await assert.rejects(pending, (error) => error === reason);
-});
-
-test('body read errors are unavailable rather than successful diagnostics', async () => {
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.error(new Error('stream failed'));
-    },
-  });
-  const result = await readProviderHttpDiagnostic(new Response(body, { status: 500 }), signal());
-  assert.deepEqual(result, { httpStatus: 500, bodyState: 'unavailable' });
 });

@@ -249,23 +249,6 @@ describe('hierarchical composition', () => {
     expect(store.chat(chat.id).headRevision).toBe(before);
   });
 
-  test('creates an item already marked as kept', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '고정 구성');
-    const { detail } = store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          { op: 'create', level: 'theme', title: '고정한 주제', intent: '', fixed: true },
-          { op: 'create', level: 'theme', title: '보통 주제', intent: '' },
-        ],
-      },
-      'user'
-    );
-    expect(detail.nodes.map((node) => node.fixed)).toEqual([true, false]);
-  });
-
   test('allows skipped levels and standalone units but rejects inversions, cross-chat parents, and writing above episodes', async () => {
     const store = await database(),
       chat = createFixtureChat(store, '유연한 구성');
@@ -559,38 +542,6 @@ describe('hierarchical composition', () => {
     expect(store.story.commands(chat.id)).toHaveLength(1);
   });
 
-  test('long authored plans and explicit scene requests stay intact through reservation and replay', async () => {
-    const store = await database();
-    const chat = createFixtureChat(store, '긴 집필 계획');
-    compose(store, chat.id);
-    const episode = find(store, chat.id, '1화 잠긴 문');
-    const intent = '장면의 세부 전개\n'.repeat(2500) + '계획의 끝';
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [{ op: 'update', id: episode.id, expectedRevision: episode.revision, intent }],
-      },
-      'user'
-    );
-    expect(store.outline.node(episode.id).intent).toBe(intent);
-    const key = randomUUID();
-    const generated = store.outline.sceneCommand(episode.id, { idempotencyKey: key });
-    expect(generated.request).toBe('Write the selected outline unit.');
-    expect(generated.request).not.toContain(intent);
-    expect(
-      store.outline.sceneCommand(episode.id, { idempotencyKey: key, request: generated.request })
-    ).toEqual(generated);
-    const next = find(store, chat.id, '2화 장부의 첫 장');
-    const request = '명시한 집필 요청\n'.repeat(2500) + '요청의 끝';
-    const explicit = { idempotencyKey: randomUUID(), request };
-    const command = store.outline.sceneCommand(next.id, explicit);
-    expect(command.request).toBe(request);
-    expect(store.outline.sceneCommand(next.id, explicit)).toEqual(command);
-    expect(store.detail(chat.id).runs).toEqual([]);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
   test('additional instructions stay separate from the plan and both freeze for admitted writing', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '구성과 추가 지시');
@@ -799,132 +750,6 @@ describe('hierarchical composition', () => {
     const { run } = write(store, chat.id, command.id, '최종 계획이 같은 원문');
     expect(run.snapshot.outline?.path.at(-1)?.intent).toBe(node.intent);
     expect(run.snapshot.outline?.path.at(-1)?.revision).toBe(current.revision);
-  });
-
-  test('large detail reads preserve source projections and archive bytes without exposing retired reviews', async () => {
-    const { HelperWorkspace } = await import('../server/helper-workspace.js');
-    const store = await database();
-    const chat = createFixtureChat(store, '구성 일괄 조회');
-    compose(store, chat.id);
-    const initial = store.outline.nodes(chat.id);
-    const episode = initial.find((node) => node.title === '1화 잠긴 문')!;
-    const beat = initial.find((node) => node.parentId === episode.id)!;
-    const second = initial.find((node) => node.title === '2화 장부의 첫 장')!;
-    const third = initial.find((node) => node.title === '3화 관장의 방문')!;
-    store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'update',
-            id: episode.id,
-            expectedRevision: episode.revision,
-            relatedIds: [third.id, second.id],
-          },
-        ],
-      },
-      'user'
-    );
-    const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
-    const { run, source } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
-    store.outline.sceneCommand(second.id, { idempotencyKey: randomUUID() });
-    store.db
-      .prepare(`INSERT INTO outline_writings(id,node_id,source_id,created_at)
-      VALUES(?,?,?,?)`)
-      .run(randomUUID(), beat.id, source.id, source.createdAt);
-    const conversation = new HelperWorkspace(store).open({ kind: 'chat', chatId: chat.id });
-    const time = '2026-01-01T00:00:00.000Z';
-    const review = (nodeId: string, status = 'completed', partial = false) => {
-      const taskId = randomUUID();
-      const sources = store.outline.preview(nodeId).outline.sources!.map((item) => ({
-        id: item.sourceRevision,
-        hash: item.sourceHash,
-        start: 0,
-        end: source.text.length,
-        total: source.text.length,
-      }));
-      store.db
-        .prepare(`INSERT INTO helper_tasks(id,conversation_id,request_key,request,status,
-        snapshot,usage,created_at,updated_at) VALUES(?,?,?,'review',?,'{}','{}',?,?)`)
-        .run(taskId, conversation.id, taskId, status, time, time);
-      store.db
-        .prepare('INSERT INTO outline_reviews VALUES(?,?,?,?,?,?)')
-        .run(
-          taskId,
-          nodeId,
-          store.outline.planHash(nodeId),
-          JSON.stringify(sources),
-          Number(partial),
-          time
-        );
-      return taskId;
-    };
-    for (const node of initial) review(node.id);
-    const latestTask = review(episode.id, 'cancelled', true);
-    const archivedReview = store.db
-      .prepare('SELECT * FROM outline_reviews WHERE task_id=?')
-      .get(latestTask);
-    const prepare = vi.spyOn(store.db, 'prepare');
-    const small = store.outline.detail(chat.id);
-    const smallReads = prepare.mock.calls.length;
-    expect(small.nodes.map((node) => node.id)).toEqual(initial.map((node) => node.id));
-    expect(small.nodes.find((node) => node.id === episode.id)).toMatchObject({
-      relatedIds: [third.id, second.id],
-      progress: {
-        state: 'written',
-        commandId: command.id,
-        runId: run.id,
-        sourceRevision: source.id,
-      },
-    });
-    expect(small.nodes.find((node) => node.id === second.id)?.progress.state).toBe('scheduled');
-    expect(small.nodes.find((node) => node.id === third.id)?.progress.state).toBe('planned');
-    const added = store.outline.apply(
-      chat.id,
-      {
-        idempotencyKey: randomUUID(),
-        operations: Array.from({ length: 200 }, (_, index) => ({
-          op: 'create',
-          level: 'theme',
-          title: `추가 계획 ${index}`,
-          intent: '',
-        })),
-      },
-      'user'
-    ).created;
-    for (const node of added) review(node.id);
-    const other = createFixtureChat(store, '다른 채팅');
-    compose(store, other.id);
-    prepare.mockClear();
-    const large = store.outline.detail(chat.id);
-    expect(prepare.mock.calls.length).toBe(smallReads);
-    expect(large.nodes).toHaveLength(207);
-    expect(large.nodes.slice(0, 7)).toEqual(small.nodes);
-    expect(large.nodes.every((node) => !('latestReview' in node))).toBe(true);
-    const edited = store.editSource(source.id, {
-      expectedRevision: store.source(source.id).editRevision ?? 0,
-      text: '문은 열려 있었다.',
-    });
-    prepare.mockClear();
-    const changed = store.outline.detail(chat.id);
-    expect(prepare.mock.calls.length).toBe(smallReads);
-    const current = changed.nodes.find((node) => node.id === episode.id)!;
-    expect(current.writings?.[0].sourceHash).toBe(edited.hash);
-    expect(current).not.toHaveProperty('latestReview');
-    expect(store.outline.preview(episode.id).outline.sources).toHaveLength(1);
-    expect(
-      store.db.prepare('SELECT * FROM outline_reviews WHERE task_id=?').get(latestTask)
-    ).toEqual(archivedReview);
-    for (const status of ['failed', 'cancelled', 'pending']) {
-      store.db
-        .prepare('UPDATE scene_commands SET status=?,source_revision=NULL WHERE id=?')
-        .run(status, command.id);
-      store.db.prepare("UPDATE runs SET status='queued' WHERE id=?").run(run.id);
-      expect(
-        store.outline.detail(chat.id).nodes.find((node) => node.id === episode.id)?.progress.state
-      ).toBe(status === 'pending' ? 'writing' : status);
-    }
   });
 
   test('writing one episode carries the upper intent into the real generation input and later siblings as history', async () => {

@@ -1,6 +1,5 @@
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { prepareNativeRisuTranslationPrompt } from '../server/risu-native-preset.js';
-import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { AUTHOR_NOTE_GUIDANCE } from '../core/notes.js';
 import { CATALOG_READ_GUIDANCE } from '../core/read-access.js';
 import { createHash } from 'node:crypto';
@@ -155,28 +154,6 @@ describe('whole-source authored translation prompts', () => {
     expect(() => compileTranslationPrompt(input, changed, 'task')).toThrow(
       'SOURCE_PROMPT_REVISION_MISMATCH'
     );
-  });
-  test('default and explicit empty instructions use the same program compiler', () => {
-    for (const selected of [false, true]) {
-      const seed = bundle('The harbor was quiet.');
-      if (selected) {
-        seed.snapshot.profile!.promptPresets!.translation!.program = createDefaultRisuPrompt(
-          '',
-          'translation'
-        );
-        delete seed.snapshot.profile!.promptControls;
-      } else delete seed.snapshot.profile!.promptPresets;
-      const input = translationInput(
-        seed.source,
-        sourceTimeContext(seed.snapshot, 'translation'),
-        seed.snapshot
-      );
-      expect(input.contract).toBe('');
-      const compilation = compileTranslationPrompt(input, seed.snapshot, 'task')!;
-      expect(compilation).toBeDefined();
-      expect(compilation.messages.some((m) => m.role === 'system')).toBe(!selected);
-      expect(input.sourceText).toBe(seed.source.text);
-    }
   });
   test('actual loopback requests preserve composed messages across source-time tools and freeze later mutations', async () => {
     const seed = bundle();

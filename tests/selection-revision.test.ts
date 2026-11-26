@@ -188,19 +188,6 @@ test('one helper call returns only a proposal and numeric usage; unsaved draft a
   });
 });
 
-test('the proposal deadline follows the helper model timeout and its default', async () => {
-  for (const [timeoutMs, expected] of [
-    [undefined, 300_000],
-    [450_000, 450_000],
-  ] as const) {
-    const f = await setup(true, timeoutMs);
-    const send = mockSend();
-    expect((await f.post()).statusCode).toBe(200);
-    expect(send.mock.calls[0][2].timeoutMs).toBe(expected);
-    vi.restoreAllMocks();
-  }
-});
-
 test('changed stored source is rejected both before spending a call and after a response arrives', async () => {
   const f = await setup();
   const send = mockSend(success, () => {

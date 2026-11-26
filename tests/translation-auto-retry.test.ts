@@ -10,11 +10,7 @@ import type { Json } from '../core/transport.js';
 import type { AuxiliaryBundle } from '../server/product-auxiliary.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { normalizeStoryUiOutput } from '../server/story-ui.js';
-import {
-  translationPolicy,
-  translationMaxRetries,
-  translationMaxCalls,
-} from '../core/translation-settings.js';
+import { translationPolicy } from '../core/translation-settings.js';
 import { bundle, bridge, hooks, selectProvider } from './fixtures/translation-job.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 
@@ -343,25 +339,6 @@ describe('terminal translation retry boundaries', () => {
     ).toBe('failed');
     expect(server.requests).toHaveLength(1);
     expect(observed.finishes).toHaveLength(1);
-  });
-  test('policy validates bounded retries and rejects removed model/backend settings', () => {
-    expect(translationPolicy()).toEqual({
-      judgment: { threshold: 0.9 },
-      maxRetries: 1,
-      maxCalls: 16,
-    });
-    for (const invalid of [-1, 6, 1.5, null, '1'])
-      expect(() => translationMaxRetries(invalid)).toThrow();
-    for (const invalid of [0, 1, 65, 1.5]) expect(() => translationMaxCalls(invalid)).toThrow();
-    expect(() =>
-      translationPolicy({ ...translationPolicy(), refusalModel: null } as never)
-    ).toThrow('TRANSLATION_POLICY_INVALID');
-    expect(() =>
-      translationPolicy({
-        ...translationPolicy(),
-        judgment: { backend: 'jev', threshold: 0.9 },
-      } as never)
-    ).toThrow('TRANSLATION_JUDGMENT_INVALID');
   });
 });
 

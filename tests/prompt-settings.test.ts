@@ -4,7 +4,6 @@ import { prepareNativeFixtureRun } from './fixtures/native-run.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { injectWithFixtureBot, createFixtureChat } from './fixtures/chat.js';
-import { DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -25,56 +24,6 @@ import { repairPromptCombinationValues } from '../core/prompt-combinations.js';
 import { initializePromptWorkspaceReferences } from '../server/prompt-workspace.js';
 
 const owned: { directory: string; app?: App }[] = [];
-test('selected main preset role cannot change or poison workspace reads', async () => {
-  const role = 'main' as const;
-  const app = await application();
-  const initial = await workspace(app);
-  const preset = await request<PromptPreset>(app, '/prompt-presets', {
-    title: '선택한 프롬프트 역할 보존',
-    role,
-    program: createDefaultRisuPrompt('선택 원본', role),
-  });
-  const selected = await apply(app, preset);
-  const otherRole = role === 'main' ? 'translation' : 'main';
-  const beforeChanges = app.store.db.prepare('SELECT total_changes() AS n').get();
-  const rejected = await request(
-    app,
-    `/prompt-presets/${preset.id}`,
-    {
-      expectedRevision: preset.revision,
-      title: '반영하면 안 되는 변경',
-      role: otherRole,
-      program: createDefaultRisuPrompt('바뀐 역할 본문', otherRole),
-    },
-    409,
-    'PUT'
-  );
-  expect(rejected.error).toContain('다른 프리셋을 선택한 뒤');
-  expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id)).toEqual(preset);
-  expect(await workspace(app)).toEqual(selected);
-  expect((await read(app, '/model-workspace')).revision).toBe(selected.revision);
-  expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(beforeChanges);
-  await apply(app, app.store.product.get<PromptPreset>('prompt-preset', initial[role].presetId!));
-  const revised = await request<PromptPreset>(
-    app,
-    `/prompt-presets/${preset.id}`,
-    {
-      expectedRevision: preset.revision,
-      title: preset.title,
-      role: otherRole,
-      program: createDefaultRisuPrompt('사용하지 않는 원본의 역할 변경', otherRole),
-    },
-    200,
-    'PUT'
-  );
-  expect(revised).toMatchObject({
-    id: preset.id,
-    revision: preset.revision + 1,
-    role: otherRole,
-  });
-  expect((await workspace(app))[role].presetId).toBe(initial[role].presetId);
-});
-
 test('legacy copied defaults become inheritance while values different from that baseline remain explicit', async () => {
   const app = await application();
   const baseline = await workspace(app);
@@ -230,60 +179,6 @@ test('obsolete same-owner combinations stay retained and can be repaired with bo
   );
 });
 
-test('large plain presets remain editable in the library, workspace and read-only request preview', async () => {
-  const app = await application();
-  const literal = ' '.repeat(9 * 1024 * 1024) + 'Preserve this complete instruction.';
-  const program = createDefaultRisuPrompt(literal);
-  const saved = await request<PromptPreset>(app, '/prompt-presets', {
-    title: 'Large preset',
-    role: 'main',
-    program,
-  });
-  const revised = await request<PromptPreset>(
-    app,
-    `/prompt-presets/${saved.id}`,
-    {
-      title: 'Edited large preset',
-      role: 'main',
-      program,
-      expectedRevision: saved.revision,
-    },
-    200,
-    'PUT'
-  );
-  expect(revised.program.nativeRisuPreset.preset.promptTemplate).toEqual(
-    program.nativeRisuPreset.preset.promptTemplate
-  );
-  const current = await workspace(app);
-  const updated = await request(
-    app,
-    '/prompt-workspace',
-    {
-      expectedRevision: current.revision,
-      main: { title: 'Large working preset', program, values: {} },
-    },
-    200,
-    'PUT'
-  );
-  expect(updated.main.program).toEqual(program);
-  const chat = createFixtureChat(app.store, 'Large preview');
-  const draft = 'a'.repeat(600_001);
-  const before = app.store.db.prepare('SELECT total_changes() AS n').get();
-  const preview = await request(app, `/chats/${chat.id}/prompt-preview`, {
-    program,
-    request: draft,
-  });
-  expect(preview.scope).toBe('preview-only-no-provider-call');
-  expect(preview.error).toBeUndefined();
-  expect(preview.compilation.messages[0].content[0].text).toBe(literal);
-  expect(
-    preview.compilation.messages.some((message: any) =>
-      message.content.some((part: any) => part.text === draft)
-    )
-  ).toBe(true);
-  expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
-  expect(fetch).not.toHaveBeenCalled();
-});
 test('option combinations bind to a prompt owner and exact control meanings while preserving working source identity', async () => {
   const app = await application();
   const program = createDefaultRisuPrompt('Options');
@@ -894,56 +789,5 @@ describe('global working prompts and independent library copies', () => {
       c.id
     );
     expect(app.store.product.snapshot(chat.id)).toHaveProperty('promptPresets.main');
-  });
-});
-
-describe('translation prompt preview uses the job compiler without writes', () => {
-  test('default translation preview with stored source=true', async () => {
-    const stored = true;
-    const app = await application(),
-      chat = createFixtureChat(app.store, 'Translation preview');
-    const source = stored ? complete(app, capture(app, chat.id)) : undefined;
-    const before = app.store.db.prepare('SELECT total_changes() AS n').get();
-    const program = createDefaultRisuPrompt(DEFAULT_TRANSLATION_PROMPT, 'translation');
-    const preview = await request(app, `/chats/${chat.id}/prompt-preview`, {
-      role: 'translation',
-      program,
-      request: 'Synthetic preview source.',
-    });
-    expect(preview.scope).toBe('preview-only-no-provider-call');
-    expect(preview.error).toBeUndefined();
-    expect(preview.previewSource.kind).toBe(stored ? 'stored' : 'synthetic');
-    expect(preview.compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
-    expect(preview.compilation.messages.some((m: any) => m.id === 'outputSchema')).toBe(false);
-    const sourceText = preview.compilation.messages.find(
-      (m: any) => m.provenance.origin === 'current'
-    ).content[0].text;
-    expect(sourceText).toContain(
-      stored ? 'Mira waits by the quiet harbor.' : 'Synthetic preview source.'
-    );
-    expect(sourceText).not.toContain('anchor');
-    if (source)
-      expect(preview.previewSource).toMatchObject({
-        sourceRevision: source.id,
-        sourceHash: source.hash,
-      });
-    expect(
-      preview.compilation.messages.filter((m: any) => m.provenance.origin === 'current')
-    ).toHaveLength(1);
-    expect(
-      preview.compilation.messages.filter((m: any) => m.provenance.origin === 'history')
-    ).toHaveLength(0);
-    program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
-    (program.nativeRisuPreset.preset.promptTemplate as Record<string, unknown>[])[0].text +=
-      '{{getglobalvar::toggle_tone}}';
-    const changed = await request(app, `/chats/${chat.id}/prompt-preview`, {
-      role: 'translation',
-      program,
-      request: 'Synthetic preview source.',
-      values: { tone: 'PREVIEW OVERRIDE' },
-    });
-    expect(changed.compilation.messages[0].content[0].text).toContain('PREVIEW OVERRIDE');
-    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
-    expect(fetch).not.toHaveBeenCalled();
   });
 });

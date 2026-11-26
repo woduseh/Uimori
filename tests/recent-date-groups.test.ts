@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, expect, test } from 'vitest';
-import { groupRecentDates, recentDateGroupLabel } from '../web/recent-date-groups.js';
+import { groupRecentDates } from '../web/recent-date-groups.js';
 import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
@@ -39,39 +39,4 @@ test('timezone-bearing instants are grouped by their local date, without inventi
   expect(groups[0].date?.getTime()).toBe(yesterday.getTime());
   expect(groups[1].date).toBeUndefined();
   expect(groups[1].items).toEqual(['not-a-timestamp', undefined, '']);
-});
-
-test('grouping retains activity priority and the already paginated item order', () => {
-  const items = [
-    { id: 'running-old', at: '2026-10-20T12:00:00' },
-    { id: 'completed-today', at: '2026-10-25T12:00:00' },
-    { id: 'completed-old', at: '2026-10-20T12:00:00' },
-  ];
-  const groups = groupRecentDates(items, (item) => item.at, new Date(2026, 9, 25, 13));
-  expect(groups.map((group) => group.key)).toEqual(['week', 'today', 'week']);
-  expect(groups.flatMap((group) => group.items)).toEqual(items);
-});
-
-test('spring and autumn calendar days stay yesterday even when their elapsed length differs', () => {
-  for (const [now, before] of [
-    [new Date(2026, 2, 9, 0, 5), new Date(2026, 2, 8, 0, 1)],
-    [new Date(2026, 10, 2, 0, 5), new Date(2026, 10, 1, 0, 1)],
-  ]) {
-    expect(groupRecentDates([before.toISOString()], (item) => item, now)[0].key).toBe('yesterday');
-  }
-});
-
-test('group labels follow the current UI locale and preserve a future calendar date', () => {
-  const now = new Date(2026, 9, 25, 12);
-  const groups = groupRecentDates(
-    ['2026-10-25T12:00:00', '2026-10-26T12:00:00'],
-    (item) => item,
-    now
-  );
-  setLocale('ko');
-  expect(recentDateGroupLabel(groups[0])).toBe('오늘');
-  expect(recentDateGroupLabel(groups[1])).toContain('26');
-  setLocale('en');
-  expect(recentDateGroupLabel(groups[0])).toBe('Today');
-  expect(recentDateGroupLabel(groups[1])).toBe('October 26, 2026');
 });

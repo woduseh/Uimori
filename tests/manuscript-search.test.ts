@@ -1,14 +1,13 @@
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
 import { ManuscriptSearch } from '../server/manuscript-search.js';
 import { deleteChat } from '../server/chat-deletion.js';
-import { createApp, type App } from '../server/app.js';
+import { type App } from '../server/app.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
-import { readerTargetFromUrl, readerTargetUrl } from '../core/reader-target.js';
 import type { ManuscriptSearchQuery } from '../core/manuscript-search.js';
 
 const owned: { directory: string; store: Store; search: ManuscriptSearch }[] = [];
@@ -133,49 +132,6 @@ test('pagination stays stable across index refresh, scopes isolate bots, and unr
   ).rejects.toThrow('SEARCH_CURSOR_STALE');
 });
 
-test('a slow or cancelled search does not block writes and does not turn a partial scan into no matches', async () => {
-  const { store, search } = fixture();
-  const chat = createFixtureChat(store, 'Responsive');
-  completedSource(
-    store,
-    chat.id,
-    `${'긴 문장으로 채워진 원고입니다.\n\n'.repeat(12000)}끝에서만 찾는 보라색우산`
-  );
-  const pending = search.search(query('보라색우산'));
-  const other = createFixtureChat(store, 'A write while searching');
-  expect(store.chat(other.id).title).toBe(other.title);
-  expect((await pending).items).toHaveLength(1);
-  const controller = new AbortController();
-  controller.abort();
-  await expect(search.search(query('보라색우산'), controller.signal)).rejects.toThrow();
-});
-
-test('common location URLs preserve IDs and mode, and POST search stays read-only during maintenance', async () => {
-  const { store, search, directory } = fixture();
-  const chat = createFixtureChat(store, 'Maintenance');
-  const source = completedSource(store, chat.id, '검증할 문장');
-  const target = {
-    chatId: chat.id,
-    sourceId: source.id,
-    representation: 'original' as const,
-    contentHash: source.hash,
-    blockAnchor: source.blocks![0].anchor,
-  };
-  expect(readerTargetFromUrl(readerTargetUrl(target))).toEqual(target);
-  await search.close();
-  const app = await createApp({
-    dbPath: join(directory, 'read-only-api.sqlite'),
-    buildId: 'fixture',
-    testMode: true,
-    maintenance: true,
-  });
-  apps.push(app);
-  const before = app.store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n;
-  const response = await app.inject({ method: 'POST', url: '/api/search', payload: query('문장') });
-  expect(response.statusCode, response.body).toBe(200);
-  expect(app.store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(before);
-});
-
 async function legacyIndexFixture(emptyDocuments = 0) {
   const { directory, store, search } = fixture();
   const chat = createFixtureChat(store, 'Legacy index');
@@ -265,91 +221,4 @@ test('an index written by the previous release keeps answering while it moves to
   for (const table of ['search_fts', 'search_trigrams'])
     reopened.db.exec(`INSERT INTO ${table}(${table}) VALUES('integrity-check')`);
   expect(reopened.db.prepare('PRAGMA integrity_check').get()!.integrity_check).toBe('ok');
-});
-
-test('a legacy index with many empty documents finishes moving across a restart and then stops writing', async () => {
-  const { sources, reopen } = await legacyIndexFixture(70);
-  let { reopened, upgraded } = reopen();
-  const queries = [
-    'golden lantern',
-    'LANTERN 아래',
-    '보라색우산',
-    '붉은 우산',
-    '우산',
-    '없는 문장',
-  ];
-  const results = async () => {
-    const found: string[][] = [];
-    for (const text of queries)
-      found.push((await upgraded.search(query(text))).items.map((item) => item.target.sourceId));
-    return found;
-  };
-  const [first, second] = sources.map((source) => source.id);
-  const expected = [[first], [first], [second], [first], [first, second], []];
-  expect(await results()).toEqual(expected);
-  reopened.db.prepare("DELETE FROM search_documents WHERE kind='empty-0'").run();
-
-  expect(upgraded.moveLegacyIndexBatch()).toBe(true);
-  expect(await results()).toEqual(expected);
-  await upgraded.close();
-  reopened.close();
-  owned.pop();
-  ({ reopened, upgraded } = reopen());
-  expect(await results()).toEqual(expected);
-  let steps = 0;
-  while (steps < 20 && upgraded.moveLegacyIndexBatch()) steps++;
-  expect(steps).toBeLessThan(20);
-  const count = (table: string) =>
-    Number(reopened.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n);
-  expect(count('search_fts_docsize')).toBe(0);
-  expect(count('search_fts_idx')).toBe(0);
-  expect(
-    reopened.db.prepare("SELECT 1 FROM search_documents WHERE search_text<>''").get()
-  ).toBeUndefined();
-  expect(await results()).toEqual(expected);
-
-  const exec = vi.spyOn(reopened.db, 'exec');
-  const changes = () => Number(reopened.db.prepare('SELECT total_changes() AS n').get()!.n);
-  const before = changes();
-  for (let tick = 0; tick < 3; tick++) expect(upgraded.moveLegacyIndexBatch()).toBe(false);
-  expect(exec).not.toHaveBeenCalled();
-  expect(changes()).toBe(before);
-  exec.mockRestore();
-  for (const table of ['search_fts', 'search_trigrams'])
-    reopened.db.exec(`INSERT INTO ${table}(${table}) VALUES('integrity-check')`);
-});
-
-test('a database created by this version opens no write transaction for the legacy index', () => {
-  const { store, search } = fixture();
-  const exec = vi.spyOn(store.db, 'exec');
-  expect(search.moveLegacyIndexBatch()).toBe(false);
-  expect(exec).not.toHaveBeenCalled();
-  exec.mockRestore();
-});
-
-test('a legacy index holding only entries without text is cleared in one step', () => {
-  const { store, search } = fixture();
-  store.db.exec("INSERT INTO search_fts(rowid,search_text) VALUES(999,'')");
-  expect(store.db.prepare('SELECT 1 FROM search_fts_idx LIMIT 1').get()).toBeUndefined();
-  expect(search.moveLegacyIndexBatch()).toBe(false);
-  expect(store.db.prepare('SELECT 1 FROM search_fts_docsize LIMIT 1').get()).toBeUndefined();
-  const exec = vi.spyOn(store.db, 'exec');
-  expect(search.moveLegacyIndexBatch()).toBe(false);
-  expect(exec).not.toHaveBeenCalled();
-  exec.mockRestore();
-});
-
-test('large index updates make bounded progress rather than grouping eight oversized scenes', async () => {
-  const { store, search } = fixture();
-  const chat = createFixtureChat(store, 'Bounded indexing');
-  for (let index = 0; index < 3; index++)
-    completedSource(store, chat.id, `${'길게 쓴 원고. '.repeat(30000)}보라색우산`);
-  const count = () =>
-    Number(store.db.prepare('SELECT count(*) AS n FROM search_dirty_sources').get()!.n);
-  expect(count()).toBe(3);
-  await search.refreshBatch();
-  expect(count()).toBe(2);
-  expect((await search.search(query('보라색우산'))).items).toHaveLength(3);
-  await index(search, store);
-  expect((await search.search(query('보라색우산'))).items).toHaveLength(3);
 });

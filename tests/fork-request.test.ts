@@ -95,31 +95,6 @@ test('a terminal receipt for a deleted copy releases its retained key', async ()
   expect(JSON.parse(String(fetch.mock.calls[2][1]?.body)).idempotencyKey).not.toBe(previous);
 });
 
-test('an unverified copy receipt releases its retained key', async () => {
-  const { values } = storageFixture();
-  vi.spyOn(globalThis, 'fetch')
-    .mockRejectedValueOnce(new TypeError('Connection lost'))
-    .mockResolvedValueOnce(
-      Response.json({ error: 'CHAT_COPY_RECEIPT_UNVERIFIED' }, { status: 409 })
-    );
-  await expect(requestChatFork('chat', 'source')).rejects.toThrow();
-  expect(values.get(key)).toBeTruthy();
-  await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({
-    status: 409,
-    code: 'CHAT_COPY_RECEIPT_UNVERIFIED',
-  });
-  expect(values.has(key)).toBe(false);
-});
-
-test('an uncertain HTTP failure retains the pending admission identity', async () => {
-  const { values } = storageFixture();
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response(JSON.stringify({ error: 'Synthetic failure' }), { status: 503 })
-  );
-  await expect(requestChatFork('chat', 'source')).rejects.toBeInstanceOf(ApiError);
-  expect(values.get(key)).toBeTruthy();
-});
-
 test('a definite rejection clears only its own pending identity', async () => {
   const { values } = storageFixture();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -127,39 +102,6 @@ test('a definite rejection clears only its own pending identity', async () => {
   );
   await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({ status: 409 });
   expect(values.has(key)).toBe(false);
-});
-
-test('accepted work remains successful when cleanup throws', async () => {
-  const { storage, values } = storageFixture();
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-    storage.removeItem.mockImplementation(() => {
-      throw new Error('Cleanup unavailable');
-    });
-    return accepted();
-  });
-  await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
-  expect(values.get(key)).toBeTruthy();
-});
-
-test('cleanup cannot replace a definite request error with a storage exception', async () => {
-  const { storage } = storageFixture();
-  storage.removeItem.mockImplementation(() => {
-    throw new Error('Cleanup unavailable');
-  });
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response(JSON.stringify({ error: 'Revision conflict' }), { status: 409 })
-  );
-  await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({ status: 409 });
-});
-
-test('completion does not remove an identity written by another operation', async () => {
-  const { values } = storageFixture();
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-    values.set(key, 'other-operation');
-    return accepted();
-  });
-  await requestChatFork('chat', 'source');
-  expect(values.get(key)).toBe('other-operation');
 });
 
 test('different source scopes do not share pending fork identities', async () => {

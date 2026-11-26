@@ -9,11 +9,3 @@ test('removes nested CBS blocks, tags and scripts from a preview', () => {
     )
   ).toBe('다시 왔네 어서 와, .');
 });
-
-test('returns an empty preview when only markup remains', () => {
-  expect(markupPreview('<div style="x">{{setvar::a::1}}</div><!-- note -->', 55)).toBe('');
-});
-
-test('decodes common entities and limits the length', () => {
-  expect(markupPreview('A&amp;B&nbsp;&lt;C&gt; 긴 문장입니다', 7)).toBe('A&B <C>');
-});

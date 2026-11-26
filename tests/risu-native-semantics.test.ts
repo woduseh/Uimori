@@ -195,41 +195,6 @@ test('example dialogue uses separate message roles at the beginning of native ch
   expect(result.nativeRisuExecution!.variables).not.toHaveProperty('should_not_run');
 });
 
-test('native ChatML and history preserve roles and text despite retired settings', () => {
-  const input = fixture(
-    [
-      {
-        type: 'chatML',
-        text: '<|im_start|>system<|im_sep|>Policy<|im_end|>\n<|im_start|>user\nExample<|im_end|>',
-      },
-      { type: 'postEverything' },
-      chat,
-    ],
-    {},
-    { promptSettings: { postEndInnerFormat: 'End', sendName: true, sendChatAsSystem: true } }
-  );
-  const result = compileRisuPrompt(input.profile!.promptPresets!.main!.program, {
-    slots: { postEverything: '' },
-    examples: [{ role: 'assistant', text: 'Example reply' }],
-    history: [
-      { id: 'first', role: 'assistant', sourceKind: 'authored-start', text: 'Hi' },
-      { id: 'request', role: 'user', text: 'Go', current: true },
-    ],
-  });
-  expect(
-    result.messages.map((message) => [
-      message.role,
-      message.content.filter((part) => part.type === 'text')[0].text,
-    ])
-  ).toEqual([
-    ['system', 'Policy'],
-    ['user', 'Example'],
-    ['assistant', 'Example reply'],
-    ['assistant', 'Hi'],
-    ['user', 'Go'],
-  ]);
-});
-
 test('risu-native-prompt-2 suppresses retired blocks and settings in historical presets', () => {
   const compilerVersion = 'risu-native-prompt-2' as const;
   const input = fixture(

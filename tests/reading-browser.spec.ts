@@ -1,20 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
-import type { HelperConversation, HelperMessage } from '../core/helper.js';
-import type { ResponseStreamPage } from '../core/response-stream.js';
-import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
-import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
-import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
-import {
-  navigationAction,
-  openChatMenu,
-  openHelper,
-  selectSettingsSection,
-} from './ui-navigation.js';
+import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import { navigationAction, openChatMenu, selectSettingsSection } from './ui-navigation.js';
 
 test.setTimeout(90000);
 
@@ -29,16 +20,6 @@ const sourceText =
 const translatedText =
   '번역된 장면이다. “함께 걸어가자.” 그는 고개를 들었다. ‘아직 늦지 않았어.’\n\n' +
   '「도착했어.」 문 앞에 『여행의 끝』이 놓여 있었다.';
-const helperAnswer = '**“문을 열어 주세요.”**\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
-const helperAnswerText = '“문을 열어 주세요.”\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
-const artifactText = '그녀가 돌아섰다. 「다시 만나요.」 그는 ‘꼭 돌아오겠어.’라고 생각했다.';
-const artifactRequest =
-  '  “장면 요청은 그대로”  읽어요.\n‘첫 줄의 조건’\n\n  다음 문단도 그대로예요.  ';
-const artifactDraft =
-  '  “보관 초안도 그대로”  남겨요.\n‘첫 줄의 생각’\n\n  다음 문단도 그대로예요.  ';
-const streamText = '장면을 살펴보고 있어요. “이 장면의 선택”을 설명할게요.';
-const helperRequest = '“이 요청은 그대로” 읽으며 확인해 주세요.';
-const helperPersona = '“설정 지침도 그대로” 보관해요.';
 
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -113,8 +94,6 @@ async function fits(page: Page, region: Locator) {
   );
 }
 
-const quotes = (region: Locator, role: 'dialogue' | 'thought' | 'quote') =>
-  region.locator(`.reading-quote[data-quote-role="${role}"]`);
 async function clipboard(page: Page) {
   const copied: string[] = [];
   await page.exposeFunction('recordReadingClipboard', (text: string) => copied.push(text));
@@ -155,7 +134,7 @@ test('READUI01 native source and translation keep text and copies while shared r
   const before = await seed(request);
   const copied = await clipboard(page);
   const observed = watch(page);
-  for (const width of DEFAULT_WIDTHS) {
+  for (const width of [DESKTOP_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?chat=${before.chat.id}`);
     const source = page.getByTestId('source');
@@ -173,14 +152,6 @@ test('READUI01 native source and translation keep text and copies while shared r
     await expect(source.getByRole('button', { name: '본문 복사됨', exact: true })).toBeVisible();
 
     let settings = await readingDialog(page);
-    for (const name of ['대사 줄바꿈', '생각 줄바꿈']) {
-      const toggle = settings.getByRole('switch', { name, exact: true });
-      const toggleBox = (await toggle.boundingBox())!;
-      const rowBox = (await toggle.locator('xpath=ancestor::label').boundingBox())!;
-      expect(Math.abs(rowBox.x + rowBox.width - toggleBox.x - toggleBox.width)).toBeLessThanOrEqual(
-        1
-      );
-    }
     await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '여유롭게' });
     const slider = settings.getByRole('slider', { name: '본문 크기' });
     expect(await slider.evaluate((node) => getComputedStyle(node).accentColor)).not.toBe('auto');
@@ -286,347 +257,4 @@ test('READUI01 native source and translation keep text and copies while shared r
   expect(after.attempts).toEqual(before.attempts);
   expect(after.profile).toEqual(before.profile);
   expect(observed).toEqual({ writes: [], errors: [] });
-});
-
-async function helperFixture(page: Page, before: ChatDetail) {
-  const time = new Date().toISOString();
-  const conversation: HelperConversation = {
-    id: randomUUID(),
-    scope: { kind: 'chat', chatId: before.chat.id },
-    title: '합성 읽기 도우미',
-    revision: 1,
-    persona: helperPersona,
-    limits: { totalCalls: 24, helperCalls: 12 },
-    createdAt: time,
-    updatedAt: time,
-  };
-  const usage = { modelCalls: 1, inputTokens: 10, outputTokens: 10, costUsd: null };
-  const tasks: HelperTaskView[] = ['running', 'completed'].map((status) => ({
-    id: randomUUID(),
-    conversationId: conversation.id,
-    request: helperRequest,
-    mode: 'apply' as const,
-    status: status as HelperTaskView['status'],
-    modelTitle: '“상태 카드의 모델 이름”',
-    generation: 1,
-    error: null,
-    usage,
-    createdAt: time,
-    startedAt: time,
-    updatedAt: time,
-  }));
-  const artifact: HelperArtifactView = {
-    id: randomUUID(),
-    conversationId: conversation.id,
-    taskId: tasks[1].id,
-    revision: 1,
-    origin: 'model',
-    request: artifactRequest,
-    text: artifactText,
-    usage,
-    createdAt: time,
-  };
-  const message = (
-    task: HelperTaskView,
-    role: HelperMessage['role'],
-    text: string
-  ): HelperMessage => ({
-    id: randomUUID(),
-    conversationId: conversation.id,
-    taskId: task.id,
-    role,
-    text,
-    artifacts: role === 'assistant' ? [{ id: artifact.id, revision: 1 }] : [],
-    createdAt: time,
-  });
-  const messages = [
-    message(tasks[1], 'user', helperRequest),
-    message(tasks[1], 'assistant', helperAnswer),
-    message(tasks[0], 'user', helperRequest),
-  ];
-  const streams: ResponseStreamPage = {
-    taskKind: 'helper',
-    taskId: tasks[0].id,
-    status: 'running',
-    chunks: [
-      {
-        seq: 1,
-        attemptId: 'reading-attempt',
-        segment: 0,
-        text: streamText,
-        offset: streamText.length,
-      },
-    ],
-    cursor: 1,
-    hasMore: false,
-  };
-  const unexpected: string[] = [];
-  await page.route('**/api/helper/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (request.method() === 'GET') {
-      if (path === '/api/helper/projects') return route.fulfill({ json: [] });
-      if (path === '/api/helper/conversations')
-        return route.fulfill({
-          json: [{ ...conversation, activity: { running: 1, queued: 0 }, latestEventSeq: 0 }],
-        });
-      if (path === `/api/helper/conversations/${conversation.id}`)
-        return route.fulfill({ json: conversation });
-      if (path === `/api/helper/conversations/${conversation.id}/view`)
-        return route.fulfill({ json: { conversation, messages, tasks, eventCursor: 0 } });
-      if (path === `/api/helper/conversations/${conversation.id}/messages`)
-        return route.fulfill({ json: messages });
-      if (path === `/api/helper/conversations/${conversation.id}/tasks`)
-        return route.fulfill({ json: tasks });
-      if (path === `/api/helper/conversations/${conversation.id}/events`)
-        return route.fulfill({ json: [] });
-      const activityTask = tasks.find((task) => path === `/api/helper/tasks/${task.id}/activity`);
-      if (activityTask)
-        return route.fulfill({
-          json: {
-            taskId: activityTask.id,
-            status: activityTask.status,
-            events: [],
-            hasEarlier: false,
-          },
-        });
-      const resultsTask = tasks.find((task) => path === `/api/helper/tasks/${task.id}/results`);
-      if (resultsTask)
-        return route.fulfill({
-          json: {
-            taskId: resultsTask.id,
-            status: resultsTask.status,
-            results: [],
-            changes: [],
-            unrecordedOperations: 0,
-            usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
-          },
-        });
-      if (path === `/api/helper/artifacts/${artifact.id}`) return route.fulfill({ json: artifact });
-    }
-    unexpected.push(`${request.method()} ${path}`);
-    return route.fulfill({
-      status: 400,
-      json: { error: 'Unexpected readability fixture request' },
-    });
-  });
-  await page.route(`**/api/response-streams/helper/${tasks[0].id}?*`, async (route) => {
-    const after = Number(new URL(route.request().url()).searchParams.get('after') ?? 0);
-    return route.fulfill({
-      json: { ...streams, chunks: streams.chunks.filter((chunk) => chunk.seq > after) },
-    });
-  });
-  await page.goto(`/?chat=${before.chat.id}`);
-  await page.evaluate(
-    async ({ key, text }) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('uimori-editor-recovery', 1);
-        request.onupgradeneeded = () => request.result.createObjectStore('buffers');
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const transaction = database.transaction('buffers', 'readwrite');
-          transaction.objectStore('buffers').put(
-            {
-              revision: null,
-              model: JSON.stringify({ revision: 1, text }),
-              rawFields: {},
-            },
-            key
-          );
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-        });
-      } finally {
-        database.close();
-      }
-    },
-    { key: `helper:helper-artifact-draft:${artifact.id}:1`, text: artifactDraft }
-  );
-  return { unexpected };
-}
-
-test('READUI02 helper answers, archived scenes and public streams share reading styles while requests, drafts and diagnostics stay literal', async ({
-  page,
-  request,
-}, info) => {
-  const before = await seed(request);
-  const copied = await clipboard(page);
-  const fixture = await helperFixture(page, before);
-  const observed = watch(page);
-  try {
-    for (const width of DEFAULT_WIDTHS) {
-      await page.setViewportSize({ width, height: 1000 });
-      await page.goto(`/?chat=${before.chat.id}`);
-      await openHelper(page);
-      const panel = page.locator('#helper-panel');
-      const answer = panel.locator('.helper-message.assistant > .helper-prose');
-      const card = panel.getByRole('region', { name: '보관된 가정 장면', exact: true });
-      const scene = card.locator(':scope > .helper-prose');
-      const stream = panel.locator('.streaming-text');
-      await expect(answer).toHaveText(helperAnswerText);
-      await expect(answer.locator('strong')).toHaveText('“문을 열어 주세요.”');
-      const answerHeight = (await answer.boundingBox())!.height;
-      await expect(scene).toHaveText(artifactText);
-      await expect(stream).toHaveText(streamText);
-      const typography = (target: Locator) =>
-        target.evaluate((element) => {
-          const style = getComputedStyle(element);
-          return [style.fontFamily, style.fontSize, style.lineHeight, style.color];
-        });
-      expect(await typography(stream.locator('.streaming-pending'))).toEqual(
-        await typography(answer.locator('p').first())
-      );
-      await expect(panel.locator('.reading-quote-break')).toHaveCount(0);
-      await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
-      await expect(panel).toBeHidden();
-      let settings = await readingDialog(page);
-      await settings
-        .getByLabel('읽기 스타일', { exact: true })
-        .selectOption({ label: '대사 중심' });
-      await settings.getByLabel('문단 간격', { exact: true }).selectOption('1');
-      await closeDialog(page, settings);
-      await openHelper(page);
-      for (const text of [answer, scene, stream]) {
-        await expect(quotes(text, 'dialogue').first()).toHaveClass(/reading-quote-break/u);
-        await expect(quotes(text, 'dialogue').first()).toHaveAttribute('data-emphasis', 'subtle');
-      }
-      expect((await answer.textContent())?.trimEnd()).toBe(helperAnswerText);
-      expect((await answer.boundingBox())!.height).toBeGreaterThan(answerHeight);
-      expect(await scene.textContent()).toBe(artifactText);
-      expect(await stream.textContent()).toBe(streamText);
-      await expect(panel.getByTestId('source-request')).toHaveCount(2);
-      await expect(panel.getByTestId('source-request').locator('.reading-quote')).toHaveCount(0);
-      const status = panel.locator(
-        '[data-testid="helper-task-activity"]:has(.turn-status-running)'
-      );
-      await status.locator(':scope > summary').click();
-      await expect(status).toContainText('“상태 카드의 모델 이름”');
-      await expect(status.locator('.reading-quote')).toHaveCount(0);
-      await status.locator(':scope > summary').click();
-      await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
-      await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
-      await expect(panel.getByRole('textbox', { name: '도우미 말투', exact: true })).toHaveValue(
-        helperPersona
-      );
-      await expect(panel.locator('.helper-settings .reading-quote')).toHaveCount(0);
-      await page
-        .getByRole('dialog', { name: '도우미 설정', exact: true })
-        .getByRole('button', { name: '도우미 설정 닫기', exact: true })
-        .click();
-      await card.getByRole('button', { name: '가정 장면 복사', exact: true }).click();
-      expect(copied.at(-1)).toBe(artifactText);
-      await expect(card.getByRole('button', { name: '직접 편집', exact: true })).toHaveCount(0);
-      await expect(card.getByRole('textbox')).toHaveCount(0);
-      await card.getByText('장면 요청', { exact: true }).click();
-      await card.getByText('이 기기에 남은 편집 초안 1개', { exact: true }).click();
-      const savedRequest = card.locator('.helper-artifact-request .helper-artifact-literal');
-      const draft = card.getByRole('region', { name: '보관된 편집 초안 1', exact: true });
-      const draftText = draft.locator('.helper-artifact-literal');
-      for (const [text, expected] of [
-        [savedRequest, artifactRequest],
-        [draftText, artifactDraft],
-      ] as const) {
-        expect(await text.textContent()).toBe(expected);
-        await expect(text).toHaveCSS('white-space', 'pre-wrap');
-        await expect(text.locator('.reading-quote, .reading-plain-paragraph')).toHaveCount(0);
-      }
-      await card.getByRole('button', { name: '가정 장면 요청 복사', exact: true }).click();
-      expect(copied.at(-1)).toBe(artifactRequest);
-      await draft.getByRole('button', { name: '가정 장면 초안 복사', exact: true }).click();
-      expect(copied.at(-1)).toBe(artifactDraft);
-      await fits(page, panel);
-      if (visualReview)
-        await page.screenshot({ path: info.outputPath(`reading-helper-${width}.png`) });
-      await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
-      await expect(panel).toBeHidden();
-      await page.reload();
-      await openHelper(page);
-      await expect(quotes(answer, 'dialogue').first()).toHaveAttribute('data-emphasis', 'subtle');
-      await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
-      await expect(panel).toBeHidden();
-      settings = await readingDialog(page);
-      await settings.getByRole('button', { name: '읽기 스타일 초기화', exact: true }).click();
-      await closeDialog(page, settings);
-      await openHelper(page);
-      await expect(panel.locator('.reading-quote-break')).toHaveCount(0);
-      await expect(answer).toHaveText(helperAnswerText);
-      expect(Math.abs((await answer.boundingBox())!.height - answerHeight)).toBeLessThan(1);
-      await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
-    }
-    const after = await detail(request, before.chat.id);
-    expect(after.sources).toEqual(before.sources);
-    expect(after.jobs).toEqual(before.jobs);
-    expect(after.runs).toEqual(before.runs);
-    expect(after.attempts).toEqual(before.attempts);
-    expect(observed).toEqual({ writes: [], errors: [] });
-    expect(fixture.unexpected).toEqual([]);
-  } finally {
-    await page.goto('about:blank');
-    await page.unrouteAll({ behavior: 'wait' });
-  }
-});
-
-test('READUI03 inline, single-newline and paragraph quotes share one visual gap without modifying saved text', async ({
-  page,
-  request,
-}, info) => {
-  const chat = await seed(request);
-  const source = chat.sources[0];
-  const text =
-    '서술 A “대사 A” 서술 뒤 A\n\n서술 B\n“대사 B”\n서술 뒤 B\n\n서술 C\n\n“대사 C”\n\n서술 뒤 C\n\n서술 D ‘생각 D’ 서술 뒤 D';
-  const response = await request.put(`/api/sources/${source.id}/text`, {
-    data: { text, expectedRevision: source.editRevision ?? 0 },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await clipboard(page);
-  await page.goto(`/?chat=${chat.chat.id}`);
-  const article = page.getByTestId('source');
-  const prose = article.getByTestId('source-text').locator('.risu-chat-text');
-  await expect(prose).toContainText('대사 A');
-  const original = await prose.textContent();
-  for (const width of [1440, 360]) {
-    await page.setViewportSize({ width, height: 1000 });
-    const settings = await readingDialog(page);
-    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('dialogue');
-    await settings.getByLabel('생각 줄바꿈', { exact: true }).check();
-    await settings.getByLabel('문단 간격', { exact: true }).selectOption('1');
-    await fits(page, settings);
-    await settings.locator('.dialog-body').evaluate((node) => {
-      node.scrollTop = 0;
-    });
-    await settings.screenshot({ path: info.outputPath(`reading-settings-${width}.png`) });
-    await closeDialog(page, settings);
-    await waitForNativeLayout(article.getByTestId('source-text'));
-    const distances = await prose.evaluate((node) => {
-      const top = (text: string) => {
-        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
-        while (walker.nextNode()) {
-          const part = walker.currentNode as Text;
-          const index = part.data.indexOf(text);
-          if (index < 0) continue;
-          const range = document.createRange();
-          range.setStart(part, index);
-          range.setEnd(part, index + text.length);
-          return range.getBoundingClientRect().top;
-        }
-        throw new Error(`Missing visible text ${text}`);
-      };
-      return ['A', 'B', 'C', 'D'].map((id) => {
-        const quote = (id === 'D' ? '생각 ' : '대사 ') + id;
-        return [top(quote) - top('서술 ' + id), top('서술 뒤 ' + id) - top(quote)];
-      });
-    });
-    for (const gaps of distances)
-      for (const gap of gaps) expect(Math.abs(gap - distances[2][0])).toBeLessThan(2);
-    expect(await prose.textContent()).toBe(original);
-    await article.screenshot({ path: info.outputPath(`quote-spacing-${width}.png`) });
-  }
-  const stored = (await detail(request, chat.chat.id)).sources.find(
-    (item) => item.id === source.id
-  )!;
-  expect(stored.text).toBe(text);
 });

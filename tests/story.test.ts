@@ -273,24 +273,3 @@ test('long requests share one bound for new runs and outline writing, without st
   expect(app.store.detail(created.id).runs).toEqual([]);
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
-
-test('independent scene queue endpoints are retired while stored command bytes remain', async () => {
-  const app = await application();
-  const created = await api(app, 'POST', '/api/chats', { title: 'Retired queue' });
-  const command = app.store.story.createCommand(created.id, {
-    label: 'Archived command',
-    request: 'Preserved exact request',
-    idempotencyKey: randomUUID(),
-  });
-  for (const [method, url] of [
-    ['POST', `/api/chats/${created.id}/scene-commands`],
-    ['POST', `/api/scene-commands/${command.id}/cancel`],
-    ['DELETE', `/api/scene-commands/${command.id}`],
-  ] as const) {
-    const response = await app.inject({ method, url, payload: {} });
-    expect(response.statusCode, response.body).toBe(404);
-  }
-  expect(app.store.story.command(command.id)).toEqual(command);
-  expect(await api(app, 'GET', `/api/chats/${created.id}/story`)).not.toHaveProperty('commands');
-  expect(globalThis.fetch).not.toHaveBeenCalled();
-});

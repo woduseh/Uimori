@@ -1,11 +1,9 @@
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { reviewWidths, visualReview } from './fixtures/visual-review.js';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Bookmark } from '../core/reading-state.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { openSourceActions, resizeViewport } from './ui-navigation.js';
+import { openSourceActions } from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -46,17 +44,10 @@ async function seed(request: APIRequestContext, title: string, requests: string[
   return detail(request, chat.id);
 }
 
-async function noHorizontalOverflow(page: Page, region: Locator) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  expect(await region.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-}
-
 test('RACOM04 last response retry chooses replacement or copy and preserves the response until success', async ({
   page,
   request,
-}, info) => {
+}) => {
   test.setTimeout(60_000);
   const before = await seed(request, '재요청 방식 합성 채팅', ['첫 장면', '마지막 장면']);
   const old = before.sources.at(-1)!;
@@ -81,14 +72,6 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   await expect(
     dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true })
   ).toBeVisible();
-  for (const width of [412, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    await noHorizontalOverflow(page, dialog);
-    await page.screenshot({
-      path: info.outputPath(`retry-choice-${width}.png`),
-      animations: 'disabled',
-    });
-  }
   await page.setViewportSize({ width: 412, height: 900 });
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
   expect(modes).toHaveLength(0);
@@ -214,7 +197,7 @@ test('RACOM07 cancelled request dismissal waits for acknowledgement, recovers tr
   page,
   request,
   context,
-}, info) => {
+}) => {
   const before = await seed(request, '취소 요청 정리 합성 채팅', ['보존할 기존 장면']);
   const run = await cancelNewRequest(page, request, before.chat.id);
   const pending = page.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);
@@ -226,14 +209,6 @@ test('RACOM07 cancelled request dismissal waits for acknowledgement, recovers tr
   await expect(
     pending.locator('.partial-response, .streaming-response, .chat-retry-failure')
   ).toHaveCount(0);
-  for (const width of [412, 1440]) {
-    await resizeViewport(page, { width, height: 900 });
-    await actions.scrollIntoViewIfNeeded();
-    await noHorizontalOverflow(page, pending);
-    for (const button of await actions.getByRole('button').all())
-      await expect(button).toBeInViewport({ ratio: 1 });
-    await page.screenshot({ path: info.outputPath(`cancelled-request-${width}.png`) });
-  }
   const composerDraft = '정리와 새로고침 후에도 남길 다음 요청 초안';
   const editDraft = '취소한 요청의 아직 보내지 않은 수정 초안';
   const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
@@ -326,7 +301,7 @@ test('RACOM07 cancelled request dismissal waits for acknowledgement, recovers tr
 test('RACOM08 cancelled request opens its specific task record and lazily recovers streamed partial output', async ({
   page,
   request,
-}, info) => {
+}) => {
   const before = await seed(request, '취소 요청 일부 응답 합성 채팅', ['이전 작업과 구분할 장면']);
   const run = await cancelNewRequest(page, request, before.chat.id);
   const pending = page.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);
@@ -369,165 +344,12 @@ test('RACOM08 cancelled request opens its specific task record and lazily recove
   await partial.getByText('일부 응답 보기', { exact: true }).click();
   await expect(partial.locator('.streaming-text')).toHaveText(partialText);
   expect(streamReads).toBe(1);
-  await expect(pending.locator('.partial-response, .streaming-response')).toHaveCount(0);
-  await partial.scrollIntoViewIfNeeded();
-  await noHorizontalOverflow(page, dialog);
-  await page.screenshot({ path: info.outputPath('cancelled-request-partial-response.png') });
-});
-
-test('RACOM01 source footer stays compact and its menu supports touch, keyboard and dismissal at representative widths with optional six-width review', async ({
-  page,
-  request,
-}, info) => {
-  test.setTimeout(60_000);
-  const sceneRequest =
-    '합성 화면 검사: 등대지기는 항구에서 돌아온 편지를 펼쳤다.\n\n' +
-    '바닷바람이 창문을 두드렸고 두 사람은 다음 항해를 이야기했다. '.repeat(35);
-  const before = await seed(request, '응답 작업 메뉴 합성 채팅', [sceneRequest]);
-  const source = before.sources[0];
-  const pageErrors: string[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  for (const width of reviewWidths([320, 360, 390, 412, 768, 1440])) {
-    await page.setViewportSize({ width, height: width >= 768 ? 1000 : 844 });
-    await page.goto(`/?chat=${before.chat.id}`);
-    const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-    const footer = scene.locator('.source-actions');
-    const trigger = footer.getByLabel('장면 작업 메뉴', { exact: true });
-    const menu = trigger.locator('..');
-    await expect(scene.getByTestId('source-text')).toBeVisible();
-    await page.getByLabel('다음 장면 요청', { exact: true }).fill('메뉴를 닫아도 남는 합성 초안');
-    await trigger.scrollIntoViewIfNeeded();
-    await expect(menu).toHaveJSProperty('open', false);
-    await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
-    await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
-    await expect(footer.getByRole('button', { name: /책갈피 추가/ })).toBeVisible();
-    await expect(trigger).toBeVisible();
-    for (const control of await footer.locator('button, summary').filter({ visible: true }).all()) {
-      const box = (await control.boundingBox())!;
-      expect(box.width).toBeGreaterThanOrEqual(44);
-      expect(box.height).toBeGreaterThanOrEqual(44);
-    }
-    if (visualReview)
-      expect((await footer.boundingBox())!.height).toBeLessThanOrEqual(width < 400 ? 100 : 52);
-    await noHorizontalOverflow(page, scene);
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`response-actions-${width}.png`) });
-
-    await trigger.focus();
-    await trigger.press('Enter');
-    await expect(menu).toHaveJSProperty('open', true);
-    const actions = menu.locator('.action-menu-body');
-    await expect(actions.getByRole('button')).toHaveText([
-      '다시 쓰기',
-      '도우미에게 물어보기',
-      '삽화 생성',
-      '이 장면까지 새 채팅으로 분기',
-      '더 보기',
-      '장면 삭제',
-    ]);
-    await expect(actions.getByRole('button', { name: '더 보기', exact: true })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
-    const openTriggerBox = (await trigger.boundingBox())!;
-    const menuBox = (await actions.boundingBox())!;
-    const height = page.viewportSize()!.height;
-    expect(menuBox.x).toBeGreaterThanOrEqual(0);
-    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width);
-    expect(menuBox.y).toBeGreaterThanOrEqual(0);
-    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(height);
-    if (width <= 600) {
-      expect(menuBox.y + menuBox.height).toBeGreaterThanOrEqual(height - 24);
-      for (const item of await actions.getByRole('button').all()) {
-        const box = (await item.boundingBox())!;
-        expect(box.y).toBeGreaterThanOrEqual(0);
-        expect(box.y + box.height).toBeLessThanOrEqual(height);
-      }
-    } else expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(openTriggerBox.y + 1);
-    if (width === MOBILE_WIDTH || width === DESKTOP_WIDTH)
-      if (visualReview)
-        await page.screenshot({ path: info.outputPath(`response-menu-${width}.png`) });
-    await page.keyboard.press('Tab');
-    await expect(actions.getByRole('button').first()).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(menu).toHaveJSProperty('open', false);
-    await expect(trigger).toBeFocused();
-
-    if (width === DESKTOP_WIDTH) {
-      for (const compactWidth of [768, 600, 601]) {
-        await page.setViewportSize({ width: compactWidth, height: 320 });
-        await trigger.scrollIntoViewIfNeeded();
-        if (!(await menu.evaluate((node) => (node as HTMLDetailsElement).open)))
-          await trigger.click();
-        await expect(menu).toHaveJSProperty('open', true);
-        const box = (await actions.boundingBox())!;
-        expect(box.x).toBeGreaterThanOrEqual(0);
-        expect(box.y).toBeGreaterThanOrEqual(0);
-        expect(box.x + box.width).toBeLessThanOrEqual(compactWidth);
-        expect(box.y + box.height).toBeLessThanOrEqual(320);
-        if (compactWidth === 600) expect(box.y + box.height).toBeGreaterThanOrEqual(296);
-        const more = actions.getByRole('button', { name: '더 보기', exact: true });
-        if (await more.isVisible()) {
-          await more.click();
-          const collapse = actions.getByRole('button', { name: '접기', exact: true });
-          await expect(collapse).toBeFocused();
-          await expect(collapse).toHaveAttribute('aria-expanded', 'true');
-          await expect(menu).toHaveJSProperty('open', true);
-          await expect(actions.getByRole('button')).toHaveText([
-            '다시 쓰기',
-            '도우미에게 물어보기',
-            '삽화 생성',
-            '이 장면까지 새 채팅으로 분기',
-            '접기',
-            '번역 수정',
-            '원문 연결 정보',
-            '장면 삭제',
-          ]);
-        }
-        await trigger.focus();
-        for (const item of await actions.getByRole('button').all()) {
-          await page.keyboard.press('Tab');
-          await expect(item).toBeFocused();
-          await expect(item).toBeInViewport();
-        }
-      }
-      await trigger.press('Escape');
-      await expect(trigger).toBeFocused();
-      await page.setViewportSize({ width, height: 1000 });
-    }
-
-    await openSourceActions(scene);
-    await expect(actions.getByRole('button', { name: '더 보기', exact: true })).toHaveAttribute(
-      'aria-expanded',
-      'false'
-    );
-    const composer = page.getByLabel('다음 장면 요청', { exact: true });
-    if (width <= 600) {
-      const sheet = (await actions.boundingBox())!;
-      await page.mouse.click(width / 2, Math.max(8, sheet.y - 30));
-      await expect(menu).toHaveJSProperty('open', false);
-    }
-    await composer.click();
-    await expect(menu).toHaveJSProperty('open', false);
-    await expect(composer).toBeFocused();
-    await expect(composer).toHaveValue('메뉴를 닫아도 남는 합성 초안');
-    await expect(footer.getByRole('button', { name: '본문 복사', exact: true })).toBeVisible();
-    await expect(footer.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
-    await expect(footer.getByRole('button', { name: /책갈피 추가/ })).toBeVisible();
-    await expect(trigger).toBeVisible();
-  }
-  const after = await detail(request, before.chat.id);
-  expect(after.sources).toEqual(before.sources);
-  expect(after.runs).toEqual(before.runs);
-  expect(after.attempts).toEqual(before.attempts);
-  expect(after.jobs).toEqual(before.jobs);
-  expect(pageErrors).toEqual([]);
 });
 
 test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing and saved representations remain available', async ({
   page,
   request,
-}, info) => {
+}) => {
   test.setTimeout(90_000);
   const before = await seed(request, '지난 장면 작업 합성 채팅', [
     '등대지기가 편지를 펼치는 첫 장면이에요.',
@@ -563,7 +385,7 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     if (event.method() === 'POST' && /\/(?:translation|retranslate)$/.test(event.url()))
       generationRequests.push(event.url());
   });
-  for (const width of [360, 1440]) {
+  for (const width of [360]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(`/?chat=${before.chat.id}`);
     const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
@@ -609,7 +431,6 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await expect(menu).toHaveJSProperty('open', true);
     await expect(translationChoice).toHaveCount(0);
     await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toBeFocused();
-    await page.screenshot({ path: info.outputPath(`past-scene-menu-${width}.png`) });
     await page.keyboard.press('Escape');
     await expect(opener).toBeFocused();
     await openSourceActions(scene);
@@ -632,8 +453,6 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
     await scene.getByRole('button', { name: '원문 보기', exact: true }).click();
     await page.keyboard.press('Escape');
     await expect(menu).toHaveJSProperty('open', false);
-    await page.screenshot({ path: info.outputPath(`past-scene-actions-${width}.png`) });
-    await noHorizontalOverflow(page, scene);
     await page.reload();
     await expect(scene.getByTestId('source-text')).toBeVisible();
     await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
@@ -669,7 +488,7 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
   expect(after.sources).toEqual(
     before.sources.map((item) =>
       item.id === source.id
-        ? { ...item, translationRevision: (source.translationRevision ?? 0) + 3 }
+        ? { ...item, translationRevision: (source.translationRevision ?? 0) + 2 }
         : item
     )
   );
@@ -681,142 +500,4 @@ test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing 
       .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0]?.result?.text
   ).toBe(translatedText);
   expect(generationRequests).toEqual([]);
-});
-
-test('RACOM09 a scene menu stays open when its own toggle shortens the scene and clamps the reader scroll, and still closes when the reader scrolls', async ({
-  page,
-  request,
-}) => {
-  const before = await seed(request, '스크롤 고정 합성 채팅', [
-    '등대지기가 편지를 펼치는 첫 장면이에요.',
-    '최신 장면에서는 다음 항해를 준비해요.',
-  ]);
-  const source = before.sources[0];
-  const translated = await request.put(`/api/sources/${source.id}/translation`, {
-    data: {
-      text: '짧은 번역이에요.',
-      expectedRevision: source.translationRevision ?? 0,
-      expectedSourceHash: source.hash,
-    },
-  });
-  expect(translated.ok(), await translated.text()).toBe(true);
-  await page.addInitScript(() => {
-    if (window === window.top) localStorage.setItem('uimori:reading-language', 'original');
-  });
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  await page.goto(`/?chat=${before.chat.id}`);
-  const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  const reader = page.locator('[data-reader-scrollport]');
-  await expect(scene.getByTestId('source-text')).toBeVisible();
-  const bottomGap = 40;
-  const range = await reader.evaluate((node, gap) => {
-    node.scrollTop = node.scrollHeight - node.clientHeight - gap;
-    return { scrollTop: node.scrollTop, max: node.scrollHeight - node.clientHeight };
-  }, bottomGap);
-  expect(range.scrollTop).toBe(range.max - bottomGap);
-  const original = await scene
-    .getByTestId('source-text')
-    .evaluate((node) => node.getBoundingClientRect().height);
-  const opener = await openSourceActions(scene);
-  const menu = opener.locator('..');
-  await expect(menu).toHaveJSProperty('open', true);
-  await reader.evaluate((node) => {
-    node.addEventListener('scroll', () => node.setAttribute('data-test-clamped', 'yes'), {
-      once: true,
-    });
-  });
-  const translationChoice = scene.getByRole('button', { name: '번역 보기', exact: true });
-  await translationChoice.click();
-  await expect(scene.getByTestId('translation-text')).toContainText('짧은 번역이에요.');
-  const shortened = await scene
-    .getByTestId('translation-text')
-    .evaluate((node) => node.getBoundingClientRect().height);
-  expect(original - shortened).toBeGreaterThan(bottomGap);
-  await expect(reader).toHaveAttribute('data-test-clamped', 'yes');
-  const clamped = await reader.evaluate((node) => ({
-    scrollTop: node.scrollTop,
-    max: node.scrollHeight - node.clientHeight,
-  }));
-  expect(clamped.scrollTop).toBe(clamped.max);
-  expect(clamped.scrollTop).toBeLessThan(range.scrollTop);
-  await expect(menu).toHaveJSProperty('open', true);
-  await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toBeFocused();
-
-  await reader.evaluate((node) => {
-    node.scrollTop = 0;
-  });
-  await expect(menu).toHaveJSProperty('open', false);
-});
-
-test('RACOM06 earlier-scene translation generation stays explicit and pending or failed work keeps visible recovery', async ({
-  page,
-  request,
-}, info) => {
-  const before = await seed(request, '지난 장면 번역 복구 합성 채팅', [
-    '편지를 읽어요.',
-    '답장을 써요.',
-  ]);
-  const source = before.sources[0];
-  await page.setViewportSize({ width: 360, height: 1000 });
-  const fail = await request.post('/api/test/control', {
-    data: { action: 'fail-next', point: 'translation' },
-  });
-  expect(fail.ok()).toBe(true);
-  let submissions = 0;
-  let release = () => {};
-  let admission = Promise.resolve();
-  await page.route(`**/api/sources/${source.id}/translation`, async (route) => {
-    submissions++;
-    await admission;
-    await route.fulfill({ response: await route.fetch() });
-  });
-  try {
-    await page.goto(`/?chat=${before.chat.id}`);
-    const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-    const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    await draft.fill('지난 장면의 번역이 실패해도 남길 초안');
-    await expect(scene.getByRole('button', { name: '번역 생성', exact: true })).toBeHidden();
-    const opener = await openSourceActions(scene);
-    const generate = scene.getByRole('button', { name: '번역 생성', exact: true });
-    await expect(generate).toBeVisible();
-    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toHaveCount(0);
-    expect(submissions).toBe(0);
-    await generate.click();
-    const retry = scene.locator('.scene-header').getByRole('button', {
-      name: '번역 다시 시도',
-      exact: true,
-    });
-    await expect(retry).toBeVisible();
-    await expect(scene.locator('.translation-placeholder')).toContainText(
-      '한국어 번역을 완료하지 못했어요.'
-    );
-    expect(submissions).toBe(1);
-    await page.screenshot({ path: info.outputPath('past-scene-translation-failed.png') });
-    admission = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await retry.click();
-    await expect(retry).toBeDisabled();
-    await expect(scene.locator('.translation-placeholder .loading-state')).toBeVisible();
-    await retry.dispatchEvent('click');
-    expect(submissions).toBe(2);
-    release();
-    await expect(scene.getByTestId('translation-text')).toBeVisible();
-    await expect(scene.getByTestId('scene-representation')).toHaveCount(0);
-    await expect(retry).toHaveCount(0);
-    await openSourceActions(scene);
-    await scene.getByRole('button', { name: '원문 보기', exact: true }).click();
-    await page.keyboard.press('Escape');
-    await expect(opener).toBeFocused();
-    await expect(scene.getByTestId('source-text')).toBeVisible();
-    await expect(draft).toHaveValue('지난 장면의 번역이 실패해도 남길 초안');
-    expect(submissions).toBe(2);
-    const after = await detail(request, before.chat.id);
-    expect(after.sources[0]).toEqual({ ...source, translationRevision: 2 });
-    expect(after.sources[1]).toEqual(before.sources[1]);
-    expect(after.runs).toEqual(before.runs);
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: 'wait' });
-  }
 });

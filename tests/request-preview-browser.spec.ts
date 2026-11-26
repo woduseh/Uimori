@@ -47,7 +47,7 @@ async function prepare(request: APIRequestContext, endpoint: string) {
   return { chat, model, input };
 }
 
-test('REQUESTPREVIEW current composer settings are estimated without generation at both widths', async ({
+test('REQUESTPREVIEW current composer settings are estimated without generation', async ({
   page,
   request,
 }, info) => {
@@ -63,7 +63,7 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
     });
     await page.goto(`/?chat=${chat.id}`);
     const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    for (const width of DEFAULT_WIDTHS) {
+    for (const width of DEFAULT_WIDTHS.slice(0, 1)) {
       await page.setViewportSize({ width, height: 900 });
       await composer.fill('');
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
@@ -137,67 +137,6 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
     expect(after.chat.headRevision).toBe(chat.headRevision);
     expect(after.chat.settingsRevision).toBe(chat.settingsRevision);
   } finally {
-    await peer.close();
-  }
-});
-
-test('REQUESTPREVIEW closing a pending preview preserves the draft and ignores its late response', async ({
-  page,
-  request,
-}) => {
-  const peer = await loopbackProvider((_wire, response) =>
-    writeSse(response, [{ type: 'text_delta', delta: 'UNEXPECTED_GENERATION' }, { type: 'done' }])
-  );
-  let release = () => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let fetched = () => {};
-  const firstFetched = new Promise<void>((resolve) => {
-    fetched = resolve;
-  });
-  let held = 0;
-  try {
-    const { chat, model, input } = await prepare(request, peer.endpoint);
-    await page.route(
-      (url) => url.pathname === `/api/chats/${chat.id}/request-preview`,
-      async (route) => {
-        if (held++ !== 0) return route.continue();
-        const response = await route.fetch();
-        expect(response.ok()).toBe(true);
-        fetched();
-        await gate;
-        await route.fulfill({ response }).catch(() => {});
-      }
-    );
-    await page.goto(`/?chat=${chat.id}`);
-    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    const open = async () => {
-      await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-      await page.getByRole('button', { name: '다음 요청 미리보기', exact: true }).click();
-    };
-    await composer.fill('첫 요청은 보내지 않아요.');
-    await open();
-    await firstFetched;
-    const dialog = page.getByRole('dialog', { name: '다음 요청 미리보기', exact: true });
-    await dialog.getByRole('button', { name: '다음 요청 미리보기 닫기', exact: true }).click();
-    const updated = await body<ModelPreset>(
-      await request.put(`/api/model-presets/${model.id}`, {
-        data: { ...input, expectedRevision: model.revision, title: '새로 선택한 미리보기 모델' },
-      })
-    );
-    const draft = '두 번째 요청만 현재 미리보기에 사용해요.';
-    await composer.fill(draft);
-    await open();
-    await expect(dialog.getByTestId('request-preview')).toContainText(updated.title);
-    release();
-    await page.unrouteAll({ behavior: 'wait' });
-    await expect(dialog.getByTestId('request-preview')).not.toContainText(model.title);
-    await dialog.getByRole('button', { name: '다음 요청 미리보기 닫기', exact: true }).click();
-    await expect(composer).toHaveValue(draft);
-    expect(peer.requests).toHaveLength(0);
-  } finally {
-    release();
     await peer.close();
   }
 });

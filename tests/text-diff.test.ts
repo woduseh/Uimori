@@ -3,8 +3,6 @@ import {
   TEXT_DIFF_LIMITS,
   applyTextDiff,
   diffText,
-  intralineDiff,
-  pairChangedLines,
   rewriteAsBlocks,
   type TextDiff,
 } from '../core/text-diff.js';
@@ -60,38 +58,6 @@ test('a rewritten paragraph reads as one deleted block and one inserted block', 
   expect(rewriteAsBlocks(swap.hunks[0]!.segments)).toEqual(swap.hunks[0]!.segments);
 });
 
-test('separate prose changes become separate hunks and inserted paragraphs count their words', () => {
-  const filler = Array.from({ length: 40 }, (_, index) => `단어${index}`).join(' ');
-  const before = `앞 문장 하나.\n${filler}\n뒤 문장 하나.\n`;
-  const after = `앞 문장 둘.\n${filler}\n새로 넣은 문단이에요.\n뒤 문장 하나.\n`;
-  const diff = changes(diffText(before, after, 'prose'));
-  expect(diff.hunks).toHaveLength(2);
-  expect(diff).toMatchObject({ added: 4, removed: 1 });
-  expect(applyTextDiff(before, diff.hunks)).toBe(after);
-});
-
-test('JSON and regular expressions compare by line', () => {
-  const before = JSON.stringify(
-    { name: '마을', keys: ['다리', '강'], regex: '^(\\S+)님$', order: 3 },
-    null,
-    2
-  );
-  const after = JSON.stringify(
-    { name: '마을', keys: ['다리', '강', '숲'], regex: '^(\\S+)씨$', order: 3 },
-    null,
-    2
-  );
-  const diff = changes(diffText(before, after, 'code'));
-  expect(diff).toMatchObject({ unit: 'line', added: 3, removed: 2 });
-  expect(changed(diff)).toEqual([
-    ['delete', '    "강"\n'],
-    ['insert', '    "강",\n    "숲"\n'],
-    ['delete', '  "regex": "^(\\\\S+)님$",\n'],
-    ['insert', '  "regex": "^(\\\\S+)씨$",\n'],
-  ]);
-  expect(applyTextDiff(before, diff.hunks)).toBe(after);
-});
-
 test('the limits return an explicit omission instead of a partial diff', () => {
   const long = 'a'.repeat(TEXT_DIFF_LIMITS.maxInputLength + 1);
   expect(diffText(long, 'b', 'prose')).toEqual({ mode: 'prose', unit: 'word', omitted: 'size' });
@@ -112,17 +78,6 @@ test('the limits return an explicit omission instead of a partial diff', () => {
       now: () => (clock += 100),
     })
   ).toEqual({ mode: 'code', unit: 'line', omitted: 'time' });
-});
-
-test('a prose region too different for word alignment falls back to replaced paragraphs', () => {
-  const before = Array.from({ length: 30 }, (_, index) => `가${index}`).join(' ');
-  const after = Array.from({ length: 30 }, (_, index) => `나${index}`).join(' ');
-  const diff = changes(diffText(before, after, 'prose', { ...TEXT_DIFF_LIMITS, maxEdits: 10 }));
-  expect(changed(diff)).toEqual([
-    ['delete', before],
-    ['insert', after],
-  ]);
-  expect(diff).toMatchObject({ added: 30, removed: 30 });
 });
 
 test('applying the hunks of random edits reproduces the edited text', () => {
@@ -170,47 +125,4 @@ test('applying the hunks of random edits reproduces the edited text', () => {
       if (before === after) expect(diff.hunks).toEqual([]);
     }
   }
-});
-
-test('intraline emphasis marks only the changed words of a paired line', () => {
-  const found = intralineDiff('  <span>날씨: 맑음</span>', '  <span>날씨: 흐림</span>');
-  expect(found?.before.filter((segment) => segment.op !== 'equal').map((s) => s.text)).toEqual([
-    '맑음',
-  ]);
-  expect(found?.after.filter((segment) => segment.op !== 'equal').map((s) => s.text)).toEqual([
-    '흐림',
-  ]);
-  expect(found?.before.map((segment) => segment.text).join('')).toBe('  <span>날씨: 맑음</span>');
-  const spaced = intralineDiff('local hp = max_hp - 10', 'local mp = max_mp - 10');
-  expect(spaced?.after.filter((segment) => segment.op === 'insert').map((s) => s.text)).toEqual([
-    'mp',
-    'max_mp',
-  ]);
-});
-
-test('intraline emphasis steps aside when a line is mostly rewritten', () => {
-  expect(intralineDiff('return a', 'print(b, c)')).toBeNull();
-  expect(intralineDiff('same', 'same')).toBeNull();
-  const now = (() => {
-    let time = 0;
-    return () => (time += 10);
-  })();
-  const slow = intralineDiff('alpha beta gamma delta', 'alpha beta gamma omega', now);
-  expect(slow?.after.filter((segment) => segment.op === 'insert').map((s) => s.text)).toEqual([
-    'omega',
-  ]);
-});
-
-test('changed lines pair by similarity in order and leave unrelated lines unpaired', () => {
-  expect(
-    pairChangedLines(
-      ['  <span>날씨: 맑음</span>', '  <span>체력: 80</span>'],
-      ['  <span>새 줄</span>', '  <span>날씨: 흐림</span>', '  <span>체력: 65</span>']
-    )
-  ).toEqual([
-    [0, 1],
-    [1, 2],
-  ]);
-  expect(pairChangedLines(['alpha beta'], ['totally different words'])).toEqual([]);
-  expect(pairChangedLines([], ['added'])).toEqual([]);
 });

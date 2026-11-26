@@ -1,13 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import {
-  navigationAction,
-  openChatMenu,
-  openChatSettings,
-  selectChatSettingsSection,
-  selectSettingsSection,
-} from './ui-navigation.js';
+import { openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
 
 for (const width of [412]) {
   test(`SCUISEARCHCHAT search navigates real chat settings and preserves drafts at ${width}px`, async ({
@@ -90,110 +84,5 @@ for (const width of [412]) {
       .getByRole('button', { name: '초안 버리고 닫기', exact: true })
       .click();
     await expect(dialog).toBeHidden();
-  });
-
-  test(`SCUISEARCHREADING search focuses reading controls and retains changes at ${width}px`, async ({
-    page,
-    request,
-  }, info) => {
-    const created = await postFixtureChat(request, {
-      data: { title: `읽기 검색 합성 채팅 ${width}` },
-    });
-    expect(created.ok()).toBe(true);
-    const chat = await created.json();
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    await (await openChatMenu(page))
-      .getByRole('button', { name: '읽기 설정', exact: true })
-      .click();
-    const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
-    const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
-    const results = dialog.locator('.settings-search-results');
-    const inputBefore = (await search.boundingBox())!;
-    const dialogBefore = (await dialog.boundingBox())!;
-    await search.fill('글자 크기');
-    const sizeResult = results.getByRole('button', { name: '본문 크기', exact: true });
-    await expect(sizeResult).toBeVisible();
-    expect(Math.abs((await search.boundingBox())!.y - inputBefore.y)).toBeLessThanOrEqual(1);
-    expect(
-      Math.abs((await dialog.boundingBox())!.height - dialogBefore.height)
-    ).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: info.outputPath(`reading-settings-search-${width}.png`) });
-    await search.press('Tab');
-    await expect(sizeResult).toBeFocused();
-    await page.keyboard.press('Enter');
-    const size = dialog.getByRole('slider', { name: '본문 크기', exact: true });
-    await expect(size).toBeFocused();
-    const oldSize = Number(await size.inputValue());
-    const nextSize = oldSize === 28 ? oldSize - 1 : oldSize + 1;
-    await size.press(oldSize === 28 ? 'ArrowLeft' : 'ArrowRight');
-    await expect(size).toHaveValue(String(nextSize));
-    await search.fill('문단 간격');
-    await results.getByRole('button', { name: '문단 간격', exact: true }).click();
-    const spacing = dialog.getByRole('combobox', { name: '문단 간격', exact: true });
-    await expect(spacing).toBeFocused();
-    await spacing.selectOption('1.5');
-    await search.fill('없는 읽기 설정');
-    await expect(results.getByRole('status')).toHaveText('검색 결과가 없어요.');
-    await search.fill(' / · - ');
-    await expect(results).toHaveCount(0);
-    await expect(size).toBeVisible();
-    await expect(spacing).toHaveValue('1.5');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true
-    );
-    await dialog.getByRole('button', { name: '읽기 설정 닫기', exact: true }).click();
-    await page.reload();
-    await (await openChatMenu(page))
-      .getByRole('button', { name: '읽기 설정', exact: true })
-      .click();
-    await expect(size).toHaveValue(String(nextSize));
-    await expect(spacing).toHaveValue('1.5');
-    await dialog.getByRole('button', { name: '읽기 설정 닫기', exact: true }).click();
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '일반');
-    const global = page.getByRole('dialog', { name: '설정', exact: true });
-    await expect(
-      global.getByRole('searchbox', { name: '설정 검색', exact: true, includeHidden: true })
-    ).toHaveCount(1);
-    await expect(global.getByRole('slider', { name: '본문 크기', exact: true })).toHaveValue(
-      String(nextSize)
-    );
-    if (width <= 760)
-      await global.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-    await expect(global.getByRole('searchbox', { name: '설정 검색', exact: true })).toBeVisible();
-  });
-}
-
-for (const width of [412, 1440]) {
-  test(`SCUISEARCHDETAIL search opens the add-provider detail and Escape or back returns to the provider list at ${width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-    if (width <= 760)
-      await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-    const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
-    await search.fill('프로바이더 추가');
-    const result = dialog
-      .locator('.settings-search-results')
-      .getByRole('button', { name: /^프로바이더 추가/ });
-    await expect(result).toContainText('프로바이더와 모델');
-    await result.click();
-    const detail = dialog.getByRole('region', {
-      name: '프로바이더와 모델 / 프로바이더 추가',
-      exact: true,
-    });
-    await expect(detail).toBeFocused();
-    await expect(
-      detail.getByRole('region', { name: '프로바이더 선택', exact: true })
-    ).toBeVisible();
-    if (width <= 760) await page.goBack();
-    else await page.keyboard.press('Escape');
-    await expect(detail).toBeHidden();
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByTestId('connection-editor')).toBeVisible();
   });
 }

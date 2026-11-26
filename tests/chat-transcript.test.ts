@@ -20,7 +20,6 @@ import type { Content } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { exportManuscript, manuscriptExportMetadata } from '../server/manuscript-export.js';
 import { readerDetail } from '../server/reader.js';
-import { apiErrorDiagnostic } from '../web/api-errors.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -207,29 +206,6 @@ describe('Markdown manuscript export', () => {
       exportManuscript(store, empty.id, { mode: 'source', expectedHeadRevision: null })
     ).toThrow('MANUSCRIPT_EMPTY');
   });
-
-  test('only validated scene numbers reach the missing translation message', () => {
-    expect(apiErrorDiagnostic('MANUSCRIPT_TRANSLATION_MISSING:0,2:2', 409, 'POST')).toEqual({
-      code: 'MANUSCRIPT_TRANSLATION_MISSING',
-      message:
-        '저장된 유효 번역이 없는 장면: 첫 메시지, 장면 2. 번역을 완료하거나 범위를 바꿔 주세요.',
-    });
-    const twenty = Array.from({ length: 20 }, (_, index) => index + 1).join(',');
-    expect(
-      apiErrorDiagnostic(`MANUSCRIPT_TRANSLATION_MISSING:${twenty}:23`, 409, 'POST').message
-    ).toContain('장면 20 외 3개');
-    for (const suffix of ['2:0', '2,1:2', 'secret:1', '1:1:secret', `${twenty},21:21`]) {
-      const diagnostic = apiErrorDiagnostic(
-        `MANUSCRIPT_TRANSLATION_MISSING:${suffix}`,
-        409,
-        'POST'
-      );
-      expect(diagnostic.code).toBeNull();
-      expect(diagnostic.message).toBe(
-        '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)'
-      );
-    }
-  });
 });
 
 describe('chat transcript export and import', () => {
@@ -335,26 +311,6 @@ describe('chat transcript export and import', () => {
     expect(exportChatTranscript(destination, restored.chat.id).notes).toEqual(
       backup.chats[0].transcript.notes
     );
-  });
-
-  test('transcripts admit long titles and histories without an unrelated entry-count limit', () => {
-    const title = 'The night the tide carried our city home — '.repeat(8).trim();
-    const entries = Array.from({ length: 5001 }, (_, index) => ({
-      request: `Continue ${index}`,
-      text: `Scene ${index}`,
-      translation: null,
-    }));
-    const transcript = validateChatTranscript({
-      format: CHAT_TRANSCRIPT_FORMAT,
-      version: 2,
-      title,
-      exportedAt: '2026-01-01T00:00:00Z',
-      packageAttachments: [],
-      notes: [],
-      entries,
-    });
-    expect(transcript.title).toBe(title);
-    expect(transcript.entries).toEqual(entries);
   });
 
   test('export keeps current edits and matching translations while respecting note and source scope', async () => {

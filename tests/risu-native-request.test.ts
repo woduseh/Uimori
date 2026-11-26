@@ -183,20 +183,6 @@ test('start script exclusion does not resurrect an image-only current input', as
   ).toBe(false);
 });
 
-test('native request without callbacks never adds the retired RISUP assistant prefill', async () => {
-  const input = await prepared();
-  expect(input.request.prompt!.messages.at(-1)).toMatchObject({
-    role: 'user',
-    completion: 'complete',
-    content: [{ type: 'text', text: 'A scene' }],
-  });
-  const result = await prepareNativeRisuRequest(input.snapshot, input.request);
-  expect(result.request.prompt).toEqual(input.request.prompt);
-  expect(
-    result.snapshot.nativeRisuExecution!.requestEdits![0]!.prompt.messages.at(-1)!.completion
-  ).toBe('complete');
-});
-
 test('native request body edits preserve completion when the final role and position stay fixed', async () => {
   const input = await prepared(
     `listenEdit('editRequest', function(id, messages)

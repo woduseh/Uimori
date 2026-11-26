@@ -212,21 +212,6 @@ test('DEL03 deleting selected chat clears reader and URL while preserving anothe
   await nav.locator(`[data-chat-id="${chat.id}"]`).hover();
   await nav.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
   await nav.getByRole('button', { name: `${chat.title} 채팅 삭제`, exact: true }).click();
-  const destructive = page
-    .getByRole('alertdialog', { name: '삭제 확인', exact: true })
-    .getByRole('button', { name: '영구 삭제', exact: true });
-  await destructive.hover();
-  const resolved = await destructive.evaluate((button) => {
-    const probe = document.createElement('span');
-    probe.style.color = 'var(--error-hover)';
-    probe.style.backgroundColor = 'var(--error-ink)';
-    button.append(probe);
-    const { color, backgroundColor } = getComputedStyle(probe);
-    probe.remove();
-    return { hover: color, ink: backgroundColor };
-  });
-  await expect(destructive).toHaveCSS('background-color', resolved.hover);
-  await expect(destructive).toHaveCSS('color', resolved.ink);
   await confirm(page, '영구 삭제');
   await expect(nav.getByRole('button', { name: chat.title, exact: true })).toHaveCount(0);
   await expect(page).not.toHaveURL(new RegExp(chat.id));

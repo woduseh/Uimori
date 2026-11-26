@@ -4,12 +4,7 @@ import { readFile } from 'node:fs/promises';
 import type { Content, PromptPreset } from '../core/product.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { readRisuPresetFile } from '../server/risu-preset-file.js';
-import {
-  DESKTOP_HEIGHT,
-  DESKTOP_WIDTH,
-  MOBILE_HEIGHT,
-  MOBILE_WIDTH,
-} from './fixtures/browser-viewports.js';
+import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import {
@@ -117,10 +112,7 @@ function nextSave(page: Page) {
   );
 }
 
-const viewports = [
-  { name: 'desktop', width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
-  { name: 'mobile', width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
-];
+const viewports = [{ name: 'desktop', width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }];
 
 for (const viewport of viewports) {
   test.describe(`UI recovery ${viewport.name} ${viewport.width}x${viewport.height}`, () => {

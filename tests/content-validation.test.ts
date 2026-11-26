@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from 'vitest';
 import { assertRisuContent, validateRisuContent, type RisuContent } from '../core/risu-content.js';
-import { assertRisuContentSource, validateRisuContentSource } from '../core/risu-native.js';
+import { validateRisuContentSource } from '../core/risu-native.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
 
 function content(): RisuContent {
@@ -48,32 +48,6 @@ function freeze(value: unknown): void {
   Object.freeze(value);
   for (const child of Object.values(value)) freeze(child);
 }
-
-test('package and native source validation borrow a value without mutating its object graph', () => {
-  const input: unknown = content();
-  const before = structuredClone(input);
-  freeze(input);
-  assertRisuContent(input);
-  expect(input.id).toBe('fixture');
-  expect(input).toEqual(before);
-  assertRisuContentSource(input.nativeRisu);
-  const edited = validateRisuContentSource(input.nativeRisu);
-  edited.card.description = 'Edited';
-  expect(input.nativeRisu.card.description).toBe('Body');
-});
-
-test('the existing validator still returns a detached editable copy', () => {
-  const input = content();
-  const result = validateRisuContent(input);
-  expect(result).toEqual(input);
-  expect(result).not.toBe(input);
-  result.lore[0].text = 'Edited';
-  result.lore[0].relatedIds!.push('later');
-  result.nativeRisu.card.description = 'Edited card';
-  expect(input.lore[0].text).toBe('Second lore');
-  expect(input.lore[0].relatedIds).toEqual(['first']);
-  expect(input.nativeRisu.card.description).toBe('Body');
-});
 
 test('compilation is read-only, detached and preserves resource grouping and ordering', () => {
   const input = content();

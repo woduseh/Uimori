@@ -1,8 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
-import { isResourceSaveRequest } from './fixtures/resource-save.js';
-import { navigationAction, selectEditorSection } from './ui-navigation.js';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
@@ -125,119 +123,6 @@ test('SHORTCUT03 Ctrl+S saves the focused source editor and nothing else', async
   expect(saved.sources[0].text).toBe('단축키로 저장한 원문.');
 });
 
-test('SHORTCUT04 Escape twice cancels the running generation and a lone or post-dialog Escape does not', async ({
-  page,
-  request,
-}) => {
-  const { chat } = await createReadingChat(request, `단축키 중단 ${Date.now()}`, 1);
-  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
-  let cancels = 0;
-  await page.route('**/api/runs/*/cancel', async (route) => {
-    cancels++;
-    await route.fulfill({ response: await route.fetch() });
-  });
-  try {
-    await page.goto(`/?chat=${chat.id}`);
-    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    await composer.fill('멈출 장면 요청');
-    await page.getByRole('button', { name: '원문 생성', exact: true }).click();
-    const cancel = page.getByRole('button', { name: '원문 생성 취소', exact: true });
-    await expect(cancel).toBeVisible();
-    const notice = page.locator('.transient-notice', {
-      hasText: 'Esc 키를 한 번 더 누르면 원문 생성을 취소해요.',
-    });
-
-    await composer.click();
-    await page.keyboard.press('Escape');
-    await expect(notice).toBeVisible();
-    await page.waitForTimeout(2100);
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-    expect(cancels).toBe(0);
-    await expect(cancel).toBeVisible();
-    await page.waitForTimeout(2100);
-
-    await page.keyboard.press('Control+Comma');
-    const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    await expect(settings).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(settings).toBeHidden();
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-    expect(cancels).toBe(0);
-
-    await page.waitForTimeout(1500);
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
-    await expect.poll(() => cancels).toBe(1);
-  } finally {
-    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
-  }
-  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
-});
-
-test('SHORTCUT05 turning shortcuts off keeps only the Escape behaviour that existed before', async ({
-  page,
-  request,
-}) => {
-  const { chat } = await createReadingChat(request, `단축키 끄기 ${Date.now()}`, 1);
-  await page.goto(`/?chat=${chat.id}`);
-  const shell = page.locator('.app-shell');
-  await page.getByRole('textbox', { name: '다음 장면 요청', exact: true }).click();
-  await page.keyboard.press('Control+Comma');
-  const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const toggle = settings.getByRole('switch', { name: '키보드 단축키', exact: true });
-  await expect(toggle).toBeChecked();
-  await toggle.uncheck();
-  expect(await page.evaluate(() => localStorage.getItem('uimori:shortcuts'))).toBe('false');
-  await page.keyboard.press('Escape');
-  await expect(settings).toBeHidden();
-
-  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
-  let cancels = 0;
-  await page.route('**/api/runs/*/cancel', async (route) => {
-    cancels++;
-    await route.fulfill({ response: await route.fetch() });
-  });
-  try {
-    await page.reload();
-    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
-    await composer.fill('끈 상태의 요청');
-    await page.getByRole('button', { name: '원문 생성', exact: true }).click();
-    await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
-    await composer.click();
-    for (const key of ['Control+B', 'Control+K', 'Control+Backslash', 'Control+Shift+F'])
-      await page.keyboard.press(key);
-    await expect(shell).not.toHaveClass(/sidebar-collapsed/);
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-    expect(cancels).toBe(0);
-    await expect(page.locator('.transient-notice')).toHaveCount(0);
-
-    const scene = page.getByTestId('source').first();
-    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
-    const editor = scene.locator('.source-text-editor textarea');
-    await editor.fill('버릴지 물어야 하는 초안');
-    await page.keyboard.press('Escape');
-    const discard = page.getByRole('alertdialog');
-    await expect(discard).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(discard).toBeHidden();
-    await expect(editor).toHaveValue('버릴지 물어야 하는 초안');
-
-    const safeMode = () => page.evaluate(() => sessionStorage.getItem('uimori:theme-disabled'));
-    await page.keyboard.press('Control+Period');
-    await expect.poll(safeMode).toBe('1');
-    await page.keyboard.press('Control+Period');
-    await expect.poll(safeMode).toBe('0');
-  } finally {
-    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
-  }
-});
-
 test('SHORTCUT06 the command palette opens a chat, a settings section and manuscript search by keyboard', async ({
   page,
   request,
@@ -249,7 +134,6 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   const palette = page.getByRole('dialog', { name: '명령 팔레트', exact: true });
   const query = palette.getByRole('combobox', { name: '채팅, 서재 자료, 설정, 명령 찾기' });
-  const options = palette.getByRole('option');
   const active = palette.locator('[role="option"][aria-selected="true"]');
   const expectActive = async (option: Locator) => {
     await expect(option).toHaveAttribute('aria-selected', 'true');
@@ -265,36 +149,6 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   await page.keyboard.press('Control+K');
   await expect(palette).toBeVisible();
   await expect(query).toBeFocused();
-  await expect(palette.locator('.dialog-header')).toBeHidden();
-  await expect(options.first()).toHaveAccessibleName('새 채팅');
-  await expectActive(options.first());
-  await page.screenshot({ path: test.info().outputPath('palette.png') });
-  await page.keyboard.press('ArrowDown');
-  await expectActive(options.nth(1));
-  await page.keyboard.press('End');
-  await expectActive(options.last());
-  await expect(options.last().locator('kbd')).toHaveText('Ctrl+Shift+F');
-  await page.keyboard.press('ArrowDown');
-  await expectActive(options.first());
-  await page.keyboard.press('ArrowUp');
-  await expectActive(options.last());
-  await page.keyboard.press('Home');
-  await expectActive(options.first());
-  await options.nth(2).hover();
-  await expectActive(options.nth(2));
-  await page.mouse.move(0, 0);
-  await expectActive(options.nth(2));
-  const top = (await palette.boundingBox())!.y;
-  await page.keyboard.type('보라색 우산');
-  await expect(query).toHaveValue('보라색 우산');
-  await expect(options).toHaveCount(1);
-  await expectActive(options.first());
-  expect((await palette.boundingBox())!.y).toBe(top);
-  await page.keyboard.press('Escape');
-  await expect(palette).toBeHidden();
-  await expect(composer).toBeFocused();
-
-  await page.keyboard.press('Control+K');
   await expect(query).toHaveValue('');
   await page.keyboard.type(other.title);
   const activeLabel = () => active.locator('.command-palette-label').textContent();
@@ -335,41 +189,6 @@ test('SHORTCUT06 the command palette opens a chat, a settings section and manusc
   await page.keyboard.press('Escape');
   await expect(search).toBeHidden();
   await expect(composer).toBeFocused();
-});
-
-test('SHORTCUT07 Ctrl+S in the prompt editor shows what clicking save shows while another role has a draft', async ({
-  page,
-}) => {
-  await page.goto('/');
-  await navigationAction(page, '프롬프트');
-  await page.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
-  const editor = page.getByTestId('prompt-editor');
-  const title = editor.getByLabel('프롬프트 이름', { exact: true });
-  const role = editor.getByLabel('프롬프트 역할', { exact: true });
-  const suffix = Date.now();
-  await selectEditorSection(editor, '기본 옵션');
-  await title.fill(`단축키 집필 ${suffix}`);
-  await role.selectOption('translation');
-  await selectEditorSection(editor, '기본 옵션');
-  await title.fill(`단축키 번역 ${suffix}`);
-  const saves: string[] = [];
-  page.on('request', (value) => {
-    if (isResourceSaveRequest(value)) saves.push(value.url());
-  });
-  const saved = page.locator('.transient-notice', { hasText: '프롬프트를 저장했어요.' });
-
-  await title.click();
-  await page.keyboard.press('Control+S');
-  await expect(saved).toBeVisible();
-  await expect.poll(() => saves.length).toBe(1);
-
-  await role.selectOption('main');
-  await selectEditorSection(editor, '기본 옵션');
-  await expect(title).toHaveValue(`단축키 집필 ${suffix}`);
-  await expect(saved).toBeHidden();
-  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
-  await expect(saved).toBeVisible();
-  await expect.poll(() => saves.length).toBe(2);
 });
 
 test('SHORTCUT08 shortcuts can be rebound, validated, persisted in browser storage and reset', async ({

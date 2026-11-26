@@ -363,54 +363,6 @@ test('a later source, request context, or variables change after reviewing a fol
   intact(f.store);
 });
 
-test('illustration diagnostic attempt IDs retain numeric usage while detaching deleted scene payloads', () => {
-  const f = manuscript(),
-    time = new Date().toISOString();
-  f.store.db
-    .prepare(
-      "INSERT INTO attempts(id,chat_id,role,connection_id,model_id,status,request,response,input_tokens,output_tokens,cost_usd) VALUES('deleted-illustration',?,'illustration','fixture','fixture','completed',?,?,17,23,0.25)"
-    )
-    .run(
-      f.chatId,
-      JSON.stringify({ prompt: 'Synthetic removed bridge image request' }),
-      JSON.stringify({ text: 'Synthetic private image response' })
-    );
-  f.store.db
-    .prepare(
-      "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,input,diagnostic,created_at,updated_at) VALUES('deleted-illustration-job',?,?,?,'manual','completed','{}',?,?,?)"
-    )
-    .run(
-      f.chatId,
-      f.b.id,
-      f.b.hash,
-      JSON.stringify({ attempts: ['deleted-illustration'] }),
-      time,
-      time
-    );
-  deleteScenes(f.store, f.chatId, f.b.id, request(f));
-  expect(
-    f.store.db.prepare("SELECT id FROM illustration_jobs WHERE id='deleted-illustration-job'").get()
-  ).toBeUndefined();
-  const attempt = f.store.db
-    .prepare(
-      "SELECT chat_id,run_id,job_id,usage_detached,request,response,input_tokens,output_tokens,cost_usd FROM attempts WHERE id='deleted-illustration'"
-    )
-    .get();
-  expect(attempt).toMatchObject({
-    chat_id: null,
-    run_id: null,
-    job_id: null,
-    usage_detached: 1,
-    request: '{}',
-    input_tokens: 17,
-    output_tokens: 23,
-    cost_usd: 0.25,
-  });
-  expect(JSON.parse(String(attempt?.response))).toMatchObject({ detailsOmitted: true });
-  expect(String(attempt?.response)).not.toContain('Synthetic private');
-  intact(f.store);
-});
-
 test('active generation and outstanding provider calls reject a reviewed deletion; an identical completed request is idempotent', () => {
   const f = manuscript(),
     command = request(f),

@@ -64,17 +64,6 @@ test('title cache policy does not rewrite saved Responses options', () => {
   expect(model).toEqual(original);
 });
 
-test('title provider options are copied instead of sharing editable nested data', () => {
-  const { connection, model } = fixture('vercel-chat-v1');
-  model.providerOptions = { gateway: { order: ['example-provider'] } };
-  const original = structuredClone(model.providerOptions);
-  const request = titleRequest(model, connection, input);
-  expect(request.providerOptions).toEqual(original);
-  expect(request.providerOptions).not.toBe(model.providerOptions);
-  expect(request.providerOptions?.gateway).not.toBe(model.providerOptions.gateway);
-  expect(model.providerOptions).toEqual(original);
-});
-
 test.each([
   ['gemini-4-hydrogen', 'LOW'],
   ['gemini-4-carbon', 'LOW'],

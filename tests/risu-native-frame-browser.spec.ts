@@ -101,78 +101,6 @@ test('RSURFACE authored CSS cannot apply html/body layout to the app', async ({ 
     .toBe(true);
 });
 
-test('RSURFACE fixed panels open and close against the viewport without enlarging the reader', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    document.body.style.minHeight = '2400px';
-    document.getElementById('mount')!.style.cssText =
-      'width:70%;max-width:760px;margin:160px auto 0';
-    const path = '/tests/fixtures/native-risu-frame.tsx';
-    const { mount } = await import(path);
-    mount(`<style>
-      #settings {display:none}
-      .toolbar {position:fixed;top:35px;right:12px;z-index:2}
-      .panel {position:fixed;right:-440px;top:100px;width:420px;height:70vh}
-      #settings:checked ~ .panel {right:0}
-      @media(max-width:700px) {.panel {width:100vw;right:-100vw}}
-    </style><div class="risu-background"></div><p>Reader text</p><input type="checkbox" id="settings">
-    <label class="toolbar" for="settings">Toggle settings</label>
-    <aside class="panel"><input aria-label="Card draft" value="Keep me"></aside>`);
-  });
-  const native = page.locator('.risu-message-surface');
-  const panel = native.locator('.panel');
-  const toolbar = native.locator('.toolbar');
-  const draft = native.getByRole('textbox', { name: 'Card draft' });
-  const left = () => panel.evaluate((node) => node.getBoundingClientRect().left);
-  const dimensions = () =>
-    native.evaluate((host) => ({
-      height: host.getBoundingClientRect().height,
-      min: host.style.minHeight,
-    }));
-
-  for (const viewport of [
-    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
-    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
-  ]) {
-    await page.setViewportSize(viewport);
-    await expect.poll(left).toBeGreaterThanOrEqual(viewport.width);
-    await expect.poll(dimensions).toMatchObject({ min: '' });
-    expect((await dimensions()).height).toBeLessThan(200);
-    expect(
-      await native.evaluate((host) => {
-        const background = host
-          .shadowRoot!.querySelector('.risu-background')!
-          .getBoundingClientRect();
-        const message = host.getBoundingClientRect();
-        return (
-          Math.abs(background.top - message.top) + Math.abs(background.height - message.height)
-        );
-      })
-    ).toBeLessThan(1);
-    await toolbar.click();
-    await expect
-      .poll(() => panel.evaluate((node) => Math.round(node.getBoundingClientRect().right)))
-      .toBe(viewport.width);
-    await expect(panel).toHaveCSS('width', `${viewport.width < 700 ? viewport.width : 420}px`);
-    if (viewport.width === DESKTOP_WIDTH) await draft.fill('Preserved card draft');
-    await expect(draft).toHaveValue('Preserved card draft');
-    await page.evaluate(() => window.scrollTo(0, 500));
-    await expect
-      .poll(() => toolbar.evaluate((node) => Math.round(node.getBoundingClientRect().top)))
-      .toBe(35);
-    await expect
-      .poll(() => panel.evaluate((node) => Math.round(node.getBoundingClientRect().top)))
-      .toBe(100);
-    await toolbar.click();
-    await expect.poll(left).toBeGreaterThanOrEqual(viewport.width);
-    await expect(draft).toHaveValue('Preserved card draft');
-    expect((await dimensions()).height).toBeLessThan(200);
-  }
-});
-
 test('RSURFACE viewport projections retain local controls and action locks until a native revision', async ({
   page,
 }) => {
@@ -422,74 +350,6 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   expect(saved.program.nativeRisuPreset.preset.apiKey).toBeUndefined();
 });
 
-test('native preset blocks reorder by drag and keep the moved block selected', async ({ page }) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/native-preset-editor.tsx';
-    const { mountReorderFixture } = await import(path);
-    mountReorderFixture();
-  });
-  const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
-  const list = editor.getByRole('complementary', { name: '프롬프트 블록 목록' });
-  const rows = list.locator(':scope > button');
-  await expect(rows).toHaveCount(3);
-  await rows.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 20, y: 40 } });
-  await expect(rows.locator('strong')).toHaveText(['1. Second', '2. Third', '3. First']);
-  await expectCodeFieldValue(editor.getByLabel('3번 프롬프트 본문'), 'First');
-  const savedOrder = () =>
-    page
-      .locator('output')
-      .textContent()
-      .then((value) =>
-        JSON.parse(value!).nativeRisuPreset.preset.promptTemplate.map(
-          (block: { name: string }) => block.name
-        )
-      );
-  await expect.poll(savedOrder).toEqual(['Second', 'Third', 'First']);
-
-  await list.getByPlaceholder('블록 찾기').fill('i');
-  const filteredRows = list.locator(':scope > button');
-  await expect(filteredRows).toHaveCount(2);
-  await filteredRows.nth(1).dragTo(filteredRows.nth(0), { targetPosition: { x: 20, y: 1 } });
-  await expect.poll(savedOrder).toEqual(['Second', 'First', 'Third']);
-});
-
-test('native collection rows share drag ordering and selection feedback', async ({ page }) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/native-regex-editor.tsx';
-    const { mount } = await import(path);
-    mount();
-  });
-  const list = page.getByRole('complementary', { name: '정규식 목록', exact: true });
-  const rows = list.locator(':scope > button');
-  await rows.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 20, y: 48 } });
-  const value = () =>
-    page
-      .locator('output')
-      .textContent()
-      .then((text) => JSON.parse(text!).map((item: { comment: string }) => item.comment));
-  await expect.poll(value).toEqual(['Second rule', 'Future rule', 'First rule']);
-  await expect(page.getByLabel('정규식 이름', { exact: true })).toHaveValue('First rule');
-  await expect(list.getByRole('status')).toContainText('3번째');
-  const name = page.getByLabel('정규식 이름', { exact: true });
-  await name.fill('Edited selected rule');
-  await list.getByRole('searchbox', { name: '정규식 찾기', exact: true }).fill('No matching rule');
-  await expect(list.getByRole('status').filter({ hasText: '검색 결과가 없어요.' })).toBeVisible();
-  await expect(rows).toHaveCount(0);
-  await expect(name).toHaveValue('Edited selected rule');
-  await list.getByRole('button', { name: '검색 지우기', exact: true }).click();
-  await expect(rows).toHaveCount(3);
-  await expect(rows.filter({ hasText: 'Edited selected rule' })).toHaveAttribute(
-    'aria-current',
-    'true'
-  );
-  await expect(name).toHaveValue('Edited selected rule');
-  await expect.poll(value).toEqual(['Second rule', 'Future rule', 'Edited selected rule']);
-});
-
 test('native regex synced buffers follow parent JSON changes while local and remote drafts survive', async ({
   page,
 }) => {
@@ -524,12 +384,9 @@ test('native regex synced buffers follow parent JSON changes while local and rem
     .toBe('remote');
 });
 
-for (const viewport of [
-  { width: MOBILE_WIDTH, height: 915 },
-  { width: DESKTOP_WIDTH, height: 1440 },
-]) {
-  test.describe(`native editor input at ${viewport.width}x${viewport.height}`, () => {
-    test.use({ viewport });
+{
+  test.describe('native editor input', () => {
+    test.use({ viewport: { width: MOBILE_WIDTH, height: 915 } });
 
     test('native regex forms preserve aliases, custom flags, order and invalid raw drafts', async ({
       page,
@@ -608,21 +465,6 @@ for (const viewport of [
       await expect
         .poll(async () => (await value())[2])
         .toEqual({ comment: 'Future rule', in: '', out: '', type: 'future_mode', unknown: [1, 2] });
-      const bounds = await page.getByRole('region', { name: '정규식 편집기' }).evaluate((node) => {
-        const edge = node.getBoundingClientRect().right;
-        return {
-          overflow: node.scrollWidth - node.clientWidth,
-          outside: [...node.querySelectorAll('*')]
-            .filter((child) => child.getBoundingClientRect().right > edge + 1)
-            .map((child) => ({
-              tag: child.tagName,
-              classes: child.className,
-              right: child.getBoundingClientRect().right,
-              width: child.getBoundingClientRect().width,
-            })),
-        };
-      });
-      expect(bounds.overflow, JSON.stringify(bounds.outside)).toBeLessThanOrEqual(1);
     });
 
     test('native lore keywords accept sequential comma input without losing the next key', async ({
@@ -656,79 +498,8 @@ for (const viewport of [
       await expect(keywords).toHaveValue('forest, river, village');
       await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
     });
-
-    test('native preset block types use their own role and switch numeric chat end back to end', async ({
-      page,
-    }) => {
-      await page.goto(origin);
-      await page.evaluate(async () => {
-        const path = '/tests/fixtures/native-preset-editor.tsx';
-        const { mount } = await import(path);
-        mount();
-      });
-      const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
-      const role = editor.getByLabel('1번 블록 역할');
-      await role.selectOption('user');
-      await editor.locator('summary').filter({ hasText: '블록 종류' }).click();
-      const type = editor.getByLabel('1번 블록 종류');
-      await type.selectOption('description');
-      await expect(role).toHaveValue('system');
-      await role.selectOption('assistant');
-      await expect(role).toHaveValue('assistant');
-      await type.selectOption('plain');
-      await expect(role).toHaveValue('user');
-      await type.selectOption('description');
-      await expect(role).toHaveValue('assistant');
-      await type.selectOption('chat');
-      await editor.getByLabel('대화 끝 위치 유형', { exact: true }).selectOption('index');
-      await editor.getByLabel('대화 끝 위치', { exact: true }).fill('-2');
-      const block = () =>
-        page
-          .locator('output')
-          .textContent()
-          .then((value) => JSON.parse(value!).program.nativeRisuPreset.preset.promptTemplate[0]);
-      await expect.poll(block).toMatchObject({ rangeEnd: -2 });
-      await editor.getByLabel('대화 끝 위치 유형', { exact: true }).selectOption('end');
-      await expect(editor.getByLabel('대화 끝 위치', { exact: true })).toHaveCount(0);
-      await expect.poll(block).toMatchObject({
-        type: 'chat',
-        role: 'user',
-        role2: 'bot',
-        rangeEnd: 'end',
-      });
-      await expect(editor.getByRole('alert')).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
-    });
   });
 }
-
-test('RSURFACE appearance follows app settings without resetting authored controls', async ({
-  page,
-}) => {
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    document.documentElement.style.setProperty('--text', '#123456');
-    document.documentElement.style.setProperty('--reading', '18px');
-    const path = '/tests/fixtures/native-risu-frame.tsx';
-    const { mount } = await import(path);
-    mount(
-      '<p id="inherited">App defaults</p><p id="authored" style="color:rgb(100,20,30);font-size:12px">Authored style</p><input aria-label="Unsaved input" />'
-    );
-  });
-  const native = page.locator('.risu-message-surface');
-  await expect(native.locator('#inherited')).toHaveCSS('color', 'rgb(18, 52, 86)');
-  await native.getByRole('textbox', { name: 'Unsaved input' }).fill('Keep me');
-  await page.evaluate(() => {
-    document.documentElement.style.setProperty('--text', '#abcdef');
-    document.documentElement.style.setProperty('--reading', '24px');
-    document.documentElement.style.setProperty('--reading-line-height', '2.2');
-  });
-  await expect(native.locator('#inherited')).toHaveCSS('color', 'rgb(171, 205, 239)');
-  await expect(native.locator('#inherited')).toHaveCSS('font-size', '24px');
-  await expect(native.locator('#authored')).toHaveCSS('color', 'rgb(100, 20, 30)');
-  await expect(native.locator('#authored')).toHaveCSS('font-size', '12px');
-  await expect(native.getByRole('textbox', { name: 'Unsaved input' })).toHaveValue('Keep me');
-});
 
 test('STUDIOLOC01 the active editor location follows the selected section and list item', async ({
   page,

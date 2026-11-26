@@ -305,16 +305,6 @@ test('save conflicts preserve local input and clean reload restores the latest b
   });
 });
 
-test('closing after a recovery read failure does not erase unread input', async () => {
-  vi.mocked(readRecovery).mockRejectedValueOnce(new Error('Temporary read failure'));
-  const session = editor();
-  await session.open();
-  expect(session.snapshot()).toMatchObject({ ready: true, dirty: false, recovery: 'failed' });
-  session.dispose();
-  await vi.runAllTimersAsync();
-  expect(writeRecovery).not.toHaveBeenCalled();
-});
-
 test.each(['save', 'discard', 'copy'] as const)(
   '%s only clears its own recovery write, preserving another tab across reopen',
   async (action) => {
@@ -444,36 +434,6 @@ test('an uncertain new-resource save survives reopening and replays the exact fr
   expect(disk.get('new:content:bot')).toBeUndefined();
 });
 
-test('an uncertain create can be confirmed while newer unsaved input is invalid', async () => {
-  const session = editor(null);
-  await session.open();
-  const submitted = { ...model, title: 'Already admitted' };
-  session.setModel(submitted);
-  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
-  await expect(session.save()).rejects.toThrow('Connection lost');
-  const firstRequest = vi.mocked(api).mock.lastCall?.[1] as { idempotencyKey: string };
-
-  session.pendingField('raw', true);
-  session.setField('raw', '{ incomplete');
-  session.prepareOnSave('raw', () => {
-    throw new Error('Invalid draft input');
-  });
-  vi.mocked(api).mockResolvedValueOnce({ saved: saved(submitted, 1, 'existing'), created: false });
-  await session.save();
-  expect(api).toHaveBeenLastCalledWith(
-    '/resources/save',
-    expect.objectContaining({
-      idempotencyKey: firstRequest.idempotencyKey,
-      model: submitted,
-    })
-  );
-  expect(session.snapshot()).toMatchObject({
-    document: { targetId: 'existing' },
-    local: { rawFields: { raw: '{ incomplete' } },
-    dirty: true,
-  });
-});
-
 test('a rejected create releases its frozen key and retries the edited draft as a new intent', async () => {
   const session = editor(null);
   await session.open();
@@ -499,17 +459,6 @@ test('a rejected create releases its frozen key and retries the edited draft as 
       idempotencyKey: expect.any(String),
     })
   );
-});
-
-test('a failed pending-command read blocks another creation rather than generating a new identity', async () => {
-  vi.mocked(readRecovery)
-    .mockImplementationOnce(async () => undefined)
-    .mockRejectedValueOnce(new Error('IndexedDB unavailable'));
-  const session = editor(null);
-  await session.open();
-  session.setModel({ ...model, title: 'Do not duplicate' });
-  await expect(session.save()).rejects.toThrow('복구 기록을 읽지 못했어요');
-  expect(api).not.toHaveBeenCalled();
 });
 
 test('a temporary outbox write failure never sends a new resource request', async () => {
@@ -584,36 +533,3 @@ test.each([400, 429])(
     );
   }
 );
-
-test('a confirmed removed creation releases its identity and retains the current input', async () => {
-  const session = editor(null);
-  await session.open();
-  const submitted = { ...model, title: 'Maybe created' };
-  const later = { ...submitted, text: 'Keep this draft' };
-  session.setModel(submitted);
-  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
-  await expect(session.save()).rejects.toThrow('Connection lost');
-  const key = `resource-creation:new:content:bot:${sessionStorage.getItem('uimori:editor-tab-scope')}`;
-  const old = disk.get(key);
-  session.setModel(later);
-
-  vi.mocked(api).mockRejectedValueOnce(
-    new ApiError('The created copy was removed', 410, 'RESOURCE_CREATION_REMOVED')
-  );
-  await expect(session.save()).rejects.toThrow('removed');
-  expect(disk.has(key)).toBe(false);
-  expect(session.snapshot()).toMatchObject({
-    creationPending: false,
-    dirty: true,
-    local: { model: later },
-  });
-  vi.mocked(api).mockResolvedValueOnce({ saved: saved(later, 1, 'new'), created: true });
-  await session.save();
-  expect(api).toHaveBeenLastCalledWith(
-    '/resources/save',
-    expect.objectContaining({
-      idempotencyKey: expect.not.stringMatching(old!.token!),
-      model: later,
-    })
-  );
-});

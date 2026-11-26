@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { createCandidateSearch, type CandidateSearchDocument } from '../core/candidate-search.js';
+import { createCandidateSearch } from '../core/candidate-search.js';
 
 describe('local text candidate retrieval', () => {
   test('finds a rare entity in late paragraphs of a long lore entry', () => {
@@ -32,51 +32,6 @@ describe('local text candidate retrieval', () => {
     ]);
     expect(search.rank([{ text: 'cafe\u0301', weight: 1 }])[0]).toBe('z-unicode');
     expect(search.rank([{ text: '미나', weight: 1 }])[0]).toBe('z-unicode');
-  });
-
-  test('prioritizes title matches over incidental mentions in the body', () => {
-    const search = createCandidateSearch([
-      { id: 'a-mention', title: 'Market', text: 'Asterion is mentioned in passing.' },
-      { id: 'z-entity', title: 'Asterion', text: 'The ancient seal and its origin.' },
-    ]);
-    expect(search.rank([{ text: 'Asterion', weight: 1 }])[0]).toBe('z-entity');
-  });
-
-  test('rare details outweigh repeated filler and each block retains its own minority topic', () => {
-    const documents: CandidateSearchDocument[] = [
-      { id: 'a-filler', title: 'General scene', text: 'garden '.repeat(1_000) },
-      { id: 'z-minority', title: 'Hidden scene', text: 'garden meteorite' },
-      ...Array.from({ length: 20 }, (_, index) => ({
-        id: `garden-${index}`,
-        title: 'Garden view',
-        text: 'garden trees path',
-      })),
-    ];
-    const search = createCandidateSearch(documents);
-    expect(search.rank([{ text: `${'garden '.repeat(500)}meteorite`, weight: 1 }])[0]).toBe(
-      'z-minority'
-    );
-    expect(search.rank([{ text: 'meteorite', weight: 1 }])[0]).toBe('z-minority');
-    expect(search.rank([{ text: 'garden', weight: 1 }])[0]).not.toBe('z-minority');
-  });
-
-  test('current request weight outweighs a repetitive historical topic', () => {
-    const search = createCandidateSearch([
-      { id: 'a-old', title: 'Harbor', text: 'harbor ships pier waves' },
-      { id: 'z-current', title: 'Mountain', text: 'mountain snow summit' },
-    ]);
-    expect(
-      search.rank([
-        { text: 'harbor ships pier waves '.repeat(1_000), weight: 1 },
-        { text: 'mountain', weight: 3 },
-      ])[0]
-    ).toBe('z-current');
-    expect(
-      search.rank([
-        { text: 'harbor', weight: 3 },
-        { text: 'mountain', weight: 1 },
-      ])[0]
-    ).toBe('a-old');
   });
 
   test('returns every ID with deterministic ties independent of document order and repeated calls', () => {

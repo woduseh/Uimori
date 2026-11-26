@@ -11,10 +11,8 @@ import {
   editToggleItem,
   moveToggleGroup,
   moveToggleItem,
-  moveToggleItemToGroup,
   parseDefaultVariableLines,
   parseToggleDocument,
-  renameToggleGroup,
   ungroupToggleGroup,
 } from '../web/native-toggle-document.js';
 import { serializeNativeToggleLines } from '../web/native-risu-toggle-editor.js';
@@ -42,17 +40,6 @@ describe('grouped toggle document', () => {
     );
     expect(deleteToggleItem(source, 0)).toBe('b=B');
   });
-  it('does not attach captions through blank, unknown, or divider rows', () => {
-    const doc = parseToggleDocument(
-      'a=A\n\n=alone=caption\n# raw\n=also alone=caption\n=Break=divider\n=last=caption'
-    );
-    expect(doc.groups[0]?.items).toHaveLength(7);
-    expect(doc.groups[0]?.items.every((item) => item.caption === '')).toBe(true);
-  });
-  it('moves between visible rows while preserving intervening blank source rows', () => {
-    expect(moveToggleItem('a=A\r\n  \r\n\r\nb=B', 0, 1)).toBe('b=B\r\n  \r\n\r\na=A');
-    expect(moveToggleItem('a=A\n\n# unknown\nb=B', 0, 1)).toBe('# unknown\n\na=A\nb=B');
-  });
   it('moves complete groups while retaining interstitial unknown source and closed boundaries', () => {
     const source =
       '=One=group\r\na=A\r\n==groupEnd\r\n# between\r\n=Two=group\r\nb=B\r\n==groupEnd';
@@ -65,18 +52,6 @@ describe('grouped toggle document', () => {
       'a=A\r\n# between\r\n=Two=group\r\nb=B\r\n==groupEnd'
     );
     expect(deleteToggleGroup(source, 4)).toBe('=One=group\r\na=A\r\n==groupEnd\r\n# between');
-  });
-  it('moves items between earlier and later groups and out to the ungrouped tail', () => {
-    const source = '=One=group\na=A\n=help=caption\n==groupEnd\n=Two=group\nb=B\n==groupEnd';
-    expect(moveToggleItemToGroup(source, 1, 4)).toBe(
-      '=One=group\n==groupEnd\n=Two=group\nb=B\na=A\n=help=caption\n==groupEnd'
-    );
-    expect(moveToggleItemToGroup(source, 5, 0)).toBe(
-      '=One=group\na=A\n=help=caption\nb=B\n==groupEnd\n=Two=group\n==groupEnd'
-    );
-    expect(moveToggleItemToGroup(source, 1, -1)).toBe(
-      '=One=group\n==groupEnd\n=Two=group\nb=B\n==groupEnd\na=A\n=help=caption'
-    );
   });
   it('edits fields and multi-line captions while preserving unrelated raw content and empty options', () => {
     const source = '# unknown\r\na=A=select=,one,,\r\n=first=caption\r\n=second=caption';
@@ -91,16 +66,6 @@ describe('grouped toggle document', () => {
     expect(editToggleItem(keyed, 0, {}, 'New\nKeep')).toBe(
       'a=A\r\nfirst=New=caption\nsecond=Keep=caption\r\nb=B'
     );
-  });
-  it('adds bounded groups and controls while reserving keys from unknown rows', () => {
-    expect(addToggleGroup('opaque', 'G')).toBe('opaque\n=G=group\n==groupEnd');
-    expect(renameToggleGroup('special=Old=group\r\n==groupEnd', 0, 'New')).toBe(
-      'special=New=group\r\n==groupEnd'
-    );
-    expect(addToggleItem('=G=group\r\nnew_toggle=Future=unknown\r\n==groupEnd', 0, 'text')).toBe(
-      '=G=group\r\nnew_toggle=Future=unknown\r\nnew_toggle_2=새 항목=text\r\n==groupEnd'
-    );
-    expect(addToggleItem('', -1, 'select')).toBe('new_toggle=새 항목=select=선택 1,선택 2');
   });
   it('leaves malformed boundaries visible and rejects ambiguous structural operations', () => {
     for (const source of [

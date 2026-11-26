@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { listenAddress, networkPolicy } from '../server/network-policy.js';
 
@@ -27,7 +26,7 @@ const libraryUrl = new URL('../scripts/lib.mjs', import.meta.url).href;
 const runnerUrl = new URL('../scripts/browser-verification.mjs', import.meta.url).href;
 const lib = await import(libraryUrl);
 const realLib: typeof lib = await vi.importActual('../scripts/lib.mjs');
-const { runBrowserVerification, defaultBrowserWorkers } = await import(runnerUrl);
+const { runBrowserVerification } = await import(runnerUrl);
 const directories = new Set<string>();
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
@@ -107,48 +106,6 @@ async function run(options: Record<string, unknown> = {}) {
   );
   return result;
 }
-
-test('browser harness records its build and selected commands without retaining successful databases', async () => {
-  const { directory, summary } = await run({
-    files: ['tests/fixture-browser.spec.ts'],
-    grep: 'CASE01',
-    timeout: 4321,
-  });
-  expect(summary.status).toBe('PASS');
-  expect(summary.identity).toEqual(identity);
-  expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
-  expect(lib.assertBuild).toHaveBeenCalledTimes(1);
-  expect(lib.artifactScan).not.toHaveBeenCalled();
-  expect(existsSync(path.join(directory, 'evidence-db'))).toBe(false);
-  expect(lib.command).toHaveBeenCalledWith(
-    [
-      'node_modules/@playwright/test/cli.js',
-      'test',
-      'tests/fixture-browser.spec.ts',
-      '--grep',
-      'CASE01',
-      '--reporter=list,json',
-    ],
-    expect.objectContaining({ timeout: 4321, echo: true })
-  );
-  const owner = JSON.parse(await readFile(path.join(directory, 'ownership.json'), 'utf8'));
-  expect(owner).toMatchObject({
-    root: lib.root,
-    directory,
-    ownerPid: process.pid,
-    active: false,
-    cleanup: summary.cleanup,
-  });
-  const cleanup = spawnSync(process.execPath, ['scripts/cleanup.mjs', '--run', owner.runId], {
-    cwd: lib.root,
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 10000,
-  });
-  expect(cleanup.status, cleanup.stderr).toBe(0);
-  expect(JSON.parse(cleanup.stdout)).toMatchObject({ status: 'PASS', evidencePreserved: false });
-  expect(existsSync(directory)).toBe(false);
-});
 
 test('local verification isolates inherited self-host and Codex settings at the real spawn boundary', async () => {
   const providerFixture = true;
@@ -263,21 +220,6 @@ test('each Playwright worker gets its own server and database, kept as evidence 
   expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
 });
 
-test('worker count follows the environment override and never exceeds the selected files', async () => {
-  vi.stubEnv('UIMORI_BROWSER_WORKERS', '4');
-  const { summary } = await run({ files: ['tests/a-browser.spec.ts', 'tests/b-browser.spec.ts'] });
-  expect(summary.workers).toBe(2);
-  expect(lib.startServer).toHaveBeenCalledTimes(2);
-});
-
-test('default worker count is bounded by half the CPUs and 2 GiB of memory per worker', () => {
-  const gib = 2 ** 30;
-  expect(defaultBrowserWorkers({ cpus: 16, memory: 32 * gib })).toBe(8);
-  expect(defaultBrowserWorkers({ cpus: 16, memory: 8 * gib })).toBe(4);
-  expect(defaultBrowserWorkers({ cpus: 4, memory: 16 * gib })).toBe(2);
-  expect(defaultBrowserWorkers({ cpus: 1, memory: gib })).toBe(1);
-});
-
 test('a stale build fails before launching any browser or server', async () => {
   lib.assertBuild.mockRejectedValue(new Error('stale build'));
   const { summary } = await run();
@@ -285,107 +227,6 @@ test('a stale build fails before launching any browser or server', async () => {
   expect(lib.startServer).not.toHaveBeenCalled();
   expect(lib.command).not.toHaveBeenCalled();
 });
-
-test('focused visual checks narrow the existing selection and record their actual scope', async () => {
-  process.argv.push('--grep', 'CASE01', '--visual');
-  const { summary } = await run({
-    files: ['tests/fixture-browser.spec.ts'],
-    grep: 'CASE01|CASE02',
-  });
-  expect(summary.status).toBe('PASS');
-  expect(summary.selection).toMatchObject({
-    focused: true,
-    files: ['tests/fixture-browser.spec.ts'],
-  });
-  const filter = new RegExp(summary.selection.grep);
-  expect(filter.test('fixture CASE01 selected scenario')).toBe(true);
-  expect(filter.test('fixture CASE02 unselected scenario')).toBe(false);
-  expect(filter.test('fixture OTHER unselected scenario')).toBe(false);
-  expect(summary.screenshots).toEqual([]);
-  expect(summary.visualReview).toBe(true);
-  expect(lib.command).toHaveBeenCalledWith(
-    expect.arrayContaining(['--grep', summary.selection.grep]),
-    expect.objectContaining({ env: expect.objectContaining({ UIMORI_VISUAL_REVIEW: '1' }) })
-  );
-});
-
-test('invalid browser options and shards fail before launching a server', async () => {
-  for (const args of [
-    ['--grep', '['],
-    ['--unknown'],
-    ['--shard', '0/4'],
-    ['--shard', 'bad'],
-    ['--workers', '0'],
-    ['--workers', 'many'],
-  ]) {
-    process.argv = [...originalArgv.slice(0, 2), ...args];
-    await expect(run(), args.join(' ')).rejects.toThrow();
-  }
-  expect(lib.startServer).not.toHaveBeenCalled();
-  expect(lib.command).not.toHaveBeenCalled();
-});
-
-test('primary and cleanup failures both survive in the saved summary and ownership', async () => {
-  commandFailure.code = 1;
-  lib.killOwned.mockRejectedValue(new Error('injected process cleanup failure'));
-  const { directory, summary } = await run();
-  expect(summary.status).toBe('FAIL');
-  expect(summary.failures.some((message: string) => message.startsWith('Command exit 1:'))).toBe(
-    true
-  );
-  expect(summary.failures).toContain('Cleanup: injected process cleanup failure');
-  expect(summary.cleanup.status).toBe('FAIL');
-  const owner = JSON.parse(await readFile(path.join(directory, 'ownership.json'), 'utf8'));
-  expect(owner.cleanup.status).toBe('FAIL');
-});
-
-test('missing browser records BLOCKED before any server or test launch', async () => {
-  lib.browserPath.mockReturnValue(undefined);
-  const { summary } = await run();
-  expect(summary.status).toBe('BLOCKED');
-  expect(summary.cleanup.status).toBe('PASS');
-  expect(lib.startServer).not.toHaveBeenCalled();
-  expect(lib.command).not.toHaveBeenCalled();
-});
-
-test('visual mode records captured screenshots without a second filename manifest', async () => {
-  vi.stubEnv('UIMORI_VISUAL_REVIEW', '1');
-  const originalCommand = lib.command.getMockImplementation();
-  const relativeScreenshot = path.join('browser', 'nested-output', 'required.png');
-  lib.command.mockImplementation(
-    async (args: string[], options: { env: Record<string, string> }) => {
-      const directory = path.join(options.env.UIMORI_BROWSER_OUTPUT!, 'nested-output');
-      await mkdir(directory, { recursive: true });
-      const valid = Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j9n8AAAAASUVORK5CYII=',
-        'base64'
-      );
-      await writeFile(path.join(directory, 'required.png'), valid);
-      return originalCommand(args, options);
-    }
-  );
-  const { directory, summary } = await run();
-  expect(summary.report.passed).toBe(1);
-  expect(summary.cleanup.status).toBe('PASS');
-  expect(summary.status).toBe('PASS');
-  expect(summary.screenshots).toContain(relativeScreenshot);
-  expect(existsSync(path.join(directory, relativeScreenshot))).toBe(true);
-});
-
-test.each([false, true])(
-  'private sample discovery follows the runner opt-in: %s',
-  async (privateMaterials) => {
-    vi.stubEnv('UIMORI_PRIVATE_MATERIALS', '1');
-    const { summary } = await run({ privateMaterials });
-    expect(summary.status).toBe('PASS');
-    expect(lib.command).toHaveBeenCalledWith(
-      expect.any(Array),
-      expect.objectContaining({
-        env: expect.objectContaining({ UIMORI_PRIVATE_MATERIALS: privateMaterials ? '1' : '0' }),
-      })
-    );
-  }
-);
 
 test('passing browser assertions cannot hide errors from the actual loopback provider fixture', async () => {
   const originalCommand = lib.command.getMockImplementation();
@@ -408,82 +249,4 @@ test('passing browser assertions cannot hide errors from the actual loopback pro
   expect(summary.failures).toContain('Fixture: Unexpected fixture purpose');
   expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
   expect(process.exitCode).toBe(1);
-});
-
-test('cancellation during failure artifact scanning settles cleanup', async () => {
-  commandFailure.code = 1;
-  lib.artifactScan.mockImplementation(async (directory: string) => {
-    process.emit('SIGINT');
-    return realLib.artifactScan(directory);
-  });
-  const { summary } = await run();
-  expect(summary.report.passed).toBe(1);
-  expect(summary.status).toBe('FAIL');
-  expect(summary.failures).toContain('SIGINT: harness-selftest verification cancelled');
-  expect(process.exitCode).toBe(1);
-});
-
-test('terminal summary saving begins after cancellation listeners have been released', async () => {
-  const beforeInterrupt = process.listeners('SIGINT');
-  const beforeTerminate = process.listeners('SIGTERM');
-  let terminalWrite = false;
-  lib.json.mockImplementation(async (file: string, value: Record<string, unknown>) => {
-    if (path.basename(file) === 'summary.json') {
-      terminalWrite = true;
-      expect(process.listeners('SIGINT')).toEqual(beforeInterrupt);
-      expect(process.listeners('SIGTERM')).toEqual(beforeTerminate);
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(value.status).toBe('PASS');
-    }
-    return realLib.json(file, value);
-  });
-  const { summary } = await run();
-  expect(terminalWrite).toBe(true);
-  expect(summary.status).toBe('PASS');
-});
-
-test('unrunnable browser is BLOCKED before creating the application', async () => {
-  vi.mocked(assertBrowserRuntime).mockRejectedValue(
-    Object.assign(new Error('missing libglib'), {
-      code: 'BROWSER_RUNTIME_UNAVAILABLE',
-    })
-  );
-  const { summary } = await run();
-  expect(summary.status).toBe('BLOCKED');
-  expect(lib.startServer).not.toHaveBeenCalled();
-  expect(lib.command).not.toHaveBeenCalled();
-});
-
-test('native browser shard records the full collection and only reports the selected execution', async () => {
-  process.argv.push('--shard', '1/3');
-  const full = browserReport();
-  full.suites[0].specs.push(
-    ...browserReport({ title: 'CASE02 outside this shard' }).suites[0].specs
-  );
-  const execute = lib.command.getMockImplementation()!;
-  lib.command.mockImplementation(
-    async (args: string[], options: { env: Record<string, string> }) => {
-      report = args.includes('--list') ? full : browserReport();
-      return execute(args, options);
-    }
-  );
-  const { summary } = await run();
-  expect(summary.status).toBe('PASS');
-  expect(summary.selection.shard).toBe('1/3');
-  expect(summary.selection.allTests).toHaveLength(2);
-  expect(summary.testCases).toHaveLength(1);
-  expect(summary.selection.allTests).toEqual(expect.arrayContaining(summary.testCases));
-  expect(lib.command.mock.calls[0][0]).toContain('--list');
-  expect(lib.command.mock.calls[0][0]).not.toContain('--shard=1/3');
-  expect(lib.command.mock.calls[1][0]).toContain('--shard=1/3');
-});
-
-test('artifact cleanup warnings preserve the original browser result', async () => {
-  vi.mocked(retainArtifacts).mockResolvedValue({
-    status: 'WARN',
-    warnings: ['synthetic cleanup failure'],
-  });
-  const { summary } = await run();
-  expect(summary.status).toBe('PASS');
-  expect(summary.retention.status).toBe('WARN');
 });

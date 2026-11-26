@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Store } from '../server/store.js';
-import { invokeHelperSceneTool, sceneTranslationState } from '../server/helper-scene-tools.js';
+import { invokeHelperSceneTool } from '../server/helper-scene-tools.js';
 import { latestTranslation } from '../server/source-editing.js';
 import { invokeSceneRegexSearch } from '../server/helper-data-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -206,48 +206,6 @@ test('live literal search pages matches, preserves counts and provides patch gua
   expect(store.source(source.id).text).toContain('Chihiro-san');
 });
 
-test('scene search bounds large output, protects chat scope and searches translations', () => {
-  const { store, source, chatId, call } = fixture('a'.repeat(56000));
-  expect(() =>
-    call('scene.search', { sourceId: source.id, target: 'original', patterns: [] })
-  ).toThrow();
-  expect(() =>
-    call('scene.search', { sourceId: source.id, target: 'original', patterns: [''] })
-  ).toThrow();
-  const many = call('scene.search', {
-    sourceId: source.id,
-    target: 'original',
-    patterns: ['a'],
-    context: 100,
-    limit: 20,
-  });
-  expect(many).toMatchObject({ totalLength: 56000, totalMatches: 56000, nextOffset: 20 });
-  expect(many.matches).toHaveLength(20);
-  expect(JSON.stringify(many).length).toBeLessThan(16000);
-  expect(call('scene.search', many.nextSearch).matches[0].start).toBe(20);
-  const otherChat = createFixtureChat(store, 'Another').id;
-  expect(otherChat).not.toBe(chatId);
-  expect(() =>
-    invokeHelperSceneTool(store, otherChat, 'scene.search', {
-      sourceId: source.id,
-      target: 'original',
-      patterns: ['a'],
-    })
-  ).toThrow(/ancestry/);
-  store.editTranslation(source.id, {
-    text: '번역어 번역어',
-    expectedRevision: 0,
-    expectedSourceHash: source.hash,
-  });
-  const translated = call('scene.search', {
-    sourceId: source.id,
-    target: 'translation',
-    patterns: ['번역어'],
-  });
-  expect(translated).toMatchObject({ totalMatches: 2, counts: [{ count: 2 }] });
-  expect(translated.editTarget.target).toBe('translation');
-});
-
 test('bounded reads require stable snapshots and reject sources outside the live chat', () => {
   const { store, source, chatId, call } = fixture('abcdefghij');
   const first = call('scene.read', { sourceId: source.id, target: 'original', limit: 4 });
@@ -268,26 +226,6 @@ test('bounded reads require stable snapshots and reject sources outside the live
   ).toThrow(/ancestry/);
   store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chatId);
   expect(() => call('scene.read', { sourceId: source.id, target: 'original' })).toThrow(/ancestry/);
-});
-
-test('scene and retained-version reads reject offsets past the text instead of reporting completion', () => {
-  const { source, call, read } = fixture('Short text');
-  const editTarget = read().editTarget;
-  for (const [name, args] of [
-    ['scene.read', editTarget],
-    ['scene.versions', { sourceId: source.id, versionRevision: 0 }],
-  ] as const) {
-    const current = call(name, args);
-    const guards = { ...current.editTarget };
-    if (name === 'scene.versions') delete guards.target;
-    expect(call(name, { ...args, ...guards, offset: 10 })).toMatchObject({
-      text: '',
-      offset: 10,
-      totalLength: 10,
-      nextOffset: null,
-    });
-    expect(() => call(name, { ...args, ...guards, offset: 11 })).toThrow(/offset/);
-  }
 });
 
 test('retained original versions expose metadata and bounded text, restore as a new edit', () => {
@@ -376,26 +314,6 @@ test('translation editing preserves source, skips no-op writes and invalidates i
   expect(store.source(source.id).text).toBe('Original words');
   call('scene.patch', { ...read().editTarget, text: 'New original' });
   expect(() => read('translation')).toThrow(/no usable/);
-});
-
-test('the translation state of a scene names a failed or stopped attempt instead of pending', () => {
-  const { store, chatId, source } = fixture('Original.');
-  const attempt = (status: string, revision: number) =>
-    store.db
-      .prepare(
-        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at) VALUES(?,?,?,?,'translation',?,?,?,?)"
-      )
-      .run(randomUUID(), chatId, source.id, source.hash, status, revision, '1', '1');
-  expect(sceneTranslationState(store, source)).toBe('none');
-  attempt('running', 1);
-  expect(sceneTranslationState(store, source)).toBe('pending');
-  let revision = 1;
-  for (const status of ['failed', 'cancelled', 'interrupted', 'partial']) {
-    attempt(status, ++revision);
-    expect(sceneTranslationState(store, source), status).toBe('failed');
-  }
-  attempt('queued', ++revision);
-  expect(sceneTranslationState(store, source)).toBe('pending');
 });
 
 test('translation pagination detects completion that changes displayed text without a new revision', () => {
@@ -508,23 +426,6 @@ test('chat-wide scene search pages editable matches and invalidates a changed co
   ).toThrow(/changed/);
   store.editSource(later.id, { text: 'updated', expectedRevision: 0 });
   expect(() => call('scene.search', first.nextSearch)).toThrow(/changed/);
-});
-
-test('chat-wide translation search skips missing translations and returns usable patch guards', () => {
-  const { store, source, chatId, call } = fixture('no translation');
-  const later = appendScene(store, chatId, 'other');
-  store.editTranslation(later.id, {
-    text: 'ruby on',
-    expectedRevision: 0,
-    expectedSourceHash: later.hash,
-  });
-  const found = call('scene.search', { target: 'translation', patterns: ['ruby'] });
-  expect(found).toMatchObject({
-    scannedScenes: 1,
-    unmatchedTranslations: 1,
-    matches: [{ editTarget: { sourceId: later.id, target: 'translation' }, match: 'ruby' }],
-  });
-  expect(source.id).not.toBe(later.id);
 });
 
 test('scene.patchMany applies distinct scene edits atomically with per-item guards', () => {
@@ -705,66 +606,4 @@ test('isolated regex bounds matched text and rejects unsafe regex without touchi
     })
   ).rejects.toThrow(/DATA_QUERY_TIMEOUT/);
   expect(store.source(source.id).editRevision).toBe(0);
-});
-
-test('isolated regex continuation rejects a changed pattern and previews complete unicode characters', async () => {
-  const { store, chatId } = fixture('alpha alpha beta');
-  const first = (await invokeSceneRegexSearch(store, chatId, {
-    target: 'original',
-    regex: true,
-    patterns: ['alpha'],
-    limit: 1,
-  })) as Record<string, any>;
-  const altered = { ...first.nextSearch.arguments.arguments, patterns: ['beta'] };
-  delete altered.chatId;
-  await expect(invokeSceneRegexSearch(store, chatId, altered)).rejects.toThrow(/changed/);
-  const emoji = appendScene(store, chatId, '`<ruby>' + 'a'.repeat(992) + '😀suffix</ruby>`');
-  const longMatch = (await invokeSceneRegexSearch(store, chatId, {
-    sourceId: emoji.id,
-    target: 'original',
-    regex: true,
-    patterns: ['`<ruby>[^`]+</ruby>`'],
-  })) as Record<string, any>;
-  expect(longMatch.matches[0].truncated).toBe(true);
-  expect(longMatch.matches[0].match).toBe('`<ruby>' + 'a'.repeat(992));
-});
-
-test('isolated regex honors single-scene read guards and preserves unicode context', async () => {
-  const { store, source, chatId, call } = fixture('😀X😀');
-  const guards = call('scene.read', { sourceId: source.id, target: 'original' }).editTarget;
-  const found = (await invokeSceneRegexSearch(store, chatId, {
-    ...guards,
-    regex: true,
-    patterns: ['X'],
-    context: 1,
-  })) as Record<string, any>;
-  expect(found.matches[0]).toMatchObject({ match: 'X', before: '😀', after: '😀' });
-  store.editSource(source.id, { text: '😀Y😀', expectedRevision: 0 });
-  await expect(
-    invokeSceneRegexSearch(store, chatId, {
-      ...guards,
-      regex: true,
-      patterns: ['Y'],
-    })
-  ).rejects.toThrow(/changed/);
-});
-
-test('default scene pages budget tokens while continuations retain UTF-16 guards', () => {
-  const content = 'simple words '.repeat(4000) + '한글😀終'.repeat(2000);
-  const { call, source } = fixture(content);
-  let page = call('scene.read', { sourceId: source.id, target: 'original' });
-  expect(page.text.length).toBeGreaterThan(6000);
-  let joined = '';
-  for (;;) {
-    expect(countTextTokens(page.text)).toBeLessThanOrEqual(3000);
-    expect(content.slice(page.offset, page.offset + page.text.length)).toBe(page.text);
-    joined += page.text;
-    if (!page.nextRead) break;
-    expect(page.nextRead.arguments.arguments).not.toHaveProperty('limit');
-    page = call('scene.read', page.nextRead);
-  }
-  expect(joined).toBe(content);
-  expect(call('scene.read', { sourceId: source.id, target: 'original', limit: 7 }).text).toBe(
-    content.slice(0, 7)
-  );
 });

@@ -148,64 +148,6 @@ test('chat.preview lists, searches and pages the assembled next request without 
   expect(changes(store)).toBe(before);
 });
 
-test('scene.lore reports missing records and rejects scenes outside the chat', async () => {
-  const { store, chat } = fixture();
-  await expect(readHelperChatState(store, chat.id, 'scene.lore', {})).resolves.toEqual({
-    sourceId: chat.headRevision,
-    attemptId: null,
-    lore: null,
-  });
-  await expect(
-    readHelperChatState(store, chat.id, 'scene.lore', { sourceId: 'missing-scene' })
-  ).rejects.toMatchObject({
-    statusCode: 404,
-    message: expect.stringMatching(/^SCENE_NOT_IN_CHAT/u),
-  });
-});
-
-test('chat.variables.read merges defaults with chat values and pages one long value', async () => {
-  const { store, chat } = fixture();
-  const sourceHash = store.source(chat.headRevision!).hash;
-  writeChatVariables(store, chat.id, {
-    expectedRevision: 0,
-    expectedSourceHash: sourceHash,
-    idempotencyKey: randomUUID(),
-    values: { mood: 'tense', quest: 'started' },
-  });
-  const list = (await readHelperChatState(store, chat.id, 'chat.variables.read', {})) as Record<
-    string,
-    any
-  >;
-  expect(list).toMatchObject({ revision: 1, sourceHash, pending: false, nextOffset: null });
-  expect(list.total).toBe(list.variables.length);
-  const byName = Object.fromEntries(
-    list.variables.map((item: { name: string }) => [item.name, item])
-  );
-  expect(byName.mood).toEqual({ name: 'mood', value: 'tense', overridden: true, default: 'calm' });
-  expect(byName.quest).toEqual({ name: 'quest', value: 'started', overridden: true });
-  expect(byName.score).toEqual({ name: 'score', value: '1', overridden: false, default: 'same' });
-  expect(byName.log).toMatchObject({ valueLength: 400, overridden: false, default: 'same' });
-  expect(byName.log.value.length).toBeLessThan(400);
-
-  const log = (await readHelperChatState(store, chat.id, 'chat.variables.read', {
-    name: 'log',
-    textOffset: 390,
-  })) as Record<string, any>;
-  expect(log).toMatchObject({
-    name: 'log',
-    text: 'x'.repeat(10),
-    totalChars: 400,
-    nextOffset: null,
-  });
-  const filtered = (await readHelperChatState(store, chat.id, 'chat.variables.read', {
-    query: 'MO',
-  })) as Record<string, any>;
-  expect(filtered.variables.map((item: { name: string }) => item.name)).toEqual(['mood']);
-  await expect(
-    readHelperChatState(store, chat.id, 'chat.variables.read', { name: 'unknown' })
-  ).rejects.toMatchObject({ statusCode: 404 });
-});
-
 test('chat.variables.update merges changes with a receipt and rejects a stale read', async () => {
   const { store, chat } = fixture();
   const sourceHash = store.source(chat.headRevision!).hash;

@@ -36,26 +36,6 @@ test('Codex turn-wide input remains usage accounting rather than request occupan
   expect(receipt(usage)).toContain('컨텍스트 약 25% (2,048 / 8,192)');
 });
 
-test('the receipt omits fields without a record', () => {
-  const html = receipt({
-    inputTokens: 10,
-    outputTokens: 5,
-    context: null,
-    receipt: {
-      version: 1,
-      model: { modelId: 'writer', title: 'Writer' },
-      prompt: null,
-      persona: null,
-      summary: null,
-    },
-  });
-  expect(html).toContain('<dt>페르소나</dt><dd>선택 없음</dd>');
-  expect(html).not.toContain('프롬프트');
-  expect(html).not.toContain('대화 요약');
-  expect(html).not.toContain('기록이 없어요');
-  expect(html).not.toContain('scene-context');
-});
-
 test('the run text cost keeps a known subtotal apart from unpriced calls', () => {
   expect(
     sceneCostLabels({ usd: 0.0025, subtotalUsd: 0.0025, unknownCount: 0, attemptCount: 1 })

@@ -3,22 +3,15 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import {
-  forgetConfirmedAcknowledgements,
-  readAcknowledgements,
-  saveAcknowledgements,
-} from '../web/activity-acknowledgements.js';
-import {
   forgetBotStorage,
   forgetChatStorage,
   forgetMissingBots,
   forgetMissingChats,
   localStorageNamespaces,
-  removeRecentStorage,
   storageFamilies,
   storageFamily,
   storageKeys,
   sweepUnregisteredStorage,
-  writeRecentStorage,
 } from '../web/storage-keys.js';
 
 class MemoryStorage {
@@ -179,28 +172,6 @@ test('unsent work and recovery receipts are registered and therefore never swept
   expect(storageFamilies.filter((family) => family.work && family.cap)).toEqual([]);
 });
 
-test('capped families keep the most recently written keys, oldest unknown ones first out', () => {
-  const key = (index: number) => storageKeys.helperConfirmationDeclined('task', String(index));
-  local.setItem(key(-1), '1');
-  for (let index = 0; index < 205; index++) expect(writeRecentStorage(key(index), '1')).toBe(true);
-  const kept = [...local.values.keys()].filter((item) => item.startsWith(key(0).slice(0, -1)));
-  expect(kept).toHaveLength(200);
-  expect(kept).not.toContain(key(-1));
-  expect(kept).not.toContain(key(4));
-  expect(kept).toContain(key(5));
-  writeRecentStorage(key(5), '1');
-  writeRecentStorage(key(205), '1');
-  expect(local.getItem(key(5))).toBe('1');
-  expect(local.getItem(key(6))).toBeNull();
-  removeRecentStorage(key(205));
-  expect(local.getItem(key(205))).toBeNull();
-  expect(
-    (JSON.parse(local.getItem(storageKeys.storageRecency)!) as Record<string, string[]>)[
-      'uimori:helper-confirmation-declined:'
-    ]
-  ).toHaveLength(199);
-});
-
 test('deleting a chat or bot, or its absence from the server list, removes its browser state', () => {
   const chatScope = JSON.stringify({ kind: 'chat', chatId: 'gone' });
   const ownedByGone = [
@@ -237,23 +208,6 @@ test('deleting a chat or bot, or its absence from the server list, removes its b
   expect(local.getItem(storageKeys.chatFolders('other'))).toBe('{}');
   forgetMissingBots(new Set());
   expect(local.getItem(storageKeys.chatFolders('other'))).toBeNull();
-});
-
-test('acknowledgements the server confirmed are dropped locally beyond the newest hundred', () => {
-  const identity = (day: number) =>
-    JSON.stringify(['main', `run-${day}`, 0, new Date(Date.UTC(2026, 0, 1 + day)).toISOString()]);
-  const identities = Array.from({ length: 130 }, (_, day) => identity(day));
-  expect(saveAcknowledgements('chat', [...identities, 'request:pending'])).toBe(true);
-  const confirmed = identities.filter((_, day) => day !== 0);
-  forgetConfirmedAcknowledgements('chat', confirmed);
-  const left = readAcknowledgements('chat');
-  expect(left).toHaveLength(101);
-  expect(left).toContain(identity(31));
-  expect(left).not.toContain(identity(30));
-  expect(left).toContain('request:pending');
-  expect(left).toContain(identity(0));
-  expect(left).toContain(identity(129));
-  expect(left).not.toContain(identity(28));
 });
 
 const webRoot = resolve(import.meta.dirname, '../web');

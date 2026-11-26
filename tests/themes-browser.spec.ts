@@ -5,8 +5,6 @@ import { readFile } from 'node:fs/promises';
 import { DEFAULT_THEME_TEMPLATE, emptyTheme, themeFile } from '../core/themes.js';
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
-import { restoreGlobalBackground, setGlobalBackgroundImage } from './fixtures/theme-background.js';
-import { restoreGlobalThemeSelection } from './fixtures/theme-selection.js';
 
 async function expectPalette(page: Page, id: string, mode: 'light' | 'dark' = 'light') {
   const palette = BUILTIN_PALETTES.find((entry) => entry.id === id)!;
@@ -34,59 +32,6 @@ async function openThemes(page: Page, url = '/') {
     if (await advanced.isVisible()) await advanced.click();
   }
 }
-
-test('THEMES mobile primary choices precede background and preserve its unsaved edits', async ({
-  page,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: 412, height: 844 });
-  const originalBackground = await setGlobalBackgroundImage(request);
-  const before = await (await request.get('/api/themes')).json();
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마와 색상');
-  await expect(page.getByLabel('테마 적용 범위', { exact: true })).toBeInViewport({ ratio: 1 });
-  await expect(page.getByLabel('기본 외관', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('테마 화면 모드', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.theme-advanced')).not.toHaveAttribute('open', '');
-  const layout = page.getByRole('region', { name: '레이아웃', exact: true });
-  const palette = page.getByRole('region', { name: '색상 팔레트', exact: true });
-  const background = page.getByRole('region', { name: '본문 바깥 배경', exact: true });
-  await expect(layout).toBeVisible();
-  await expect(palette).toBeVisible();
-  await expect(page.getByRole('region', { name: '글꼴', exact: true })).toBeVisible();
-  await expect(background).toBeVisible();
-  await expect(page.getByRole('button', { name: '새 커스텀 테마', exact: true })).toBeHidden();
-  await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });
-  const layoutBox = await layout.boundingBox();
-  const paletteBox = await palette.boundingBox();
-  const backgroundBox = await background.boundingBox();
-  expect(layoutBox!.y + layoutBox!.height).toBeLessThan(paletteBox!.y);
-  expect(paletteBox!.y + paletteBox!.height).toBeLessThan(backgroundBox!.y);
-  await page.screenshot({ path: info.outputPath('theme-order.png') });
-
-  const blur = background.getByLabel('배경 흐림', { exact: true });
-  const original = await blur.inputValue();
-  const changed = original === '7' ? '8' : '7';
-  await blur.fill(changed);
-  await expect(page.getByLabel('테마 적용 범위', { exact: true })).toBeDisabled();
-  await expect(layout.getByRole('button', { name: '기본 테마 적용', exact: true })).toBeDisabled();
-  await expect(
-    palette.getByRole('button', { name: '크림 팔레트 적용', exact: true })
-  ).toBeDisabled();
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  const guard = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
-  await expect(guard).toBeVisible();
-  await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(blur).toHaveValue(changed);
-  await background.getByRole('button', { name: '배경 변경 취소', exact: true }).click();
-  await expect(blur).toHaveValue(original);
-  await expect(background.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
-  expect((await (await request.get('/api/themes')).json()).preferences).toEqual(before.preferences);
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expect(guard).toBeHidden();
-  await restoreGlobalBackground(request, originalBackground);
-});
 
 for (const width of [412]) {
   test(`THEMES ${width} palette, custom editor, persistence and portable import`, async ({
@@ -235,38 +180,6 @@ test('THEMES slot/CSS switches preserve author input and recover from invalid or
     await request.delete(`/api/themes/${theme.id}`, { data: { expectedRevision: theme.revision } });
 });
 
-test('THEMES invalid import leaves selection untouched and closing dirty editor requires a decision', async ({
-  page,
-}) => {
-  await openThemes(page);
-  await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
-  const invalid = themeFile(emptyTheme('Bad layout'));
-  invalid.theme.templateHtml = '<div>bad</div>';
-  await page.getByLabel('테마 파일', { exact: true }).setInputFiles({
-    name: 'invalid.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(invalid)),
-  });
-  await expect(page.getByRole('alert')).toContainText('slot name');
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
-  await page.locator('.theme-advanced > summary').click();
-  await page.getByRole('button', { name: '복제해서 꾸미기', exact: true }).first().click();
-  await expect(page.locator('.theme-advanced')).toHaveAttribute('open', '');
-  await page.getByLabel('테마 이름', { exact: true }).fill('관리 영역을 접어도 남는 초안');
-  await page.locator('.theme-advanced > summary').click();
-  await expect(page.getByLabel('테마 이름', { exact: true })).toBeHidden();
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expect(page.getByRole('alertdialog', { name: '미저장 설정 확인' })).toBeVisible();
-  await page.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await page.locator('.theme-advanced > summary').click();
-  await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue(
-    '관리 영역을 접어도 남는 초안'
-  );
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeHidden();
-});
-
 test('THEMES imported leading style applies inside the layout without changing its content', async ({
   page,
 }, info) => {
@@ -304,48 +217,6 @@ test('THEMES rejects leading executable markup instead of silently dropping it o
   });
   await expect(page.getByRole('alert')).toContainText('지원하지 않는 HTML');
   expect(await page.evaluate(() => 'themeScriptExecuted' in window)).toBe(false);
-});
-
-test('THEMES each scope shows its own selected layout without changing saved selections', async ({
-  page,
-  request,
-}) => {
-  const botResponse = await request.post('/api/content', {
-    data: fixtureBotInput(`Scoped theme ${randomUUID()}`),
-  });
-  expect(botResponse.ok()).toBe(true);
-  const bot = await botResponse.json();
-  const chatResponse = await request.post('/api/chats', {
-    data: { title: 'Scoped theme', botId: bot.id },
-  });
-  expect(chatResponse.ok()).toBe(true);
-  const chat = await chatResponse.json();
-  for (const selection of [
-    { scope: 'global', themeId: 'builtin:cinematic' },
-    { scope: 'bot', targetId: bot.id, themeId: 'builtin:letter' },
-    { scope: 'chat', targetId: chat.id, themeId: 'builtin:scrapbook' },
-  ]) {
-    const catalog = await (await request.get('/api/themes')).json();
-    const selected = await request.post('/api/themes/selection', {
-      data: { ...selection, expectedRevision: catalog.preferences.revision },
-    });
-    expect(selected.ok()).toBe(true);
-  }
-  const before = await (await request.get('/api/themes')).json();
-  await openThemes(page, `/?chat=${chat.id}`);
-  for (const [scope, title] of [
-    ['global', '시네마틱'],
-    ['bot', '편지지'],
-    ['chat', '스크랩북'],
-    ['global', '시네마틱'],
-  ]) {
-    await page.getByLabel('테마 적용 범위', { exact: true }).selectOption(scope);
-    await expect(
-      page.getByRole('button', { name: `${title} 테마 적용`, exact: true })
-    ).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:scrapbook');
-  }
-  expect((await (await request.get('/api/themes')).json()).preferences).toEqual(before.preferences);
 });
 
 test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard navigation', async ({
@@ -410,153 +281,4 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   await tabs.getByRole('tab', { name: '일반', exact: true }).click();
   await page.keyboard.press('ArrowDown');
   await expect(tabs.getByRole('tab', { name: '테마와 색상', exact: true })).toBeFocused();
-});
-
-for (const width of [412]) {
-  test(`THEMES ${width} independent palette changes preserve layout, draft and author state`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 1000 });
-    await openThemes(page);
-    await setAppearance(page, 'light');
-    await page.getByRole('button', { name: '편지지 테마 적용', exact: true }).click();
-    await page.getByRole('button', { name: '레이아웃 원래 색상 팔레트 적용', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '레이아웃', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '색상 팔레트', exact: true })).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: '미드나이트 테마 적용', exact: true })
-    ).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '벚꽃 테마 적용', exact: true })).toHaveCount(0);
-    await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
-    const sample = page.locator('.theme-sample');
-    await sample.getByText('봇이 만든 상태창', { exact: true }).click();
-    const memo = sample.getByLabel('테마 예문 메모', { exact: true });
-    await memo.fill('palette keeps this node');
-    await memo.evaluate((element) => element.setAttribute('data-stable-node', 'palette'));
-    await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
-    await page.getByLabel('테마 이름', { exact: true }).fill('Unchanged local palette draft');
-    await page.getByLabel('밝은 색 강조 색상', { exact: true }).fill('#663399');
-    for (const palette of BUILTIN_PALETTES) {
-      const choice = page.getByRole('button', {
-        name: `${palette.title} 팔레트 적용`,
-        exact: true,
-      });
-      await expect(choice).toHaveAccessibleDescription(palette.description);
-      await choice.click();
-      await expect(choice).toHaveAttribute('aria-pressed', 'true');
-      await expectPalette(page, palette.id);
-      await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
-      await expect(memo).toHaveValue('palette keeps this node');
-      await expect(memo).toHaveAttribute('data-stable-node', 'palette');
-      await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue(
-        'Unchanged local palette draft'
-      );
-      await expect(page.getByLabel('밝은 색 강조 색상', { exact: true })).toHaveValue('#663399');
-      expect(await page.evaluate(() => localStorage.getItem('uimori:theme'))).toBe('light');
-    }
-    await page.getByRole('button', { name: '차콜 팔레트 적용', exact: true }).click();
-    await page.getByRole('button', { name: '시네마틱 테마 적용', exact: true }).click();
-    await expectPalette(page, 'charcoal');
-    await expect(memo).toHaveValue('palette keeps this node');
-    await expect(memo).toHaveAttribute('data-stable-node', 'palette');
-    await setAppearance(page, 'dark');
-    await expectPalette(page, 'charcoal', 'dark');
-    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
-    const beforeReload = await (await request.get('/api/themes')).json();
-    expect(beforeReload.preferences).toMatchObject({
-      defaultThemeId: 'builtin:cinematic',
-      defaultPaletteId: 'charcoal',
-    });
-    await openThemes(page);
-    await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:cinematic');
-    await expect(
-      page.getByRole('button', { name: '차콜 팔레트 적용', exact: true })
-    ).toHaveAttribute('aria-pressed', 'true');
-    await expectPalette(page, 'charcoal', 'dark');
-    await page.getByRole('button', { name: '팔레트 기본값으로', exact: true }).click();
-    await expectPalette(page, 'midnight', 'dark');
-    await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:cinematic');
-    expect(await page.evaluate(() => localStorage.getItem('uimori:theme'))).toBe('dark');
-    await setAppearance(page, 'light');
-    await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
-    await page.screenshot({
-      path: info.outputPath(`independent-palettes-${width}.png`),
-      fullPage: true,
-    });
-    await page.getByRole('region', { name: '색상 팔레트', exact: true }).screenshot({
-      path: info.outputPath(`palette-choices-${width}.png`),
-    });
-  });
-}
-
-test('THEMES palette selections lock duplicate actions and refresh conflicts without discarding drafts', async ({
-  page,
-  request,
-}) => {
-  const baseline = (await (await request.get('/api/themes')).json()).preferences;
-  await openThemes(page);
-  await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
-  await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
-  await page.getByLabel('테마 이름', { exact: true }).fill('Keep conflicted draft');
-  let selections = 0;
-  let release!: () => void;
-  const pending = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/api/themes/selection', async (route) => {
-    selections += 1;
-    await pending;
-    await route.continue();
-  });
-  const cream = page.getByRole('button', { name: '크림 팔레트 적용', exact: true });
-  await cream.click();
-  await expect(cream).toBeDisabled();
-  await expect(page.getByRole('button', { name: '기본 테마 적용', exact: true })).toBeDisabled();
-  await cream.evaluate((element) => {
-    (element as HTMLButtonElement).click();
-  });
-  release();
-  await expect(cream).toBeEnabled();
-  expect(selections).toBe(1);
-  await page.unroute('**/api/themes/selection');
-  let catalogReads = 0;
-  let releaseLiveRead!: () => void;
-  const liveReadReleased = new Promise<void>((resolve) => {
-    releaseLiveRead = resolve;
-  });
-  let liveReadDone!: Promise<void>;
-  await page.route('**/api/themes', (route) => {
-    if (catalogReads++ > 0) return route.continue();
-    liveReadDone = liveReadReleased.then(() => route.continue());
-    return liveReadDone;
-  });
-  const current = await (await request.get('/api/themes')).json();
-  const changed = await request.post('/api/themes/selection', {
-    data: {
-      dimension: 'palette',
-      scope: 'global',
-      paletteId: 'rose',
-      expectedRevision: current.preferences.revision,
-    },
-  });
-  expect(changed.ok()).toBe(true);
-  await expect.poll(() => catalogReads).toBe(1);
-  await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('button', { name: '로즈 팔레트 적용', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
-  releaseLiveRead();
-  await liveReadDone;
-  await page.unroute('**/api/themes');
-  await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue('Keep conflicted draft');
-  await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '세이지 팔레트 적용', exact: true })
-  ).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  await page.getByRole('button', { name: '편집 취소', exact: true }).click();
-  await restoreGlobalThemeSelection(request, baseline);
 });

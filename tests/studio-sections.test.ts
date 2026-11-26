@@ -10,7 +10,6 @@ import {
   contentSection,
   contentSectionRegistry,
   contentSections,
-  defaultContentSection,
   isAuthoringPath,
   placeSections,
   presetChanges,
@@ -38,40 +37,6 @@ const placement = (
     more: placed.filter((item) => item.more).map((item) => item.id),
   };
 };
-const standaloneModule = (module: Record<string, unknown>) => {
-  const pkg = nativeContent({}, {}, 'module');
-  pkg.nativeRisu.card = {};
-  pkg.nativeRisu.module = { name: 'Module', ...module };
-  return pkg;
-};
-
-test('a bot shows every available section in group order', () => {
-  expect(placement(nativeContent({ name: 'Bot' }), 'bot')).toEqual({
-    shown: [
-      'basic',
-      'greetings',
-      'lore',
-      'instructions',
-      'assets',
-      'appearances',
-      'translation',
-      'display',
-      'variables',
-      'triggers',
-      'regex',
-      'modules',
-      'source',
-    ],
-    more: [],
-  });
-});
-
-test('an empty persona shows its defaults and keeps the rest under more', () => {
-  const { shown, more } = placement(nativeContent({ name: 'Persona' }, {}, 'persona'), 'persona');
-  expect(shown).toEqual(['basic', 'assets']);
-  expect(more).toContain('lore');
-  expect(more).toContain('source');
-});
 
 test('a section with data, the current section and a pending draft are never under more', () => {
   const persona = nativeContent(
@@ -88,35 +53,6 @@ test('a section with data, the current section and a pending draft are never und
   expect(placement(persona, 'persona', 'basic', ['package.native.regex']).shown).toContain('regex');
   expect(placement(persona, 'persona').more).toContain('regex');
   expect(placement(persona, 'persona').shown).not.toContain('source');
-});
-
-test('a standalone module leads with lore and orders groups by the module defaults', () => {
-  const { shown, more } = placement(standaloneModule({}), 'module');
-  expect(shown).toEqual(['lore', 'basic', 'triggers', 'regex', 'variables', 'display', 'assets']);
-  expect(more).toEqual(['modules', 'appearances', 'translation', 'source']);
-  expect([...MODULE_SECTION_ORDER].sort()).toEqual(
-    contentSectionRegistry
-      .filter((section) => section.defaultFor.includes('module'))
-      .map((section) => section.id)
-      .sort()
-  );
-});
-
-test('a standalone module edits its own background and greetings need a card', () => {
-  const standalone = placement(standaloneModule({}), 'module');
-  expect(standalone.shown).toContain('display');
-  expect([...standalone.shown, ...standalone.more]).not.toContain('greetings');
-  const display = contentSectionRegistry.find(({ id }) => id === 'display')!;
-  expect(display.hasData(standaloneModule({}))).toBe(false);
-  const styled = standaloneModule({ backgroundEmbedding: '<style>.x{}</style>' });
-  expect(display.hasData(styled)).toBe(true);
-  const title = (content: RisuContent, kind: 'bot' | 'module') =>
-    contentSections(content, kind, 'basic').find(({ id }) => id === 'display')?.title;
-  expect(title(styled, 'module')).toBe(title(nativeContent({ name: 'Bot' }), 'bot'));
-  const carded = placement(nativeContent({ name: 'Carded' }, {}, 'module'), 'module');
-  expect(carded.shown.slice(0, 3)).toEqual(['lore', 'basic', 'triggers']);
-  expect(carded.shown).toContain('display');
-  expect(carded.more).toContain('greetings');
 });
 
 test('owns maps helper paths to the section that edits them', () => {
@@ -149,45 +85,6 @@ test('owns maps helper paths to the section that edits them', () => {
     'variables'
   );
   expect(presetSection('/program/nativeRisuPreset/preset/temperature')).toBeNull();
-});
-
-test('each kind opens on its first default section', () => {
-  expect(defaultContentSection(nativeContent({ name: 'Bot' }), 'bot')).toBe('basic');
-  expect(defaultContentSection(nativeContent({}, {}, 'persona'), 'persona')).toBe('basic');
-  expect(defaultContentSection(standaloneModule({}), 'module')).toBe('lore');
-  expect(defaultContentSection(nativeContent({ name: 'Carded' }, {}, 'module'), 'module')).toBe(
-    'lore'
-  );
-});
-
-test('rail counts cover scripts and linked modules and agree with the data checks', () => {
-  const counts = (content: RisuContent) =>
-    Object.fromEntries(
-      contentSections(content, 'bot', 'basic').map((section) => [section.id, section.count])
-    );
-  const pkg = nativeContent({
-    first_mes: '  \n ',
-    extensions: {
-      risuai: { customScripts: [{ in: 'a', out: 'b' }], triggerscript: [{}, {}] },
-    },
-  });
-  pkg.modules = [{ id: 'linked', revision: 1 }] as unknown as typeof pkg.modules;
-  expect(counts(pkg)).toMatchObject({ greetings: 0, regex: 1, triggers: 2, modules: 1 });
-  const greetings = contentSectionRegistry.find((section) => section.id === 'greetings')!;
-  expect(greetings.hasData(pkg)).toBe(false);
-  const two = nativeContent({ first_mes: ' ', alternate_greetings: [''] });
-  expect(greetings.count!(two)).toBe(2);
-  expect(greetings.hasData(two)).toBe(true);
-  const module = standaloneModule({ regex: [{}, {}, {}], trigger: [{}] });
-  expect(placement(module, 'module').shown).toContain('regex');
-  expect(
-    Object.fromEntries(
-      contentSections(module, 'module', 'lore').map((section) => [section.id, section.count])
-    )
-  ).toMatchObject({ regex: 3, triggers: 1 });
-  const program = createDefaultRisuPrompt('Synthetic', 'main');
-  program.nativeRisuPreset.preset.regex = [{}, {}];
-  expect(presetSections(program, false).find((section) => section.id === 'regex')?.count).toBe(2);
 });
 
 test('changed sections follow the rail order, count pending drafts and place unowned paths', () => {

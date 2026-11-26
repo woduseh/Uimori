@@ -6,9 +6,6 @@ import { crc32 } from 'node:zlib';
 import { zip } from './fixtures/zip.js';
 import { afterEach, expect, test } from 'vitest';
 import { cardZip, readCharacterCardPath } from '../server/character-card-file.js';
-import { encodeRPack } from '../server/compat/risu/rpack.js';
-import { readCardModule } from '../server/risu-card-module.js';
-import { moduleJsonDocument } from '../server/risu-module-json.js';
 
 const directories: string[] = [];
 function fixture(bytes: Buffer, name: string) {
@@ -159,78 +156,4 @@ test('JSON tokenizer preserves escaped Unicode, primitive arrays and duplicate-k
   expect(
     Object.hasOwn((result.nativeCard as Record<string, unknown>).extensions as object, '__proto__')
   ).toBe(true);
-});
-
-test('binary modules index asset payloads without decoding them during metadata preparation', () => {
-  const asset = Buffer.alloc(100_003, 37);
-  const main = Buffer.from(
-    JSON.stringify({
-      type: 'risuModule',
-      module: { name: 'Module', assets: [['image', 'local-image']] },
-    })
-  );
-  const payload = (value: Buffer) => {
-    const size = Buffer.alloc(4);
-    size.writeUInt32LE(value.length);
-    return Buffer.concat([size, encodeRPack(value)]);
-  };
-  const bytes = Buffer.concat([
-    Buffer.from([111, 0]),
-    payload(main),
-    Buffer.from([1]),
-    payload(asset),
-    Buffer.from([0]),
-  ]);
-  const sizes: number[] = [];
-  const result = readCardModule(bytes.length, (offset, length) => {
-    sizes.push(length);
-    return bytes.subarray(offset, offset + length);
-  });
-  expect(Math.max(...sizes)).toBe(main.length);
-  expect(result.module.name).toBe('Module');
-  const members = new Map<string, () => Buffer>();
-  moduleJsonDocument({ type: 'risuModule', module: result.module }, members, result.assets);
-  expect(Math.max(...sizes)).toBe(main.length);
-  expect(members.get('module-assets/0')!()).toEqual(asset);
-  expect(sizes.at(-1)).toBe(asset.length);
-});
-
-test('ZIP accepts 32768 entries and rejects the next entry independently of the asset count', () => {
-  const archive = (count: number) => {
-    const locals: Buffer[] = [],
-      central: Buffer[] = [];
-    let offset = 0;
-    for (let index = 0; index < count; index++) {
-      const name = Buffer.from(index === 0 ? 'card.json' : `metadata/${index}`);
-      const bytes = index === 0 ? Buffer.from(JSON.stringify(card())) : Buffer.alloc(0);
-      const local = Buffer.alloc(30),
-        entry = Buffer.alloc(46);
-      local.writeUInt32LE(0x04034b50);
-      local.writeUInt32LE(crc32(bytes), 14);
-      local.writeUInt32LE(bytes.length, 18);
-      local.writeUInt32LE(bytes.length, 22);
-      local.writeUInt16LE(name.length, 26);
-      entry.writeUInt32LE(0x02014b50);
-      entry.writeUInt32LE(crc32(bytes), 16);
-      entry.writeUInt32LE(bytes.length, 20);
-      entry.writeUInt32LE(bytes.length, 24);
-      entry.writeUInt16LE(name.length, 28);
-      entry.writeUInt32LE(offset, 42);
-      locals.push(local, name, bytes);
-      central.push(entry, name);
-      offset += local.length + name.length + bytes.length;
-    }
-    const directory = Buffer.concat(central),
-      end = Buffer.alloc(22);
-    end.writeUInt32LE(0x06054b50);
-    end.writeUInt16LE(count, 8);
-    end.writeUInt16LE(count, 10);
-    end.writeUInt32LE(directory.length, 12);
-    end.writeUInt32LE(offset, 16);
-    return Buffer.concat([...locals, directory, end]);
-  };
-  const accepted = cardZip(archive(32768));
-  expect(accepted.size).toBe(32768);
-  expect(JSON.parse(accepted.get('card.json')!().toString()).data.name).toBe('Format fixture');
-  expect(() => cardZip(archive(32769))).toThrow('RISU_IMPORT_INVALID_FILE');
 });

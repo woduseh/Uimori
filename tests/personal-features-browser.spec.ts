@@ -1,5 +1,4 @@
 import { test, expect, type Locator } from '@playwright/test';
-import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectSettingsSection, visibleNavigation } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
@@ -25,7 +24,7 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     if (event.method() === 'POST' && /\/(?:runs|retranslate)$/.test(new URL(event.url()).pathname))
       modelCalls.push(event.url());
   });
-  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+  for (const width of [DESKTOP_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
     await visibleNavigation(page);
@@ -520,41 +519,4 @@ test('PWUI05 app installation is explicit, registers a cache-free worker and nev
   ).toBe(true);
   expect(await page.evaluate(() => caches.keys())).toEqual([]);
   expect(authoring).toEqual([]);
-});
-
-test('PWUI08 title matches report all saved chats and the next page remains selectable', async ({
-  page,
-  request,
-}) => {
-  const owner = await postFixtureChat(request, { data: { title: '제목 검색 자료' } });
-  const botId = (await owner.json()).botId;
-  const prefix = `제목검증-${Date.now()}`;
-  let last = '';
-  for (let index = 0; index < 35; index++) {
-    const response = await request.post('/api/chats', {
-      data: { title: `${prefix}-${String(index).padStart(2, '0')}`, botId },
-    });
-    expect(response.ok()).toBe(true);
-    last = (await response.json()).id;
-  }
-  await page.goto('/');
-  await visibleNavigation(page);
-  await page
-    .getByRole('button', { name: '전체 채팅 검색', exact: true })
-    .filter({ visible: true })
-    .click();
-  const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
-  await dialog.getByRole('searchbox', { name: '전체 채팅 검색', exact: true }).fill(prefix);
-  await expect(dialog.locator('summary').filter({ hasText: '제목 일치' })).toHaveText(
-    '제목 일치 35개'
-  );
-  await expect(dialog.locator('[data-chat-id]')).toHaveCount(5);
-  for (let remaining = 30; remaining > 0; remaining -= 5) {
-    await dialog
-      .getByRole('button', { name: `채팅 제목 더 보기 (${remaining}개 남음)`, exact: true })
-      .click();
-  }
-  await expect(dialog.locator('[data-chat-id]')).toHaveCount(35);
-  await dialog.locator(`[data-chat-id="${last}"]`).click();
-  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(last);
 });

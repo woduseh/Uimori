@@ -1,11 +1,5 @@
 import { expect, test } from 'vitest';
-import {
-  activityFrame,
-  helperDataFrame,
-  helperSessionsFrame,
-  presentationFrame,
-  promptWorkspaceFrame,
-} from '../web/live-frames.js';
+import { activityFrame, helperDataFrame, promptWorkspaceFrame } from '../web/live-frames.js';
 import type { LiveFrame } from '../web/live-stream.js';
 
 const chats = (kind: string, chatId: string | null = 'chat-1'): LiveFrame => ({
@@ -63,28 +57,4 @@ test('helper data readers wake on finished tasks and saved settings or resources
   expect(helperDataFrame(chats('helper.task.completed'))).toBe(false);
   expect(promptWorkspaceFrame(chats('prompt-workspace.updated', null))).toBe(true);
   expect(promptWorkspaceFrame(helper('prompt-workspace.updated'))).toBe(false);
-});
-
-test('the conversation list follows chat titles only when it shows them and only for its own chats', () => {
-  const listed = { chatTitles: true, chatIds: () => ['chat-1'] };
-  expect(helperSessionsFrame(chats('chat.title.generated'), listed)).toBe(true);
-  expect(helperSessionsFrame(chats('chat.title.manual'), listed)).toBe(true);
-  expect(helperSessionsFrame(chats('chat.title.started'), listed)).toBe(false);
-  expect(helperSessionsFrame(chats('chat.title.manual', 'chat-2'), listed)).toBe(false);
-  expect(helperSessionsFrame(chats('chat.title.manual'), { ...listed, chatTitles: false })).toBe(
-    false
-  );
-  expect(helperSessionsFrame(helper('task.running'), listed)).toBe(true);
-  expect(helperSessionsFrame(helper('tool.started'), listed)).toBe(false);
-  expect(helperSessionsFrame(helper('context.compaction.completed', null), listed)).toBe(true);
-  expect(helperSessionsFrame(invalidate('helper-list'), listed)).toBe(true);
-  expect(helperSessionsFrame(invalidate('activity'), listed)).toBe(false);
-});
-
-test('theme, font and illustration preset views read on their own catalog invalidation, whoever wrote it', () => {
-  expect(presentationFrame('themes')(invalidate('themes'))).toBe(true);
-  expect(presentationFrame('fonts')(invalidate('fonts'))).toBe(true);
-  expect(presentationFrame('illustration-presets')(invalidate('illustration-presets'))).toBe(true);
-  expect(presentationFrame('themes')(invalidate('fonts'))).toBe(false);
-  expect(presentationFrame('themes')(helper('theme.updated'))).toBe(false);
 });

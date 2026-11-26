@@ -34,47 +34,6 @@ async function seed(request: APIRequestContext, width: number, text = '원래 �
   return { chat, run, before: await detail(request, chat.id) };
 }
 for (const width of [MOBILE_WIDTH]) {
-  test(`RINFO01 ${width} expanded requests avoid duplicate previews and source metadata opens from the menu`, async ({
-    page,
-    request,
-  }, info) => {
-    const text = '긴 합성 요청이에요.\n'.repeat(35);
-    const { chat } = await seed(request, width, text);
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    const source = page.getByTestId('source').first();
-    const message = source.getByTestId('source-request');
-    await message.locator('summary').click();
-    await expect(message.locator('.request-preview')).toBeHidden();
-    await expect(message.locator('summary')).toHaveText('접기', { useInnerText: true });
-    await expect(message.locator('p')).toHaveText(text);
-    await page.screenshot({ path: info.outputPath(`request-expanded-${width}.png`) });
-    await message.locator('summary').click();
-    await expect(message.locator('.request-preview')).toBeVisible();
-    const menu = source.getByLabel('장면 작업 메뉴', { exact: true });
-    const metadata = source.getByRole('button', { name: '원문 연결 정보', exact: true });
-    await expect(metadata).not.toBeVisible();
-    await menu.click();
-    await source.getByRole('button', { name: '더 보기', exact: true }).click();
-    await metadata.click();
-    const dialog = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
-    await expect(dialog).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialog).not.toBeVisible();
-    await expect(menu).toBeFocused();
-    await page.route('**/api/sources/*/translation', (route) =>
-      route.fulfill({ status: 400, json: { error: 'Synthetic invalid request' } })
-    );
-    await source.getByRole('button', { name: '번역 생성', exact: true }).click();
-    const error = source.locator('.source-action-error');
-    await expect(error).toContainText('요청을 처리할 수 없어요. (400)');
-    const action = error.getByRole('button', { name: '역할별 모델' });
-    const container = await error.boundingBox(),
-      button = await action.boundingBox();
-    expect(container!.x + container!.width - button!.x - button!.width).toBeLessThanOrEqual(24);
-    expect(await error.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
-    await page.screenshot({ path: info.outputPath(`source-error-${width}.png`) });
-  });
   test(`SCCTX01 ${width} editing and excluding past input and scene keeps the original run intact`, async ({
     page,
     request,

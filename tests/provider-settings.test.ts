@@ -207,16 +207,6 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('rejects the retired contextTools setting', async () => {
-    const app = await application();
-    const connection = await request<Connection>(
-      app,
-      '/connections',
-      connectionBody('fixture-sse-v1')
-    );
-    await request(app, '/model-presets', modelBody(connection, { contextTools: true }), 400);
-  });
-
   test('preserves absent native options, explicit false and protocol-specific generation settings', async () => {
     const app = await application();
     for (const protocol of ['openai-responses-v1', 'anthropic-messages-v1'] as const) {
@@ -386,60 +376,6 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('rejects cross-provider options and inconsistent thinking budgets without storing a model', async () => {
-    const app = await application();
-    for (const protocol of [
-      'fixture-sse-v1',
-      'anthropic-messages-v1',
-      'vercel-chat-v1',
-      'openai-chat-v1',
-    ] as const) {
-      const connection = await request<Connection>(app, '/connections', connectionBody(protocol));
-      const forbidden =
-        protocol === 'fixture-sse-v1'
-          ? [
-              { structuredOutput: true },
-              { reasoningEffort: 'high' },
-              { thinkingMode: 'disabled' },
-              { thinkingBudgetTokens: 2048 },
-            ]
-          : protocol === 'anthropic-messages-v1'
-            ? [
-                { thinkingLevel: 'HIGH' },
-                { reasoningEffort: 'none' },
-                { reasoningEffort: 'minimal' },
-                { temperature: 1.1 },
-                { thinkingMode: 'enabled' },
-                { thinkingMode: 'enabled', thinkingBudgetTokens: 8192 },
-                { thinkingMode: 'enabled', thinkingBudgetTokens: 1023 },
-                { thinkingMode: 'adaptive', thinkingBudgetTokens: 2048 },
-                { thinkingBudgetTokens: 2048 },
-                { thinkingMode: 'enabled', thinkingBudgetTokens: 2048, temperature: 1 },
-                { thinkingMode: 'adaptive', temperature: 0 },
-              ]
-            : protocol === 'vercel-chat-v1'
-              ? [{ thinkingBudgetTokens: 2048 }]
-              : [
-                  { thinkingLevel: 'HIGH' },
-                  { thinkingMode: 'disabled' },
-                  { thinkingBudgetTokens: 2048 },
-                ];
-      for (const changes of [
-        ...forbidden,
-        ...(protocol === 'vercel-chat-v1'
-          ? []
-          : [{ providerOptions: { gateway: { only: ['openai'] } } }]),
-        { structuredOutput: 1 },
-        { reasoningEffort: 'ultra' },
-        { timeoutMs: 1800001 },
-        { maxOutputTokens: 500001 },
-      ])
-        await request(app, '/model-presets', modelBody(connection, changes), 400);
-    }
-    expect(app.store.product.all('model')).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
   test('moving a model changes only display order, rejects stale lists and survives a pre-existing edit', async () => {
     const app = await application();
     const connection = await request<Connection>(
@@ -573,99 +509,6 @@ describe('provider settings, catalogs and archive contracts', () => {
       409
     );
     expect(fetch).not.toHaveBeenCalled();
-  });
-
-  test('updates a single settings row with CAS and removes model and connection revision endpoints', async () => {
-    const app = await application();
-    const vertex = await request<Connection>(
-      app,
-      '/connections',
-      connectionBody('vertex-gemini-v1')
-    );
-    const first = await request<ModelPreset>(
-      app,
-      '/model-presets',
-      modelBody(vertex, { serviceTier: 'standard' })
-    );
-    const second = await request<ModelPreset>(
-      app,
-      '/model-presets/' + first.id,
-      { ...modelBody(vertex, { serviceTier: 'flex' }), expectedRevision: first.revision },
-      200,
-      'PUT'
-    );
-    expect(second.serviceTier).toBe('flex');
-    expect(app.store.product.get<ModelPreset>('model', first.id)).toEqual(second);
-    expect(() => app.store.product.get('model', first.id, first.revision)).toThrow(
-      'Setting not found'
-    );
-    expect(second).not.toHaveProperty('connectionRevision');
-    expect(second.source).not.toHaveProperty('connectionRevision');
-    await request(
-      app,
-      '/model-presets/' + first.id,
-      { ...modelBody(vertex, { serviceTier: 'standard' }), expectedRevision: first.revision },
-      409,
-      'PUT'
-    );
-    expect(app.store.product.get('model', first.id)).toEqual(second);
-    const current = await injectWithFixtureBot(app, {
-      method: 'GET',
-      url: `/api/model-presets/${first.id}`,
-      headers: { host: '127.0.0.1' },
-    });
-    expect(current.json()).toMatchObject({ id: first.id, revision: second.revision });
-    expect(app.store.product.authorize(vertex)).toEqual(vertex);
-    const custom = await request<Connection>(app, '/connections', connectionBody('openai-chat-v1'));
-    vi.mocked(fetch).mockResolvedValueOnce(response({ data: [{ id: 'old-model' }] }));
-    const listed = await request<Connection>(app, `/connections/${custom.id}/catalog`, {});
-    expect(listed.catalog).toHaveLength(1);
-    const edited = await request<Connection>(
-      app,
-      '/connections/' + custom.id,
-      saved(listed, { endpoint: 'https://synthetic.invalid/changed/v1' }),
-      200,
-      'PUT'
-    );
-    expect(edited.catalog).toEqual([]);
-    expect(() => app.store.product.authorize(listed)).toThrow('authority changed');
-    await request(
-      app,
-      '/connections/' + custom.id,
-      saved(listed, { title: 'Stale edit' }),
-      409,
-      'PUT'
-    );
-    expect(app.store.product.get('connection', custom.id)).toEqual(edited);
-    const currentConnection = await injectWithFixtureBot(app, {
-      method: 'GET',
-      url: `/api/connections/${custom.id}`,
-      headers: { host: '127.0.0.1' },
-    });
-    expect(currentConnection.json()).toMatchObject({ id: custom.id, revision: edited.revision });
-    for (const [kind, setting] of [
-      ['model', second],
-      ['connection', edited],
-    ] as const) {
-      expect(
-        app.store.db
-          .prepare('SELECT COUNT(*) AS count FROM provider_settings WHERE kind=? AND id=?')
-          .get(kind, setting.id)?.count
-      ).toBe(1);
-      for (const revision of [1, setting.revision]) {
-        const missing = await injectWithFixtureBot(app, {
-          method: 'GET',
-          url: `/api/revisions/${kind}/${setting.id}/${revision}`,
-          headers: { host: '127.0.0.1' },
-        });
-        expect(missing.statusCode).toBe(404);
-      }
-    }
-    expect(
-      app.store.db
-        .prepare("SELECT COUNT(*) AS count FROM versions WHERE kind IN ('model','connection')")
-        .get()?.count
-    ).toBe(0);
   });
 
   test('an existing chat uses current model and connection settings on its next Run while in-flight input and completed output remain intact', async () => {

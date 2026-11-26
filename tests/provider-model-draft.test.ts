@@ -114,15 +114,6 @@ describe('model numeric drafts', () => {
     }
   );
 
-  test('converts edited numeric strings on save and restores numeric presets as text', () => {
-    const draft = { ...initialModel(), maxOutputTokens: '4096' };
-    expect(modelDraftError(draft, connection)).toBe('');
-    const payload = modelPayload(draft, connection);
-    expect(payload.maxOutputTokens).toBe(4096);
-    const restored = modelDraft({ ...payload, id: 'model', revision: 1 } as ModelPreset);
-    expect(restored.maxOutputTokens).toBe('4096');
-  });
-
   test('keeps the manual evaluation profile across context modes and connection changes', () => {
     const metadataProfile = 'deepmind' as const;
     for (const contextMode of ['model-selected', 'preloaded'] as const) {

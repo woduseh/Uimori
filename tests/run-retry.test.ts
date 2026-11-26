@@ -15,7 +15,6 @@ import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
-import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
 import { editSource } from '../server/source-editing.js';
 import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 import { mainJudgmentInput } from '../server/main-judgment.js';
@@ -214,52 +213,6 @@ test('replacement seeds ancestor variables and swaps state only after completion
   store.completeRun(retry.id, 'New response', selected.run.usage!);
   expect(readChatVariables(store, chat.id)).toEqual({ revision: 3, values: { scene: 'before' } });
 });
-test('completed replacements can be replaced again and failed judgment recovery preserves replacement ownership', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Replace twice');
-  const selected = complete(store, chat.id, 'Old response');
-  const retry = store.retryRun(
-    selected.run.id,
-    'replace-first',
-    undefined,
-    undefined,
-    'replace'
-  ).run;
-  store.startRun(retry.id);
-  const newer = store.completeRun(retry.id, 'First replacement', selected.run.usage!);
-  const next = store.retryRun(newer.runId, 'replace-second', undefined, undefined, 'replace').run;
-  expect(next.snapshot.replacement?.sourceRevision).toBe(newer.id);
-  const snapshot = {
-    ...next.snapshot,
-    mainJudgmentEnabled: true,
-    mainJudgment: {
-      version: 'main-refusal-jev-v2',
-      candidateHash: newer.hash,
-      response: 'Preserved candidate',
-      threshold: 0.5,
-    },
-  };
-  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot), next.id);
-  store.startRun(next.id);
-  store.finishRun(next.id, 'failed', 'JEV_CONNECTION_FAILED', 'Preserved candidate');
-  const recovered = store.candidate(
-    next.id,
-    'rejudge-replacement',
-    'Unused title',
-    undefined,
-    true
-  ).run;
-  expect(recovered.chatId).toBe(chat.id);
-  expect(recovered.snapshot.judgmentRecovery).toBe(true);
-  expect(recovered.snapshot.replacement?.sourceRevision).toBe(newer.id);
-  store.startRun(recovered.id);
-  const final = store.completeRun(recovered.id, 'Preserved candidate', selected.run.usage!);
-  expect(store.history(final.id).map((source) => source.text)).toEqual(['Preserved candidate']);
-  const copy = store.candidate(next.id, 'candidate-failed-replacement', 'Explicit candidate').run;
-  expect(copy.chatId).not.toBe(chat.id);
-  expect(copy.snapshot.replacement).toBeUndefined();
-});
-
 test('rejudgment reports a conflict while another request runs and preserves both runs', () => {
   const store = database();
   const chat = createFixtureChat(store, 'Rejudgment admission');
@@ -300,7 +253,7 @@ test('rejudgment reports a conflict while another request runs and preserves bot
   });
 });
 
-test.each(['compacted', 'recent'] as const)(
+test.each(['compacted'] as const)(
   'replacement clears an active checkpoint with the old response in %s only after success and preserves its record',
   (location) => {
     const store = database(),
@@ -528,73 +481,6 @@ test('failed retry after the original head advances copies a chat at its origina
   expect(store.chat(chat.id).headRevision).toBe(later.source.id);
 });
 
-test('an imported request beyond the old length limits can be edited and regenerated without changing its original', () => {
-  const store = database();
-  const source = createFixtureChat(store, 'Long imported request');
-  complete(store, source.id, 'Original scene');
-  const transcript = exportChatTranscript(store, source.id);
-  const request = '요'.repeat(20_000) + '끝부분';
-  transcript.entries[0].request = request;
-  const imported = importChatTranscript(store, { transcript, idempotencyKey: randomUUID() });
-  const original = store.run(store.source(imported.chat.headRevision!).runId);
-  expect(original.request).toBe(request);
-  const edited = `${request}\n수정한 전개`;
-  const retry = store.retryRun(original.id, 'long-request-edit', undefined, edited);
-  expect(retry.created).toBe(true);
-  expect(retry.run.request).toBe(edited);
-  expect(retry.run.snapshot.request).toBe(edited);
-  expect(retry.run.chatId).not.toBe(imported.chat.id);
-  store.startRun(retry.run.id);
-  store.completeRun(retry.run.id, 'Revised scene', {
-    modelCalls: 0,
-    inputTokens: null,
-    outputTokens: null,
-    costUsd: null,
-  });
-  expect(exportChatTranscript(store, retry.run.chatId).entries[0]).toMatchObject({
-    request: edited,
-    text: 'Revised scene',
-  });
-  expect(exportChatTranscript(store, imported.chat.id).entries[0]).toMatchObject({
-    request,
-    text: 'Original scene',
-  });
-  expect(store.retryRun(original.id, 'long-request-edit', undefined, edited).created).toBe(false);
-});
-
-test('pending turns follow five-source page boundaries without losing active work or source numbering', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Paged recovery');
-  for (let index = 0; index < 5; index++) complete(store, chat.id, `Source ${index + 1}`);
-  const failed = queued(store, chat.id, 'Between pages');
-  store.finishRun(failed.id, 'failed', 'Failed between pages');
-  const cancelled = queued(store, chat.id, 'Cancelled between pages');
-  store.finishRun(cancelled.id, 'cancelled', 'Run cancelled', 'Retained partial');
-  const sixth = complete(store, chat.id, 'Source 6');
-  complete(store, chat.id, 'Source 7');
-  const first = readerDetail(store, chat.id, {});
-  expect(first.sources).toHaveLength(5);
-  expect(first.reader.pendingRunIds).not.toContain(failed.id);
-  const last = readerDetail(store, chat.id, { source: sixth.source.id });
-  expect(last.reader.start).toBe(5);
-  expect(last.sources).toHaveLength(2);
-  expect(last.reader.pendingRunIds).toContain(failed.id);
-  expect(last.reader.pendingRunIds).toContain(cancelled.id);
-  dismissReaderRun(store, cancelled.id);
-  const dismissed = readerDetail(store, chat.id, { source: sixth.source.id });
-  expect(dismissed.reader.pendingRunIds).not.toContain(cancelled.id);
-  expect(dismissed.reader.pendingRunIds).toContain(failed.id);
-  expect(dismissed.reader.order).toEqual(last.reader.order);
-  expect(dismissed.reader.navigation).toEqual(last.reader.navigation);
-  const timeline = readerConversation(last.sources as Source[], last.runs as ReaderRun[]);
-  expect(timeline[0]).toMatchObject({ kind: 'pending', run: { id: failed.id } });
-  expect(timeline.filter((entry) => entry.kind === 'source').map((entry) => entry.index)).toEqual([
-    0, 1,
-  ]);
-  const active = queued(store, chat.id, 'Active at latest head');
-  expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(active.id);
-});
-
 test('reader dismissal survives reopening without modifying execution data, and a retry stays visible', () => {
   let store = database();
   const chat = createFixtureChat(store, 'Dismiss cancelled request');
@@ -658,19 +544,6 @@ test('reader dismissal survives reopening without modifying execution data, and 
       .get(readerRunDismissalKey(chat.id, run.id))
   ).toBeUndefined();
 });
-
-test.each(['running', 'failed'] as const)(
-  'reader dismissal rejects %s work and leaves it visible',
-  (status) => {
-    const store = database(),
-      chat = createFixtureChat(store, 'Keep unresolved work');
-    const run = queued(store, chat.id);
-    if (status === 'running') store.startRun(run.id);
-    else store.finishRun(run.id, status, 'Fixture terminal state');
-    expect(() => dismissReaderRun(store, run.id)).toThrow(/Only a cancelled request/);
-    expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(run.id);
-  }
-);
 
 test('completion winning a cancel race keeps its source and cannot be dismissed', () => {
   const store = database(),

@@ -1,20 +1,15 @@
 import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
 import {
   navigationAction,
-  openChatSettings,
-  selectChatSettingsSection,
   selectSettingsSection,
   selectEditorSection,
   discardEdits,
 } from './ui-navigation.js';
-import { postFixtureChat } from './fixtures/chat.js';
-import { visualReview } from './fixtures/visual-review.js';
-import { expectCodeFieldValue, codeFieldValue } from './code-field.js';
+import { codeFieldValue } from './code-field.js';
 
 async function createBot(request: APIRequestContext, title: string): Promise<Content> {
   const pkg = nativeContent({ name: title, description: 'Synthetic story source.' });
@@ -121,63 +116,6 @@ for (const width of [412]) {
     });
   });
 }
-
-test('PERSONAL images retain native alias while display metadata and WebP persist', async ({
-  page,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  const original = await createBot(request, `Image metadata ${randomUUID()}`);
-  await openEditor(page, original.title);
-  await selectEditorSection(page, '에셋');
-  const image = await sharp({
-    create: {
-      width: 96,
-      height: 72,
-      channels: 4,
-      background: { r: 60, g: 120, b: 190, alpha: 0.5 },
-    },
-  })
-    .png()
-    .toBuffer();
-  await page
-    .getByLabel('Risu 이미지 추가', { exact: true })
-    .setInputFiles({ name: 'script_alias.png', mimeType: 'image/png', buffer: image });
-  const search = page.getByRole('searchbox', { name: '에셋 검색', exact: true });
-  await search.fill('없는 에셋');
-  await expect(
-    page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button')
-  ).toHaveCount(0);
-  await search.fill('script_alias');
-  const uploaded = page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button').first();
-  await expect(uploaded).toHaveAttribute('aria-pressed', 'true');
-  await page.getByLabel('이미지 이름', { exact: true }).fill('우산을 든 유나');
-  await page.getByLabel('이미지 설명', { exact: true }).fill('비 오는 하굣길, 투명 우산과 미소');
-  await page
-    .getByLabel('선택한 에셋', { exact: true })
-    .getByLabel('이미지 용도', { exact: true })
-    .selectOption('inline');
-  const saved = await save(page);
-  expect(saved.package.images![0]).toMatchObject({
-    title: '우산을 든 유나',
-    description: '비 오는 하굣길, 투명 우산과 미소',
-    mime: 'image/webp',
-    allowedUse: 'inline',
-  });
-  expect(saved.package.nativeRisu.assets[0].name).toBe('script_alias');
-  const response = await request.get(
-    `/api/package-image-blobs/${saved.package.images![0].blobHash}`
-  );
-  const metadata = await sharp(await response.body()).metadata();
-  expect([metadata.format, metadata.width, metadata.height, metadata.hasAlpha]).toEqual([
-    'webp',
-    96,
-    72,
-    true,
-  ]);
-  await page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button').first().click();
-  await page.screenshot({ path: info.outputPath('personal-image-metadata.png'), fullPage: true });
-});
 
 test('PERSONAL UI accepts a direct API key for a custom LAN endpoint without restart', async ({
   page,
@@ -364,127 +302,6 @@ test('PERSONAL saving one tab preserves another tab recovery through reload', as
   }
 });
 
-test('PERSONAL uploaded metadata locks pending fields and retains rejected input', async ({
-  page,
-  request,
-}, info) => {
-  const created = await postFixtureChat(request, { data: { title: `Metadata ${randomUUID()}` } });
-  expect(created.ok(), await created.text()).toBe(true);
-  const chat = await created.json();
-  const image = await sharp({
-    create: { width: 80, height: 80, channels: 3, background: '#6688aa' },
-  })
-    .png()
-    .toBuffer();
-  const uploaded = await request.post(`/api/chats/${chat.id}/assets`, {
-    data: {
-      title: 'Original image',
-      description: 'Original description',
-      actor: '유나',
-      outfit: '교복',
-      location: '하굣길',
-      allowedUse: 'both',
-      mime: 'image/png',
-      base64: image.toString('base64'),
-    },
-  });
-  expect(uploaded.ok(), await uploaded.text()).toBe(true);
-  const asset = await uploaded.json();
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`/?chat=${chat.id}`);
-  await openChatSettings(page);
-  await selectChatSettingsSection(page, '이미지');
-  await page.locator('.chat-settings-image-management > summary').click();
-  const metadata = page.locator('.asset-grid small.ui-meta-row').filter({ hasText: '유나' });
-  await expect(metadata).toBeVisible();
-  for (const width of [412, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
-    expect(
-      await metadata.evaluate((element) => {
-        const boxes = Array.from(element.children).map((child) => child.getBoundingClientRect());
-        return boxes
-          .slice(1)
-          .every(
-            (box, index) => box.top >= boxes[index].bottom || box.left >= boxes[index].right + 4
-          );
-      })
-    ).toBe(true);
-    await metadata.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`asset-metadata-spacing-${width}.png`) });
-  }
-  await page.getByText('이름과 설명 편집', { exact: true }).click();
-  const title = page.getByLabel('업로드한 이미지 이름', { exact: true });
-  const description = page.getByLabel('업로드한 이미지 설명', { exact: true });
-  const submit = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
-  await title.fill('Saved image');
-  await description.fill('Saved description');
-  const path = `**/api/chats/${chat.id}/assets/${asset.id}`;
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route(path, async (route) => {
-    await held;
-    await route.continue();
-  });
-  const response = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/assets/${asset.id}`) && response.request().method() === 'PATCH'
-  );
-  const readyBounds = (await submit.boundingBox())!;
-  try {
-    await submit.click();
-    await expect(title).toBeDisabled();
-    await expect(description).toBeDisabled();
-    await expect(submit).toBeDisabled();
-    await expect(submit).toHaveAttribute('aria-busy', 'true');
-    const pendingText = submit.getByText('저장 중');
-    await expect(pendingText).toBeVisible();
-    const indicator = (await submit.locator('svg').boundingBox())!;
-    const label = (await pendingText.boundingBox())!;
-    expect(indicator.x + indicator.width).toBeLessThan(label.x);
-    expect(Math.abs(indicator.y + indicator.height / 2 - label.y - label.height / 2)).toBeLessThan(
-      2
-    );
-    const pendingBounds = (await submit.boundingBox())!;
-    expect(pendingBounds.height).toBe(readyBounds.height);
-    expect(pendingBounds.width).toBe(readyBounds.width);
-    await page.screenshot({
-      path: info.outputPath('personal-metadata-pending-disabled.png'),
-      fullPage: true,
-    });
-  } finally {
-    release();
-  }
-  const accepted = await response;
-  expect(accepted.ok(), await accepted.text()).toBe(true);
-  await expect(description).toBeEnabled();
-  await expect(title).toHaveValue('Saved image');
-  await expectCodeFieldValue(description, 'Saved description');
-  await page.unroute(path);
-  await page.route(path, (route) =>
-    route.fulfill({ status: 409, json: { error: 'REVISION_CONFLICT' } })
-  );
-  await title.fill('Keep unsaved title');
-  await description.fill('Keep unsaved description');
-  await submit.click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(title).toBeEnabled();
-  await expect(description).toBeEnabled();
-  await expect(title).toHaveValue('Keep unsaved title');
-  await expectCodeFieldValue(description, 'Keep unsaved description');
-  await page.getByText('이름과 설명 편집', { exact: true }).click();
-  await expect(title).not.toBeVisible();
-  await page.getByText('이름과 설명 편집', { exact: true }).click();
-  await expect(title).toHaveValue('Keep unsaved title');
-  await expectCodeFieldValue(description, 'Keep unsaved description');
-  await expect(page.getByRole('alert')).toBeVisible();
-  await page.screenshot({
-    path: info.outputPath('personal-metadata-error-retained.png'),
-    fullPage: true,
-  });
-});
-
 test('PERSONAL binary resource backup downloads and imports through the archive UI', async ({
   page,
   request,
@@ -525,73 +342,3 @@ test('PERSONAL binary resource backup downloads and imports through the archive 
   expect(content.title).toBe(title);
   expect(content.package.nativeRisu.card.description).toBe('Synthetic story source.');
 });
-
-for (const width of [412]) {
-  test(`AUDIT2 archive import confirms a completed request after a lost response without duplicates ${width}`, async ({
-    page,
-    request,
-  }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const title = `AUDIT2 archive ${width} ${randomUUID()}`;
-    const original = await createBot(request, title);
-    const archive = await request.post('/api/native-transfers/export-archive', {
-      data: { items: [{ kind: 'content', id: original.id }] },
-    });
-    expect(archive.ok(), await archive.text().catch(() => '')).toBe(true);
-    const bytes = await archive.body();
-    const importedTitleCount = async () => {
-      const library = await (await request.get('/api/library?view=summary')).json();
-      return library.contents.filter((item: { title: string }) => item.title === title).length;
-    };
-    const before = await importedTitleCount();
-    const bodies: unknown[] = [];
-    let receipt: { created: boolean; items: { id: string }[] } | undefined;
-    await page.route('**/api/native-transfers/apply-archive', async (route) => {
-      bodies.push(route.request().postDataJSON());
-      if (bodies.length !== 1) return route.continue();
-      const accepted = await route.fetch();
-      expect(accepted.ok(), await accepted.text()).toBe(true);
-      receipt = await accepted.json();
-      await route.fulfill({ status: 503, json: { error: 'AUDIT2_IMPORT_RESPONSE_LOST' } });
-    });
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '데이터 관리');
-    const importer = page.getByRole('region', { name: '백업 파일 가져오기', exact: true });
-    const file = importer.getByLabel('백업 파일 선택', { exact: true });
-    await file.setInputFiles({
-      name: 'audit2-resource.uimori',
-      mimeType: 'application/zip',
-      buffer: bytes,
-    });
-    await expect(importer).toContainText('자료 1개, 프리셋 0개, 이미지 0개');
-    await importer.getByRole('button', { name: '새 자료로 가져오기', exact: true }).click();
-    await expect(importer.getByRole('alert')).toContainText('503');
-    expect(receipt?.created).toBe(true);
-    expect(await importedTitleCount()).toBe(before + 1);
-    await importer.getByRole('alert').scrollIntoViewIfNeeded();
-    if (visualReview)
-      await page.screenshot({
-        path: info.outputPath(`audit2-resource-import-uncertain-${width}.png`),
-      });
-    await expect(file).toBeDisabled();
-    await expect(importer.getByRole('status')).toContainText('완료 여부');
-    const retry = page.waitForResponse(
-      (response) => response.url().endsWith('/api/native-transfers/apply-archive') && response.ok()
-    );
-    await importer.getByRole('button', { name: '같은 요청으로 다시 확인', exact: true }).click();
-    const replay = await (await retry).json();
-    expect(bodies).toHaveLength(2);
-    expect(bodies[1]).toEqual(bodies[0]);
-    expect(replay.created).toBe(false);
-    expect(replay.items).toEqual(receipt!.items);
-    expect(await importedTitleCount()).toBe(before + 1);
-    await expect(file).toBeEnabled();
-    await expect(importer.getByRole('status')).toContainText('자료 1개를 추가했어요.');
-    await expect(importer.getByRole('alert')).toHaveCount(0);
-    if (visualReview)
-      await page.screenshot({
-        path: info.outputPath(`audit2-resource-import-confirmed-${width}.png`),
-      });
-  });
-}

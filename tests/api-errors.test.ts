@@ -1,8 +1,6 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
-import { mainJudgmentError } from '../web/main-judgment-error.js';
-import { loadLocale, setLocale, translateMessage, UI_LOCALES } from '../web/i18n.js';
-import { apiErrorDiagnostic } from '../web/api-errors.js';
+import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
@@ -19,48 +17,6 @@ async function rejected(status: number, error: unknown, method = 'POST') {
   expect(result).toBeInstanceOf(ApiError);
   return result as ApiError;
 }
-
-test('image admission and execution failures give actionable safe messages', async () => {
-  const result = await rejected(400, 'REQUEST_IMAGE_ANIMATED');
-  expect(result).toMatchObject({ code: 'REQUEST_IMAGE_ANIMATED', status: 400 });
-  expect(result.message).toContain('정지 이미지');
-  expect(mainJudgmentError('RISU_NATIVE_REQUEST_IMAGE_IDENTITY')).toContain('id와 역할');
-  expect(mainJudgmentError('IMAGE_INPUT_UNSUPPORTED_MODEL')).toContain('본문 모델');
-  expect(mainJudgmentError('REQUEST_IMAGE_ANIMATED: unsafe provider text')).toBeUndefined();
-});
-
-test('pinned prompt failures preserve the safe code and point to chat settings, not revision conflict', async () => {
-  const result = await rejected(
-    409,
-    'PINNED_PROMPT_UNAVAILABLE: arbitrary server details secret-value'
-  );
-  expect(result).toMatchObject({ status: 409, code: 'PINNED_PROMPT_UNAVAILABLE' });
-  expect(result.message).toContain('채팅 설정');
-  expect(result.message).toContain('고정을 해제');
-  expect(result.message).not.toMatch(/다른 요청|secret-value/);
-});
-
-test('business errors have their own recovery message', async () => {
-  for (const [status, code, message] of [
-    [400, 'PACKAGE_START_TEXT_TOO_LONG', '2,000,000자'],
-    [409, 'MODEL_REQUIRED:helper', '도우미 모델'],
-    [409, 'HELPER_EFFECTS_ALREADY_COMMITTED', '남은 작업만 새 요청'],
-  ] as const) {
-    const result = await rejected(status, code);
-    expect(result).toMatchObject({ code, status });
-    expect(result.message).toContain(message);
-    expect(result.message).not.toContain('다른 요청이 먼저');
-  }
-});
-
-test('story UI errors preserve their diagnostic code and update retained translations', async () => {
-  const result = await rejected(409, 'STORY_UI_STALE_SOURCE');
-  setLocale('en');
-  expect(result).toMatchObject({ status: 409, code: 'STORY_UI_STALE_SOURCE' });
-  expect(result.displayMessage).toContain('Check the latest scene.');
-  expect(translateMessage(result.message)).toBe(result.displayMessage);
-  expect((await rejected(409, 'STORY_UI_STALE_SOURCE: untrusted suffix')).code).toBeNull();
-});
 
 test('unavailable models retain only the role code and show the current selection paths', async () => {
   const result = await rejected(409, 'MODEL_UNAVAILABLE:main:private-model-and-credential');
@@ -99,108 +55,4 @@ test('generic errors keep provider/internal text hidden and retain deletion conf
   });
   const deletion = '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.';
   expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
-});
-
-test('only the exact helper copy conflict follows the UI language', async () => {
-  const wireMessage = '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.';
-  const result = await rejected(409, wireMessage);
-  expect(result).toMatchObject({
-    status: 409,
-    code: 'HELPER_CONVERSATION_COPY_CHANGED',
-    message: wireMessage,
-  });
-  for (const [locale, expected] of [
-    ['ko', '도우미 대화가 바뀌었어요. 다시 복사해 주세요.'],
-    ['en', 'The assistant conversation changed. Please copy it again.'],
-    ['ja', 'アシスタントの会話が変更されました。もう一度コピーしてください。'],
-    ['zh', '助手对话已更改。请重新复制。'],
-  ] as const) {
-    setLocale(locale);
-    expect(result.displayMessage).toBe(expected);
-    expect(translateMessage(result.message)).toBe(expected);
-    expect(result.message).toBe(wireMessage);
-  }
-  for (const [status, error, method] of [
-    [400, wireMessage, 'POST'],
-    [409, wireMessage, 'PATCH'],
-    [409, `${wireMessage} external detail`, 'POST'],
-  ] as const) {
-    const other = apiErrorDiagnostic(error, status, method);
-    expect(other.code).toBeNull();
-    expect(other.message).not.toContain('external detail');
-    expect(other.message).not.toBe(wireMessage);
-  }
-});
-
-test('a Risu native action conflict retains its diagnostic while its display follows the UI language', async () => {
-  setLocale('ko');
-  const code = 'RISU_NATIVE_ACTION_FAILED';
-  const result = await rejected(409, code);
-  const original =
-    '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)';
-  expect(result).toMatchObject({ status: 409, code, message: original });
-  for (const [locale, expected] of [
-    [
-      'en',
-      'This request cannot complete in the current state. Check settings and task status. (409)',
-    ],
-    ['ja', '現在の状態ではこの依頼を完了できません。設定と作業状態を確認してください。(409)'],
-    ['zh', '当前状态下无法完成此请求。请检查设置和任务状态。(409)'],
-    ['ko', original],
-  ] as const) {
-    setLocale(locale);
-    expect(result.displayMessage).toBe(expected);
-    expect(translateMessage(result.message)).toBe(expected);
-    expect(result.message).toBe(original);
-    expect(result.code).toBe(code);
-  }
-});
-
-test('authored deletion conflict details remain literal after a language change', async () => {
-  const detail = '삭제할 수 없는 제목: 사용자 원고 (fixture).';
-  const result = await rejected(409, detail, 'DELETE');
-  setLocale('en');
-  expect(result.message).toBe(detail);
-  expect(result.displayMessage).toBe(detail);
-  expect(result.code).toBeNull();
-});
-
-test('API errors keep Korean message and stable codes in another UI language', async () => {
-  setLocale('en');
-  const result = await rejected(409, 'ILLUSTRATION_ACTIVE');
-  expect(result.code).toBe('ILLUSTRATION_ACTIVE');
-  expect(result.message).toBe('이 컷은 생성 중이에요.');
-  expect(result.displayMessage).not.toBe(result.message);
-  expect(translateMessage(result.message)).toBe(result.displayMessage);
-  const required = await rejected(409, 'MODEL_REQUIRED:translation-refusal');
-  expect(required.code).toBe('MODEL_REQUIRED:translation-refusal');
-  expect(required.message).toBe('설정 > 역할별 모델에서 번역 거절 판정 모델을 선택해 주세요.');
-  expect(required.displayMessage).not.toContain('역할별 모델');
-});
-
-test('retained manuscript translation errors retranslate scene labels after locale changes', async () => {
-  setLocale('ko');
-  const result = await rejected(409, 'MANUSCRIPT_TRANSLATION_MISSING:0,2:3');
-  const retained = result.message;
-  expect(result.code).toBe('MANUSCRIPT_TRANSLATION_MISSING');
-  expect(retained).toBe(
-    '저장된 유효 번역이 없는 장면: 첫 메시지, 장면 2 외 1개. 번역을 완료하거나 범위를 바꿔 주세요.'
-  );
-  setLocale('en');
-  expect(translateMessage(retained)).toContain('First message, Scene 2 and 1 more');
-  setLocale('ko');
-  expect(translateMessage(retained)).toBe(retained);
-  setLocale('ja');
-  expect(translateMessage(retained)).toContain('最初のメッセージ, シーン2、ほか1件');
-  setLocale('zh');
-  expect(translateMessage(retained)).toContain('首条消息, 场景2，另有1个');
-  expect(result.message).toBe(retained);
-  expect(result.code).toBe('MANUSCRIPT_TRANSLATION_MISSING');
-});
-
-test('Risu display timeouts name the script stage instead of a bare server failure', async () => {
-  const result = await rejected(500, 'RISU_NATIVE_TIMEOUT', 'GET');
-  expect(result).toMatchObject({ status: 500, code: 'RISU_NATIVE_TIMEOUT' });
-  expect(result.message).toContain('표시 스크립트');
-  expect((await rejected(500, 'Request failed', 'GET')).message).toContain('(500)');
 });

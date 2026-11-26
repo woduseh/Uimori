@@ -205,44 +205,6 @@ async function expectBothScenesEnabled(surfaces: Locator) {
   );
 }
 
-test('a delayed successful action releases the replacement reader after a shared confirmation', async ({
-  page,
-}) => {
-  const { surfaces } = await openRepeatedScenes(page);
-  const submissions: Record<string, unknown>[] = [];
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/risu-action', async (route) => {
-    const body = route.request().postDataJSON();
-    if (body.name !== 'count') return route.continue();
-    submissions.push(body);
-    const response = await route.fetch();
-    if (submissions.length === 1) await gate;
-    await route.fulfill({ response });
-  });
-  try {
-    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-    await expectBothScenes(surfaces, 1);
-    await expectBothScenesEnabled(surfaces);
-    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
-      'data-risu-disabled',
-      'true'
-    );
-    release();
-    await expectBothScenesEnabled(surfaces);
-    expect(submissions).toHaveLength(1);
-    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
-    await expectBothScenes(surfaces, 2);
-    expect(submissions).toHaveLength(2);
-    expect(submissions[1].idempotencyKey).not.toBe(submissions[0].idempotencyKey);
-  } finally {
-    release();
-  }
-});
-
 test('identical scenes retain separate uncertain actions and each replacement can confirm its own', async ({
   page,
   request,

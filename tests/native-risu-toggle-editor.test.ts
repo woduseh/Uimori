@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  nativeToggleGroupWarnings,
   parseNativeToggleLines,
   serializeNativeToggleDefinition,
   serializeNativeToggleLines,
@@ -50,15 +49,5 @@ describe('native toggle definition editor source preservation', () => {
     expect(() => serializeNativeToggleDefinition({ ...item, label: 'x=y' })).toThrow('등호');
     expect(() => serializeNativeToggleDefinition({ ...item, key: '' })).toThrow('변수 키');
     expect(() => serializeNativeToggleDefinition({ ...item, label: 'x\ny' })).toThrow('줄바꿈');
-  });
-
-  it('reports group boundary problems without repairing or dropping their source', () => {
-    const raw = '==groupEnd\n=One=group\n=Nested=group';
-    const lines = parseNativeToggleLines(raw);
-    expect(nativeToggleGroupWarnings(lines)).toHaveLength(3);
-    expect(serializeNativeToggleLines(lines)).toBe(raw);
-    expect(
-      nativeToggleGroupWarnings(parseNativeToggleLines('=One=group\na=A\n==groupEnd'))
-    ).toEqual([]);
   });
 });

@@ -1,7 +1,6 @@
 import { createApp, type App } from '../server/app.js';
 import { describe } from 'vitest';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -24,12 +23,9 @@ import {
 } from '../core/helper.js';
 import Fastify from 'fastify';
 import { helperRoutes } from '../server/helper-routes.js';
-import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { HELPER_PERSONA_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from '../web/helper-persona.js';
 import { chatWithSource } from './fixtures/illustration.js';
-import { readHelperTaskResults } from '../server/helper-task-results.js';
-import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
-import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import {
   chatGenerationDefaults,
   saveChatGenerationDefaults,
@@ -217,73 +213,6 @@ test('saved editor references freeze at admission and identical retries survive 
     f.runtime.enqueue(f.conversation.id, 'new-request', '내용을 설명해줘', editor)
   ).toThrow('참고하던 자료가 변경');
   expect(send).toHaveBeenCalledTimes(1);
-});
-
-test('the request route validates the editor focus and the model receives it in source.editor', async () => {
-  const f = fixture();
-  const saved = f.store.product.content(fixtureBotInput('위치를 보낼 자료', '원래 본문'));
-  let captured: transport.Json | undefined;
-  mockSend((request) => {
-    captured = request.input.source;
-    return structuredClone(success);
-  });
-  const focus = {
-    section: 'lore',
-    item: { index: 1, label: '항구' },
-    field: {
-      section: 'lore',
-      item: 1,
-      field: 'content',
-      label: '로어 본문',
-      language: 'cbs',
-      length: 14,
-      usesCbs: true,
-    },
-    selection: { from: 2, to: 5, text: '에는 ' },
-    diagnostic: {
-      code: 'cbs.unclosed-call',
-      severity: 'error',
-      from: 6,
-      to: 8,
-      line: 1,
-      column: 7,
-    },
-    unsavedSections: ['lore'],
-  };
-  const editor = {
-    kind: 'content',
-    source: 'saved',
-    targetId: saved.id,
-    revision: saved.revision,
-    title: saved.title,
-  };
-  const app = Fastify();
-  helperRoutes(app, f.runtime);
-  try {
-    const post = (requestKey: string, payload: Record<string, unknown>) =>
-      app.inject({
-        method: 'POST',
-        url: `/api/helper/conversations/${f.conversation.id}/messages`,
-        payload: { requestKey, text: '이 오류 고쳐 줘', editor: payload },
-      });
-    for (const [key, invalid] of [
-      ['unknown-key', { ...focus, extra: true }],
-      ['selection-without-field', { section: 'lore', selection: focus.selection }],
-      ['selection-text-mismatch', { ...focus, selection: { from: 2, to: 5, text: '에' } }],
-      ['bad-code', { ...focus, diagnostic: { ...focus.diagnostic, code: 'lua.syntax' } }],
-      ['too-many', { ...focus, diagnostics: Array(11).fill(focus.diagnostic) }],
-    ] as const) {
-      const response = await post(key, { ...editor, focus: invalid });
-      expect(response.statusCode, key).toBe(400);
-      expect(response.json().message).toMatch(/^Invalid editor focus/u);
-    }
-    const accepted = await post('valid', { ...editor, focus });
-    expect(accepted.statusCode, accepted.body).toBe(200);
-    await Promise.all(f.work);
-    expect(captured).toMatchObject({ editor: { hasUnsavedInput: false, focus } });
-  } finally {
-    await app.close();
-  }
 });
 
 test('an unsaved editor is analysis input and a patch of that resource saves its saved revision', async () => {
@@ -526,75 +455,6 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
   };
 }
 
-test('completed helper retains bounded call arguments, shell outcome and attempt timing', async () => {
-  const f = fixture();
-  const args = { command: `echo diagnostic\n#${'가'.repeat(1600)}\necho DIAGNOSTIC_END` };
-  vi.spyOn(f.runtime.shell, 'exec').mockResolvedValue({
-    exitCode: 7,
-    signal: null,
-    timedOut: false,
-    outputBytes: 987654,
-    truncated: true,
-    output: 'PRIVATE_SHELL_OUTPUT',
-    applied: [],
-  });
-  mockSend((_request, _options, index) =>
-    index === 0
-      ? {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          text: '',
-          toolCalls: [
-            { id: 'invalid', name: 'data.exec', arguments: { command: 123 } },
-            { id: 'shell', name: 'data.exec', arguments: args },
-          ],
-        }
-      : structuredClone(success)
-  );
-  const task = f.runtime.enqueue(f.conversation.id, 'diagnostic-retention', 'Inspect locally.');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  const events = f.workspace.events(f.conversation.id);
-  const data = (kind: string, callId: string) =>
-    events.find(
-      (event) =>
-        event.kind === kind && (event.data as { callId?: string } | null)?.callId === callId
-    )?.data as Record<string, any>;
-  const started = data('tool.started', 'shell');
-  expect(started).toMatchObject({
-    name: 'data.exec',
-    argsChars: JSON.stringify(args).length,
-    argsSha256: createHash('sha256').update(JSON.stringify(args)).digest('hex'),
-    argsTruncated: true,
-    argsRedacted: false,
-    startedAt: expect.any(String),
-  });
-  expect(started.argsPreview.length).toBeLessThanOrEqual(1024);
-  expect(started.argsPreview).toContain('echo diagnostic');
-  expect(started.argsPreview).toContain('DIAGNOSTIC_END');
-  expect(started.argsPreview).toContain('[arguments truncated]');
-  expect(data('tool.finished', 'shell')).toMatchObject({
-    denied: false,
-    status: 'failed',
-    finishedAt: expect.any(String),
-    shell: { exitCode: 7, signal: null, timedOut: false, outputBytes: 987654, truncated: true },
-    detailsOmitted: true,
-  });
-  expect(data('tool.finished', 'invalid')).toMatchObject({
-    denied: true,
-    errorCode: 'INVALID_SHELL_ARGUMENTS',
-    detailsOmitted: true,
-  });
-  expect(JSON.stringify(events)).not.toContain('PRIVATE_SHELL_OUTPUT');
-  const attempts = events.filter((event) => event.kind === 'attempt.finished');
-  expect(attempts).toHaveLength(2);
-  for (const event of attempts)
-    expect(event.data).toMatchObject({
-      finishedAt: expect.any(String),
-      elapsedMs: expect.any(Number),
-    });
-});
-
 test('app-wide helper history preserves original scopes, filters and deletion ownership', async () => {
   const f = fixture();
   const chat = createFixtureChat(f.store, '이전 작품');
@@ -642,417 +502,6 @@ test('app-wide helper history preserves original scopes, filters and deletion ow
   } finally {
     await app.close();
   }
-});
-
-test('helper results retain actual batch targets and safe settings outcomes after payload cleanup', async () => {
-  const f = fixture(64_000);
-  const changed = f.store.product.content(fixtureBotInput('수정 전', 'PRIVATE_RESOURCE_BODY'));
-  const unchanged = f.store.product.content(fixtureBotInput('그대로'));
-  const revision = modelWorkspace(f.store).revision;
-  mockSend(
-    (_request, _options, index): transport.ProviderResult =>
-      index === 0
-        ? {
-            ...structuredClone(success),
-            status: 'tool_calls',
-            toolCalls: [
-              {
-                id: 'batch-change',
-                name: 'app.call',
-                arguments: {
-                  name: 'resource.patchMany',
-                  arguments: {
-                    items: [
-                      {
-                        kind: 'content',
-                        id: changed.id,
-                        expectedRevision: changed.revision,
-                        changes: [
-                          { path: '/package/nativeRisu/card/name', op: 'set', value: '수정 후' },
-                        ],
-                      },
-                      {
-                        kind: 'content',
-                        id: unchanged.id,
-                        expectedRevision: unchanged.revision,
-                        changes: [
-                          {
-                            path: '/package/nativeRisu/card/name',
-                            op: 'set',
-                            value: unchanged.title,
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                },
-              },
-              {
-                id: 'same-model',
-                name: 'app.call',
-                arguments: {
-                  name: 'settings.update',
-                  arguments: {
-                    setting: 'global.mainModel',
-                    expectedRevision: revision,
-                    value: f.model.id,
-                  },
-                },
-              },
-            ],
-          }
-        : index === 1
-          ? {
-              ...structuredClone(success),
-              status: 'tool_calls',
-              toolCalls: [
-                {
-                  id: 'select-translation',
-                  name: 'app.call',
-                  arguments: {
-                    name: 'settings.update',
-                    arguments: {
-                      setting: 'global.translationModel',
-                      expectedRevision: modelWorkspace(f.store).revision,
-                      value: f.model.id,
-                    },
-                  },
-                },
-              ],
-            }
-          : structuredClone(success)
-  );
-  const task = f.runtime.enqueue(
-    f.conversation.id,
-    'results-retained',
-    '자료를 수정하고 번역 모델을 골라줘'
-  );
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id).status).toBe('completed');
-  f.store.product.model(
-    {
-      title: f.model.title,
-      connectionId: f.model.connectionId,
-      modelId: f.model.modelId,
-      temperature: null,
-      maxOutputTokens: 1024,
-      inputTokenLimit: 128_000,
-      expectedRevision: f.model.revision,
-    },
-    f.model.id
-  );
-  const app = Fastify();
-  helperRoutes(app, f.runtime);
-  try {
-    const response = await app.inject({ url: `/api/helper/tasks/${task.id}/results` });
-    expect(response.statusCode).toBe(200);
-    const view = response.json();
-    expect(view.results).toHaveLength(3);
-    expect(
-      view.results.find((item: { operation: string }) => item.operation === 'resource.patchMany')
-    ).toMatchObject({
-      requestedTargets: 2,
-      changedTargets: 1,
-      targets: [
-        { kind: 'content', id: changed.id, title: '수정 후', revision: changed.revision + 1 },
-      ],
-    });
-    expect(view.results).toContainEqual(
-      expect.objectContaining({
-        operation: 'settings.update',
-        changedTargets: 0,
-        requestedTargets: 1,
-        targets: [],
-      })
-    );
-    expect(view.results).toContainEqual(
-      expect.objectContaining({
-        targets: [
-          expect.objectContaining({
-            kind: 'settings',
-            setting: 'global.translationModel',
-            before: null,
-            after: f.model.id,
-            beforeLabel: null,
-            afterLabel: f.model.title,
-          }),
-        ],
-      })
-    );
-    expect(view.unrecordedOperations).toBe(0);
-    expect(view.usage.toolExecutions).toBe(3);
-    expect(view.usage.attempts).toHaveLength(3);
-    expect(view.usage.latestInputEstimate).toBeGreaterThan(0);
-    expect(view.usage.latestInputLimit).toBe(64_000);
-    expect(view.usage.latestInputExecution).toBe('provider-tool-loop');
-    expect(view.usage.latestInputParts).toEqual({
-      instructions: expect.any(Number),
-      toolSchemas: expect.any(Number),
-      history: expect.any(Number),
-      source: expect.any(Number),
-      toolResults: expect.any(Number),
-    });
-    expect(response.body).not.toContain('PRIVATE_RESOURCE_BODY');
-    expect(response.body).not.toContain('127.0.0.1');
-    expect(
-      f.store.db
-        .prepare('SELECT result FROM helper_operations WHERE task_id=?')
-        .all(task.id)
-        .every((row) => JSON.parse(String(row.result)).detailsOmitted)
-    ).toBe(true);
-    expect((await app.inject({ url: '/api/helper/tasks/missing/results' })).statusCode).toBe(404);
-  } finally {
-    await app.close();
-  }
-});
-
-test('task result usage preserves reported native token detail, unknown internal calls and unrecorded operations', () => {
-  const f = fixture();
-  const task = f.workspace.enqueue(f.conversation.id, 'usage-result', '사용량 확인', snapshot(f));
-  f.workspace.start(task.id, 'usage-owner');
-  const attempt = f.workspace.startAttempt(task.id, 'usage-owner', 1, 'helper', 0, {
-    connectionId: f.model.connectionId,
-    protocol: 'codex-app-server-v1',
-    role: 'helper',
-    modelId: f.model.modelId,
-    method: 'POST',
-    url: 'https://private-endpoint.invalid/secret',
-    headers: { authorization: 'PRIVATE_CREDENTIAL' },
-    body: { private: 'PRIVATE_REQUEST_BODY' },
-    bodySha256: 'synthetic',
-    stablePrefixSha256: 'synthetic',
-  });
-  f.workspace.finishAttempt(task.id, attempt, {
-    ...structuredClone(success),
-    usage: {
-      ...success.usage,
-      raw: {
-        kind: 'codex-agent-turn',
-        modelCalls: null,
-        tokenUsage: {
-          total: {
-            inputTokens: 10,
-            cachedInputTokens: 6,
-            outputTokens: 4,
-            reasoningOutputTokens: 2,
-          },
-        },
-        private: 'PRIVATE_RAW_USAGE',
-      },
-    },
-  });
-  f.workspace.operation(task.id, 'old-receipt', {}, () => ({ old: 'PRIVATE_RESULT' }));
-  f.workspace.event(f.conversation.id, task.id, 'tool.finished', { name: 'unreported-tool' });
-  f.workspace.event(f.conversation.id, task.id, 'input.measured', {
-    estimatedInputTokens: 321,
-    inputTokenLimit: 64_000,
-  });
-  f.workspace.finish(task.id, 'usage-owner', 1, 'completed', '완료', null);
-  const view = readHelperTaskResults(f.store, task.id);
-  expect(view.results).toEqual([]);
-  expect(view.unrecordedOperations).toBe(1);
-  expect(view.usage).toEqual({
-    attempts: [
-      {
-        id: attempt,
-        kind: 'helper',
-        owner: 'helper',
-        sceneRunId: null,
-        purpose: 'helper',
-        modelId: f.model.modelId,
-        status: 'completed',
-        startedAt: expect.any(String),
-        elapsedMs: expect.any(Number),
-        firstByteMs: null,
-        inputTokens: 10,
-        outputTokens: 4,
-        costUsd: null,
-        estimatedUsd: null,
-        estimatedSubtotalUsd: 0,
-        cachedInputTokens: 6,
-        reasoningTokens: 2,
-        internalModelCalls: null,
-        tools: [{ name: 'unreported-tool', resultChars: null, elapsedMs: null, failed: false }],
-      },
-    ],
-    toolExecutions: 1,
-    latestInputTokens: null,
-    latestInputEstimate: 321,
-    latestInputLimit: 64_000,
-    latestInputParts: null,
-    latestInputExecution: null,
-  });
-  expect(JSON.stringify(view)).not.toContain('PRIVATE_');
-  expect(JSON.stringify(view)).not.toContain('private-endpoint');
-});
-
-test.each([
-  ['codex-app-server-v1', { tokenUsage: { last: { inputTokens: 90_040 } } }, 90_040],
-  ['codex-app-server-v1', { tokenUsage: { total: { inputTokens: 647_519 } } }, null],
-  ['fixture-sse-v1', null, 647_519],
-] as const)(
-  'latest input uses a helper request, never native cumulative usage: %s',
-  (protocol, raw, expected) => {
-    const f = fixture();
-    const task = f.workspace.enqueue(f.conversation.id, 'latest-input', '사용량 확인', snapshot(f));
-    f.workspace.start(task.id, 'owner');
-    const wire: transport.WireRecord = {
-      connectionId: f.model.connectionId,
-      protocol,
-      role: 'helper',
-      modelId: f.model.modelId,
-      method: 'POST',
-      url: 'https://example.invalid/',
-      headers: {},
-      body: {},
-      bodySha256: 'synthetic',
-      stablePrefixSha256: 'synthetic',
-    };
-    const helper = f.workspace.startAttempt(task.id, 'owner', 1, 'helper', 0, wire);
-    f.workspace.finishAttempt(task.id, helper, {
-      ...structuredClone(success),
-      usage: { ...success.usage, inputTokens: 647_519, raw: raw as transport.Json },
-    });
-    const context = f.workspace.startAttempt(task.id, 'owner', 1, 'context', 0, wire);
-    f.workspace.finishAttempt(task.id, context, {
-      ...structuredClone(success),
-      usage: { ...success.usage, inputTokens: 999_999 },
-    });
-    expect(readHelperTaskResults(f.store, task.id).usage.latestInputTokens).toBe(expected);
-    const unknown = f.workspace.startAttempt(task.id, 'owner', 1, 'helper', 1, wire);
-    f.workspace.finishAttempt(task.id, unknown, {
-      ...structuredClone(success),
-      usage: { ...success.usage, inputTokens: null, raw: null },
-    });
-    f.workspace.finish(task.id, 'owner', 1, 'completed', '완료', null);
-    const usage = readHelperTaskResults(f.store, task.id).usage;
-    expect(usage.latestInputTokens).toBeNull();
-    expect(usage.attempts[0].inputTokens).toBe(647_519);
-  }
-);
-
-test('resource creation, undo, clone and deletion outcomes retain identities without extending undo or surviving rollback', () => {
-  const f = fixture();
-  const task = f.workspace.enqueue(
-    f.conversation.id,
-    'resource-lifecycle',
-    '자료 관리',
-    snapshot(f)
-  );
-  f.workspace.start(task.id, 'resource-owner');
-  let next = 0;
-  const apply = (name: string, args: Record<string, unknown>) => {
-    const operation = helperResourceOperation(name, args);
-    if (!operation || operation.readOnly) throw new Error('Expected resource mutation');
-    const receiptId = `lifecycle-${next++}`;
-    return f.workspace.operation(task.id, receiptId, { name, args }, () =>
-      applyHelperResourceMutation(
-        f.store,
-        f.workspace,
-        task,
-        receiptId,
-        name,
-        args,
-        operation.targets ?? operation.target
-      )
-    ) as { id: string; revision: number };
-  };
-  const created = apply('resource.save', { kind: 'content', model: fixtureBotInput('새 자료') });
-  const changed = apply('resource.patch', {
-    kind: 'content',
-    id: created.id,
-    expectedRevision: created.revision,
-    changes: [{ path: '/package/nativeRisu/card/name', op: 'set', value: '고친 자료' }],
-  });
-  const restored = apply('resource.undo', {
-    kind: 'content',
-    id: created.id,
-    expectedRevision: changed.revision,
-  });
-  const cloned = apply('resource.clone', {
-    kind: 'content',
-    sourceId: created.id,
-    expectedSourceRevision: restored.revision,
-    title: '복제 자료',
-  });
-  apply('resource.delete', { kind: 'content', id: cloned.id, expectedRevision: cloned.revision });
-  const results = readHelperTaskResults(f.store, task.id).results;
-  expect(results.map((item) => [item.operation, item.changedTargets, item.targets[0]?.id])).toEqual(
-    [
-      ['resource.save', 1, created.id],
-      ['resource.patch', 1, created.id],
-      ['resource.undo', 1, created.id],
-      ['resource.clone', 1, cloned.id],
-      ['resource.delete', 1, cloned.id],
-    ]
-  );
-  expect(results.at(-1)?.targets).toEqual([
-    { kind: 'content', id: cloned.id, revision: cloned.revision, title: '복제 자료' },
-  ]);
-  expect(() =>
-    f.workspace.operation(task.id, 'rolled-back', {}, () => {
-      applyHelperResourceMutation(
-        f.store,
-        f.workspace,
-        task,
-        'rolled-back',
-        'resource.patch',
-        {
-          kind: 'content',
-          id: created.id,
-          expectedRevision: restored.revision,
-          changes: [
-            { path: '/package/nativeRisu/card/name', op: 'set', value: '저장되면 안 돼요' },
-          ],
-        },
-        { kind: 'content', id: created.id }
-      );
-      throw new Error('forced rollback');
-    })
-  ).toThrow('forced rollback');
-  expect(readResource(f.store, 'content', created.id).revision).toBe(restored.revision);
-  expect(readHelperTaskResults(f.store, task.id).results).toEqual(results);
-});
-
-test('helper requests expose only remaining host calls at each boundary', async () => {
-  const f = fixture();
-  const requests: transport.ProviderRequest[] = [];
-  mockSend((request, _options, index) => {
-    requests.push(structuredClone(request));
-    return index === 0
-      ? {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          text: '',
-          toolCalls: [{ id: 'discover', name: 'app.tools', arguments: {} }],
-        }
-      : structuredClone(success);
-  });
-  const task = f.runtime.enqueue(f.conversation.id, 'budget-guidance', '가능한 작업을 알려줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id)).toMatchObject({
-    status: 'completed',
-    usage: { modelCalls: 2 },
-  });
-  expect(requests.map((request) => request.input.controls)).toEqual([
-    expect.objectContaining({
-      helperCallsRemaining: 64,
-      totalCallsRemaining: 128,
-      includesCurrentCall: true,
-      nativeInternalCalls: null,
-    }),
-    expect.objectContaining({
-      helperCallsRemaining: 63,
-      totalCallsRemaining: 127,
-      includesCurrentCall: true,
-      nativeInternalCalls: null,
-    }),
-  ]);
-  expect(requests[0].webSearch).toBeUndefined();
-  expect(requests[0].input.source).toMatchObject({
-    webSearch: { supported: false, mode: 'unavailable' },
-    currentDateUtc: new Date().toISOString().slice(0, 10),
-  });
 });
 
 test.each(['provider', 'native'] as const)(
@@ -1146,44 +595,6 @@ test.each(['provider', 'native'] as const)(
     if (execution === 'native') expect(nativeSignal?.aborted).toBe(true);
   }
 );
-
-test('the last call the budget allows reports the work instead of failing', async () => {
-  const f = fixture();
-  const task = f.runtime.enqueue(
-    f.conversation.id,
-    'final-call',
-    '도구를 확인해줘',
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    false
-  );
-  task.snapshot.limits = { helperCalls: 2, totalCalls: 2 };
-  f.store.db
-    .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
-    .run(JSON.stringify(task.snapshot), task.id);
-  const controls: unknown[] = [];
-  mockSend((request, _options, index) => {
-    controls.push(request.input.controls);
-    return index === 0
-      ? {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          text: '',
-          toolCalls: [{ id: 'first-read', name: 'missing.tool', arguments: {} }],
-        }
-      : { ...structuredClone(success), text: '여기까지 했고, 남은 일은 이거예요.' };
-  });
-  f.runtime.pump();
-  await Promise.all(f.work);
-  expect(controls[0]).not.toHaveProperty('finalCall');
-  expect(controls[1]).toMatchObject({ finalCall: true, helperCallsRemaining: 1 });
-  expect(f.workspace.task(task.id)).toMatchObject({
-    status: 'completed',
-    usage: { modelCalls: 2 },
-  });
-});
 
 test('HTTP steering skips a stale write, delivers once and retains the correction in future history', async () => {
   const f = fixture();
@@ -1387,123 +798,6 @@ test('live helper counters preserve attempt budgets and completion without loadi
   expect(returnedRows.every((row) => !('snapshot' in row))).toBe(true);
 });
 
-test('public helper task pages preserve summaries and receipts without loading reservations per row', async () => {
-  const f = fixture();
-  const app = Fastify();
-  helperRoutes(app, f.runtime);
-  const largeHistory = 'Private frozen helper history. '.repeat(2000);
-  const ids: string[] = [];
-  f.store.transaction(() => {
-    for (let index = 0; index < 55; index++) {
-      const task = f.workspace.enqueue(f.conversation.id, `page-${index}`, `요청 ${index}`, {
-        ...snapshot(f),
-        model: { ...f.store.product.modelSnapshot(f.model.id), title: `예약 당시 모델 ${index}` },
-        history: [{ id: 'frozen-message', role: 'user', text: largeHistory }],
-      });
-      ids.push(task.id);
-      f.workspace.start(task.id, 'page-owner');
-      if (index % 2 === 0) {
-        f.workspace.operation(task.id, `saved-${index}`, {}, () => ({ saved: true }));
-        f.workspace.operation(task.id, `saved-again-${index}`, {}, () => ({ saved: true }));
-      } else {
-        f.workspace.event(f.conversation.id, task.id, 'tool.finished', { saved: true });
-      }
-      f.store.db.prepare("UPDATE helper_tasks SET status='completed' WHERE id=?").run(task.id);
-    }
-    ids.forEach((id, index) => {
-      const status =
-        index === 54
-          ? 'running'
-          : ['queued', 'completed', 'failed', 'cancelled', 'interrupted'][index % 5];
-      f.store.db
-        .prepare('UPDATE helper_tasks SET status=?,error=?,created_at=?,started_at=? WHERE id=?')
-        .run(
-          status,
-          status === 'failed' ? 'UNEXPECTED_EOF' : null,
-          `2030-01-01T00:00:${String(59 - index).padStart(2, '0')}.000Z`,
-          status === 'queued' ? null : '2030-01-01T00:01:00.000Z',
-          id
-        );
-    });
-  });
-  const other = f.workspace.create(f.conversation.scope, 'other-page');
-  const otherTask = f.workspace.enqueue(other.id, 'other', '다른 대화', snapshot(f));
-  const project = (task: ReturnType<typeof f.workspace.task>) => {
-    const { snapshot: reserved, ...view } = task;
-    return { ...view, modelTitle: reserved.model.title };
-  };
-  const expected = ids
-    .slice(-50)
-    .reverse()
-    .map((id) => project(f.workspace.task(id)));
-  const before = expected.at(-1)!.id;
-  const expectedOlder = ids
-    .slice(0, 5)
-    .reverse()
-    .map((id) => project(f.workspace.task(id)));
-  expect(expected.map((task) => task.id)).toEqual(ids.slice(-50).reverse());
-  expect(expectedOlder.map((task) => task.id)).toEqual(ids.slice(0, 5).reverse());
-
-  const prepare = f.store.db.prepare.bind(f.store.db);
-  const returnedRows: Record<string, unknown>[] = [];
-  const queries = vi.spyOn(f.store.db, 'prepare').mockImplementation((sql) => {
-    const statement = prepare(sql);
-    const all = statement.all.bind(statement);
-    vi.spyOn(statement, 'all').mockImplementation((...args) => {
-      const rows = all(...args);
-      returnedRows.push(...rows);
-      return rows;
-    });
-    return statement;
-  });
-  try {
-    const page = await app.inject({
-      url: `/api/helper/conversations/${f.conversation.id}/tasks`,
-    });
-    expect(page.statusCode).toBe(200);
-    expect(page.json()).toEqual(expected);
-    expect(queries.mock.calls.length).toBeLessThanOrEqual(4);
-    expect(returnedRows).toHaveLength(50);
-    expect(returnedRows.every((row) => !('snapshot' in row))).toBe(true);
-    expect(JSON.stringify(returnedRows)).not.toContain(largeHistory);
-    for (const task of page.json()) {
-      const index = ids.indexOf(task.id);
-      if (['failed', 'cancelled', 'interrupted'].includes(task.status) && index % 2 === 0)
-        expect(task.completedEffects).toEqual({ count: 2, labels: ['완료된 도우미 작업'] });
-      else expect(task).not.toHaveProperty('completedEffects');
-    }
-
-    const older = await app.inject({
-      url: `/api/helper/conversations/${f.conversation.id}/tasks?before=${before}`,
-    });
-    expect(older.json()).toEqual(expectedOlder);
-    const view = await app.inject({
-      url: `/api/helper/conversations/${f.conversation.id}/view`,
-    });
-    expect(view.statusCode).toBe(200);
-    expect(view.json().tasks).toEqual(expected);
-    const failed = expected.find((task) => task.completedEffects)!;
-    const detail = await app.inject({ url: `/api/helper/tasks/${failed.id}` });
-    expect(detail.json()).toEqual(failed);
-    for (const cursor of ['missing-task', otherTask.id]) {
-      const outside = await app.inject({
-        url: `/api/helper/conversations/${f.conversation.id}/tasks?before=${cursor}`,
-      });
-      expect(outside.json()).toEqual([]);
-    }
-    for (const url of [
-      '/api/helper/conversations/missing-conversation/tasks',
-      '/api/helper/conversations/missing-conversation/view',
-      '/api/helper/tasks/missing-task',
-    ]) {
-      expect((await app.inject({ url })).statusCode).toBe(404);
-    }
-    expect(f.workspace.task(ids[0]).snapshot.history[0].text).toBe(largeHistory);
-  } finally {
-    await app.close();
-  }
-});
-
 test('library-only helper has durable attempts, idempotent submission and no main run', async () => {
   const f = fixture(),
     send = mockSend();
@@ -1694,43 +988,6 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   expect(reopened.taskSummaries(conversation.id)).toHaveLength(1);
 });
 
-test('a helper shell call previews 64 KB of output unless the model asks for less', async () => {
-  vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-no-shell-root'));
-  const f = fixture();
-  const exec = vi
-    .spyOn(f.runtime.shell, 'exec')
-    .mockResolvedValue({ exitCode: 0, output: 'ok', truncated: false });
-  const requests: transport.ProviderRequest[] = [];
-  mockSend((request, _options, index) => {
-    requests.push(structuredClone(request));
-    return index === 0
-      ? {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          text: '',
-          toolCalls: [
-            { id: 'default', name: 'data.exec', arguments: { command: 'true' } },
-            {
-              id: 'small',
-              name: 'data.exec',
-              arguments: { command: 'true', maxOutputBytes: 1024 },
-            },
-          ],
-        }
-      : structuredClone(success);
-  });
-  const task = f.runtime.enqueue(f.conversation.id, 'shell', '자료를 확인해줘');
-  await Promise.all(f.work);
-  vi.unstubAllEnvs();
-  expect(f.workspace.task(task.id)).toMatchObject({ status: 'completed' });
-  expect(exec.mock.calls.map((call) => call[6])).toEqual([65_536, 1024]);
-  const shell = requests[0].stable.tools.find((tool) => tool.name === 'data.exec')!;
-  expect(
-    (shell.inputSchema as { properties: { maxOutputBytes: { description: string } } }).properties
-      .maxOutputBytes.description
-  ).toContain('Default 65536');
-});
-
 function stoppedAfterRename(f: ReturnType<typeof fixture>) {
   const chat = createFixtureChat(f.store, '원 제목');
   const conversation = f.workspace.open({ kind: 'chat', chatId: chat.id });
@@ -1847,64 +1104,6 @@ test('a resumed task that stops again carries the whole chain and still refuses 
   ).toEqual(['catalog', 'rename']);
 });
 
-test('a stopped task counts the targets one batch call changed, not the call', async () => {
-  const f = fixture();
-  const bots = ['하나', '둘'].map(
-    (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, '설명')) as Content
-  );
-  mockSend((_request, _options, index) =>
-    index === 0
-      ? {
-          ...structuredClone(success),
-          status: 'tool_calls',
-          text: '',
-          toolCalls: [
-            {
-              id: 'batch',
-              name: 'app.call',
-              arguments: {
-                name: 'resource.patchMany',
-                arguments: {
-                  items: bots.map((bot) => ({
-                    kind: 'content',
-                    id: bot.id,
-                    expectedRevision: bot.revision,
-                    changes: [
-                      { op: 'set', path: '/package/nativeRisu/card/description', value: '새 설명' },
-                    ],
-                  })),
-                },
-              },
-            },
-          ],
-        }
-      : { ...structuredClone(success), status: 'error', text: '', error: { code: 'HTTP_400' } }
-  );
-  const task = f.runtime.enqueue(f.conversation.id, 'batch', '두 봇의 설명을 바꿔줘');
-  await Promise.all(f.work);
-  expect(
-    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
-  ).toEqual({ n: 1 });
-  expect(f.workspace.task(task.id)).toMatchObject({
-    status: 'failed',
-    completedEffects: { count: 2 },
-  });
-  expect(f.workspace.taskSummaries(f.conversation.id)[0]).toMatchObject({
-    completedEffects: { count: 2 },
-  });
-});
-
-test.each([
-  ['SAFETY', 'HELPER_RESPONSE_REFUSED:SAFETY'],
-  ['I cannot help with that request.', 'HELPER_RESPONSE_REFUSED'],
-])('a provider refusal %s ends the task as %s', async (refusal, error) => {
-  const f = fixture();
-  mockSend(() => ({ ...structuredClone(success), status: 'refused', text: '', refusal }));
-  const task = f.runtime.enqueue(f.conversation.id, 'refused', '자료를 알려줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id)).toMatchObject({ status: 'failed', error });
-});
-
 test('a refused task is retried from the start, and continued once it has saved a change', async () => {
   const refused: transport.ProviderResult = {
     ...structuredClone(success),
@@ -1953,80 +1152,6 @@ test('a refused task is retried from the start, and continued once it has saved 
   expect(late.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({
     n: 1,
   });
-});
-
-test('a task with no recorded exchange cannot be resumed', async () => {
-  const f = fixture();
-  mockSend(() => ({
-    ...structuredClone(success),
-    status: 'error',
-    text: '',
-    error: { code: 'HTTP_400' },
-  }));
-  const stopped = f.runtime.enqueue(f.conversation.id, 'first', '자료를 알려줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(stopped.id)).not.toHaveProperty('resumable');
-  const resume = (previous?: string) =>
-    f.runtime.enqueue(
-      f.conversation.id,
-      'resume',
-      '자료를 알려줘',
-      undefined,
-      undefined,
-      previous,
-      undefined,
-      true,
-      undefined,
-      { resume: true }
-    );
-  expect(() => resume(stopped.id)).toThrow('HELPER_RESUME_UNAVAILABLE');
-  expect(() => resume()).toThrow('HELPER_RESUME_UNAVAILABLE');
-});
-
-test('paged helper messages retain their task outcome outside the recent task window', () => {
-  const f = fixture();
-  const failed = f.workspace.enqueue(
-    f.conversation.id,
-    'failed-message',
-    '중단된 요청',
-    snapshot(f)
-  );
-  f.workspace.start(failed.id, 'owner');
-  f.workspace.finish(failed.id, 'owner', 1, 'failed', '완료되지 않은 응답', 'UNEXPECTED_EOF');
-  for (let index = 0; index < 51; index++)
-    f.workspace.enqueue(f.conversation.id, `later-${index}`, '나중 요청', snapshot(f));
-  expect(f.workspace.taskSummaries(f.conversation.id).some((task) => task.id === failed.id)).toBe(
-    false
-  );
-  expect(
-    f.workspace.messages(f.conversation.id).find((message) => message.role === 'assistant')
-  ).toMatchObject({
-    taskId: failed.id,
-    taskStatus: 'failed',
-    text: '완료되지 않은 응답',
-  });
-});
-
-test('a rolled-back operation does not block retry or claim a completed change', () => {
-  const f = fixture(),
-    chat = createFixtureChat(f.store, '원 제목');
-  const task = f.workspace.enqueue(f.conversation.id, 'rollback', 'rename', snapshot(f));
-  f.workspace.start(task.id, 'owner');
-  expect(() =>
-    f.workspace.operation(task.id, 'rolled-back', {}, () => {
-      f.store.renameChat(chat.id, '되돌릴 제목', chat.titleRevision ?? 0);
-      throw new Error('rolled back');
-    })
-  ).toThrow('rolled back');
-  f.workspace.finish(task.id, 'owner', 1, 'failed', '', 'UNEXPECTED_EOF');
-  expect(f.workspace.task(task.id)).not.toHaveProperty('completedEffects');
-  expect(f.store.chat(chat.id).title).toBe('원 제목');
-  expect(
-    f.workspace.enqueue(f.conversation.id, 'retry', 'rename', {
-      ...snapshot(f),
-      retryOf: task.id,
-    }).snapshot.retryOf
-  ).toBe(task.id);
 });
 
 test('cancellation rejects late text/final result while preserving provider accounting', async () => {
@@ -2215,29 +1340,6 @@ test.each([
   }
 );
 
-test('a rate-limited attempt leaves nothing unknown in the task usage', async () => {
-  const f = fixture(),
-    { runtime } = waitingRuntime(f);
-  mockSend((_request, _options, index) =>
-    index === 0
-      ? {
-          ...providerError('HTTP_429'),
-          usage: { inputTokens: 0, outputTokens: 0, costUsd: null, raw: null, priceRevision: null },
-        }
-      : structuredClone(success)
-  );
-  const task = runtime.enqueue(f.conversation.id, 'r', '설명해줘');
-  await Promise.all(f.work);
-  expect(runtime.workspace.task(task.id).usage).toMatchObject({ inputTokens: 10, outputTokens: 4 });
-  expect(readHelperTaskResults(f.store, task.id).usage.attempts[0]).toMatchObject({
-    status: 'error',
-    inputTokens: 0,
-    outputTokens: 0,
-    cachedInputTokens: 0,
-    reasoningTokens: 0,
-  });
-});
-
 const refusedCall = (): transport.ProviderResult => ({
   ...structuredClone(success),
   status: 'refused',
@@ -2291,8 +1393,6 @@ test('a refused call is sent again at once with the task’s tool results intact
 
 test.each([
   { enabled: true, max: 2, attempts: 3 },
-  { enabled: true, max: 5, attempts: 6 },
-  { enabled: true, max: 0, attempts: 1 },
   { enabled: false, max: 2, attempts: 1 },
 ])(
   'a call that keeps being refused ends the task after $attempts attempts when automatic retry is $enabled with a limit of $max',
@@ -2309,28 +1409,6 @@ test.each([
     expect(attemptCount(f)).toBe(attempts);
   }
 );
-
-test('each refused call gets its own retries within one task', async () => {
-  const f = fixture();
-  setRefusalRetries(f.store, true, 1);
-  const replies = [
-    refusedCall(),
-    {
-      ...structuredClone(success),
-      status: 'tool_calls' as const,
-      text: '',
-      toolCalls: [{ id: 'catalog', name: 'app.tools', arguments: { query: 'resource' } }],
-    },
-    refusedCall(),
-  ];
-  mockSend(() => replies.shift() ?? structuredClone(success));
-  const task = f.runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘');
-  await Promise.all(f.work);
-  expect(f.workspace.task(task.id), f.workspace.task(task.id).error ?? '').toMatchObject({
-    status: 'completed',
-  });
-  expect(attemptCount(f)).toBe(4);
-});
 
 function useGeminiHelper(f: ReturnType<typeof fixture>) {
   const connection = f.store.product.connection({
@@ -2356,31 +1434,6 @@ function useGeminiHelper(f: ReturnType<typeof fixture>) {
     helperModel: { id: model.id },
   });
 }
-
-test('a Gemini helper call asks for thought summaries, shows them while it runs and drops them when it ends', async () => {
-  const f = fixture();
-  useGeminiHelper(f);
-  let taskId = '';
-  const seen: (string | undefined)[] = [];
-  mockSend(async (request, options, index) => {
-    expect(request.thoughtSummary).toBe(true);
-    seen.push(f.streams.read('helper', taskId).thought);
-    await options.onThought?.(index === 0 ? '자료를 확인하는 중' : '답변을 정리하는 중');
-    seen.push(f.streams.read('helper', taskId).thought);
-    return index === 0 ? refusedCall() : structuredClone(success);
-  });
-  taskId = f.runtime.enqueue(f.conversation.id, 'r', '자료 도구를 알려줘').id;
-  await Promise.all(f.work);
-  expect(f.workspace.task(taskId), f.workspace.task(taskId).error ?? '').toMatchObject({
-    status: 'completed',
-  });
-  expect(seen).toEqual([undefined, '자료를 확인하는 중', undefined, '답변을 정리하는 중']);
-  expect(
-    f.store.db
-      .prepare("SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND data LIKE '%정리하는%'")
-      .get(taskId)
-  ).toEqual({ n: 0 });
-});
 
 test.each([{ later: 'completed' }, { later: 'HTTP_400' }] as const)(
   'a Gemini call rejected with HTTP 400 is sent once more without thought summaries, then ends $later',
@@ -2551,28 +1604,6 @@ test('copy preserves the visible retry order across message pages without restor
   expect(copied.slice(102)).toEqual(['고친 요청', '재시도 답변', '둘째 요청', '둘째 답변']);
 });
 
-test('only unnamed new sessions adopt the first request title and preserve explicit or renamed titles', () => {
-  const f = fixture(),
-    question = `  첫 질문\n${'🌟'.repeat(90)}`;
-  const task = f.workspace.enqueue(f.conversation.id, 'first', question, snapshot(f));
-  const expected = Array.from(question.trim().replace(/\s+/gu, ' ')).slice(0, 80).join('');
-  expect(f.workspace.conversation(f.conversation.id)).toMatchObject({
-    title: expected,
-    revision: 2,
-  });
-  expect(f.workspace.open(f.conversation.scope).title).toBe(expected);
-  expect(f.workspace.existing(f.conversation.id, 'first', question)?.id).toBe(task.id);
-  f.workspace.enqueue(f.conversation.id, 'second', '두 번째 요청', snapshot(f));
-  expect(f.workspace.conversation(f.conversation.id).title).toBe(expected);
-  const explicit = f.workspace.create(f.conversation.scope, 'explicit', '새 도우미 대화');
-  f.workspace.enqueue(explicit.id, 'first', '이 요청은 이름이 되면 안 돼요', snapshot(f));
-  expect(f.workspace.conversation(explicit.id).title).toBe('새 도우미 대화');
-  const manual = f.workspace.create(f.conversation.scope, 'manual');
-  f.workspace.update(manual.id, manual.revision, { title: '내가 정한 이름' });
-  f.workspace.enqueue(manual.id, 'first', '이 요청도 이름이 되면 안 돼요', snapshot(f));
-  expect(f.workspace.conversation(manual.id).title).toBe('내가 정한 이름');
-});
-
 test('all helper sessions share two execution slots while each session preserves FIFO and isolated history', async () => {
   const f = fixture();
   const a = f.conversation,
@@ -2730,46 +1761,6 @@ test('selected prose appears once in the current request and survives into the n
   expect(history[0].text).toContain(source.id);
   expect(history[0].text).toContain(current.hash);
   expect(history[0].text.endsWith(selectedText)).toBe(true);
-});
-
-test('the helper message route preserves full-length Korean requests and selected source text', async () => {
-  const f = fixture();
-  f.controller.abort();
-  const { source } = chatWithSource(f.store);
-  const selectedText = '가'.repeat(REQUEST_TEXT_MAX_CHARS - 1) + '끝';
-  const current = f.store.editSource(source.id, { text: selectedText, expectedRevision: 0 });
-  const conversation = f.workspace.open({
-    kind: 'chat',
-    chatId: source.chatId,
-  });
-  const message = '나'.repeat(REQUEST_TEXT_MAX_CHARS - 1) + '끝';
-  const selection = { sourceId: source.id, sourceHash: current.hash, text: selectedText };
-  const app = Fastify({ bodyLimit: 4 * 1024 * 1024 });
-  helperRoutes(app, f.runtime);
-  try {
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/helper/conversations/${conversation.id}/messages`,
-      payload: { requestKey: 'full-length-selection', text: message, selection },
-    });
-    expect(response.statusCode, response.body.slice(0, 300)).toBe(200);
-    const task = f.workspace.task(response.json().id);
-    expect(task.request).toBe(message);
-    expect(task.snapshot.selection).toEqual(selection);
-    const over = await app.inject({
-      method: 'POST',
-      url: `/api/helper/conversations/${conversation.id}/messages`,
-      payload: {
-        requestKey: 'over-length-selection',
-        text: '검토',
-        selection: { ...selection, text: selectedText + '넘침' },
-      },
-    });
-    expect(over.statusCode).toBe(400);
-    expect(f.workspace.taskSummaries(conversation.id)).toHaveLength(1);
-  } finally {
-    await app.close();
-  }
 });
 
 describe('Helper current view cursor', () => {

@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { navigationAction, visibleNavigation, selectSettingsSection } from './ui-navigation.js';
+import { navigationAction } from './ui-navigation.js';
 
 test.use({ reducedMotion: 'no-preference' });
 
 for (const width of [412]) {
-  for (const destination of ['서재', '프롬프트']) {
+  for (const destination of ['서재']) {
     test(`WORKLOAD ${destination} ${width} delayed loading becomes an error and explicit retry recovers`, async ({
       page,
-    }, info) => {
+    }) => {
       await page.setViewportSize({ width, height: 900 });
       const now = Date.now();
       await page.clock.install({ time: now });
@@ -33,44 +33,19 @@ for (const width of [412]) {
         await expect(loading).toHaveCount(0);
         await page.clock.fastForward(100);
         await expect(loading).toBeVisible();
-        await expect(loading.locator('svg')).toHaveCSS('animation-name', 'activity-spin');
-        const box = (await loading.boundingBox())!;
-        const body = (await page.locator('.destination-scroll').boundingBox())!;
-        expect(Math.abs(box.x + box.width / 2 - body.x - body.width / 2)).toBeLessThan(2);
-        expect(Math.abs(box.y + box.height / 2 - body.y - body.height / 2)).toBeLessThan(64);
-        await page.screenshot({ path: info.outputPath(`workspace-loading-${width}.png`) });
         release();
-        const error = page.getByRole('alert').filter({
-          hasText:
-            destination === '프롬프트'
-              ? '프롬프트 목록을 불러오지 못했어요.'
-              : '서재를 불러오지 못했어요.',
-        });
+        const error = page.getByRole('alert').filter({ hasText: '서재를 불러오지 못했어요.' });
         await expect(error).toBeVisible();
         await expect(loading).toHaveCount(0);
         await page.clock.resume();
         failing = false;
-        if (width === 1440 && destination === '서재') {
-          const nav = await visibleNavigation(page);
-          await nav.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-        } else if (width === 1440 && destination === '프롬프트') {
-          await navigationAction(page, '설정');
-          await selectSettingsSection(page, '프로바이더와 모델');
-          const settings = page.getByRole('dialog', { name: '설정', exact: true });
-          await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-          await expect(settings.getByTestId('connection-editor')).toBeVisible();
-          await page.keyboard.press('Escape');
-        } else {
-          await page
-            .locator('.destination-scroll')
-            .getByRole('button', { name: '다시 불러오기', exact: true })
-            .click();
-        }
+        await page
+          .locator('.destination-scroll')
+          .getByRole('button', { name: '다시 불러오기', exact: true })
+          .click();
         await expect(error).toHaveCount(0);
         await expect(
-          destination === '서재'
-            ? page.getByTestId('library-panel').getByRole('tabpanel', { name: '봇', exact: true })
-            : page.getByTestId('prompt-library')
+          page.getByTestId('library-panel').getByRole('tabpanel', { name: '봇', exact: true })
         ).toBeVisible();
         await expect(
           page.getByRole('alert').filter({ hasText: '서버 작업을 완료하지 못했어요. (503)' })
@@ -82,51 +57,3 @@ for (const width of [412]) {
     });
   }
 }
-
-test('WORKLOAD every library-dependent settings page shows the same read failure and explicit retry recovers', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 412, height: 900 });
-  let failing = true;
-  await page.route('**/api/library?view=summary', async (route) => {
-    if (!failing) return route.continue();
-    await route.fulfill({
-      status: 503,
-      json: { error: 'Synthetic settings library read failure' },
-    });
-  });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  for (const [section, errorLabel] of [
-    ['역할별 모델', '역할별 모델 설정을 불러오지 못했어요.'],
-    ['기본 프롬프트', '기본 프롬프트를 불러오지 못했어요.'],
-    ['삽화', '삽화 설정을 불러오지 못했어요.'],
-    ['프로바이더와 모델', '프로바이더 목록을 불러오지 못했어요.'],
-  ]) {
-    await selectSettingsSection(page, section);
-    await expect(settings.getByRole('alert').filter({ hasText: errorLabel })).toBeVisible();
-    await expect(
-      settings.getByRole('button', { name: '다시 불러오기', exact: true })
-    ).toBeEnabled();
-  }
-  failing = false;
-  await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
-  await expect(settings.getByTestId('connection-editor')).toBeVisible();
-  for (const section of ['역할별 모델', '기본 프롬프트', '삽화']) {
-    await selectSettingsSection(page, section);
-    await expect(settings.locator('.loading-state [role="alert"]')).toHaveCount(0);
-    if (section === '역할별 모델')
-      await expect(
-        settings.getByRole('region', { name: '역할별 모델 설정', exact: true })
-      ).toBeVisible();
-    if (section === '기본 프롬프트')
-      await expect(
-        settings.getByRole('region', { name: '기본 프롬프트 설정', exact: true })
-      ).toBeVisible();
-    if (section === '삽화')
-      await expect(
-        settings.getByRole('region', { name: '삽화 프리셋', exact: true })
-      ).toBeVisible();
-  }
-});

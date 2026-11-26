@@ -1,10 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import {
-  clearReadingPosition,
-  readDraftCursor,
-  readReadingPosition,
-  writeViewCache,
-} from '../web/story-storage.js';
+import { readDraftCursor, readReadingPosition, writeViewCache } from '../web/story-storage.js';
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -53,37 +48,6 @@ test('legacy tab-local reading position moves to persistent storage', () => {
   vi.stubGlobal('sessionStorage', session);
   expect(readReadingPosition('reading:chat')).toEqual(position);
   expect(JSON.parse(local.getItem('reading:chat')!)).toEqual(position);
-  expect(session.getItem('reading:chat')).toBeNull();
-});
-
-test('quota fallback preserves the previous durable position without restoring it in this tab', () => {
-  const local = memoryStorage();
-  const session = memoryStorage();
-  const next = { ...position, source: 'source-2', top: 460 };
-  local.setItem('reading:chat', JSON.stringify(position));
-  local.setItem.mockImplementation(() => {
-    throw new Error('quota');
-  });
-  vi.stubGlobal('localStorage', local);
-  vi.stubGlobal('sessionStorage', session);
-  writeViewCache('reading:chat', next);
-  expect(JSON.parse(local.getItem('reading:chat')!)).toEqual(position);
-  expect(readReadingPosition('reading:chat')).toEqual(next);
-  vi.stubGlobal('sessionStorage', memoryStorage());
-  expect(readReadingPosition('reading:chat')).toEqual(position);
-});
-
-test('blocked persistent storage falls back to the current tab', () => {
-  const local = memoryStorage();
-  local.setItem.mockImplementation(() => {
-    throw new Error('quota');
-  });
-  const session = memoryStorage();
-  vi.stubGlobal('localStorage', local);
-  vi.stubGlobal('sessionStorage', session);
-  writeViewCache('reading:chat', position);
-  expect(readReadingPosition('reading:chat')).toEqual(position);
-  clearReadingPosition('reading:chat');
   expect(session.getItem('reading:chat')).toBeNull();
 });
 

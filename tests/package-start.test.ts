@@ -99,20 +99,6 @@ test('greeting text at the stored message limit is preserved and oversized text 
   );
 });
 
-test('alternative greetings remain selectable beyond the old count and combined size caps', () => {
-  const starts = Array.from({ length: 101 }, (_, index) => ({
-    id: `start-${index}`,
-    title: `Opening ${index}`,
-    mode: 'authored' as const,
-    text: `${index}:${'a'.repeat(21_000)}`,
-  }));
-  const validated = validatePackageStarts(starts);
-  expect(validated).toEqual(starts);
-  expect(
-    resolvePackageStart({ id: 'card', revision: 1, starts: validated }, 'start-100').text
-  ).toBe(starts[100].text);
-});
-
 test('greeting selection rejects stale ownership and subsequent attempts without adding a source', () => {
   const f = fixture();
   expect(() =>

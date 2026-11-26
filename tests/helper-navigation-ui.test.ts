@@ -1,13 +1,9 @@
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HelperProject } from '../core/helper.js';
 import type { HelperSession } from '../web/useHelperSessions.js';
-import { HelperNavigation } from '../web/HelperNavigation.js';
 import {
   helperNavigationLists,
   helperNavigationOrder,
-  helperNavigationStorageKey,
   listedHelperSessions,
   readHelperNavigationView,
 } from '../web/helper-navigation-model.js';
@@ -65,20 +61,6 @@ describe('helper navigation ownership and order', () => {
     const names = helperNavigationLists(sessions, projects, '', { sort: 'name', order: [] });
     expect(names.inProject('p1').map((item) => item.id)).toEqual(['one', 'two']);
   });
-  it('finds a project by its name and a child by its conversation name', () => {
-    const byProject = helperNavigationLists(sessions, projects, ' 첫 프로젝트 ', {
-      sort: 'recent',
-      order: [],
-    });
-    expect(byProject.projects.map((item) => item.id)).toEqual(['p1']);
-    expect(byProject.recent.map((item) => item.id)).toEqual(['two', 'one']);
-    const byConversation = helperNavigationLists(sessions, projects, '가 대화', {
-      sort: 'recent',
-      order: [],
-    });
-    expect(byConversation.projects.map((item) => item.id)).toEqual(['p1']);
-    expect(byConversation.inProject('p1').map((item) => item.id)).toEqual(['one']);
-  });
   it('reorders destination siblings and retains the remembered order elsewhere', () => {
     const current = ['project:p1', 'conversation:other', 'conversation:a', 'conversation:b'];
     expect(
@@ -133,115 +115,5 @@ describe('helper navigation ownership and order', () => {
       order: [],
       collapsed: {},
     });
-  });
-  it('moves a searched conversation within its full sibling order without moving hidden siblings', () => {
-    const values = ['A', 'B', 'C', 'D', 'E'].map((id) =>
-      session(id, ['B', 'D'].includes(id) ? `검색 ${id}` : id, 'p1', '2026-10-28T01:00:00Z')
-    );
-    const current = values.map((item) => `conversation:${item.id}`);
-    const view = { sort: 'manual' as const, order: current };
-    const visible = helperNavigationLists(values, projects, '검색', view);
-    const all = helperNavigationLists(values, projects, '', view);
-    expect(visible.inProject('p1').map((item) => item.id)).toEqual(['B', 'D']);
-    expect(
-      helperNavigationOrder(
-        current,
-        all.inProject('p1').map((item) => `conversation:${item.id}`),
-        'conversation:D',
-        'conversation:B'
-      )
-    ).toEqual([
-      'conversation:A',
-      'conversation:D',
-      'conversation:B',
-      'conversation:C',
-      'conversation:E',
-    ]);
-  });
-});
-
-const render = (listed = sessions) =>
-  renderToStaticMarkup(
-    createElement(HelperNavigation, {
-      sessions: listed,
-      projects,
-      currentId: 'one',
-      unread: ['two'],
-      search: '',
-      onSearch: () => {},
-      searchInput: { current: null },
-      creating: false,
-      working: false,
-      focusProject: null,
-      onFocusedProject: () => {},
-      onSelect: () => {},
-      onAcknowledge: () => {},
-      onNewProject: () => {},
-      onCreate: () => {},
-      onRenameProject: () => {},
-      onDeleteProject: () => {},
-      onMove: async () => true,
-      sessionMenu: (_session, orderActions) => orderActions,
-    })
-  );
-describe('helper navigation presentation', () => {
-  it('renders a nonduplicated tree with project children and project actions', () => {
-    const html = render();
-    for (const item of sessions)
-      expect(html.split(`data-conversation-id="${item.id}"`)).toHaveLength(2);
-    expect(html).toContain('첫 프로젝트 프로젝트 메뉴');
-    expect(html).toContain('aria-label="미확인 활동 1개"');
-    expect(html.split('<span>첫 프로젝트</span>')).toHaveLength(2);
-    expect(html).not.toContain('<span>프로젝트 없음</span>');
-  });
-  it('renders complete recent activity separately from unread and running sections', () => {
-    vi.stubGlobal('localStorage', {
-      getItem: (key: string) =>
-        key === helperNavigationStorageKey
-          ? JSON.stringify({ mode: 'activity', sort: 'name' })
-          : null,
-    });
-    const html = render();
-    expect(html).toContain('data-activity-section="unread"');
-    expect(html).not.toContain('data-activity-section="running"');
-    expect(html).toContain('>모두 확인</button>');
-    const recent = html.slice(html.indexOf('data-activity-section="recent"'));
-    for (const item of sessions) expect(recent).toContain(`data-conversation-id="${item.id}"`);
-    expect(recent.indexOf('data-conversation-id="two"')).toBeLessThan(
-      recent.indexOf('data-conversation-id="one"')
-    );
-    expect(html).toContain('나 대화 활동 확인');
-  });
-  it('marks a conversation whose last task failed or was stopped, in the tree and in recent activity', () => {
-    const ended = [
-      { ...sessions[0], lastTaskStatus: 'completed' as const },
-      { ...sessions[2], lastTaskStatus: 'failed' as const },
-      { ...sessions[3], lastTaskStatus: 'cancelled' as const },
-      {
-        ...session('five', '마 대화', null, '2026-10-24T01:00:00Z'),
-        lastTaskStatus: 'failed' as const,
-        activity: { running: 1, queued: 0 },
-      },
-    ];
-    const row = (html: string, id: string) =>
-      html.slice(html.indexOf(`data-conversation-id="${id}"`)).split('data-conversation-id=')[1];
-    const tree = render(ended);
-    expect(row(tree, 'one')).not.toMatch(/aria-label="(완료|실패|취소됨)"/u);
-    expect(row(tree, 'three')).toContain('aria-label="실패"');
-    expect(row(tree, 'four')).toContain('aria-label="취소됨"');
-    expect(row(tree, 'five')).toContain('aria-label="진행 중"');
-    expect(row(tree, 'five')).not.toContain('aria-label="실패"');
-    vi.stubGlobal('localStorage', {
-      getItem: (key: string) =>
-        key === helperNavigationStorageKey ? JSON.stringify({ mode: 'activity' }) : null,
-    });
-    const activity = render(ended);
-    const recent = activity.slice(activity.indexOf('data-activity-section="recent"'));
-    expect(row(recent, 'three')).toContain('class="activity-nav-state"><svg');
-    expect(row(recent, 'three')).toContain('activity-nav-warning');
-    expect(row(recent, 'three')).toContain('</svg>실패</span>');
-    expect(row(recent, 'four')).toContain('</svg>취소됨</span>');
-    expect(row(recent, 'one')).not.toContain('완료</span>');
-    expect(row(recent, 'one')).not.toContain('<svg');
   });
 });

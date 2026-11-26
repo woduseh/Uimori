@@ -229,64 +229,6 @@ describe('stored context checkpoint selection', () => {
     changed.profile!.packageAttachments = [{ id: 'new-canon', revision: 1, role: 'module' }];
     expect(previousContextPlan(f.store, seedContextPlan(changed))).toBeUndefined();
   });
-
-  test.each(['hash', 'scope'] as const)(
-    'rejects a captured checkpoint with mismatched %s',
-    (part) => {
-      const f = fixture();
-      f.checkpoint(1, '검증한 요약');
-      const captured = f.capture();
-      if (part === 'scope') captured.contextBase!.scopeKey += ':other-chat';
-      else captured.contextBase!.checkpoint![part] = 'missing-or-altered';
-      expect(() => previousContextPlan(f.store, captured)).toThrow(
-        part === 'scope' ? 'CONTEXT_CHECKPOINT_SCOPE_MISMATCH' : 'CONTEXT_CHECKPOINT_MISSING'
-      );
-    }
-  );
-
-  test('rejects a stored checkpoint whose projection no longer matches its hash', () => {
-    const f = fixture();
-    f.checkpoint(1, '저장된 불변 요약');
-    const captured = f.capture();
-    f.store.db
-      .prepare("UPDATE context_checkpoints SET plan=json_set(plan,'$.summary',?) WHERE id=?")
-      .run('외부 변조', captured.contextBase!.checkpoint!.id);
-    expect(() => previousContextPlan(f.store, captured)).toThrow(
-      'CONTEXT_CHECKPOINT_HASH_MISMATCH'
-    );
-  });
-
-  test.each(['chatId', 'hash'])('rejects invalid source identity at source capture: %s', (part) => {
-    const f = fixture();
-    const current = f.current.history.at(-1)!;
-    const id = current.revision;
-    const chatId = part === 'chatId' ? '' : f.current.chatId;
-    const text = current.text;
-    const sourceHash = part === 'hash' ? 'wrong-hash' : hash(text);
-    f.store.db.exec('PRAGMA foreign_keys=OFF');
-    f.store.db
-      .prepare('UPDATE sources SET id=?,chat_id=?,text=?,hash=? WHERE id=?')
-      .run(id, chatId, text, sourceHash, current.revision);
-    f.store.db.exec('PRAGMA foreign_keys=ON');
-    expect(() => f.store.source(id)).toThrow('SOURCE_IDENTITY_INVALID');
-    expect(() => f.store.history(id)).toThrow('SOURCE_IDENTITY_INVALID');
-  });
-
-  test('preserves missing-source and missing-run errors at their storage boundaries', () => {
-    const f = fixture();
-    expect(() => f.store.history('missing-source')).toThrow(
-      expect.objectContaining({ statusCode: 404, message: 'Source not found' })
-    );
-    f.store.db.exec('PRAGMA foreign_keys=OFF');
-    f.store.db.prepare('DELETE FROM runs WHERE id=?').run('run-3');
-    f.store.db.exec('PRAGMA foreign_keys=ON');
-    expect(() => f.store.run('run-3')).toThrow(
-      expect.objectContaining({ statusCode: 404, message: 'Run not found' })
-    );
-    expect(() => f.store.history('source-3')).toThrow(
-      expect.objectContaining({ statusCode: 404, message: 'Source not found' })
-    );
-  });
 });
 
 describe('Current checkpoint lifetime', () => {

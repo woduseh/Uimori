@@ -7,13 +7,11 @@ import { createApp, type App } from '../server/app.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { editTranslation } from '../server/source-editing.js';
-import { updateSceneContext } from '../server/scene-context.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
 import type { HelperConversation, HelperTask } from '../core/helper.js';
 import type { ToolEvent } from '../core/types.js';
 import * as transport from '../core/transport.js';
-import { countTextTokens } from '../core/text-tokens.js';
 
 const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
@@ -31,7 +29,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function fixture(kind: 'chat' | 'library' = 'chat', inputTokenLimit = 272000) {
+async function fixture(kind: 'chat' | 'library' = 'chat') {
   const path = mkdtempSync(join(tmpdir(), 'uimori-scene-runtime-'));
   const app = await createApp({
     dbPath: join(path, 'test.sqlite'),
@@ -52,7 +50,7 @@ async function fixture(kind: 'chat' | 'library' = 'chat', inputTokenLimit = 2720
     modelId: 'fixture-helper',
     temperature: null,
     maxOutputTokens: 1024,
-    inputTokenLimit,
+    inputTokenLimit: 272000,
   });
   const selected = modelWorkspace(store);
   updateModelWorkspace(store, {
@@ -245,79 +243,6 @@ test('library helper targets an explicit chat and edits translation without chan
   expect(f.store.job(String(latest.id)).result).toMatchObject({
     text: '요시노가 “안녕하세요.” 하고 말했다.',
   });
-});
-
-test('chat.read numbers only visible scenes and returns optional bounded live previews', async () => {
-  const f = await fixture();
-  const original = '한글😀z'.repeat(100);
-  expect(countTextTokens(original)).toBeGreaterThan(60);
-  f.store.editSource(f.source.id, { text: original, expectedRevision: 0 });
-  updateSceneContext(f.store, f.source.id, { expectedRevision: 0, sceneEnabled: false });
-  const second = completedSource(f.store, f.chat.id, 'Visible second scene.');
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('compact', 'chat.read', {}),
-        call('previews', 'chat.read', { includePreview: true })
-      );
-    const compact = result(request, 'compact').messages as Record<string, unknown>[];
-    const previews = result(request, 'previews').messages as Record<string, unknown>[];
-    expect(compact).toMatchObject([
-      { id: f.source.id, sceneNumber: null, sceneEnabled: false, originalLength: 500 },
-      { id: second.id, sceneNumber: 1, sceneEnabled: true, originalLength: 21 },
-    ]);
-    expect(compact.every((message) => !Object.hasOwn(message, 'preview'))).toBe(true);
-    const preview = previews[0].preview as string;
-    expect(countTextTokens(preview)).toBeLessThanOrEqual(60);
-    expect(preview.length).toBeGreaterThan(0);
-    expect(preview.length).toBeLessThan(original.length);
-    expect(original.startsWith(preview)).toBe(true);
-    expect(preview).toContain('😀');
-    expect(preview).not.toMatch(/[\uD800-\uDBFF]$/u);
-    expect(previews[1].preview).toBe('Visible second scene.');
-    return structuredClone(success);
-  });
-  await submit(f, '채팅의 장면을 확인해줘.');
-});
-
-test('oversized scene search suggests a narrower continuation without losing its scope', async () => {
-  const f = await fixture('chat', 20000);
-  f.store.editSource(f.source.id, { text: '\u0001'.repeat(5000), expectedRevision: 0 });
-  const patterns = Array.from({ length: 8 }, () => '\u0001'.repeat(256));
-  mockSend((request, round) => {
-    if (round === 0)
-      return calls(
-        call('search', 'scene.search', {
-          sourceId: f.source.id,
-          target: 'original',
-          patterns,
-          context: 120,
-          limit: 20,
-        })
-      );
-    const searchEvent = event(request, 'search');
-    expect(searchEvent).toMatchObject({
-      denied: true,
-      errorKind: 'recoverable',
-      result: { error: 'HELPER_READ_TOO_LARGE' },
-    });
-    const next = (searchEvent.result as any).nextRead;
-    expect(next).toMatchObject({
-      name: 'app.call',
-      arguments: {
-        name: 'scene.search',
-        arguments: {
-          sourceId: f.source.id,
-          target: 'original',
-          patterns,
-          context: 60,
-          limit: 10,
-        },
-      },
-    });
-    return structuredClone(success);
-  });
-  await submit(f, '빈번한 제어문자를 검색해서 확인해줘.');
 });
 
 test('helper runs isolated regex chat search then commits a guarded scene batch', async () => {

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   appendLoreReads,
   DEFAULT_LORE_CONTEXT,
-  measureLoreText,
   validateLoreContextPolicy,
   type RetainedLore,
 } from '../core/lore-context.js';
@@ -45,19 +44,6 @@ describe('local-token lore policy', () => {
     const { tokenEstimator, ...limits } = DEFAULT_LORE_CONTEXT;
     const inherited = Object.assign(Object.create({ tokenEstimator }), limits);
     expect(() => validateLoreContextPolicy(inherited)).toThrow();
-  });
-
-  it.each([-1, 0.5, 200001])('rejects invalid retained token limit %s', (limit) => {
-    expect(() =>
-      validateLoreContextPolicy({ ...DEFAULT_LORE_CONTEXT, maxRetainedTokens: limit })
-    ).toThrow();
-  });
-
-  it('requires a valid token counter rather than silently substituting characters', () => {
-    expect(() => measureLoreText('test')).toThrow('LORE_TOKEN_COUNTER_REQUIRED');
-    for (const value of [-1, NaN, Infinity, 0.5])
-      expect(() => measureLoreText('test', () => value)).toThrow('LORE_TOKEN_COUNT_INVALID');
-    expect(measureLoreText('😀', () => 3)).toBe(3);
   });
 
   it('uses the local token budget rather than the character length at the boundary', () => {

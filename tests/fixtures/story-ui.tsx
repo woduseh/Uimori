@@ -1,6 +1,5 @@
 import { createRoot } from 'react-dom/client';
 import { StoryUi } from '../../web/StoryUi.js';
-import type { StoryUiSegment } from '../../core/story-ui.js';
 
 export async function mountReader(
   element: HTMLElement,
@@ -36,135 +35,6 @@ export async function mountStreaming(
   return show;
 }
 
-export function mountCharts(element: HTMLElement) {
-  const segment = {
-    kind: 'ui',
-    id: 'charts',
-    start: 0,
-    end: 1,
-    expression: '<a2ui></a2ui>',
-    surfaceId: 'main',
-    messages: [
-      {
-        version: '1.0',
-        createSurface: {
-          surfaceId: 'main',
-          catalogId: 'urn:uimori:story-ui:1',
-          components: [
-            { id: 'root', component: 'Column', children: ['line', 'bar'] },
-            {
-              id: 'line',
-              component: 'LineChart',
-              title: '온도 변화',
-              items: [
-                { label: '밤', value: -10 },
-                { label: '낮', value: 20 },
-              ],
-            },
-            {
-              id: 'bar',
-              component: 'BarChart',
-              title: '수지',
-              items: [
-                { label: '손실', value: -10 },
-                { label: '이익', value: 20 },
-              ],
-            },
-          ],
-        },
-      },
-    ],
-  } as StoryUiSegment;
-  createRoot(element).render(
-    <StoryUi segment={segment as Extract<StoryUiSegment, { kind: 'ui' }>} />
-  );
-}
-
-export function mountPreset(
-  element: HTMLElement,
-  style: import('../../core/story-ui-style.js').StoryUiStyle
-) {
-  const titles = {
-    default: '현장 기록',
-    'east-asian': '운림서원 순찰록',
-    fantasy: '왕립 길드의 의뢰',
-    modern: '팀 업무 현황',
-    period: '경성 조사 일지',
-    'blue-archive': '샬레 업무 보고',
-    idol: '오늘의 레슨 일정',
-    neon: '제7구역 관제',
-    horror: '폐병원 조사 기록',
-    tactical: '작전 상황판',
-    romance: '둘만의 교환 일기',
-    pop: '방과 후 작전 회의',
-  };
-  const segment = {
-    kind: 'ui',
-    id: 'blue',
-    start: 0,
-    end: 1,
-    expression: '<a2ui></a2ui>',
-    surfaceId: 'main',
-    messages: [
-      {
-        version: '1.0',
-        createSurface: {
-          surfaceId: 'main',
-          catalogId: 'urn:uimori:story-ui:1',
-          components: [
-            {
-              id: 'root',
-              component: 'Column',
-              children: ['title', 'tabs', 'field', 'table', 'button'],
-            },
-            { id: 'title', component: 'Text', text: titles[style] },
-            {
-              id: 'tabs',
-              component: 'Tabs',
-              tabs: [
-                { title: '임무 정보', child: 'one' },
-                { title: '활동 기록', child: 'two' },
-              ],
-            },
-            {
-              id: 'one',
-              component: 'Text',
-              text: '오늘의 순찰 구역을 확인해 주세요.',
-            },
-            { id: 'two', component: 'Text', text: '오늘의 활동 기록이에요.' },
-            {
-              id: 'field',
-              component: 'TextField',
-              label: '조사 메모',
-              value: { '@path': '/note' },
-            },
-            {
-              id: 'table',
-              component: 'DataTable',
-              title: '임무 현황',
-              columns: ['구역', '상태'],
-              rows: [
-                ['중앙 광장', '확인 완료'],
-                ['도서관', '순찰 중'],
-              ],
-            },
-            {
-              id: 'button',
-              component: 'Button',
-              child: 'buttonText',
-              action: { event: { name: 'confirm' } },
-            },
-            { id: 'buttonText', component: 'Text', text: '확인' },
-          ],
-        },
-      },
-    ],
-  } as StoryUiSegment;
-  createRoot(element).render(
-    <StoryUi segment={segment as Extract<StoryUiSegment, { kind: 'ui' }>} style={style} />
-  );
-}
-
 export async function mountGallery(
   element: HTMLElement,
   sources: string[],
@@ -181,9 +51,4 @@ export async function mountGallery(
       })}
     </div>
   );
-}
-
-export async function mountHelperAnswer(element: HTMLElement, text: string) {
-  const { HelperMessageProse } = await import('../../web/HelperMessageProse.js');
-  createRoot(element).render(<HelperMessageProse text={text} />);
 }

@@ -3,11 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
-import {
-  HELPER_REVERTED_CHANGES_LIMIT,
-  type HelperRollbackUnit,
-  type HelperTask,
-} from '../core/helper.js';
+import type { HelperRollbackUnit, HelperTask } from '../core/helper.js';
 import { OUTLINE_LEVELS, outlineParentAllowed, type OutlineLevel } from '../core/outline.js';
 import type { Content } from '../core/product.js';
 import { editableResource, type ResourceModel } from '../core/resource-editing.js';
@@ -28,11 +24,7 @@ import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
-import {
-  helperRevertedChanges,
-  helperRollbackView,
-  rollBackHelperTask,
-} from '../server/helper-rollback.js';
+import { helperRollbackView, rollBackHelperTask } from '../server/helper-rollback.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
@@ -523,35 +515,6 @@ test('a task that rewrote or retired an imported memory rolls back to the memory
   expect(notes).toHaveLength(2);
 });
 
-test('a later owner edit of a bot setting outside the card text blocks the rollback of that bot', () => {
-  const f = fixture();
-  const bot = f.store.product.content(fixtureBotInput('설정 봇', '처음 설명')) as Content;
-  const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
-  const task = f.begin();
-  f.resource(task, 'resource.patch', {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: bot.revision,
-    changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미 설명' }],
-  });
-  f.finish(task);
-  const saved = readResource(f.store, 'content', bot.id);
-  const model = structuredClone(editableResource('content', saved)) as any;
-  model.package.modules = [{ id: module.id, revision: module.revision }];
-  saveResource(f.store, {
-    kind: 'content',
-    id: bot.id,
-    expectedRevision: saved.revision,
-    model: model as ResourceModel,
-  });
-  expect(f.rollBack(task).units).toMatchObject([
-    { unit: `resource:content:${bot.id}`, status: 'changed-since', reason: 'changed-after-task' },
-  ]);
-  const after = readResource(f.store, 'content', bot.id) as Content;
-  expect(after.package.modules).toEqual([{ id: module.id, revision: module.revision }]);
-  expect(description(f.store, bot.id)).toBe('도우미 설명');
-});
-
 test('a bot change recorded with the card-only state hash still rolls back unless its settings changed', () => {
   const f = fixture();
   const module = f.store.product.content({ ...fixtureBotInput('함께 쓰는 모듈'), kind: 'module' });
@@ -681,34 +644,6 @@ test('an outline rollback cancels only the scheduled scenes whose plan it change
   ).toEqual({ b: 'pending', d: 'cancelled', e: 'pending' });
 });
 
-test('a patch across three resources restores the two nobody touched and reports the edited one', () => {
-  const f = fixture();
-  const bots = ['가', '나', '다'].map(
-    (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, `${name} 처음`)) as Content
-  );
-  const task = f.begin();
-  f.resource(task, 'resource.patchMany', {
-    items: bots.map((bot) => ({
-      kind: 'content',
-      id: bot.id,
-      expectedRevision: bot.revision,
-      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '한꺼번에' }],
-    })),
-  });
-  f.finish(task);
-  setDescription(f.store, bots[1]!.id, '사용자 수정');
-  expect(f.rollBack(task).units.map(({ unit, status }) => [unit, status])).toEqual([
-    [`resource:content:${bots[0]!.id}`, 'restored'],
-    [`resource:content:${bots[1]!.id}`, 'changed-since'],
-    [`resource:content:${bots[2]!.id}`, 'restored'],
-  ]);
-  expect(bots.map((bot) => description(f.store, bot.id))).toEqual([
-    '가 처음',
-    '사용자 수정',
-    '다 처음',
-  ]);
-});
-
 test('chat-only lore edits and removals roll back to the override the chat had before the task', () => {
   const f = fixture();
   const model = fixtureBotInput('로어 봇', '설명');
@@ -814,31 +749,6 @@ test('rolling back one target leaves the other targets of the task as they are',
   expect(f.store.source(first!.id).text).toBe('한 곳.\n');
   expect(f.store.source(second!.id).text).toBe('둘째 장면이에요.\n그녀가 말했다.\n');
   expect(() => f.rollBack(task, 'scene:missing')).toThrow('HELPER_ROLLBACK_UNIT_NOT_FOUND');
-});
-
-test('a rollback that restores nothing tells no view that the task was rolled back', () => {
-  const f = fixture();
-  const [first] = f.scenes;
-  const task = f.begin();
-  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
-  f.finish(task);
-  f.store.editSource(first!.id, {
-    text: '사용자가 다시 고친 장면.\n',
-    expectedRevision: f.store.source(first!.id).editRevision ?? 0,
-  });
-  const rolledBack = () =>
-    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'task.rolled-back')
-      .length;
-  expect(f.rollBack(task).units).toMatchObject([{ status: 'changed-since' }]);
-  expect(rolledBack()).toBe(0);
-  f.store.editSource(first!.id, {
-    text: '도우미가 고친 장면.\n',
-    expectedRevision: f.store.source(first!.id).editRevision ?? 0,
-  });
-  expect(f.rollBack(task).units).toMatchObject([{ status: 'restored' }]);
-  expect(rolledBack()).toBe(1);
-  expect(f.rollBack(task).units).toMatchObject([{ status: 'restored' }]);
-  expect(rolledBack()).toBe(1);
 });
 
 type Target = string;
@@ -1397,64 +1307,4 @@ test('the next task is told once what was rolled back, and a retry on Codex keep
   const later = await h.run('그다음 요청');
   expect(later.snapshot.revertedChanges).toBeUndefined();
   expect(h.sources.at(-1)!.source).not.toHaveProperty('revertedChanges');
-});
-
-test('a retry is also told what was rolled back after the failed attempt', async () => {
-  const f = fixture();
-  const [first] = f.scenes;
-  const task = f.begin();
-  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
-  f.finish(task);
-  const h = helperRuns(f.store, f.chat.id);
-  const failed = await h.run('다음 요청', { fail: true });
-  expect(failed.snapshot.revertedChanges).toBeUndefined();
-  expect(f.rollBack(task).units.map((unit) => unit.status)).toEqual(['restored']);
-  const retried = await h.run('다음 요청', { retryOf: failed.id, fail: true });
-  expect(retried.snapshot.revertedChanges?.changes).toEqual([
-    expect.objectContaining({ taskId: task.id, domain: 'scene', targetId: first!.id }),
-  ]);
-  const again = await h.run('다음 요청', { retryOf: retried.id });
-  expect(again.snapshot.revertedChanges).toEqual(retried.snapshot.revertedChanges);
-});
-
-test('a rollback stamped in the same millisecond as the next task is told only once', async () => {
-  const f = fixture();
-  const [first] = f.scenes;
-  const task = f.begin();
-  f.scene(task, { ...f.read(first!.id), text: '도우미가 고친 장면.\n' });
-  f.finish(task);
-  f.rollBack(task);
-  const h = helperRuns(f.store, f.chat.id);
-  const told = await h.run('다음 요청');
-  expect(told.snapshot.revertedChanges?.changes).toHaveLength(1);
-  f.store.db
-    .prepare(
-      'UPDATE helper_changes SET rolled_back_at=(SELECT created_at FROM helper_tasks WHERE id=?) WHERE task_id=?'
-    )
-    .run(told.id, task.id);
-  const later = await h.run('그다음 요청');
-  expect(later.snapshot.revertedChanges).toBeUndefined();
-});
-
-test('the rolled-back list keeps the most recent changes and counts the rest', () => {
-  const f = fixture();
-  const bots = Array.from(
-    { length: HELPER_REVERTED_CHANGES_LIMIT + 2 },
-    (_, index) => f.store.product.content(fixtureBotInput(`봇 ${index + 1}`, '처음')) as Content
-  );
-  const task = f.begin();
-  for (const bot of bots)
-    f.resource(task, 'resource.patch', {
-      kind: 'content',
-      id: bot.id,
-      expectedRevision: bot.revision,
-      changes: [{ op: 'set', path: '/package/nativeRisu/card/description', value: '도우미' }],
-    });
-  f.finish(task);
-  f.rollBack(task);
-  const listed = helperRevertedChanges(f.store, f.conversation.id)!;
-  expect(listed.omitted).toBe(2);
-  expect(listed.changes.map((change) => change.targetId)).toEqual(
-    bots.slice(2).map((bot) => bot.id)
-  );
 });

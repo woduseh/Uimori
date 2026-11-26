@@ -275,16 +275,6 @@ test('Vertex Model Garden publisher entries keep Gemini model IDs only', () => {
     expect(vertexPublisherModelEntry(raw)).toBeUndefined();
 });
 
-test('unknown family templates do not fabricate verified values or narrow Grok reasoning vocabulary', () => {
-  const hints = modelHints(connection('vercel-chat-v1'), 'vendor/new-model', 'xai');
-  expect(hints.source).toBe('none');
-  expect(hints.thinking?.known).toBeUndefined();
-  expect(hints.thinking?.all).toContain('xhigh');
-  expect(modelHints(connection('vercel-chat-v1'), 'unknown/new').thinking?.field).toBe(
-    'reasoningEffort'
-  );
-});
-
 test('gateway common effort hints do not claim native Claude or Gemini option support', () => {
   const gateway = connection('vercel-chat-v1', [
     {

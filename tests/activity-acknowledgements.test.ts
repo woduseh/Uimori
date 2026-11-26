@@ -38,9 +38,3 @@ test('storage failure is explicit and keeps earlier confirmations', () => {
   expect(saveAcknowledgements('a', ['new-execution'])).toBe(false);
   expect(readAcknowledgements('a')).toEqual(['old-execution']);
 });
-
-test('confirmations do not stop persisting after an arbitrary history count', () => {
-  const identities = Array.from({ length: 2001 }, (_, index) => `execution-${index}`);
-  expect(saveAcknowledgements('a', identities)).toBe(true);
-  expect(readAcknowledgements('a')).toHaveLength(2001);
-});

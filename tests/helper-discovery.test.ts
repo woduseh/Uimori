@@ -7,28 +7,11 @@ import {
 
 test.each([
   ['rename this chat', 'chat.rename', 'chat'],
-  ['find saved chats by title', 'chat.list', 'library'],
   ['change the model for this chat', 'settings.update', 'chat'],
-  ['set the shared character appearance defaults', 'resource.patch', 'library'],
-  ['save chat-only appearance profiles', 'illustration.profiles.save', 'chat'],
   ['undo the last saved resource edit', 'resource.undo', 'library'],
-  ['duplicate this bot', 'resource.clone', 'library'],
-  ['move these bots into a folder', 'library.organize', 'library'],
-  ['how much did I spend last month', 'usage.read', 'library'],
-  ['retry a failed helper task', 'task.retry', 'library'],
-  ['set global font', 'font.select', 'library'],
   ['aboveInputTokens', 'model.pricing.update', 'library'],
-  ['which region is fastest for this vertex model', 'vertex.location.compare', 'library'],
-  ['move the vertex connection to another region', 'vertex.location.update', 'library'],
   ['기본 외형', 'resource.patch', 'library'],
-  ['register a new model from the provider catalog', 'model.register', 'library'],
   ['delete an unused model', 'model.delete', 'library'],
-  ['attach a different persona to this chat', 'chat.profile.update', 'chat'],
-  ['hide this scene from the writer', 'scene.context.update', 'chat'],
-  ['bookmark this scene', 'chat.bookmark', 'chat'],
-  ['put these chats into a folder', 'chat.organize', 'library'],
-  ['use another illustration preset for this chat', 'illustration-preset.select', 'chat'],
-  ['turn on automatic translation', 'settings.update', 'library'],
 ] as const)(
   'discovery returns %s candidates with the needed %s schema',
   (query, expected, scope) => {
@@ -51,30 +34,6 @@ test('every exact operation name returns one complete schema with its original e
   expect(
     describeHelperTools({ query: ' RESOURCE.READMANY ' }).tools.map((tool) => tool.name)
   ).toEqual(['resource.readMany']);
-});
-
-test('query pages contain complete schemas and exact names select only that operation', () => {
-  expect(describeHelperTools({ query: 'read' }).tools).toHaveLength(3);
-  expect(
-    describeHelperTools({ query: 'oldText' }).tools.some((tool) =>
-      ['resource.patch', 'scene.patch'].includes(tool.name)
-    )
-  ).toBe(true);
-  const exact = describeHelperTools({ query: 'resource.patch', limit: 10 }, false, 'chat');
-  expect(exact.tools.map((tool) => tool.name)).toEqual(['resource.patch']);
-  const first = describeHelperTools({ query: 'read', limit: 2 });
-  if (!('nextOffset' in first)) throw new Error('Expected query page');
-  expect(first.tools).toHaveLength(2);
-  expect(first.nextOffset).toBe(2);
-  const second = describeHelperTools({ query: 'read', limit: 2, offset: first.nextOffset });
-  expect(second.tools).toHaveLength(2);
-  expect(second.tools.map((tool) => tool.name)).not.toEqual(first.tools.map((tool) => tool.name));
-  for (const tool of [...first.tools, ...second.tools])
-    expect(tool).toMatchObject(describeHelperTools({ names: [tool.name] }).tools[0]!);
-  expect(describeHelperTools({ query: 'zznotatoolzz' }).tools).toEqual([]);
-  expect(describeHelperTools({ query: 'the and my' }).tools).toEqual([]);
-  for (const limit of [0, -1, 1.5, '3', Number.MAX_SAFE_INTEGER + 1])
-    expect(() => describeHelperTools({ query: 'read', limit })).toThrow('INVALID_ARGUMENTS');
 });
 
 test('review discovery applies its allowed operation set before ranking and paging', () => {

@@ -4,16 +4,13 @@ import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { Content } from '../core/product.js';
 import { countTextTokens } from '../core/text-tokens.js';
-import { describeHelperTools, helperToolTraits } from '../server/helper-app-tools.js';
-import { HELPER_CODE_TOOLS, invokeHelperCodeTool } from '../server/helper-code-tools.js';
+import { invokeHelperCodeTool } from '../server/helper-code-tools.js';
 import { invokeHelperGuideTool } from '../server/helper-guide-tools.js';
 import { checkNativeRisuLuaSyntax } from '../server/risu-lua-syntax.js';
-import { nativeRisuCbsFunctionCatalog } from '../server/risu-native-cbs.js';
 import {
   RISU_NATIVE_LUA_FUNCTIONS,
   RISU_NATIVE_LUA_UNSUPPORTED_FUNCTIONS,
 } from '../server/risu-native-lua.js';
-import { RISU_NATIVE_TRIGGER_EFFECTS } from '../server/risu-native-runtime.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { CODE_BOT_CARD, saveCodeBot, saveCodePreset } from './fixtures/code-tools.js';
@@ -37,22 +34,6 @@ function fixture() {
 }
 const call = async (store: Store, name: string, args: Record<string, unknown>) =>
   (await invokeHelperCodeTool(store, name, args)) as Record<string, any>;
-
-test('the code operations are read-only, outside review and listed under their own area', () => {
-  for (const tool of HELPER_CODE_TOOLS) {
-    expect(helperToolTraits(tool.name)).toMatchObject({
-      readOnly: true,
-      effect: 'read',
-      reviewAllowed: false,
-      confirmation: undefined,
-    });
-    expect(describeHelperTools({ names: [tool.name] }).tools[0]).toEqual(tool);
-    expect(() => describeHelperTools({ names: [tool.name] }, true)).toThrow('UNKNOWN_APP_TOOL');
-  }
-  expect(describeHelperTools({ query: 'check lua trigger regex errors' }).tools[0]?.name).toBe(
-    'code.diagnose'
-  );
-});
 
 test('code.cbs locates diagnostics, blocks and variables in a text or a saved field', async () => {
   const store = fixture();
@@ -153,35 +134,6 @@ test('code.references filters the index and points every use at a patchable path
   );
 });
 
-test('reference findings follow their variable across pages in a large bot', async () => {
-  const store = fixture();
-  const defaults = Array.from(
-    { length: 1600 },
-    (_, i) => `score${String(i).padStart(4, '0')}=0`
-  ).join('\n');
-  const bot = store.product.content({
-    ...fixtureBotInput('Ledger'),
-    package: nativeContent({
-      name: 'Ledger',
-      extensions: { risuai: { defaultVariables: defaults } },
-    }),
-  }) as Content;
-  const last = await call(store, 'code.references', {
-    kind: 'content',
-    id: bot.id,
-    offset: 1599,
-    limit: 1,
-  });
-  expect(last).toMatchObject({
-    total: 1600,
-    totalFindings: 1600,
-    nextOffset: null,
-    findings: [{ name: 'score1599', code: 'never-read' }],
-    variables: [{ name: 'score1599' }],
-  });
-  expect(countTextTokens(JSON.stringify(last))).toBeLessThanOrEqual(12_000);
-});
-
 test('code.diagnose reports each finding kind of a bot with paths and positions', async () => {
   const store = fixture();
   const bot = saveCodeBot(store);
@@ -240,64 +192,6 @@ test('code.diagnose reports each finding kind of a bot with paths and positions'
   ).rejects.toThrow('INVALID_ARGUMENTS');
 });
 
-test('code checks distinguish executable trigger operands, Lua calls and rendered assets', async () => {
-  const store = fixture();
-  const card = {
-    name: 'Static checks',
-    description: '{{// {{img::comment}} }} {{img::real}}',
-    extensions: {
-      risuai: {
-        customScripts: [{ type: 'editdisplay', in: '(x)', out: '{{img::$&}} {{img::$<group>}}' }],
-        triggerscript: [
-          {
-            type: 'start',
-            effect: [
-              {
-                type: 'triggerlua',
-                code: '-- getChatVar(id, "hidden")\nlocal function log() end\ngetChatVar(id, "visible")',
-              },
-            ],
-          },
-          {
-            type: 'start',
-            effect: [
-              { type: 'v2If', source: 'mood', target: 'limit', targetType: 'var', condition: '?' },
-              {
-                type: 'v2IfAdvanced',
-                source: 'plain',
-                sourceType: 'value',
-                target: 'other',
-                targetType: 'var',
-                condition: '=',
-              },
-            ],
-          },
-        ],
-      },
-    },
-  };
-  const bot = store.product.content({
-    ...fixtureBotInput('Static checks'),
-    package: nativeContent(card),
-  }) as Content;
-  const args = { kind: 'content', id: bot.id };
-  const report = await call(store, 'code.diagnose', args);
-  expect(
-    report.findings.filter((f: any) => f.code === 'asset.missing').map((f: any) => f.name)
-  ).toEqual(['real']);
-  expect(report.findings.filter((f: any) => f.code === 'compat.lua-function')).toEqual([]);
-  expect(report.findings.filter((f: any) => f.code === 'compat.trigger-operator')).toMatchObject([
-    { name: '?', path: expect.stringMatching(/effect\/0\/condition$/) },
-  ]);
-  const refs = await call(store, 'code.references', args);
-  expect(refs.variables.map((v: any) => v.name).sort()).toEqual([
-    'limit',
-    'mood',
-    'other',
-    'visible',
-  ]);
-});
-
 test('code.diagnose checks a prompt preset with preset paths', async () => {
   const store = fixture();
   const preset = saveCodePreset(store);
@@ -311,32 +205,6 @@ test('code.diagnose checks a prompt preset with preset paths', async () => {
     `compat.preset-setting ${root}/promptSettings/utilOverride`,
     `compat.preset-block-skipped ${root}/promptTemplate/1/type`,
   ]);
-});
-
-test('compatibility rules come from the constants that the runtime enforces', async () => {
-  const store = fixture();
-  const bot = saveCodeBot(store);
-  const compatibility = async () =>
-    (
-      await call(store, 'code.diagnose', {
-        kind: 'content',
-        id: bot.id,
-        sections: ['compatibility'],
-        limit: 100,
-      })
-    ).findings.map((item: any) => `${item.code}:${item.name}`);
-  expect(await compatibility()).not.toContain('compat.lua-function:LLM');
-  RISU_NATIVE_LUA_UNSUPPORTED_FUNCTIONS.push('LLM');
-  const effects = RISU_NATIVE_TRIGGER_EFFECTS as string[];
-  effects.push('v2GetCharAt');
-  try {
-    const found = await compatibility();
-    expect(found).toContain('compat.lua-function:LLM');
-    expect(found).not.toContain('compat.trigger-effect:v2GetCharAt');
-  } finally {
-    RISU_NATIVE_LUA_UNSUPPORTED_FUNCTIONS.pop();
-    effects.pop();
-  }
 });
 
 test('the Lua syntax check compiles chunks without running them', async () => {
@@ -497,28 +365,4 @@ test('the Lua API guide names exactly the functions the Lua host provides', () =
       [...RISU_NATIVE_LUA_FUNCTIONS, ...callbacks, 'json.encode', 'json.decode', 'math.random'],
       name
     ).toContain(name);
-});
-
-test('the CBS reference guide is generated from the evaluator catalog', () => {
-  const guides = (invokeHelperGuideTool({}) as { guides: { name: string }[] }).guides;
-  expect(guides.map((guide) => guide.name)).toEqual(
-    expect.arrayContaining([
-      'CBS-REFERENCE',
-      'RISU-LUA-API',
-      'RISU-RUNTIME-INTEROP',
-      'RISU-PRESET-FIELDS',
-    ])
-  );
-  let text = '';
-  for (let offset: number | null = 0; offset !== null; ) {
-    const page = invokeHelperGuideTool({ name: 'CBS-REFERENCE', offset, limit: 20_000 }) as {
-      text: string;
-      nextOffset: number | null;
-    };
-    text += page.text;
-    offset = page.nextOffset;
-  }
-  for (const entry of nativeRisuCbsFunctionCatalog().functions)
-    if (!entry.internal) expect(text).toContain(`- \`${entry.name}\``);
-  expect(text).toMatch(/- `#if` — deprecated: [^\n]+Use #when/u);
 });

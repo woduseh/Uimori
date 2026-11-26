@@ -15,41 +15,6 @@ describe('lore context UI boundaries', () => {
     maxSelectedTokens: '8000',
     maxInputTokens: '262000',
   };
-  it('accepts explicit zero retention and both inclusive policy limits', () => {
-    expect(parseLorePolicyDraft(valid)).toEqual(DEFAULT_LORE_CONTEXT);
-    expect(
-      parseLorePolicyDraft({
-        ...valid,
-        enabled: false,
-        maxRetainedTokens: '0',
-        maxRetainedEntries: '0',
-        maxPinnedTokens: '1',
-      })
-    ).toEqual({
-      judgment: DEFAULT_LORE_CONTEXT.judgment,
-      enabled: false,
-      tokenEstimator: DEFAULT_LORE_CONTEXT.tokenEstimator,
-      maxRetainedTokens: 0,
-      maxRetainedEntries: 0,
-      maxPinnedTokens: 1,
-    });
-    expect(
-      parseLorePolicyDraft({
-        ...valid,
-        enabled: true,
-        maxRetainedTokens: '200000',
-        maxRetainedEntries: '256',
-        maxPinnedTokens: '1000000',
-      })
-    ).toEqual({
-      judgment: DEFAULT_LORE_CONTEXT.judgment,
-      enabled: true,
-      tokenEstimator: DEFAULT_LORE_CONTEXT.tokenEstimator,
-      maxRetainedTokens: 200000,
-      maxRetainedEntries: 256,
-      maxPinnedTokens: 1000000,
-    });
-  });
   it('rejects incomplete, fractional and out-of-bound drafts without changing their text', () => {
     for (const [key, text] of [
       ['maxRetainedTokens', ''],

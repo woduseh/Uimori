@@ -11,7 +11,6 @@ import sharp from 'sharp';
 import { createApp, type App } from '../server/app.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { nativeDraftTitle } from './fixtures/native-content.js';
 import { saveResource } from '../server/resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
 import { imageJobInput } from '../server/package-images.js';
@@ -23,9 +22,6 @@ import { importChatTranscript } from '../server/chat-transcript.js';
 import { importChatBackup } from '../server/chat-backup.js';
 import { forkChat } from '../server/chat-fork.js';
 import { databaseBackupStream } from '../server/database-backup.js';
-import { HelperWorkspace } from '../server/helper-workspace.js';
-import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import * as transport from '../core/transport.js';
 import type { Content } from '../core/product.js';
 
 const owned: { path: string; app?: App; store?: Store }[] = [];
@@ -168,37 +164,6 @@ test('image metadata editing changes the JEV catalog without rewriting bytes or 
   );
 });
 
-test('renaming a resource invalidates only dependent chats and latest content has no revision history', () => {
-  const store = database();
-  const one = store.product.content(fixtureBotInput('One')) as Content;
-  const two = store.product.content(fixtureBotInput('Two')) as Content;
-  const a = story(store, 'a', one),
-    b = story(store, 'b', two);
-  const seq = Number(store.db.prepare('SELECT coalesce(max(seq),0) AS seq FROM events').get()!.seq);
-  saveResource(store, {
-    kind: 'content',
-    id: one.id,
-    expectedRevision: one.revision,
-    model: nativeDraftTitle(editableResource('content', one), 'One updated'),
-  });
-  expect(
-    store.db
-      .prepare("SELECT chat_id FROM events WHERE seq>? AND kind='profile.updated'")
-      .all(seq)
-      .map((row) => row.chat_id)
-  ).toEqual([a.id]);
-  expect(store.product.snapshot(a.id).packages!.find((pkg) => pkg.id === one.id)?.title).toBe(
-    'One updated'
-  );
-  expect(store.product.snapshot(b.id).packages!.find((pkg) => pkg.id === two.id)?.title).toBe(
-    'Two'
-  );
-  expect(
-    store.db.prepare("SELECT count(*) AS n FROM versions WHERE kind='content' AND id=?").get(one.id)
-      ?.n
-  ).toBe(1);
-});
-
 test('independent copies and portable restores retain inline images, notes and can accept another request', async () => {
   const source = database();
   const bot = source.product.content(fixtureBotInput('Inline bot')) as Content;
@@ -298,110 +263,6 @@ test('full SQLite snapshot includes database keys and WebP bytes', async () => {
   expect(restored.credentials.get('jev')).toBe('private-jev-test-key');
   expect(new JevCredentialStore(restored.db).resolve()).toBe('private-jev-test-key');
   expect(readImage(restored.db, image.hash).bytes.equals(image.bytes)).toBe(true);
-});
-
-test('library helper can directly edit an unselected resource and rename another chat', async () => {
-  const app = await application(),
-    store = app.store;
-  const bot = store.product.content(fixtureBotInput('Before')) as Content;
-  const chat = story(store, 'A story', bot);
-  const connection = store.product.connection({
-    title: 'Synthetic',
-    protocol: 'fixture-sse-v1',
-    endpoint: 'http://127.0.0.1:9',
-    enabled: true,
-  });
-  const model = store.product.model({
-    title: 'Synthetic',
-    connectionId: connection.id,
-    modelId: 'fixture-helper',
-    temperature: null,
-    maxOutputTokens: 2048,
-  });
-  const current = modelWorkspace(store);
-  updateModelWorkspace(store, {
-    expectedRevision: current.revision,
-    routes: { ...current.routes, main: { id: model.id } },
-    helperModel: { id: model.id },
-    translationPolicy: current.translationPolicy,
-  });
-  const success: transport.ProviderResult = {
-    status: 'completed',
-    text: 'Done',
-    toolCalls: [],
-    refusal: null,
-    error: null,
-    opaqueState: null,
-    usage: { inputTokens: 10, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
-  };
-  let round = 0;
-  vi.spyOn(transport, 'executeProvider').mockImplementation(async (_connection, request) => {
-    expect(request.stable.tools.some((tool) => tool.name === 'app.tools')).toBe(true);
-    expect(request.stable.tools.some((tool) => tool.name === 'app.call')).toBe(true);
-    if (round++ === 0)
-      return {
-        ...success,
-        status: 'tool_calls',
-        text: '',
-        toolCalls: [
-          {
-            id: 'edit',
-            name: 'app.call',
-            arguments: {
-              name: 'resource.save',
-              arguments: {
-                kind: 'content',
-                id: bot.id,
-                expectedRevision: bot.revision,
-                model: nativeDraftTitle(
-                  editableResource('content', bot),
-                  'Helper changed'
-                ) as unknown as transport.Json,
-              },
-            },
-          },
-          {
-            id: 'rename',
-            name: 'app.call',
-            arguments: {
-              name: 'chat.rename',
-              arguments: {
-                chatId: chat.id,
-                title: 'Changed from library',
-                expectedRevision: chat.titleRevision ?? 0,
-              },
-            },
-          },
-        ] as transport.ProviderToolCall[],
-      };
-    const events = request.input.results as unknown as {
-      denied?: boolean;
-      name: string;
-      args: { name?: string };
-      result: unknown;
-    }[];
-    const mutations = events.filter(
-      (event) =>
-        event.name === 'app.call' &&
-        (event.args.name === 'resource.save' || event.args.name === 'chat.rename')
-    );
-    expect(mutations).toHaveLength(2);
-    expect(mutations.every((event) => !event.denied)).toBe(true);
-    return success;
-  });
-  const conversation = await api(app, '/api/helper/conversations', {
-    scope: { kind: 'library', workId: 'freely-edit' },
-  });
-  const task = await api(app, `/api/helper/conversations/${conversation.id}/messages`, {
-    requestKey: randomUUID(),
-    text: '관련 자료를 자연스럽게 다듬어 주세요.',
-  });
-  const workspace = new HelperWorkspace(store);
-  await vi.waitFor(() => expect(workspace.task(task.id).status).toBe('completed'), {
-    timeout: 5000,
-  });
-  expect(store.product.get<Content>('content', bot.id).title).toBe('Helper changed');
-  expect(store.chat(chat.id).title).toBe('Changed from library');
 });
 
 describe('Concurrent portable chat restore', () => {

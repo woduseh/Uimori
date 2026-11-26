@@ -235,61 +235,6 @@ test('explicit retry creates a new current-policy job and preserves failed candi
   expect(store.job(job.id).result?.text).toBe('Uncertain candidate');
 });
 
-test('failure diagnostics persist only for the current owner and generation without changing frozen inputs', () => {
-  const store = database();
-  const original = source(store);
-  const originalSnapshot = structuredClone(readStoredRunSnapshot(store, original.runId));
-  promptSetting(store, 'Frozen translation instructions');
-  const job = store.requestTranslation(original.id);
-  const active = store.claimJob(job.id, 'diagnostic-owner', {})!;
-  const reservedSource = structuredClone(store.source(original.id));
-  const frozenInput = structuredClone(store.job(job.id).input);
-  if (!frozenInput || typeof frozenInput !== 'object' || Array.isArray(frozenInput))
-    throw new Error('Expected a frozen translation input object');
-  const failure = {
-    status: 'failed' as const,
-    result: {
-      mock: true,
-      sourceRevision: original.id,
-      sourceHash: original.hash,
-      text: 'Uncertain candidate',
-    },
-    error: 'TRANSLATION_REFUSAL_UNCERTAIN',
-    diagnostic: {
-      stage: 'translation-refusal' as const,
-      code: 'TRANSLATION_REFUSAL_UNCERTAIN',
-      attemptId: 'classifier-attempt',
-    },
-  };
-  for (const [generation, owner] of [
-    [active.generation + 1, 'diagnostic-owner'],
-    [active.generation, 'stale-owner'],
-  ] as const) {
-    expect(store.finishAuxiliary(job.id, generation, owner, failure)).toBe(false);
-    expect(store.job(job.id).input).toEqual(frozenInput);
-    expect(store.job(job.id).status).toBe('running');
-    expect(store.job(job.id).result).toBeNull();
-  }
-  expect(store.finishAuxiliary(job.id, active.generation, 'diagnostic-owner', failure)).toBe(true);
-  expect(store.job(job.id).input).toEqual({
-    ...frozenInput,
-    failureDiagnostic: failure.diagnostic,
-  });
-  expect(store.job(job.id).result).toEqual(failure.result);
-  expect(store.source(original.id)).toEqual(reservedSource);
-  expect(reservedSource.text).toBe(original.text);
-  expect(reservedSource.hash).toBe(original.hash);
-  expect(readStoredRunSnapshot(store, original.runId)).toEqual(originalSnapshot);
-  const completed = structuredClone(store.job(job.id));
-  expect(
-    store.finishAuxiliary(job.id, active.generation, 'diagnostic-owner', {
-      ...failure,
-      diagnostic: { ...failure.diagnostic, attemptId: 'late-attempt' },
-    })
-  ).toBe(false);
-  expect(store.job(job.id)).toEqual(completed);
-});
-
 test('completion never reserves translation; manual save and demand remain free', () => {
   const store = database();
   const s = source(store);

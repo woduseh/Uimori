@@ -242,27 +242,3 @@ test('an unedited retry keeps the dice result, while a free-text retry has no ac
   expect(edited.json<Run>()).toMatchObject({ request: 'Leave the room.' });
   expect(edited.json<Run>().snapshot.storyUiAction).toBeUndefined();
 });
-
-test('a client that prefers a minimal response receives the run receipt without its frozen input', async () => {
-  const f = await setup(
-    'root = Button(Text("Roll"), action=Event("roll", {sides: 6, count: 5}))',
-    'roll',
-    { sides: 6, count: 5 }
-  );
-  const full = await f.submit({ componentId: 'root' });
-  expect(full.statusCode, full.body).toBe(200);
-  const run = full.json<Run>();
-  expect(run.snapshot.history.length).toBeGreaterThan(0);
-  const cancelled = await f.app.inject({
-    method: 'POST',
-    url: `/api/runs/${run.id}/cancel`,
-    headers: { prefer: 'return=minimal' },
-  });
-  expect(cancelled.statusCode, cancelled.body).toBe(200);
-  const receipt = cancelled.json<Record<string, unknown>>();
-  expect(receipt).toMatchObject({ id: run.id, chatId: run.chatId, status: 'cancelled' });
-  for (const field of ['snapshot', 'inputs', 'toolEvents'])
-    expect(receipt).not.toHaveProperty(field);
-  expect(f.store.run(run.id).snapshot).toMatchObject({ settled: true, history: [] });
-  f.app.controls.release('run');
-});

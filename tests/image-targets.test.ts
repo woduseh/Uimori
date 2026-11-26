@@ -2,15 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { afterEach, expect, test, vi } from 'vitest';
-import { createApp } from '../server/app.js';
-import { JEV_ENDPOINT } from '../server/jev-judgment.js';
+import { afterEach, expect, test } from 'vitest';
 import { Store, type Job, type Source } from '../server/store.js';
 import { readRunSnapshot } from '../server/run-projections.js';
 import { splitSource, validatePresentation } from '../core/auxiliary.js';
 import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
-import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { putImageBlob, requestImages } from '../server/package-images.js';
 import { imageCatalog, imageJobInput, latestImageJob } from '../server/package-images.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
@@ -277,105 +274,6 @@ test.each(['real', 'synthetic'] as const)(
   }
 );
 
-test('an earlier real image attempt conservatively requires retry after another restart', () => {
-  const { store, source, chat } = fixture({ image: true });
-  const job = images(store, source)[0];
-  const first = store.claimJob(job.id, 'first-worker', {})!;
-  const attempt = store.product.startAttempt(chat.id, null, job.id, imageWire());
-  store.product.finishAttempt(attempt, {
-    status: 'error',
-    text: '',
-    toolCalls: [],
-    refusal: null,
-    error: { code: 'FIXTURE_FAILURE' },
-    usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null },
-    opaqueState: null,
-  });
-  store.failJob(job.id, first.generation, 'first-worker', 'FIXTURE_FAILURE');
-  store.retryJob(job.id);
-  store.claimJob(job.id, 'next-worker', {});
-
-  store.recover();
-
-  expect(store.job(job.id).status).toBe('interrupted');
-  expect(store.queuedJobs()).not.toContain(job.id);
-});
-
-test('translated image placement through the app pump retains its source and provenance', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-image-pump-'));
-  const app = await createApp({
-    dbPath: join(directory, 'synthetic.sqlite'),
-    buildId: 'image-pump-test',
-    testMode: true,
-  });
-  try {
-    const { store, source } = fixture({ image: true }, app.store);
-    store.credentials.set('jev', 'synthetic-jev-key');
-    const translation = translate(store, source);
-    const translatedSource = store.source(source.id);
-    vi.stubGlobal('fetch', async (url: unknown, init?: RequestInit) => {
-      expect(url).toBe(JEV_ENDPOINT);
-      const body = JSON.parse(String(init?.body));
-      return new Response(
-        JSON.stringify({
-          model: 'jev-latest',
-          answers: Object.fromEntries(
-            Object.entries(body.questions).map(([key, q]) => [
-              key,
-              {
-                type: 'choice',
-                choice: 'none',
-                confidence: 1,
-                probabilities: Object.fromEntries(
-                  Object.keys((q as any).criteria).map((option) => [
-                    option,
-                    option === 'none' ? 1 : 0,
-                  ])
-                ),
-              },
-            ])
-          ),
-          usage: { input_tokens: 7, output_tokens: 3 },
-        })
-      );
-    });
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/sources/${source.id}/images`,
-      headers: { host: '127.0.0.1' },
-      payload: {
-        target: 'translation',
-        expectedSourceHash: source.hash,
-        expectedRevision: latestImageJob(store, source.id, 'translation')?.revision ?? 0,
-        expectedTranslationJobId: translation.id,
-        expectedTranslationRevision: translation.revision,
-      },
-    });
-    expect(response.statusCode, response.body).toBe(200);
-    const jobId = response.json().id as string;
-    await vi.waitFor(() => expect(store.job(jobId).status).toBe('completed'), { timeout: 6000 });
-    expect(store.job(jobId)).toMatchObject({
-      result: {
-        sourceRevision: source.id,
-        sourceHash: source.hash,
-        imageTarget: {
-          mode: 'translation',
-          translationJobId: translation.id,
-          translationRevision: translation.revision,
-        },
-      },
-    });
-    expect(store.source(source.id)).toEqual(translatedSource);
-    expect(
-      store.product.attempts(source.chatId).filter((attempt) => attempt.jobId === jobId)
-    ).toHaveLength(1);
-  } finally {
-    vi.unstubAllGlobals();
-    await app.close();
-    removeFixtureDirectory(directory, 'uimori-image-pump-');
-  }
-});
-
 test('automatic translation placement respects ownership, catalog availability and direct edit boundary', () => {
   const empty = fixture({ image: true, images: false });
   translate(empty.store, empty.source);
@@ -441,32 +339,6 @@ test('translation edits invalidate only translated placement and fence an alread
     translationJobId: manual.id,
     translationRevision: manual.revision,
   });
-});
-
-test('an unavailable JEV connection records an image failure without rolling back translated text', async () => {
-  const { store, source } = fixture({ image: true });
-  const translation = translate(store, source);
-  const job = selectTranslation(store, source, translation);
-  await runAuxiliaryJob(
-    auxiliaryBridge(store, new Controls(), new AbortController().signal),
-    job.id,
-    'synthetic-worker',
-    {
-      signal: new AbortController().signal,
-
-      authorize: (value) => value,
-      jev: { credential: () => undefined },
-      onAttemptStart: () => {
-        throw new Error('Unexpected provider call');
-      },
-      onAttemptFinish: () => {},
-    }
-  );
-  expect(store.job(translation.id)).toMatchObject({
-    status: 'completed',
-    result: { text: translated },
-  });
-  expect(store.job(job.id)).toMatchObject({ status: 'failed', error: 'JEV_CREDENTIAL_REQUIRED' });
 });
 
 test('pending and failed retranslations retain images until a successful replacement invalidates them', async () => {

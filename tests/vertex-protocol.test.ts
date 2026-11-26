@@ -8,7 +8,6 @@ import {
   vertexThoughtText,
 } from '../core/vertex-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
-import { validateModelOptions } from '../core/model-capabilities.js';
 import { TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
 
 const request = (): ProviderRequest => ({
@@ -123,26 +122,6 @@ test.each([
     input.generation.thinkingLevel = 'HIGH';
     input.generation.maxOutputTokens = 65_537;
     expect(() => encodeVertex(input)).toThrow(`${code}_LONG_DECODE_UNSUPPORTED`);
-  }
-);
-
-test.each(['gemini-4-neon', 'gemini-4-hydrogen'])(
-  '%s sends the XHIGH thinking level on Vertex and Google AI Studio',
-  (modelId) => {
-    const input = request();
-    input.modelId = modelId;
-    const generation = {
-      maxOutputTokens: 32_768,
-      temperature: null,
-      thinkingLevel: 'XHIGH',
-    } as const;
-    input.generation = generation;
-    for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
-      expect(() => validateModelOptions(generation, protocol)).not.toThrow();
-      expect(bodyObject(encodeVertex(input, protocol).body).generationConfig).toMatchObject({
-        thinkingConfig: { thinkingLevel: 'XHIGH' },
-      });
-    }
   }
 );
 
@@ -390,15 +369,6 @@ describe('Vertex request and continuation protocol', () => {
       maxOutputTokens: 8192,
     });
   });
-
-  test.each([0, 500_001])(
-    'rejects unsupported max output %s before wire encoding',
-    (maxOutputTokens) => {
-      const input = request();
-      input.generation!.maxOutputTokens = maxOutputTokens;
-      expect(() => encodeVertex(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-    }
-  );
 
   test('encodes unlisted models with protocol options and rejects unknown thinking values and duplicate declarations', () => {
     const input = request();

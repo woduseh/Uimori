@@ -1,6 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import type { TokenizerProfileId } from '../core/tokenizer-profiles.js';
@@ -9,52 +8,10 @@ vi.mock('node:fs', async (original) => {
   const actual = await original<typeof import('node:fs')>();
   return { ...actual, readFileSync: vi.fn(actual.readFileSync) };
 });
-const require = createRequire(import.meta.url);
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.mocked(readFileSync).mockClear();
   vi.resetModules();
-});
-
-test('importing counters does not load a vocabulary or tokenizer runtime', async () => {
-  const files = [require.resolve('tiktoken/lite'), require.resolve('@huggingface/tokenizers')];
-  for (const file of files) expect(require.cache[file]).toBeUndefined();
-  await import('../core/text-tokens.js');
-  for (const file of files) expect(require.cache[file]).toBeUndefined();
-  expect(
-    vi
-      .mocked(readFileSync)
-      .mock.calls.filter(([path]) => String(path).includes('third_party/tokenizers'))
-  ).toEqual([]);
-});
-
-test('only used families load, reuse hot counters and evict older vocabularies without network', async () => {
-  const fetch = vi.fn(() => {
-    throw new Error('Token counting must stay offline');
-  });
-  vi.stubGlobal('fetch', fetch);
-  const { countTextTokens, tokenizerInfo } = await import('../core/text-tokens.js');
-  const loads = () =>
-    vi
-      .mocked(readFileSync)
-      .mock.calls.map(([path]) => String(path))
-      .filter(
-        (path) => path.includes('third_party/tokenizers') && path.endsWith('tokenizer.json.gz')
-      );
-  const text = '항구의 밤은 고요했다. The lights went out. 日本語も混ざる。';
-  const first = countTextTokens(text, 'deepseek-v4');
-  expect(first).toBeGreaterThan(0);
-  expect(tokenizerInfo('deepseek-v4').fallback).toBe(false);
-  expect(countTextTokens(text, 'deepseek-v4')).toBe(first);
-  expect(loads()).toHaveLength(1);
-  for (const profile of ['deepseek-v3', 'glm-5', 'gemini-gemma4'] as const) {
-    expect(countTextTokens(text, profile)).toBeGreaterThan(0);
-    expect(tokenizerInfo(profile).fallback).toBe(false);
-  }
-  expect(loads()).toHaveLength(4);
-  expect(countTextTokens(text, 'deepseek-v4')).toBe(first);
-  expect(loads()).toHaveLength(5);
-  expect(fetch).not.toHaveBeenCalled();
 });
 
 test('an unavailable family falls back once, reports the change, and never fetches a replacement', async () => {

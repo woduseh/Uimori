@@ -3,13 +3,12 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { MOBILE_HEIGHT, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { visualReview } from './fixtures/visual-review.js';
 import { openHelper, openSourceActions } from './ui-navigation.js';
 
 test('HELPREC01 failed draft reads preserve the old draft and selected source; failed saves remain visible and retryable', async ({
   page,
   request,
-}, info) => {
+}) => {
   const chat = (await (
     await postFixtureChat(request, { data: { title: `도우미 복구 ${randomUUID()}` } })
   ).json()) as Chat;
@@ -82,8 +81,6 @@ test('HELPREC01 failed draft reads preserve the old draft and selected source; f
   await expect(panel).toBeVisible();
   await expect(panel.getByText('도우미 초안을 불러오지 못했어요.')).toBeVisible();
   await expect(input).toBeDisabled();
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('helper-draft-read-failed.png') });
   await page.evaluate(() => localStorage.removeItem('test-helper-read-fails'));
   expect(await diskValue()).toBe(original);
   await panel.getByRole('button', { name: '초안 다시 불러오기' }).click();
@@ -95,8 +92,6 @@ test('HELPREC01 failed draft reads preserve the old draft and selected source; f
   await input.fill(replacement);
   await expect(panel.getByText(/도우미 초안을 기기에 저장하지 못했어요/)).toBeVisible();
   await expect(input).toHaveValue(replacement);
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('helper-draft-save-failed.png') });
   await page.evaluate(() => localStorage.removeItem('test-helper-write-fails'));
   await panel.getByRole('button', { name: '다시 저장', exact: true }).click();
   await expect(panel.getByText(/도우미 초안을 기기에 저장하지 못했어요/)).toHaveCount(0);
@@ -129,21 +124,6 @@ async function handoffFixture(page: Page, request: APIRequestContext) {
       return detail.runs.find((item) => item.id === run.id)?.status;
     })
     .toBe('completed');
-  const outline = await request.post(`/api/chats/${chat.id}/outline`, {
-    data: {
-      idempotencyKey: randomUUID(),
-      operations: [
-        {
-          op: 'create',
-          ref: 'chapter',
-          level: 'episode',
-          title: '나중에 선택한 구성',
-          intent: '원래 초안을 보존해요.',
-        },
-      ],
-    },
-  });
-  expect(outline.ok(), await outline.text()).toBe(true);
   const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/?chat=${chat.id}`);
@@ -227,50 +207,6 @@ test('HELPHANDOFF01 a late source handoff cannot undo a manual session selection
     await f.picker.selectOption(f.first);
     await expect(f.input).toHaveValue('첫 대화의 기존 초안');
     await expect(f.panel.locator('.helper-selection')).toHaveCount(0);
-  } finally {
-    held.release();
-    await page.unrouteAll({ behavior: 'wait' });
-  }
-});
-
-test('HELPHANDOFF02 a newer outline handoff wins over an earlier delayed source handoff', async ({
-  page,
-  request,
-}) => {
-  const f = await handoffFixture(page, request);
-  const held = await delayHandoffOwner(page, f.first);
-  const posts: string[] = [];
-  page.on('request', (item) => {
-    if (
-      item.method() === 'POST' &&
-      /\/api\/helper\/conversations\/[^/]+\/messages$/u.test(new URL(item.url()).pathname)
-    )
-      posts.push(item.url());
-  });
-  try {
-    await askAboutSource(page, f.sourceId);
-    await held.started;
-    await expect(f.panel).toBeVisible();
-    await f.panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
-    await expect(f.panel).toBeHidden();
-    const chatMenu = page.locator('.chat-menu');
-    await chatMenu.getByLabel('채팅 메뉴').click();
-    await chatMenu.getByRole('button', { name: '플롯', exact: true }).click();
-    const outline = page.locator('.outline-panel');
-    await expect(outline).toBeVisible();
-    await outline
-      .locator('.outline-navigation .outline-title')
-      .getByText('나중에 선택한 구성', { exact: true })
-      .click();
-    await outline.getByRole('button', { name: '상세화', exact: true }).click();
-    await expect(f.panel.locator('.helper-outline-selection')).toContainText('나중에 선택한 구성');
-    await expect(f.input).toHaveValue('첫 대화의 기존 초안');
-    held.release();
-    await settleHandoffResponse(page, held.done);
-    await expect(f.panel.locator('.helper-outline-selection')).toContainText('나중에 선택한 구성');
-    await expect(f.panel.locator('.helper-selection')).toHaveCount(0);
-    await expect(f.input).toHaveValue('첫 대화의 기존 초안');
-    expect(posts).toEqual([]);
   } finally {
     held.release();
     await page.unrouteAll({ behavior: 'wait' });

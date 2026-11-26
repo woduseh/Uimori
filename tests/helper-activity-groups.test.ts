@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import type { HelperActivity, HelperActivityEvent } from '../core/helper-activity.js';
 import { helperActivityStages } from '../web/helper-activity.js';
-import { groupHelperActivity, isHelperReadTool } from '../web/helper-activity-groups.js';
+import { groupHelperActivity } from '../web/helper-activity-groups.js';
 
 const call = (
   seq: number,
@@ -18,22 +18,6 @@ const rows = (events: HelperActivityEvent[], status: HelperActivity['status'] = 
   groupHelperActivity(
     helperActivityStages({ taskId: 'task', status, hasEarlier: false, helperCalls: 0, events })
   );
-
-test('read, list, search and inspect calls are reads; writes and the shell are not', () => {
-  for (const name of [
-    'resource.read',
-    'resource.list',
-    'data.search',
-    'task.inspect',
-    'tool.guide',
-    'scene.versions',
-    'scene.lore',
-    'scene.regex',
-  ])
-    expect(isHelperReadTool(name), name).toBe(true);
-  for (const name of ['resource.patch', 'scene.patch', 'settings.update', 'data.exec', undefined])
-    expect(isHelperReadTool(name), String(name)).toBe(false);
-});
 
 test('consecutive reads fold into one row that counts scenes, resources and other lookups', () => {
   const result = rows([

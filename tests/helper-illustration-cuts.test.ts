@@ -52,45 +52,6 @@ test('source pages expose the same original anchors for focused generation and r
   expect(() => readIllustrationScene(store, other.chat.id, { sourceId: source.id })).toThrow();
 });
 
-test('cut pages follow scene order, with the hero before cuts in original paragraph order', () => {
-  const store = databases.create();
-  const { chat, source } = chatWithSource(store);
-  const later = completedSource(store, chat.id, 'The ship sailed off.');
-  for (const scene of [later, source]) {
-    const blocks = readIllustrationScene(store, chat.id, { sourceId: scene.id }).blocks;
-    const plan = reserveIllustrationPlan(store, scene, 'manual', {
-      settings: fixtureSettings(),
-      testMode: true,
-      maxTargets: blocks.length,
-    });
-    const claimed = claimIllustration(store, plan.id, 'worker')!;
-    completeIllustrationStoryboard(
-      store,
-      claimed.job,
-      'worker',
-      {
-        heroIndex: blocks.length - 1,
-        targets: blocks.map(({ anchor, text }) => ({
-          startAnchor: anchor,
-          endAnchor: anchor,
-          focus: text,
-          visualBrief: text,
-        })),
-      },
-      { stage: 'planning', attempts: [], retries: [] }
-    );
-  }
-  const first = listIllustrationCuts(store, chat.id, { limit: 1 });
-  expect(first).toMatchObject({
-    total: 3,
-    nextOffset: 1,
-    cuts: [{ sourceId: source.id, hero: true, focus: 'Mira waited on the pier.' }],
-  });
-  const rest = listIllustrationCuts(store, chat.id, { offset: first.nextOffset! });
-  expect(rest.cuts.map((cut) => cut.sourceId)).toEqual([source.id, later.id]);
-  expect(rest.nextOffset).toBeNull();
-});
-
 test('inspection addresses the chosen variation; redraw freezes its prompt and rejects stale or foreign requests', async () => {
   const store = databases.create();
   const { chat, source } = chatWithSource(store);

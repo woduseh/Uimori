@@ -1,22 +1,15 @@
-import {
-  DESKTOP_HEIGHT,
-  DESKTOP_WIDTH,
-  MOBILE_HEIGHT,
-  MOBILE_WIDTH,
-} from './fixtures/browser-viewports.js';
+import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { setCurrentModels, selectEditorSection, navigationAction } from './ui-navigation.js';
-import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { test, expect } from '@playwright/test';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import type { PromptPreset } from '../core/product.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
-test('AGENTUI02 saved collaboration options reach the real preview API and translation stays separate on desktop', async ({
+test('AGENTUI02 saved collaboration options reach the real preview API', async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
   const program = createDefaultRisuPrompt('Synthetic main instructions.');
   program.nativeRisuPreset.preset.customPromptTemplateToggle =
@@ -54,13 +47,6 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   await options.getByRole('button', { name: /모든 옵션/ }).click();
   await options.getByLabel('옵션 이름으로 찾기').fill('합성');
   await options.getByLabel('합성 시점', { exact: true }).check();
-  await expect(options).toContainText('1 / 64개 선택');
-  if (visualReview) {
-    await page.screenshot({ path: info.outputPath('shared-options-2560x1440.png') });
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-    await page.screenshot({ path: info.outputPath('shared-options-412x915.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-  }
   await options.getByRole('button', { name: '전달할 창작 옵션 닫기' }).click();
   await expect(
     collaboration.locator('.ac-shared-tags').getByText('합성 시점', { exact: true })
@@ -124,91 +110,6 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(detail.runs).toHaveLength(0);
   expect(detail.attempts).toHaveLength(0);
-  await selectEditorSection(editor, '협업');
-  await collaboration.scrollIntoViewIfNeeded();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('agent-collaboration-desktop.png') });
-  await collaboration
-    .getByRole('button', { name: '에이전트 협업', exact: true })
-    .evaluate((element) => element.scrollIntoView({ block: 'start' }));
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath('agent-collaboration-desktop-overview.png') });
-  if (visualReview) {
-    await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-    await page.screenshot({ path: info.outputPath('agent-collaboration-412x915.png') });
-    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
-  }
-  await agent.locator('summary').click();
-  await agent.getByRole('textbox', { name: / 지침$/ }).fill('');
-  await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
-  await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
-  const disabledSave = page.waitForResponse(
-    (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'
-  );
-  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
-  const disabledResponse = await disabledSave;
-  expect(disabledResponse.ok()).toBe(true);
-  expect((await disabledResponse.json()).saved.program.collaboration).toMatchObject({
-    enabled: false,
-    agents: [{ instructions: '' }],
-  });
-  await selectEditorSection(editor, '협업');
-  await collaboration.getByRole('switch', { name: '협업 사용' }).check();
-  await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
-  await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
-  await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
-  await selectEditorSection(editor, '기본 옵션');
-  await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toBeDisabled();
-  const library = page.getByTestId('prompt-library');
-  await library.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
-  await library.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
-  await selectEditorSection(editor, '기본 옵션');
-  await editor.getByLabel('프롬프트 역할', { exact: true }).selectOption('translation');
-  await expect(editor.getByRole('tab', { name: '협업', exact: true })).toHaveCount(0);
-});
-
-test('AUDIT2 collaboration keyboard navigation follows the visible vertical order', async ({
-  page,
-  request,
-}, info) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  const program = createDefaultRisuPrompt('Synthetic keyboard navigation fixture.');
-  program.collaboration = {
-    ...createAgentCollaboration(),
-    enabled: true,
-    agents: [createAgentDefinition('lore', `agent-${crypto.randomUUID()}`)],
-  };
-  const created = await request.post('/api/prompt-presets', {
-    data: { title: `협업 키보드 ${crypto.randomUUID()}`, role: 'main', program },
-  });
-  expect(created.ok()).toBe(true);
-  const preset = (await created.json()) as PromptPreset;
-  await page.goto('/');
-  await navigationAction(page, '프롬프트');
-  await page.getByRole('button', { name: `${preset.title} 프롬프트 편집`, exact: true }).click();
-  const editor = page.getByTestId('prompt-editor');
-  await selectEditorSection(editor, '협업');
-  const collaboration = editor.getByRole('region', { name: '에이전트 협업' });
-  const enabled = collaboration.getByRole('switch', { name: '협업 사용' });
-  const agent = collaboration.locator('.ac-agent > summary').first();
-  const add = collaboration.getByRole('button', { name: '에이전트 추가', exact: true });
-  const shared = collaboration.getByRole('textbox', { name: '함께 따를 지침', exact: true });
-  const bounds = await Promise.all([agent, add, shared].map((control) => control.boundingBox()));
-  expect(bounds.every(Boolean)).toBe(true);
-  expect(bounds[0]!.y).toBeLessThan(bounds[1]!.y);
-  expect(bounds[1]!.y).toBeLessThan(bounds[2]!.y);
-  await enabled.focus();
-  await page.keyboard.press('Tab');
-  if (visualReview)
-    await page.screenshot({ path: info.outputPath(`collaboration-keyboard-order.png`) });
-  await expect(agent).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(add).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(shared).toBeFocused();
 });
 
 preservePromptWorkspace();

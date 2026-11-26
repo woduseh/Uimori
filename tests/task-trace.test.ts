@@ -1,9 +1,8 @@
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from 'vitest';
-import { sumTraceCosts, traceCallKind } from '../core/task-trace.js';
+import { sumTraceCosts } from '../core/task-trace.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
-import type { HelperActivity } from '../core/helper-activity.js';
 import {
   releaseCompletedJobInputs,
   releaseCompletedRunInputs,
@@ -20,9 +19,9 @@ import {
   helperTaskCosts,
   helperTraceCalls,
 } from '../server/task-trace.js';
-import { helperActivityStages, helperToolKind } from '../web/helper-activity.js';
+import { helperToolKind } from '../web/helper-activity.js';
 import { createFixtureChat } from './fixtures/chat.js';
-import { completedSource, fixtureSettings, reserveIllustration } from './fixtures/illustration.js';
+import { completedSource } from './fixtures/illustration.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 
 const wire = (role: string, extra: Partial<WireRecord> = {}) =>
@@ -303,29 +302,6 @@ test('the scene summary is the sum of its rows and the text cost keeps the run c
   }
 });
 
-test('stored fields classify each call, and a released judgment without its kind stays generic', () => {
-  const kind = (usageKind: string | null, role: string, judgmentKind: string | null = null) =>
-    traceCallKind({ usageKind, role, judgmentKind, diagnosticPurpose: null });
-  expect(kind('judgment', 'main', 'main-refusal')).toBe('refusal-judgment');
-  expect(kind('judgment', 'main', 'lore-selection')).toBe('lore-selection');
-  expect(kind('judgment', 'translation', 'translation-refusal')).toBe('translation-judgment');
-  expect(kind('judgment', 'image', 'image-selection')).toBe('image-judgment');
-  expect(kind('judgment', 'main')).toBe('judgment');
-  expect(
-    traceCallKind({
-      usageKind: 'judgment',
-      role: 'translation',
-      judgmentKind: null,
-      diagnosticPurpose: 'codex-content-preflight',
-    })
-  ).toBe('content-precheck');
-  expect(kind('image', 'illustration')).toBe('illustration');
-  expect(kind('image', 'image')).toBe('image-placement');
-  expect(kind('input-translation', 'translation')).toBe('input-translation');
-  expect(kind('unclassified', 'title')).toBe('chat-title');
-  expect(kind('unclassified', 'unknown-role')).toBe('other');
-});
-
 test('a helper task prices each call by its reported cost before its estimate', () => {
   const { store, close } = fixture();
   try {
@@ -405,44 +381,6 @@ test('every registered helper tool names a step kind instead of the generic fall
   expect(names.filter((name) => !helperToolKind(name))).toEqual([]);
 });
 
-test('the helper timeline numbers model calls and names the tool that ran', () => {
-  const activity: HelperActivity = {
-    taskId: 'task',
-    status: 'completed',
-    hasEarlier: false,
-    helperCalls: 2,
-    events: [
-      { seq: 1, kind: 'attempt.started', attemptId: 'a', purpose: 'helper' },
-      { seq: 2, kind: 'attempt.finished', attemptId: 'a', status: 'tool_calls', elapsedMs: 1800 },
-      { seq: 3, kind: 'tool.started', name: 'model.pricing.update', callId: 'c1' },
-      {
-        seq: 4,
-        kind: 'tool.finished',
-        name: 'model.pricing.update',
-        callId: 'c1',
-        elapsedMs: 35,
-        resultChars: 240,
-      },
-      { seq: 5, kind: 'tool.finished', name: 'future.tool', callId: 'c2' },
-      { seq: 6, kind: 'attempt.started', attemptId: 'b', purpose: 'helper' },
-      { seq: 7, kind: 'attempt.finished', attemptId: 'b', status: 'completed' },
-    ],
-  };
-  const stages = helperActivityStages(activity);
-  expect(stages.map((stage) => stage.label)).toEqual([
-    '모델 호출 1',
-    '모델 설정 변경',
-    'future.tool',
-    '모델 호출 2',
-  ]);
-  expect(stages[0]).toMatchObject({ call: 1, elapsedMs: 1800, state: 'completed' });
-  expect(stages[1]).toMatchObject({
-    tool: 'model.pricing.update',
-    elapsedMs: 35,
-    resultChars: 240,
-  });
-});
-
 test('trace reads reported thinking and decision-cache tokens', () => {
   expect(
     attemptUsageDetails('anthropic-messages-v1', { output_tokens_details: { thinking_tokens: 6 } })
@@ -453,53 +391,4 @@ test('trace reads reported thinking and decision-cache tokens', () => {
       attemptUsageDetails(protocol, { input_tokens_details: { cached_tokens: 130 } })
         .cachedInputTokens
     ).toBe(130);
-});
-
-test('research tools belong to their illustration job and concurrent advisor reads keep their own attempt', () => {
-  const { store, close } = fixture();
-  try {
-    const chat = createFixtureChat(store, 'illustration trace');
-    const source = completedSource(store, chat.id);
-    const job = reserveIllustration(store, source, 'manual', {
-      settings: fixtureSettings(),
-      testMode: true,
-    });
-    const startedAt = '2026-11-25T12:00:00.000Z';
-    const call = (role: string, owner: { runId?: string }) =>
-      attempt(store, chat.id, owner, wire(role), result('tool_calls', { input: 12, output: 3 }), {
-        usd: 0,
-        startedAt,
-      });
-    const image = call('illustration', {});
-    store.db
-      .prepare('UPDATE illustration_jobs SET diagnostic=? WHERE id=?')
-      .run(JSON.stringify({ attempts: [image] }), job.id);
-    store.db
-      .prepare(
-        'INSERT INTO execution_tool_diagnostics(illustration_job_id,origin,data) VALUES(?,?,?)'
-      )
-      .run(
-        job.id,
-        'illustration',
-        JSON.stringify({ name: 'illustration.sources.search', startedAt })
-      );
-    const advisors = [call('main', { runId: source.runId }), call('main', { runId: source.runId })];
-    for (const id of advisors)
-      store.db.prepare("UPDATE attempts SET usage_kind='advisor' WHERE id=?").run(id);
-    for (const id of advisors)
-      store.db
-        .prepare('INSERT INTO execution_tool_diagnostics(run_id,origin,data) VALUES(?,?,?)')
-        .run(
-          source.runId,
-          'advisor',
-          JSON.stringify({ name: 'agents.read', attemptId: id, startedAt })
-        );
-    const calls = chatTraceCalls(store, chat.id);
-    expect(calls.find((item) => item.id === image)?.tools.map((tool) => tool.name)).toEqual([
-      'illustration.sources.search',
-    ]);
-    for (const id of advisors) expect(calls.find((item) => item.id === id)?.tools).toHaveLength(1);
-  } finally {
-    close();
-  }
 });

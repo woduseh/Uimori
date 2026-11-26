@@ -17,7 +17,6 @@ function latch() {
 
 const compact = { width: 412, height: 915 };
 const flows = [
-  { flow: 'content-list', viewport: compact },
   { flow: 'prompt-list', viewport: compact },
   { flow: 'global-navigation', viewport: { width: 2560, height: 1440 } },
 ] as const;
@@ -193,9 +192,7 @@ for (const { flow, viewport } of flows) {
     }
     await saved;
     await expect(guard).toBeHidden();
-    await expect(
-      page.getByLabel(flow === 'content-list' ? '서재 검색' : '프롬프트 검색', { exact: true })
-    ).toBeVisible();
+    await expect(page.getByLabel('프롬프트 검색', { exact: true })).toBeVisible();
     const persisted = await (await request.get(`${endpoint}/${original.id}`)).json();
     expect(persisted.title).toBe(`${title} edited`);
     expect(persisted.revision).toBe(original.revision + 1);

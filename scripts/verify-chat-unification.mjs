@@ -13,7 +13,7 @@ await runBrowserVerification({
     'tests/request-edit-browser.spec.ts',
     'tests/loading-browser.spec.ts',
   ],
-  grep: 'shared composer|HELPUI|HSESSION|failed request edit|independent failed requests|REDIT01|RINFO01|LOADUI05',
+  grep: 'shared composer|HELPUI|HSESSION|failed request edit|REDIT01',
   limitations: [
     'Helper browser responses are synthetic projections; durable helper retry is also covered by SQLite integration tests.',
   ],

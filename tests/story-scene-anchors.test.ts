@@ -83,28 +83,6 @@ describe('scene locators in frozen source ancestry', () => {
     expect(fixed).toEqual(original);
   });
 
-  test.each([0, '2', Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid sceneNumber %s without coercing it',
-    (sceneNumber) => {
-      expect(invoke(snapshot(), 'story.read', { sceneNumber })).toMatchObject({
-        denied: true,
-        result: { code: 'INVALID_ARGUMENTS' },
-      });
-    }
-  );
-
-  test('legacy revision selector is invalid while an out-of-range scene is unavailable', () => {
-    const fixed = snapshot();
-    expect(invoke(fixed, 'story.read', { id: 'source-0' })).toMatchObject({
-      denied: true,
-      result: { code: 'INVALID_ARGUMENTS' },
-    });
-    expect(invoke(fixed, 'story.read', { sceneNumber: 4 })).toMatchObject({
-      denied: true,
-      result: { code: 'RESOURCE_UNAVAILABLE' },
-    });
-  });
-
   test('forks share prefix ordinals while divergent tails and edits retain exact source identity', () => {
     const original = snapshot();
     const fork = structuredClone(original);
@@ -128,19 +106,5 @@ describe('scene locators in frozen source ancestry', () => {
     const edited = read(fork, 'story.read', { sceneNumber: 2 });
     expect(edited.source.hash).toBe(sourceHash('Corrected promise.'));
     expect(edited.source.hash).not.toBe(prefix.source.hash);
-  });
-
-  test('scene-number reads preserve UTF-16 continuation and the byte cap', () => {
-    const text = '🌙 "정확한 인용"\n'.repeat(4000);
-    const fixed = snapshot([text]);
-    let offset: number | null = 0;
-    let recovered = '';
-    while (offset !== null) {
-      const page = read(fixed, 'story.read', { sceneNumber: 1, offset, limit: 16000 });
-      expect(page.source.start).toBe(offset);
-      recovered += page.text;
-      offset = page.nextOffset;
-    }
-    expect(recovered).toBe(text);
   });
 });

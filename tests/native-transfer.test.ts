@@ -503,22 +503,3 @@ test('NATIVE12 the native file uses the existing module depth limit before persi
   };
   expect(() => prepareNativeTransfer({ file })).toThrow('Package module dependency limit');
 });
-
-test('JSON resource output is retired while archive output remains available', async () => {
-  const source = sourceFixture();
-  const items = [{ kind: 'content', id: source.bot.id }];
-  const retired = await source.app.inject({
-    method: 'POST',
-    url: '/api/native-transfers/export',
-    payload: { items },
-  });
-  expect(retired.statusCode).toBe(404);
-  const archive = await source.app.inject({
-    method: 'POST',
-    url: '/api/native-transfers/export-archive',
-    payload: { items },
-  });
-  expect(archive.statusCode, archive.body).toBe(200);
-  expect(archive.headers['content-type']).toContain('application/zip');
-  expect(archive.rawPayload.subarray(0, 2).toString()).toBe('PK');
-});

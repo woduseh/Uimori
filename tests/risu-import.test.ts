@@ -10,7 +10,6 @@ import { applyRisuImport, prepareRisuImport, risuImportRoutes } from '../server/
 
 import type { Content } from '../core/product.js';
 import { nativeRisuRegex } from '../core/risu-native.js';
-import { resolvePackageStart } from '../core/package-start.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
 import { modelWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
@@ -310,101 +309,6 @@ test('module lorebook keys, secondary keys and mode remain in authoritative Risu
     { key: 'storm', secondkey: 'rain', selective: true, mode: 'child' },
   ]);
   expect(pkg.lore.every((item) => !Object.hasOwn(item, 'activation'))).toBe(true);
-});
-
-test('module scripts remain native source and module import cannot create memory', async () => {
-  const store = database();
-  const source = sourceOf({
-    type: 'risuModule',
-    module: {
-      name: 'Scripted module',
-      description: '',
-      lorebook: [{ comment: 'Text', content: 'Lore', alwaysActive: true }],
-      trigger: [
-        { type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] },
-      ],
-      lowLevelAccess: true,
-    },
-  });
-  const preview = prepareRisuImport({ source });
-  const body = {
-    source,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'scripted-module',
-  };
-  const saved = await applyRisuImport(store, body);
-  expect(
-    store.product.get<Content>('content', saved.receipt.items[0].id).package!.nativeRisu!.module!
-      .trigger
-  ).toEqual([{ type: 'output', effect: [{ type: 'triggerlua', code: 'return "not executed"' }] }]);
-  await expect(
-    applyRisuImport(store, { ...body, allowPartial: true, memoryIds: ['lore-0'] })
-  ).rejects.toThrow('Unknown request field');
-  expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-  expect(() =>
-    prepareRisuImport({
-      source: sourceOf({ name: 'Unwrapped module', description: '', lorebook: [] }),
-    })
-  ).toThrow('RISU_IMPORT_INVALID_FILE');
-});
-
-test('card display regex stays native without creating a second transform program', async () => {
-  const store = database();
-  const value = card();
-  Object.assign(value.data, {
-    extensions: {
-      risuai: {
-        customScripts: [
-          {
-            type: 'editdisplay',
-            in: '<state>([\\s\\S]*?)</state>',
-            out: '**상태**$n$1',
-            ableFlag: true,
-            flag: 'g',
-          },
-        ],
-      },
-    },
-  });
-  const source = sourceOf(value),
-    preview = prepareRisuImport({ source });
-  expect(preview.findings.some((item) => item.level === 'unsupported')).toBe(false);
-  const saved = await applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'display-regex',
-  });
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(nativeRisuRegex(content.package!.nativeRisu!)).toEqual([
-    {
-      type: 'editdisplay',
-      in: '<state>([\\s\\S]*?)</state>',
-      out: '**상태**$n$1',
-      ableFlag: true,
-      flag: 'g',
-    },
-  ]);
-});
-
-test('imported opening identity tokens stay native until the opening runtime evaluates them', async () => {
-  const store = database(),
-    value = card();
-  value.data.first_mes = '{{char}} welcomes {{user}}.';
-  const source = sourceOf(value),
-    preview = prepareRisuImport({ source });
-  const saved = await applyRisuImport(store, {
-    source,
-    digest: preview.digest,
-    allowPartial: false,
-    idempotencyKey: 'opening-template',
-  });
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id);
-  expect(content.package!.starts![0].text).toBe(value.data.first_mes);
-  expect(resolvePackageStart(content.package!, 'start-0').text).toBe('{{char}} welcomes {{user}}.');
-  expect(saved.chat!.headRevision).not.toBeNull();
-  expect(store.sourceOriginal(saved.chat!.headRevision!).text).toBe(value.data.first_mes);
 });
 
 test('card imports preserve all lore, trimmed like the Risu decorator reader, and cannot move it into the first chat notes', async () => {

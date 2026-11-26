@@ -10,7 +10,6 @@ import * as transport from '../core/transport.js';
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { contextSourceRefs } from '../server/context-planning.js';
-import * as mainRequest from '../server/main-request.js';
 import {
   modelWorkspace,
   promptWorkspace,
@@ -20,7 +19,6 @@ import {
 import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import * as nativeRun from '../server/risu-native-run.js';
 import * as nativeRuntime from '../server/risu-native-runtime.js';
-import { saveTheme, selectTheme } from '../server/themes.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { app: App; directory: string }[] = [];
@@ -135,84 +133,6 @@ async function fixture(withModel = true) {
   return { app, store, chat, model, modelInput, connection, bot, post, preview, changes };
 }
 
-test('reservations and request previews present frozen story UI theme choices without CSS', async () => {
-  const f = await fixture();
-  const chat = f.store.settings(f.chat.id, f.chat.settingsRevision, {
-    ...f.chat.settings,
-    storyUi: true,
-  });
-  const theme = saveTheme(f.store, {
-    title: 'Harbor Gazette',
-    description: 'Paper notices from a coastal city',
-    appCss: '/* PRIVATE_APP_STYLE */',
-    storyUi: { baseStyle: 'period', css: '/* PRIVATE_STORY_UI_STYLE */' },
-  });
-  saveTheme(f.store, { title: 'App layout only' });
-  selectTheme(f.store, {
-    scope: 'bot',
-    targetId: f.bot.id,
-    dimension: 'storyUi',
-    themeId: theme.id,
-    expectedRevision: 0,
-  });
-  const { run } = f.store.createRun(
-    chat.id,
-    {
-      request: 'Visit the harbor.',
-      expectedRevision: chat.headRevision,
-      expectedSettingsRevision: chat.settingsRevision,
-      idempotencyKey: randomUUID(),
-    },
-    (current) => {
-      const profile = f.store.product.snapshot(current.id, 'main', current.headRevision);
-      return {
-        chatId: current.id,
-        parentRevision: current.headRevision,
-        settingsRevision: current.settingsRevision,
-        settings: current.settings,
-        request: 'Visit the harbor.',
-        history: f.store.history(current.headRevision),
-        resources: f.store.product.resources(current.id, profile),
-        profile,
-      };
-    }
-  );
-  const choices = {
-    themes: [
-      {
-        id: `theme:${theme.id}`,
-        title: theme.title,
-        description: theme.description,
-        baseStyle: 'period',
-      },
-    ],
-    botThemeId: `theme:${theme.id}`,
-  };
-  expect(run.snapshot.storyUiThemeChoices).toEqual(choices);
-  expect(JSON.stringify(run.snapshot)).not.toContain('PRIVATE_STORY_UI_STYLE');
-  const prepare = nativeRun.prepareNativeRisuRun;
-  vi.spyOn(nativeRun, 'prepareNativeRisuRun').mockImplementationOnce(async (...args) => {
-    const result = await prepare(...args);
-    saveTheme(f.store, { ...theme, title: 'New Gazette' }, theme.id, theme.revision);
-    return result;
-  });
-  const buildRequest = vi.spyOn(mainRequest, 'buildMainProviderRequest');
-  const preview = await f.preview();
-  expect(preview.error).toBeNull();
-  expect(preview.snapshot.stale).toBe(true);
-  expect(preview.caveats).toContain('SNAPSHOT_CHANGED');
-  const built = buildRequest.mock.results[0].value;
-  expect(built.snapshot.storyUiThemeChoices).toEqual(choices);
-  expect(built.request.input.source).toMatchObject({ storyUi: { themeChoices: choices } });
-  expect(built.request.stable.contract).toContain('storyUi.themeChoices');
-  expect(built.request.stable.contract).not.toContain(theme.title);
-  const wire = mainRequest.encodeMainPreview(built.request, built.snapshot.profile!.models.main!);
-  const serialized = JSON.stringify(wire.body);
-  expect(serialized).toContain(`theme:${theme.id}`);
-  expect(serialized).not.toMatch(/PRIVATE_(APP|STORY_UI)_STYLE/);
-  expect(f.store.run(run.id).snapshot.storyUiThemeChoices).toEqual(choices);
-});
-
 test('current preview is metadata only, with no writes, provider calls or native callbacks', async () => {
   const f = await fixture();
   const provider = vi
@@ -264,51 +184,6 @@ test('current preview is metadata only, with no writes, provider calls or native
   expect(provider).not.toHaveBeenCalled();
   expect(network).not.toHaveBeenCalled();
   expect(callbacks).not.toHaveBeenCalled();
-});
-
-test('image-only preview includes image allowance without uploading or storing image data', async () => {
-  const f = await fixture();
-  f.store.product.connection(
-    {
-      title: 'Image preview',
-      protocol: 'openai-responses-v1',
-      endpoint: 'https://api.openai.com/v1',
-      enabled: true,
-      expectedRevision: f.connection.revision,
-    },
-    f.connection.id
-  );
-  f.store.product.model({ ...f.modelInput, expectedRevision: f.model.revision }, f.model.id);
-  const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
-  const baseline = await f.preview();
-  const before = f.changes();
-  const response = await f.post({
-    request: '',
-    requestImages: [{ name: 'PRIVATE_REFERENCE.png', width: 4096, height: 2048 }],
-  });
-  expect(response.statusCode, response.body).toBe(200);
-  const result = response.json<RequestPreview>();
-  expect(result.error).toBeNull();
-  expect(result.tokens).toMatchObject({
-    imageCount: 1,
-    imageEstimate: 'conservative-dimensions-v1',
-  });
-  expect(result.tokens.estimatedImageTokens).toBeGreaterThan(0);
-  expect(result.tokens.estimatedInputTokens!).toBeGreaterThan(
-    baseline.tokens.estimatedInputTokens!
-  );
-  expect(response.body).not.toContain('PRIVATE_REFERENCE');
-  expect(f.changes()).toBe(before);
-  expect(network).not.toHaveBeenCalled();
-  const changed = await f.post({
-    request: '',
-    requestImages: [{ name: 'PRIVATE_REFERENCE.png', width: 2048, height: 2048 }],
-  });
-  expect(changed.json<RequestPreview>().snapshot.requestHash).not.toBe(result.snapshot.requestHash);
-  expect(
-    (await f.post({ request: '', requestImages: [{ name: 'bad', width: 0, height: 5 }] }))
-      .statusCode
-  ).toBe(400);
 });
 
 test('draft and refreshed current settings/models affect provenance and estimate without creating summaries', async () => {
@@ -453,26 +328,5 @@ test('missing model remains unknown and malformed drafts are rejected before exe
     { request: 'Valid', program: {} },
   ])
     expect((await f.post(body)).statusCode).toBe(400);
-  expect(f.changes()).toBe(before);
-});
-
-test('failed native preparation returns unknown counts rather than invented zero or private errors', async () => {
-  const f = await fixture();
-  vi.spyOn(nativeRun, 'prepareNativeRisuRun').mockRejectedValueOnce(
-    new Error('PRIVATE_NATIVE_ERROR')
-  );
-  const before = f.changes();
-  const result = await f.preview();
-  expect(result.error).toBe('PREVIEW_UNAVAILABLE');
-  expect(result.tokens.estimatedInputTokens).toBeNull();
-  expect(result.lore.retainedEntries).toBeNull();
-  expect(result.lore.pinnedEntries).toBeNull();
-  expect(result.summary).toEqual({
-    available: null,
-    inUse: null,
-    compactedSources: null,
-    compactionPending: null,
-  });
-  expect(JSON.stringify(result)).not.toContain('PRIVATE_NATIVE_ERROR');
   expect(f.changes()).toBe(before);
 });

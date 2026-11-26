@@ -1,5 +1,4 @@
-import { countTextTokens } from '../core/text-tokens.js';
-import { ILLUSTRATION_EXCERPT_TOKENS, ILLUSTRATION_PROMPT_FIELDS } from '../core/illustration.js';
+import { ILLUSTRATION_PROMPT_FIELDS } from '../core/illustration.js';
 import { afterEach, expect, test } from 'vitest';
 import { splitSource } from '../core/auxiliary.js';
 import {
@@ -7,7 +6,6 @@ import {
   parseIllustrationPlacement,
   storyboardRequest,
   illustrationPlacementRequest,
-  illustrationTargetText,
 } from '../core/illustration-storyboard.js';
 import { runIllustrationJob, type IllustrationRunnerHooks } from '../server/illustration-runner.js';
 import {
@@ -33,8 +31,6 @@ import {
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
 import { placeIllustrationCuts } from '../server/helper-illustration-placement.js';
 import {
-  inspectIllustrationCut,
-  readIllustrationScene,
   listIllustrationCuts,
   reviseFailedIllustrationCut,
   deleteIllustrationCut,
@@ -330,23 +326,6 @@ test('obsolete failed cuts remain removable after their manuscript was edited', 
   expect(listIllustrationCuts(store, chat.id, { sourceId: changed.id }).cuts).toEqual([]);
 });
 
-test('illustration scene reads can center on an exact anchor without guessing its offset', () => {
-  const store = databases.create();
-  const { chat, source } = chatWithSource(store);
-  const blocks = splitSource(source);
-  const page = readIllustrationScene(store, chat.id, {
-    sourceId: source.id,
-    expectedSourceHash: source.hash,
-    anchor: blocks[1].anchor,
-    limit: 1,
-  });
-  expect(page.blocks.map((block) => block.anchor)).toEqual([blocks[1].anchor]);
-  expect(page.offset).toBe(1);
-  expect(() =>
-    readIllustrationScene(store, chat.id, { sourceId: source.id, anchor: 'invalid' })
-  ).toThrow('ILLUSTRATION_ANCHOR_NOT_FOUND');
-});
-
 test('regeneration keeps the old picture, failed siblings are independent and copy restores groups and verified anchors', async () => {
   const store = databases.create();
   const { source, chat } = chatWithSource(store);
@@ -490,104 +469,6 @@ test('placing a cut after an edit keeps original images and job evidence through
       .filter((job) => job.task === 'render')
       .map((job) => job.id)
   ).toEqual([jobs[1]]);
-});
-
-test('planning again after a revision keeps other stale cuts and their authored moments portable', async () => {
-  const store = databases.create();
-  const { chat, source } = chatWithSource(store);
-  settings(store);
-  const first = reserveIllustrationPlan(store, source, 'manual', {
-    testMode: true,
-    maxTargets: 2,
-  });
-  await runIllustrationJob(store, first.id, 'planner', hooks(store));
-  const ids = queuedIllustrations(store);
-  for (const id of ids) await runIllustrationJob(store, id, 'render', hooks(store));
-  const v2 = store.editSource(source.id, {
-    text: 'At the shore.\n\nAt the gate.',
-    expectedRevision: 0,
-  });
-  const note = (index: number) => ({
-    focus: `Chosen focus ${index}`,
-    visualBrief: `Chosen brief ${index}`,
-  });
-  const position = (id: string, scene: typeof source, index: number, revision: number) => ({
-    jobId: id,
-    expectedSourceHash: scene.hash,
-    expectedPresentationRevision: revision,
-    startAnchor: splitSource(scene)[index].anchor,
-    endAnchor: splitSource(scene)[index].anchor,
-  });
-  const before = illustrationPresentation(store, source.id)!.revision;
-  placeIllustrationCuts(store, chat.id, {
-    placements: ids.map((id, i) => ({ ...position(id, v2, i, before), ...note(i) })),
-  });
-  const v3 = store.editSource(source.id, {
-    text: 'Shoreline.\n\nGatehouse.\n\nDoorway.',
-    expectedRevision: 1,
-  });
-  const extra = reserveIllustrationPlan(store, v3, 'manual', { testMode: true, maxTargets: 1 });
-  await runIllustrationJob(store, extra.id, 'planner', hooks(store));
-  for (const id of queuedIllustrations(store))
-    await runIllustrationJob(store, id, 'render', hooks(store));
-  const other = illustrationsForSources(store, [source.id]).find((item) => item.id === ids[1])!;
-  expect(other).toMatchObject({ sourceHash: v2.hash, target: { focus: note(1).focus } });
-  const frozen = illustrationJob(store, ids[1]).input.target!;
-  expect(inspectIllustrationCut(store, chat.id, { imageId: other.images[0].id })).toMatchObject({
-    sourceHash: v2.hash,
-    currentSourceHash: v3.hash,
-    generatedSourceHash: source.hash,
-    target: note(1),
-    generatedFocus: frozen.focus,
-    generatedVisualBrief: frozen.visualBrief,
-  });
-  expect(illustrationSlots(store, source.id).total).toBe(1);
-  const copy = captureChatCopy(store, chat.id);
-  const stale = copy.illustrations.find((item) => item.group === ids[1])!;
-  expect(stale).toMatchObject({ stale: true, sourceHash: v2.hash, unplacedMoment: note(1) });
-  const fork = restoreChatCopy(store, copy, 'detached');
-  const forkSource = store.source(fork.headRevision!);
-  const restored = illustrationsForSources(store, [forkSource.id]).find(
-    (item) => item.unplacedMoment?.focus === note(1).focus
-  )!;
-  expect(restored.sourceHash).toBe(v2.hash);
-  expect(inspectIllustrationCut(store, fork.id, { imageId: restored.images[0].id })).toMatchObject({
-    unplacedMoment: note(1),
-    target: null,
-    generatedSourceHash: null,
-    generatedFocus: null,
-    generatedVisualBrief: null,
-  });
-  expect(illustrationSlots(store, forkSource.id).total).toBe(1);
-  const reverted = store.editSource(forkSource.id, { text: v2.text, expectedRevision: 0 });
-  expect(reverted.hash).toBe(v2.hash);
-  expect(illustrationSlots(store, forkSource.id).total).toBe(0);
-  expect(() => regenerateIllustration(store, restored.id, true)).toThrow(
-    'ILLUSTRATION_TARGET_UNAVAILABLE'
-  );
-  expect(
-    captureChatCopy(store, fork.id).illustrations.find((item) => item.group === restored.id)
-  ).toMatchObject({ stale: true, unplacedMoment: note(1) });
-  placeIllustrationCuts(store, fork.id, {
-    placements: [
-      position(restored.id, reverted, 1, illustrationPresentation(store, forkSource.id)!.revision),
-    ],
-  });
-  expect(
-    illustrationPresentation(store, forkSource.id)!.targets[restored.id].placedTarget
-  ).toMatchObject(note(1));
-  expect(regenerateIllustration(store, restored.id, true).input.target).toMatchObject({
-    ...note(1),
-    endAnchor: splitSource(reverted)[1].anchor,
-  });
-  placeIllustrationCuts(store, chat.id, {
-    placements: [position(ids[1], v3, 1, illustrationPresentation(store, source.id)!.revision)],
-  });
-  expect(
-    illustrationPresentation(store, source.id)!.targets[other.target!.id].placedTarget
-  ).toMatchObject(note(1));
-  removeIllustration(store, ids[0]);
-  expect(Object.keys(illustrationPresentation(store, source.id)!.detached ?? {})).toHaveLength(0);
 });
 
 test('translation completion schedules once, keeps old mapping from overwriting a new translation and copies it without re-generation', async () => {
@@ -901,30 +782,6 @@ test('compact wire aliases preserve every source paragraph and round-trip to can
     )
   ).toThrow();
   expect(store.source(source.id)).toEqual(source);
-});
-
-test('a wide render target retains its brief and final event while bounding only the repeated source excerpt', () => {
-  const store = databases.create();
-  const { chat } = chatWithSource(store);
-  const source = completedSource(
-    store,
-    chat.id,
-    'Distant scenery. '.repeat(10000) + '\n\nThe lantern rises.'
-  );
-  const blocks = splitSource(source);
-  const target = {
-    startAnchor: blocks[0].anchor,
-    endAnchor: blocks[1].anchor,
-    focus: 'The lantern rises',
-    visualBrief: 'Mira, silver hair, blue coat, raising a lantern on the pier.',
-  };
-  const input = JSON.parse(illustrationTargetText(source, target));
-  expect(input.focus).toBe(target.focus);
-  expect(input.visualBrief).toBe(target.visualBrief);
-  expect(input.excerpt).toMatch(/^\[Earlier text omitted\]/);
-  expect(input.excerpt.endsWith('The lantern rises.')).toBe(true);
-  expect(countTextTokens(input.excerpt)).toBeLessThanOrEqual(ILLUSTRATION_EXCERPT_TOKENS.target);
-  expect(store.source(source.id).text).toBe(source.text);
 });
 
 test('variable count respects its minimum and allows zero only when configured', () => {

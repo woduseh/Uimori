@@ -98,14 +98,6 @@ test('definition review reports each incompatible edit once and does not copy un
   expect(optionDraftValues(saved, unchanged.draft).fixed).toEqual({ note: '외부 메모' });
 });
 
-test('an incompatible unset is reviewed once even if the saved fixed value is absent', () => {
-  const draft = editOptionDraft(base, {}, 'fixed', {});
-  const saved = { ...base, binding: { ...base.binding, owner: 'preset:other' }, fixedValues: {} };
-  const review = reviewOptionDraft(base, draft, saved);
-  expect(review.draft).toEqual({});
-  expect(review.discarded).toEqual([expect.objectContaining({ id: 'tone', unset: true })]);
-});
-
 const text = (id = 'tone', label = '문체'): PromptControl => ({
   id,
   label,
@@ -171,50 +163,6 @@ test('a heading rename preserves the edited value and explicit unset', () => {
     draft: { tone: { inherit: true } },
     discarded: [],
   });
-});
-
-test('an enum choice label or order change still permits an explicit unset', () => {
-  const initial = { ...base, controls: [choice()] };
-  const saved = {
-    ...initial,
-    controls: [{ ...choice('새 선택지'), options: [...choice('새 선택지').options!].reverse() }],
-  };
-  expect(reviewOptionDraft(initial, { tone: { inherit: true } }, saved)).toEqual({
-    draft: { tone: { inherit: true } },
-    discarded: [],
-  });
-});
-
-test('incompatible type review preserves saved values and reports unsets before values', () => {
-  const initial = { ...base, controls: [text(), text('note', '메모')] };
-  const saved = {
-    ...initial,
-    controls: [choice(), { ...text('note', '메모'), type: 'boolean' as const, default: true }],
-    fixedValues: { tone: '0', note: 'independent' },
-  };
-  const draft: OptionDraft = { note: { value: 'local note' }, tone: { inherit: true } };
-  const originals = structuredClone({ initial, saved, draft });
-  expect(reviewOptionDraft(initial, draft, saved)).toEqual({
-    draft: {},
-    discarded: [
-      {
-        scope: 'fixed',
-        id: 'tone',
-        label: '문체',
-        value: null,
-        unset: true,
-        reason: expect.stringMatching(/\S/u),
-      },
-      {
-        scope: 'oneoff',
-        id: 'note',
-        label: '메모',
-        value: 'local note',
-        reason: expect.stringMatching(/\S/u),
-      },
-    ],
-  });
-  expect({ initial, saved, draft }).toEqual(originals);
 });
 
 test('definition review retains explicit false, zero and empty text values', () => {

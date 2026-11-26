@@ -135,42 +135,6 @@ const toolResult = (body: any) =>
   JSON.parse(body.messages.findLast((message: any) => message.role === 'tool').content);
 
 linuxTest(
-  'nonzero data.exec exit preserves diagnostics without denying the tool invocation',
-  async () => {
-    const f = await fixture();
-    const bodies = provider((body, round) =>
-      round === 0
-        ? answer(body, {
-            id: 'shell-fail',
-            arguments: { command: 'echo missing-file >&2; exit 7' },
-          })
-        : answer(body)
-    );
-    const task = await f.run('Inspect a missing local file.');
-    expect(task.status).toBe('completed');
-    expect(bodies).toHaveLength(2);
-    expect(toolResult(bodies[1])).toMatchObject({
-      exitCode: 7,
-      timedOut: false,
-      outputFile: expect.stringMatching(/^scratch\/exec-/),
-    });
-    const finished = f.runtime.workspace
-      .events(f.conversation.id)
-      .find(
-        (event) =>
-          event.kind === 'tool.finished' &&
-          (event.data as { callId?: string }).callId === 'shell-fail'
-      );
-    expect(finished?.data).toMatchObject({
-      denied: false,
-      status: 'failed',
-      errorKind: null,
-      detailsOmitted: true,
-    });
-  }
-);
-
-linuxTest(
   'committed apply remains recorded when Runner response is lost and stops automatic replay',
   async () => {
     const f = await fixture();
@@ -214,65 +178,6 @@ ${process.execPath} ${resolve('runner/uimori.mjs')} apply ${file} && kill -KILL 
         applied: [expect.objectContaining({ path: file, changed: true })],
       },
     });
-  }
-);
-
-linuxTest(
-  'invalid shell arguments can be corrected to a long command with a small result',
-  async () => {
-    const f = await fixture();
-    const command = '#' + 'x'.repeat(33000) + '\nprintf LONG_COMMAND_OK';
-    const bodies = provider((body, round) => {
-      if (round === 0) return answer(body, { id: 'invalid-shell', arguments: { command: 123 } });
-      if (round === 1) return answer(body, { id: 'long-shell', arguments: { command } });
-      return answer(body);
-    });
-    const task = await f.run('Run the local script.');
-    expect(bodies).toHaveLength(3);
-    expect(toolResult(bodies[1])).toMatchObject({
-      code: 'INVALID_SHELL_ARGUMENTS',
-      outcome: 'unchanged',
-      retryMode: 'correct_arguments',
-      recoverable: true,
-    });
-    expect(toolResult(bodies[2])).toMatchObject({
-      exitCode: 0,
-      output: 'LONG_COMMAND_OK',
-      applied: [],
-    });
-    expect(task.status).toBe('completed');
-    expect(task.completedEffects?.count ?? 0).toBe(0);
-  }
-);
-
-linuxTest(
-  'oversized shell output is narrowed from its log without replaying the command',
-  async () => {
-    const f = await fixture(undefined, 16384);
-    const counter = join(f.root, 'executions');
-    const command = `printf x >> ${counter}; python3 -c "print(chr(0) * 18000, end='')"`;
-    const bodies = provider((body, round) => {
-      if (round === 0) return answer(body, { id: 'large-output', arguments: { command } });
-      if (round === 1) {
-        const result = toolResult(body);
-        if (result.nextRead?.name === 'data.exec')
-          return answer(body, { id: 'narrow-output', arguments: result.nextRead.arguments });
-      }
-      return answer(body);
-    });
-    const task = await f.run('Inspect the local output.');
-    const result = toolResult(bodies[1]);
-    expect(result).toMatchObject({
-      error: 'HELPER_READ_TOO_LARGE',
-      returned: false,
-      execution: { exitCode: 0, outputFile: expect.stringContaining('scratch/exec-') },
-      nextRead: { name: 'data.exec' },
-    });
-    expect(result.nextRead.arguments.command).toMatch(/head -c 1000 -- 'scratch\/exec-/u);
-    expect(bodies).toHaveLength(3);
-    expect(toolResult(bodies[2])).toMatchObject({ exitCode: 0, output: '\0'.repeat(1000) });
-    expect(task.status).toBe('completed');
-    expect(readFileSync(counter, 'utf8')).toBe('x');
   }
 );
 

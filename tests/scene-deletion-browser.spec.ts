@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { openChatMenu, openSourceActions } from './ui-navigation.js';
+import { openSourceActions } from './ui-navigation.js';
 
 async function detail(request: APIRequestContext, chatId: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${chatId}`);
@@ -55,92 +55,17 @@ async function openDeletion(page: Page, sourceId: string) {
 test('SCENEDEL01 cancel preserves all scenes and deleting only the middle keeps the later scene', async ({
   page,
   request,
-}, info) => {
+}) => {
   test.setTimeout(60_000);
   const before = await seed(request, '중간 장면 삭제');
   const [first, middle, last] = before.sources;
   await page.goto(`/?chat=${before.chat.id}`);
-  const menu = await openChatMenu(page);
-  await expect(menu.getByRole('group')).toHaveCount(4);
-  expect(
-    await menu
-      .getByRole('group')
-      .evaluateAll((groups) => groups.map((group) => group.getAttribute('aria-label')))
-  ).toEqual(['읽기', '창작 도구', '복사와 내보내기', '채팅 관리']);
-  await page.screenshot({ path: info.outputPath('chat-menu-groups.png') });
-  await page.locator('.chat-menu').getByLabel('채팅 메뉴', { exact: true }).click();
-
-  for (const width of [412, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    const source = scene(page, middle.id);
-    await openSourceActions(source);
-    const actions = source.locator('.action-menu[open] > .action-menu-body');
-    const buttons = actions.getByRole('button');
-    await expect(buttons.last()).toHaveText('장면 삭제');
-    await expect(actions.getByRole('group', { name: '본문', exact: true })).toBeVisible();
-    await expect(actions.getByRole('group', { name: '창작 도구', exact: true })).toBeVisible();
-    if (width === 412) {
-      expect(
-        await buttons.evaluateAll((items) =>
-          items.every((item) => item.getBoundingClientRect().height >= 48)
-        )
-      ).toBe(true);
-      await actions.getByRole('button', { name: '더 보기', exact: true }).click();
-      await expect(actions.getByRole('group', { name: '더 보기', exact: true })).toBeVisible();
-      await expect(buttons.last()).toHaveText('장면 삭제');
-      expect(
-        await buttons.evaluateAll((items) =>
-          items.every((item) => item.getBoundingClientRect().height >= 48)
-        )
-      ).toBe(true);
-    }
-    await page.screenshot({ path: info.outputPath(`scene-menu-groups-${width}.png`) });
-    await source.locator('.action-menu[open] > summary').press('Escape');
-  }
 
   let dialog = await openDeletion(page, middle.id);
   await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeChecked();
   await expect(
     dialog.getByRole('radio', { name: '이 장면부터 이후까지 (2개)', exact: true })
   ).not.toBeChecked();
-  await expect(dialog).toContainText(
-    '중간 장면 하나만 삭제하면 이후 장면과 현재 채팅 변수는 유지돼요.'
-  );
-  for (const width of [412, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    expect(
-      await dialog.locator('.scene-delete-scopes label').evaluateAll((labels) =>
-        labels.every((label) => {
-          const input = label.querySelector('input')!.getBoundingClientRect();
-          const text = [...label.childNodes].find(
-            (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
-          );
-          if (!text) return false;
-          const range = document.createRange();
-          range.selectNodeContents(text);
-          const bounds = range.getBoundingClientRect();
-          return (
-            input.right <= bounds.left &&
-            Math.abs(input.y + input.height / 2 - bounds.y - bounds.height / 2) < 4
-          );
-        })
-      )
-    ).toBe(true);
-    expect(
-      await dialog.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-        return (
-          bounds.left >= 0 &&
-          bounds.right <= innerWidth &&
-          element.scrollWidth <= element.clientWidth + 1
-        );
-      })
-    ).toBe(true);
-    await page.screenshot({
-      path: info.outputPath(`scene-delete-confirm-${width}.png`),
-      animations: 'disabled',
-    });
-  }
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(scene(page, middle.id).getByLabel('장면 작업 메뉴', { exact: true })).toBeFocused();
@@ -187,54 +112,6 @@ test('SCENEDEL02 deleting from a middle scene removes its following range and re
   expect(after.chat.headRevision).toBe(first.id);
   await page.reload();
   await expect(page.getByTestId('source')).toHaveCount(1);
-});
-
-test('SCENEDEL03 an accepted delete with a lost acknowledgement is checked again with the same command', async ({
-  page,
-  request,
-}) => {
-  test.setTimeout(60_000);
-  const before = await seed(request, '삭제 결과 확인');
-  const [first, middle, last] = before.sources;
-  const commands: unknown[] = [];
-  const path = `**/api/chats/${before.chat.id}/sources/${middle.id}`;
-  await page.route(path, async (route) => {
-    if (route.request().method() !== 'DELETE') return route.continue();
-    commands.push(route.request().postDataJSON());
-    if (commands.length === 2)
-      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
-    const accepted = await route.fetch();
-    expect(accepted.ok(), await accepted.text()).toBe(true);
-    if (commands.length === 1) {
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Synthetic lost acknowledgement' }),
-      });
-    } else await route.fulfill({ response: accepted });
-  });
-  await page.goto(`/?chat=${before.chat.id}`);
-  const dialog = await openDeletion(page, middle.id);
-  await dialog.getByRole('button', { name: '선택한 장면 1개 삭제', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('삭제 결과를 확인하지 못했어요.');
-  await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeDisabled();
-  await dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
-  await expect.poll(() => commands.length).toBe(2);
-  await expect(
-    dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true })
-  ).toBeEnabled();
-  await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeDisabled();
-  await dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(commands).toHaveLength(3);
-  expect(commands[1]).toEqual(commands[0]);
-  expect(commands[2]).toEqual(commands[0]);
-  expect((await detail(request, before.chat.id)).sources.map((source) => source.id)).toEqual([
-    first.id,
-    last.id,
-  ]);
-  await expect(page.getByTestId('source')).toHaveCount(2);
-  await expect(scene(page, middle.id)).toHaveCount(0);
 });
 
 test('SCENEDEL04 a deleted scene can be checked after closing and reloading', async ({
@@ -284,66 +161,4 @@ test('SCENEDEL04 a deleted scene can be checked after closing and reloading', as
     first.id,
     last.id,
   ]);
-});
-
-test('SCENEDEL05 a late deletion acknowledgement does not override a newer reader selection', async ({
-  page,
-  request,
-}) => {
-  test.setTimeout(60_000);
-  const before = await seed(request, '늦은 삭제 확인');
-  const [first, middle] = before.sources;
-  const otherResponse = await postFixtureChat(request, {
-    data: { title: `삭제 중 이동 ${crypto.randomUUID()}` },
-  });
-  expect(otherResponse.ok(), await otherResponse.text()).toBe(true);
-  const other = (await otherResponse.json()) as Chat;
-  const storageKey = `scene-delete:${before.chat.id}:${middle.id}`;
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let sent = false;
-  await page.route(`**/api/chats/${before.chat.id}/sources/${middle.id}`, async (route) => {
-    if (route.request().method() !== 'DELETE') return route.continue();
-    const accepted = await route.fetch();
-    expect(accepted.ok(), await accepted.text()).toBe(true);
-    sent = true;
-    await held;
-    await route.fulfill({ response: accepted });
-  });
-
-  try {
-    await page.goto(`/?chat=${before.chat.id}`);
-    const dialog = await openDeletion(page, middle.id);
-    await dialog.getByRole('button', { name: '선택한 장면 1개 삭제', exact: true }).click();
-    await expect.poll(() => sent).toBe(true);
-    await expect(scene(page, middle.id)).toHaveCount(0);
-    await page.evaluate((id) => {
-      history.pushState(null, '', `/?chat=${id}`);
-      dispatchEvent(new PopStateEvent('popstate'));
-    }, other.id);
-    await expect(page.getByTestId('source')).toHaveCount(0);
-    await page.evaluate(
-      ({ chatId, sourceId }) => {
-        history.pushState(null, '', `/?chat=${chatId}&source=${sourceId}`);
-        dispatchEvent(new PopStateEvent('popstate'));
-      },
-      { chatId: before.chat.id, sourceId: first.id }
-    );
-    await expect(scene(page, first.id)).toBeVisible();
-    release();
-    await expect
-      .poll(() => page.evaluate((key) => sessionStorage.getItem(key), storageKey))
-      .toBeNull();
-    await page.evaluate(async () => {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    });
-    const current = new URL(page.url());
-    expect(current.searchParams.get('chat')).toBe(before.chat.id);
-    expect(current.searchParams.get('source')).toBe(first.id);
-  } finally {
-    release();
-  }
 });

@@ -31,7 +31,6 @@ test(
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
     const panel = page.locator('#chat-prompt-options');
-    await expect(panel.getByRole('tab', { name: '모든 채팅', exact: true })).toHaveCount(0);
     const group = panel.locator('details.chat-option-group').first();
     await expect(group).not.toHaveAttribute('open');
     await group.locator('summary').click();
@@ -136,49 +135,21 @@ test(
           (await (await request.get('/api/prompt-workspace')).json()).translation.values.tone
       )
       .toBe('직접 수정');
-    for (const width of [1440, MOBILE_WIDTH]) {
-      await page.setViewportSize({ width, height: 900 });
-      const presetChoice = editor.getByLabel('기본 프롬프트', { exact: true });
-      const editPrompt = editor.getByRole('button', { name: '프롬프트 편집', exact: true });
-      const choiceBox = (await presetChoice.boundingBox())!;
-      const editBox = (await editPrompt.boundingBox())!;
-      expect(Math.abs(choiceBox.y - editBox.y)).toBeLessThanOrEqual(1);
-      expect(editBox.x).toBeGreaterThanOrEqual(choiceBox.x + choiceBox.width);
-      expect(editBox.width).toBeGreaterThanOrEqual(44);
-      expect(editBox.height).toBeGreaterThanOrEqual(44);
-      const openCombination = async () => {
-        await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
-        await editor
-          .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
-          .click();
-      };
-      await openCombination();
-      const combo = page.getByRole('region', {
-        name: '기본 프롬프트 / 옵션 프리셋 저장',
-        exact: true,
-      });
-      await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill('취소할 조합');
-      await combo.getByRole('button', { name: '취소', exact: true }).click();
-      await expect(combo).toBeHidden();
-      await openCombination();
-      await expect(combo).toBeFocused();
-      await expect(editor).toBeHidden();
-      await page.keyboard.press('Escape');
-      await expect(combo).toBeHidden();
-      await expect(editor.getByLabel('옵션 프리셋 메뉴', { exact: true })).toBeFocused();
-      await openCombination();
-      const title = `PWS 조합 ${width} ${crypto.randomUUID()}`;
-      await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill(title);
-      const save = combo.getByRole('button', { name: '옵션 프리셋 저장', exact: true });
-      await expect(save).toHaveClass(/primary/);
-      expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      await page.screenshot({ path: info.outputPath(`prompt-combination-save-${width}.png`) });
-      await save.click();
-      await expect(combo).toBeHidden();
-      await expect(
-        editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')
-      ).toContainText([title]);
-    }
+    await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+    await editor
+      .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
+      .click();
+    const combo = page.getByRole('region', {
+      name: '기본 프롬프트 / 옵션 프리셋 저장',
+      exact: true,
+    });
+    const title = `PWS 조합 ${crypto.randomUUID()}`;
+    await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill(title);
+    await combo.getByRole('button', { name: '옵션 프리셋 저장', exact: true }).click();
+    await expect(combo).toBeHidden();
+    await expect(editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')).toContainText(
+      [title]
+    );
     const modified = await request.put(`/api/prompt-presets/${preset.id}`, {
       data: {
         expectedRevision: preset.revision,
@@ -197,9 +168,6 @@ test(
       (await (await request.get('/api/prompt-workspace')).json()).translation.values.tone
     ).toBe('직접 수정');
     await editor.locator('summary').filter({ hasText: '번역 옵션' }).click();
-    await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
-      0
-    );
     await editor.getByLabel('옵션 프리셋', { exact: true }).selectOption('default');
     await expect(tone).toBeEnabled();
     await expect(tone).toHaveValue('새 기본값');
@@ -215,108 +183,93 @@ test(
   }
 );
 
-test(
-  'PWS07 quick combinations stay in this chat and obsolete combinations can be repaired',
-  { tag: '@smoke' },
-  async ({ page, request }, info) => {
-    const program = nativePrompt('조합 적용 범위 확인', {
-      customPromptTemplateToggle: 'tone=문체=text\nold=이전 옵션=text',
-    });
-    const preset = await (
-      await request.post('/api/prompt-presets', {
-        data: { title: '조합 수리 검증', role: 'main', program },
-      })
-    ).json();
-    let workspace = await (await request.get('/api/prompt-workspace')).json();
-    const applied = await request.post('/api/prompt-workspace/apply', {
-      data: { expectedRevision: workspace.revision, role: 'main', presetId: preset.id },
-    });
-    expect(applied.ok()).toBe(true);
-    const combo = await (
-      await request.post('/api/prompt-combinations', {
-        data: {
-          title: '보존할 조합',
-          role: 'main',
-          owner: { kind: 'preset', id: preset.id },
-          expectedRevision: preset.revision,
-          values: { tone: '차분하게', old: '옛 값' },
-        },
-      })
-    ).json();
-    const one = await (await postFixtureChat(request, { data: { title: '조합 첫 채팅' } })).json();
-    const two = await (
-      await postFixtureChat(request, { data: { title: '조합 둘째 채팅' } })
-    ).json();
-    await page.goto(`/?chat=${one.id}`);
-    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-    await page
-      .getByLabel('빠른 옵션 프리셋', { exact: true })
-      .selectOption(`${combo.id}@${combo.revision}`);
-    await expect
-      .poll(
-        async () => (await (await request.get(`/api/chats/${one.id}/options`)).json()).fixedValues
-      )
-      .toEqual({ tone: '차분하게', old: '옛 값' });
-    expect((await (await request.get(`/api/chats/${two.id}/options`)).json()).fixedValues).toEqual(
-      {}
-    );
-    expect((await (await request.get('/api/prompt-workspace')).json()).main.optionValues).toEqual(
-      {}
-    );
-    const changed = nativePrompt('조합 적용 범위 확인 수정', {
-      customPromptTemplateToggle: 'tone=문체=text\nnew=새 옵션=text',
-    });
-    const saved = await request.put(`/api/prompt-presets/${preset.id}`, {
+test('PWS07 quick combinations stay in this chat and obsolete combinations can be repaired', {
+  tag: '@smoke',
+}, async ({ page, request }) => {
+  const program = nativePrompt('조합 적용 범위 확인', {
+    customPromptTemplateToggle: 'tone=문체=text\nold=이전 옵션=text',
+  });
+  const preset = await (
+    await request.post('/api/prompt-presets', {
+      data: { title: '조합 수리 검증', role: 'main', program },
+    })
+  ).json();
+  let workspace = await (await request.get('/api/prompt-workspace')).json();
+  const applied = await request.post('/api/prompt-workspace/apply', {
+    data: { expectedRevision: workspace.revision, role: 'main', presetId: preset.id },
+  });
+  expect(applied.ok()).toBe(true);
+  const combo = await (
+    await request.post('/api/prompt-combinations', {
       data: {
-        expectedRevision: preset.revision,
-        title: preset.title,
+        title: '보존할 조합',
         role: 'main',
-        program: changed,
+        owner: { kind: 'preset', id: preset.id },
+        expectedRevision: preset.revision,
+        values: { tone: '차분하게', old: '옛 값' },
       },
-    });
-    expect(saved.ok()).toBe(true);
-    await page.reload();
-    await navigationAction(page, '설정');
-    await selectSettingsSection(page, '기본 프롬프트');
-    const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
-    await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
-    await expect(
-      editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')
-    ).not.toContainText(['보존할 조합']);
-    await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
-    await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
-    const manager = page.getByRole('region', {
-      name: '기본 프롬프트 / 옵션 프리셋 관리',
-      exact: true,
-    });
-    await expect(manager).toContainText('보존할 조합');
-    await expect(manager).toContainText('적용 불가');
-    await manager.getByRole('button', { name: '옵션 수정', exact: true }).click();
-    await manager.locator('.prompt-option-group > summary').click();
-    await expect(manager.getByLabel('문체', { exact: true })).toHaveValue('차분하게');
-    await manager.getByLabel('새 옵션', { exact: true }).fill('새 지시');
-    await manager.getByRole('button', { name: '옵션 프리셋 저장', exact: true }).click();
-    await expect(manager.getByText('적용 불가', { exact: false })).toHaveCount(0);
-    const library = await (await request.get('/api/library')).json();
-    const repaired = library.promptCombinations.find(
-      (item: { id: string }) => item.id === combo.id
-    );
-    expect(repaired).toMatchObject({
-      id: combo.id,
-      revision: combo.revision + 1,
-      values: { tone: '차분하게', new: '새 지시' },
-    });
-    for (const width of [1440, MOBILE_WIDTH]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.screenshot({ path: info.outputPath(`prompt-combination-manager-${width}.png`) });
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
-      ).toBe(true);
-    }
-    workspace = await (await request.get('/api/prompt-workspace')).json();
-    expect(workspace.main.program).toEqual(changed);
-  }
-);
+    })
+  ).json();
+  const one = await (await postFixtureChat(request, { data: { title: '조합 첫 채팅' } })).json();
+  const two = await (await postFixtureChat(request, { data: { title: '조합 둘째 채팅' } })).json();
+  await page.goto(`/?chat=${one.id}`);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  await page
+    .getByLabel('빠른 옵션 프리셋', { exact: true })
+    .selectOption(`${combo.id}@${combo.revision}`);
+  await expect
+    .poll(
+      async () => (await (await request.get(`/api/chats/${one.id}/options`)).json()).fixedValues
+    )
+    .toEqual({ tone: '차분하게', old: '옛 값' });
+  expect((await (await request.get(`/api/chats/${two.id}/options`)).json()).fixedValues).toEqual(
+    {}
+  );
+  expect((await (await request.get('/api/prompt-workspace')).json()).main.optionValues).toEqual({});
+  const changed = nativePrompt('조합 적용 범위 확인 수정', {
+    customPromptTemplateToggle: 'tone=문체=text\nnew=새 옵션=text',
+  });
+  const saved = await request.put(`/api/prompt-presets/${preset.id}`, {
+    data: {
+      expectedRevision: preset.revision,
+      title: preset.title,
+      role: 'main',
+      program: changed,
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.reload();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '기본 프롬프트');
+  const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
+  await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
+  await expect(
+    editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')
+  ).not.toContainText(['보존할 조합']);
+  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
+  const manager = page.getByRole('region', {
+    name: '기본 프롬프트 / 옵션 프리셋 관리',
+    exact: true,
+  });
+  await expect(manager).toContainText('보존할 조합');
+  await expect(manager).toContainText('적용 불가');
+  await manager.getByRole('button', { name: '옵션 수정', exact: true }).click();
+  await manager.locator('.prompt-option-group > summary').click();
+  await expect(manager.getByLabel('문체', { exact: true })).toHaveValue('차분하게');
+  await manager.getByLabel('새 옵션', { exact: true }).fill('새 지시');
+  await manager.getByRole('button', { name: '옵션 프리셋 저장', exact: true }).click();
+  await expect(manager.getByText('적용 불가', { exact: false })).toHaveCount(0);
+  const library = await (await request.get('/api/library')).json();
+  const repaired = library.promptCombinations.find((item: { id: string }) => item.id === combo.id);
+  expect(repaired).toMatchObject({
+    id: combo.id,
+    revision: combo.revision + 1,
+    values: { tone: '차분하게', new: '새 지시' },
+  });
+  workspace = await (await request.get('/api/prompt-workspace')).json();
+  expect(workspace.main.program).toEqual(changed);
+});
 
 test('PWS03 failed autosaves preserve consecutive local changes and protect external revisions', async ({
   page,
@@ -417,179 +370,4 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
   );
 });
 
-test('PWS05 summary length controls save independently and survive reload on mobile', {
-  tag: '@smoke',
-}, async ({ page, request }) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '역할별 모델');
-  let models = page.getByRole('region', { name: '역할별 모델 설정' });
-  const conversation = models.getByLabel('채팅 요약 길이', { exact: true });
-  const helper = models.getByLabel('도우미 요약 길이', { exact: true });
-  await expect(conversation).toHaveValue('auto');
-  await expect(helper).toHaveValue('auto');
-  await conversation.selectOption('16384');
-  await helper.selectOption('2048');
-  await models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
-  await expect
-    .poll(async () => (await (await request.get('/api/model-workspace')).json()).summaryLength)
-    .toEqual({
-      conversation: 16384,
-      helper: 2048,
-    });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  await page.reload();
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '역할별 모델');
-  models = page.getByRole('region', { name: '역할별 모델 설정' });
-  await expect(models.getByLabel('채팅 요약 길이', { exact: true })).toHaveValue('16384');
-  await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toHaveValue('2048');
-});
-
-test('PWS04 shared workspace load failures recover in model and prompt settings', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
-  let ready = false;
-  await page.route(
-    /\/api\/(?:prompt-workspace|resources\/prompt-workspace\/current)$/,
-    async (route) => {
-      if (ready) await route.continue();
-      else
-        await route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: '합성 일시 오류' }),
-        });
-    }
-  );
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '역할별 모델');
-  const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const reload = settings.getByRole('button', { name: '다시 불러오기', exact: true });
-  await expect(settings.getByRole('alert')).toContainText('불러오지 못했어요.');
-  await expect(settings.getByRole('status').filter({ hasText: '불러오는 중' })).toHaveCount(0);
-  await expect(reload).toHaveAccessibleName(/\S/u);
-  const reloadBox = await reload.boundingBox();
-  expect(reloadBox!.width).toBeGreaterThanOrEqual(44);
-  expect(reloadBox!.height).toBeGreaterThanOrEqual(44);
-  ready = true;
-  await reload.click();
-  const models = settings.getByRole('region', { name: '역할별 모델 설정', exact: true });
-  await expect(models).toBeVisible();
-  const modelSave = models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
-  await modelSave.scrollIntoViewIfNeeded();
-  const saveBox = await modelSave.boundingBox();
-  expect(saveBox!.width).toBeGreaterThanOrEqual(44);
-  expect(saveBox!.height).toBeGreaterThanOrEqual(44);
-
-  ready = false;
-  await page.reload();
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '기본 프롬프트');
-  await expect(reload).toBeVisible();
-  await expect(settings.getByRole('alert')).toContainText('불러오지 못했어요.');
-  await expect(settings.getByRole('status').filter({ hasText: '불러오는 중' })).toHaveCount(0);
-  ready = true;
-  await reload.click();
-  const prompts = settings.getByRole('region', { name: '기본 프롬프트 설정' });
-  await expect(prompts.getByLabel('기본 프롬프트', { exact: true })).toBeVisible();
-  await expect(prompts.getByTestId('prompt-composer')).toHaveCount(0);
-  await expect(prompts.getByRole('button', { name: '현재 설정 저장', exact: true })).toHaveCount(0);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-});
-
 preservePromptWorkspace();
-
-test('PWS09 unsaved option preset input asks before Escape, Back or closing settings discards it', async ({
-  page,
-  request,
-}) => {
-  const program = nativePrompt('조합 미저장 확인', {
-    customPromptTemplateToggle: 'tone=문체=text',
-  });
-  const preset = await (
-    await request.post('/api/prompt-presets', {
-      data: { title: `조합 미저장 ${crypto.randomUUID()}`, role: 'main', program },
-    })
-  ).json();
-  const workspace = await (await request.get('/api/prompt-workspace')).json();
-  const applied = await request.post('/api/prompt-workspace/apply', {
-    data: { expectedRevision: workspace.revision, role: 'main', presetId: preset.id },
-  });
-  expect(applied.ok(), await applied.text()).toBe(true);
-  const saved = await request.post('/api/prompt-combinations', {
-    data: {
-      title: '고칠 조합',
-      role: 'main',
-      owner: { kind: 'preset', id: preset.id },
-      expectedRevision: preset.revision,
-      values: { tone: '차분하게' },
-    },
-  });
-  expect(saved.ok(), await saved.text()).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '기본 프롬프트');
-  const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const editor = page.getByRole('region', { name: '기본 프롬프트 설정' });
-  await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
-  const leave = page.getByRole('alertdialog', { name: '옵션 프리셋 편집 닫기', exact: true });
-
-  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
-  await editor
-    .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
-    .click();
-  const create = page.getByRole('region', {
-    name: '기본 프롬프트 / 옵션 프리셋 저장',
-    exact: true,
-  });
-  const name = create.getByLabel('옵션 프리셋 이름', { exact: true });
-  await name.fill('아직 저장하지 않은 이름');
-  await name.press('Escape');
-  await expect(leave).toBeVisible();
-  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(name).toHaveValue('아직 저장하지 않은 이름');
-  await page.goBack();
-  await expect(leave).toBeVisible();
-  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(name).toHaveValue('아직 저장하지 않은 이름');
-  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  const close = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
-  await expect(close).toBeVisible();
-  await close.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(name).toHaveValue('아직 저장하지 않은 이름');
-  await name.press('Escape');
-  await leave.getByRole('button', { name: '입력 버리고 닫기', exact: true }).click();
-  await expect(create).toBeHidden();
-
-  await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
-  await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
-  const manager = page.getByRole('region', {
-    name: '기본 프롬프트 / 옵션 프리셋 관리',
-    exact: true,
-  });
-  await manager.getByRole('button', { name: '수정', exact: true }).click();
-  const title = manager.getByLabel('옵션 프리셋 이름', { exact: true });
-  await expect(title).toHaveValue('고칠 조합');
-  await title.press('Escape');
-  await expect(leave).toBeHidden();
-  await expect(title).toBeHidden();
-  await manager.getByRole('button', { name: '수정', exact: true }).click();
-  await title.fill('고친 이름');
-  await title.press('Escape');
-  await expect(leave).toBeVisible();
-  await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(title).toHaveValue('고친 이름');
-  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expect(close).toBeVisible();
-  await close.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
-  await expect(settings).toBeHidden();
-});

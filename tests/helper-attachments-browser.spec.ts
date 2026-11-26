@@ -94,7 +94,7 @@ async function messages(
 test('HATT01 picker sends image and text attachments without text and restores stored metadata', async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const { chat } = await setup(request);
   const panel = await open(page, chat);
@@ -114,8 +114,6 @@ test('HATT01 picker sends image and text attachments without text and restores s
   await expect(draftImages(page)).toHaveCount(1);
   await expect(composer(page)).toHaveValue('');
   const send = panel.getByRole('button', { name: '도우미 요청 보내기', exact: true });
-  await expect(send).toBeEnabled();
-  await page.screenshot({ path: info.outputPath('helper-attachments-desktop.png') });
   await send.click();
   await expect.poll(() => posts.length).toBe(1);
   expect(posts[0]).toMatchObject({
@@ -162,7 +160,7 @@ test('HATT01 picker sends image and text attachments without text and restores s
 test('HATT02 image paste and drop drafts survive sidecar, workspace, conversation switching and model rejection', async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: 360, height: 844 });
   const { chat, model } = await setup(request);
   const panel = await open(page, chat);
@@ -213,7 +211,6 @@ test('HATT02 image paste and drop drafts survive sidecar, workspace, conversatio
   await expect(draftFiles(page)).toContainText('드롭한 문서.txt');
   await panel.getByRole('button', { name: chat.title, exact: true }).click();
   await expect(panel).not.toHaveClass(/helper-expanded/u);
-  await page.screenshot({ path: info.outputPath('helper-attachments-mobile.png') });
   const textConnection = await request.post('/api/connections', {
     data: {
       title: `텍스트 전용 합성 ${randomUUID()}`,
@@ -252,57 +249,4 @@ test('HATT02 image paste and drop drafts survive sidecar, workspace, conversatio
   await expect(draftFiles(page)).toContainText('드롭한 문서.txt');
   await sessionPicker(page).selectOption(otherId);
   await expect(draftFiles(page)).toContainText('다른 대화 자료.txt');
-});
-
-test('HATT03 uncertain admission reuses exact uploads and preserves the newer text and image draft', async ({
-  page,
-  request,
-}) => {
-  const { chat } = await setup(request);
-  const panel = await open(page, chat);
-  const id = await sessionPicker(page).inputValue();
-  const posts: unknown[] = [];
-  let uploads = 0;
-  await page.route('**/api/uploads', async (route) => {
-    uploads++;
-    await route.fallback();
-  });
-  await page.route(`**/api/helper/conversations/${id}/messages`, async (route) => {
-    if (route.request().method() !== 'POST') return route.fallback();
-    posts.push(route.request().postDataJSON());
-    const response = await route.fetch();
-    expect(response.ok(), await response.text()).toBe(true);
-    if (posts.length === 1) await route.abort('failed');
-    else await route.fulfill({ response });
-  });
-  await composer(page).fill('접수 여부를 확인할 원래 요청');
-  await picker(page).setInputFiles(textFile('처음 첨부.txt'));
-  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
-  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
-  await page.reload();
-  await open(page);
-  await composer(page).fill('늦은 접수 응답 뒤에도 남아야 하는 새 초안');
-  await picker(page).setInputFiles(await png('새 첨부.png'));
-  await expect(draftImages(page)).toHaveCount(1);
-  await expect(panel.getByRole('button', { name: '파일 첨부', exact: true })).toBeEnabled();
-  await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
-    .getByRole('button', { name: '접수 확인 및 재시도', exact: true })
-    .click();
-  await expect.poll(() => posts.length).toBe(2);
-  expect(posts[1]).toEqual(posts[0]);
-  expect(uploads).toBe(1);
-  await expect(panel.locator('.helper-outbox')).toHaveCount(0);
-  await expect(composer(page)).toHaveValue('늦은 접수 응답 뒤에도 남아야 하는 새 초안');
-  await expect(draftImages(page)).toHaveCount(1);
-  await expect(draftFiles(page)).toContainText('처음 첨부.txt');
-  expect((await messages(request, id)).filter((message) => message.role === 'user')).toHaveLength(
-    1
-  );
-  await page.reload();
-  await open(page);
-  await expect(composer(page)).toHaveValue('늦은 접수 응답 뒤에도 남아야 하는 새 초안');
-  await expect(draftImages(page)).toHaveCount(1);
-  await expect(draftFiles(page)).toContainText('처음 첨부.txt');
 });

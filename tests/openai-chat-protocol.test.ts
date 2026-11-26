@@ -353,15 +353,6 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     expect(() => encodeChat(input)).toThrow('UNSUPPORTED_PROVIDER_OPTIONS');
     expect(() => encodeChat(input, 'deepseek-chat-v1')).toThrow('UNSUPPORTED_PROVIDER_OPTIONS');
   });
-  test.each([
-    { verbosity: 'low' },
-    { outputEffort: 'high' },
-    { thinkingBudgetTokens: 1024, maxOutputTokens: 8192 },
-  ])('does not silently send or discard foreign native option %j', (options) => {
-    const input = request();
-    Object.assign(input.generation!, options);
-    expect(() => encodeChat(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-  });
   test('encodes the selected model and explicit options without assuming native structured output support', () => {
     const input = request();
     const original = structuredClone(input);

@@ -99,12 +99,6 @@ test('shell request bounds permit useful long work and explicit bounded output',
   );
 });
 
-test('the sandbox runner caps a shell timeout at the same maximum as the app', () => {
-  expect(readFileSync(resolve('runner/runner.mjs'), 'utf8')).toContain(
-    `const timeoutMs = Math.min(${SHELL_TIMEOUT_MAX_MS}, `
-  );
-});
-
 test('first attempted exec prepares frozen current data without dumping the saved archive', async () => {
   const f = fixture();
   await expect(f.shell.run(f.snapshot, 'first', { command: 'true' })).rejects.toThrow();

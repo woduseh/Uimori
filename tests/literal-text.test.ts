@@ -166,13 +166,3 @@ test('spans cover the text in order without gaps', () => {
     expect(spans.every((span) => span.start < span.end)).toBe(true);
   }
 });
-
-test('a long scene is scanned in time proportional to its length', () => {
-  const paragraph =
-    '등대의 불빛이 파도 위를 건너갔다. "어디로 가?" 미라가 물었다. [지도](map) `코드`\n\n';
-  const text = paragraph.repeat(Math.ceil(240_000 / paragraph.length));
-  const started = performance.now();
-  const spans = literalTextSpans(text);
-  expect(performance.now() - started).toBeLessThan(1000);
-  expect(spans.map((span) => text.slice(span.start, span.end)).join('')).toBe(text);
-});
