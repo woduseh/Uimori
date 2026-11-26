@@ -6,7 +6,9 @@ export function docsOnly(files) {
   return (
     files.length > 0 &&
     files.every((file) =>
-      /^(?:docs\/[^\r\n]+\.md|README(?:\.ko)?\.md|AGENTS\.md|LICENSE)$/.test(file)
+      /^(?:docs\/(?:dev|plans|releases)\/[^\r\n]+\.md|README(?:\.ko)?\.md|AGENTS\.md|LICENSE)$/.test(
+        file
+      )
     )
   );
 }

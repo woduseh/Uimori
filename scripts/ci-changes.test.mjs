@@ -19,10 +19,28 @@ test('a version change between the pushed revisions marks a release candidate', 
 });
 
 test('only inert documentation changes skip the expensive quality steps', () => {
-  assert.equal(docsOnly(['README.md', 'docs/dev/DEVELOPMENT.md', 'docs/READING.md']), true);
-  assert.equal(docsOnly(['README.ko.md']), true);
+  for (const files of [
+    ['README.md', 'docs/dev/DEVELOPMENT.md'],
+    ['README.ko.md'],
+    ['AGENTS.md', 'LICENSE'],
+    ['docs/plans/ux-redesign.md'],
+    ['docs/releases/v0.18.1.md'],
+  ])
+    assert.equal(docsOnly(files), true);
+});
+
+test('root user guides are build inputs and run the full quality steps', () => {
+  for (const files of [
+    ['docs/READING.md'],
+    ['README.md', 'docs/dev/DEVELOPMENT.md', 'docs/READING.md'],
+  ])
+    assert.equal(docsOnly(files), false);
+});
+
+test('code, workflow and empty change sets run the full quality steps', () => {
   for (const files of [
     [],
+    ['server/app.ts'],
     ['web/help.md'],
     ['docs/example.ts'],
     ['docs/page.mdx'],
