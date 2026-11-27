@@ -43,6 +43,8 @@ import {
 } from '../server/illustrations.js';
 import { remapIllustrationPackageReferences } from '../server/illustration-reference-copy.js';
 import { saveChatGenerationDefaults } from '../server/chat-generation-defaults.js';
+import { ChatOptionsStore } from '../server/chat-options.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -510,4 +512,48 @@ test('a chat backup carries the deleted library items its chat holds and restore
   expect(attachments.map((item) => item.role)).toEqual(['bot', 'module']);
   expect(attachments.every((item) => target.product.isLive('content', item.id))).toBe(true);
   expect(target.product.stored<Content>('content', attachments[1].id).title).toBe('Held glossary');
+});
+
+test('a chat backup carries a deleted pinned prompt and its fixed options and restores them live', async () => {
+  const source = database();
+  const chat = createFixtureChat(source, 'Held prompt');
+  const prompt = source.product.promptPreset({
+    title: 'Held pinned prompt',
+    role: 'main',
+    program: nativePrompt('Write', { customPromptTemplateToggle: 'tone=Tone=text' }),
+  }) as { id: string; revision: number };
+  const profile = source.product.profile(chat.id);
+  source.product.updateProfile(chat.id, {
+    expectedRevision: profile.revision,
+    image: profile.image,
+    pinned: { mainPromptPresetId: prompt.id },
+  });
+  const options = new ChatOptionsStore(source);
+  const state = options.get(chat.id);
+  options.fixed(
+    chat.id,
+    {
+      expectedRevision: state.revision,
+      binding: state.binding,
+      values: { tone: 'bold' },
+      operationId: 'fix-tone',
+    },
+    'held-prompt-options'
+  );
+  softDeleteLibraryItem(source, 'prompt-preset', prompt);
+
+  const archive = await bytes(exportChatBackupArchive(source, chat.id));
+  const target = database();
+  const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
+  const restored = importChatBackupArchiveRequest(target, {
+    preparedId: preview.preparedId,
+    digest: preview.digest,
+    idempotencyKey: 'held-prompt-archive',
+  }).chat;
+  const pinned = target.product.profile(restored.id).pinned!.mainPromptPresetId!;
+  expect(target.product.isLive('prompt-preset', pinned)).toBe(true);
+  expect(target.product.stored<{ title: string }>('prompt-preset', pinned).title).toBe(
+    'Held pinned prompt'
+  );
+  expect(new ChatOptionsStore(target).get(restored.id).fixedValues).toEqual({ tone: 'bold' });
 });

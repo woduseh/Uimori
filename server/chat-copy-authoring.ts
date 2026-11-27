@@ -49,7 +49,7 @@ export function captureChatAuthoring(
       })
     ),
     ...(focus ? { outlineFocusId: focus.nodeId } : {}),
-    options: new ChatOptionsStore(store).get(chatId).fixedValues,
+    options: new ChatOptionsStore(store).get(chatId, 'preserve').fixedValues,
     lore: overrides.entries
       .filter((entry) => !entry.retired)
       .map(
@@ -178,7 +178,7 @@ export function restoreChatAuthoring(
     store.db
       .prepare('INSERT INTO outline_focus(chat_id,node_id,updated_at) VALUES(?,?,?)')
       .run(chatId, ids.get(authoring.outlineFocusId)!, at);
-  const options = new ChatOptionsStore(store).get(chatId);
+  const options = new ChatOptionsStore(store).get(chatId, 'preserve');
   const controls = options.controls ?? [];
   const values = Object.fromEntries(
     Object.entries(authoring.options).filter(([key]) =>

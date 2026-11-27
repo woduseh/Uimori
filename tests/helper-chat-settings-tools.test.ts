@@ -426,6 +426,49 @@ test('chat.profile.update attaches a persona and modules, keeps the bot and reco
   expect(JSON.stringify(note?.diff)).toContain('loud');
 });
 
+test('chat.profile.update checks the revision first and keeps a deleted module the chat holds', async () => {
+  const { store, chat } = fixture();
+  const held = libraryContent(store, 'module', 'Held weather');
+  const added = libraryContent(store, 'module', 'Added tides');
+  const initial = store.product.profile(chat.id);
+  store.product.updateProfile(chat.id, {
+    expectedRevision: initial.revision,
+    image: initial.image,
+    packageAttachments: [
+      ...initial.packageAttachments!,
+      { id: held.id, revision: held.revision, role: 'module' },
+    ],
+  });
+  softDeleteLibraryItem(store, 'content', held);
+  softDeleteLibraryItem(store, 'content', added);
+  const before = store.product.profile(chat.id);
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('stale', 'chat.profile.update', {
+      expectedRevision: before.revision - 1,
+      modules: [added.id],
+    }),
+    helperCall('add-deleted', 'chat.profile.update', {
+      expectedRevision: before.revision,
+      modules: [held.id, added.id],
+    }),
+    helperCall('keep-held', 'chat.profile.update', {
+      expectedRevision: before.revision,
+      modules: [held.id],
+      authorNote: 'Keep the tide table.',
+    }),
+    helperDone,
+  ]);
+  expect(run.finished('stale')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  expect(run.finished('add-deleted')).toMatchObject({ errorCode: 'LIBRARY_ITEM_DELETED' });
+  expect(run.finished('keep-held')).not.toMatchObject({ denied: true });
+  const profile = store.product.profile(chat.id);
+  expect(profile.revision).toBe(before.revision + 1);
+  expect(profile.authorNote).toBe('Keep the tide table.');
+  expect(profile.packageAttachments!.map((ref) => `${ref.role}:${ref.id}`)).toEqual(
+    before.packageAttachments!.map((ref) => `${ref.role}:${ref.id}`)
+  );
+});
+
 test('scene.context.update hides a scene, replaces its request and reports the new context revision', async () => {
   const { store, chat } = fixture();
   const sourceId = chat.headRevision!;

@@ -666,11 +666,13 @@ export class ProductStore {
           ? (prior.authorNote ?? '')
           : text(b.authorNote, 'author note', CHAT_AUTHOR_NOTE_MAX_CHARS, true);
       const baseline = held ?? prior;
-      if (
-        pinned?.mainPromptPresetId &&
-        pinned.mainPromptPresetId !== baseline.pinned?.mainPromptPresetId
-      ) {
-        const preset = this.available<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+      const prompt = pinned?.mainPromptPresetId;
+      if (prompt && prompt !== prior.pinned?.mainPromptPresetId) {
+        const preset = this.reference<PromptPreset>(
+          prompt === baseline.pinned?.mainPromptPresetId ? 'preserve' : 'library',
+          'prompt-preset',
+          prompt
+        );
         if (preset.role !== 'main') throw new AppError(400, 'PINNED_PROMPT_NOT_MAIN');
       }
       if (pinned?.mainModel?.id !== baseline.pinned?.mainModel?.id)
@@ -1280,12 +1282,16 @@ function packageRefs(
     refs.filter((r) => r.role === 'persona').length > 1
   )
     throw new HttpError(400, 'Duplicate package or primary role');
-  for (const r of refs) {
-    const kept = held.some((h) => h.id === r.id && h.role === r.role);
-    const content = kept
-      ? product.stored<Content>('content', r.id)
-      : product.available<Content>('content', r.id);
-    if (!content.package) throw new HttpError(400, 'Content is not a package');
-  }
+  for (const r of refs) attachableContent(product, r, held);
   return refs;
+}
+export function attachableContent(
+  product: ProductStore,
+  ref: Pick<ContentAttachment, 'id' | 'role'>,
+  held: readonly ContentAttachment[]
+): Content {
+  const kept = held.some((h) => h.id === ref.id && h.role === ref.role);
+  const content = product.reference<Content>(kept ? 'preserve' : 'library', 'content', ref.id);
+  if (!content.package) throw new HttpError(400, 'Content is not a package');
+  return content;
 }

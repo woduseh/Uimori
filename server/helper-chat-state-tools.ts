@@ -33,7 +33,8 @@ import { sceneRequestLore } from './request-lore.js';
 import { sceneTitle, setSceneTitle } from './scene-titles.js';
 import { inspectNextRequest } from './request-preview.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
-import { HelperToolError } from './app-errors.js';
+import { AppError, HelperToolError } from './app-errors.js';
+import { attachableContent } from './product-store.js';
 import type { Store } from './store.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
@@ -835,9 +836,14 @@ function readChatProfile(store: Store, chatId: string) {
   };
 }
 
-function attachable(store: Store, value: unknown, role: 'persona' | 'module'): ContentAttachment {
+function attachable(
+  store: Store,
+  value: unknown,
+  role: 'persona' | 'module',
+  held: readonly ContentAttachment[]
+): ContentAttachment {
   const id = text(value, `${role} ID`, 100);
-  const content = store.product.available<Content>('content', id);
+  const content = attachableContent(store.product, { id, role }, held);
   if (content.kind !== role)
     throw new HttpError(400, `NOT_A_${role.toUpperCase()}: ${id} is a ${content.kind}.`);
   return { id: content.id, revision: content.revision, role };
@@ -858,6 +864,7 @@ function updateChatProfile(
   );
   if (!requested.length) throw new HttpError(400, 'Pass at least one change');
   const prior = store.product.profile(chatId);
+  if (prior.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
   const current = prior.packageAttachments ?? [];
   let packageAttachments: ContentAttachment[] | undefined;
   if (args.persona !== undefined || args.modules !== undefined) {
@@ -869,10 +876,10 @@ function updateChatProfile(
         ? current.filter((ref) => ref.role === 'persona')
         : args.persona === null
           ? []
-          : [attachable(store, args.persona, 'persona')]),
+          : [attachable(store, args.persona, 'persona', current)]),
       ...(args.modules === undefined
         ? current.filter((ref) => ref.role === 'module')
-        : (args.modules as unknown[]).map((id) => attachable(store, id, 'module'))),
+        : (args.modules as unknown[]).map((id) => attachable(store, id, 'module', current))),
     ];
   }
   const keys = (refs: ContentAttachment[] | undefined) =>
@@ -883,7 +890,7 @@ function updateChatProfile(
     (args.loreContext === undefined ||
       isDeepStrictEqual(args.loreContext, prior.loreContext ?? null)) &&
     (args.authorNote === undefined || args.authorNote === (prior.authorNote ?? ''));
-  if (unchanged && prior.revision === expectedRevision) {
+  if (unchanged) {
     recordHelperTaskResult(workspace, task, {
       receiptId,
       operation: 'chat.profile.update',

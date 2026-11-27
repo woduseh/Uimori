@@ -26,6 +26,7 @@ import {
 } from '../core/judgment-settings.js';
 import { validateJudgmentPricing } from '../core/model-pricing.js';
 import type { FastifyInstance } from 'fastify';
+import type { ReferenceSource } from './product-store.js';
 import type {
   ChatProfile,
   Connection,
@@ -493,14 +494,19 @@ type ChatPromptWorkspace = PromptWorkspace & { pinnedMainPreset?: ContentRef };
 
 export function chatPromptWorkspace(
   store: Store,
-  pinned: ChatProfile['pinned']
+  pinned: ChatProfile['pinned'],
+  source: ReferenceSource = 'library'
 ): ChatPromptWorkspace {
   const workspace: ChatPromptWorkspace = promptWorkspace(store);
   if (pinned?.mainModel) workspace.modelRoutes.main = structuredClone(pinned.mainModel);
   if (pinned?.mainPromptPresetId) {
     let preset: PromptPreset;
     try {
-      preset = store.product.available<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+      preset = store.product.reference<PromptPreset>(
+        source,
+        'prompt-preset',
+        pinned.mainPromptPresetId
+      );
       if (preset.role !== 'main')
         throw new HttpError(400, 'The pinned prompt is not a main prompt');
     } catch (error) {

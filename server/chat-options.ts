@@ -21,6 +21,7 @@ import { HelperWorkspace } from './helper-workspace.js';
 import { chatPromptWorkspace } from './prompt-workspace.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import type { ReferenceSource } from './product-store.js';
 import { AppError, HelperToolError } from './app-errors.js';
 
 type Row = Record<string, string | number | null>;
@@ -119,9 +120,9 @@ export class ChatOptionsStore {
     ).map((row) => JSON.parse(String(row.body)) as PendingChatOptions);
   }
 
-  get(chatId: string): ChatOptionState {
+  get(chatId: string, source: ReferenceSource = 'library'): ChatOptionState {
     const profile = this.store.product.profile(chatId);
-    const workspace = chatPromptWorkspace(this.store, profile.pinned),
+    const workspace = chatPromptWorkspace(this.store, profile.pinned, source),
       controls = effectiveRisuControls(
         resolvePackageProfile(this.store.product, profile),
         workspace.main.program
