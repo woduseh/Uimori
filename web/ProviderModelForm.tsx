@@ -18,6 +18,7 @@ type Props = {
   models: ModelPreset[];
   modelConnections: LibraryConnection[];
   conflict: boolean;
+  deleted: boolean;
   busy: boolean;
   saving: boolean;
   forcedVertexTier?: VertexRequestTier;
@@ -37,6 +38,7 @@ export function ProviderModelForm({
   models,
   modelConnections,
   conflict,
+  deleted,
   busy,
   saving,
   forcedVertexTier,
@@ -57,7 +59,6 @@ export function ProviderModelForm({
     !hidden
   );
   const savedModel = editingModel && models.find((item) => item.id === editingModel.id);
-  const deletedModel = !!editingModel && !savedModel;
   const staleModel = !!savedModel && savedModel.revision !== editingModel?.revision;
   const reloadButton = editingModel && (
     <button
@@ -91,7 +92,7 @@ export function ProviderModelForm({
           )}
         </h3>
       )}
-      {deletedModel ? (
+      {deleted ? (
         <NoticeBanner tone="error" className="full">
           {t('providers.modelDeletedElsewhere')}
         </NoticeBanner>

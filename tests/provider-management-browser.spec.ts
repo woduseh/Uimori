@@ -299,8 +299,51 @@ test('PMUI15 a model deleted on another screen keeps the draft and says so inste
   await expect(
     form.getByRole('button', { name: '최신 모델 설정 불러오기', exact: true })
   ).toHaveCount(0);
+  await expect(form.getByRole('button', { name: /삭제/ })).toHaveCount(0);
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
+});
+
+test('PMUI18 a provider just created while the library list fails to reload is not reported as deleted', async ({
+  page,
+  request,
+}) => {
+  const title = 'PMUI18 ' + Date.now(),
+    observed = observe(page);
+  const connection = await api<Connection>(request, '/connections', connectionInput(title));
+  const model = await api<ModelPreset>(
+    request,
+    '/model-presets',
+    modelInput(connection, title + ' model')
+  );
+  await settings(page);
+  await openProviderModel(page, model.title);
+  await page
+    .getByRole('form', { name: '모델 편집 양식' })
+    .getByLabel('모델 프리셋 이름', { exact: true })
+    .fill(model.title + ' 내 초안');
+  await startProviderConnection(page);
+  await page
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
+    .getByRole('button', { name: /Codex/ })
+    .click();
+  const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
+  await form.getByLabel('프로바이더 이름', { exact: true }).fill(title + ' 새 Codex');
+  await page.route('**/api/library**', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 503, json: { error: 'Synthetic library failure' } })
+      : route.continue()
+  );
+  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+  await expect(page.getByRole('alertdialog', { name: '편집 중인 초안 확인' })).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await library(request)).connections.some((item) => item.title === title + ' 새 Codex')
+    )
+    .toBe(true);
+  await expect(form).not.toContainText('이 프로바이더는 다른 화면에서 삭제됐어요.');
+  await expect(form).not.toContainText('프로바이더가 변경됐어요.');
+  expect(observed.errors).toEqual([]);
 });
 
 test('PMUI07 quick setup selects a cached catalog model and keeps drafts across workspace pages', async ({

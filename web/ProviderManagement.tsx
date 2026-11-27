@@ -198,6 +198,23 @@ export function ConnectionEditor({
     baseline: modelBaseline,
     started: modelStarted,
   } = drafts.model;
+  const seenInLibrary = useRef(new Set<string>());
+  const [confirmedDeleted, setConfirmedDeleted] = useState<string | null>(null);
+  useEffect(() => {
+    for (const item of library.connections) seenInLibrary.current.add(`connection:${item.id}`);
+    for (const item of library.models) seenInLibrary.current.add(`model:${item.id}`);
+  }, [library]);
+  const deletedElsewhere = (
+    kind: 'connection' | 'model',
+    editing: { id: string } | undefined,
+    list: readonly { id: string }[]
+  ) =>
+    !!editing &&
+    !list.some((item) => item.id === editing.id) &&
+    (seenInLibrary.current.has(`${kind}:${editing.id}`) ||
+      confirmedDeleted === `${kind}:${editing.id}`);
+  const connectionDeleted = deletedElsewhere('connection', editingConnection, library.connections);
+  const modelDeleted = deletedElsewhere('model', editingModel, library.models);
   const connectionDirty = connectionStarted && JSON.stringify(connection) !== connectionBaseline;
   const modelDirty = modelStarted && JSON.stringify(model) !== modelBaseline;
   const setConnection = (update: SetStateAction<ConnectionDraft>) =>
@@ -385,7 +402,7 @@ export function ConnectionEditor({
       const detail = errorDescriptor(caught, 'providers.m8');
       setError(detail);
       onError(detail);
-      if (caught instanceof ApiError && caught.status === 409 && scope !== 'status') {
+      if (caught instanceof ApiError && caught.code === 'REVISION_CONFLICT' && scope !== 'status') {
         setConflict(scope);
         if (saveAttempt) setSaveConflict(scope);
       }
@@ -912,8 +929,10 @@ export function ConnectionEditor({
             const value = await savedOrDeleted(
               api<Connection>(`/connections/${editingConnection.id}`)
             );
-            if (!value)
+            if (!value) {
+              setConfirmedDeleted(`connection:${editingConnection.id}`);
               return () => ({ content: <p>{t('providers.connectionDeletedElsewhere')}</p> });
+            }
             return () => [
               { label: t('providers.m43'), value: value.title },
               {
@@ -931,7 +950,10 @@ export function ConnectionEditor({
             const value = await savedOrDeleted(
               api<ModelPreset>(`/model-presets/${editingModel.id}`)
             );
-            if (!value) return () => ({ content: <p>{t('providers.modelDeletedElsewhere')}</p> });
+            if (!value) {
+              setConfirmedDeleted(`model:${editingModel.id}`);
+              return () => ({ content: <p>{t('providers.modelDeletedElsewhere')}</p> });
+            }
             return () => [
               { label: t('providers.m49'), value: value.title },
               { label: t('providers.m50'), value: value.modelId },
@@ -1471,6 +1493,7 @@ export function ConnectionEditor({
           draft={drafts.connection}
           connections={library.connections}
           conflict={conflict === 'connection'}
+          deleted={connectionDeleted}
           busy={busy}
           saving={operation === 'connection-save'}
           operationBusy={operationBusy}
@@ -1482,7 +1505,9 @@ export function ConnectionEditor({
             void perform(() => latest('connection'), 'connection');
           }}
           onDone={() => navigate('connections')}
-          deleteAction={editingConnection && deleteConnection(editingConnection)}
+          deleteAction={
+            editingConnection && !connectionDeleted && deleteConnection(editingConnection)
+          }
         />
         <ProviderModelForm
           hidden={screen !== 'model'}
@@ -1490,6 +1515,7 @@ export function ConnectionEditor({
           models={library.models}
           modelConnections={library.connections}
           conflict={conflict === 'model'}
+          deleted={modelDeleted}
           busy={busy}
           saving={operation === 'model-save'}
           forcedVertexTier={forcedVertexTier}
@@ -1505,7 +1531,7 @@ export function ConnectionEditor({
           onCatalog={(item) => {
             void perform(() => catalog(item));
           }}
-          deleteAction={editingModel && deleteModel(editingModel, true)}
+          deleteAction={editingModel && !modelDeleted && deleteModel(editingModel, true)}
         />
       </SettingsDetail>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}

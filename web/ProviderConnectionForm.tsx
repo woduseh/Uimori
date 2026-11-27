@@ -31,6 +31,7 @@ type Props = {
   draft: ProviderEditorState['connection'];
   connections: LibraryConnection[];
   conflict: boolean;
+  deleted: boolean;
   busy: boolean;
   saving: boolean;
   operationBusy: boolean;
@@ -48,6 +49,7 @@ export function ProviderConnectionForm({
   draft,
   connections,
   conflict,
+  deleted,
   busy,
   saving,
   operationBusy,
@@ -78,7 +80,6 @@ export function ProviderConnectionForm({
         : t('providers.m129');
   const savedConnection =
     editingConnection && connections.find((item) => item.id === editingConnection.id);
-  const deletedConnection = !!editingConnection && !savedConnection;
   const staleConnection =
     !!savedConnection && savedConnection.revision !== editingConnection?.revision;
   const reloadButton = editingConnection && (
@@ -112,7 +113,7 @@ export function ProviderConnectionForm({
           )}
         </h3>
       )}
-      {deletedConnection ? (
+      {deleted ? (
         <NoticeBanner tone="error" className="full">
           {t('providers.connectionDeletedElsewhere')}
         </NoticeBanner>
