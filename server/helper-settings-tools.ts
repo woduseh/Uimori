@@ -1,4 +1,8 @@
-import { HELPER_PRICING_TOOLS, invokeHelperPricingTool } from './helper-pricing-tools.js';
+import {
+  assertJudgmentPricingRequest,
+  HELPER_PRICING_TOOLS,
+  invokeHelperPricingTool,
+} from './helper-pricing-tools.js';
 import {
   HELPER_MODEL_PARAMETER_TOOLS,
   invokeHelperModelParameterTool,
@@ -349,6 +353,7 @@ export function applyHelperSettingsMutation(
     name.startsWith('model.pricing.') &&
     (args.judgment !== undefined || args.judgmentTarget !== undefined)
   ) {
+    assertJudgmentPricingRequest(store, name, args);
     const read = () =>
       invokeHelperSettingsTool(store, 'model.pricing.read', {
         judgment: true,

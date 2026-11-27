@@ -508,3 +508,41 @@ test('a helper judgment price update without judgment:true is refused as a prici
     vi.restoreAllMocks();
   }
 });
+
+test('a judgment price update answers its target and revision before validating the named target', async () => {
+  const { store } = fixture();
+  selectFixtureModels(store);
+  const chat = createFixtureChat(store, 'Judgment order');
+  const { revision } = call(store, 'model.pricing.read', { judgment: true }) as {
+    revision: number;
+  };
+  const wrongTarget = { provider: 'openai', modelId: 'wrong-model' };
+  expect(() =>
+    call(store, 'model.pricing.update', {
+      judgment: true,
+      judgmentTarget: wrongTarget,
+      expectedRevision: revision + 1,
+      pricing: null,
+    })
+  ).toThrow('REVISION_CONFLICT');
+  try {
+    const run = await runScriptedChatHelper(store, chat.id, [
+      helperCall('no-judgment', 'model.pricing.update', {
+        judgmentTarget: wrongTarget,
+        expectedRevision: revision,
+        pricing: null,
+      }),
+      helperCall('stale', 'model.pricing.update', {
+        judgment: true,
+        judgmentTarget: wrongTarget,
+        expectedRevision: revision + 1,
+        pricing: null,
+      }),
+      helperDone,
+    ]);
+    expect(run.finished('no-judgment')).toMatchObject({ errorCode: 'PRICING_TARGET_INVALID' });
+    expect(run.finished('stale')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  } finally {
+    vi.restoreAllMocks();
+  }
+});

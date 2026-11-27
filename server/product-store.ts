@@ -204,7 +204,7 @@ export class ProductStore {
     return this.stored<T>(kind, id);
   }
   reference<T>(source: ReferenceSource, kind: string, id: string): T {
-    return source === 'library' ? this.available<T>(kind, id) : this.stored<T>(kind, id);
+    return source === 'preserve' ? this.stored<T>(kind, id) : this.available<T>(kind, id);
   }
   writable<T>(kind: string, id: string): T {
     if (!this.isLive(kind, id)) throw new AppError(409, 'REVISION_CONFLICT');
