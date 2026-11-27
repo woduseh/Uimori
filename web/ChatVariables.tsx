@@ -1,6 +1,7 @@
 import { tryParseJson } from './json.js';
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -20,7 +21,7 @@ type VariableView = ChatVariableState & {
   origins?: Record<string, TemplateVariableOrigin>;
   sourceHash: string | null;
   pending: boolean;
-  variableDefaultsError?: string;
+  variableDefaultsError?: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT';
 };
 type SaveBody = {
   expectedRevision: number;
@@ -93,9 +94,9 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
   const [draft, setDraft] = useState<Draft | null>(() => readDraft(storageKey));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [readFailed, setReadFailed] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [raw, setRaw] = useState(false);
   const [query, setQuery] = useState('');
   const [newKey, setNewKey] = useState('');
@@ -111,12 +112,12 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       const next = await api<VariableView>(readEndpoint);
       if (alive.current && readEpoch.current === epoch) {
         setView(next);
-        setError('');
+        setError(null);
         setReadFailed(false);
       }
     } catch (cause) {
       if (alive.current && readEpoch.current === epoch) {
-        setError(cause instanceof Error ? cause.message : legacyDescriptor('chatsettings.m158'));
+        setError(toUiMessage(cause, 'chatsettings.m158'));
         setReadFailed(true);
       }
     } finally {
@@ -147,16 +148,16 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
     try {
       rememberDraft(storageKey, next);
     } catch {
-      setError(legacyDescriptor('chatsettings.m159'));
+      setError(uiMessage('chatsettings.m159'));
     }
-    setNotice('');
+    setNotice(null);
   }
 
   async function save() {
     if (!view || !draft || saving.current) return;
     const parsed = parseValues(draft.text);
     if (!parsed) {
-      setError(legacyDescriptor('chatsettings.m160'));
+      setError(uiMessage('chatsettings.m160'));
       return;
     }
     const conflict = draft.revision !== view.revision || draft.sourceHash !== view.sourceHash;
@@ -171,8 +172,8 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       } satisfies SaveBody);
     saving.current = true;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     const pendingDraft = { ...draft, pending: body };
     try {
       rememberDraft(storageKey, pendingDraft);
@@ -180,7 +181,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
     } catch {
       setBusy(false);
       saving.current = false;
-      setError(legacyDescriptor('chatsettings.m161'));
+      setError(uiMessage('chatsettings.m161'));
       return;
     }
     try {
@@ -193,11 +194,11 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       try {
         rememberDraft(storageKey, null);
       } catch {}
-      setNotice(legacyDescriptor('chatsettings.m162'));
+      setNotice(uiMessage('chatsettings.m162'));
       onChange?.();
     } catch (cause) {
       if (!alive.current) return;
-      setError(cause instanceof Error ? cause.message : legacyDescriptor('chatsettings.m163'));
+      setError(toUiMessage(cause, 'chatsettings.m163'));
       if (definiteRejection(cause)) {
         const rejected: Draft = {
           text: pendingDraft.text,
@@ -269,7 +270,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       {view?.pending && <p role="status">{t('chatsettings.m171')}</p>}
       {view?.variableDefaultsError && (
         <p role="alert" className="error">
-          {t('chatsettings.defaultsError', { error: translateMessage(view.variableDefaultsError) })}
+          {t('chatsettings.defaultsError', { error: t('chatsettings.defaultsLimit') })}
         </p>
       )}
       {conflict && !hasUncertainSave && (
@@ -283,11 +284,11 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
               if (!view || !draft) return;
               const next = { ...draft, revision: view.revision, sourceHash: view.sourceHash };
               setDraft(next);
-              setError('');
+              setError(null);
               try {
                 rememberDraft(storageKey, next);
               } catch {
-                setError(legacyDescriptor('chatsettings.m159'));
+                setError(uiMessage('chatsettings.m159'));
               }
             }}
           >
@@ -296,7 +297,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
         </div>
       )}
       {hasUncertainSave && <p role="status">{t('chatsettings.m175')}</p>}
-      <TransientNotice content={legacyUiMessage(notice)} />
+      <TransientNotice content={notice} />
       {error && (
         <NoticeBanner
           tone="error"
@@ -313,7 +314,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
             ) : undefined
           }
         >
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </NoticeBanner>
       )}
       <form
@@ -441,8 +442,8 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
               try {
                 rememberDraft(storageKey, null);
               } catch {}
-              setError('');
-              setNotice(legacyDescriptor('chatsettings.m188'));
+              setError(null);
+              setNotice(uiMessage('chatsettings.m188'));
             }}
           >
             <ResetIcon size={16} aria-hidden="true" /> {t('chatsettings.m189')}

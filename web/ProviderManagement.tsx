@@ -1,12 +1,5 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  messageRef,
-  message as descriptor,
-} from './i18n.js';
-import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ProviderConnectionForm } from './ProviderConnectionForm.js';
@@ -65,7 +58,7 @@ import { PROVIDER_CHOICES, providerDefinition } from '../core/provider-definitio
 import { providerLabel } from './builtin-labels.js';
 import { deletionEndpoints, providerEndpoints } from '#contracts';
 import { api, ApiError, callEndpoint } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import {
   initialModel,
   modelDraft,
@@ -259,9 +252,9 @@ export function ConnectionEditor({
   const [operation, setOperation] = useState<'connection-save' | 'model-save' | 'other' | null>(
       null
     ),
-    [message, setMessage] = useState(''),
-    [refreshWarning, setRefreshWarning] = useState(''),
-    [error, setError] = useState('');
+    [message, setMessage] = useState<UiMessage | null>(null),
+    [refreshWarning, setRefreshWarning] = useState<UiMessage | null>(null),
+    [error, setError] = useState<UiMessage | null>(null);
   const operationBusy = operation !== null;
   const busy = operationBusy || uploadingCredential || jevBusy;
   const dirty = busy || jevDirty || connectionDirty || modelDirty;
@@ -332,18 +325,18 @@ export function ConnectionEditor({
   async function deletedConnection(item: LibraryConnection) {
     if (editingConnection?.id === item.id && screen === 'connection') navigate('connections');
     dispatchDraft({ type: 'connection.deleted', id: item.id });
-    setError('');
+    setError(null);
     onError(null);
-    setMessage(descriptor('providers.m532', { value0: item.title }));
+    setMessage(uiMessage('providers.m532', { value0: item.title }));
     await reload();
   }
   async function deletedModel(item: ModelPreset) {
     if (editingModel?.id === item.id && screen === 'model') navigate('models');
     dispatchDraft({ type: 'model.deleted', id: item.id });
     setConflict(null);
-    setError('');
+    setError(null);
     onError(null);
-    setMessage(descriptor('providers.m533', { value0: item.title }));
+    setMessage(uiMessage('providers.m533', { value0: item.title }));
     await reload();
   }
   const deleteConnection = (item: LibraryConnection) => (
@@ -382,26 +375,27 @@ export function ConnectionEditor({
     if (operationLock.current) return false;
     operationLock.current = true;
     setOperation(saveAttempt && scope !== 'status' ? `${scope}-save` : 'other');
-    setError('');
+    setError(null);
     onError(null);
-    setMessage('');
-    setRefreshWarning('');
+    setMessage(null);
+    setRefreshWarning(null);
     try {
       await work();
       try {
         await reload();
       } catch (caught) {
-        const detail = errorDescriptor(caught, 'providers.m7');
-        const warning = descriptor('providers.m534', { value0: messageRef(detail) });
-        setMessage('');
+        const warning = uiMessage('providers.m534', {
+          value0: toUiMessage(caught, 'providers.m7'),
+        });
+        setMessage(null);
         setRefreshWarning(warning);
-        onError(legacyUiMessage(warning));
+        onError(warning);
       }
       return true;
     } catch (caught) {
-      const detail = errorDescriptor(caught, 'providers.m8');
+      const detail = toUiMessage(caught, 'providers.m8');
       setError(detail);
-      onError(legacyUiMessage(detail));
+      onError(detail);
       if (caught instanceof ApiError && caught.code === 'REVISION_CONFLICT' && scope !== 'status') {
         setConflict(scope);
         if (saveAttempt) setSaveConflict(scope);
@@ -423,7 +417,7 @@ export function ConnectionEditor({
       ...(copy ? { title: item.title + t('shared.copySuffix'), enabled: false } : {}),
     };
     dispatchDraft({ type: 'connection.open', value: next, editing: copy ? undefined : item, copy });
-    setError('');
+    setError(null);
     onError(null);
     returnItem.current = { screen: 'connections', id: item.id };
     navigate('connection');
@@ -471,7 +465,7 @@ export function ConnectionEditor({
       }
     }
     setMessage(
-      descriptor('providers.m600', { name: saved.title, action: id ? 'updated' : 'created' })
+      uiMessage('providers.m600', { name: saved.title, action: id ? 'updated' : 'created' })
     );
   }
   async function saveModel(
@@ -491,13 +485,13 @@ export function ConnectionEditor({
       if (!leave) navigate('models');
     }
     setMessage(
-      descriptor('providers.m601', { name: saved.title, action: id ? 'updated' : 'created' })
+      uiMessage('providers.m601', { name: saved.title, action: id ? 'updated' : 'created' })
     );
   }
   async function catalog(item: LibraryConnection) {
     const result = await api<Connection>(`/connections/${item.id}/catalog`, {});
     if (result.catalogError) throw new UiError(uiMessage('providers.m14'));
-    setMessage(descriptor('providers.m15'));
+    setMessage(uiMessage('providers.m15'));
   }
   function statusConnection(item: LibraryConnection) {
     const body = {
@@ -573,7 +567,7 @@ export function ConnectionEditor({
           expectedOrder: group.map((item) => item.id),
         });
       }
-      setMessage(descriptor('providers.m16'));
+      setMessage(uiMessage('providers.m16'));
     });
   }
   function dragAttributes(kind: 'connection' | 'model', id: string) {
@@ -680,7 +674,7 @@ export function ConnectionEditor({
       if (!value) throw new UiError(uiMessage('providers.m19'));
       await showModel(value, false, true);
     }
-    setMessage(descriptor('providers.m20'));
+    setMessage(uiMessage('providers.m20'));
   }
   function newConnection() {
     navigate('providers');
@@ -700,7 +694,7 @@ export function ConnectionEditor({
       enabled: protocol !== 'fixture-sse-v1',
     };
     dispatchDraft({ type: 'connection.open', value: next });
-    setError('');
+    setError(null);
     onError(null);
     navigate('connection');
   }
@@ -713,7 +707,7 @@ export function ConnectionEditor({
       chosen ?? library.connections.find((item) => item.enabled) ?? library.connections[0];
     const next = linked ? selectModelConnection(initialModel(), linked) : initialModel();
     dispatchDraft({ type: 'model.open', value: next });
-    setError('');
+    setError(null);
     setModelSection('basic');
     navigate('model');
   }
@@ -762,7 +756,7 @@ export function ConnectionEditor({
       setScreen('model');
       setModelSection('advanced');
       setError(optionError);
-      onError(legacyUiMessage(optionError));
+      onError(optionError);
       requestAnimationFrame(() =>
         modelForm.current
           ?.querySelector<HTMLElement>('[data-model-section="generation"]')
@@ -801,7 +795,7 @@ export function ConnectionEditor({
     }
     const target = library.models.find((item) => item.id === detailRequest.id);
     if (!target) {
-      setError(descriptor('providers.m21'));
+      setError(uiMessage('providers.m21'));
       return;
     }
     if (editingModel?.id === target.id) navigate('model');
@@ -1534,9 +1528,9 @@ export function ConnectionEditor({
           deleteAction={editingModel && !modelDeleted && deleteModel(editingModel, true)}
         />
       </SettingsDetail>
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <TransientNotice content={legacyUiMessage(message)} />
-      {refreshWarning && <NoticeBanner>{translateMessage(refreshWarning)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      <TransientNotice content={message} />
+      {refreshWarning && <NoticeBanner>{refreshWarning}</NoticeBanner>}
     </section>
   );
 }

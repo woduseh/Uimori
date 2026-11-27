@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { isApplePlatform } from './ChatComposer.js';
-import { t, useI18n, translateMessage, message as legacyDescriptor, messageRef } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import {
   defaultShortcutBindings,
@@ -23,7 +24,7 @@ import {
 } from './shortcuts.js';
 import './shortcut-settings.css';
 
-const ACTION_LABELS: Record<ShortcutAction, string> = {
+const ACTION_LABELS: Record<ShortcutAction, MessageKey> = {
   'palette.open': 'shortcuts.action.paletteOpen',
   'navigation.toggle': 'shortcuts.action.navigationToggle',
   'rightPanel.toggle': 'shortcuts.action.rightPanelToggle',
@@ -43,7 +44,7 @@ export function ShortcutSettings() {
   const defaults = defaultShortcutBindings();
   const apple = isApplePlatform();
   const [recording, setRecording] = useState<ShortcutAction | null>(null);
-  const [feedback, setFeedback] = useState<{ action: ShortcutAction; message: string } | null>(
+  const [feedback, setFeedback] = useState<{ action: ShortcutAction; error: UiMessage } | null>(
     null
   );
   const captureButton = useRef<HTMLButtonElement>(null);
@@ -85,20 +86,20 @@ export function ShortcutSettings() {
       if (result.reason === 'browser-reserved') {
         setFeedback({
           action: recording,
-          message: legacyDescriptor('shortcuts.errorBrowserReserved', {
+          error: uiMessage('shortcuts.errorBrowserReserved', {
             key: shortcutKeyLabel(key, apple),
           }),
         });
       } else if (result.reason === 'modifier-required') {
         setFeedback({
           action: recording,
-          message: legacyDescriptor('shortcuts.errorModifierRequired'),
+          error: uiMessage('shortcuts.errorModifierRequired'),
         });
       } else if (result.reason === 'conflict') {
         setFeedback({
           action: recording,
-          message: legacyDescriptor('shortcuts.errorConflict', {
-            action: messageRef(legacyDescriptor(ACTION_LABELS[result.conflictWith])),
+          error: uiMessage('shortcuts.errorConflict', {
+            action: uiMessage(ACTION_LABELS[result.conflictWith]),
           }),
         });
       }
@@ -124,7 +125,7 @@ export function ShortcutSettings() {
           const active = recording === action;
           const actionLabel = t(ACTION_LABELS[action]);
           const keyLabel = shortcutKeyLabel(bindings[action], apple);
-          const rowError = feedback?.action === action ? feedback.message : '';
+          const rowError = feedback?.action === action ? feedback.error : null;
           return (
             <div key={action} className="settings-row shortcut-settings-row" role="listitem">
               <div className="settings-row-copy">
@@ -133,7 +134,7 @@ export function ShortcutSettings() {
                 {!rebindable && <small>{t('shortcuts.fixedHint')}</small>}
                 {rowError && (
                   <small className="shortcut-settings-error" role="alert">
-                    {translateMessage(rowError)}
+                    {formatUiMessage(rowError)}
                   </small>
                 )}
               </div>

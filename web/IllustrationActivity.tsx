@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { type UiMessage } from './ui-message.js';
 import { useRef, useState } from 'react';
@@ -90,7 +90,7 @@ export function IllustrationPhases({
               <span>
                 {phase.task === 'placement' && phase.status === 'completed' && progress.unresolved
                   ? t('visuals.m173')
-                  : translateMessage(labels[phase.status] ?? phase.status)}
+                  : (labels[phase.status] ?? phase.status)}
               </span>
               {phase.detail && <span>{phase.detail}</span>}
             </dd>

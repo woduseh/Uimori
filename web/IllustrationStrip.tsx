@@ -1,6 +1,6 @@
-import { t, useI18n, message as legacyDescriptor, messageRef } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { uiMessage, type UiMessage, legacyUiMessage, formatUiMessage } from './ui-message.js';
+import { uiMessage, type UiMessage, formatUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { readingScrollport } from './theme-body-scroll.js';
 import { cutsFor, type Cut } from './illustration-progress.js';
@@ -322,7 +322,7 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
       {!active && (
         <DeleteButton
           path={`/illustrations/${job.id}`}
-          title={messageRef(legacyDescriptor('visuals.m118'))}
+          title={uiMessage('visuals.m118')}
           label={uiMessage('visuals.m119')}
           description={uiMessage('visuals.m120')}
           iconOnly
@@ -409,7 +409,7 @@ function IllustrationCard({
   const [ready, setReady] = useState(!!picture?.images.length);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<IllustrationDetail | null>(null);
-  const [detailError, setDetailError] = useState('');
+  const [detailError, setDetailError] = useState<UiMessage | null>(null);
   useLayoutEffect(() => {
     if (ready || !picture?.images.length) return;
     const node = element.current;
@@ -427,13 +427,13 @@ function IllustrationCard({
     if (!detailOpen) return;
     let current = true;
     setDetail(null);
-    setDetailError('');
+    setDetailError(null);
     void api<IllustrationDetail>(`/illustrations/${job.id}`)
       .then((value) => {
         if (current) setDetail(value);
       })
-      .catch((error: Error) => {
-        if (current) setDetailError(error.message);
+      .catch((error: unknown) => {
+        if (current) setDetailError(toUiMessage(error));
       });
     return () => {
       current = false;
@@ -515,9 +515,7 @@ function IllustrationCard({
                 <DeleteButton
                   path={`/illustrations/${job.id}`}
                   title={
-                    job.target?.focus ||
-                    picture?.images[0]?.caption ||
-                    messageRef(legacyDescriptor('visuals.m131'))
+                    job.target?.focus || picture?.images[0]?.caption || uiMessage('visuals.m131')
                   }
                   label={uiMessage('visuals.m132')}
                   description={uiMessage('visuals.m133')}
@@ -634,11 +632,7 @@ function IllustrationCard({
         className="source-info-dialog"
       >
         {detailError ? (
-          <LoadingState
-            presentation="inline"
-            loading={false}
-            error={legacyUiMessage(detailError)}
-          />
+          <LoadingState presentation="inline" loading={false} error={detailError} />
         ) : detail ? (
           <div className="illustration-diagnostic">
             <p>

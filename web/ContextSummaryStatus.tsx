@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
 import type { ReaderRun } from '../core/types.js';
 import './context-summary.css';
 
@@ -18,7 +18,7 @@ export function ContextSummaryStatus({ summary }: { summary: ReaderRun['contextS
       ) : summary.status === 'failed' ? (
         <>
           <strong>{t('settings.m317')}</strong>
-          <span>{summary.error ? translateMessage(summary.error) : t('settings.m318')}</span>
+          <span>{summary.error || t('settings.m318')}</span>
         </>
       ) : (
         <span>

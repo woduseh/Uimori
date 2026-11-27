@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatDate } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { CheckIcon, CopyIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { providerEndpoints } from '#contracts';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
 import { ApiError, callEndpoint } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
 const runtimeErrors: Record<string, string> = {
@@ -105,9 +105,9 @@ export function CodexAgentSettings({
   const [status, setStatus] = useState<CodexRuntimeStatus>();
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
+    [error, setError] = useState<UiMessage | null>(null),
     [copied, setCopied] = useState(false),
-    [copyError, setCopyError] = useState(''),
+    [copyError, setCopyError] = useState<UiMessage | null>(null),
     [disconnecting, setDisconnecting] = useState(false);
   const version = useRef(0),
     locked = useRef(false);
@@ -124,14 +124,14 @@ export function CodexAgentSettings({
         const result = await callEndpoint(providerEndpoints.readCodexRuntime);
         if (!alive || current !== version.current) return;
         setStatus(result);
-        setError('');
+        setError(null);
         if (result.login && Date.now() < deadline)
           timer = setTimeout(() => {
             void poll();
           }, 3000);
-        else if (result.login) setError(legacyDescriptor('providers.m418'));
+        else if (result.login) setError(uiMessage('providers.m418'));
       } catch {
-        if (alive && current === version.current) setError(legacyDescriptor('providers.m419'));
+        if (alive && current === version.current) setError(uiMessage('providers.m419'));
       } finally {
         if (alive && current === version.current) setChecking(false);
       }
@@ -151,7 +151,7 @@ export function CodexAgentSettings({
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     ++version.current;
     setChecking(false);
     try {
@@ -161,8 +161,8 @@ export function CodexAgentSettings({
       setError(
         caught instanceof ApiError &&
           (caught.code === 'CODEX_AUTH_BUSY' || caught.code === 'CODEX_RUNTIME_BUSY')
-          ? errorDescriptor(caught)
-          : legacyDescriptor('providers.m420')
+          ? toUiMessage(caught, 'providers.m420')
+          : uiMessage('providers.m420')
       );
     } finally {
       locked.current = false;
@@ -171,12 +171,12 @@ export function CodexAgentSettings({
   }
   const recheck = () => refreshStatus();
   async function copyLoginCode(code: string) {
-    setCopyError('');
+    setCopyError(null);
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
     } catch {
-      setCopyError(legacyDescriptor('providers.loginCodeCopyFailed'));
+      setCopyError(uiMessage('providers.loginCodeCopyFailed'));
     }
   }
   useEffect(() => {
@@ -198,7 +198,7 @@ export function CodexAgentSettings({
         <LoadingState
           presentation="region"
           loading={!error}
-          error={legacyUiMessage(error)}
+          error={error}
           label={uiMessage('providers.m424')}
           onRetry={recheck}
         />
@@ -241,7 +241,7 @@ export function CodexAgentSettings({
               </span>
               {copyError && (
                 <span className="error" role="alert">
-                  {translateMessage(copyError)}
+                  {formatUiMessage(copyError)}
                 </span>
               )}
               <a href={status.login.verificationUrl} target="_blank" rel="noopener noreferrer">
@@ -372,7 +372,7 @@ export function CodexAgentSettings({
       )}
       {status && error && (
         <NoticeBanner tone="error" actions={recheckAction}>
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
       <TransientNotice content={copied ? uiMessage('providers.loginCodeCopied') : null} />

@@ -1,4 +1,5 @@
-import { formatNumber, message as validationMessage, messageRef } from './i18n.js';
+import { formatNumber } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import type { GeminiSafetySettings } from '../core/gemini-safety.js';
 import type {
   LibraryConnection,
@@ -296,24 +297,22 @@ export function modelPayload(draft: ModelDraft, connection: LibraryConnection) {
 export function providerOptionsDraftError(
   draft: ModelDraft,
   connection: LibraryConnection
-): string {
-  if (connection.protocol !== 'vercel-chat-v1') return '';
+): UiMessage | null {
+  if (connection.protocol !== 'vercel-chat-v1') return null;
   try {
     parseProviderOptionsText(draft.providerOptions);
-    return '';
+    return null;
   } catch (error) {
     switch (error instanceof ProviderOptionsError ? error.code : undefined) {
       case 'PROVIDER_OPTIONS_OBJECT':
       case 'PROVIDER_OPTIONS_JSON':
-        return validationMessage('providers.m322');
+        return uiMessage('providers.m322');
       case 'PROVIDER_OPTIONS_TOO_LARGE':
-        return validationMessage('providers.m575', {
-          value0: formatNumber(PROVIDER_OPTIONS_MAX_CHARS),
-        });
+        return uiMessage('providers.m575', { value0: formatNumber(PROVIDER_OPTIONS_MAX_CHARS) });
       case 'PROVIDER_OPTIONS_SENSITIVE_FIELD':
-        return validationMessage('providers.m323');
+        return uiMessage('providers.m323');
       default:
-        return validationMessage('providers.m324');
+        return uiMessage('providers.m324');
     }
   }
 }
@@ -321,28 +320,26 @@ export function forcedServiceTierError(
   draft: ModelDraft,
   connection: LibraryConnection | undefined,
   forcedVertexTier?: VertexRequestTier
-): string {
+): UiMessage | null {
   return connection?.protocol === 'vertex-gemini-v1' &&
     forcedVertexTier &&
     draft.serviceTier &&
     draft.serviceTier !== forcedVertexTier
-    ? validationMessage('providers.m576', {
-        value0: forcedVertexTier === 'flex' ? 'Flex' : 'Standard',
-      })
-    : '';
+    ? uiMessage('providers.m576', { value0: forcedVertexTier === 'flex' ? 'Flex' : 'Standard' })
+    : null;
 }
 export function modelDraftError(
   draft: ModelDraft,
   connection: LibraryConnection,
   forcedVertexTier?: VertexRequestTier
-): string {
+): UiMessage | null {
   const providerError = providerOptionsDraftError(draft, connection);
   if (providerError) return providerError;
   if (draft.tokenizer && !TOKENIZER_PROFILES.some((profile) => profile.id === draft.tokenizer))
-    return validationMessage('providers.m325');
+    return uiMessage('providers.m325');
   try {
     validateModelPricing(pricingPayload(draft.pricing));
-    if (!draft.maxOutputTokens.trim()) return validationMessage('providers.m326');
+    if (!draft.maxOutputTokens.trim()) return uiMessage('providers.m326');
     if (draft.evaluationToolsEnabled) {
       validateEvaluationToolOptions(modelPayload(draft, connection).evaluationTools);
     }
@@ -357,13 +354,9 @@ export function modelDraftError(
       draft.evaluationTools.contextMode === 'preloaded' &&
       modelCapability(connection.protocol, draft.modelId)?.forcedTools === false
     )
-      return validationMessage('providers.m327');
-    return '';
-  } catch (error) {
-    return validationMessage('providers.m577', {
-      value0: messageRef(
-        error instanceof Error ? error.message : validationMessage('providers.m328')
-      ),
-    });
+      return uiMessage('providers.m327');
+    return null;
+  } catch {
+    return uiMessage('providers.m577', { value0: uiMessage('providers.m328') });
   }
 }

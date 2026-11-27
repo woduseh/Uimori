@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { serviceTierLabel } from './pricing-display.js';
@@ -162,8 +163,8 @@ function ModelOptionSelect({
   onChange: (value: string) => void;
   format?: (value: string) => string;
   defaultLabel?: string;
-  invalidMessage?: string;
-  validationError?: string;
+  invalidMessage?: UiMessage;
+  validationError?: UiMessage | null;
   full?: boolean;
 }) {
   useI18n();
@@ -172,11 +173,11 @@ function ModelOptionSelect({
   const unsendable = value !== '' && !!vocabulary && !vocabulary.includes(value);
   const undocumented = value !== '' && !unsendable && !!choices && !choices.includes(value);
   const error =
-    validationError ||
+    validationError ??
     (unsendable
-      ? (invalidMessage ?? t('providers.m552', { value0: label, value1: defaultLabel }))
-      : '');
-  const shownError = translateMessage(error);
+      ? (invalidMessage ?? uiMessage('providers.m552', { value0: label, value1: defaultLabel }))
+      : null);
+  const shownError = error ? formatUiMessage(error) : '';
   useEffect(() => {
     ref.current?.setCustomValidity(shownError);
   }, [shownError]);
@@ -214,7 +215,7 @@ function ModelOptionSelect({
         )}
       </select>
       {error ? (
-        <small className="error">{translateMessage(error)}</small>
+        <small className="error">{shownError}</small>
       ) : undocumented ? (
         <small className="provider-undocumented">{UNDOCUMENTED()}</small>
       ) : null}
@@ -280,8 +281,8 @@ function OptionalNumber({
   useI18n();
   const ref = useRef<HTMLInputElement>(null),
     invalid = value !== '' && !sendable;
-  const error = invalid ? t('providers.m554', { value0: label }) : '';
-  const shownError = translateMessage(error);
+  const error = invalid ? uiMessage('providers.m554', { value0: label }) : null;
+  const shownError = error ? formatUiMessage(error) : '';
   useEffect(() => {
     ref.current?.setCustomValidity(shownError);
   }, [shownError]);
@@ -302,7 +303,7 @@ function OptionalNumber({
         onChange={(event) => onChange(event.target.value)}
       />
       {error ? (
-        <small className="error">{translateMessage(error)}</small>
+        <small className="error">{shownError}</small>
       ) : documented === false && value !== '' ? (
         <small className="provider-undocumented">{UNDOCUMENTED()}</small>
       ) : null}
@@ -324,8 +325,8 @@ function StopSequence({
 }) {
   useI18n();
   const ref = useRef<HTMLTextAreaElement>(null),
-    error = sendable ? '' : t('providers.m188');
-  const shownError = translateMessage(error);
+    error = sendable ? null : uiMessage('providers.m188');
+  const shownError = error ? formatUiMessage(error) : '';
   useEffect(() => {
     ref.current?.setCustomValidity(shownError);
   }, [shownError]);
@@ -342,7 +343,7 @@ function StopSequence({
           value={value}
           onChange={(event) => onChange(event.target.value)}
         />
-        {error && <small className="error">{translateMessage(error)}</small>}
+        {error && <small className="error">{shownError}</small>}
       </label>
       <button
         type="button"
@@ -428,11 +429,13 @@ export function ProviderModelFields({
   const cacheTtlAvailable = value.cacheMode === 'explicit' || value.cacheMode === 'automatic';
   const samplingStored = value.temperature !== '' || value.topP !== '';
   const optionsError =
-    connection && value.modelId ? modelDraftError(value, connection, forcedVertexTier) : '';
+    connection && value.modelId ? modelDraftError(value, connection, forcedVertexTier) : null;
   const providerOptionsError =
-    connection && protocol === 'vercel-chat-v1' ? providerOptionsDraftError(value, connection) : '';
+    connection && protocol === 'vercel-chat-v1'
+      ? providerOptionsDraftError(value, connection)
+      : null;
   const providerOptionsRef = useRef<HTMLTextAreaElement>(null);
-  const shownOptionsError = translateMessage(providerOptionsError);
+  const shownOptionsError = providerOptionsError ? formatUiMessage(providerOptionsError) : '';
   useEffect(() => {
     providerOptionsRef.current?.setCustomValidity(shownOptionsError);
   }, [shownOptionsError]);
@@ -540,7 +543,7 @@ export function ProviderModelFields({
               </option>
               {MODEL_FAMILY_CHOICES.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {translateMessage(item.label)}
+                  {item.label}
                 </option>
               ))}
             </select>
@@ -621,7 +624,7 @@ export function ProviderModelFields({
               {specified.map((item) => (
                 <li key={item.key}>
                   <span className="ui-meta-row">
-                    <span>{translateMessage(item.label)}</span>
+                    <span>{item.label}</span>
                     <strong>{item.text}</strong>
                   </span>
                   <button
@@ -907,7 +910,7 @@ export function ProviderModelFields({
               onChange={(cacheTtl) => update({ cacheTtl })}
               defaultLabel={t('providers.m236')}
               format={cacheTtlLabel}
-              invalidMessage={!cacheTtlAvailable ? t('providers.m253') : undefined}
+              invalidMessage={!cacheTtlAvailable ? uiMessage('providers.m253') : undefined}
             />
           </fieldset>
         )}
@@ -1002,7 +1005,7 @@ export function ProviderModelFields({
       </div>
       {optionsError && (
         <p className="error full" role="alert">
-          {translateMessage(optionsError)}
+          {formatUiMessage(optionsError)}
         </p>
       )}
     </>

@@ -7,8 +7,9 @@ import {
 } from '../core/chat-settings.js';
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
-import { message as legacyDescriptor, t, translateMessage, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
@@ -22,7 +23,7 @@ export function ChatGenerationDefaults() {
   const [maxCallsDraft, setMaxCallsDraft] = useState('');
   const [retriesDraft, setRetriesDraft] = useState('');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const confirmed = useRef<Defaults | null>(null);
   const requested = useRef<Defaults | null>(null);
   const saves = useRef(Promise.resolve());
@@ -35,10 +36,10 @@ export function ChatGenerationDefaults() {
         setDefaults(next);
         setMaxCallsDraft(String(next.maxCalls));
         setRetriesDraft(String(next.autoRefusalMaxRetries));
-        setError('');
+        setError(null);
       })
       .catch((cause) => {
-        if (active) setError((cause as Error).message);
+        if (active) setError(toUiMessage(cause, 'settings.newChatDefaultsLoadFailed'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -52,7 +53,7 @@ export function ChatGenerationDefaults() {
     const target = { ...requested.current, ...patch };
     requested.current = target;
     setDefaults(target);
-    setError('');
+    setError(null);
     saves.current = saves.current.then(() => persist(target));
   }
   async function persist(target: Defaults) {
@@ -81,7 +82,7 @@ export function ChatGenerationDefaults() {
       setDefaults(confirmed.current);
       setMaxCallsDraft(String(base.maxCalls));
       setRetriesDraft(String(base.autoRefusalMaxRetries));
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     }
   }
   function commitMaxCalls() {
@@ -90,7 +91,7 @@ export function ChatGenerationDefaults() {
     if (maxCalls === requested.current.maxCalls) return;
     if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > MAX_MAIN_MODEL_CALLS) {
       setMaxCallsDraft(String(requested.current.maxCalls));
-      setError(legacyDescriptor('settings.m78'));
+      setError(uiMessage('settings.m78'));
       return;
     }
     change({ maxCalls });
@@ -101,9 +102,7 @@ export function ChatGenerationDefaults() {
     if (autoRefusalMaxRetries === requested.current.autoRefusalMaxRetries) return;
     if (!retriesDraft.trim() || !isAutoRefusalRetryCount(autoRefusalMaxRetries)) {
       setRetriesDraft(String(requested.current.autoRefusalMaxRetries));
-      setError(
-        legacyDescriptor('settings.autoRefusalRetryRange', { max: MAX_AUTO_REFUSAL_RETRIES })
-      );
+      setError(uiMessage('settings.autoRefusalRetryRange', { max: MAX_AUTO_REFUSAL_RETRIES }));
       return;
     }
     change({ autoRefusalMaxRetries });
@@ -118,7 +117,7 @@ export function ChatGenerationDefaults() {
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={!defaults ? legacyUiMessage(error) : null}
+        error={!defaults ? error : null}
         label={uiMessage('settings.newChatDefaultsLoading')}
         errorLabel={uiMessage('settings.newChatDefaultsLoadFailed')}
         onRetry={retry}
@@ -212,7 +211,7 @@ export function ChatGenerationDefaults() {
       )}
       {defaults && error && (
         <NoticeBanner tone="error">
-          {translateMessage(error)}{' '}
+          {formatUiMessage(error)}{' '}
           <button type="button" className="link-button" onClick={retry}>
             {t('settings.m103')}
           </button>

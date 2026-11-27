@@ -1,5 +1,4 @@
 import { t, useI18n } from './i18n.js';
-import { legacyUiMessage } from './ui-message.js';
 import { useState } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -60,7 +59,7 @@ export function ProviderCatalogPicker({
           <LoadingState
             presentation="inline"
             loading={catalogState.loading}
-            error={legacyUiMessage(catalogState.error)}
+            error={catalogState.error}
             onRetry={catalogState.retry}
           />
         )}
