@@ -1839,3 +1839,12 @@ test('manual compaction with a disabled helper model names the helper role', asy
     expect.objectContaining({ code: 'MODEL_UNAVAILABLE', params: { role: 'helper' } })
   );
 });
+
+test('the summary of a conversation stays readable after its helper model is deleted', async () => {
+  const f = await fixture({ fixed: false });
+  f.store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('model',?)").run(f.helperModel.id);
+  const summary = f.runtime.contextSummary(f.conversation.id);
+  expect(() =>
+    f.runtime.editContextSummary(f.conversation.id, summary.checkpointRevision, '새 요약')
+  ).toThrow(expect.objectContaining({ code: 'MODEL_UNAVAILABLE', params: { role: 'helper' } }));
+});

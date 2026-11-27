@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import type { HelperChange, HelperRollbackUnit, HelperRollbackView } from '../core/helper.js';
+import { isAppErrorCode } from '#contracts';
 import { api, definiteRejection } from './api.js';
+import { apiErrorDisplay } from './api-errors.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
 import { getIntlLocale, t, translateMessage } from './i18n.js';
@@ -54,8 +56,11 @@ const unsaved = (unit: HelperRollbackUnit) =>
 
 function reasonText(unit: HelperRollbackUnit) {
   if (unit.status === 'restored') return t('helperRollback.alreadyRestored');
-  if (unit.status === 'failed')
+  if (unit.status === 'failed') {
+    if (unit.error && isAppErrorCode(unit.error))
+      return apiErrorDisplay({ code: unit.error, params: unit.errorParams }, 409, 'POST');
     return unit.error ? translateMessage(unit.error) : t('helperRollback.failed');
+  }
   if (unit.reason === 'changed-after-task') return t('helperRollback.changedAfter');
   if (unit.reason === 'changed-during-task') return t('helperRollback.changedDuring');
   if (unit.reason === 'created') return t('helperRollback.created');

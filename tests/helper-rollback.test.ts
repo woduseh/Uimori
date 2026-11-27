@@ -748,7 +748,9 @@ test('rolling back one target leaves the other targets of the task as they are',
   ]);
   expect(f.store.source(first!.id).text).toBe('한 곳.\n');
   expect(f.store.source(second!.id).text).toBe('둘째 장면이에요.\n그녀가 말했다.\n');
-  expect(() => f.rollBack(task, 'scene:missing')).toThrow('HELPER_ROLLBACK_UNIT_NOT_FOUND');
+  expect(() => f.rollBack(task, 'scene:missing')).toThrow(
+    expect.objectContaining({ code: 'HELPER_ROLLBACK_UNIT_NOT_FOUND' })
+  );
 });
 
 type Target = string;

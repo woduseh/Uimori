@@ -6,6 +6,7 @@ import {
   type HelperScope,
 } from '../core/helper.js';
 import type { Json } from '../core/transport.js';
+import { AppError } from './app-errors.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
 import type { Store } from './store.js';
@@ -150,11 +151,10 @@ export function validateHelperReferences(
   for (const pointer of pointers) {
     if (pointer.kind === 'scene') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'REFERENCE_OUTSIDE_SCOPE');
-      if (!sceneIds.has(pointer.id)) throw new HttpError(404, 'Referenced scene not found');
+      if (!sceneIds.has(pointer.id)) throw new AppError(404, 'HELPER_REFERENCE_NOT_FOUND');
     } else if (pointer.kind === 'outline') {
       if (scope.kind !== 'chat') throw new HttpError(403, 'REFERENCE_OUTSIDE_SCOPE');
-      if (!outlineIds.has(pointer.id))
-        throw new HttpError(404, 'Referenced outline node not found');
+      if (!outlineIds.has(pointer.id)) throw new AppError(404, 'HELPER_REFERENCE_NOT_FOUND');
     } else {
       const exists = store.db
         .prepare(
@@ -163,7 +163,7 @@ export function validateHelperReferences(
            LIMIT 1`
         )
         .get(pointer.kind, pointer.id);
-      if (!exists) throw new HttpError(404, 'Referenced library resource not found');
+      if (!exists) throw new AppError(404, 'HELPER_REFERENCE_NOT_FOUND');
     }
   }
   return pointers;

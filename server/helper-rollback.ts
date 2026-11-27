@@ -537,7 +537,7 @@ export function rollBackHelperTask(
     const all = readUnits(store, taskId);
     const selected = unitKeyFilter ? all.filter((unit) => unit.unit === unitKeyFilter) : all;
     if (unitKeyFilter && !selected.length)
-      throw new HttpError(404, 'HELPER_ROLLBACK_UNIT_NOT_FOUND');
+      throw new AppError(404, 'HELPER_ROLLBACK_UNIT_NOT_FOUND');
     const resourceKinds = new Set<ResourceKind>();
     const units = selected.flatMap((unit): HelperRollbackUnit[] => {
       const assessment = assessSafely(store, unit);
@@ -567,7 +567,11 @@ export function rollBackHelperTask(
         return [
           {
             ...describe(store, unit, { status: 'failed' }),
-            error: error instanceof HttpError ? error.message : 'HELPER_ROLLBACK_FAILED',
+            ...(error instanceof AppError
+              ? { error: error.code, ...(error.params ? { errorParams: error.params } : {}) }
+              : error instanceof HttpError
+                ? { error: error.message }
+                : {}),
           },
         ];
       }

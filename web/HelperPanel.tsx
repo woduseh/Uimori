@@ -1380,7 +1380,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       data.applyMessageMutation(result);
       return true;
     } catch (cause) {
-      if ('text' in mutation && cause instanceof ApiError && cause.status === 409) {
+      if ('text' in mutation && cause instanceof ApiError && cause.code === 'REVISION_CONFLICT') {
         if (currentScope.current === owner)
           setEditConflict({ conversationId: owner, messageId, draft: mutation.text });
         return false;

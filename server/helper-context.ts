@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
 import {
-  HELPER_COMPACTION_FAILURES,
   HELPER_COMPACTION_INPUT_RATIO,
   type HelperCompactionFailure,
   type HelperCompactionOutcome,
@@ -190,9 +189,7 @@ function lastManualCompaction(
     : {
         status: 'failed',
         finishedAt: data.finishedAt,
-        code: HELPER_COMPACTION_FAILURES.includes(data.code as HelperCompactionFailure)
-          ? (data.code as HelperCompactionFailure)
-          : 'HELPER_COMPACTION_FAILED',
+        code: data.code as HelperCompactionFailure,
       };
 }
 

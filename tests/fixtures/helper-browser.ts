@@ -210,7 +210,7 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
         return route.fulfill({ status: 503, json: { error: '합성 저장 실패' } });
       }
       if (body.expectedRevision !== view.conversation.revision)
-        return route.fulfill({ status: 409, json: { error: '합성 대화 충돌' } });
+        return route.fulfill({ status: 409, json: { code: 'REVISION_CONFLICT' } });
       const selected = view.messages.find((item) => item.id === messageMatch[2])!;
       const mutation: HelperMessageMutation = { conversation: view.conversation };
       if (request.method() === 'PATCH') {
@@ -259,7 +259,7 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
       const kind = conversationMatch[2];
       if (!kind && request.method() === 'PATCH') {
         if (body.expectedRevision !== view.conversation.revision)
-          return route.fulfill({ status: 409, json: { error: '합성 대화 충돌' } });
+          return route.fulfill({ status: 409, json: { code: 'REVISION_CONFLICT' } });
         view.conversation = {
           ...view.conversation,
           title: body.title ?? view.conversation.title,

@@ -233,4 +233,14 @@ test('helper @ reference search, model delivery, scope validation and deletion s
   ).json() as HelperMessage[];
   const userMessageAfter = messagesAfter.find((item) => item.role === 'user');
   expect(userMessageAfter?.references ?? []).toEqual([]);
+  const stale = await app.inject({
+    method: 'POST',
+    url: `/api/helper/conversations/${chatConversation.id}/messages`,
+    payload: {
+      requestKey: randomUUID(),
+      text: '@장면 1: 등대의 밤 을 다시 봐줘',
+      references: [{ kind: 'scene', id: scene.id }],
+    },
+  });
+  expect([stale.statusCode, stale.json()]).toEqual([404, { code: 'HELPER_REFERENCE_NOT_FOUND' }]);
 });

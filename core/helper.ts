@@ -390,6 +390,7 @@ export type HelperRollbackUnit = {
   touches: HelperRollbackTouch | null;
   notices?: 'translation-images-not-restored'[];
   error?: string;
+  errorParams?: Record<string, string | number | boolean>;
 };
 export type HelperRollbackView = {
   taskId: string;

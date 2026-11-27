@@ -1385,9 +1385,15 @@ export class HelperRuntime {
     running?.controller.abort();
     return { cancelled: Boolean(running) };
   }
-  private summaryModel() {
+  private summaryModel(required = false) {
     const ref = workspaceModelRef(promptWorkspace(this.store), 'helper');
-    return ref ? this.store.product.modelSnapshot(ref.id, undefined, false) : null;
+    if (!ref) return null;
+    try {
+      return this.store.product.modelSnapshot(ref.id, 'helper', false);
+    } catch (error) {
+      if (!required && error instanceof AppError && error.code === 'MODEL_UNAVAILABLE') return null;
+      throw error;
+    }
   }
   contextSummary(conversationId: string) {
     const busy = !this.deletionImpact(conversationId).canDelete;
@@ -1397,7 +1403,7 @@ export class HelperRuntime {
     const { scope } = this.workspace.conversation(conversationId);
     if (!this.deletionImpact(conversationId).canDelete)
       throw new AppError(409, 'HELPER_COMPACTION_BUSY');
-    const model = this.summaryModel();
+    const model = this.summaryModel(true);
     if (!model) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     this.store.transaction(() => {
       const change = publishEditedHelperContext(
