@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -54,7 +54,7 @@ export function useHelperActivity(
           setView((old) => ({
             taskId,
             data: old.data?.taskId === taskId ? old.data : null,
-            error: cause instanceof Error ? cause.message : uiMessage('helpers.m112'),
+            error: cause instanceof Error ? cause.message : legacyDescriptor('helpers.m112'),
           }));
       } finally {
         if (!disposed) setView((old) => ({ ...old, reading: false }));

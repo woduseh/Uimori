@@ -1,5 +1,5 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -260,7 +260,7 @@ export function OutlinePanel({
     try {
       retain(draftKey, next);
     } catch {
-      setError(uiMessage('prompts.uiYourDraftStaysOnThisScreenCheckBrowserStorage'));
+      setError(legacyDescriptor('prompts.uiYourDraftStaysOnThisScreenCheckBrowserStorage'));
     }
   }
   function edit() {
@@ -1188,7 +1188,9 @@ export function OutlinePanel({
                                 await navigator.clipboard.writeText(previousRequest);
                               } catch {
                                 setError(
-                                  uiMessage('prompts.uiUnableToCopyTheDraftSelectTheDraftText')
+                                  legacyDescriptor(
+                                    'prompts.uiUnableToCopyTheDraftSelectTheDraftText'
+                                  )
                                 );
                               }
                             }}

@@ -1,4 +1,4 @@
-import { useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   defaultStoryGuideConfig,
@@ -80,7 +80,7 @@ function StoryGuideEditor({
     const text =
       caught instanceof Error
         ? caught.message
-        : uiMessage('prompts.uiUnableToLoadCanonAndCharacterReferences');
+        : legacyDescriptor('prompts.uiUnableToLoadCanonAndCharacterReferences');
     setError(text);
     onError(text);
   }
@@ -144,7 +144,7 @@ function StoryGuideEditor({
       loadSequence.current++;
       setLoaded(value);
       acceptSaved(value);
-      setMessage(uiMessage('prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe'));
+      setMessage(legacyDescriptor('prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe'));
       onError('');
       onChanged();
       return true;

@@ -3,7 +3,7 @@ import {
   useI18n,
   translateMessage,
   formatNumber,
-  message as uiMessage,
+  message as legacyDescriptor,
   messageRef,
 } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
@@ -74,7 +74,7 @@ export function ContentAttachments({
       })
       .catch((caught) => {
         if (version.current === request && latest.current.viewKey === viewKey) {
-          const message = uiMessage('library.couldNotVerifyRequiredModulesCheckFor', {
+          const message = legacyDescriptor('library.couldNotVerifyRequiredModulesCheckFor', {
             v0: messageRef((caught as Error).message),
           });
           setLoadError(message);

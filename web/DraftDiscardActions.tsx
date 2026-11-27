@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
+import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { CloseIcon, EditIcon, SaveIcon } from './ui-icons.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -9,8 +9,8 @@ export function DraftDiscardActions({
   onDiscard,
   onSave,
   onSavingChange,
-  discardLabel = uiMessage('shared.discardLeave'),
-  saveLabel = uiMessage('shared.saveLeave'),
+  discardLabel = legacyDescriptor('shared.discardLeave'),
+  saveLabel = legacyDescriptor('shared.saveLeave'),
   disabled = false,
   open = true,
 }: {
@@ -65,7 +65,7 @@ export function DraftDiscardActions({
               onSavingChange?.(true);
               setError('');
               try {
-                if (!(await onSave())) setError(uiMessage('shared.saveFailure'));
+                if (!(await onSave())) setError(legacyDescriptor('shared.saveFailure'));
               } catch (caught) {
                 setError((caught as Error).message);
               } finally {

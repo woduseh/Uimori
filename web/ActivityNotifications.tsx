@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -63,7 +63,7 @@ export function ActivityNotifications({
       history.current(page.items);
       setCursor(page.nextCursor);
     } catch {
-      if (version === sequence.current) setError(uiMessage('helpers.m283'));
+      if (version === sequence.current) setError(legacyDescriptor('helpers.m283'));
     } finally {
       if (version === sequence.current) setLoading(false);
     }
@@ -256,7 +256,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
           actualGeneration !== undefined &&
           generation !== actualGeneration
         ) {
-          setError(uiMessage('helpers.m300'));
+          setError(legacyDescriptor('helpers.m300'));
           return;
         }
         setResult(value);
@@ -265,7 +265,9 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       .catch((cause) => {
         if (current)
           setError(
-            uiMessage('helpers.m301', { v0: cause instanceof ApiError ? ` (${cause.status})` : '' })
+            legacyDescriptor('helpers.m301', {
+              v0: cause instanceof ApiError ? ` (${cause.status})` : '',
+            })
           );
       });
     return () => {

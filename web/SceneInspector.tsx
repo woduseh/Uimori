@@ -1,4 +1,4 @@
-import { t, useI18n, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, formatNumber, message as legacyDescriptor } from './i18n.js';
 import { useState, type ReactNode } from 'react';
 import type { Job, ReaderRun, Run, Source } from '../core/types.js';
 import type { Illustration, IllustrationUsageReport } from '../core/illustration.js';
@@ -206,7 +206,7 @@ function RawRecords({
               text={() => json(record.value)}
               label={t('reader.copyJson')}
               copiedLabel={t('visuals.historyCopied')}
-              onFailure={() => onError(uiMessage('visuals.historyCopyFailed'))}
+              onFailure={() => onError(legacyDescriptor('visuals.historyCopyFailed'))}
             />
           )}
         </div>
@@ -348,7 +348,7 @@ export function SceneInspector({
                   text={() => run.partialText!}
                   label={t('visuals.m282')}
                   copiedLabel={t('visuals.m281')}
-                  onFailure={() => onError(uiMessage('visuals.m280'))}
+                  onFailure={() => onError(legacyDescriptor('visuals.m280'))}
                 />
               </div>
               <pre>{run.partialText}</pre>

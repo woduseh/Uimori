@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RevisionContext, SelectionRevisionResult } from '../core/selection-revision.js';
 import { api } from './api.js';
-import { message as uiMessage } from './i18n.js';
+import { message as legacyDescriptor } from './i18n.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { storageKeys } from './storage-keys.js';
@@ -109,7 +109,7 @@ export function useSelectionRevision({
         setError(
           cause instanceof Error
             ? cause.message
-            : uiMessage('reader.couldNotGetARevisionSuggestion')
+            : legacyDescriptor('reader.couldNotGetARevisionSuggestion')
         );
     } finally {
       if (pending.current === controller) {

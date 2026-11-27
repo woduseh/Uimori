@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
+import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
@@ -43,7 +43,9 @@ export function SaveConflictDialog({
       if (request === version.current) setFields(() => saved);
     } catch (caught) {
       if (request === version.current)
-        setError(caught instanceof Error ? caught.message : uiMessage('shared.savedFailure'));
+        setError(
+          caught instanceof Error ? caught.message : legacyDescriptor('shared.savedFailure')
+        );
     } finally {
       if (request === version.current) setLoading(false);
     }

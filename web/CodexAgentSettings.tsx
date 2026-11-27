@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
 import { CheckIcon, CopyIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -128,9 +128,9 @@ export function CodexAgentSettings({
           timer = setTimeout(() => {
             void poll();
           }, 3000);
-        else if (result.login) setError(uiMessage('providers.m418'));
+        else if (result.login) setError(legacyDescriptor('providers.m418'));
       } catch {
-        if (alive && current === version.current) setError(uiMessage('providers.m419'));
+        if (alive && current === version.current) setError(legacyDescriptor('providers.m419'));
       } finally {
         if (alive && current === version.current) setChecking(false);
       }
@@ -161,7 +161,7 @@ export function CodexAgentSettings({
         caught instanceof ApiError &&
           (caught.code === 'CODEX_AUTH_BUSY' || caught.code === 'CODEX_RUNTIME_BUSY')
           ? errorDescriptor(caught)
-          : uiMessage('providers.m420')
+          : legacyDescriptor('providers.m420')
       );
     } finally {
       locked.current = false;
@@ -175,7 +175,7 @@ export function CodexAgentSettings({
       await navigator.clipboard.writeText(code);
       setCopied(true);
     } catch {
-      setCopyError(uiMessage('providers.loginCodeCopyFailed'));
+      setCopyError(legacyDescriptor('providers.loginCodeCopyFailed'));
     }
   }
   useEffect(() => {
@@ -374,7 +374,7 @@ export function CodexAgentSettings({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice content={copied ? uiMessage('providers.loginCodeCopied') : ''} />
+      <TransientNotice content={copied ? legacyDescriptor('providers.loginCodeCopied') : ''} />
     </section>
   );
 }

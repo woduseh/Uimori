@@ -1,5 +1,5 @@
 import { tryParseJson } from './json.js';
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -115,7 +115,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       }
     } catch (cause) {
       if (alive.current && readEpoch.current === epoch) {
-        setError(cause instanceof Error ? cause.message : uiMessage('chatsettings.m158'));
+        setError(cause instanceof Error ? cause.message : legacyDescriptor('chatsettings.m158'));
         setReadFailed(true);
       }
     } finally {
@@ -146,7 +146,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
     try {
       rememberDraft(storageKey, next);
     } catch {
-      setError(uiMessage('chatsettings.m159'));
+      setError(legacyDescriptor('chatsettings.m159'));
     }
     setNotice('');
   }
@@ -155,7 +155,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
     if (!view || !draft || saving.current) return;
     const parsed = parseValues(draft.text);
     if (!parsed) {
-      setError(uiMessage('chatsettings.m160'));
+      setError(legacyDescriptor('chatsettings.m160'));
       return;
     }
     const conflict = draft.revision !== view.revision || draft.sourceHash !== view.sourceHash;
@@ -179,7 +179,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
     } catch {
       setBusy(false);
       saving.current = false;
-      setError(uiMessage('chatsettings.m161'));
+      setError(legacyDescriptor('chatsettings.m161'));
       return;
     }
     try {
@@ -192,11 +192,11 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       try {
         rememberDraft(storageKey, null);
       } catch {}
-      setNotice(uiMessage('chatsettings.m162'));
+      setNotice(legacyDescriptor('chatsettings.m162'));
       onChange?.();
     } catch (cause) {
       if (!alive.current) return;
-      setError(cause instanceof Error ? cause.message : uiMessage('chatsettings.m163'));
+      setError(cause instanceof Error ? cause.message : legacyDescriptor('chatsettings.m163'));
       if (definiteRejection(cause)) {
         const rejected: Draft = {
           text: pendingDraft.text,
@@ -284,7 +284,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
               try {
                 rememberDraft(storageKey, next);
               } catch {
-                setError(uiMessage('chatsettings.m159'));
+                setError(legacyDescriptor('chatsettings.m159'));
               }
             }}
           >
@@ -439,7 +439,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
                 rememberDraft(storageKey, null);
               } catch {}
               setError('');
-              setNotice(uiMessage('chatsettings.m188'));
+              setNotice(legacyDescriptor('chatsettings.m188'));
             }}
           >
             <ResetIcon size={16} aria-hidden="true" /> {t('chatsettings.m189')}

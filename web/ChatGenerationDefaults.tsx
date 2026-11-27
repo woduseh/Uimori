@@ -7,7 +7,7 @@ import {
 } from '../core/chat-settings.js';
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
-import { message as uiMessage, t, translateMessage, useI18n } from './i18n.js';
+import { message as legacyDescriptor, t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
@@ -89,7 +89,7 @@ export function ChatGenerationDefaults() {
     if (maxCalls === requested.current.maxCalls) return;
     if (!Number.isInteger(maxCalls) || maxCalls < 1 || maxCalls > MAX_MAIN_MODEL_CALLS) {
       setMaxCallsDraft(String(requested.current.maxCalls));
-      setError(uiMessage('settings.m78'));
+      setError(legacyDescriptor('settings.m78'));
       return;
     }
     change({ maxCalls });
@@ -100,7 +100,9 @@ export function ChatGenerationDefaults() {
     if (autoRefusalMaxRetries === requested.current.autoRefusalMaxRetries) return;
     if (!retriesDraft.trim() || !isAutoRefusalRetryCount(autoRefusalMaxRetries)) {
       setRetriesDraft(String(requested.current.autoRefusalMaxRetries));
-      setError(uiMessage('settings.autoRefusalRetryRange', { max: MAX_AUTO_REFUSAL_RETRIES }));
+      setError(
+        legacyDescriptor('settings.autoRefusalRetryRange', { max: MAX_AUTO_REFUSAL_RETRIES })
+      );
       return;
     }
     change({ autoRefusalMaxRetries });

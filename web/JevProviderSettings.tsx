@@ -1,5 +1,5 @@
 import { tryParseJson } from './json.js';
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -116,7 +116,7 @@ export function JevProviderSettings({
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setError(uiMessage('providers.m336'));
+        if (!controller.signal.aborted) setError(legacyDescriptor('providers.m336'));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -133,7 +133,7 @@ export function JevProviderSettings({
           if (!controller.signal.aborted) acceptTest(result);
         })
         .catch(() => {
-          if (!controller.signal.aborted) setTestError(uiMessage('providers.m337'));
+          if (!controller.signal.aborted) setTestError(legacyDescriptor('providers.m337'));
         });
     }, 1000);
     return () => {
@@ -160,16 +160,18 @@ export function JevProviderSettings({
       setStatus(next);
       setApiKey('');
       setTest(next.latestTest);
-      setMessage(remove ? uiMessage('providers.m338') : uiMessage('providers.m339'));
+      setMessage(remove ? legacyDescriptor('providers.m338') : legacyDescriptor('providers.m339'));
       return true;
     } catch (caught) {
       if (!alive.current) return false;
       if (caught instanceof ApiError && caught.code === 'REVISION_CONFLICT') {
         setConflict(true);
         setSaveConflict(true);
-        setError(uiMessage('providers.m340'));
+        setError(legacyDescriptor('providers.m340'));
       } else {
-        setError(definiteRejection(caught) ? errorDescriptor(caught) : uiMessage('providers.m341'));
+        setError(
+          definiteRejection(caught) ? errorDescriptor(caught) : legacyDescriptor('providers.m341')
+        );
       }
       return false;
     } finally {
@@ -196,15 +198,15 @@ export function JevProviderSettings({
       });
       if (!alive.current) return;
       setStatus(next);
-      setMessage(uiMessage('providers.jevSettingsSaved'));
+      setMessage(legacyDescriptor('providers.jevSettingsSaved'));
     } catch (caught) {
       if (alive.current)
         setSettingsError(
           caught instanceof ApiError && caught.code === 'REVISION_CONFLICT'
-            ? uiMessage('providers.jevSettingsConflict')
+            ? legacyDescriptor('providers.jevSettingsConflict')
             : definiteRejection(caught)
               ? errorDescriptor(caught)
-              : uiMessage('providers.jevSettingsFailed')
+              : legacyDescriptor('providers.jevSettingsFailed')
         );
     } finally {
       lock.current = false;
@@ -240,13 +242,13 @@ export function JevProviderSettings({
         if (revisionConflict) setConflict(true);
         setError(
           revisionConflict
-            ? uiMessage('providers.m342')
+            ? legacyDescriptor('providers.m342')
             : caught instanceof ApiError && caught.code === 'CONNECTION_TEST_RUNNING'
               ? errorDescriptor(caught)
-              : uiMessage('providers.m343')
+              : legacyDescriptor('providers.m343')
         );
       } else {
-        setTestError(uiMessage('providers.m344'));
+        setTestError(legacyDescriptor('providers.m344'));
       }
     } finally {
       lock.current = false;

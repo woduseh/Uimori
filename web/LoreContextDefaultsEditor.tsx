@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
+import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -64,7 +64,7 @@ export function LoreContextDefaultsEditor({
       );
       setSaved(accepted);
       setDraft(structuredClone(accepted));
-      setMessage(uiMessage('settings.m197'));
+      setMessage(legacyDescriptor('settings.m197'));
       return true;
     } catch (caught) {
       setError((caught as Error).message);

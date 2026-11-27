@@ -6,7 +6,7 @@ import { api, definiteRejection } from './api.js';
 import { apiErrorDisplay } from './api-errors.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
-import { getIntlLocale, t, translateMessage, message as uiMessage } from './i18n.js';
+import { getIntlLocale, t, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -244,11 +244,13 @@ export function useHelperRollback({
       for (const body of chosen.bodies)
         results.push(...(await api<HelperRollbackView>(path, body)).units);
       const count = results.filter((unit) => unit.status === 'restored').length;
-      if (alive.current && count) notify(uiMessage('helperRollback.done', { count }));
+      if (alive.current && count) notify(legacyDescriptor('helperRollback.done', { count }));
     } catch (cause) {
       if (!alive.current) return;
       if (definiteRejection(cause)) {
-        setError(cause instanceof Error ? cause.message : uiMessage('helperRollback.failed'));
+        setError(
+          cause instanceof Error ? cause.message : legacyDescriptor('helperRollback.failed')
+        );
         retry();
       } else setUnknown(true);
     } finally {

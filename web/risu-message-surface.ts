@@ -1,4 +1,4 @@
-import { message as uiMessage } from './i18n.js';
+import { message as legacyDescriptor } from './i18n.js';
 import { themeMessageSheet } from './theme-message-style.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { createReadingDecorator } from './reading-dom.js';
@@ -181,7 +181,7 @@ export function mountRisuMessageSurface(
         if (!alive || current !== generation) return;
         locked = false;
         setDisabled();
-        onState({ busy: false, issue: uiMessage('native.cardActionFailed') });
+        onState({ busy: false, issue: legacyDescriptor('native.cardActionFailed') });
       });
   };
   const click = (event: Event) => {
@@ -214,7 +214,7 @@ export function mountRisuMessageSurface(
         if (!value.name) continue;
         onState({
           busy: false,
-          issue: uiMessage('native.cardFormFileUnsupported'),
+          issue: legacyDescriptor('native.cardFormFileUnsupported'),
         });
         return;
       }

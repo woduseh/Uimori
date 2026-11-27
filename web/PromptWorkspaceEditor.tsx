@@ -1,4 +1,4 @@
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -101,7 +101,7 @@ export function PromptWorkspaceEditor({
     setApplyError('');
     try {
       await session.save();
-      setMessage(uiMessage('prompts.uiChangesSavedAutomatically'));
+      setMessage(legacyDescriptor('prompts.uiChangesSavedAutomatically'));
       return !session.snapshot().dirty;
     } catch {
       return false;
@@ -142,7 +142,7 @@ export function PromptWorkspaceEditor({
       });
       await session.reloadSaved();
       setSelectedCombo('');
-      setMessage(uiMessage('prompts.uiBuiltInPromptSelected'));
+      setMessage(legacyDescriptor('prompts.uiBuiltInPromptSelected'));
     } catch (caught) {
       setApplyError((caught as Error).message);
       await session.refresh().catch(() => {});
