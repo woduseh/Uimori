@@ -20,7 +20,8 @@ import {
   type LoreContextSnapshot,
 } from '../core/lore-context.js';
 import type { PromptCompilation } from '../core/risu-prompt.js';
-import { api } from './api.js';
+import { readerEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { knownContextError } from './context-error.js';
 import './lore-context.css';
@@ -246,12 +247,13 @@ export function LoreContextPolicyEditor({
     setBusy(true);
     setError(null);
     try {
-      const result = await api<Preview>(`/chats/${encodeURIComponent(chatId)}/prompt-preview`, {
+      const result = (await callEndpoint(readerEndpoints.previewPrompt, {
+        chatId,
         request: previewRequest,
         role: 'main',
         loreContext: policy,
         ...(reset ? { loreContextReset: true } : {}),
-      });
+      })) as Preview;
       if (sequence.current === version && latest.current === source)
         setPreview({ value: result, fingerprint: source });
     } catch (caught) {

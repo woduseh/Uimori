@@ -377,12 +377,6 @@ export const messages = {
     ja: '画像配置の担当をJEVに設定してから、もう一度配置してください。',
     zh: '请将图片排布负责方设为JEV后再重新排布。',
   },
-  'errors.INPUT_TRANSLATION_LANGUAGE_INVALID': {
-    ko: '입력 번역 언어를 다시 선택해 주세요.',
-    en: 'Select the input translation language again.',
-    ja: '入力の翻訳先言語を選び直してください。',
-    zh: '请重新选择输入翻译语言。',
-  },
   'errors.SELECTION_REVISION_RANGE_INVALID': {
     ko: '원문에서 퇴고할 구절을 다시 선택해 주세요.',
     en: 'Select the passage to revise in the original again.',
@@ -1750,12 +1744,6 @@ export const messages = {
     en: 'Earlier history cannot be changed while a scene is generating.',
     ja: '場面の生成中は以前の記録を変更できません。',
     zh: '生成场景期间无法更改之前的记录。',
-  },
-  'errors.SCENE_DELETE_NOT_FOUND': {
-    ko: '현재 채팅에서 삭제할 장면을 찾을 수 없어요.',
-    en: 'The scene to delete is not in the current chat.',
-    ja: '削除する場面が現在のチャットに見つかりません。',
-    zh: '在当前聊天中找不到要删除的场景。',
   },
   'errors.SCENE_DELETE_REFERENCED': {
     ko: '다른 채팅에서 참조하는 장면은 삭제할 수 없어요.',

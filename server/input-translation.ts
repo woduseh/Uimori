@@ -1,6 +1,8 @@
 import { textTokenExcerpt } from '../core/text-tokens.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
+import { readerEndpoints } from '#contracts';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { modelTimeoutMs, workspaceModelRef } from '../core/product.js';
@@ -22,8 +24,9 @@ import {
 } from '../core/transport.js';
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { promptWorkspace } from './prompt-workspace.js';
-import { HttpError, fields, record, text } from './request-validation.js';
 import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
+import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
 type Options = Pick<
@@ -32,16 +35,16 @@ type Options = Pick<
 > & { signal: AbortSignal; track: (work: Promise<void>) => void };
 
 export function inputTranslationRoutes(app: FastifyInstance, store: Store, options: Options) {
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/input-translation',
-    { bodyLimit: 16 * 1024 * 1024 },
-    async (request, reply): Promise<InputTranslationResult> => {
-      const body = record(request.body);
-      fields(body, ['text', 'targetLanguage']);
-      const draft = text(body.text, 'input translation text', REQUEST_TEXT_MAX_CHARS);
-      const language = inputTranslationLanguage(body.targetLanguage);
-      if (!language) throw new AppError(400, 'INPUT_TRANSLATION_LANGUAGE_INVALID');
-      const chatId = request.params.id;
+  registerEndpoint(
+    app,
+    readerEndpoints.translateInput,
+    readerOperations.translateInput,
+    async (
+      { chatId, text: draft, targetLanguage },
+      _request,
+      reply
+    ): Promise<InputTranslationResult> => {
+      const language = inputTranslationLanguage(targetLanguage)!;
       const chat = store.chat(chatId);
       const selected = workspaceModelRef(promptWorkspace(store), 'translation');
       if (!selected) throw new AppError(409, 'MODEL_REQUIRED', { role: 'translation' });
@@ -129,7 +132,6 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
         )
       );
       try {
-        reply.header('Cache-Control', 'no-store');
         return await work;
       } catch (error) {
         if (error instanceof HttpError) throw error;

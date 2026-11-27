@@ -12,6 +12,7 @@ import {
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createApp, type App } from '../server/app.js';
 import { latestTranslation, requestTranslation } from '../server/source-editing.js';
+import { deleteChat } from '../server/chat-deletion.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -99,6 +100,7 @@ async function setup(withModel = true, timeoutMs?: number, translation: string |
   const start = draft.indexOf('미라는');
   const end = start + '미라는 슬펐다.'.length;
   const payload = {
+    target: 'source' as const,
     draft,
     start,
     end,
@@ -202,7 +204,7 @@ test('changed stored source is rejected both before spending a call and after a 
   });
   const late = await f.post();
   expect(late.statusCode).toBe(409);
-  expect(late.json()).toEqual({ error: 'SELECTION_REVISION_STALE' });
+  expect(late.json()).toEqual({ code: 'SELECTION_REVISION_STALE' });
   expect(f.store.source(f.source.id).text).toBe('다른 창에서 저장한 원문.');
   const early = await f.post();
   expect(early.statusCode).toBe(409);
@@ -231,7 +233,7 @@ test('refused, partial, empty, tool-call, or oversized results cannot change the
     const send = mockSend({ ...success, ...delta });
     const response = await f.post();
     expect(response.statusCode, JSON.stringify(delta).slice(0, 80)).toBe(status);
-    if (error) expect(response.json()).toEqual({ error });
+    if (error) expect(response.json()).toEqual({ code: error });
     expect(send).toHaveBeenCalledTimes(1);
     expect(authoredState(f.app)).toEqual(before);
   }
@@ -241,7 +243,12 @@ test('refused, partial, empty, tool-call, or oversized results cannot change the
 test('invalid selection and absent helper model never send a provider call', async () => {
   const f = await setup(false);
   const send = mockSend();
-  expect((await f.post({ ...f.payload, end: f.payload.start })).statusCode).toBe(400);
+  const invalid = await f.post({ ...f.payload, end: f.payload.start });
+  expect(invalid.statusCode).toBe(400);
+  expect(invalid.json()).toEqual({ code: 'SELECTION_REVISION_RANGE_INVALID' });
+  const schemaRefused = await f.post({ ...f.payload, instruction: ' ' });
+  expect(schemaRefused.statusCode).toBe(400);
+  expect(schemaRefused.headers['cache-control']).toBe('no-store');
   const response = await f.post();
   expect(response.statusCode).toBe(409);
   expect(response.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'helper' } });
@@ -249,6 +256,18 @@ test('invalid selection and absent helper model never send a provider call', asy
   expect(validRevisionRange('A😀B', 1, 2)).toBe(false);
   expect(validRevisionRange('A😀B', 2, 3)).toBe(false);
   expect(validRevisionRange('A😀B', 1, 3)).toBe(true);
+});
+
+test('a source another tab deleted answers the revision conflict and never spends a call', async () => {
+  const f = await setup();
+  const send = mockSend();
+  deleteChat(f.store, f.chat.id, {});
+  const response = await f.post({ ...f.payload, end: f.payload.start });
+  expect(response.statusCode).toBe(409);
+  expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });
+  expect(response.headers['cache-control']).toBe('no-store');
+  expect(send).not.toHaveBeenCalled();
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
 test('nearby context keeps whole paragraphs next to the selection and marks the excerpt', () => {
@@ -366,7 +385,7 @@ test('a changed translation is rejected before a call and after the response; a 
   });
   const late = await f.post(body);
   expect(late.statusCode).toBe(409);
-  expect(late.json()).toEqual({ error: 'SELECTION_REVISION_TRANSLATION_STALE' });
+  expect(late.json()).toEqual({ code: 'SELECTION_REVISION_TRANSLATION_STALE' });
   expect((await f.post(body)).statusCode).toBe(409);
   expect(send).toHaveBeenCalledTimes(1);
   const current = translationPayload(f).body;

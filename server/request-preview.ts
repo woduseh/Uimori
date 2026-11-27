@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto';
+import { readerEndpoints } from '#contracts';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
-import { PROMPT_HTTP_BODY_MAX_BYTES, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import type { RequestPreview } from '../core/request-preview.js';
 import {
-  REQUEST_IMAGE_MAX_COUNT,
-  validateRequestImage,
   type RequestImage,
   type RequestImagePreview,
+  validateRequestImage,
 } from '../core/request-images.js';
 import type { LoreContextSnapshot } from '../core/lore-context.js';
 import type { Connection, ModelPreset, PromptPreset } from '../core/product.js';
@@ -24,7 +24,7 @@ import { CONTEXT_COMPACTION_TRIGGER_RATIO } from '../core/context-compaction.js'
 import { loreSelectionPending } from './lore-selection.js';
 import { buildMainProviderRequest, measureProviderRequest } from './main-request.js';
 import { promptWorkspace } from './prompt-workspace.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { registerEndpoint } from './endpoint.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { nativeRisuPending, prepareNativeRisuRun } from './risu-native-run.js';
 import { requestReceipt } from './request-receipt.js';
@@ -251,49 +251,30 @@ export async function inspectNextRequest(
 }
 
 export function requestPreviewRoutes(app: FastifyInstance, store: Store) {
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/request-preview',
-    { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES },
-    async (request) => {
-      const body = record(request.body);
-      fields(body, ['request', 'loreContextReset', 'requestImages']);
-      if (body.loreContextReset !== undefined && typeof body.loreContextReset !== 'boolean')
-        throw new HttpError(400, 'Invalid lore context reset');
-      const images = body.requestImages === undefined ? [] : previewImages(body.requestImages);
-      return previewNextRequest(
-        store,
-        request.params.id,
-        text(body.request, 'preview request', REQUEST_TEXT_MAX_CHARS, images.length > 0),
-        body.loreContextReset === true,
-        images.map(({ name, width, height }) => ({ name, width, height }))
-      );
-    }
+  registerEndpoint(
+    app,
+    readerEndpoints.previewRequest,
+    readerOperations.previewRequest,
+    ({ chatId, request, loreContextReset, requestImages }) =>
+      previewNextRequest(store, chatId, request, loreContextReset === true, requestImages ?? [])
   );
 }
 
-function previewImages(value: unknown): RequestImage[] {
-  if (!Array.isArray(value) || value.length > REQUEST_IMAGE_MAX_COUNT)
-    throw new HttpError(400, 'Invalid preview images');
-  try {
-    return value.map((raw, index) => {
-      const image = record(raw);
-      fields(image, ['name', 'width', 'height']);
-      const hash = createHash('sha256')
-        .update(JSON.stringify([index, image]))
-        .digest('hex');
-      const ratio = Math.min(1, 2048 / Math.max(image.width, image.height));
-      return validateRequestImage({
-        ...image,
+function previewImages(images: readonly RequestImagePreview[]): RequestImage[] {
+  return images.map((image, index) => {
+    const hash = createHash('sha256')
+      .update(JSON.stringify([index, image]))
+      .digest('hex');
+    const ratio = Math.min(1, 2048 / Math.max(image.width, image.height));
+    return validateRequestImage({
+      ...image,
+      hash,
+      mime: 'image/webp',
+      input: {
         hash,
-        mime: 'image/webp',
-        input: {
-          hash,
-          width: Math.max(1, Math.round(image.width * ratio)),
-          height: Math.max(1, Math.round(image.height * ratio)),
-        },
-      });
+        width: Math.max(1, Math.round(image.width * ratio)),
+        height: Math.max(1, Math.round(image.height * ratio)),
+      },
     });
-  } catch {
-    throw new HttpError(400, 'Invalid preview image name or size');
-  }
+  });
 }

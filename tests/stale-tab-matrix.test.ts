@@ -23,6 +23,7 @@ import { libraryCases } from './stale-tab/library.js';
 import { personalWorkspaceCases } from './stale-tab/personal-workspace.js';
 import { promptsCases } from './stale-tab/prompts.js';
 import { providersCases } from './stale-tab/providers.js';
+import { readerCases } from './stale-tab/reader.js';
 import { resourceEditorsCases } from './stale-tab/resource-editors.js';
 import { translationCases } from './stale-tab/translation.js';
 
@@ -33,6 +34,7 @@ const domainFiles: DomainCases[] = [
   personalWorkspaceCases,
   promptsCases,
   providersCases,
+  readerCases,
   resourceEditorsCases,
   translationCases,
 ];

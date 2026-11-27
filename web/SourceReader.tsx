@@ -1,3 +1,4 @@
+import { readerEndpoints } from '#contracts';
 import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { UiError, uiMessage, type UiMessage, formatUiMessage } from './ui-message.js';
@@ -30,7 +31,7 @@ import type { ChatDetail, ImageTarget, Job, ReaderRun, RunReceipt, Source } from
 import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
-import { api, ApiError, definiteRejection, labels } from './api.js';
+import { api, ApiError, callEndpoint, definiteRejection, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
@@ -45,6 +46,7 @@ import type { RisuAction } from './risu-message-surface.js';
 import { retainReaderNavigation } from './reader-navigation-scroll.js';
 import { RisuInteractionDialog } from './RisuInteractionDialog.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
+import { endpointRecord, type RecordSource } from './useApiRecord.js';
 import { LoadingState } from './LoadingState.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
@@ -883,8 +885,8 @@ function SourceReaderContent({
     }
     void action('translation', async () => {
       const proceed = await codexWarning.check(
-        `/sources/${source.id}/codex-content-preflight`,
-        {},
+        (signal) =>
+          callEndpoint(readerEndpoints.preflightSourceContent, { sourceId: source.id }, signal),
         'translation'
       );
       if (!proceed || !mounted.current) return;
@@ -987,8 +989,8 @@ function SourceReaderContent({
   const retranslate = () => {
     void action('translation', async () => {
       const proceed = await codexWarning.check(
-        `/sources/${source.id}/codex-content-preflight`,
-        {},
+        (signal) =>
+          callEndpoint(readerEndpoints.preflightSourceContent, { sourceId: source.id }, signal),
         'translation'
       );
       if (!proceed || !mounted.current) return;
@@ -1009,7 +1011,11 @@ function SourceReaderContent({
       ? {
           representation: 'original',
           text: source.text,
-          request: { expectedSourceHash: source.hash, expectedRevision: source.editRevision ?? 0 },
+          request: {
+            target: 'source',
+            expectedSourceHash: source.hash,
+            expectedRevision: source.editRevision ?? 0,
+          },
           parts: { source: sourceVersion, translation: '' },
         }
       : typeof validTranslation?.text === 'string' && shownTranslationHash
@@ -1633,16 +1639,17 @@ function SourceReaderContent({
                       }
                       onClick={() =>
                         void action('images', async () => {
-                          await api(`/sources/${source.id}/images`, {
-                            target: mode,
+                          await callEndpoint(readerEndpoints.requestImages, {
+                            sourceId: source.id,
                             expectedSourceHash: source.hash,
                             expectedRevision: latestImageJob?.revision ?? 0,
                             ...(imageTarget?.mode === 'translation'
                               ? {
+                                  target: 'translation' as const,
                                   expectedTranslationJobId: imageTarget.translationJobId,
                                   expectedTranslationRevision: imageTarget.translationRevision,
                                 }
-                              : {}),
+                              : { target: 'original' as const }),
                           });
                           await refresh();
                         })
@@ -2323,7 +2330,11 @@ export function JobCard({
       {job.rejection && <ProviderRejectionNotice rejection={job.rejection} />}
       <JobActions job={job} refresh={refresh} onError={onError} />
       <LazyDiagnostics<Job & { input?: unknown }>
-        path={`/jobs/${job.id}`}
+        source={
+          endpointRecord(readerEndpoints.readJob, { jobId: job.id }) as RecordSource<
+            Job & { input?: unknown }
+          >
+        }
         revision={`${job.status}:${job.attempt}:${job.revision}`}
         title={t('reader.actualAuxiliaryTaskInputAndTools')}
       >

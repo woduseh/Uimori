@@ -3,10 +3,10 @@ import { uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useApiRecord } from './useApiRecord.js';
+import { type RecordSource, useApiRecord } from './useApiRecord.js';
 
 export function LazyDiagnostics<T>({
-  path,
+  source,
   revision,
   title,
   initiallyOpen = false,
@@ -14,7 +14,7 @@ export function LazyDiagnostics<T>({
   actions,
   children,
 }: {
-  path: string;
+  source: string | RecordSource<T>;
   revision: number | string;
   title: ReactNode;
   initiallyOpen?: boolean;
@@ -24,7 +24,7 @@ export function LazyDiagnostics<T>({
 }) {
   useI18n();
   const [open, setOpen] = useState(initiallyOpen);
-  const { value, error, retry } = useApiRecord<T>(path, revision, !disclosure || open);
+  const { value, error, retry } = useApiRecord<T>(source, revision, !disclosure || open);
   const expanded = !disclosure || open;
   useEffect(() => {
     setOpen(initiallyOpen);

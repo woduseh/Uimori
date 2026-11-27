@@ -2,9 +2,9 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import {
   inputTranslationLanguage,
   type InputTranslationLanguage,
-  type InputTranslationResult,
 } from '../core/input-translation.js';
-import { api } from './api.js';
+import { readerEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 import {
   readOptionalJson,
@@ -99,8 +99,12 @@ export function useInputTranslation(options: Options) {
     setCandidate(null);
     try {
       const proceed = await codexWarning.check(
-        `/chats/${encodeURIComponent(scope.chatId)}/codex-content-preflight`,
-        { role: 'translation', text: captured.text },
+        (signal) =>
+          callEndpoint(
+            readerEndpoints.preflightChatContent,
+            { chatId: scope.chatId, role: 'translation', text: captured.text },
+            signal
+          ),
         'translation',
         controller.signal
       );
@@ -117,10 +121,9 @@ export function useInputTranslation(options: Options) {
         languageRef.current !== selectedLanguage
       )
         return;
-      const result = await api<InputTranslationResult>(
-        `/chats/${encodeURIComponent(scope.chatId)}/input-translation`,
-        { text: captured.text, targetLanguage: selectedLanguage },
-        'POST',
+      const result = await callEndpoint(
+        readerEndpoints.translateInput,
+        { chatId: scope.chatId, text: captured.text, targetLanguage: selectedLanguage },
         controller.signal
       );
       const latest = current.current.readDraft();

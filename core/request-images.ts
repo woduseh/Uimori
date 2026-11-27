@@ -1,3 +1,5 @@
+import { REQUEST_IMAGE_MAX_COUNT } from '#contracts';
+
 export type RequestImage = {
   hash: string;
   mime: 'image/webp';
@@ -12,7 +14,7 @@ export type RequestImagePreview = Pick<RequestImage, 'name' | 'width' | 'height'
 
 export type RequestImagePart = { type: 'image'; image: RequestImage };
 
-export const REQUEST_IMAGE_MAX_COUNT = 8;
+export { REQUEST_IMAGE_MAX_COUNT };
 export const STORED_REQUEST_IMAGE_ERRORS = [
   'IMAGE_INPUT_UNSUPPORTED_MODEL',
   'IMAGE_INPUT_UNSUPPORTED_PROTOCOL',

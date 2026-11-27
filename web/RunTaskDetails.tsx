@@ -1,3 +1,4 @@
+import { readerEndpoints } from '#contracts';
 import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { type UiMessage, uiMessage } from './ui-message.js';
@@ -21,7 +22,7 @@ import {
   TraceSummary,
   useChatTrace,
 } from './TaskTrace.js';
-import { useApiRecord } from './useApiRecord.js';
+import { endpointRecord, type RecordSource, useApiRecord } from './useApiRecord.js';
 import './run-task-details.css';
 
 type RunJob = Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>;
@@ -151,7 +152,7 @@ function RunJobs({
       {jobs.map((job) => (
         <LazyDiagnostics<Job>
           key={job.id}
-          path={`/jobs/${job.id}`}
+          source={endpointRecord(readerEndpoints.readJob, { jobId: job.id }) as RecordSource<Job>}
           revision={revision}
           disclosure={false}
           title={t('visuals.m284', {

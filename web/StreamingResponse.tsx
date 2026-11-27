@@ -8,7 +8,8 @@ import {
   watchResponseStream,
   type PushedResponsePage,
 } from './response-stream-bridge.js';
-import { api, ApiError } from './api.js';
+import { readerEndpoints } from '#contracts';
+import { api, ApiError, callEndpoint } from './api.js';
 import { responseStreamPollDelay } from './poll-delays.js';
 import { PlainProse, Prose } from './Prose.js';
 import { HelperMessageProse } from './HelperMessageProse.js';
@@ -191,7 +192,6 @@ export function StreamingResponse({
       polling = false,
       cursor = 0,
       failures = 0;
-    const base = `/response-streams/${taskKind}/${encodeURIComponent(taskId)}`;
     const reading = () => !closed && !terminal && shown.current && !document.hidden;
     const commit = () => {
       cancelAnimationFrame(frame);
@@ -257,12 +257,11 @@ export function StreamingResponse({
         let textArrived = false;
         do {
           const requested = cursor;
-          page = await api<ResponseStreamPage>(
-            `${base}?after=${requested}`,
-            undefined,
-            'GET',
+          page = (await callEndpoint(
+            readerEndpoints.readResponseStream,
+            { taskKind, taskId, after: requested },
             controller.signal
-          );
+          )) as ResponseStreamPage;
           if (closed) return;
           receive(page);
           textArrived = cursor > requested;

@@ -1,13 +1,19 @@
 import { createHash } from 'node:crypto';
 import { removeDeletedContinuityScenes } from './illustration-continuity.js';
 import { readerRunDismissalKey } from './run-reader-state.js';
+import {
+  type DeleteScenesInput,
+  readerEndpoints,
+  type SceneDeletionImpact,
+  type SceneDeletionResult,
+} from '#contracts';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { CONTEXT_JOB_SCENE_DELETED } from '../core/context-plan.js';
-import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-deletion.js';
 import type { MessageChanges } from '../core/message-changes.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
 import { assertChatIdleForDeletion } from './chat-deletion.js';
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { settleSnapshot } from './execution-snapshot.js';
@@ -22,12 +28,14 @@ import {
 } from './helper-argument-retention.js';
 import { AppError } from './app-errors.js';
 
-function target(store: Store, chatId: string, sourceId: string) {
-  const chat = store.chat(chatId),
+function target(store: Store, chatId: string, sourceId: string, mode: 'read' | 'write') {
+  const chat = mode === 'read' ? store.chat(chatId) : store.writableChat(chatId),
     history = store.history(chat.headRevision);
   const index = history.findIndex((source) => source.revision === sourceId);
   if (index < 0 || store.sourceMetadata(sourceId).chatId !== chatId)
-    throw new AppError(404, 'SCENE_DELETE_NOT_FOUND');
+    throw mode === 'read'
+      ? new AppError(404, 'LIBRARY_ITEM_DELETED')
+      : new AppError(409, 'REVISION_CONFLICT');
   return { chat, history, index };
 }
 function historyHash(history: ReturnType<Store['history']>) {
@@ -48,7 +56,7 @@ export function sceneDeletionImpact(
   chatId: string,
   sourceId: string
 ): SceneDeletionImpact {
-  const { chat, history, index } = target(store, chatId, sourceId);
+  const { chat, history, index } = target(store, chatId, sourceId, 'read');
   assertChatIdleForDeletion(store, chatId);
   const notes = store.story.notes.entries({ chatId, history });
   const following = new Set(history.slice(index).map((source) => source.revision));
@@ -103,29 +111,18 @@ export function deleteScenes(
   store: Store,
   chatId: string,
   sourceId: string,
-  input: unknown,
+  input: Omit<DeleteScenesInput, 'chatId' | 'sourceId'>,
   afterDelete?: (chatId: string) => void
 ): SceneDeletionResult {
-  const body = record(input);
-  fields(body, [
-    'scope',
-    'expectedHeadRevision',
-    'expectedSettingsRevision',
-    'expectedSourceHash',
-    'expectedHistoryHash',
-    'expectedVariablesRevision',
-    'idempotencyKey',
-  ]);
-  const scope = text(body.scope, 'scope', 10);
-  if (scope !== 'only' && scope !== 'following')
-    throw new HttpError(400, 'Invalid scene deletion scope');
-  const expectedHead =
-    body.expectedHeadRevision === null ? null : text(body.expectedHeadRevision, 'head', 100);
-  const expectedSettings = number(body.expectedSettingsRevision, 'settings revision', 1);
-  const expectedHash = text(body.expectedSourceHash, 'source hash', 64);
-  const expectedHistoryHash = text(body.expectedHistoryHash, 'history hash', 64);
-  const expectedVariablesRevision = number(body.expectedVariablesRevision, 'variables revision', 0);
-  const requestKey = text(body.idempotencyKey, 'delete request', 100);
+  const {
+    scope,
+    expectedHeadRevision: expectedHead,
+    expectedSettingsRevision: expectedSettings,
+    expectedSourceHash: expectedHash,
+    expectedHistoryHash,
+    expectedVariablesRevision,
+    idempotencyKey: requestKey,
+  } = input;
   const receiptKey = `transcript:scene-delete:${chatId}:${requestKey}`;
   const digest = createHash('sha256')
     .update(
@@ -145,7 +142,7 @@ export function deleteScenes(
   const result = store.transaction(() => {
     const previous = readImportReceipt<SceneDeletionResult>(store, receiptKey, digest);
     if (previous) return previous;
-    const { chat, history, index } = target(store, chatId, sourceId);
+    const { chat, history, index } = target(store, chatId, sourceId, 'write');
     if (
       chat.headRevision !== expectedHead ||
       chat.settingsRevision !== expectedSettings ||
@@ -389,14 +386,16 @@ export function sceneDeletionRoutes(
   store: Store,
   publish: (chatId: string) => void
 ) {
-  app.get<{ Params: { id: string; sourceId: string } }>(
-    '/api/chats/:id/sources/:sourceId/deletion-impact',
-    (request) => sceneDeletionImpact(store, request.params.id, request.params.sourceId)
+  registerEndpoint(
+    app,
+    readerEndpoints.readSceneDeletionImpact,
+    readerOperations.readSceneDeletionImpact,
+    ({ chatId, sourceId }) => sceneDeletionImpact(store, chatId, sourceId)
   );
-  app.delete<{ Params: { id: string; sourceId: string } }>(
-    '/api/chats/:id/sources/:sourceId',
-    (request) => {
-      return deleteScenes(store, request.params.id, request.params.sourceId, request.body, publish);
-    }
+  registerEndpoint(
+    app,
+    readerEndpoints.deleteScenes,
+    readerOperations.deleteScenes,
+    ({ chatId, sourceId, ...input }) => deleteScenes(store, chatId, sourceId, input, publish)
   );
 }

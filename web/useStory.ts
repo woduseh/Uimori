@@ -64,7 +64,7 @@ import type {
 } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
-import { promptEndpoints } from '#contracts';
+import { promptEndpoints, readerEndpoints } from '#contracts';
 import {
   api,
   apiBinary,
@@ -76,7 +76,7 @@ import {
 import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useInputTranslation } from './useInputTranslation.js';
-import { useCodexContentWarning } from './useCodexContentWarning.js';
+import { type Preflight, useCodexContentWarning } from './useCodexContentWarning.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
 import { isModelSelectable } from './model-selection.js';
@@ -1314,9 +1314,9 @@ export function useStory() {
     };
     const sentTranslationId = queued ? undefined : inputTranslation.beginSend();
     if (!previous && !payload.judgmentRecovery) {
-      const preflightPath = `/chats/${chat.id}/codex-content-preflight`;
       const preflight = {
-        role: 'main',
+        chatId: chat.id,
+        role: 'main' as const,
         text: payload.request,
         ...((payload.requestImages?.length ??
         retryRun?.snapshot.requestImages?.length ??
@@ -1330,12 +1330,14 @@ export function useStory() {
           : {}),
         ...(payload.retryOf ? { retryRunId: payload.retryOf } : {}),
       };
+      const sendPreflight: Preflight = (signal) =>
+        callEndpoint(readerEndpoints.preflightChatContent, preflight, signal);
       if (queued) {
-        if (await codexWarning.needsConfirmation(preflightPath, preflight)) {
+        if (await codexWarning.needsConfirmation(sendPreflight)) {
           queued.state = 'confirmation';
           return false;
         }
-      } else if (!(await codexWarning.check(preflightPath, preflight, 'main'))) return false;
+      } else if (!(await codexWarning.check(sendPreflight, 'main'))) return false;
       const draftChanged =
         !retryRun &&
         !queued &&

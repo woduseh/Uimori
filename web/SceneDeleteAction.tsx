@@ -1,6 +1,7 @@
 import { tryParseJson } from './json.js';
 import { useEffect, useRef, useState } from 'react';
-import { api, definiteRejection } from './api.js';
+import { readerEndpoints } from '#contracts';
+import { callEndpoint, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { t, useI18n } from './i18n.js';
@@ -54,7 +55,6 @@ export function SceneDeleteDialog({
   const mounted = useRef(true);
   const callbacks = useRef({ onClose, onError, onPendingChange });
   callbacks.current = { onClose, onError, onPendingChange };
-  const path = `/chats/${encodeURIComponent(chatId)}/sources/${encodeURIComponent(sourceId)}`;
   const storageKey = storageKeys.sceneDeletion(chatId, sourceId);
 
   useEffect(() => {
@@ -78,7 +78,10 @@ export function SceneDeleteDialog({
           setImpact(previous.impact);
           setScope(previous.scope);
         } else {
-          const next = await api<SceneDeletionImpact>(`${path}/deletion-impact`);
+          const next = await callEndpoint(readerEndpoints.readSceneDeletionImpact, {
+            chatId,
+            sourceId,
+          });
           if (active) setImpact(next);
         }
       } catch (cause) {
@@ -92,7 +95,7 @@ export function SceneDeleteDialog({
       active = false;
       mounted.current = false;
     };
-  }, [path, sourceId, storageKey]);
+  }, [chatId, sourceId, storageKey]);
 
   async function remove() {
     if (!impact || locked.current) return;
@@ -118,11 +121,13 @@ export function SceneDeleteDialog({
       setPending({ command, raw });
       callbacks.current.onPendingChange();
       sent = true;
-      accepted = await api<SceneDeletionResult>(
-        path,
-        { ...command.impact.request, scope: command.scope, idempotencyKey: command.idempotencyKey },
-        'DELETE'
-      );
+      accepted = await callEndpoint(readerEndpoints.deleteScenes, {
+        chatId,
+        sourceId,
+        ...command.impact.request,
+        scope: command.scope,
+        idempotencyKey: command.idempotencyKey,
+      });
     } catch (cause) {
       if (!sent) {
         if (mounted.current) setError(toUiMessage(cause));

@@ -1,3 +1,4 @@
+import { readerEndpoints } from '#contracts';
 import { t, useI18n, formatNumber } from './i18n.js';
 import { uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
@@ -20,7 +21,7 @@ import {
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { RequestLoreEntries } from './RequestLoreEntries.js';
 import { DropdownIcon } from './ui-icons.js';
-import { useApiRecord } from './useApiRecord.js';
+import { endpointRecord, type RecordSource, useApiRecord } from './useApiRecord.js';
 import './scene-usage.css';
 
 const amount = (value: number | null) =>
@@ -189,8 +190,10 @@ function summaryText(summary: NonNullable<NonNullable<SceneUsageReceipt['receipt
 }
 
 function useSceneUsageDetail(attemptId: string | undefined) {
-  const record = useApiRecord<SceneUsageDetail>(
-    `/attempts/${encodeURIComponent(attemptId ?? '')}/scene-detail`,
+  const record = useApiRecord(
+    endpointRecord(readerEndpoints.readSceneDetail, {
+      attemptId: attemptId ?? '',
+    }) as RecordSource<SceneUsageDetail>,
     0,
     !!attemptId
   );

@@ -24,4 +24,7 @@ export * from './domains/prompts/endpoints.js';
 export type * from './domains/prompts/operations.js';
 export * from './domains/providers/endpoints.js';
 export type * from './domains/providers/operations.js';
+export * from './domains/reader/limits.js';
+export * from './domains/reader/endpoints.js';
+export type * from './domains/reader/operations.js';
 export * from './endpoint-registry.js';

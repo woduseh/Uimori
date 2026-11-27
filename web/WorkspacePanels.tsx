@@ -1,3 +1,4 @@
+import { readerEndpoints } from '#contracts';
 import {
   settingsSearchText as searchText,
   matchesSettingsSearch as matchesSearch,
@@ -56,7 +57,7 @@ import { HelperIcon, BackIcon, LibraryIcon } from './ui-icons.js';
 import { GitFork } from 'lucide-react';
 import type { Job, ReaderRun } from '../core/types.js';
 import type { StoryState } from './useStory.js';
-import { api, labels } from './api.js';
+import { api, callEndpoint, labels } from './api.js';
 import { ConnectionEditor, type ProviderDetailRequest } from './ProviderManagement.js';
 import { backFromSettingsDetail, openSettingsDetail, SettingsDetail } from './SettingsDetail.js';
 import { ArchivePanel } from './ArchivePanel.js';
@@ -141,9 +142,7 @@ export function TasksPanel({
     setJobs(null);
     setJobsError(null);
     if (detail)
-      void api<Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>[]>(
-        `/chats/${detail.chat.id}/jobs`
-      )
+      void callEndpoint(readerEndpoints.listChatJobs, { chatId: detail.chat.id })
         .then((value) => {
           if (alive) setJobs(value);
         })

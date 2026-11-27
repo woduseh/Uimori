@@ -1,13 +1,13 @@
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { readRunSnapshot } from './run-projections.js';
-import { PROMPT_HTTP_BODY_MAX_BYTES, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { HttpError, fields, record, text } from './request-validation.js';
+import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { FastifyInstance } from 'fastify';
-import { promptEndpoints } from '#contracts';
-import { promptOperations } from '#contracts/operations';
+import { type PromptPreview, promptEndpoints, readerEndpoints } from '#contracts';
+import { promptOperations, readerOperations } from '#contracts/operations';
 import { registerEndpoint } from './endpoint.js';
 import { defaultProfile } from '../core/product.js';
-import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
+import { compileRisuPrompt, type PromptValue, validateRisuPrompt } from '../core/risu-prompt.js';
 import { planNativeMessages } from '../core/provider-messages.js';
 import { ProviderContractError } from '../core/provider-errors.js';
 import { failureLabel } from './failure-label.js';
@@ -56,37 +56,26 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
     if (!template) throw new HttpError(404, 'Unknown prompt template');
     return template;
   });
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/prompt-preview',
-    { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES },
-    async (request) => {
-      const b = record(request.body);
-      fields(b, ['program', 'request', 'values', 'role', 'loreContext', 'loreContextReset']);
-      const role = b.role ?? 'main';
-      if (!['main', 'translation'].includes(role)) throw new HttpError(400, 'Invalid prompt role');
-      if (b.loreContextReset !== undefined && typeof b.loreContextReset !== 'boolean')
-        throw new HttpError(400, 'Invalid lore context reset');
-      if (role !== 'main' && (b.loreContext !== undefined || b.loreContextReset !== undefined))
-        throw new HttpError(400, 'Lore context preview requires the main role');
-      const chat = store.chat(request.params.id);
-      const profile = store.product.snapshot(
-        chat.id,
-        role as 'main' | 'translation',
-        chat.headRevision
-      ) ?? {
+  registerEndpoint(
+    app,
+    readerEndpoints.previewPrompt,
+    readerOperations.previewPrompt,
+    async (b): Promise<PromptPreview> => {
+      const role = b.role;
+      const chat = store.chat(b.chatId);
+      const profile = store.product.snapshot(chat.id, role, chat.headRevision) ?? {
         ...defaultProfile(chat.id),
         models: {},
       };
       const program =
         b.program === undefined
-          ? (profile.promptPresets?.[role as 'main' | 'translation']?.program ??
-            createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT))
+          ? (profile.promptPresets?.[role]?.program ?? createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT))
           : validateRisuPrompt(b.program);
-      if (b.loreContext !== undefined)
+      if (b.role === 'main' && b.loreContext !== undefined)
         try {
           profile.loreContext = validateLoreContextPolicy(b.loreContext);
         } catch {
-          throw new HttpError(400, 'Invalid lore context policy');
+          throw new AppError(400, 'INVALID_REQUEST');
         }
       if (role === 'main') {
         const selected = profile.promptPresets?.main;
@@ -106,11 +95,11 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         parentRevision: chat.headRevision,
         settingsRevision: chat.settingsRevision,
         settings: chat.settings,
-        request: text(b.request, 'preview request', REQUEST_TEXT_MAX_CHARS),
+        request: b.request,
         history: store.history(chat.headRevision),
         resources: store.product.resources(chat.id, profile),
         profile,
-        ...(b.loreContextReset ? { loreContextReset: true } : {}),
+        ...(b.role === 'main' && b.loreContextReset ? { loreContextReset: true } : {}),
       };
       let snapshot = freezeReservationSnapshot(store, base, {
         purpose: role === 'main' ? 'preview-main' : 'preview-translation',
@@ -119,7 +108,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           return { iso, unix: Math.floor(Date.parse(iso) / 1000) };
         },
       });
-      const values = b.values !== undefined ? record(b.values) : undefined;
+      const values = b.values as Record<string, PromptValue> | undefined;
       let previewSource:
         | {
             kind: 'stored' | 'synthetic';
@@ -218,7 +207,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
         compilation = compileSnapshotPrompt(snapshot, program, values).promptCompilation!;
         compilation.warnings.push(...(snapshot.nativeRisuExecution?.issues ?? []));
       }
-      const target = profile.models[role as 'main' | 'translation'];
+      const target = profile.models[role];
       let provider = null;
       let error: PromptPreviewFailure | undefined;
       if (target)
@@ -238,7 +227,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
           } else {
             const plan = planNativeMessages(
               {
-                role: role as 'main' | 'translation',
+                role,
                 modelId: target.modelId,
                 stable: { contract: '', tools: [] },
                 input: { task: snapshot.request, controls: {} },

@@ -26,6 +26,7 @@
         "core/translation-display.ts",
         "core/manuscript-export.ts",
         "server/reader*.ts",
+        "packages/contracts/src/domains/reader/**",
         "server/selection-revision.ts",
         "server/source-editing.ts",
         "server/manuscript-export.ts",

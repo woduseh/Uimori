@@ -234,7 +234,7 @@ describe('durable public response batches', () => {
       { text: '부분' },
     ]);
     state.db.prepare('DELETE FROM runs WHERE id=?').run('run-1');
-    expect(() => state.streams.read('main', 'run-1')).toThrow('not found');
+    expect(() => state.streams.read('main', 'run-1')).toThrow('LIBRARY_ITEM_DELETED');
     expect(state.db.prepare('SELECT COUNT(*) AS count FROM response_stream_chunks').get()).toEqual({
       count: 0,
     });
@@ -242,7 +242,7 @@ describe('durable public response batches', () => {
     helper.progress({ attemptId: 'attempt-2', segment: 0, text: '도우미', offset: 3 });
     helper.finish('completed');
     state.db.prepare('DELETE FROM helper_tasks WHERE id=?').run('task-1');
-    expect(() => state.streams.read('helper', 'task-1')).toThrow('not found');
+    expect(() => state.streams.read('helper', 'task-1')).toThrow('LIBRARY_ITEM_DELETED');
   });
 
   test('a cursor sees one gapless sequence across memory delivery, a second reader and persistence', () => {
@@ -392,7 +392,7 @@ describe('durable public response batches', () => {
       status: 'running',
       chunks: [{ text: '번역' }],
     });
-    expect((await app.inject('/api/response-streams/unknown/job-1')).statusCode).toBe(404);
+    expect((await app.inject('/api/response-streams/unknown/job-1')).statusCode).toBe(400);
     await app.close();
     unsubscribe();
     state.db.close();

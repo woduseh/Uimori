@@ -171,6 +171,16 @@ test('Codex preflight warns through JEV for main and translation while remaining
     payload: { role: 'main', text: '' },
   });
   expect(emptyWithoutImage.statusCode).toBe(400);
+  expect(emptyWithoutImage.headers['cache-control']).toBe('no-store');
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: `/api/chats/${chat.id}/codex-content-preflight`,
+        payload: { role: 'translation', text: 'Hello.', selection: 'Hello' },
+      })
+    ).statusCode
+  ).toBe(400);
   const translationModel = app.store.product.snapshot(chat.id, 'translation').models.translation;
   expect(
     await autoTranslationNeedsConfirmation(
