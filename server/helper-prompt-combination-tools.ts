@@ -178,11 +178,17 @@ export function applyHelperPromptCombination(
   }
   if (name === 'prompt.combination.delete') {
     const input = parseInput(deletionOperations.deleteLibraryItem.input, args);
-    const combinationId = input.id;
-    const item = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
-    deleteLibraryItem(store, 'prompt-combination', combinationId, input);
+    const item = store.transaction(() => {
+      const item = store.product.editable<SavedPromptCombination>(
+        'prompt-combination',
+        input.id,
+        input.expectedRevision
+      );
+      deleteLibraryItem(store, 'prompt-combination', input.id, input);
+      return item;
+    });
     report(item);
-    return { deleted: true, id: combinationId, title: item.title };
+    return { deleted: true, id: input.id, title: item.title };
   }
   if (name === 'prompt.combination.apply') {
     fields(args, ['role', 'id', 'workspaceRevision']);

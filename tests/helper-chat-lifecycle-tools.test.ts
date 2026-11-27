@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content, SavedPromptCombination } from '../core/product.js';
+import { applyHelperPromptCombination } from '../server/helper-prompt-combination-tools.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { promptWorkspace } from '../server/prompt-workspace.js';
 import { Store } from '../server/store.js';
@@ -194,4 +196,28 @@ test('option presets are listed, saved, renamed, applied and deleted through the
   );
   expect(deleted.finished('delete')).toMatchObject({ denied: false });
   expect(f.store.product.isHidden('prompt-combination', saved!.id)).toBe(true);
+});
+
+test('deleting a combination already deleted elsewhere answers a revision conflict', async () => {
+  const f = fixture();
+  await runScriptedChatHelper(f.store, f.chat.id, [
+    helperCall('save', 'prompt.combination.save', {
+      title: '짧게',
+      workspaceRevision: promptWorkspace(f.store).revision,
+    }),
+    helperDone,
+  ]);
+  const [saved] = f.store.product.all('prompt-combination') as SavedPromptCombination[];
+  const target = { id: saved!.id, expectedRevision: saved!.revision };
+  deleteLibraryItem(f.store, 'prompt-combination', saved!.id, target);
+  expect(() =>
+    applyHelperPromptCombination(
+      f.store,
+      {} as HelperWorkspace,
+      { id: 'task', conversationId: 'conversation' },
+      'receipt',
+      'prompt.combination.delete',
+      target
+    )
+  ).toThrow(expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' }));
 });

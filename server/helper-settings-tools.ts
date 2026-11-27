@@ -728,13 +728,11 @@ export function invokeHelperSettingsTool(
   if (name === 'model.delete') {
     fields(args, ['modelId', 'expectedRevision']);
     const modelId = text(args.modelId, 'saved model ID', 100);
-    store.product.assertAvailable('model', modelId);
-    const model = store.product.get<ModelPreset>('model', modelId);
+    const expectedRevision = number(args.expectedRevision, 'model revision');
+    const model = store.product.editable<ModelPreset>('model', modelId, expectedRevision);
     const use = modelInUse(store, modelId);
     if (use) throw new HelperToolError(409, 'MODEL_IN_USE', `${use}`);
-    deleteLibraryItem(store, 'model', modelId, {
-      expectedRevision: number(args.expectedRevision, 'model revision'),
-    });
+    deleteLibraryItem(store, 'model', modelId, { expectedRevision });
     return { modelId, title: model.title, revision: model.revision, deleted: true };
   }
   if (name === 'usage.read') {

@@ -397,6 +397,43 @@ afterEach(async () => {
     await rm(target, { recursive: true, force: true });
   }
 });
+test('a stale tab applying a prompt or a combination is told to refresh before anything else', async () => {
+  const app = await application();
+  const program = createDefaultRisuPrompt('Stale options');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Narration tone=text';
+  const [first, second, removed] = await Promise.all(
+    ['First', 'Second', 'Removed'].map((title) =>
+      request<PromptPreset>(app, '/prompt-presets', { title, role: 'main', program })
+    )
+  );
+  const options = await request(app, '/prompt-combinations', {
+    title: 'Bold',
+    role: 'main',
+    values: { tone: 'bold' },
+    owner: { kind: 'preset', id: first!.id },
+    expectedRevision: first!.revision,
+  });
+  const stale = (await workspace(app)).revision;
+  await apply(app, second!);
+  deleteLibraryItem(app.store, 'prompt-preset', removed!.id, {
+    expectedRevision: removed!.revision,
+  });
+  const before = await workspace(app);
+  for (const [path, payload] of [
+    ['/prompt-workspace/apply-options', { combinationId: options.id }],
+    ['/prompt-workspace/apply', { presetId: removed!.id }],
+  ] as const) {
+    const refused = await request(
+      app,
+      path,
+      { expectedRevision: stale, role: 'main', ...payload },
+      409
+    );
+    expect(refused, path).toEqual({ code: 'REVISION_CONFLICT' });
+  }
+  expect(await workspace(app)).toEqual(before);
+});
+
 async function application() {
   const directory = await mkdtemp(join(tmpdir(), 'Uimori prompt settings '));
   const item: (typeof owned)[number] = { directory };
@@ -695,7 +732,7 @@ describe('global working prompts and independent library copies', () => {
     await request(
       app,
       '/prompt-workspace/apply',
-      { expectedRevision: current.revision, role: 'main', presetId: preset.id },
+      { expectedRevision: latest.revision, role: 'main', presetId: preset.id },
       400
     );
     const applied = await apply(app, edited);

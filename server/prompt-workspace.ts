@@ -778,22 +778,26 @@ export function applyWorkspacePromptPreset(
   store: Store,
   { expectedRevision, role, presetId }: ApplyPromptPreset
 ) {
-  store.product.assertAvailable('prompt-preset', presetId);
-  const preset = store.product.get<PromptPreset>('prompt-preset', presetId);
-  if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
-  return updatePromptWorkspace(
-    store,
-    {
-      expectedRevision,
-      [role]: {
-        title: preset.title,
-        program: preset.program,
-        values: preset.values ?? {},
-        defaultValues: resolvePromptValues(preset.program, preset.values ?? {}),
+  return store.transaction(() => {
+    assertRevision(promptWorkspace(store).revision, expectedRevision);
+    store.product.assertAvailable('prompt-preset', presetId);
+    const preset = store.product.get<PromptPreset>('prompt-preset', presetId);
+    if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
+    return updatePromptWorkspace(
+      store,
+      {
+        expectedRevision,
+        [role]: {
+          title: preset.title,
+          program: preset.program,
+          values: preset.values ?? {},
+          defaultValues: resolvePromptValues(preset.program, preset.values ?? {}),
+        },
       },
-    },
-    { role, id: preset.id }
-  );
+      { role, id: preset.id },
+      true
+    );
+  });
 }
 
 export function promptWorkspaceRoutes(app: FastifyInstance, store: Store, publishAll: () => void) {
@@ -828,14 +832,23 @@ export function applyPromptCombination(
   store: Store,
   { expectedRevision, role, combinationId }: ApplyPromptCombination
 ) {
-  store.product.assertAvailable('prompt-combination', combinationId);
-  const preset = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
-  if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
-  const current = promptWorkspace(store)[role];
-  if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))
-    throw new AppError(409, 'PROMPT_COMBINATION_MISMATCH');
-  return updatePromptWorkspace(store, {
-    expectedRevision,
-    [role]: { ...current, values: preset.values, optionValues: preset.values },
+  return store.transaction(() => {
+    const workspace = promptWorkspace(store);
+    assertRevision(workspace.revision, expectedRevision);
+    store.product.assertAvailable('prompt-combination', combinationId);
+    const preset = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
+    if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
+    const current = workspace[role];
+    if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))
+      throw new AppError(409, 'PROMPT_COMBINATION_MISMATCH');
+    return updatePromptWorkspace(
+      store,
+      {
+        expectedRevision,
+        [role]: { ...current, values: preset.values, optionValues: preset.values },
+      },
+      undefined,
+      true
+    );
   });
 }
