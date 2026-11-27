@@ -40,7 +40,7 @@ import { defaultThemeBackground } from '../core/theme-background.js';
 import { assertThemeAssetsStored, pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 const preferenceKey = 'theme-preferences';
 export function readTheme(store: Store, id: string): Theme {
-  return getBuiltinTheme(id) ?? store.product.get<Theme>('theme', id);
+  return getBuiltinTheme(id) ?? store.product.available<Theme>('theme', id);
 }
 export function themePreferences(store: Store): ThemePreferences {
   const row = store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(preferenceKey);
@@ -180,21 +180,10 @@ export function selectThemeBackground(
     return writePreferences(store, p);
   });
 }
-function assertStoredRevision(
-  store: Store,
-  kind: 'theme' | 'palette',
-  id: string,
-  expected: number
-) {
-  const row = store.db.prepare('SELECT revision FROM versions WHERE kind=? AND id=?').get(kind, id);
-  if (!row) throw new AppError(409, 'REVISION_CONFLICT');
-  assertRevision(Number(row.revision), expected);
-}
 export function deleteTheme(store: Store, id: string, expectedRevision: number) {
   if (id.startsWith('builtin:')) throw new HelperToolError(400, 'THEME_BUILTIN_READONLY');
   return store.transaction(() => {
-    assertStoredRevision(store, 'theme', id, expectedRevision);
-    const theme = readTheme(store, id);
+    const theme = store.product.editable<Theme>('theme', id, expectedRevision);
     const undo = store.db
       .prepare("SELECT model FROM resource_undo WHERE kind='theme' AND id=?")
       .get(id)?.model;
@@ -224,7 +213,7 @@ export function paletteCatalog(store: Store) {
 export function readPalette(store: Store, id: string) {
   return (
     BUILTIN_PALETTES.find((palette) => palette.id === id) ??
-    store.product.get<Palette>('palette', id)
+    store.product.available<Palette>('palette', id)
   );
 }
 export function savePalette(
@@ -241,17 +230,14 @@ export function savePalette(
   } catch (error) {
     throw asAppError(error);
   }
-  const saved = store.transaction(() => {
-    if (id !== undefined) assertStoredRevision(store, 'palette', id, expectedRevision ?? 0);
-    return store.product.save('palette', model, id, expectedRevision) as Palette;
-  });
+  const saved = store.product.save('palette', model, id, expectedRevision) as Palette;
   store.invalidated('themes');
   return saved;
 }
 export function deletePalette(store: Store, id: string, expectedRevision: number) {
   if (isPaletteId(id)) throw new HelperToolError(400, 'PALETTE_BUILTIN_READONLY');
   return store.transaction(() => {
-    assertStoredRevision(store, 'palette', id, expectedRevision);
+    store.product.editable('palette', id, expectedRevision);
     const p = themePreferences(store);
     if (p.defaultPaletteId === id) p.defaultPaletteId = THEME_PALETTE_ID;
     for (const map of [p.botPalettes, p.chatPalettes])

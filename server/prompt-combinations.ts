@@ -7,7 +7,7 @@ import { promptOperations } from '#contracts/operations';
 import { HttpError } from './request-validation.js';
 import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
-import { AppError, assertRevision } from './app-errors.js';
+import { assertRevision } from './app-errors.js';
 
 export function updatePromptCombination(
   store: Store,
@@ -15,20 +15,10 @@ export function updatePromptCombination(
   { id, expectedRevision, sourceRevision: expectedSource, title, values }: UpdatePromptCombination
 ) {
   return store.transaction(() => {
-    const saved = <T>(kind: string, savedId: string): T => {
-      try {
-        store.product.assertAvailable(kind, savedId);
-        return store.product.get<T>(kind, savedId);
-      } catch (error) {
-        if (error instanceof HttpError && error.statusCode === 404)
-          throw new AppError(409, 'REVISION_CONFLICT');
-        throw error;
-      }
-    };
-    const item = saved<SavedPromptCombination>('prompt-combination', id);
+    const item = store.product.writable<SavedPromptCombination>('prompt-combination', id);
     const current =
       item.owner.kind === 'preset'
-        ? saved<PromptPreset>('prompt-preset', item.owner.id)
+        ? store.product.writable<PromptPreset>('prompt-preset', item.owner.id)
         : getWorkspace()[item.role];
     if ('role' in current && current.role !== item.role)
       throw new HttpError(409, 'Prompt role mismatch');

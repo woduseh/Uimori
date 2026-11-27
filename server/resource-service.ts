@@ -13,7 +13,6 @@ import type {
 } from '../core/resource-editing.js';
 import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
-import { HttpError } from './request-validation.js';
 import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 import { AppError, assertRevision } from './app-errors.js';
 import type { CloneResource } from '#contracts';
@@ -34,24 +33,19 @@ function creationReceipt(key: string, payload: unknown) {
 
 export function readResource(store: Store, kind: ResourceKind, id: string): SavedResource {
   if (kind === 'prompt-workspace') return promptWorkspace(store);
-  try {
-    if (kind === 'illustration-preset') return readIllustrationPreset(store, id);
-    if (kind === 'theme') return readTheme(store, id);
-    store.product.assertAvailable(kind, id);
-    return store.product.get(kind, id);
-  } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 404)
-      throw new AppError(404, 'LIBRARY_ITEM_DELETED');
-    throw error;
-  }
+  if (kind === 'illustration-preset') return readIllustrationPreset(store, id);
+  if (kind === 'theme') return readTheme(store, id);
+  return store.product.available(kind, id);
 }
+
+const deleted = (error: unknown) =>
+  error instanceof AppError && error.code === 'LIBRARY_ITEM_DELETED';
 
 function readForEdit(store: Store, kind: ResourceKind, id: string): SavedResource {
   try {
     return readResource(store, kind, id);
   } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 404)
-      throw new AppError(409, 'REVISION_CONFLICT');
+    if (deleted(error)) throw new AppError(409, 'REVISION_CONFLICT');
     throw error;
   }
 }
@@ -60,8 +54,7 @@ function readCreatedResource(store: Store, receipt: CreationReceipt): SavedResou
   try {
     return readResource(store, receipt.kind, receipt.id);
   } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 404)
-      throw new AppError(410, 'RESOURCE_CREATION_REMOVED');
+    if (deleted(error)) throw new AppError(410, 'RESOURCE_CREATION_REMOVED');
     throw error;
   }
 }

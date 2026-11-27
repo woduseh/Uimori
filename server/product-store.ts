@@ -187,7 +187,7 @@ export class ProductStore {
   isHidden(kind: string, id: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
   }
-  private stored(kind: string, id: string): boolean {
+  isLive(kind: string, id: string): boolean {
     const table = isProviderSetting(kind) ? 'provider_settings' : 'versions';
     return (
       !this.isHidden(kind, id) &&
@@ -195,7 +195,15 @@ export class ProductStore {
     );
   }
   assertAvailable(kind: string, id: string) {
-    if (!this.stored(kind, id)) throw new AppError(404, 'LIBRARY_ITEM_DELETED');
+    if (!this.isLive(kind, id)) throw new AppError(404, 'LIBRARY_ITEM_DELETED');
+  }
+  available<T>(kind: string, id: string): T {
+    this.assertAvailable(kind, id);
+    return this.get<T>(kind, id);
+  }
+  writable<T>(kind: string, id: string): T {
+    if (!this.isLive(kind, id)) throw new AppError(409, 'REVISION_CONFLICT');
+    return this.get<T>(kind, id);
   }
   get<T>(kind: string, id: string, revision?: number): T {
     if (kind === 'package-image') return encodedImage(this.db, id) as T;
@@ -218,8 +226,7 @@ export class ProductStore {
     return parse(r.body);
   }
   editable<T extends { revision: number }>(kind: string, id: string, expected?: number): T {
-    if (!this.stored(kind, id)) throw new AppError(409, 'REVISION_CONFLICT');
-    const current = this.get<T>(kind, id);
+    const current = this.writable<T>(kind, id);
     if (current.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     return current;
   }
@@ -484,15 +491,8 @@ export class ProductStore {
     const connectionId = text(b.connectionId, 'connection ID', 100);
     if (validationConnection && validationConnection.id !== connectionId)
       throw new HttpError(400, 'Validation connection mismatch');
-    if (
-      !validationConnection &&
-      (this.isHidden('connection', connectionId) ||
-        !this.db
-          .prepare("SELECT 1 FROM provider_settings WHERE kind='connection' AND id=?")
-          .get(connectionId))
-    )
-      throw new AppError(409, 'REVISION_CONFLICT');
-    const connection = validationConnection ?? this.get<Connection>('connection', connectionId);
+    const connection =
+      validationConnection ?? this.writable<Connection>('connection', connectionId);
     const modelId = text(b.modelId, 'model ID', 300);
     validateModelGeneration(b, connection.protocol);
     const gemini = isGeminiProtocol(connection.protocol);
@@ -550,12 +550,7 @@ export class ProductStore {
     const targetId = text(body.targetId, 'display order target', 100);
     const position = choice(body.position, ['before', 'after'], 'display order position');
     return this.store.transaction(() => {
-      if (
-        this.isHidden(kind, id) ||
-        !this.db.prepare('SELECT 1 FROM provider_settings WHERE kind=? AND id=?').get(kind, id)
-      )
-        throw new AppError(409, 'REVISION_CONFLICT');
-      const model = this.get<ModelPreset | Connection>(kind, id);
+      const model = this.writable<ModelPreset | Connection>(kind, id);
       const group = (this.all(kind) as (ModelPreset | Connection)[])
         .filter(
           (item) =>

@@ -377,9 +377,11 @@ test('a stale editor reads a deleted resource as deleted and its save answers a 
   }).saved;
   deleteLibraryItem(store, 'content', bot.id, { expectedRevision: bot.revision });
   deleteTheme(store, (theme as { id: string }).id, theme.revision);
-  const read = await app.inject(`/api/resources/content/${bot.id}`);
-  expect(read.statusCode).toBe(404);
-  expect(read.json().message).toBe('LIBRARY_ITEM_DELETED');
+  for (const path of [`content/${bot.id}`, `theme/${(theme as { id: string }).id}`]) {
+    const read = await app.inject(`/api/resources/${path}`);
+    expect(read.statusCode, path).toBe(404);
+    expect(read.json().message, path).toBe('LIBRARY_ITEM_DELETED');
+  }
   const before = rows(store);
   for (const [kind, id, revision, model] of [
     ['content', bot.id, bot.revision, editableResource('content', bot)],

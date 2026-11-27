@@ -36,7 +36,7 @@ function writePreferences(store: Store, p: IllustrationPresetPreferences) {
 export function readIllustrationPreset(store: Store, id: string): IllustrationPreset {
   return id === DEFAULT_ILLUSTRATION_PRESET_ID
     ? BUILTIN_ILLUSTRATION_PRESET
-    : store.product.get<IllustrationPreset>('illustration-preset', id);
+    : store.product.available<IllustrationPreset>('illustration-preset', id);
 }
 export function illustrationPresetCatalog(store: Store): IllustrationPresetCatalog {
   return {
