@@ -16,7 +16,6 @@ import { navigationAction, openMoreSourceActions, sourceAction } from './ui-navi
     const title = `Quick start ${crypto.randomUUID()}`;
     const imageResponse = await request.post('/api/package-image-blobs', {
       data: {
-        mime: 'image/png',
         base64:
           'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEUlEQVQImWMQCej5D8IMMAYAP7QHvSBXvZYAAAAASUVORK5CYII=',
       },
