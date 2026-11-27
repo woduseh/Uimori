@@ -55,11 +55,6 @@
     "system": "Node MockTimers; Undici"
   },
   {
-    "file": "tests/provider-management-browser.spec.ts",
-    "comment": "Begin the native drag before scrolling a long list to the other provider. dragTo scrolls its target while the mouse is down but before this first movement.",
-    "system": "Playwright"
-  },
-  {
     "file": "tests/risu-message-surface-browser.spec.ts",
     "comment": "Playwright's actionability checks call form.getAttribute directly, so add this deliberately clobbering field after the real keyboard/click steps.",
     "system": "Playwright"

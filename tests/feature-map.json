@@ -124,8 +124,7 @@
         { "file": "tests/chat-option-recovery-browser.spec.ts" },
         { "file": "tests/chat-recovery-browser.spec.ts" },
         { "file": "tests/model-picker-browser.spec.ts" },
-        { "file": "tests/agent-collaboration-browser.spec.ts" },
-        { "file": "tests/evaluation-browser.spec.ts" }
+        { "file": "tests/agent-collaboration-browser.spec.ts" }
       ]
     },
     "context": {
@@ -454,12 +453,8 @@
       ],
       "specs": [
         { "file": "tests/settings-compact-browser.spec.ts" },
-        { "file": "tests/settings-dialog-consistency-browser.spec.ts" },
-        { "file": "tests/settings-polish-browser.spec.ts" },
         { "file": "tests/settings-save-decisions-browser.spec.ts" },
-        { "file": "tests/settings-search-browser.spec.ts" },
-        { "file": "tests/settings-sync-browser.spec.ts" },
-        { "file": "tests/input-affordances-browser.spec.ts" }
+        { "file": "tests/settings-sync-browser.spec.ts" }
       ]
     },
     "appearance": {

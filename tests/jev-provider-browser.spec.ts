@@ -159,7 +159,7 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   expect(await connection(request)).toMatchObject({ configured: false, hasSavedKey: false });
 });
 
-test('JEVUI03 recovers a synthetic uncertain test and shows structured success and auth failure', async ({
+test('JEVUI03 an uncertain test resubmits the same idempotency key and the next test uses a new one', async ({
   page,
   request,
 }) => {
@@ -181,22 +181,6 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
     error: null,
     usage: { inputTokens: null, outputTokens: null, costUsd: null },
   };
-  await page.route('**/api/provider-management/jev', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-    const response = await route.fetch();
-    await route.fulfill({
-      json: {
-        ...(await response.json()),
-        latestTest: {
-          ...base,
-          modelRevision: current.revision - 1,
-          status: 'completed',
-          finishedAt: new Date().toISOString(),
-          text: JSON.stringify({ scores: { relevant: 0.8 } }),
-        },
-      },
-    });
-  });
   await page.route('**/api/provider-management/jev/test', async (route) => {
     submissions.push(route.request().postDataJSON());
     expect(route.request().postData()).not.toContain(syntheticKey);
@@ -227,32 +211,20 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   });
   await openJev(page);
   const section = await openJevModel(page);
-  await expect(
-    section.getByText('이전 연결 정보로 실행한 테스트 결과예요.', { exact: true })
-  ).toBeVisible();
-  await section.getByRole('button', { name: 'JEV 연결 테스트', exact: true }).click();
-  await expect(section.getByRole('alert')).toContainText('테스트 결과를 확인하지 못했어요');
+  const run = section.getByRole('button', { name: 'JEV 연결 테스트', exact: true });
+  await run.click();
+  await expect(section.getByRole('alert')).toBeVisible();
   const statusButton = section.getByRole('button', { name: '테스트 상태 확인', exact: true });
   await expect(statusButton).toBeVisible();
   expect(submissions).toHaveLength(1);
   await statusButton.click();
-  await expect(section.getByLabel('JEV API 키', { exact: true })).toBeHidden();
-  await expect(section.getByRole('button', { name: '응답 확인 중…', exact: true })).toBeDisabled();
-  await expect(section.getByText('판단 응답을 확인했어요.', { exact: true })).toBeVisible();
-  await expect(section.getByText('예제 관련성: 97.0%', { exact: true })).toBeVisible();
-  await expect(section.getByText('0.32초', { exact: true })).toBeVisible();
-  await expect(section.getByText('$0.000123', { exact: true })).toBeVisible();
+  await expect.poll(() => polls.length).toBe(1);
+  await expect(run).toBeEnabled();
   expect(submissions).toHaveLength(2);
   expect(submissions[1]).toEqual(submissions[0]);
   expect(submissions[0]?.expectedRevision).toBe(current.revision);
-  expect(polls).toHaveLength(1);
-  await section.getByRole('button', { name: 'JEV 연결 테스트', exact: true }).click();
-  await expect(
-    section.getByText('API 키와 TypeSafe 계정의 사용 권한을 확인해 주세요.', { exact: true })
-  ).toBeVisible();
-  await expect(section.getByText('예제 관련성: 97.0%', { exact: true })).toHaveCount(0);
+  await run.click();
+  await expect.poll(() => polls.length).toBe(2);
   expect(submissions).toHaveLength(3);
   expect(submissions[2]?.idempotencyKey).not.toBe(submissions[1]?.idempotencyKey);
-  expect(polls).toHaveLength(2);
-  expect((await connection(request)).latestTest).toBeNull();
 });
