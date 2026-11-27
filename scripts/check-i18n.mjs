@@ -49,15 +49,13 @@ export function scanI18nSource(source, file = 'input.tsx') {
     calls = [],
     dynamicCalls = [];
   const tree = ast(source, file);
-  const functions = new Map(
-    ['t', 'message', 'retainedMessage', 'formatMessage'].map((name) => [name, name])
-  );
+  const functions = new Map(['t', 'formatMessage'].map((name) => [name, name]));
   for (const entry of tree.program.body) {
     if (entry.type !== 'ImportDeclaration') continue;
     const imported = /\/i18n\.[jt]s$/u.test(entry.source.value)
-      ? { t: 't', message: 'message', formatMessage: 'formatMessage' }
+      ? { t: 't', formatMessage: 'formatMessage' }
       : /\/ui-message\.[jt]s$/u.test(entry.source.value)
-        ? { uiMessage: 'message' }
+        ? { uiMessage: 'uiMessage' }
         : null;
     if (!imported) continue;
     for (const item of entry.specifiers) {

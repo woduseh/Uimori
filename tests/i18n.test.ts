@@ -367,7 +367,7 @@ test('catalog checker rejects duplicate and missing keys, malformed ICU and wron
     );
     writeFileSync(
       join(directory, 'web/view.tsx'),
-      'import { message as uiMessage, t as translate, formatMessage as formatUi } from "./i18n.js"; t("unknown.key"); t("good", { wrong: 1 }); uiMessage("unknown.alias"); translate("unknown.translateAlias"); formatUi("good", "en", { wrong: 2 });'
+      'import { t as translate, formatMessage as formatUi } from "./i18n.js"; import { uiMessage as ui } from "./ui-message.js"; t("unknown.key"); t("good", { wrong: 1 }); ui("unknown.alias"); translate("unknown.translateAlias"); formatUi("good", "en", { wrong: 2 });'
     );
     const result = checkI18n(directory);
     expect(result.errors).toEqual(
