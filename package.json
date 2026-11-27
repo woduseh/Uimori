@@ -23,7 +23,7 @@
     "lint": "biome lint . --error-on-warnings",
     "lint:fix": "biome lint --write . --error-on-warnings",
     "lint:architecture": "biome lint core packages server web --only=style/noRestrictedImports --error-on-warnings",
-    "quality": "biome check . --error-on-warnings && tsc --noEmit && tsc -p tsconfig.server.json --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs && node scripts/check-ui-message.mjs && node scripts/check-script-imports.mjs",
+    "quality": "biome check . --error-on-warnings && tsc --noEmit && tsc -p tsconfig.server.json --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs && node scripts/check-ui-message.mjs && node scripts/check-endpoint-calls.mjs && node scripts/check-script-imports.mjs",
     "quality:full": "npm run quality && npm run test:tooling && npm test",
     "check:changed": "node scripts/check-changed.mjs",
     "check:unit-diff": "node scripts/check-unit-diff.mjs",
@@ -43,6 +43,7 @@
     "test:personal": "vitest run tests/personal-workspace-flow.test.ts tests/database-schema.test.ts tests/access-session.test.ts",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:ui-message": "node scripts/check-ui-message.mjs",
+    "check:endpoint-calls": "node scripts/check-endpoint-calls.mjs",
     "check:script-imports": "node scripts/check-script-imports.mjs"
   },
   "dependencies": {

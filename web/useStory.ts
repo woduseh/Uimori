@@ -64,7 +64,7 @@ import type {
 } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
-import { promptEndpoints, readerEndpoints } from '#contracts';
+import { chatSettingsEndpoints, promptEndpoints, readerEndpoints } from '#contracts';
 import {
   api,
   apiBinary,
@@ -197,7 +197,7 @@ async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
   const chat = `/chats/${encodeURIComponent(chatId)}`;
   const [profile, options, workspace] = await Promise.all([
     api<ChatProfile>(`${chat}/profile`),
-    api<ChatOptionState>(`${chat}/options`),
+    callEndpoint(chatSettingsEndpoints.readOptions, { chatId }),
     callEndpoint(promptEndpoints.readModelWorkspace),
   ]);
   return {
@@ -1659,7 +1659,9 @@ export function useStory() {
         )
           throw new UiError(uiMessage('main.story16'));
         {
-          const state = await api<ChatOptionState>(`/chats/${chatId}/options`);
+          const state = (await callEndpoint(chatSettingsEndpoints.readOptions, {
+            chatId,
+          })) as ChatOptionState;
           if (
             !matchesPromptCombination(
               preset,
@@ -1669,7 +1671,8 @@ export function useStory() {
             )
           )
             throw new UiError(uiMessage('main.story17'));
-          await api(`/chats/${chatId}/options/fixed`, {
+          await callEndpoint(chatSettingsEndpoints.fixOptions, {
+            chatId,
             expectedRevision: state.revision,
             operationId: crypto.randomUUID(),
             binding: state.binding,

@@ -50,6 +50,7 @@ const classTable = {
     'commentSource',
     'i18nInput',
     'uiMessageInput',
+    'endpointCallInput',
     'browserInput',
     'windowsInsensitive',
   ],

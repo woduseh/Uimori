@@ -134,19 +134,21 @@ export const chatSettingsCases = domainCases('chat-settings', {
   writeVariables: {
     cases: [
       {
-        when: 'a chat another tab deleted',
+        when: 'a chat another tab deleted and values the service refuses',
         arrange: () => {
-          const request = {
-            expectedRevision: 0,
-            expectedSourceHash: null,
-            values: { mood: 'calm' },
-          };
+          const request = { expectedRevision: 0, expectedSourceHash: null };
           return {
-            input: { ...request, chatId: goneChatId(), idempotencyKey: randomUUID() },
+            input: {
+              ...request,
+              chatId: goneChatId(),
+              idempotencyKey: randomUUID(),
+              values: { prototype: 'x' },
+            },
             control: {
               ...request,
               chatId: chatId('Stale tab variables'),
               idempotencyKey: randomUUID(),
+              values: { mood: 'calm' },
             },
           };
         },

@@ -8,6 +8,8 @@ import type { FastifyInstance } from 'fastify';
 import { chatSettingsEndpoints } from '#contracts';
 import {
   chatSettingsOperations,
+  fixOptionsInput,
+  stageOptionsInput,
   type ChatOptionsCancel,
   type ChatOptionsCommand,
 } from '#contracts/operations';
@@ -346,6 +348,18 @@ export const helperOptionTools: ProviderTool[] = [
     })(),
   },
 ];
+const optionValues = fixOptionsInput.shape.values;
+const helperOptionInputs = {
+  read: z.strictObject({}),
+  stage: stageOptionsInput.omit({ chatId: true, operationId: true }),
+  fix: fixOptionsInput.omit({ chatId: true, operationId: true, values: true }).extend({
+    values: optionValues.optional(),
+    set: optionValues.optional(),
+    unset: z.array(z.string()).optional(),
+  }),
+  command: fixOptionsInput.omit({ chatId: true }),
+};
+
 export function invokeHelperOptions(
   store: Store,
   task: HelperTask,
@@ -357,41 +371,37 @@ export function invokeHelperOptions(
   if (scope.kind !== 'chat') throw new HelperToolError(403, 'CHAT_SCOPE_REQUIRED');
   const service = new ChatOptionsStore(store);
   const { chatId } = scope;
-  const args = (value ?? {}) as Record<string, unknown>;
+  const args = value === undefined ? {} : value;
   if (name === 'options.read') {
-    parseInput(chatSettingsOperations.readOptions.input, { ...args, chatId });
+    parseInput(helperOptionInputs.read, args);
     return helperOptionState(service.get(chatId));
   }
-  const workspace = new HelperWorkspace(store);
-  workspace.assertRunning(task.id);
-  const body: Record<string, unknown> = { ...args, operationId, chatId };
   if (name === 'options.oneoff') {
-    const { chatId: _chatId, ...command } = parseInput(
-      chatSettingsOperations.stageOptions.input,
-      body
-    );
+    const input = parseInput(helperOptionInputs.stage, args);
+    new HelperWorkspace(store).assertRunning(task.id);
+    const command = parseInput(helperOptionInputs.command, { ...input, operationId });
     return helperOptionState(service.stage(chatId, command, task.id));
   }
   if (name !== 'options.fix') throw new HttpError(400, 'Unknown option tool');
+  const { set, unset, ...saved } = parseInput(helperOptionInputs.fix, args);
+  const workspace = new HelperWorkspace(store);
+  workspace.assertRunning(task.id);
+  store.writableChat(chatId);
   const current = service.get(chatId);
   const before = current.revision;
-  if (body.set !== undefined || body.unset !== undefined) {
-    if (body.values !== undefined)
-      throw new HttpError(400, 'Give either values or set/unset, not both');
-    const set = parseInput(chatSettingsOperations.fixOptions.input.shape.values, body.set ?? {});
-    const unset = parseInput(z.array(z.string()), body.unset ?? []);
+  let values = saved.values;
+  if (set !== undefined || unset !== undefined) {
+    if (values !== undefined) throw new HttpError(400, 'Give either values or set/unset, not both');
     const controls = new Set(current.controls?.map((control) => control.id));
-    for (const id of unset) {
+    for (const id of unset ?? []) {
       if (!controls.has(id)) throw new HttpError(400, 'Unknown option to unset');
-      if (Object.hasOwn(set, id)) throw new HttpError(400, 'Cannot set and unset the same option');
+      if (Object.hasOwn(set ?? {}, id))
+        throw new HttpError(400, 'Cannot set and unset the same option');
     }
-    const values: Record<string, unknown> = { ...current.fixedValues, ...set };
-    for (const id of unset) delete values[id];
-    delete body.set;
-    delete body.unset;
-    body.values = values;
+    values = { ...current.fixedValues, ...set };
+    for (const id of unset ?? []) delete values[id];
   }
-  const { chatId: _chatId, ...command } = parseInput(chatSettingsOperations.fixOptions.input, body);
+  const command = parseInput(helperOptionInputs.command, { ...saved, values, operationId });
   const state = service.fixed(chatId, command, task.id);
   recordHelperTaskResult(workspace, task, {
     receiptId: `${task.id}:${operationId}`,
@@ -403,8 +413,8 @@ export function invokeHelperOptions(
         : [
             {
               kind: 'settings',
-              id: scope.chatId,
-              title: store.chat(scope.chatId).title,
+              id: chatId,
+              title: store.chat(chatId).title,
               revision: state.revision,
               setting: 'chat.options',
             },

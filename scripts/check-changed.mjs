@@ -110,6 +110,7 @@ export function selectChecks(
     comments: files.some(is.fullCommentScan) ? 'all' : files.filter(is.commentSource),
     i18n: files.some(is.i18nInput),
     uiMessage: files.some(is.uiMessageInput),
+    endpointCalls: files.some(is.endpointCallInput),
     scriptImports: files.some(is.scriptImportInput),
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
@@ -352,6 +353,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       );
     if (checks.i18n) statics.push(run('i18n', node, ['scripts/check-i18n.mjs']));
     if (checks.uiMessage) statics.push(run('ui-message', node, ['scripts/check-ui-message.mjs']));
+    if (checks.endpointCalls)
+      statics.push(run('endpoint-calls', node, ['scripts/check-endpoint-calls.mjs']));
     if (checks.scriptImports)
       statics.push(run('script-imports', node, ['scripts/check-script-imports.mjs']));
     if (checks.vitest.length) listing = affectedTests(checks.vitest);
