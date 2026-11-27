@@ -84,6 +84,25 @@ export type AppErrorParams = {
   MANUSCRIPT_RANGE_CHANGED: undefined;
   MANUSCRIPT_EMPTY: undefined;
   MANUSCRIPT_RANGE_INVALID: undefined;
+  FONT_NOT_FOUND: undefined;
+  FONT_TOO_LARGE: { maxBytes: number };
+  FONT_INVALID: undefined;
+  FONT_FORMAT_UNSUPPORTED: undefined;
+  FONT_STORAGE_FULL: { maxCount: number; maxBytes: number };
+  THEME_ASSET_STORAGE_FULL: { maxBytes: number };
+  THEME_ASSET_NOT_FOUND: undefined;
+  THEME_ASSET_MISSING: { name: string };
+  OUTLINE_NODE_NOT_FOUND: undefined;
+  OUTLINE_RELATED_TOO_MANY: { limit: number };
+  OUTLINE_SELECTION_STALE: undefined;
+  OUTLINE_REVIEW_SOURCE_MISSING: undefined;
+  OUTLINE_NODE_WRITING: undefined;
+  OUTLINE_LEVEL_SCHEDULED: undefined;
+  OUTLINE_NODE_WRITTEN: { title: string };
+  OUTLINE_PLAN_CHANGED: undefined;
+  OUTLINE_WRITING_IN_PROGRESS: undefined;
+  OUTLINE_WRITING_SCHEDULED: undefined;
+  OUTLINE_WRITING_CANCELLED: undefined;
 };
 
 export type AppErrorCode = keyof AppErrorParams;
@@ -178,6 +197,25 @@ const takesParams = {
   MANUSCRIPT_RANGE_CHANGED: false,
   MANUSCRIPT_EMPTY: false,
   MANUSCRIPT_RANGE_INVALID: false,
+  FONT_NOT_FOUND: false,
+  FONT_TOO_LARGE: true,
+  FONT_INVALID: false,
+  FONT_FORMAT_UNSUPPORTED: false,
+  FONT_STORAGE_FULL: true,
+  THEME_ASSET_STORAGE_FULL: true,
+  THEME_ASSET_NOT_FOUND: false,
+  THEME_ASSET_MISSING: true,
+  OUTLINE_NODE_NOT_FOUND: false,
+  OUTLINE_RELATED_TOO_MANY: true,
+  OUTLINE_SELECTION_STALE: false,
+  OUTLINE_REVIEW_SOURCE_MISSING: false,
+  OUTLINE_NODE_WRITING: false,
+  OUTLINE_LEVEL_SCHEDULED: false,
+  OUTLINE_NODE_WRITTEN: true,
+  OUTLINE_PLAN_CHANGED: false,
+  OUTLINE_WRITING_IN_PROGRESS: false,
+  OUTLINE_WRITING_SCHEDULED: false,
+  OUTLINE_WRITING_CANCELLED: false,
 } satisfies { [C in AppErrorCode]: AppErrorParams[C] extends undefined ? false : true };
 
 export const APP_ERROR_CODES = Object.keys(takesParams) as AppErrorCode[];

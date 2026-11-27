@@ -90,7 +90,7 @@ test('background validation rejects invalid numbers, external URLs, missing blob
     expect(() => validateThemeBackground({ ...image, ...patch })).toThrow();
   expect(() =>
     selectThemeBackground(store, { scope: 'global', background: image, expectedRevision: 0 })
-  ).toThrow('업로드');
+  ).toThrow('IMAGE_NOT_FOUND');
   selectThemeBackground(store, {
     scope: 'global',
     background: defaultThemeBackground,
@@ -98,7 +98,7 @@ test('background validation rejects invalid numbers, external URLs, missing blob
   });
   expect(() =>
     selectThemeBackground(store, { scope: 'global', background: null, expectedRevision: 0 })
-  ).toThrow('다른 창');
+  ).toThrow('REVISION_CONFLICT');
   expect(themePreferences(store).revision).toBe(1);
 });
 test('image cleanup retains active background bytes without retaining cleared backgrounds forever', () => {

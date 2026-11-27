@@ -52,7 +52,7 @@ test('font bytes deduplicate without replacing the original title and selections
   expect(preferences).toEqual({ revision: 1, appFontId: font.id, readerFontId: null });
   expect(() =>
     selectFonts(store, { expectedRevision: 0, appFontId: null, readerFontId: font.id })
-  ).toThrow('다른 창');
+  ).toThrow('REVISION_CONFLICT');
   expect(deleteFont(store, font.id)).toEqual({
     fonts: [],
     preferences: { revision: 2, appFontId: null, readerFontId: null },
@@ -95,16 +95,16 @@ test('rejects unsupported signatures and table ranges before storing any font', 
   ).toThrow();
   const bytes = fixture();
   bytes.writeUInt32BE(100, 20);
-  expect(() => registerFont(store, { title: 'Truncated', bytes })).toThrow('파일 범위');
+  expect(() => registerFont(store, { title: 'Truncated', bytes })).toThrow('FONT_INVALID');
   expect(fontCatalog(store).fonts).toEqual([]);
 });
 test('URL downloads refuse local targets and unapproved schemes', async () => {
   await expect(
     downloadFont('https://127.0.0.1/font.ttf', AbortSignal.timeout(1000))
-  ).rejects.toThrow('사설');
+  ).rejects.toThrow('FONT_URL_PRIVATE_NETWORK');
   await expect(
     downloadFont('http://example.com/font.ttf', AbortSignal.timeout(1000))
-  ).rejects.toThrow('HTTPS');
+  ).rejects.toThrow('FONT_URL_NOT_PUBLIC_HTTPS');
 });
 
 test('HTTP upload round-trips exact bytes, survives reopening, and protects font files with sessions', async () => {

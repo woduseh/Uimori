@@ -1,4 +1,4 @@
-import { api } from './api.js';
+import { api, throwApiError } from './api.js';
 import {
   themeAssetVariable,
   themeFile,
@@ -50,7 +50,7 @@ export async function exportThemeFile(theme: ThemeDefinition) {
   for (const asset of theme.assets ?? []) {
     if (files.some((file) => file.hash === asset.hash)) continue;
     const response = await fetch(themeAssetUrl(asset.hash));
-    if (!response.ok) throw new Error(`${asset.name}: ${response.status}`);
+    if (!response.ok) await throwApiError(response, 'GET');
     const blob = await response.blob();
     files.push({
       hash: asset.hash,

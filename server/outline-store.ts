@@ -1,5 +1,6 @@
 import { readHelperOutline, outlineNextRead } from './outline-read.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { textTokenExcerpt } from '../core/text-tokens.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { deleteSceneCommand } from './chat-deletion.js';
@@ -53,6 +54,7 @@ const HEAD_ANCESTRY = `WITH RECURSIVE history(id) AS (
   ) SELECT id FROM history`;
 const WRITTEN_LIMIT = 40;
 const BATCH_LIMIT = 200;
+const RELATED_LIMIT = 40;
 const REVIEW_SEED_SOURCES = 3;
 const TARGET_INTENT_TOKENS = 3000;
 type OutlineSelection = {
@@ -224,18 +226,22 @@ const optionalId = (value: unknown, name: string): string | null =>
   value === null ? null : text(value, name, 100);
 
 function parseRelatedIds(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > 40)
-    throw new HttpError(400, '함께 참고할 구성은 40개까지 연결해요.');
+  if (!Array.isArray(value))
+    throw new HttpError(400, 'Invalid related outlines: expected an array');
+  if (value.length > RELATED_LIMIT)
+    throw new AppError(400, 'OUTLINE_RELATED_TOO_MANY', { limit: RELATED_LIMIT });
   const ids = value.map((id) => text(id, 'related outline', 100));
-  if (new Set(ids).size !== ids.length) throw new HttpError(400, '구성 참조가 중복됐어요.');
+  if (new Set(ids).size !== ids.length)
+    throw new HttpError(400, 'Invalid related outlines: duplicate IDs');
   return ids;
 }
 
 export function parseOutlineOperations(value: unknown): OutlineOperation[] {
-  if (!Array.isArray(value) || !value.length)
-    throw new HttpError(400, '적용할 구성 변경이 필요해요.');
-  if (value.length > BATCH_LIMIT)
-    throw new HttpError(400, `한 번에 적용할 수 있는 구성 변경은 ${BATCH_LIMIT}개까지예요.`);
+  if (!Array.isArray(value) || !value.length || value.length > BATCH_LIMIT)
+    throw new HttpError(
+      400,
+      `Invalid outline operations: expected an array of 1 to ${BATCH_LIMIT} items`
+    );
   const refs = new Set<string>();
   return value.map((item) => {
     const body = record(item);
@@ -253,10 +259,10 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
         'fixed',
       ]);
       if (body.parentRef !== undefined && body.parentId !== undefined)
-        throw new HttpError(400, '상위 항목은 parentRef 또는 parentId 하나만 지정해 주세요.');
+        throw new HttpError(400, 'Invalid outline parent: send parentRef or parentId, not both');
       if (body.ref !== undefined) {
         const ref = text(body.ref, 'outline ref', 100);
-        if (refs.has(ref)) throw new HttpError(400, `구성 참조 '${ref}'가 중복됐어요.`);
+        if (refs.has(ref)) throw new HttpError(400, `Invalid outline ref: '${ref}' is repeated`);
         refs.add(ref);
       }
       return {
@@ -296,7 +302,7 @@ export function parseOutlineOperations(value: unknown): OutlineOperation[] {
         body.fixed === undefined &&
         body.relatedIds === undefined
       )
-        throw new HttpError(400, '변경할 내용이 필요해요.');
+        throw new HttpError(400, 'Invalid outline update: expected at least one field');
       return {
         op: 'update' as const,
         id: text(body.id, 'outline node', 100),
@@ -386,7 +392,7 @@ export class OutlineStore {
   }
   node(id: string): OutlineNode {
     const row = this.db.prepare(`${NODE_SELECT} WHERE n.id=?`).get(id) as Row | undefined;
-    if (!row) throw new HttpError(404, '구성 항목을 찾을 수 없어요.');
+    if (!row) throw new AppError(404, 'OUTLINE_NODE_NOT_FOUND');
     const relatedIds = this.db
       .prepare('SELECT related_id FROM outline_links WHERE node_id=? ORDER BY position')
       .all(id)
@@ -479,8 +485,9 @@ export class OutlineStore {
   }
   private placeFocus(chatId: string, nodeId: string) {
     const node = this.db.prepare('SELECT chat_id FROM outline_nodes WHERE id=?').get(nodeId);
-    if (!node) throw new HttpError(404, '구성 항목을 찾을 수 없어요.');
-    if (node.chat_id !== chatId) throw new HttpError(400, '다른 채팅의 구성 항목이에요.');
+    if (!node) throw new AppError(404, 'OUTLINE_NODE_NOT_FOUND');
+    if (node.chat_id !== chatId)
+      throw new HttpError(400, 'Invalid outline node: it belongs to another chat');
     this.db
       .prepare(
         'INSERT INTO outline_focus(chat_id,node_id,updated_at) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET node_id=excluded.node_id,updated_at=excluded.updated_at'
@@ -492,7 +499,11 @@ export class OutlineStore {
     for (const relatedId of ids) {
       const related = this.node(relatedId);
       if (relatedId === id || related.chatId !== node.chatId)
-        throw new HttpError(400, '같은 채팅의 다른 구성만 참고할 수 있어요.');
+        throw new HelperToolError(
+          400,
+          'OUTLINE_RELATED_INVALID',
+          'Relate other nodes of the same chat.'
+        );
     }
     this.db.prepare('DELETE FROM outline_links WHERE node_id=?').run(id);
     const insert = this.db.prepare('INSERT INTO outline_links VALUES(?,?,?)');
@@ -534,15 +545,17 @@ export class OutlineStore {
   ): OutlineHelperContext {
     if (!target.nodeId) {
       if (target.purpose === 'review' || target.expectedRevision !== null)
-        throw new HttpError(400, '점검할 구성을 선택해 주세요.');
+        throw new HttpError(400, 'Invalid outline target: a review needs a node');
       return { target, brief: null, sources: [], partial: false };
     }
     const node = this.db
       .prepare('SELECT chat_id,revision FROM outline_nodes WHERE id=?')
       .get(target.nodeId);
-    if (!node || node.chat_id !== chatId) throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
+    if (!node) throw new AppError(404, 'OUTLINE_NODE_NOT_FOUND');
+    if (node.chat_id !== chatId)
+      throw new HttpError(403, 'Invalid outline target: the node is outside this chat');
     if (Number(node.revision) !== target.expectedRevision)
-      throw new HttpError(409, '선택한 구성이 변경됐어요. 다시 선택해 주세요.');
+      throw new AppError(409, 'OUTLINE_SELECTION_STALE');
     return this.store.transaction(() => {
       const nodes = this.nodes(chatId);
       const overview = readHelperOutline(this.store, chatId, {
@@ -569,11 +582,7 @@ export class OutlineStore {
         const current = outlineIndex(nodes)
           .sources(target.nodeId!)
           .filter((source) => source.current);
-        if (!current.length)
-          throw new HttpError(
-            409,
-            '현재 분기에는 이 구성이나 하위 항목에 연결된 원문이 없어요. 먼저 원문을 작성해 주세요.'
-          );
+        if (!current.length) throw new AppError(409, 'OUTLINE_REVIEW_SOURCE_MISSING');
         const items = current.slice(-REVIEW_SEED_SOURCES);
         partial ||= current.length > items.length;
         let remaining = Math.min(1500, Math.floor(inputTokenLimit / 8));
@@ -613,21 +622,20 @@ export class OutlineStore {
     });
   }
   private assertIdle(node: OutlineNode) {
-    if (node.progress.state === 'writing')
-      throw new HttpError(409, '진행 중인 원문 생성을 먼저 취소해 주세요.');
+    if (node.progress.state === 'writing') throw new AppError(409, 'OUTLINE_NODE_WRITING');
   }
   private assertLevelChange(chatId: string, node: OutlineNode, next: OutlineLevel) {
     const parent = node.parentId === null ? null : this.node(node.parentId);
     if (!outlineParentAllowed(parent?.level ?? null, next))
-      throw new HttpError(400, '상위 구성보다 작은 수준만 고를 수 있어요.');
+      throw new HelperToolError(400, 'OUTLINE_LEVEL_INVALID', 'Choose a level below the parent.');
     const children = this.db
       .prepare('SELECT level FROM outline_nodes WHERE chat_id=? AND parent_id=?')
       .all(chatId, node.id)
       .map((row) => row.level as OutlineLevel);
     if (children.some((child) => !outlineParentAllowed(next, child)))
-      throw new HttpError(400, '하위 구성보다 큰 수준만 고를 수 있어요.');
+      throw new HelperToolError(400, 'OUTLINE_LEVEL_INVALID', 'Choose a level above every child.');
     if (!outlineWritable(next) && node.progress.state === 'scheduled')
-      throw new HttpError(409, '집필 예약이 있는 구성은 집필 단위가 아닌 수준으로 바꿀 수 없어요.');
+      throw new AppError(409, 'OUTLINE_LEVEL_SCHEDULED');
   }
   private siblingPosition(chatId: string, parentId: string | null): number {
     const row = this.db
@@ -691,7 +699,7 @@ export class OutlineStore {
         .get(chatId, key) as Row | undefined;
       if (prior) {
         if (prior.authority !== authority || prior.operations !== canonical)
-          throw new HttpError(409, '구성 요청 키가 다른 내용이나 권한에 사용됐어요.');
+          throw new HttpError(409, 'Outline idempotency key was used for a different batch');
         return JSON.parse(prior.created) as { ref?: string; id: string }[];
       }
       const pending = this.db
@@ -710,17 +718,22 @@ export class OutlineStore {
             operation.parentRef !== undefined
               ? (refs.get(operation.parentRef) ??
                 (() => {
-                  throw new HttpError(400, `구성 참조 '${operation.parentRef}'를 찾을 수 없어요.`);
+                  throw new HelperToolError(
+                    400,
+                    'OUTLINE_REF_UNKNOWN',
+                    `Define '${operation.parentRef}' in an earlier create of this batch.`
+                  );
                 })())
               : (operation.parentId ?? null);
           if (parentId !== null) {
             const parent = this.node(parentId);
             if (parent.chatId !== chatId)
-              throw new HttpError(400, '다른 채팅의 상위 구성 항목이에요.');
+              throw new HelperToolError(400, 'OUTLINE_PARENT_INVALID', 'Use a node of this chat.');
             if (!outlineParentAllowed(parent.level, operation.level))
-              throw new HttpError(
+              throw new HelperToolError(
                 400,
-                '상위 구성은 더 큰 수준이어야 해요. 중간 단계는 생략할 수 있어요.'
+                'OUTLINE_PARENT_INVALID',
+                'The parent must be a higher level; intermediate levels may be skipped.'
               );
             this.assertIdle(parent);
           }
@@ -748,9 +761,10 @@ export class OutlineStore {
           continue;
         }
         const node = this.node(operation.id);
-        if (node.chatId !== chatId) throw new HttpError(400, '다른 채팅의 구성 항목이에요.');
+        if (node.chatId !== chatId)
+          throw new HelperToolError(400, 'OUTLINE_NODE_OUTSIDE_CHAT', 'Use a node of this chat.');
         if (node.revision !== operation.expectedRevision)
-          throw new HttpError(409, '구성이 변경됐어요. 최신 구성을 확인한 뒤 다시 시도해 주세요.');
+          throw new AppError(409, 'REVISION_CONFLICT');
         if (operation.op === 'update') {
           this.assertIdle(node);
           if (operation.level !== undefined && operation.level !== node.level)
@@ -777,9 +791,13 @@ export class OutlineStore {
           if (parentId !== null) {
             const parent = siblings.find((item) => item.id === parentId);
             if (!parent || !outlineParentAllowed(parent.level, node.level))
-              throw new HttpError(400, '상위 구성의 수준이 맞지 않아요.');
+              throw new HelperToolError(
+                400,
+                'OUTLINE_PARENT_INVALID',
+                'The parent must be a higher-level node of this chat.'
+              );
             if (parentId === node.id || descendants.some((i) => i.id === parentId))
-              throw new HttpError(400, '구성 항목을 자신의 하위로 옮길 수 없어요.');
+              throw new HelperToolError(400, 'OUTLINE_MOVE_CYCLE');
             this.assertIdle(parent);
           }
           this.db
@@ -791,10 +809,7 @@ export class OutlineStore {
           const subtree = [node, ...outlineIndex(live()).descendants(node.id)];
           for (const item of subtree) {
             if (item.writings?.length)
-              throw new HttpError(
-                409,
-                `'${item.title}'은 이미 집필한 구성이에요. 집필한 구성은 삭제하지 않아요.`
-              );
+              throw new AppError(409, 'OUTLINE_NODE_WRITTEN', { title: item.title });
             this.assertIdle(item);
           }
           for (const item of [...subtree].reverse()) {
@@ -839,7 +854,7 @@ export class OutlineStore {
       'expectedPlanHash',
     ]);
     if (body.request !== undefined && body.additionalInstruction !== undefined)
-      throw new HttpError(400, '집필 추가 지시를 한 번만 보내 주세요.');
+      throw new HttpError(400, 'Invalid scene command: send request or additionalInstruction');
     const additionalInstruction =
       body.additionalInstruction === undefined
         ? ''
@@ -859,7 +874,7 @@ export class OutlineStore {
       if (!outlineWritable(node.level))
         throw new HttpError(
           400,
-          `${OUTLINE_LEVEL_LABELS[node.level]}은 한 번에 집필하는 단위가 아니에요. ${OUTLINE_LEVEL_LABELS.episode} 또는 ${OUTLINE_LEVEL_LABELS.beat}를 선택해 주세요.`
+          `Invalid outline node: ${node.level} is not a writing unit; choose an episode or beat`
         );
       const prior = this.db
         .prepare('SELECT id FROM scene_commands WHERE chat_id=? AND request_key=?')
@@ -870,28 +885,24 @@ export class OutlineStore {
             .prepare('SELECT 1 FROM outline_writings WHERE node_id=? AND command_id=?')
             .get(node.id, prior.id)
         )
-          throw new HttpError(409, '이 집필 요청 키는 다른 구성 예약에 사용됐어요.');
+          throw new HttpError(409, 'Scene command key was used for another outline node');
         const command = this.store.story.command(prior.id);
         if (!matchesStoredRequest(command.request))
-          throw new HttpError(409, '집필 요청 키가 다른 내용에 사용됐어요.');
+          throw new HttpError(409, 'Scene command key was used for a different request');
         return command;
       }
       if (
-        body.expectedRevision !== undefined &&
-        number(body.expectedRevision, 'outline revision') !== node.revision
+        (body.expectedRevision !== undefined &&
+          number(body.expectedRevision, 'outline revision') !== node.revision) ||
+        (body.expectedPlanHash !== undefined &&
+          text(body.expectedPlanHash, 'plan hash', 64) !== this.planHash(node.id))
       )
-        throw new HttpError(409, '구성이 변경됐어요. 최신 구성을 확인한 뒤 다시 집필해 주세요.');
-      if (
-        body.expectedPlanHash !== undefined &&
-        text(body.expectedPlanHash, 'plan hash', 64) !== this.planHash(node.id)
-      )
-        throw new HttpError(409, '집필에 참고할 구성이 변경됐어요. 미리보기를 다시 확인해 주세요.');
-      if (node.progress.state === 'writing')
-        throw new HttpError(409, '이미 이 구성의 원문을 생성하고 있어요.');
+        throw new AppError(409, 'OUTLINE_PLAN_CHANGED');
+      if (node.progress.state === 'writing') throw new AppError(409, 'OUTLINE_WRITING_IN_PROGRESS');
       if (node.progress.state === 'scheduled' && node.progress.commandId) {
         const command = this.store.story.command(node.progress.commandId);
         if (!matchesStoredRequest(command.request))
-          throw new HttpError(409, '이 구성은 다른 요청문으로 이미 예약됐어요.');
+          throw new AppError(409, 'OUTLINE_WRITING_SCHEDULED');
         return command;
       }
       const command = this.store.story.createCommand(node.chatId, {
@@ -926,10 +937,7 @@ export class OutlineStore {
     if (!target) return undefined;
     const command = this.store.story.command(sceneCommandId);
     if (command.status === 'cancelled' && !command.runId)
-      throw new HttpError(
-        409,
-        '구성의 집필 예약이 취소됐어요. 최신 구성을 확인하고 다시 집필해 주세요.'
-      );
+      throw new AppError(409, 'OUTLINE_WRITING_CANCELLED');
     const selection = outlineIndex(nodes).selection(target.id);
     this.db
       .prepare('UPDATE outline_writings SET node_revision=?,plan_hash=? WHERE command_id=?')

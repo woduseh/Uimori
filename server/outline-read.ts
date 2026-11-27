@@ -4,7 +4,8 @@ import type { RunSnapshot } from '../core/types.js';
 import type { OutlineLevel } from '../core/outline.js';
 import type { Json } from '../core/transport.js';
 import type { Store } from './store.js';
-import { HttpError, fields, number, text } from './request-validation.js';
+import { fields, number, text } from './request-validation.js';
+import { HelperToolError } from './app-errors.js';
 
 const MAX_RESULT_TOKENS = 12_000;
 const stamp = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -182,7 +183,7 @@ function fitList<T, R>(items: T[], build: () => R): R {
   for (;;) {
     const result = build();
     if (countTextTokens(JSON.stringify(result)) <= MAX_RESULT_TOKENS) return result;
-    if (items.length <= 1) throw new HttpError(400, 'OUTLINE_METADATA_TOO_LARGE');
+    if (items.length <= 1) throw new HelperToolError(400, 'OUTLINE_METADATA_TOO_LARGE');
     items.pop();
   }
 }
@@ -208,20 +209,20 @@ export function readHelperOutline(
     'section',
   ]);
   if (args.chatId !== undefined && args.chatId !== chatId)
-    throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
+    throw new HelperToolError(403, 'OUTLINE_OUTSIDE_SCOPE');
   const mode = args.mode ?? 'overview';
   if (mode !== 'overview' && mode !== 'subtree' && mode !== 'detail')
-    throw new HttpError(400, 'OUTLINE_MODE_INVALID');
+    throw new HelperToolError(400, 'OUTLINE_MODE_INVALID');
   const nodeId = mode === 'overview' ? null : text(args.nodeId, 'outline node', 100);
   const section = mode === 'detail' ? (args.section ?? 'intent') : null;
   if (section !== null && section !== 'intent' && section !== 'related' && section !== 'writings')
-    throw new HttpError(400, 'OUTLINE_SECTION_INVALID');
+    throw new HelperToolError(400, 'OUTLINE_SECTION_INVALID');
   if (
     (mode !== 'subtree' && args.depth !== undefined) ||
     (mode !== 'detail' && args.section !== undefined) ||
     (mode === 'overview' && args.nodeId !== undefined)
   )
-    throw new HttpError(400, 'OUTLINE_ARGUMENTS_INVALID');
+    throw new HelperToolError(400, 'OUTLINE_ARGUMENTS_INVALID');
   const depth = args.depth === undefined ? null : number(args.depth, 'depth', 0, 4);
   const offset = number(args.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
   const limit = Math.min(
@@ -235,7 +236,7 @@ export function readHelperOutline(
     const scope = { chatId, mode, nodeId, depth, section };
     const target = nodeId === null ? undefined : state.byId.get(nodeId);
     if (nodeId !== null && !target) {
-      if (!expected) throw new HttpError(404, 'OUTLINE_NODE_UNAVAILABLE');
+      if (!expected) throw new HelperToolError(404, 'OUTLINE_NODE_UNAVAILABLE');
       return {
         kind: 'error' as const,
         scope,
@@ -305,7 +306,7 @@ export function readHelperOutline(
       const value = String(
         store.db.prepare('SELECT intent FROM outline_nodes WHERE id=?').get(nodeId!)!.intent
       );
-      if (offset > value.length) throw new HttpError(400, 'OUTLINE_RANGE_INVALID');
+      if (offset > value.length) throw new HelperToolError(400, 'OUTLINE_RANGE_INVALID');
       const split = (at: number) => at > 0 && (value.codePointAt(at - 1) ?? 0) > 0xffff;
       const start = split(offset) ? offset - 1 : offset;
       let end =
@@ -328,12 +329,12 @@ export function readHelperOutline(
           nextRead: end < value.length ? next(end) : null,
         };
         if (countTextTokens(JSON.stringify(result)) <= MAX_RESULT_TOKENS) return result;
-        if (end - start <= 2) throw new HttpError(400, 'OUTLINE_METADATA_TOO_LARGE');
+        if (end - start <= 2) throw new HelperToolError(400, 'OUTLINE_METADATA_TOO_LARGE');
         end = start + Math.floor((end - start) / 2);
       }
     }
     if (section === 'writings') {
-      if (offset > refs.length) throw new HttpError(400, 'OUTLINE_RANGE_INVALID');
+      if (offset > refs.length) throw new HelperToolError(400, 'OUTLINE_RANGE_INVALID');
       const items = sourcePages(store, chatId, refs.slice(offset, offset + limit), writing);
       return fitList(items, () => ({
         ...base,
@@ -353,7 +354,7 @@ export function readHelperOutline(
       section === 'related'
         ? related
         : all.filter((item) => depth === null || item.depth <= depth).map((item) => item.node);
-    if (offset > selected.length) throw new HttpError(400, 'OUTLINE_RANGE_INVALID');
+    if (offset > selected.length) throw new HelperToolError(400, 'OUTLINE_RANGE_INVALID');
     const nodes = previews(store, selected.slice(offset, offset + limit));
     const page = () => ({
       ...base,

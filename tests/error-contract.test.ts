@@ -17,6 +17,12 @@ const parameterNames = {
   NATIVE_TRANSFER_EXPORT_TOO_LARGE: { maxBytes: true },
   NATIVE_TRANSFER_IMPORT_TOO_LARGE: { maxBytes: true },
   IMAGE_TOO_LARGE: { maxBytes: true },
+  FONT_TOO_LARGE: { maxBytes: true },
+  FONT_STORAGE_FULL: { maxCount: true, maxBytes: true },
+  THEME_ASSET_STORAGE_FULL: { maxBytes: true },
+  THEME_ASSET_MISSING: { name: true },
+  OUTLINE_RELATED_TOO_MANY: { limit: true },
+  OUTLINE_NODE_WRITTEN: { title: true },
 } satisfies { [C in ParameterizedCode]: Record<keyof AppErrorParams[C], true> };
 
 test('every catalogued code has a message in every locale whose arguments are its params', () => {

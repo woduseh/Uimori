@@ -4,7 +4,8 @@ import type { FastifyInstance } from 'fastify';
 import { isStoryUiThemeSetting } from '../core/story-ui-style.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { HttpError, choice, fields, number, record, text } from './request-validation.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
@@ -73,12 +74,13 @@ export function saveTheme(
   id?: string,
   expectedRevision?: number
 ): Theme {
-  if (id?.startsWith('builtin:')) throw new HttpError(400, '기본 테마는 복제해서 수정해 주세요.');
+  if (id?.startsWith('builtin:'))
+    throw new HelperToolError(400, 'THEME_BUILTIN_READONLY', 'Save a copy under a new ID.');
   let model: ReturnType<typeof validateTheme>;
   try {
     model = validateTheme(value);
   } catch (error) {
-    throw new HttpError(400, (error as Error).message);
+    throw new HelperToolError(400, 'THEME_INVALID', (error as Error).message);
   }
   assertThemeAssetsStored(store.db, model.assets);
   const saved = store.product.save('theme', model, id, expectedRevision) as Theme;
@@ -98,41 +100,35 @@ function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
 export function selectTheme(store: Store, input: unknown): ThemePreferences {
   const b = record(input);
   fields(b, ['scope', 'targetId', 'dimension', 'themeId', 'paletteId', 'expectedRevision']);
-  const dimension = b.dimension === undefined ? 'theme' : text(b.dimension, 'dimension', 10);
-  if (dimension !== 'theme' && dimension !== 'palette' && dimension !== 'storyUi')
-    throw new HttpError(400, '테마, 팔레트 또는 이야기 UI 선택을 확인해 주세요.');
+  const dimension = choice(
+    b.dimension === undefined ? 'theme' : b.dimension,
+    ['theme', 'palette', 'storyUi'],
+    'dimension'
+  );
   if (dimension === 'palette' ? 'themeId' in b : 'paletteId' in b)
-    throw new HttpError(400, '테마와 팔레트는 각각 선택해 주세요.');
-  const scope = text(b.scope, 'scope', 10);
-  if (!['global', 'bot', 'chat'].includes(scope))
-    throw new HttpError(400, '테마 적용 범위를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid selection: send themeId or paletteId, not both');
+  const scope = choice(b.scope, ['global', 'bot', 'chat'], 'scope');
   if (dimension === 'storyUi' && scope !== 'bot')
-    throw new HttpError(400, '봇에만 기본 이야기 UI 테마를 지정할 수 있어요.');
+    throw new HttpError(400, 'Invalid scope: story UI themes are set per bot');
   const rawId = dimension === 'palette' ? b.paletteId : b.themeId;
   const selectedId = rawId === null ? null : text(rawId, dimension + ' ID', 100);
   if (selectedId !== null) {
     if (dimension === 'theme') readTheme(store, selectedId);
-    else if (
-      dimension === 'palette' &&
-      !isPaletteId(selectedId) &&
-      !paletteCatalog(store).some((palette) => palette.id === selectedId)
-    )
-      throw new HttpError(400, '지원하지 않는 팔레트예요.');
+    else if (dimension === 'palette' && !isPaletteId(selectedId)) readPalette(store, selectedId);
   }
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
-    if (content.kind !== 'bot') throw new HttpError(400, '봇에만 기본 테마를 지정할 수 있어요.');
+    if (content.kind !== 'bot') throw new HttpError(400, 'Invalid target ID: expected a bot');
   }
   if (scope === 'chat') store.chat(targetId);
   const expected = number(b.expectedRevision, 'revision', 0);
   return store.transaction(() => {
     const p = themePreferences(store);
-    if (p.revision !== expected)
-      throw new HttpError(409, '다른 창에서 테마 선택을 바꿨어요. 다시 불러온 뒤 선택해 주세요.');
+    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (dimension === 'storyUi') {
       if (selectedId !== null && !readTheme(store, selectedId).storyUi)
-        throw new HttpError(400, '이야기 UI 스타일이 포함된 테마를 선택해 주세요.');
+        throw new HelperToolError(400, 'THEME_STORY_UI_MISSING', 'Choose a theme with storyUi.');
       const map = (p.botStoryUiThemes ??= {});
       if (selectedId !== null) map[targetId] = selectedId;
       else delete map[targetId];
@@ -155,31 +151,28 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
 export function selectThemeBackground(store: Store, input: unknown): ThemePreferences {
   const b = record(input);
   fields(b, ['scope', 'targetId', 'background', 'expectedRevision']);
-  const scope = text(b.scope, 'scope', 10);
-  if (!['global', 'bot', 'chat'].includes(scope))
-    throw new HttpError(400, '배경 적용 범위를 확인해 주세요.');
+  const scope = choice(b.scope, ['global', 'bot', 'chat'], 'scope');
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
-    if (content.kind !== 'bot') throw new HttpError(400, '봇에만 기본 배경을 지정할 수 있어요.');
+    if (content.kind !== 'bot') throw new HttpError(400, 'Invalid target ID: expected a bot');
   }
   if (scope === 'chat') store.chat(targetId);
   let background: ReturnType<typeof validateThemeBackground> | null;
   try {
     background = b.background === null ? null : validateThemeBackground(b.background);
-  } catch (error) {
-    throw new HttpError(400, (error as Error).message);
+  } catch {
+    throw new HttpError(400, 'Invalid theme background');
   }
   const expected = number(b.expectedRevision, 'revision', 0);
   return store.transaction(() => {
     const p = themePreferences(store);
-    if (p.revision !== expected)
-      throw new HttpError(409, '다른 창에서 테마 설정을 바꿨어요. 다시 불러온 뒤 저장해 주세요.');
+    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (
       background?.imageHash &&
       !store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(background.imageHash)
     )
-      throw new HttpError(400, '배경 이미지를 먼저 업로드해 주세요.');
+      throw new AppError(400, 'IMAGE_NOT_FOUND');
     if (scope === 'global') p.defaultBackground = background ?? { ...defaultThemeBackground };
     else {
       const map = scope === 'bot' ? (p.botBackgrounds ??= {}) : (p.chatBackgrounds ??= {});
@@ -190,11 +183,10 @@ export function selectThemeBackground(store: Store, input: unknown): ThemePrefer
   });
 }
 export function deleteTheme(store: Store, id: string, expectedRevision: number) {
-  if (id.startsWith('builtin:')) throw new HttpError(400, '기본 테마는 삭제할 수 없어요.');
+  if (id.startsWith('builtin:')) throw new HelperToolError(400, 'THEME_BUILTIN_READONLY');
   return store.transaction(() => {
     const theme = readTheme(store, id);
-    if (theme.revision !== expectedRevision)
-      throw new HttpError(409, '테마가 변경됐어요. 최신 저장본을 확인해 주세요.');
+    if (theme.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const undo = store.db
       .prepare("SELECT model FROM resource_undo WHERE kind='theme' AND id=?")
       .get(id)?.model;
@@ -233,23 +225,23 @@ export function savePalette(
   id?: string,
   expectedRevision?: number
 ): Palette {
-  if (id && isPaletteId(id)) throw new HttpError(400, '기본 팔레트는 복제해서 수정해 주세요.');
+  if (id && isPaletteId(id))
+    throw new HelperToolError(400, 'PALETTE_BUILTIN_READONLY', 'Save a copy without an ID.');
   let model: ReturnType<typeof validatePalette>;
   try {
     model = validatePalette(value);
   } catch (error) {
-    throw new HttpError(400, (error as Error).message);
+    throw new HelperToolError(400, 'PALETTE_INVALID', (error as Error).message);
   }
   const saved = store.product.save('palette', model, id, expectedRevision) as Palette;
   store.invalidated('themes');
   return saved;
 }
 export function deletePalette(store: Store, id: string, expectedRevision: number) {
-  if (isPaletteId(id)) throw new HttpError(400, '기본 팔레트는 삭제할 수 없어요.');
+  if (isPaletteId(id)) throw new HelperToolError(400, 'PALETTE_BUILTIN_READONLY');
   return store.transaction(() => {
     const palette = readPalette(store, id) as Palette;
-    if (palette.revision !== expectedRevision)
-      throw new HttpError(409, '팔레트가 변경됐어요. 최신 저장본을 확인해 주세요.');
+    if (palette.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const p = themePreferences(store);
     if (p.defaultPaletteId === id) p.defaultPaletteId = THEME_PALETTE_ID;
     for (const map of [p.botPalettes, p.chatPalettes])

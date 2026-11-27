@@ -11,9 +11,12 @@ import {
   type FontPreferences,
 } from '../core/fonts.js';
 import type { Store } from './store.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { fields, number, record, text } from './request-validation.js';
+import { AppError, HelperToolError } from './app-errors.js';
 
 const key = 'font-preferences';
+const MAX_STORED_FONTS = 100;
+const MAX_STORED_BYTES = 200 * 1024 * 1024;
 const initialized = new WeakSet<Store>();
 export function initFonts(store: Store) {
   if (initialized.has(store)) return;
@@ -41,39 +44,37 @@ export function fontCatalog(store: Store): FontCatalog {
 function readFont(store: Store, id: string) {
   initFonts(store);
   const row = store.db.prepare('SELECT metadata,bytes FROM font_assets WHERE id=?').get(id);
-  if (!row) throw new HttpError(404, '글꼴을 찾을 수 없어요.');
+  if (!row) throw new AppError(404, 'FONT_NOT_FOUND');
   return {
     asset: JSON.parse(String(row.metadata)) as FontAsset,
     bytes: Buffer.from(row.bytes as Uint8Array),
   };
 }
 export function fontFileFormat(bytes: Buffer): FontFormat {
-  if (bytes.length < 12 || bytes.length > MAX_FONT_BYTES)
-    throw new HttpError(400, '글꼴 파일은 20 MiB 이하여야 해요.');
+  if (bytes.length > MAX_FONT_BYTES)
+    throw new AppError(400, 'FONT_TOO_LARGE', { maxBytes: MAX_FONT_BYTES });
+  if (bytes.length < 12) throw new AppError(400, 'FONT_INVALID');
   const signature = bytes.toString('ascii', 0, 4);
   if (signature === 'wOF2' || signature === 'wOFF') {
     const header = signature === 'wOF2' ? 48 : 44;
-    if (bytes.length < header) throw new HttpError(400, '글꼴 헤더가 잘렸어요.');
-    const tables = bytes.readUInt16BE(12);
     if (
       bytes.length < header ||
       bytes.readUInt32BE(8) !== bytes.length ||
-      !tables ||
+      !bytes.readUInt16BE(12) ||
       bytes.readUInt16BE(14) !== 0 ||
       bytes.readUInt32BE(16) > 100 * 1024 * 1024
     )
-      throw new HttpError(400, '올바른 WOFF 글꼴 파일이 아니에요.');
+      throw new AppError(400, 'FONT_INVALID');
     return signature === 'wOF2' ? 'woff2' : 'woff';
   }
   if (signature !== 'OTTO' && bytes.readUInt32BE(0) !== 0x00010000)
-    throw new HttpError(400, 'WOFF2, WOFF, TTF, OTF 글꼴 파일을 선택해 주세요.');
+    throw new AppError(400, 'FONT_FORMAT_UNSUPPORTED');
   const tables = bytes.readUInt16BE(4);
-  if (!tables || 12 + tables * 16 > bytes.length)
-    throw new HttpError(400, '글꼴 테이블이 올바르지 않아요.');
+  if (!tables || 12 + tables * 16 > bytes.length) throw new AppError(400, 'FONT_INVALID');
   for (let index = 0; index < tables; index++) {
     const offset = 12 + index * 16;
     if (bytes.readUInt32BE(offset + 8) + bytes.readUInt32BE(offset + 12) > bytes.length)
-      throw new HttpError(400, '글꼴 테이블이 파일 범위를 벗어났어요.');
+      throw new AppError(400, 'FONT_INVALID');
   }
   return signature === 'OTTO' ? 'otf' : 'ttf';
 }
@@ -88,8 +89,14 @@ export function registerFont(store: Store, input: { title: string; bytes: Uint8A
   const totals = store.db
     .prepare('SELECT count(*) AS count, coalesce(sum(length(bytes)),0) AS total FROM font_assets')
     .get()!;
-  if (Number(totals.count) >= 100 || Number(totals.total) + bytes.length > 200 * 1024 * 1024)
-    throw new HttpError(400, '글꼴 보관 한도(100개, 200 MiB)에 도달했어요.');
+  if (
+    Number(totals.count) >= MAX_STORED_FONTS ||
+    Number(totals.total) + bytes.length > MAX_STORED_BYTES
+  )
+    throw new AppError(400, 'FONT_STORAGE_FULL', {
+      maxCount: MAX_STORED_FONTS,
+      maxBytes: MAX_STORED_BYTES,
+    });
   const asset: FontAsset = {
     id,
     title,
@@ -126,8 +133,7 @@ export function selectFonts(store: Store, input: unknown): FontPreferences {
   const appFontId = selected(body.appFontId);
   const readerFontId = selected(body.readerFontId);
   return store.transaction(() => {
-    if (fontPreferences(store).revision !== revision)
-      throw new HttpError(409, '다른 창에서 글꼴 선택을 바꿨어요. 다시 불러와 주세요.');
+    if (fontPreferences(store).revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
     return writePreferences(store, { revision: revision + 1, appFontId, readerFontId });
   });
 }
@@ -176,21 +182,26 @@ export async function downloadFont(
   try {
     url = new URL(raw);
   } catch {
-    throw new HttpError(400, '글꼴 URL을 확인해 주세요.');
+    throw new HelperToolError(400, 'FONT_URL_INVALID');
   }
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443'))
-    throw new HttpError(400, '공개 HTTPS 글꼴 URL만 사용할 수 있어요.');
+    throw new HelperToolError(
+      400,
+      'FONT_URL_NOT_PUBLIC_HTTPS',
+      'Use a public HTTPS URL on port 443 without credentials.'
+    );
   signal.throwIfAborted();
+  const timeout = () => new HelperToolError(400, 'FONT_DOWNLOAD_TIMEOUT');
   const addresses = await new Promise<Awaited<ReturnType<typeof lookup>>[]>((resolve, reject) => {
-    const aborted = () => reject(new HttpError(400, '글꼴 다운로드 시간이 초과됐어요.'));
+    const aborted = () => reject(timeout());
     signal.addEventListener('abort', aborted, { once: true });
     void lookup(url.hostname.replace(/^\[|\]$/g, ''), { all: true })
       .then(resolve, reject)
       .finally(() => signal.removeEventListener('abort', aborted));
   });
-  if (signal.aborted) throw new HttpError(400, '글꼴 다운로드 시간이 초과됐어요.');
+  if (signal.aborted) throw timeout();
   if (!addresses.length || addresses.some((item) => !publicAddress(item.address)))
-    throw new HttpError(400, '사설 네트워크 주소에서는 글꼴을 가져올 수 없어요.');
+    throw new HelperToolError(400, 'FONT_URL_PRIVATE_NETWORK');
   const target = addresses[0];
   return new Promise<Buffer>((resolve, reject) => {
     const request = get(
@@ -204,7 +215,7 @@ export async function downloadFont(
         if ([301, 302, 303, 307, 308].includes(response.statusCode ?? 0)) {
           response.destroy();
           if (!response.headers.location || redirects >= 3) {
-            reject(new HttpError(400, '글꼴 다운로드 리디렉션이 너무 많아요.'));
+            reject(new HelperToolError(400, 'FONT_DOWNLOAD_REDIRECTS'));
             return;
           }
           try {
@@ -214,16 +225,19 @@ export async function downloadFont(
               redirects + 1
             ).then(resolve, reject);
           } catch {
-            reject(new HttpError(400, '글꼴 다운로드 주소를 확인해 주세요.'));
+            reject(new HelperToolError(400, 'FONT_URL_INVALID'));
           }
           return;
         }
-        if (
-          response.statusCode !== 200 ||
-          Number(response.headers['content-length']) > MAX_FONT_BYTES
-        ) {
+        const tooLarge = () => new AppError(400, 'FONT_TOO_LARGE', { maxBytes: MAX_FONT_BYTES });
+        if (response.statusCode !== 200) {
           response.destroy();
-          reject(new HttpError(400, '글꼴 파일을 다운로드할 수 없어요.'));
+          reject(new HelperToolError(400, 'FONT_DOWNLOAD_FAILED', `HTTP ${response.statusCode}`));
+          return;
+        }
+        if (Number(response.headers['content-length']) > MAX_FONT_BYTES) {
+          response.destroy();
+          reject(tooLarge());
           return;
         }
         const chunks: Buffer[] = [];
@@ -231,7 +245,7 @@ export async function downloadFont(
         response.on('data', (chunk: Buffer) => {
           size += chunk.length;
           if (size > MAX_FONT_BYTES) {
-            response.destroy(new HttpError(400, '글꼴 파일은 20 MiB 이하여야 해요.'));
+            response.destroy(tooLarge());
             return;
           }
           chunks.push(chunk);
@@ -252,8 +266,6 @@ export function fontRoutes(app: FastifyInstance, store: Store) {
     const body = record(request.body);
     fields(body, ['title', 'data']);
     const data = text(body.data, 'font data', Math.ceil((MAX_FONT_BYTES * 4) / 3));
-    if (/[^A-Za-z0-9+/=]/.test(data) || Buffer.from(data, 'base64').toString('base64') !== data)
-      throw new HttpError(400, '글꼴 데이터가 올바르지 않아요.');
     return registerFont(store, {
       title: body.title,
       bytes: Buffer.from(data, 'base64'),

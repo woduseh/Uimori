@@ -8,7 +8,8 @@ import { MAX_FONT_BYTES } from '../core/fonts.js';
 import type { ThemeAsset, ThemeAssetKind } from '../core/themes.js';
 import { fontFileFormat } from './fonts.js';
 import { processImage, MAX_IMAGE_INPUT_BYTES } from './image-processing.js';
-import { HttpError, fields, record, text } from './request-validation.js';
+import { choice, fields, record, text } from './request-validation.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import type { Store } from './store.js';
 
 const MAX_STORED_BYTES = 200 * 1024 * 1024;
@@ -48,15 +49,14 @@ export async function storeThemeAsset(
   const hash = createHash('sha256').update(bytes).digest('hex');
   const existing = db.prepare('SELECT kind,mime FROM theme_assets WHERE hash=?').get(hash);
   if (existing) {
-    if (existing.kind !== kind)
-      throw new HttpError(400, '같은 파일이 다른 종류로 이미 등록돼 있어요.');
+    if (existing.kind !== kind) throw new Error('THEME_ASSET_KIND_CONFLICT');
     return { hash, kind, mime: String(existing.mime), byteLength: bytes.length };
   }
   const total = Number(
     db.prepare('SELECT coalesce(sum(length(bytes)),0) AS total FROM theme_assets').get()!.total
   );
   if (total + bytes.length > MAX_STORED_BYTES)
-    throw new HttpError(400, '테마 자료 파일 보관 한도(200 MiB)에 도달했어요.');
+    throw new AppError(400, 'THEME_ASSET_STORAGE_FULL', { maxBytes: MAX_STORED_BYTES });
   db.prepare('INSERT INTO theme_assets(hash,kind,mime,bytes,created_at) VALUES(?,?,?,?,?)').run(
     hash,
     kind,
@@ -84,7 +84,7 @@ export function readThemeAsset(db: DatabaseSync, hash: string) {
   const builtin = builtinThemeAsset(hash);
   if (builtin) return builtin;
   const row = db.prepare('SELECT kind,mime,bytes FROM theme_assets WHERE hash=?').get(hash);
-  if (!row) throw new HttpError(404, '테마 자료 파일을 찾을 수 없어요.');
+  if (!row) throw new AppError(404, 'THEME_ASSET_NOT_FOUND');
   return {
     kind: String(row.kind) as ThemeAssetKind,
     mime: String(row.mime),
@@ -104,9 +104,9 @@ export function assertThemeAssetsStored(db: DatabaseSync, assets: ThemeAsset[] =
       copy.run(asset.hash, builtin.kind, builtin.mime, builtin.bytes, new Date().toISOString());
       row = { kind: builtin.kind };
     }
-    if (!row) throw new HttpError(400, `${asset.name}: 자료 파일을 먼저 업로드해 주세요.`);
+    if (!row) throw new AppError(400, 'THEME_ASSET_MISSING', { name: asset.name });
     if (row.kind !== asset.kind)
-      throw new HttpError(400, `${asset.name}: 자료 파일 종류가 업로드한 파일과 달라요.`);
+      throw new HelperToolError(400, 'THEME_ASSET_KIND_MISMATCH', asset.name);
   }
 }
 
@@ -147,20 +147,11 @@ export function themeAssetRoutes(app: FastifyInstance, store: Store) {
   app.post('/api/theme-assets', { bodyLimit: limit + 10_000 }, async (request) => {
     const body = record(request.body);
     fields(body, ['kind', 'data']);
-    const kind = text(body.kind, 'kind', 10);
-    if (kind !== 'font' && kind !== 'image')
-      throw new HttpError(400, '글꼴 또는 이미지 자료만 올릴 수 있어요.');
-    const data = text(body.data, 'data', limit);
-    if (/[^A-Za-z0-9+/=]/.test(data))
-      throw new HttpError(400, '자료 파일 데이터가 올바르지 않아요.');
-    const bytes = Buffer.from(data, 'base64');
-    if (kind === 'font' && bytes.length > MAX_FONT_BYTES)
-      throw new HttpError(400, '글꼴 파일은 20 MiB 이하여야 해요.');
+    const kind = choice(body.kind, ['font', 'image'], 'kind');
+    const bytes = Buffer.from(text(body.data, 'data', limit), 'base64');
     return storeThemeAsset(store.db, kind, bytes);
   });
   app.get<{ Params: { hash: string } }>('/api/theme-assets/:hash', (request, reply) => {
-    if (!/^[a-f0-9]{64}$/u.test(request.params.hash))
-      throw new HttpError(404, '테마 자료 파일을 찾을 수 없어요.');
     const asset = readThemeAsset(store.db, request.params.hash);
     return reply
       .type(asset.mime)

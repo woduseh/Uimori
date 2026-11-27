@@ -2011,14 +2011,14 @@ test('outline selection scope and revisions are checked before a provider call; 
       expectedRevision: foreign.revision,
       purpose: 'compose',
     })
-  ).toThrow('OUTLINE_OUTSIDE_SCOPE');
+  ).toThrow('outside this chat');
   expect(() =>
     f.runtime.enqueue(conversation.id, 'stale', '변경', undefined, undefined, undefined, {
       nodeId: node.id,
       expectedRevision: node.revision,
       purpose: 'compose',
     })
-  ).toThrow('다시 선택');
+  ).toThrow('OUTLINE_SELECTION_STALE');
   expect(send).not.toHaveBeenCalled();
   const task = f.runtime.enqueue(
     conversation.id,

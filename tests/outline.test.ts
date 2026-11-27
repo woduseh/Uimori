@@ -11,7 +11,7 @@ import { Store } from '../server/store.js';
 import type { HttpError } from '../server/request-validation.js';
 
 import { buildMainProviderRequest } from '../server/main-request.js';
-import { OUTLINE_CONTRACT, OUTLINE_FOCUS_CONTRACT, OUTLINE_LEVEL_LABELS } from '../core/outline.js';
+import { OUTLINE_CONTRACT, OUTLINE_FOCUS_CONTRACT } from '../core/outline.js';
 import type { RunSnapshot, Source } from '../core/types.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
@@ -292,7 +292,7 @@ describe('hierarchical composition', () => {
       store.outline.sceneCommand(arc.id, { idempotencyKey: randomUUID() })
     );
     expect(error.statusCode).toBe(400);
-    expect(error.message).toContain(OUTLINE_LEVEL_LABELS.episode);
+    expect(error.message).toContain('not a writing unit');
   });
 
   test('duplicate refs, late mixed-operation errors, and oversized batches reject the whole batch', async () => {
