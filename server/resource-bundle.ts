@@ -19,6 +19,7 @@ import { storeImage } from './image-storage.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { normalizeTransferImages } from './transfer-images.js';
+import { AppError } from './app-errors.js';
 
 export const bundleDigest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -64,7 +65,7 @@ export function captureResourceBundle(
   const captured = new Map<string, string>();
   const capturing = new Set<string>();
   const capture = (id: string): string => {
-    if (capturing.has(id)) throw new HttpError(400, '모듈 연결에 순환이 있어요.');
+    if (capturing.has(id)) throw new AppError(400, 'RESOURCE_BUNDLE_MODULE_CYCLE');
     const previous = captured.get(id);
     if (previous) return previous;
     capturing.add(id);
@@ -121,7 +122,7 @@ function prepareImport(value: unknown) {
   fields(body, ['file', 'digest', 'modelBindings', 'idempotencyKey']);
   const bundle = prepareBundle(body.file);
   if (body.digest !== bundle.preview.digest)
-    throw new HttpError(409, '가져올 자료가 변경됐어요. 다시 확인해 주세요.');
+    throw new AppError(409, 'NATIVE_TRANSFER_DRAFT_CHANGED');
   return { body, bundle };
 }
 
@@ -149,7 +150,7 @@ function applyPreparedBundle(
   putImages?: () => void
 ): NativeTransferReceipt {
   const supplied = body.modelBindings ?? [];
-  if (!Array.isArray(supplied)) throw new HttpError(400, '모델 연결 목록을 확인해 주세요.');
+  if (!Array.isArray(supplied)) throw new HttpError(400, 'Invalid model bindings');
   const requirements = new Set(checked.modelRequirements.map((item) => item.key));
   const mapped = new Map<
     string,
@@ -160,7 +161,7 @@ function applyPreparedBundle(
     fields(binding, ['requirementKey', 'mode', 'model']);
     const requirementKey = text(binding.requirementKey, 'model requirement', 300);
     if (!requirements.has(requirementKey) || mapped.has(requirementKey))
-      throw new HttpError(400, '잘못되거나 중복된 모델 연결이에요.');
+      throw new HttpError(400, 'Unknown or duplicate model binding');
     if (binding.mode === 'inherit-main')
       mapped.set(requirementKey, { requirementKey, mode: 'inherit-main' });
     else if (binding.mode === 'local')
@@ -169,7 +170,7 @@ function applyPreparedBundle(
         mode: 'local',
         model: { id: text(record(binding.model).id, 'model ID', 100) },
       });
-    else throw new HttpError(400, '모델 연결 방식을 확인해 주세요.');
+    else throw new HttpError(400, 'Invalid model binding mode');
   }
   const bindings = [...requirements]
     .sort()

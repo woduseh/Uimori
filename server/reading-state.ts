@@ -11,6 +11,7 @@ import { BOOKMARK_NOTE_MAX_CHARS, BOOKMARK_TITLE_MAX_CHARS } from '../core/readi
 import type { ReaderTarget } from '../core/reader-target.js';
 import { fields, record, text, HttpError } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 export function initReadingState(db: DatabaseSync) {
   db.exec(`
@@ -29,12 +30,12 @@ export function initReadingState(db: DatabaseSync) {
 }
 const bounded = (value: unknown, max: number, name: string, empty = false) => {
   if (typeof value !== 'string' || value.length > max || (!empty && !value.trim()))
-    throw new HttpError(400, `${name}을 확인해 주세요.`);
+    throw new HttpError(400, `Invalid ${name}`);
   return value;
 };
 const client = (value: unknown) => {
   const id = text(value, 'browser ID', 100);
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, '브라우저 식별자를 확인해 주세요.');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, 'Invalid browser ID');
   return id;
 };
 export function validateReaderTarget(store: Store, chatId: string, value: unknown): ReaderTarget {
@@ -47,21 +48,21 @@ export function validateReaderTarget(store: Store, chatId: string, value: unknow
     'blockAnchor',
     'offsetRatio',
   ]);
-  if (body.chatId !== chatId) throw new HttpError(400, '다른 채팅의 읽기 위치예요.');
+  if (body.chatId !== chatId) throw new HttpError(400, 'Reader target outside chat');
   const chat = store.chat(chatId);
   const sourceId = text(body.sourceId, 'source', 120);
   const member = store.db
     .prepare(`WITH RECURSIVE chain(id) AS (SELECT ? UNION SELECT s.parent_revision FROM sources s JOIN chain c ON c.id=s.id WHERE s.parent_revision IS NOT NULL)
     SELECT 1 FROM chain c JOIN sources s ON s.id=c.id WHERE c.id=? AND s.chat_id=?`)
     .get(chat.headRevision, sourceId, chatId);
-  if (!member) throw new HttpError(404, '현재 채팅에서 그 장면을 찾지 못했어요.');
+  if (!member) throw new AppError(404, 'READING_SCENE_NOT_FOUND');
   if (!['original', 'translation'].includes(String(body.representation)))
-    throw new HttpError(400, '읽기 모드를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid reading representation');
   if (
     body.contentHash !== undefined &&
     (typeof body.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(body.contentHash))
   )
-    throw new HttpError(400, '본문 식별자를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid content hash');
   if (
     body.offsetRatio !== undefined &&
     (typeof body.offsetRatio !== 'number' ||
@@ -69,14 +70,14 @@ export function validateReaderTarget(store: Store, chatId: string, value: unknow
       body.offsetRatio < 0 ||
       body.offsetRatio > 1)
   )
-    throw new HttpError(400, '읽기 위치를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid offset ratio');
   return {
     chatId,
     sourceId,
     representation: body.representation as ReaderTarget['representation'],
     ...(body.contentHash !== undefined ? { contentHash: String(body.contentHash) } : {}),
     ...(body.blockAnchor !== undefined
-      ? { blockAnchor: bounded(body.blockAnchor, 200, '문단 위치') }
+      ? { blockAnchor: bounded(body.blockAnchor, 200, 'block anchor') }
       : {}),
     ...(body.offsetRatio !== undefined ? { offsetRatio: Number(body.offsetRatio) } : {}),
   };
@@ -120,10 +121,7 @@ export function saveReadingPosition(store: Store, chatId: string, value: unknown
       !Number.isSafeInteger(body.expectedRevision) ||
       body.expectedRevision !== (old?.revision ?? 0)
     )
-      throw new HttpError(
-        409,
-        '다른 탭에서 읽기 위치가 바뀌었어요. 오래된 위치는 저장하지 않았어요.'
-      );
+      throw new AppError(409, 'READING_POSITION_CHANGED');
     const now = new Date(
       Math.max(Date.now(), (old ? Date.parse(old.updatedAt) : 0) + 1)
     ).toISOString();
@@ -158,9 +156,9 @@ export function addBookmark(store: Store, chatId: string, value: unknown): Bookm
   const body = record(value);
   fields(body, ['id', 'target', 'title', 'note', 'quote']);
   const id = client(body.id);
-  const title = bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, '책갈피 이름');
-  const note = bounded(body.note ?? '', BOOKMARK_NOTE_MAX_CHARS, '메모', true);
-  const quote = bounded(body.quote ?? '', 300, '인용', true);
+  const title = bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, 'bookmark title');
+  const note = bounded(body.note ?? '', BOOKMARK_NOTE_MAX_CHARS, 'bookmark note', true);
+  const quote = bounded(body.quote ?? '', 300, 'bookmark quote', true);
   return store.transaction(() => {
     const target = validateReaderTarget(store, chatId, body.target);
     const old = store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id);
@@ -172,7 +170,7 @@ export function addBookmark(store: Store, chatId: string, value: unknown): Bookm
         old.quote !== quote ||
         old.target !== JSON.stringify(target)
       )
-        throw new HttpError(409, '책갈피 저장 요청이 달라졌어요.');
+        throw new HttpError(409, 'Bookmark ID reused with different content');
       return bookmark(old);
     }
     const now = new Date().toISOString();
@@ -194,9 +192,8 @@ export function updateBookmark(
   fields(body, remove ? ['expectedRevision'] : ['expectedRevision', 'title', 'note']);
   return store.transaction(() => {
     const old = store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id);
-    if (!old) throw new HttpError(404, '책갈피를 찾지 못했어요.');
-    if (body.expectedRevision !== old.revision)
-      throw new HttpError(409, '책갈피가 변경됐어요. 최신 내용을 확인해 주세요.');
+    if (!old) throw new AppError(404, 'BOOKMARK_NOT_FOUND');
+    if (body.expectedRevision !== old.revision) throw new AppError(409, 'BOOKMARK_CHANGED');
     if (remove) {
       store.db.prepare('DELETE FROM bookmarks WHERE id=?').run(id);
       return { deleted: true as const };
@@ -204,8 +201,8 @@ export function updateBookmark(
     store.db
       .prepare('UPDATE bookmarks SET title=?,note=?,revision=revision+1,updated_at=? WHERE id=?')
       .run(
-        bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, '책갈피 이름'),
-        bounded(body.note, BOOKMARK_NOTE_MAX_CHARS, '메모', true),
+        bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, 'bookmark title'),
+        bounded(body.note, BOOKMARK_NOTE_MAX_CHARS, 'bookmark note', true),
         new Date().toISOString(),
         id
       );
@@ -249,7 +246,7 @@ export function restoreBookmarks(
   values: unknown
 ) {
   if (values === undefined) return;
-  if (!Array.isArray(values)) throw new HttpError(400, '책갈피 자료를 확인해 주세요.');
+  if (!Array.isArray(values)) throw new AppError(400, 'CHAT_BACKUP_INVALID');
   for (const value of values) {
     const body = record(value);
     fields(body, [
@@ -267,13 +264,13 @@ export function restoreBookmarks(
       Number(body.entry) < 0 ||
       Number(body.entry) >= sourceIds.length
     )
-      throw new HttpError(400, '책갈피 장면이 없어요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     const source = store.source(sourceIds[Number(body.entry)]);
     if (
       body.blockIndex !== undefined &&
       (!Number.isSafeInteger(body.blockIndex) || Number(body.blockIndex) < 0)
     )
-      throw new HttpError(400, '책갈피 문단을 확인해 주세요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     if (
       body.offsetRatio !== undefined &&
       (typeof body.offsetRatio !== 'number' ||
@@ -281,7 +278,7 @@ export function restoreBookmarks(
         body.offsetRatio < 0 ||
         body.offsetRatio > 1)
     )
-      throw new HttpError(400, '읽기 위치를 확인해 주세요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     let anchor: string | undefined;
     if (
       body.representation === 'original' &&

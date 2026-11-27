@@ -4,7 +4,7 @@ import type { MessageChanges } from '../core/message-changes.js';
 import type { SourceHistoryItem } from '../core/source-history.js';
 import type { NativeRisuAuthored } from '../core/risu-native-execution.js';
 import type { Store } from './store.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export function captureCopiedMessages(
   store: Store,
@@ -41,8 +41,7 @@ export function restoreCopiedMessages(
   states: readonly CopiedMessageState[],
   history: readonly SourceHistoryItem[]
 ): void {
-  if (states.length !== history.length)
-    throw new HttpError(400, '메시지 상태와 본문 개수가 맞지 않아요.');
+  if (states.length !== history.length) throw new AppError(400, 'CHAT_BACKUP_INVALID');
   const sources = new Map(
     states.map((state, index) => [
       state.sourceId,
@@ -112,10 +111,10 @@ export function restoreCopiedMessages(
             return false;
           })
         )
-          throw new HttpError(400, '메시지에 연결된 참고 이미지가 올바르지 않아요.');
+          throw new AppError(400, 'CHAT_BACKUP_INVALID');
       }
       if (imageIndexes.size !== (snapshot.requestImages?.length ?? 0))
-        throw new HttpError(400, '메시지에 연결된 참고 이미지가 올바르지 않아요.');
+        throw new AppError(400, 'CHAT_BACKUP_INVALID');
       snapshot.nativeRisuAuthored = {
         version: 1,
         action: 'copied-messages',

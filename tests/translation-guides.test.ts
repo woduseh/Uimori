@@ -145,7 +145,7 @@ test('ordinary and helper saves use one native field, validate atomically and su
     save(store, saved, { instructions: 'Invalid', terms: [{ source: '', target: '미라' }] })
   ).toThrow('표기 1');
   expect(store.product.get<Content>('content', original.id).revision).toBe(result.revision);
-  expect(() => save(store, original, guide)).toThrow('변경');
+  expect(() => save(store, original, guide)).toThrow('RESOURCE_CHANGED');
   const restored = undoResource(store, 'content', original.id, result.revision).saved as Content;
   expect(readTranslationGuide(restored.package.nativeRisu.card)).toEqual(guide);
   expect(store.db.prepare('SELECT count(*) AS n FROM jobs').get()!.n).toBe(0);

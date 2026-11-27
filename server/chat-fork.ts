@@ -2,6 +2,7 @@ import { captureChatCopy, restoreChatCopy } from './chat-copy.js';
 import { createHash } from 'node:crypto';
 import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
 import type { Chat, Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 function numberedCopyTitle(store: Store, title: string): string {
   const base =
@@ -38,11 +39,11 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       : undefined;
     if (saved) {
       if (!saved.forkCommand || typeof saved.chatId !== 'string' || !saved.chatId.trim())
-        throw new HttpError(409, 'CHAT_COPY_RECEIPT_UNVERIFIED');
+        throw new AppError(409, 'CHAT_COPY_RECEIPT_UNVERIFIED');
       if (saved.forkCommand !== command)
-        throw new HttpError(409, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
+        throw new HttpError(409, 'Idempotency key reused with different command');
       if (!store.db.prepare('SELECT 1 FROM chats WHERE id=?').get(saved.chatId))
-        throw new HttpError(410, 'CHAT_COPY_REMOVED');
+        throw new AppError(410, 'CHAT_COPY_REMOVED');
       return store.chat(saved.chatId);
     }
     const original = store.chat(chatId);

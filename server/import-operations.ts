@@ -9,7 +9,7 @@ export function readImportReceipt<T>(
   store: Store,
   key: string,
   digest: string,
-  conflictMessage = '다른 가져오기 요청에 같은 ID가 사용됐어요.'
+  conflictMessage = 'Idempotency key reused with different command'
 ): T | undefined {
   const prior = store.db
     .prepare('SELECT digest,result FROM import_operations WHERE key=?')

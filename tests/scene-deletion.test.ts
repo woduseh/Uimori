@@ -331,7 +331,7 @@ test('a stale head, settings, or hash review rejects deletion without changing t
   ];
   for (const change of stale)
     expect(() => deleteScenes(f.store, f.chatId, f.b.id, { ...request(f), ...change })).toThrow(
-      '채팅이 변경'
+      'SCENE_DELETE_CHAT_CHANGED'
     );
   expect(
     f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
@@ -354,7 +354,9 @@ test('a later source, request context, or variables change after reviewing a fol
     const command = request(f, 'following');
     change();
     const variables = readChatVariables(f.store, f.chatId);
-    expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('채팅이 변경');
+    expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow(
+      'SCENE_DELETE_CHAT_CHANGED'
+    );
     expect(
       f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
     ).toEqual([f.a.id, f.b.id, f.c.id]);
@@ -367,15 +369,17 @@ test('active generation and outstanding provider calls reject a reviewed deletio
   const f = manuscript(),
     command = request(f),
     pending = queued(f.store, f.chatId);
-  expect(() => sceneDeletionImpact(f.store, f.chatId, f.b.id)).toThrow('진행 중');
-  expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('진행 중');
+  expect(() => sceneDeletionImpact(f.store, f.chatId, f.b.id)).toThrow('CHAT_DELETE_WORK_ACTIVE');
+  expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('CHAT_DELETE_WORK_ACTIVE');
   f.store.finishRun(pending.id, 'cancelled', 'Synthetic cancellation');
   f.store.db
     .prepare(
       "INSERT INTO attempts(id,chat_id,run_id,role,connection_id,model_id,status,request) VALUES('scene-delete-attempt',?,?,'main','fixture','fixture','running','{}')"
     )
     .run(f.chatId, pending.id);
-  expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('프로바이더 요청');
+  expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow(
+    'CHAT_DELETE_PROVIDER_ACTIVE'
+  );
   f.store.db
     .prepare("UPDATE attempts SET status='cancelled' WHERE id='scene-delete-attempt'")
     .run();

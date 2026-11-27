@@ -7,7 +7,7 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore } from './chat-options.js';
 import { resolvePackageProfile } from './package-features.js';
 import type { Store } from './store.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export function captureChatAuthoring(
   store: Store,
@@ -77,7 +77,7 @@ export function remapChatAuthoring(
 ): void {
   const remap = (id: string) => {
     const target = resources.get(id);
-    if (!target) throw new HttpError(400, '채팅 전용 로어의 원본 자료가 백업에 없어요.');
+    if (!target) throw new AppError(400, 'CHAT_BACKUP_INVALID');
     return target;
   };
   for (const entry of authoring.lore) {
@@ -100,7 +100,7 @@ export function restoreChatAuthoring(
 ): void {
   const nodes = authoring.outline;
   if (!Array.isArray(nodes) || new Set(nodes.map((node) => node.id)).size !== nodes.length)
-    throw new HttpError(400, '구성 항목의 식별자가 올바르지 않아요.');
+    throw new AppError(400, 'CHAT_BACKUP_INVALID');
   const byId = new Map(nodes.map((node) => [node.id, node]));
   for (const node of nodes) {
     const parent = node.parentId ? byId.get(node.parentId) : undefined;
@@ -112,7 +112,7 @@ export function restoreChatAuthoring(
       typeof node.intent !== 'string' ||
       !Number.isSafeInteger(node.position)
     )
-      throw new HttpError(400, '구성의 수준과 상위 관계가 올바르지 않아요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     const links = node.relatedIds ?? [];
     if (
       !Array.isArray(links) ||
@@ -120,7 +120,7 @@ export function restoreChatAuthoring(
       new Set(links).size !== links.length ||
       links.some((id) => id === node.id || !byId.has(id))
     )
-      throw new HttpError(400, '함께 참고할 구성의 연결이 올바르지 않아요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
   }
   const sourceLinks = authoring.outlineSources ?? [];
   if (
@@ -134,14 +134,13 @@ export function restoreChatAuthoring(
         (link.origin !== undefined && link.origin !== 'focus')
     )
   )
-    throw new HttpError(400, '구성에 연결할 원문이 없어요.');
+    throw new AppError(400, 'CHAT_BACKUP_INVALID');
   if (authoring.outlineFocusId !== undefined && !byId.has(authoring.outlineFocusId))
-    throw new HttpError(400, '진행 중인 구성 항목이 없어요.');
+    throw new AppError(400, 'CHAT_BACKUP_INVALID');
   const at = new Date().toISOString();
   const ids = new Map(authoring.outline.map((node) => [node.id, randomUUID()]));
   for (const node of authoring.outline) {
-    if (node.parentId && !ids.has(node.parentId))
-      throw new HttpError(400, '이야기 구성의 상위 항목이 없어요.');
+    if (node.parentId && !ids.has(node.parentId)) throw new AppError(400, 'CHAT_BACKUP_INVALID');
     store.db
       .prepare(`INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at)
       VALUES(?,?,?,?,?,?,?,?,1,NULL,NULL,?,?)`)
@@ -193,8 +192,7 @@ export function restoreChatAuthoring(
   for (const [index, item] of authoring.lore.entries()) {
     const { atIndex, ...data } = item;
     const source = atIndex === null ? null : history[atIndex];
-    if (atIndex !== null && !source)
-      throw new HttpError(400, '로어 변경을 적용할 메시지가 없어요.');
+    if (atIndex !== null && !source) throw new AppError(400, 'CHAT_BACKUP_INVALID');
     const entry: ChatLoreOverride = {
       ...data,
       id: randomUUID(),

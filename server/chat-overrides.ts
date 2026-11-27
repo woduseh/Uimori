@@ -18,6 +18,7 @@ import { type ContentAttachment } from '../core/risu-content.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { resolvePackageProfile } from './package-features.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 type Row = Record<string, string | number | null>;
 
@@ -186,10 +187,8 @@ export class ChatOverridesStore {
         return JSON.parse(String(receipt.result)) as ChatOverrideResult;
       }
       const chat = this.store.chat(chatId);
-      if (this.revision(chatId) !== expectedRevision)
-        throw new HttpError(409, '채팅 전용 로어가 바뀌었어요. 최신 변경을 확인해 주세요.');
-      if (chat.headRevision !== expectedHead)
-        throw new HttpError(409, '로어 변경을 붙일 원문이 바뀌었어요. 최신 원문을 확인해 주세요.');
+      if (this.revision(chatId) !== expectedRevision) throw new AppError(409, 'CHAT_LORE_CHANGED');
+      if (chat.headRevision !== expectedHead) throw new AppError(409, 'CHAT_LORE_SOURCE_CHANGED');
       const scoped = this.scoped(chatId, chat.headRevision),
         prior = scoped.entries.find(
           (entry) => chatLoreKey(entry.selector) === chatLoreKey(selector)
@@ -209,7 +208,7 @@ export class ChatOverridesStore {
           createdAt: new Date().toISOString(),
         };
       } else if (action === 'remove') {
-        if (!prior || prior.retired) throw new HttpError(409, '이 연결에 적용한 변경이 없어요.');
+        if (!prior || prior.retired) throw new AppError(409, 'CHAT_LORE_OVERRIDE_MISSING');
         entry = {
           ...prior,
           id: randomUUID(),
@@ -222,20 +221,20 @@ export class ChatOverridesStore {
       } else {
         const profile = this.store.product.profile(chatId);
         if (profile.revision !== number(body.expectedProfileRevision, 'profile revision'))
-          throw new HttpError(409, '자료 연결이 변경됐어요.');
+          throw new AppError(409, 'CHAT_LORE_ATTACHMENTS_CHANGED');
         const resolved = resolvePackageProfile(this.store.product, profile),
           paths = chatPackagePaths(resolved, profile.packageAttachments ?? []);
         const selected = paths.find(
           (path) => chatAttachmentKey(path.scope) === chatAttachmentKey(selector)
         );
-        if (!selected) throw new HttpError(400, '선택한 패키지 연결 경로가 현재 채팅에 없어요.');
+        if (!selected) throw new AppError(400, 'CHAT_LORE_PATH_MISSING');
         if (selected.package.revision !== number(body.expectedPackageRevision, 'package revision'))
-          throw new HttpError(409, '원본 자료가 변경됐어요.');
+          throw new AppError(409, 'CHAT_LORE_PACKAGE_CHANGED');
         const baseEntry = selected.package.lore.find((lore) => lore.id === selector.loreId);
-        if (!baseEntry) throw new HttpError(404, '선택한 로어 항목이 없어요.');
+        if (!baseEntry) throw new AppError(404, 'CHAT_LORE_ENTRY_MISSING');
         const baseValue = baseEntry[selector.field];
         if (body.expectedFieldHash !== chatOverrideHash(baseValue))
-          throw new HttpError(409, '원본 로어 필드가 변경됐어요.');
+          throw new AppError(409, 'CHAT_LORE_FIELD_CHANGED');
         const roots = profile.packageAttachments ?? [],
           root = roots.find((ref) => ref.id === selector.id && ref.role === selector.role)!;
         const baseModuleRevisions = selector.modulePath.map((moduleId, index) => {

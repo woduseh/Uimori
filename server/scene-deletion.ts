@@ -19,13 +19,14 @@ import {
   forgetHelperConfirmationTargets,
   redactHelperArgumentPreviews,
 } from './helper-argument-retention.js';
+import { AppError } from './app-errors.js';
 
 function target(store: Store, chatId: string, sourceId: string) {
   const chat = store.chat(chatId),
     history = store.history(chat.headRevision);
   const index = history.findIndex((source) => source.revision === sourceId);
   if (index < 0 || store.sourceMetadata(sourceId).chatId !== chatId)
-    throw new HttpError(404, '현재 채팅에서 삭제할 장면을 찾을 수 없어요.');
+    throw new AppError(404, 'SCENE_DELETE_NOT_FOUND');
   return { chat, history, index };
 }
 function historyHash(history: ReturnType<Store['history']>) {
@@ -116,7 +117,7 @@ export function deleteScenes(
   ]);
   const scope = text(body.scope, 'scope', 10);
   if (scope !== 'only' && scope !== 'following')
-    throw new HttpError(400, '장면 삭제 범위를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid scene deletion scope');
   const expectedHead =
     body.expectedHeadRevision === null ? null : text(body.expectedHeadRevision, 'head', 100);
   const expectedSettings = number(body.expectedSettingsRevision, 'settings revision', 1);
@@ -151,7 +152,7 @@ export function deleteScenes(
       historyHash(history) !== expectedHistoryHash ||
       readChatVariables(store, chatId).revision !== expectedVariablesRevision
     )
-      throw new HttpError(409, '채팅이 변경됐어요. 삭제할 범위를 다시 확인해 주세요.');
+      throw new AppError(409, 'SCENE_DELETE_CHAT_CHANGED');
     assertChatIdleForDeletion(store, chatId);
     const removed = scope === 'only' ? [history[index]] : history.slice(index);
     const ids = new Set(removed.map((source) => source.revision));
@@ -176,7 +177,7 @@ export function deleteScenes(
           .prepare('SELECT 1 FROM runs WHERE chat_id!=? AND parent_revision=?')
           .get(chatId, id)
       )
-        throw new HttpError(409, '다른 채팅에서 참조하는 장면은 삭제할 수 없어요.');
+        throw new AppError(409, 'SCENE_DELETE_REFERENCED');
     }
     const runIds = new Set(
       sources.filter((row) => ids.has(String(row.id))).map((row) => String(row.run_id))

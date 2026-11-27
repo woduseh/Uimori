@@ -23,6 +23,7 @@ import { exportChatTranscript, importChatTranscript } from './chat-transcript.js
 import { readChatVariables } from './chat-variables.js';
 import { HttpError } from './request-validation.js';
 import { sceneTitles, restoreSceneTitles } from './scene-titles.js';
+import { AppError } from './app-errors.js';
 
 export function captureChatCopy(
   store: Store,
@@ -99,7 +100,7 @@ export function restoreChatCopy(
     const chatId = imported.chat.id;
     const history = store.history(imported.chat.headRevision);
     if (copy.state.checkpoints.length !== history.length)
-      throw new HttpError(400, '채팅 상태와 메시지 수가 맞지 않아요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     const variables = validateChatVariableState(copy.state.variables);
     const profile = store.product.profile(chatId);
     store.product.updateProfile(chatId, {

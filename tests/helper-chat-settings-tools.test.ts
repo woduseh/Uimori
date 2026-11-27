@@ -238,7 +238,7 @@ test('scene.title names a scene and refuses a stale expected name', async () => 
     helperDone,
   ]);
   expect(sceneTitle(store, sourceId)).toBe('종소리');
-  expect(run.finished('stale')).toMatchObject({ denied: true, errorCode: 'SOURCE_CONFLICT' });
+  expect(run.finished('stale')).toMatchObject({ denied: true, errorCode: 'SCENE_TITLE_CHANGED' });
   expect(run.finished('outside')).toMatchObject({ denied: true, errorCode: 'SCENE_NOT_IN_CHAT' });
   expect(run.results).toEqual([
     expect.objectContaining({

@@ -136,7 +136,7 @@ test('optional title model is independent of task routes, strict, CAS protected 
   const selected = save({ id: title.id });
   expect(selected.titleModel).toEqual({ id: title.id });
   expect(selected.routes).toEqual(emptyModelRoutes());
-  expect(() => save(null, current.revision)).toThrow(/새로고침/);
+  expect(() => save(null, current.revision)).toThrow('MODEL_WORKSPACE_CHANGED');
   expect(() => save({ id: title.id, revision: 1 })).toThrow(/Unknown request field/);
   expect(() => save({ id: 'missing-title-model' })).toThrow();
   select(store, model(store, 'Main').id);
@@ -231,7 +231,7 @@ test('current global selection is shared and CAS protected while completed outpu
       routes: firstSettings.routes,
       translationPolicy: firstSettings.translationPolicy,
     })
-  ).toThrow(/새로고침/);
+  ).toThrow('MODEL_WORKSPACE_CHANGED');
   expect(readStoredRunSnapshot(store, first.run.id)).toEqual(first.completedSnapshot);
   expect(store.source(first.source.id)).toMatchObject(first.source);
   expect(store.job(translation.id)).toEqual(frozen);
@@ -504,7 +504,7 @@ test('changing a pin invalidates pending options and preserves the pending draft
   pin(store, chat.id, { mainPromptPresetId: presetB.id });
   expect(options.get(chat.id).binding.owner).toBe(`preset:${presetB.id}`);
   expect(options.get(chat.id).conflicts.join(' ')).toMatch(/다음 요청 옵션/);
-  expect(() => complete(store, chat.id)).toThrow(/프롬프트 정의가 바뀌었어요/);
+  expect(() => complete(store, chat.id)).toThrow('CHAT_OPTIONS_PENDING_STALE');
   expect(options.get(chat.id).pending).toHaveLength(1);
   expect(store.db.prepare('SELECT count(*) AS count FROM runs').get()?.count).toBe(0);
   pin(store, chat.id, { mainPromptPresetId: presetA.id });

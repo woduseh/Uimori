@@ -96,7 +96,7 @@ test('new chats prefer explicit persona including none, then folder, then bot de
   );
   expect(() =>
     org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'inherit' } })
-  ).toThrow('변경됐어요');
+  ).toThrow('BOT_DEFAULTS_CHANGED');
   org.updateDefaults(bot.id, { expectedRevision: 3, persona: { mode: 'inherit' } });
   expect(selected()).toBe(persona.id);
 });
@@ -127,7 +127,7 @@ test('bot defaults follow current persona edits and deleted defaults require an 
   deleteLibraryItem(store, 'content', persona.id, { expectedRevision: updated.revision });
   const count = store.chats().length;
   expect(() => store.createChat('Missing default', { botId: bot.id })).toThrow(
-    '기본 페르소나가 삭제됐어요'
+    'CHAT_DEFAULT_PERSONA_DELETED'
   );
   expect(store.chats()).toHaveLength(count);
   const explicit = store.createChat('Explicit none', { botId: bot.id, persona: null });

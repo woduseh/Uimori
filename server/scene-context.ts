@@ -4,6 +4,7 @@ import { HttpError, fields, number, record, text } from './request-validation.js
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
 import type { SceneContext } from '../core/scene-context.js';
+import { AppError } from './app-errors.js';
 export type { SceneContext } from '../core/scene-context.js';
 
 export const DEFAULT_SCENE_CONTEXT: SceneContext = {
@@ -73,7 +74,7 @@ export function updateSceneContext(store: Store, sourceId: string, value: unknow
     const active = store.db
       .prepare("SELECT 1 FROM runs WHERE chat_id=? AND status IN ('queued','running') LIMIT 1")
       .get(source.chatId);
-    if (active) throw new HttpError(409, '장면 생성 중에는 이전 기록을 변경할 수 없어요.');
+    if (active) throw new AppError(409, 'SCENE_CONTEXT_RUN_ACTIVE');
     const current = readSceneContext(store.db, sourceId);
     if (current.revision !== expected) throw new HttpError(409, 'Scene context revision conflict');
     const next: SceneContext = {

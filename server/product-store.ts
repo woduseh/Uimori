@@ -91,6 +91,7 @@ import {
 } from './package-features.js';
 import { decodeImage } from './package-images.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
+import { AppError } from './app-errors.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -402,7 +403,7 @@ export class ProductStore {
             createDefaultRisuPrompt(text(b.text, 'prompt text', 200000, true), role)
           );
     if (program.collaboration) {
-      if (role !== 'main') throw new HttpError(400, '협업은 작문 프롬프트에만 설정할 수 있어요.');
+      if (role !== 'main') throw new AppError(400, 'PROMPT_COLLABORATION_MAIN_ONLY');
       const previous = id
         ? this.get<PromptPreset>('prompt-preset', id).program.collaboration
         : undefined;
@@ -425,10 +426,7 @@ export class ProductStore {
           (selected.main === id && role !== 'main') ||
           (selected.translation === id && role !== 'translation')
         )
-          throw new HttpError(
-            409,
-            '기본 프롬프트로 사용 중이에요. 현재 프롬프트 설정에서 다른 프리셋을 선택한 뒤 역할을 바꿔 주세요.'
-          );
+          throw new AppError(409, 'PROMPT_PRESET_ROLE_IN_USE');
       }
       return this.saveInTransaction(
         'prompt-preset',
@@ -548,12 +546,12 @@ export class ProductStore {
         !Array.isArray(body.expectedOrder) ||
         JSON.stringify(body.expectedOrder) !== JSON.stringify(group.map((item) => item.id))
       )
-        throw new HttpError(409, '표시 순서가 변경됐어요. 목록을 새로고침한 뒤 다시 옮겨 주세요.');
+        throw new AppError(409, 'PROVIDER_ORDER_CHANGED');
       const index = group.findIndex((item) => item.id === id);
       if (targetId === id) return { moved: false };
       const [moving] = group.splice(index, 1);
       const target = group.findIndex((item) => item.id === targetId);
-      if (target < 0) throw new HttpError(409, '같은 목록 안에서만 순서를 바꿀 수 있어요.');
+      if (target < 0) throw new AppError(409, 'PROVIDER_ORDER_OTHER_GROUP');
       group.splice(target + (position === 'after' ? 1 : 0), 0, moving!);
       const update = this.db.prepare(
         "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind=? AND id=?"
@@ -645,8 +643,7 @@ export class ProductStore {
       ) {
         this.assertAvailable('prompt-preset', pinned.mainPromptPresetId);
         const preset = this.get<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
-        if (preset.role !== 'main')
-          throw new HttpError(400, '이 채팅에는 작문 프롬프트만 고정할 수 있어요.');
+        if (preset.role !== 'main') throw new AppError(400, 'PINNED_PROMPT_NOT_MAIN');
       }
       if (pinned?.mainModel?.id !== prior.pinned?.mainModel?.id)
         assertModelSelection(this, pinned?.mainModel ?? null);
@@ -702,8 +699,8 @@ export class ProductStore {
       } catch (error) {
         if (
           requiredRole !== 'inspect' ||
-          !(error instanceof HttpError) ||
-          !error.message.startsWith('PINNED_PROMPT_UNAVAILABLE')
+          !(error instanceof AppError) ||
+          error.code !== 'PINNED_PROMPT_UNAVAILABLE'
         )
           throw error;
         return chatPromptWorkspace(this.store, { mainModel: p.pinned?.mainModel });
@@ -749,7 +746,7 @@ export class ProductStore {
         const model = agent.model
           ? this.modelSnapshot(agent.model.id, undefined, requiredRole !== 'inspect')
           : models.main;
-        if (!model) throw new HttpError(400, '협업을 사용하려면 작문 모델을 선택해 주세요.');
+        if (!model) throw new AppError(400, 'PROMPT_COLLABORATION_MODEL_REQUIRED');
         collaborationModels[agent.id] = structuredClone(model);
       }
     const profile: ProfileSnapshot = {

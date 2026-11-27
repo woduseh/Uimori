@@ -14,6 +14,7 @@ import { chatTitle, fields, HttpError, record, text } from './request-validation
 import { successfulTranslation } from './translation-artifacts.js';
 import { assertRequestImages } from './request-images.js';
 import { updateSceneContext } from './scene-context.js';
+import { AppError } from './app-errors.js';
 
 export function exportChatTranscript(
   store: Store,
@@ -92,7 +93,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     const saved = readImportReceipt<{
       chatId: string;
       skippedAttachments: ChatTranscriptImport['skippedAttachments'];
-    }>(store, key, digest, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
+    }>(store, key, digest);
     if (saved) {
       return {
         chat: store.chat(saved.chatId),
@@ -111,7 +112,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
       }
     });
     const bot = attachments.find((ref) => ref.role === 'bot');
-    if (!bot) throw new HttpError(400, '채팅을 이어 쓸 봇이 필요해요.');
+    if (!bot) throw new AppError(400, 'CHAT_TRANSCRIPT_BOT_REQUIRED');
     const chat = store.createChat(title, { botId: bot.id, persona: null });
     const profile = store.product.profile(chat.id);
     store.product.updateProfile(chat.id, {

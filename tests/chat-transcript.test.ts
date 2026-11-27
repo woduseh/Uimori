@@ -504,7 +504,7 @@ describe('chat transcript export and import', () => {
     const withoutBot = { ...transcript, packageAttachments: [] };
     expect(() =>
       importChatTranscript(store, { transcript: withoutBot, idempotencyKey: 'no-bot' })
-    ).toThrow('채팅을 이어 쓸 봇이 필요해요.');
+    ).toThrow('CHAT_TRANSCRIPT_BOT_REQUIRED');
   });
 
   test('chat backup restores transcript receipts as history without claiming destination keys', async () => {

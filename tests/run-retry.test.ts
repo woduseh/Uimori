@@ -116,7 +116,7 @@ test('last response replacement keeps old prose until commit, excludes it from i
   expect(store.db.prepare('SELECT count(*) AS total FROM chats').get()!.total).toBe(beforeChats);
   expect(() =>
     store.retryRun(selected.run.id, 'replace-middle', undefined, undefined, 'replace')
-  ).toThrow(/마지막/);
+  ).toThrow('RUN_RETRY_REPLACE_LATEST_ONLY');
   expect(
     store.retryRun(selected.run.id, 'copy-old', undefined, undefined, 'copy').run.chatId
   ).not.toBe(chat.id);

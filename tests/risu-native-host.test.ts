@@ -239,7 +239,7 @@ test('native variables-only buttons retain each user attachment through repeated
     )!.requestImageIndexes = [8];
   await expect(
     importChatBackup(target, { backup: invalid, idempotencyKey: 'invalid-image-index' })
-  ).rejects.toThrow('메시지에 연결된 참고 이미지가 올바르지 않아요.');
+  ).rejects.toThrow('CHAT_BACKUP_INVALID');
 });
 
 test('native button message merging keeps each user attachment on its identified message', async () => {

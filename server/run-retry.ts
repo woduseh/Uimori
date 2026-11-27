@@ -11,6 +11,7 @@ import { chatGenerationDefaults } from './chat-generation-defaults.js';
 import { autoRefusalRetryLimit } from '../core/chat-settings.js';
 import { imageInputSupported } from '../core/provider-images.js';
 import type { Store, Run } from './store.js';
+import { AppError } from './app-errors.js';
 
 const AUTOMATIC_REFUSAL_RETRY_KEY = 'auto-refusal-retry:';
 
@@ -134,11 +135,11 @@ export function retryRun(
     if (previous) return { run: store.run(previous.runId), created: false };
     const original = store.run(runId);
     if (original.snapshot.invalidatedBySceneDeletion)
-      throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
+      throw new AppError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
     if (['queued', 'running'].includes(original.status))
       throw new HttpError(409, 'Original run is still active');
     if (original.snapshot.packageStart?.mode === 'authored' || original.snapshot.nativeRisuAuthored)
-      throw new HttpError(409, '작성된 첫 메시지는 생성 요청이 아니에요. 새 장면을 요청해 주세요.');
+      throw new AppError(409, 'RUN_RETRY_AUTHORED_FIRST_MESSAGE');
     const originalChat = store.chat(original.chatId);
     const replace =
       options.mode === 'replace' ||
@@ -162,14 +163,10 @@ export function retryRun(
           original.snapshot.replacement &&
           replacement.hash !== original.snapshot.replacement.sourceHash))
     )
-      throw new HttpError(
-        409,
-        '마지막 완료 응답만 교체할 수 있어요. 이전 장면은 새 채팅에서 다시 요청해 주세요.'
-      );
+      throw new AppError(409, 'RUN_RETRY_REPLACE_LATEST_ONLY');
     let run: Run;
     if (options.judgmentOnly) {
-      if (!canRecoverMainJudgment(original))
-        throw new HttpError(409, '보존된 본문의 판정 실패만 다시 판정할 수 있어요.');
+      if (!canRecoverMainJudgment(original)) throw new AppError(409, 'RUN_REJUDGE_UNAVAILABLE');
       if (
         originalChat.headRevision !==
           (original.snapshot.replacement?.sourceRevision ?? original.parentRevision) ||
@@ -177,7 +174,7 @@ export function retryRun(
           store.source(original.snapshot.replacement.sourceRevision).hash !==
             original.snapshot.replacement.sourceHash)
       )
-        throw new HttpError(409, '이야기가 이미 진행됐어요. 현재 내용에서 새 요청을 보내 주세요.');
+        throw new AppError(409, 'RUN_RETRY_STORY_ADVANCED');
       if (
         store.db
           .prepare("SELECT 1 FROM runs WHERE chat_id=? AND status IN ('queued','running')")

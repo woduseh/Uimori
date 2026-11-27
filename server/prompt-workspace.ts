@@ -60,6 +60,7 @@ import { assertModelSelection } from './provider-selection.js';
 import type { Store } from './store.js';
 import { promptCombinationRoutes } from './prompt-combinations.js';
 import { recordPromptWorkspaceUpdate } from './prompt-workspace-events.js';
+import { AppError } from './app-errors.js';
 
 const roles = ['main', 'translation'] as const;
 const roleValue = (value: unknown): PromptRole => {
@@ -496,10 +497,7 @@ export function chatPromptWorkspace(
         throw new HttpError(400, 'The pinned prompt is not a main prompt');
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
-      throw new HttpError(
-        409,
-        'PINNED_PROMPT_UNAVAILABLE: 이 채팅에 고정한 작문 프롬프트를 사용할 수 없어요. 채팅 설정에서 다시 선택해 주세요.'
-      );
+      throw new AppError(409, 'PINNED_PROMPT_UNAVAILABLE');
     }
     const values = resolvePromptValues(preset.program, preset.values ?? {});
     workspace.main = {
@@ -577,7 +575,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
   return store.transaction(() => {
     const prior = promptWorkspace(store);
     if (prior.revision !== number(input.expectedRevision, 'model workspace revision'))
-      throw new HttpError(409, '설정이 다른 곳에서 바뀌었어요. 새로고침한 뒤 저장해 주세요.');
+      throw new AppError(409, 'MODEL_WORKSPACE_CHANGED');
     const next = validatePromptWorkspace({
       ...prior,
       ...(Object.hasOwn(input, 'judgment') ? { judgment: input.judgment } : {}),
@@ -694,10 +692,7 @@ export function updatePromptWorkspace(
             incoming.presetRevision !== undefined &&
             incoming.presetRevision !== prior[role].presetRevision
           )
-            throw new HttpError(
-              409,
-              '프롬프트 저장본이 변경됐어요. 입력을 확인한 뒤 다시 저장해 주세요.'
-            );
+            throw new AppError(409, 'PROMPT_PRESET_CHANGED');
           if (
             !applying &&
             (!isDeepStrictEqual(incoming.program, prior[role].program) ||
@@ -860,7 +855,7 @@ export function applyPromptCombination(store: Store, value: unknown) {
   if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
   const current = promptWorkspace(store)[role];
   if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))
-    throw new HttpError(409, '이 프롬프트의 옵션 조합이 아니거나 옵션 정의가 변경됐어요.');
+    throw new AppError(409, 'PROMPT_COMBINATION_MISMATCH');
   return updatePromptWorkspace(store, {
     expectedRevision: b.expectedRevision,
     [role]: { ...current, values: preset.values, optionValues: preset.values },

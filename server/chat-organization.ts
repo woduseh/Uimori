@@ -5,6 +5,7 @@ import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '
 import type { Store } from './store.js';
 import { loreContextDefaults } from './lore-context-defaults.js';
 import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
+import { AppError } from './app-errors.js';
 
 export type { ChatFolder } from '../core/product.js';
 export type ChatOrganization = {
@@ -47,14 +48,13 @@ export class ChatOrganizationStore {
     const selection = record(b.persona);
     fields(selection, selection.mode === 'persona' ? ['mode', 'persona'] : ['mode']);
     if (!['inherit', 'none', 'persona'].includes(selection.mode))
-      throw new HttpError(400, '기본 페르소나 선택을 확인해 주세요.');
+      throw new HttpError(400, 'Invalid default persona mode');
     return this.store.transaction(() => {
       const prior = this.defaults(botId);
-      if (prior.revision !== expected)
-        throw new HttpError(409, '봇 기본 설정이 변경됐어요. 다시 열어 확인해 주세요.');
+      if (prior.revision !== expected) throw new AppError(409, 'BOT_DEFAULTS_CHANGED');
       const persona = selection.mode === 'persona' ? this.persona(selection.persona) : null;
       if (selection.mode === 'persona' && !persona)
-        throw new HttpError(400, '기본으로 사용할 페르소나를 선택해 주세요.');
+        throw new AppError(400, 'BOT_DEFAULT_PERSONA_REQUIRED');
       if (persona) this.store.product.assertAvailable('content', persona.id);
       const next: BotDefaults = {
         revision: prior.revision + 1,
@@ -213,10 +213,7 @@ export class ChatOrganizationStore {
       selection.persona === undefined ? undefined : this.persona(selection.persona)
     );
     if (personaRef && this.store.product.isHidden('content', personaRef.id))
-      throw new HttpError(
-        409,
-        '기본 페르소나가 삭제됐어요. 봇 또는 폴더의 기본 페르소나를 다시 선택해 주세요.'
-      );
+      throw new AppError(409, 'CHAT_DEFAULT_PERSONA_DELETED');
     const persona = personaRef ? this.store.product.get<Content>('content', personaRef.id) : null;
     const packageAttachments = [
       ...(bot?.package ? [{ id: bot.id, revision: bot.revision, role: 'bot' as const }] : []),

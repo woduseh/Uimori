@@ -155,7 +155,7 @@ test('stale revisions and changed definitions cannot overwrite options', () => {
   expect(f.service.fixed(f.chat.id, initial, requestId)).toEqual(accepted);
   expect(() =>
     f.service.fixed(f.chat.id, { ...initial, operationId: randomUUID() }, requestId)
-  ).toThrow(/변경/);
+  ).toThrow('CHAT_OPTIONS_CHANGED');
   expect(() =>
     f.service.fixed(
       f.chat.id,
@@ -165,7 +165,7 @@ test('stale revisions and changed definitions cannot overwrite options', () => {
       },
       requestId
     )
-  ).toThrow(/소속/);
+  ).toThrow('CHAT_OPTIONS_BINDING_CHANGED');
   expect(() =>
     f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), requestId)
   ).toThrow();
@@ -186,7 +186,7 @@ test('definition changes block pending choices and never silently apply old fixe
   });
   expect(f.service.get(f.chat.id).fixedValues).toEqual({});
   expect(f.service.get(f.chat.id).conflicts.length).toBeGreaterThan(0);
-  expect(() => run(f)).toThrow(/再|다시/);
+  expect(() => run(f)).toThrow('CHAT_OPTIONS_PENDING_STALE');
   const state = f.service.get(f.chat.id);
   f.service.cancel(
     f.chat.id,

@@ -86,6 +86,7 @@ import type {
   ToolEvent,
   ToolEventTiming,
 } from '../core/types.js';
+import { AppError } from './app-errors.js';
 
 export type Chat = BaseChat & { createdAt: string };
 export type Run = BaseRun & { createdAt: string; updatedAt: string };
@@ -338,10 +339,7 @@ export class Store {
     return this.transaction(() => {
       const prior = this.chat(id);
       if (prior.titleRevision !== expectedTitleRevision)
-        throw new HttpError(
-          409,
-          '채팅 제목이 다른 곳에서 변경됐어요. 취소 후 최신 제목을 확인해 주세요.'
-        );
+        throw new AppError(409, 'CHAT_TITLE_CHANGED');
       this.db.prepare('UPDATE chats SET title=? WHERE id=?').run(title, id);
       this.event(id, 'chat.title.manual', id);
       return this.chat(id);

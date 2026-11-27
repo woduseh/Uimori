@@ -13,6 +13,7 @@ import {
   withContextProjection,
 } from './context-planning.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 
 type Row = Record<string, any>;
@@ -227,8 +228,7 @@ export class ContextStore {
           ) &&
           checkpoint.plan.compacted.length <= current.history.length;
       } catch (error) {
-        if (!(error instanceof HttpError) || !error.message.startsWith('PINNED_PROMPT_UNAVAILABLE'))
-          throw error;
+        if (!(error instanceof AppError) || error.code !== 'PINNED_PROMPT_UNAVAILABLE') throw error;
       }
     }
     return {

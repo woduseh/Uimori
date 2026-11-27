@@ -41,12 +41,6 @@ export const messages = {
     ja: '1〜{max} の整数を入力してください。',
     zh: '请输入 1 到 {max} 之间的整数。',
   },
-  'settings.newChatDefaultsInvalid': {
-    ko: '새 채팅 생성 기본값을 확인해 주세요.',
-    en: 'Check the new chat defaults.',
-    ja: '新しいチャットの既定値を確認してください。',
-    zh: '请检查新聊天默认值。',
-  },
   'settings.newChatDefaultsConflict': {
     ko: '다른 창에서 새 채팅 생성 기본값이 변경됐어요. 다시 불러와 주세요.',
     en: 'New chat defaults changed in another window. Reload them to continue.',

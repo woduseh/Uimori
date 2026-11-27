@@ -1,7 +1,7 @@
 import { detachAttemptUsage } from './usage-accounting.js';
 import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
-import { HttpError, fields, record } from './request-validation.js';
+import { fields, record } from './request-validation.js';
 import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
 import { CHAT_PIN_PREFIX } from './chat-organization.js';
 import type { FastifyInstance } from 'fastify';
@@ -13,6 +13,7 @@ import {
   forgetHelperConfirmationTargets,
   redactHelperArgumentPreviews,
 } from './helper-argument-retention.js';
+import { AppError } from './app-errors.js';
 
 type Row = Record<string, any>;
 const chatTables = [
@@ -60,7 +61,7 @@ export function assertChatIdleForDeletion(store: Store, chatId: string) {
       )
       .get(chatId)
   )
-    throw new HttpError(409, '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.');
+    throw new AppError(409, 'CHAT_DELETE_HELPER_ACTIVE');
   for (const table of ['runs', 'jobs', 'context_jobs', 'illustration_jobs'])
     if (
       store.db
@@ -69,19 +70,13 @@ export function assertChatIdleForDeletion(store: Store, chatId: string) {
         )
         .get(chatId)
     )
-      throw new HttpError(
-        409,
-        '진행 중인 생성 또는 보조 작업을 취소하거나 완료한 뒤 삭제해 주세요.'
-      );
+      throw new AppError(409, 'CHAT_DELETE_WORK_ACTIVE');
   if (
     store.db
       .prepare("SELECT 1 FROM attempts WHERE chat_id=? AND status='running' LIMIT 1")
       .get(chatId)
   )
-    throw new HttpError(
-      409,
-      '프로바이더 요청이 아직 종료되지 않았어요. 요청 종료 후 삭제해 주세요.'
-    );
+    throw new AppError(409, 'CHAT_DELETE_PROVIDER_ACTIVE');
 }
 
 function removeIds(store: Store, table: string, column: string, ids: string[]) {
@@ -178,15 +173,9 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
     const command = store.story.command(id);
     assertChatIdleForDeletion(store, command.chatId);
     if (command.runId || command.sourceRevision)
-      throw new HttpError(
-        409,
-        '실행 기록에 연결된 새 장면 요청이에요. 해당 분기 또는 채팅과 함께 삭제해 주세요.'
-      );
+      throw new AppError(409, 'SCENE_COMMAND_RUN_LINKED');
     if (store.db.prepare('SELECT 1 FROM outline_writings WHERE command_id=?').get(id))
-      throw new HttpError(
-        409,
-        '구성 항목에 연결된 새 장면 요청이에요. 구성에서 먼저 분리하거나 구성 항목을 삭제해 주세요.'
-      );
+      throw new AppError(409, 'SCENE_COMMAND_OUTLINE_LINKED');
     store.db.prepare('DELETE FROM scene_commands WHERE id=?').run(id);
     store.event(command.chatId, 'scene.command.deleted', id);
     return { deleted: true, chatId: command.chatId };

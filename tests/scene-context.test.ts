@@ -227,7 +227,7 @@ describe('authored scene context without replaying prior runs', () => {
     );
     expect(() =>
       updateSceneContext(store, first.id, { expectedRevision: 0, sceneEnabled: false })
-    ).toThrow('장면 생성 중');
+    ).toThrow('SCENE_CONTEXT_RUN_ACTIVE');
   });
 
   test('preserves effective controls in portable transcripts and chat forks', async () => {

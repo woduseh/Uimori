@@ -57,6 +57,10 @@ test('generic errors keep provider/internal text hidden and retain deletion conf
   });
   const deletion = '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.';
   expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
+  expect(await rejectedWith(409, { code: 'CHAT_DELETE_HELPER_ACTIVE' }, 'DELETE')).toMatchObject({
+    code: 'CHAT_DELETE_HELPER_ACTIVE',
+    message: deletion,
+  });
 });
 
 test('a coded error renders its message from params in the current locale', async () => {

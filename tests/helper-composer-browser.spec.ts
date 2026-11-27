@@ -55,7 +55,7 @@ test('HELPMODEL rejected and uncertain helper changes require an explicit reread
     if (writes === 1)
       return route.fulfill({
         status: 409,
-        json: { error: '설정이 다른 곳에서 바뀌었어요. 새로고침한 뒤 저장해 주세요.' },
+        json: { code: 'MODEL_WORKSPACE_CHANGED' },
       });
     await route.fetch();
     await route.abort('failed');

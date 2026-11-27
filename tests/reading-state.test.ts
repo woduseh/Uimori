@@ -75,7 +75,7 @@ test('device-local last positions use CAS, accept backwards reading, and reject 
   expect(readingPositions(store, chat.id, b).other).toEqual(saved);
   expect(() =>
     saveReadingPosition(store, chat.id, { clientId: a, expectedRevision: 0, target: target(first) })
-  ).toThrow('다른 탭');
+  ).toThrow('READING_POSITION_CHANGED');
   const previous = saveReadingPosition(store, chat.id, {
     clientId: a,
     expectedRevision: 1,
@@ -107,7 +107,9 @@ test('bookmarks preserve snapshots through edits, deduplicate an acknowledged cr
   };
   const created = addBookmark(store, chat.id, input);
   expect(addBookmark(store, chat.id, input)).toEqual(created);
-  expect(() => addBookmark(store, chat.id, { ...input, note: 'different' })).toThrow('달라졌어요');
+  expect(() => addBookmark(store, chat.id, { ...input, note: 'different' })).toThrow(
+    'Bookmark ID reused with different content'
+  );
   store.editSource(source.id, { expectedRevision: 0, text: 'Changed scene' });
   expect(listBookmarks(store, chat.id)[0].target.contentHash).toBe(source.hash);
   expect(store.source(source.id).hash).not.toBe(source.hash);
@@ -117,7 +119,9 @@ test('bookmarks preserve snapshots through edits, deduplicate an acknowledged cr
     note: 'Revised',
   });
   expect(edited).toMatchObject({ revision: 2, title: 'New title' });
-  expect(() => updateBookmark(store, created.id, { expectedRevision: 1 }, true)).toThrow('변경');
+  expect(() => updateBookmark(store, created.id, { expectedRevision: 1 }, true)).toThrow(
+    'BOOKMARK_CHANGED'
+  );
   updateBookmark(store, created.id, { expectedRevision: 2 }, true);
   expect(listBookmarks(store, chat.id)).toEqual([]);
   expect(store.source(source.id).text).toBe('Changed scene');
@@ -178,7 +182,7 @@ test('portable backup round-trip keeps bookmarks, rejects malformed locations at
   const previousChats = destination.chats().length;
   await expect(
     importChatBackup(destination, { backup: malformed, idempotencyKey: 'bad' })
-  ).rejects.toThrow('책갈피 장면');
+  ).rejects.toThrow('CHAT_BACKUP_INVALID');
   expect(destination.chats()).toHaveLength(previousChats);
   const legacy = structuredClone(backup);
   delete legacy.chats[0].state.bookmarks;

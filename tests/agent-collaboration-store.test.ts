@@ -281,7 +281,7 @@ test('model references, prompt role and CAS are checked before storing collabora
   const f = fixture();
   expect(() =>
     f.product.promptPreset({ title: 'Wrong role', role: 'translation', program: f.program })
-  ).toThrow('작문');
+  ).toThrow('PROMPT_COLLABORATION_MAIN_ONLY');
   const changed = structuredClone(f.program);
   changed.collaboration!.agents[0].model = { id: 'missing-model' };
   expect(() =>

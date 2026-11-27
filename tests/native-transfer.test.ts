@@ -358,10 +358,12 @@ test('NATIVE04 mapping is explicit and revalidated; unavailable local model and 
     ).program.collaboration!.agents[0].model
   ).toEqual({ id: local.id });
   const after = snapshot(store);
-  expect(() => applyNativeTransfer(store, body)).toThrow('다른 가져오기 요청에 같은 ID');
+  expect(() => applyNativeTransfer(store, body)).toThrow(
+    'Idempotency key reused with different command'
+  );
   expect(() =>
     applyNativeTransfer(store, { ...body, digest: '0'.repeat(64), idempotencyKey: 'new-key' })
-  ).toThrow('가져올 자료가 변경됐어요');
+  ).toThrow('NATIVE_TRANSFER_DRAFT_CHANGED');
   expect(snapshot(store)).toEqual(after);
   store.db.prepare("INSERT INTO library_hidden VALUES('model',?)").run(local.id);
   const hidden = snapshot(store);

@@ -20,6 +20,7 @@ import { HelperWorkspace } from './helper-workspace.js';
 import { chatPromptWorkspace } from './prompt-workspace.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError, HelperToolError } from './app-errors.js';
 
 type Row = Record<string, string | number | null>;
 const json = JSON.stringify;
@@ -70,10 +71,6 @@ function valuesFor(program: RisuPrompt | PromptControl[], value: unknown): Optio
   );
   return Object.fromEntries(Object.keys(input).map((id) => [id, resolved[id]]));
 }
-
-const conflict = (message: string): never => {
-  throw new HttpError(409, message);
-};
 
 export class ChatOptionsStore {
   readonly store: Store;
@@ -181,12 +178,11 @@ export class ChatOptionsStore {
           prior.command_hash !== commandHash ||
           prior.chat_id !== chatId
         )
-          conflict('옵션 요청 키가 다른 작업에 사용됐어요.');
+          throw new HttpError(409, 'Option operation ID reused');
         return this.get(chatId);
       }
       const state = this.get(chatId);
-      if (state.revision !== revision)
-        conflict('채팅 옵션이 변경됐어요. 입력은 유지하고 최신 설정을 확인해 주세요.');
+      if (state.revision !== revision) throw new AppError(409, 'CHAT_OPTIONS_CHANGED');
       apply(body, state);
       const result = this.get(chatId);
       this.store.db
@@ -207,14 +203,13 @@ export class ChatOptionsStore {
   }
   private assertBinding(value: unknown, state: ChatOptionState): void {
     if (!isDeepStrictEqual(readBinding(value), state.binding))
-      conflict('프롬프트 소속이나 옵션 정의가 바뀌었어요.');
+      throw new AppError(409, 'CHAT_OPTIONS_BINDING_CHANGED');
   }
   stage(chatId: string, value: unknown, requestId: string): ChatOptionState {
     return this.write(chatId, value, 'oneoff', requestId, ['binding', 'values'], (body, state) => {
       this.assertBinding(body.binding, state);
       const values = valuesFor(state.controls ?? state.program, body.values);
-      if (!Object.keys(values).length)
-        throw new HttpError(400, '한 개 이상의 옵션을 선택해 주세요.');
+      if (!Object.keys(values).length) throw new AppError(400, 'CHAT_OPTIONS_EMPTY');
       this.store.db.prepare('DELETE FROM chat_option_pending WHERE chat_id=?').run(chatId);
       const pending: PendingChatOptions = {
         id: randomUUID(),
@@ -239,7 +234,7 @@ export class ChatOptionsStore {
       ['pendingId'],
       (_b, state) => {
         const pending = state.pending.find((item) => item.id === pendingId);
-        if (!pending) conflict('취소할 다음 요청 옵션이 변경됐어요.');
+        if (!pending) throw new AppError(409, 'CHAT_OPTIONS_PENDING_CHANGED');
         this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pendingId);
         this.bump(chatId);
       }
@@ -255,7 +250,7 @@ export class ChatOptionsStore {
       !isDeepStrictEqual(frozenOptionBinding(profile), state.binding) ||
       profile.promptWorkspaceRevision !== state.workspaceRevision
     )
-      conflict('옵션 예약 전 현재 프롬프트가 변경됐어요.');
+      throw new AppError(409, 'CHAT_OPTIONS_PROMPT_CHANGED');
     const controls = effectiveRisuControls(profile, preset.program);
     const globalValues = resolveControlValues(
       controls,
@@ -268,9 +263,7 @@ export class ChatOptionsStore {
     if (runId)
       for (const pending of state.pending) {
         if (!isDeepStrictEqual(pending.binding, state.binding))
-          conflict(
-            '다음 요청 옵션의 프롬프트 정의가 바뀌었어요. 창작 옵션에서 선택을 다시 지정해 주세요.'
-          );
+          throw new AppError(409, 'CHAT_OPTIONS_PENDING_STALE');
         Object.assign(oneoffValues, pending.values);
         pendingIds.push(pending.id);
         this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pending.id);
@@ -374,7 +367,7 @@ export function invokeHelperOptions(
   operationId: string
 ): unknown {
   const scope = task.snapshot.scope;
-  if (scope.kind !== 'chat') throw new HttpError(403, '채팅에서만 창작 옵션을 선택할 수 있어요.');
+  if (scope.kind !== 'chat') throw new HelperToolError(403, 'CHAT_SCOPE_REQUIRED');
   const service = new ChatOptionsStore(store);
   if (name === 'options.read') {
     fields(record(value), []);

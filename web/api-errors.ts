@@ -40,6 +40,67 @@ export const appErrorMessages = {
   SELECTION_REVISION_REFUSED: 'errors.SELECTION_REVISION_REFUSED',
   SELECTION_REVISION_FAILED: 'errors.SELECTION_REVISION_FAILED',
   SELECTION_REVISION_TOO_LONG: 'errors.SELECTION_REVISION_TOO_LONG',
+  CHAT_TITLE_CHANGED: 'errors.CHAT_TITLE_CHANGED',
+  CHAT_DEFAULTS_CHANGED: 'settings.newChatDefaultsConflict',
+  CHAT_DEFAULT_PERSONA_DELETED: 'errors.CHAT_DEFAULT_PERSONA_DELETED',
+  BOT_DEFAULTS_CHANGED: 'errors.BOT_DEFAULTS_CHANGED',
+  BOT_DEFAULT_PERSONA_REQUIRED: 'errors.BOT_DEFAULT_PERSONA_REQUIRED',
+  CHAT_DELETE_HELPER_ACTIVE: 'errors.CHAT_DELETE_HELPER_ACTIVE',
+  CHAT_DELETE_WORK_ACTIVE: 'errors.CHAT_DELETE_WORK_ACTIVE',
+  CHAT_DELETE_PROVIDER_ACTIVE: 'errors.CHAT_DELETE_PROVIDER_ACTIVE',
+  CHAT_COPY_REMOVED: 'errors.CHAT_COPY_REMOVED',
+  CHAT_COPY_RECEIPT_UNVERIFIED: 'errors.CHAT_COPY_RECEIPT_UNVERIFIED',
+  CHAT_BACKUP_INVALID: 'errors.CHAT_BACKUP_INVALID',
+  CHAT_BACKUP_IMAGE_CHANGED: 'errors.CHAT_BACKUP_IMAGE_CHANGED',
+  CHAT_TRANSCRIPT_BOT_REQUIRED: 'errors.CHAT_TRANSCRIPT_BOT_REQUIRED',
+  CHAT_OPTIONS_CHANGED: 'errors.CHAT_OPTIONS_CHANGED',
+  CHAT_OPTIONS_BINDING_CHANGED: 'errors.CHAT_OPTIONS_BINDING_CHANGED',
+  CHAT_OPTIONS_PENDING_CHANGED: 'errors.CHAT_OPTIONS_PENDING_CHANGED',
+  CHAT_OPTIONS_PENDING_STALE: 'errors.CHAT_OPTIONS_PENDING_STALE',
+  CHAT_OPTIONS_PROMPT_CHANGED: 'errors.CHAT_OPTIONS_PROMPT_CHANGED',
+  CHAT_OPTIONS_EMPTY: 'errors.CHAT_OPTIONS_EMPTY',
+  CHAT_LORE_CHANGED: 'errors.CHAT_LORE_CHANGED',
+  CHAT_LORE_SOURCE_CHANGED: 'errors.CHAT_LORE_SOURCE_CHANGED',
+  CHAT_LORE_OVERRIDE_MISSING: 'errors.CHAT_LORE_OVERRIDE_MISSING',
+  CHAT_LORE_ATTACHMENTS_CHANGED: 'errors.CHAT_LORE_ATTACHMENTS_CHANGED',
+  CHAT_LORE_PATH_MISSING: 'errors.CHAT_LORE_PATH_MISSING',
+  CHAT_LORE_PACKAGE_CHANGED: 'errors.CHAT_LORE_PACKAGE_CHANGED',
+  CHAT_LORE_ENTRY_MISSING: 'errors.CHAT_LORE_ENTRY_MISSING',
+  CHAT_LORE_FIELD_CHANGED: 'errors.CHAT_LORE_FIELD_CHANGED',
+  SCENE_COMMAND_RUN_LINKED: 'errors.SCENE_COMMAND_RUN_LINKED',
+  SCENE_COMMAND_OUTLINE_LINKED: 'errors.SCENE_COMMAND_OUTLINE_LINKED',
+  SCENE_CONTEXT_RUN_ACTIVE: 'errors.SCENE_CONTEXT_RUN_ACTIVE',
+  SCENE_DELETE_NOT_FOUND: 'errors.SCENE_DELETE_NOT_FOUND',
+  SCENE_DELETE_CHAT_CHANGED: 'errors.SCENE_DELETE_CHAT_CHANGED',
+  SCENE_DELETE_REFERENCED: 'errors.SCENE_DELETE_REFERENCED',
+  SCENE_DELETED_RETRY_UNAVAILABLE: 'errors.SCENE_DELETED_RETRY_UNAVAILABLE',
+  SCENE_TITLE_CHANGED: 'errors.SCENE_TITLE_CHANGED',
+  READING_SCENE_NOT_FOUND: 'errors.READING_SCENE_NOT_FOUND',
+  READING_POSITION_CHANGED: 'errors.READING_POSITION_CHANGED',
+  BOOKMARK_NOT_FOUND: 'errors.BOOKMARK_NOT_FOUND',
+  BOOKMARK_CHANGED: 'errors.BOOKMARK_CHANGED',
+  RUN_RETRY_AUTHORED_FIRST_MESSAGE: 'errors.RUN_RETRY_AUTHORED_FIRST_MESSAGE',
+  RUN_RETRY_REPLACE_LATEST_ONLY: 'errors.RUN_RETRY_REPLACE_LATEST_ONLY',
+  RUN_RETRY_STORY_ADVANCED: 'errors.RUN_RETRY_STORY_ADVANCED',
+  RUN_REJUDGE_UNAVAILABLE: 'errors.RUN_REJUDGE_UNAVAILABLE',
+  PROMPT_PRESET_CHANGED: 'errors.PROMPT_PRESET_CHANGED',
+  PROMPT_PRESET_ROLE_IN_USE: 'errors.PROMPT_PRESET_ROLE_IN_USE',
+  PROMPT_COMBINATION_MISMATCH: 'errors.PROMPT_COMBINATION_MISMATCH',
+  PROMPT_COLLABORATION_MAIN_ONLY: 'errors.PROMPT_COLLABORATION_MAIN_ONLY',
+  PROMPT_COLLABORATION_MODEL_REQUIRED: 'errors.PROMPT_COLLABORATION_MODEL_REQUIRED',
+  PINNED_PROMPT_UNAVAILABLE: 'errors.PINNED_PROMPT_UNAVAILABLE',
+  PINNED_PROMPT_NOT_MAIN: 'errors.PINNED_PROMPT_NOT_MAIN',
+  MODEL_WORKSPACE_CHANGED: 'errors.MODEL_WORKSPACE_CHANGED',
+  PROVIDER_ORDER_CHANGED: 'errors.PROVIDER_ORDER_CHANGED',
+  PROVIDER_ORDER_OTHER_GROUP: 'errors.PROVIDER_ORDER_OTHER_GROUP',
+  RESOURCE_CHANGED: 'errors.RESOURCE_CHANGED',
+  RESOURCE_CREATION_REMOVED: 'errors.RESOURCE_CREATION_REMOVED',
+  RESOURCE_CLONE_SOURCE_CHANGED: 'errors.RESOURCE_CLONE_SOURCE_CHANGED',
+  RESOURCE_UNDO_UNAVAILABLE: 'errors.RESOURCE_UNDO_UNAVAILABLE',
+  RESOURCE_UNDO_UNREADABLE: 'errors.RESOURCE_UNDO_UNREADABLE',
+  RESOURCE_UNDO_CHANGED: 'errors.RESOURCE_UNDO_CHANGED',
+  RESOURCE_BUNDLE_MODULE_CYCLE: 'errors.RESOURCE_BUNDLE_MODULE_CYCLE',
+  NATIVE_TRANSFER_DRAFT_CHANGED: 'errors.NATIVE_TRANSFER_DRAFT_CHANGED',
 } satisfies Record<AppErrorCode, string>;
 
 function appErrorMessage(
@@ -53,13 +114,6 @@ function appErrorMessage(
 }
 
 const messages: Record<string, string> = {
-  CHAT_COPY_REMOVED: '이전에 만든 채팅 사본이 삭제됐어요. 새 사본을 만들 수 있어요.',
-  CHAT_COPY_RECEIPT_UNVERIFIED:
-    '이전 복사 기록을 확인할 수 없어요. 다시 복사하면 새 사본을 만들어요.',
-  RESOURCE_CREATION_REMOVED:
-    '이전에 생성된 자료가 삭제됐어요. 현재 입력을 확인한 뒤 새로 저장할 수 있어요.',
-  SCENE_DELETED_RETRY_UNAVAILABLE:
-    '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
   ...requestImageErrors,
   ...requestFileErrors,
   RISU_NATIVE_TIMEOUT:
@@ -121,16 +175,12 @@ const messages: Record<string, string> = {
     '자료 파일이 64 MB 한도를 넘었어요. 내보낼 자료를 나누어 선택해 주세요.',
   NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED:
     '프롬프트의 보조 에이전트 모델을 모두 연결한 뒤 가져와 주세요.',
-  NATIVE_TRANSFER_DRAFT_CHANGED:
-    '확인한 파일 내용이 달라졌어요. 파일을 다시 선택해 내용을 확인해 주세요.',
   NATIVE_TRANSFER_IMPORT_CONFLICT:
     '같은 가져오기 요청에 다른 파일이나 모델 연결이 지정됐어요. 기존 요청의 결과를 먼저 확인해 주세요.',
   NATIVE_TRANSFER_MODULE_BINDINGS:
     '연결된 모듈 정보가 맞지 않아요. 필요한 모듈을 포함해 자료 파일을 다시 내보내 주세요.',
   NATIVE_TRANSFER_SOURCE_CHANGED:
     '자료의 수정 번호가 달라졌어요. 최신 자료를 확인한 뒤 다시 내보내 주세요.',
-  PINNED_PROMPT_UNAVAILABLE:
-    '이 채팅에 고정한 창작 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
   HELPER_EFFECTS_ALREADY_COMMITTED:
     '이 요청의 변경 사항은 이미 저장됐어요. 저장된 결과를 확인하고 남은 작업만 새 요청으로 알려 주세요.',
   HELPER_RESUME_UNAVAILABLE: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',
@@ -154,7 +204,6 @@ const messages: Record<string, string> = {
   DRAFT_DISCARDED: '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
   CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
     '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
-  CHAT_TRANSCRIPT_BOT_REQUIRED: '본문을 가져올 봇을 선택해 주세요.',
   CHAT_TRANSCRIPT_IMPORT_CONFLICT:
     '같은 가져오기 요청의 본문이나 제목이 달라졌어요. 기존에 가져온 채팅을 먼저 확인해 주세요.',
   CHAT_TRANSCRIPT_IMPORT_UNVERIFIABLE:
@@ -263,17 +312,15 @@ function legacyErrorDiagnostic(error: unknown, status: number, method: string): 
       }
     }
     const code =
-      error === 'PINNED_PROMPT_UNAVAILABLE' || error.startsWith('PINNED_PROMPT_UNAVAILABLE:')
-        ? 'PINNED_PROMPT_UNAVAILABLE'
-        : error === '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.'
-          ? 'DRAFT_UNAPPLIED_FIELDS'
-          : [
-                '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
-                '편집 초안이 폐기됐어요.',
-                '초안이 폐기됐어요. 새 초안을 열어 주세요.',
-              ].includes(error)
-            ? 'DRAFT_DISCARDED'
-            : error;
+      error === '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.'
+        ? 'DRAFT_UNAPPLIED_FIELDS'
+        : [
+              '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
+              '편집 초안이 폐기됐어요.',
+              '초안이 폐기됐어요. 새 초안을 열어 주세요.',
+            ].includes(error)
+          ? 'DRAFT_DISCARDED'
+          : error;
     if (Object.hasOwn(storyUiErrors, code)) return { code, message: ko[storyUiErrors[code]] };
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
     if (status === 409 && nativeActionConflict.test(code))

@@ -1,5 +1,6 @@
 import type { Store } from './store.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { fields, number, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export function sceneTitles(store: Store, chatId: string): Map<string, string> {
   return new Map(
@@ -45,8 +46,7 @@ export function setSceneTitle(store: Store, sourceId: string, value: unknown) {
     const source = store.sourceMetadata(sourceId);
     const key = `source-title:${sourceId}`;
     const current = sceneTitle(store, sourceId);
-    if (current !== expected && current !== title)
-      throw new HttpError(409, '장면 이름이 바뀌었어요. 목록을 다시 열어 확인해 주세요.');
+    if (current !== expected && current !== title) throw new AppError(409, 'SCENE_TITLE_CHANGED');
     if (title)
       store.db
         .prepare('INSERT OR REPLACE INTO app_metadata(key,value) VALUES(?,?)')
@@ -59,7 +59,7 @@ export function setSceneTitle(store: Store, sourceId: string, value: unknown) {
 
 export function restoreSceneTitles(store: Store, sourceIds: string[], value: unknown): void {
   if (value === undefined) return;
-  if (!Array.isArray(value)) throw new HttpError(400, '장면 이름 목록을 확인해 주세요.');
+  if (!Array.isArray(value)) throw new AppError(400, 'CHAT_BACKUP_INVALID');
   for (const item of value) {
     const entry = record(item);
     const index = number(entry.atIndex, 'scene title index', 0, sourceIds.length - 1);

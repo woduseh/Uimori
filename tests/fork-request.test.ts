@@ -81,7 +81,7 @@ test('a terminal receipt for a deleted copy releases its retained key', async ()
   const fetch = vi
     .spyOn(globalThis, 'fetch')
     .mockRejectedValueOnce(new TypeError('Connection lost'))
-    .mockResolvedValueOnce(Response.json({ error: 'CHAT_COPY_REMOVED' }, { status: 410 }))
+    .mockResolvedValueOnce(Response.json({ code: 'CHAT_COPY_REMOVED' }, { status: 410 }))
     .mockResolvedValueOnce(accepted());
   await expect(requestChatFork('chat', 'source')).rejects.toThrow();
   const previous = values.get(key);

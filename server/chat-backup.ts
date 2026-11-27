@@ -26,7 +26,7 @@ import { processImage } from './image-processing.js';
 import { validateChatTranscript } from '../core/chat-transcript.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import { normalizeStoryGuideConfig } from '../core/story-guide.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { importPreparedResourceBundle } from './resource-bundle.js';
@@ -36,6 +36,7 @@ import {
   deletePreparedArchive,
   type PreparedArchive,
 } from './native-transfer-archive.js';
+import { AppError } from './app-errors.js';
 
 function checkedBackup(value: unknown, binary = false): ChatBackup {
   const body = record(value);
@@ -46,7 +47,7 @@ function checkedBackup(value: unknown, binary = false): ChatBackup {
     !Array.isArray(body.chats) ||
     !body.chats.length
   )
-    throw new HttpError(400, '개인 채팅 백업 파일을 확인해 주세요.');
+    throw new AppError(400, 'CHAT_BACKUP_INVALID');
   for (const raw of body.chats) {
     const copy = record(raw);
     validateChatTranscript(copy.transcript);
@@ -57,7 +58,7 @@ function checkedBackup(value: unknown, binary = false): ChatBackup {
       state.storyGuide = normalizeStoryGuideConfig(state.storyGuide);
     validateChatVariableState(state.variables);
     if (!Array.isArray(state.checkpoints) || !Array.isArray(copy.illustrations))
-      throw new HttpError(400, '채팅 상태가 올바르지 않아요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     state.checkpoints.forEach((checkpoint) => {
       if (checkpoint !== null) validateChatVariableState(checkpoint);
     });
@@ -146,13 +147,13 @@ export function importPreparedChatBackup(
         copy.transcript.title,
         (reference) => {
           const image = binary.get(reference);
-          if (!image) throw new HttpError(400, '삽화 이미지가 없어요.');
+          if (!image) throw new AppError(400, 'CHAT_BACKUP_INVALID');
           const bytes = readFileSync(image.path);
           if (
             bytes.length !== image.bytes ||
             createHash('sha256').update(bytes).digest('hex') !== image.hash
           )
-            throw new HttpError(409, '가져올 이미지가 변경됐어요. 다시 확인해 주세요.');
+            throw new AppError(409, 'CHAT_BACKUP_IMAGE_CHANGED');
           return bytes;
         }
       );
@@ -229,7 +230,7 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
     const copy = structuredClone(originalCopy);
     remapTranscriptRequestImages(copy.transcript, (hash) => {
       const image = convertedResources.imagesBySourceHash.get(hash);
-      if (!image) throw new HttpError(400, '요청에 첨부한 이미지가 백업에 없어요.');
+      if (!image) throw new AppError(400, 'CHAT_BACKUP_INVALID');
       return image.hash;
     });
     copy.transcript = rewriteTranscriptMedia(copy.transcript, (kind, hash) => {

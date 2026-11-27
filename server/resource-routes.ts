@@ -12,7 +12,7 @@ import {
 
 const kinds = ['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'];
 export function resourceKind(value: unknown): ResourceKind {
-  if (!kinds.includes(String(value))) throw new HttpError(400, '자료 종류를 확인해 주세요.');
+  if (!kinds.includes(String(value))) throw new HttpError(400, 'Invalid resource kind');
   return value as ResourceKind;
 }
 
@@ -31,7 +31,7 @@ export function resourceRoutes(app: FastifyInstance, store: Store) {
       'idempotencyKey',
     ]);
     if (body.syncNativeName !== undefined && typeof body.syncNativeName !== 'boolean')
-      throw new HttpError(400, '내부 이름 동기화 옵션을 확인해 주세요.');
+      throw new HttpError(400, 'Invalid syncNativeName');
     return cloneResource(store, {
       kind: choice(body.kind, ['content', 'prompt-preset'], 'clone resource kind'),
       sourceId: text(body.sourceId, 'source ID', 100),

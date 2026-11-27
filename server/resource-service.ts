@@ -15,6 +15,7 @@ import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HttpError } from './request-validation.js';
 import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
+import { AppError } from './app-errors.js';
 
 type CreationReceipt = { kind: ResourceKind; id: string; organizationRevision?: number };
 
@@ -32,12 +33,12 @@ export function readResource(store: Store, kind: ResourceKind, id: string): Save
 
 function readCreatedResource(store: Store, receipt: CreationReceipt): SavedResource {
   if (store.product.isHidden(receipt.kind, receipt.id))
-    throw new HttpError(410, 'RESOURCE_CREATION_REMOVED');
+    throw new AppError(410, 'RESOURCE_CREATION_REMOVED');
   try {
     return readResource(store, receipt.kind, receipt.id);
   } catch (error) {
     if (error instanceof HttpError && error.statusCode === 404)
-      throw new HttpError(410, 'RESOURCE_CREATION_REMOVED');
+      throw new AppError(410, 'RESOURCE_CREATION_REMOVED');
     throw error;
   }
 }
@@ -79,7 +80,7 @@ export function saveResource(
           ?.model
       : null;
     if (previous && previous.revision !== edit.expectedRevision)
-      throw new HttpError(409, '저장된 자료가 변경됐어요. 최신 자료를 확인해 주세요.');
+      throw new AppError(409, 'RESOURCE_CHANGED');
     const input = { ...edit.model, expectedRevision: edit.expectedRevision };
     const saved: SavedResource =
       edit.kind === 'illustration-preset'
@@ -145,7 +146,7 @@ export function cloneResource(
   }
 ) {
   if (request.syncNativeName && request.kind !== 'prompt-preset')
-    throw new HttpError(400, '프롬프트 프리셋만 내부 이름을 함께 변경할 수 있어요.');
+    throw new HttpError(400, 'syncNativeName requires a prompt preset');
   return store.transaction(() => {
     const receipt = request.idempotencyKey
       ? creationReceipt('clone', request.idempotencyKey, {
@@ -173,7 +174,7 @@ export function cloneResource(
     store.product.assertAvailable(request.kind, request.sourceId);
     const source = readResource(store, request.kind, request.sourceId);
     if (source.revision !== request.expectedSourceRevision)
-      throw new HttpError(409, '원본 자료가 변경됐어요. 최신 자료를 확인한 뒤 복제해 주세요.');
+      throw new AppError(409, 'RESOURCE_CLONE_SOURCE_CHANGED');
     const model = structuredClone(editableResource(request.kind, source));
     if (request.kind === 'content') {
       const content = model as ContentEditModel;
@@ -207,21 +208,20 @@ export function readPreviousResource(store: Store, kind: ResourceKind, id: strin
   const row = store.db
     .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
     .get(kind, id);
-  if (!row) throw new HttpError(404, '직전 저장본이 없어요.');
+  if (!row) throw new AppError(404, 'RESOURCE_UNDO_UNAVAILABLE');
   let model: unknown;
   try {
     model = JSON.parse(String(row.model));
   } catch {
-    throw new HttpError(409, '직전 저장본을 읽을 수 없어요.');
+    throw new AppError(409, 'RESOURCE_UNDO_UNREADABLE');
   }
   if (!model || typeof model !== 'object' || Array.isArray(model))
-    throw new HttpError(409, '직전 저장본을 읽을 수 없어요.');
+    throw new AppError(409, 'RESOURCE_UNDO_UNREADABLE');
   return { savedRevision: Number(row.saved_revision), model: model as ResourceModel };
 }
 
 export function undoResource(store: Store, kind: ResourceKind, id: string, revision: number) {
   const previous = readPreviousResource(store, kind, id);
-  if (previous.savedRevision !== revision)
-    throw new HttpError(409, '최근 저장 이후 자료가 변경됐어요.');
+  if (previous.savedRevision !== revision) throw new AppError(409, 'RESOURCE_UNDO_CHANGED');
   return saveResource(store, { kind, id, expectedRevision: revision, model: previous.model });
 }

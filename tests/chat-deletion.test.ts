@@ -71,7 +71,7 @@ test('active runs and outstanding provider attempts block deletion until both be
     chat = createFixtureChat(store, 'Busy');
   const pending = (await run(store, chat.id, false)).run;
   expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
-    '진행 중'
+    'CHAT_DELETE_WORK_ACTIVE'
   );
   store.finishRun(pending.id, 'cancelled', 'Synthetic cancellation');
   store.db
@@ -86,7 +86,7 @@ test('active runs and outstanding provider attempts block deletion until both be
     )
     .run(pending.id, time, time);
   expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
-    '프로바이더 요청'
+    'CHAT_DELETE_PROVIDER_ACTIVE'
   );
   store.db.prepare("UPDATE attempts SET status='cancelled'").run();
   deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request);

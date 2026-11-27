@@ -564,7 +564,7 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
     expect(event(request, 'bad-hash')).toMatchObject({
       denied: true,
       result: {
-        error: '원본 로어 필드가 변경됐어요.',
+        code: 'CHAT_LORE_FIELD_CHANGED',
         retryMode: 'refresh_then_retry',
         outcome: 'unchanged',
       },

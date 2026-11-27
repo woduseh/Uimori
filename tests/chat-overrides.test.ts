@@ -323,20 +323,20 @@ test('source scope, root/package revisions and text-only selectors reject forged
       { ...next, selector: { ...input.selector, modulePath: [unrelated.id] } },
       requestId
     )
-  ).toThrow(/연결 경로/);
+  ).toThrow('CHAT_LORE_PATH_MISSING');
   expect(() =>
     service.patch(chat.id, { ...next, expectedFieldHash: '0'.repeat(64) }, requestId)
-  ).toThrow(/필드/);
+  ).toThrow('CHAT_LORE_FIELD_CHANGED');
   expect(() =>
     service.patch(chat.id, { ...next, expectedHeadRevision: randomUUID() }, requestId)
-  ).toThrow(/원문/);
+  ).toThrow('CHAT_LORE_SOURCE_CHANGED');
   expect(() =>
     service.patch(
       chat.id,
       { ...next, expectedProfileRevision: input.expectedProfileRevision + 1 },
       requestId
     )
-  ).toThrow(/자료 연결/);
+  ).toThrow('CHAT_LORE_ATTACHMENTS_CHANGED');
   expect(service.revision(chat.id)).toBe(result.revision);
   expect(store.db.prepare('SELECT 1 FROM chat_override_operations').all()).toHaveLength(1);
 });

@@ -157,10 +157,10 @@ describe('independent stored-story fork without generation', () => {
     expect([a.title, b.title]).toEqual(['Names (사본 1)', 'Names (사본 2)']);
     expect(forkChat(store, chat.id, body)).toEqual(a);
     expect(() => forkChat(store, chat.id, { ...body, fromRevision: second.id })).toThrow(
-      '다른 채팅에 같은 가져오기 ID'
+      'Idempotency key reused with different command'
     );
     expect(() => forkChat(store, chat.id, { ...body, title: 'Different title' })).toThrow(
-      '다른 채팅에 같은 가져오기 ID'
+      'Idempotency key reused with different command'
     );
     const item = owned.find((item) => item.store === store)!;
     store.close();

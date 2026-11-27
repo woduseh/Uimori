@@ -1110,7 +1110,7 @@ test('new explicit values use final declarations and reverting a declaration rem
 test('previous reads expose the current undo slot without changing saved state or advertising patch targets', () => {
   const { store, preset, target } = presetFixture([{ type: 'plain', text: 'First' }]);
   expect(() => call(store, 'resource.read', { ...target, version: 'previous' })).toThrow(
-    '직전 저장본이 없어요'
+    'RESOURCE_UNDO_UNAVAILABLE'
   );
   const path = `${presetBlocksPath}/0/text`;
   const second = call(store, 'resource.patch', {
@@ -1158,7 +1158,7 @@ test('previous reads expose the current undo slot without changing saved state o
     .prepare('UPDATE resource_undo SET saved_revision=?,model=? WHERE id=?')
     .run(third.revision, '{broken', preset.id);
   expect(() => call(store, 'resource.read', { ...target, version: 'previous', path })).toThrow(
-    '직전 저장본을 읽을 수 없어요'
+    'RESOURCE_UNDO_UNREADABLE'
   );
   expect(call(store, 'resource.read', { ...target, path }).text).toBe('Third');
 });

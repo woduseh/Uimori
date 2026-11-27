@@ -7,6 +7,7 @@ import {
 } from '../core/chat-settings.js';
 import { fields, HttpError, number, record } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 const KEY = 'chat-generation-defaults';
 
@@ -31,12 +32,11 @@ export function saveChatGenerationDefaults(store: Store, input: unknown): ChatGe
   const { maxCalls, storyUi, storyUiStyle, autoRefusalRetryEnabled, autoRefusalMaxRetries } =
     normalizeChatSettings(body);
   if (storyUi === undefined || storyUiStyle === undefined)
-    throw new HttpError(400, '새 채팅 생성 기본값을 확인해 주세요.');
+    throw new HttpError(400, 'Invalid new chat defaults');
 
   return store.transaction(() => {
     const previous = chatGenerationDefaults(store.db);
-    if (previous.revision !== expected)
-      throw new HttpError(409, '다른 창에서 새 채팅 생성 기본값이 변경됐어요. 다시 불러와 주세요.');
+    if (previous.revision !== expected) throw new AppError(409, 'CHAT_DEFAULTS_CHANGED');
     const next: ChatGenerationDefaults = {
       revision: previous.revision + 1,
       maxCalls,
