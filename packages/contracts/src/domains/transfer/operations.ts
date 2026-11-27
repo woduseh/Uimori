@@ -120,8 +120,8 @@ export type ImportChatTranscript = z.infer<typeof importTranscriptInput>;
 const exportManuscriptInput = z.strictObject({
   id: nonBlank(100),
   mode: z.enum(['source', 'translation']),
-  fromScene: z.number().optional(),
-  toScene: z.number().optional(),
+  fromScene: z.unknown().optional(),
+  toScene: z.unknown().optional(),
   expectedHeadRevision: z.string().nullable(),
 });
 export type ExportManuscript = z.infer<typeof exportManuscriptInput>;
