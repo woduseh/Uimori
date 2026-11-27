@@ -9,7 +9,7 @@ import {
 } from './fixtures/browser-test.js';
 import type { ModelWorkspace } from '../core/product.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
-import { postFixtureChat } from './fixtures/chat.js';
+import { fixtureTranscript, postFixtureChat } from './fixtures/chat.js';
 import { loopbackProvider, sse } from './fixtures/loopback-provider.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 
@@ -250,9 +250,7 @@ test('STREAMTRANSLATION a running translation streams into the translation view 
     const owner = await body<Chat>(
       await postFixtureChat(request, { data: { title: `Streaming translation ${randomUUID()}` } })
     );
-    const transcript = await body<{ entries: unknown[] }>(
-      await request.get(`/api/chats/${owner.id}/transcript`)
-    );
+    const transcript = await fixtureTranscript(request, owner);
     transcript.entries = [
       {
         request: 'Streaming translation fixture',

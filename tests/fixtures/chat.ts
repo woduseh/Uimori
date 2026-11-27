@@ -4,6 +4,12 @@ import { nativeContent } from './native-content.js';
 import type { FastifyInstance } from 'fastify';
 import type { InjectOptions } from 'light-my-request';
 import type { APIRequestContext } from '@playwright/test';
+import {
+  CHAT_TRANSCRIPT_FORMAT,
+  CHAT_TRANSCRIPT_VERSION,
+  type ChatTranscript,
+} from '../../core/chat-transcript.js';
+import type { ChatProfile } from '../../core/product.js';
 
 export function fixtureBotInput(title = 'Synthetic fixture owner', body = '') {
   return {
@@ -68,6 +74,27 @@ export async function postFixtureChat(
     ...options,
     data: { ...options?.data, botId: (await created.json()).id },
   });
+}
+export async function fixtureTranscript(
+  request: APIRequestContext,
+  chat: { id: string; title: string }
+): Promise<ChatTranscript> {
+  const response = await request.get(`/api/chats/${chat.id}/profile`);
+  if (!response.ok()) throw new Error(`Fixture profile read failed: ${await response.text()}`);
+  const profile = (await response.json()) as ChatProfile;
+  return {
+    format: CHAT_TRANSCRIPT_FORMAT,
+    version: CHAT_TRANSCRIPT_VERSION,
+    exportedAt: new Date().toISOString(),
+    title: chat.title,
+    packageAttachments: (profile.packageAttachments ?? []).map(({ id, revision, role }) => ({
+      id,
+      revision,
+      role,
+    })),
+    notes: [],
+    entries: [],
+  };
 }
 export function createFixtureChat(
   store: Store,

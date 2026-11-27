@@ -1,15 +1,12 @@
 import { expect, type APIRequestContext } from '@playwright/test';
-import { postFixtureChat } from './chat.js';
+import { fixtureTranscript, postFixtureChat } from './chat.js';
 import type { Chat, ChatDetail } from '../../core/types.js';
-import type { ChatTranscript } from '../../core/chat-transcript.js';
 
 export async function createReadingChat(request: APIRequestContext, title: string, count = 8) {
   const owner = await postFixtureChat(request, { data: { title: `${title} 자료` } });
   expect(owner.ok()).toBe(true);
   const original = (await owner.json()) as Chat;
-  const transcript = (await (
-    await request.get(`/api/chats/${original.id}/transcript`)
-  ).json()) as ChatTranscript;
+  const transcript = await fixtureTranscript(request, original);
   transcript.title = title;
   transcript.entries = Array.from({ length: count }, (_, index) => ({
     request: `검증 장면 ${index + 1}`,
