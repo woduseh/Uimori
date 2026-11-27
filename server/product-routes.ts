@@ -13,6 +13,7 @@ import {
   vertexPublisherModelEntry,
 } from '../core/provider-catalog.js';
 import { readProviderBody } from '../core/provider-fetch.js';
+import type { MaintenanceStatus } from '#contracts';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
@@ -37,7 +38,6 @@ import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { inspectVertexAccount, type VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
 import { assertLibraryVisible, libraryDeletionRoutes } from './library-deletion.js';
-import type { MaintenanceStatus } from './maintenance.js';
 
 export function productRoutes(
   app: FastifyInstance,

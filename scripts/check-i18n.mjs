@@ -157,7 +157,7 @@ export function findUnusedMessages(catalog, sources) {
     const scanned = scanMessageReferences(source, file);
     for (const item of scanned.literals) literals.add(item);
     for (const item of scanned.patterns) patterns.add(item);
-    if (/^(web|core|server)\//u.test(file.replaceAll('\\', '/')))
+    if (/^(web|core|packages|server)\//u.test(file.replaceAll('\\', '/')))
       for (const item of scanned.texts) texts.add(item);
   }
   const expressions = [...patterns].map((pattern) => new RegExp(pattern, 'u'));
@@ -248,7 +248,7 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
     } catch {}
   }
   const localeDirectory = resolve(root, 'web/locales');
-  const sources = ['web', 'core', 'server', 'scripts', 'tests']
+  const sources = ['web', 'core', 'packages', 'server', 'scripts', 'tests']
     .filter((directory) => existsSync(resolve(root, directory)))
     .flatMap((directory) => files(resolve(root, directory)))
     .filter((path) => /\.[cm]?[jt]sx?$|\.mts$/u.test(path) && !path.startsWith(localeDirectory))

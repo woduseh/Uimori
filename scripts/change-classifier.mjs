@@ -1,4 +1,4 @@
-export const runtimeRoots = ['core', 'server', 'web', 'runner'];
+export const runtimeRoots = ['core', 'packages', 'server', 'web', 'runner'];
 export const sourceRoots = [...runtimeRoots, 'scripts', 'tests'];
 
 const patterns = {

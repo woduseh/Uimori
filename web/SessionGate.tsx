@@ -3,13 +3,8 @@ import { LanguageSelect } from './LanguageSelect.js';
 import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import {
-  api,
-  ApiError,
-  rememberMaintenance,
-  sessionRequiredEvent,
-  type MaintenanceStatus,
-} from './api.js';
+import type { MaintenanceStatus } from '#contracts';
+import { api, ApiError, rememberMaintenance, sessionRequiredEvent } from './api.js';
 
 type Session = { required: boolean; authenticated: boolean; maintenance?: MaintenanceStatus };
 

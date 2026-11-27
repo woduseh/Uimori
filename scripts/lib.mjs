@@ -84,8 +84,8 @@ export async function guideFiles(sourceRoot = root) {
 export async function fingerprint(sourceRoot = root, { buildOnly = false } = {}) {
   const root = sourceRoot;
   const dirs = buildOnly
-    ? ['core', 'server', 'web', 'src', 'third_party']
-    : ['core', 'server', 'web', 'src', 'third_party', 'tests', 'scripts', 'fixtures'];
+    ? ['core', 'packages', 'server', 'web', 'src', 'third_party']
+    : ['core', 'packages', 'server', 'web', 'src', 'third_party', 'tests', 'scripts', 'fixtures'];
   const config = (await readdir(root)).filter((name) =>
     (buildOnly
       ? /^(package(?:-lock)?\.json|tsconfig(?:\.server)?\.json|vite\.config\.[cm]?[jt]s|\.gitattributes)$/

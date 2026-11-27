@@ -17,6 +17,13 @@ const classTable = {
     'commentSource',
     'browserInput',
   ],
+  'packages/contracts/src/index.ts': [
+    'biomeFile',
+    'typeScriptInput',
+    'moduleFile',
+    'commentSource',
+    'browserInput',
+  ],
   'server/app.ts': [
     'biomeFile',
     'typeScriptInput',

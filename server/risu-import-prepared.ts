@@ -23,6 +23,7 @@ import { readImportEnvelope } from './import-envelope.js';
 import { hasControl } from './import-envelope.js';
 import { uploadDirectory, UPLOAD_MAX_AGE_MS, UPLOAD_MAX_BYTES } from './uploads.js';
 import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
+import { typeScriptSourceHooks } from './risu-native-worker.js';
 import {
   acquireImportPreparation,
   checkImportPreparation,
@@ -142,16 +143,7 @@ export function findPreparedRisuImport(
 }
 const bootstrap = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
-const { registerHooks } = require('node:module');
-const { existsSync } = require('node:fs');
-const { fileURLToPath } = require('node:url');
-registerHooks({ resolve(specifier, context, nextResolve) {
- if ((specifier.startsWith('.') || specifier.startsWith('file:')) && specifier.endsWith('.js')) {
-  const url = new URL(specifier, context.parentURL);
-  if (!existsSync(fileURLToPath(url))) return nextResolve(url.href.slice(0,-3)+'.ts', context);
- }
- return nextResolve(specifier, context);
-}});
+${typeScriptSourceHooks}
 import(workerData.module).then(module => module.prepareRisuInWorker(workerData.input))
 .then(() => parentPort.postMessage({ok:true}))
 .catch(error => parentPort.postMessage({ok:false, code:String(error.message), statusCode:error.statusCode || 400}));

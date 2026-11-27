@@ -31,8 +31,7 @@ test('workers started from raw TypeScript load only builtins, packages, JSON, an
   const unresolvable = workers.flatMap((file) =>
     sourceImports(readFileSync(join(root, file), 'utf8'), file)
       .filter(
-        (item) =>
-          item.runtime && item.specifier.startsWith('.') && !item.specifier.endsWith('.json')
+        (item) => item.runtime && /^[.#]/u.test(item.specifier) && !item.specifier.endsWith('.json')
       )
       .map((item) => `${file} -> ${item.specifier}`)
   );

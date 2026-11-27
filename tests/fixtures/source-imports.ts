@@ -1,6 +1,44 @@
 import { parse } from '@babel/parser';
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, posix } from 'node:path';
+
+export type ModuleSources = {
+  read(file: string): string;
+  exists(file: string): boolean;
+  imports: Record<string, unknown>;
+};
+
+export function repositorySources(root: string): ModuleSources {
+  const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+    imports?: Record<string, unknown>;
+  };
+  return {
+    read: (file) => readFileSync(join(root, file), 'utf8'),
+    exists: (file) => existsSync(join(root, file)),
+    imports: manifest.imports ?? {},
+  };
+}
+
+export function importedSource(
+  sources: ModuleSources,
+  file: string,
+  specifier: string
+): string | undefined {
+  let base: string;
+  if (specifier.startsWith('#')) {
+    const target = sources.imports[specifier];
+    if (typeof target !== 'string')
+      throw new Error(
+        `${file} imports ${specifier}, which package.json "imports" does not map to a single file`
+      );
+    base = posix.normalize(target);
+  } else if (specifier.startsWith('.')) base = posix.join(posix.dirname(file), specifier);
+  else return undefined;
+  const stem = base.replace(/\.js$/u, '');
+  return [base, `${stem}.ts`, `${stem}.tsx`].find(
+    (candidate) => /\.[cm]?[jt]sx?$/u.test(candidate) && sources.exists(candidate)
+  );
+}
 
 export function sourceFiles(root: string, directory: string): string[] {
   return readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {

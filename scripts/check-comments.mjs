@@ -5,7 +5,15 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-export const checkedDirectories = ['web', 'core', 'server', 'scripts', 'tests', 'runner'];
+export const checkedDirectories = [
+  'web',
+  'core',
+  'packages',
+  'server',
+  'scripts',
+  'tests',
+  'runner',
+];
 export const allowlistPath = 'scripts/comment-allowlist.json';
 
 const sourceExtension = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|css)$/u;

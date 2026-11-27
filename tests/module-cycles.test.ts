@@ -1,18 +1,18 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
-import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
+import {
+  importedSource,
+  repositorySources,
+  sourceFiles,
+  sourceImports,
+} from './fixtures/source-imports.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const sources = repositorySources(root);
 function valueImports(file: string): string[] {
-  return sourceImports(readFileSync(join(root, file), 'utf8'), file)
-    .filter((item) => item.runtime && item.eager && item.specifier.startsWith('.'))
-    .map(({ specifier }) =>
-      relative(root, resolve(dirname(join(root, file)), specifier))
-        .replaceAll('\\', '/')
-        .replace(/\.js$/, '.ts')
-    );
+  return sourceImports(sources.read(file), file)
+    .filter((item) => item.runtime && item.eager)
+    .flatMap(({ specifier }) => importedSource(sources, file, specifier) ?? []);
 }
 
 function stronglyConnected(graph: Map<string, string[]>): string[][] {
@@ -49,8 +49,8 @@ function stronglyConnected(graph: Map<string, string[]>): string[][] {
   return result.sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-test('core and server modules have no value-import cycles', () => {
-  const files = ['core', 'server'].flatMap((dir) => sourceFiles(root, dir));
+test('core, packages and server modules have no value-import cycles', () => {
+  const files = ['core', 'packages', 'server'].flatMap((dir) => sourceFiles(root, dir));
   const graph = new Map(files.map((file) => [file, valueImports(file)]));
   expect(stronglyConnected(graph)).toEqual([]);
 });

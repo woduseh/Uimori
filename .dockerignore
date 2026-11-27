@@ -11,6 +11,8 @@
 !.gitattributes
 !core/
 !core/**
+!packages/
+!packages/**
 !server/
 !server/**
 !runner/

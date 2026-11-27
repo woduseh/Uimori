@@ -1,3 +1,4 @@
+import { MAINTENANCE_CLOSED, type MaintenanceStatus } from '#contracts';
 import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 import { t } from './i18n.js';
 import { writeOptionalStorage } from './optional-storage.js';
@@ -27,12 +28,6 @@ export function definiteRejection(error: unknown): boolean {
 }
 export const sessionRequiredEvent = 'uimori-session-required';
 export const maintenanceChangedEvent = 'uimori-maintenance-changed';
-export type MaintenanceStatus = {
-  status: 'open' | 'closed';
-  epoch: number;
-  reason?: string;
-  forcedClosed: boolean;
-};
 let maintenance: MaintenanceStatus | null = null;
 export const knownMaintenance = () => maintenance;
 export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
@@ -65,7 +60,7 @@ async function readApiResponse<T>(
   const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
   if (
     response.status === 503 &&
-    payload?.error === 'MAINTENANCE_CLOSED' &&
+    payload?.error === MAINTENANCE_CLOSED &&
     typeof window !== 'undefined'
   )
     window.dispatchEvent(new Event(maintenanceChangedEvent));

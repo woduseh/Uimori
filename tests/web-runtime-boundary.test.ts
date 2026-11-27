@@ -1,8 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
-import { sourceFiles, sourceImports } from './fixtures/source-imports.js';
+import {
+  importedSource,
+  repositorySources,
+  sourceFiles,
+  sourceImports,
+  type ModuleSources,
+} from './fixtures/source-imports.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const nodeOnlyModules = new Set(['core/local-tokenizers.ts']);
@@ -11,26 +15,17 @@ function isNodeOnly(module: string): boolean {
   return module.startsWith('node:') || module.startsWith('server/') || nodeOnlyModules.has(module);
 }
 
-function resolveSource(file: string, specifier: string): string | undefined {
-  const base = relative(root, resolve(dirname(join(root, file)), specifier)).replaceAll('\\', '/');
-  const stem = base.replace(/\.js$/, '');
-  return [base, `${stem}.ts`, `${stem}.tsx`].find(
-    (candidate) => /\.[cm]?[jt]sx?$/.test(candidate) && existsSync(join(root, candidate))
-  );
-}
-
-function runtimeImports(file: string): string[] {
-  return sourceImports(readFileSync(join(root, file), 'utf8'), file)
+function runtimeImports(sources: ModuleSources, file: string): string[] {
+  return sourceImports(sources.read(file), file)
     .filter((item) => item.runtime)
     .flatMap(({ specifier }) => {
       if (specifier.startsWith('node:')) return [specifier];
-      if (!specifier.startsWith('.')) return [];
-      const resolved = resolveSource(file, specifier);
+      const resolved = importedSource(sources, file, specifier);
       return resolved ? [resolved] : [];
     });
 }
 
-function nodeOnlyChains(entries: string[]): string[] {
+function nodeOnlyChains(entries: string[], sources: ModuleSources): string[] {
   const parent = new Map<string, string | undefined>(entries.map((entry) => [entry, undefined]));
   const queue = [...entries];
   const reached: string[] = [];
@@ -39,7 +34,7 @@ function nodeOnlyChains(entries: string[]): string[] {
       reached.push(next);
       continue;
     }
-    for (const imported of runtimeImports(next)) {
+    for (const imported of runtimeImports(sources, next)) {
       if (parent.has(imported)) continue;
       parent.set(imported, next);
       queue.push(imported);
@@ -54,7 +49,7 @@ function nodeOnlyChains(entries: string[]): string[] {
 }
 
 test('web modules never load Node-only modules at runtime', () => {
-  const chains = nodeOnlyChains(sourceFiles(root, 'web'));
+  const chains = nodeOnlyChains(sourceFiles(root, 'web'), repositorySources(root));
   expect(
     chains,
     [
@@ -64,4 +59,21 @@ test('web modules never load Node-only modules at runtime', () => {
       'as core/illustration-cuts.ts and core/novelai-settings.ts do. Use `import type` for types only.',
     ].join('\n')
   ).toEqual([]);
+});
+
+test('a Node builtin reached through a package.json subpath import is reported', () => {
+  const files: Record<string, string> = {
+    'web/banner.ts': "import { MAINTENANCE_CLOSED } from '#contracts';",
+    'packages/contracts/src/index.ts': "export * from './maintenance.js';",
+    'packages/contracts/src/maintenance.ts':
+      "import { readFileSync } from 'node:fs';\nexport const MAINTENANCE_CLOSED = readFileSync;",
+  };
+  const sources: ModuleSources = {
+    read: (file) => files[file]!,
+    exists: (file) => file in files,
+    imports: { '#contracts': './packages/contracts/src/index.js' },
+  };
+  expect(nodeOnlyChains(['web/banner.ts'], sources)).toEqual([
+    'web/banner.ts -> packages/contracts/src/index.ts -> packages/contracts/src/maintenance.ts -> node:fs',
+  ]);
 });

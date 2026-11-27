@@ -43,7 +43,7 @@ test('snapshot code imports nothing from Uimori', () => {
 });
 
 test('only the compat layer and explicit native CBS adapter import the snapshot', () => {
-  for (const dir of ['core', 'server', 'web', 'scripts'])
+  for (const dir of ['core', 'packages', 'server', 'web', 'scripts'])
     for (const file of walk(dir)) {
       if (file.startsWith(`${COMPAT_LAYER}/`)) continue;
       if (file === 'server/risu-native-cbs.ts') continue;

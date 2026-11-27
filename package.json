@@ -4,6 +4,9 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
+  "imports": {
+    "#contracts": "./packages/contracts/src/index.js"
+  },
   "engines": {
     "node": ">=26.13.0 <27"
   },
@@ -17,7 +20,7 @@
     "format:check": "biome format .",
     "lint": "biome lint . --error-on-warnings",
     "lint:fix": "biome lint --write . --error-on-warnings",
-    "lint:architecture": "biome lint core server web --only=style/noRestrictedImports --error-on-warnings",
+    "lint:architecture": "biome lint core packages server web --only=style/noRestrictedImports --error-on-warnings",
     "quality": "biome check . --error-on-warnings && tsc --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs",
     "quality:full": "npm run quality && npm run test:tooling && npm test",
     "check:changed": "node scripts/check-changed.mjs",

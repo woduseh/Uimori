@@ -1,13 +1,9 @@
+import { MAINTENANCE_CLOSED, type MaintenanceStatus } from '#contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { fields, record, text, HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
-export type MaintenanceState = {
-  status: 'open' | 'closed';
-  epoch: number;
-  reason?: string;
-  updatedAt: string;
-};
+export type MaintenanceState = Omit<MaintenanceStatus, 'forcedClosed'>;
 type Row = Record<string, unknown> & { status: MaintenanceState['status'] };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const ALWAYS_ADMITTED = new Set([
@@ -62,7 +58,6 @@ export function setMaintenance(
   });
 }
 
-export type MaintenanceStatus = MaintenanceState & { forcedClosed: boolean };
 export function maintenanceStatus(store: Store, forcedClosed: boolean): MaintenanceStatus {
   const current = maintenanceState(store);
   return {
@@ -87,7 +82,7 @@ export function maintenanceRoutes(
   app.addHook('onRequest', async (request) => {
     if (!MUTATING.has(request.method) || ALWAYS_ADMITTED.has(request.routeOptions.url ?? ''))
       return;
-    if (!admissionOpen(store, options.forcedClosed)) throw new HttpError(503, 'MAINTENANCE_CLOSED');
+    if (!admissionOpen(store, options.forcedClosed)) throw new HttpError(503, MAINTENANCE_CLOSED);
     writes.add(request);
   });
   app.addHook('onResponse', async (request) => {

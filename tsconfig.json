@@ -13,5 +13,5 @@
     "types": ["node", "vite/client"],
     "noEmit": true
   },
-  "include": ["core", "server", "web", "tests", "*.config.ts"]
+  "include": ["core", "packages", "server", "web", "tests", "*.config.ts"]
 }

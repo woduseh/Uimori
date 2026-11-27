@@ -9,6 +9,7 @@
     "ignoreUnknown": true,
     "includes": [
       "core/**",
+      "packages/**",
       "server/**",
       "web/**",
       "tests/**",
@@ -80,6 +81,41 @@
         "rules": {
           "correctness": {
             "noUndeclaredVariables": "error"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**", "!./**", "!../**", "!zod", "!zod/**"],
+                    "message": "Contracts are runtime-neutral: import only modules inside packages/contracts and zod."
+                  },
+                  {
+                    "group": [
+                      "**/core",
+                      "**/core/**",
+                      "**/server",
+                      "**/server/**",
+                      "**/web",
+                      "**/web/**",
+                      "**/tests",
+                      "**/tests/**",
+                      "**/scripts",
+                      "**/scripts/**"
+                    ],
+                    "message": "Contracts are the lowest layer and cannot import application code, including types."
+                  }
+                ]
+              }
+            }
           }
         }
       }

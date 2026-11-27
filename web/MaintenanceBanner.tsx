@@ -1,6 +1,7 @@
 import { useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
-import { api, knownMaintenance, maintenanceChangedEvent, type MaintenanceStatus } from './api.js';
+import type { MaintenanceStatus } from '#contracts';
+import { api, knownMaintenance, maintenanceChangedEvent } from './api.js';
 import { NoticeBanner } from './NoticeBanner.js';
 
 type Maintenance = MaintenanceStatus & { activeWork?: number };

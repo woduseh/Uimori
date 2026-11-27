@@ -1,18 +1,30 @@
 import { Worker } from 'node:worker_threads';
 import { nativeRisuEntropyMarker } from './risu-native-entropy.js';
 
-const bootstrap = String.raw`
-const { parentPort, workerData } = require('node:worker_threads');
+export const typeScriptSourceHooks = String.raw`
 const { registerHooks } = require('node:module');
 const { existsSync } = require('node:fs');
 const { fileURLToPath } = require('node:url');
 registerHooks({ resolve(specifier, context, nextResolve) {
+  if (specifier.startsWith('#')) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !String(error.url).endsWith('.js')) throw error;
+      return nextResolve(error.url.slice(0, -3) + '.ts', context);
+    }
+  }
   if ((specifier.startsWith('.') || specifier.startsWith('file:')) && specifier.endsWith('.js')) {
     const url = new URL(specifier, context.parentURL);
     if (!existsSync(fileURLToPath(url))) return nextResolve(url.href.slice(0, -3) + '.ts', context);
   }
   return nextResolve(specifier, context);
 }});
+`;
+
+const bootstrap = String.raw`
+const { parentPort, workerData } = require('node:worker_threads');
+${typeScriptSourceHooks}
 const entropy = Symbol.for('uimori.native-risu.entropy');
 import(workerData.module).then(module => {
   const run = async input => {
