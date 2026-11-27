@@ -60,7 +60,7 @@ type Props = {
     preset: PromptPreset,
     created: boolean,
     creationOrganizationRevision: number | null
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   library: Library;
   reload?: () => Promise<void>;
   onError: (message: string) => void;
@@ -242,19 +242,15 @@ export function PromptEditor({
       setPlacing(true);
       const warnings: string[] = [];
       try {
-        await onSaved?.(
+        const placed = await onSaved?.(
           accepted,
           result.creationIntent,
           result.creationOrganizationRevision ?? null
         );
+        if (placed === false) warnings.push(descriptor('prompts.savedPlacement', { error: '' }));
       } catch (caught) {
         warnings.push(
-          descriptor('prompts.savedPlacement', {
-            error:
-              (caught as Error).message === descriptor('prompts.uiUnableToPlaceTheItemInTheFolder')
-                ? ''
-                : messageRef((caught as Error).message),
-          })
+          descriptor('prompts.savedPlacement', { error: messageRef((caught as Error).message) })
         );
       }
       try {

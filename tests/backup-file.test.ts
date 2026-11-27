@@ -3,13 +3,14 @@ import { inspectBackupFile } from '../web/backup-file.js';
 import { nativeArchiveStream } from '../server/native-transfer-archive-codec.js';
 import { shownRejection } from './shown-error.js';
 
-async function archive(kind: 'resources' | 'chat', name: string) {
+async function archive(
+  kind: 'resources' | 'chat',
+  name: string,
+  manifest = JSON.stringify({ format: 'uimori-archive', version: 1, kind })
+) {
   const chunks: ArrayBuffer[] = [];
   for await (const chunk of nativeArchiveStream([
-    {
-      name: 'manifest.json',
-      read: () => Buffer.from(JSON.stringify({ format: 'uimori-archive', version: 1, kind })),
-    },
+    { name: 'manifest.json', read: () => Buffer.from(manifest) },
   ]))
     chunks.push(new Uint8Array(chunk).buffer);
   return new File(chunks, name);
@@ -52,4 +53,7 @@ test('unknown or incomplete files stay outside both apply flows', async () => {
       await shownRejection(inspectBackupFile(new File([text], 'backup.uimori'))),
       text
     ).toMatch(/백업.*파일/);
+  expect(
+    await shownRejection(inspectBackupFile(await archive('chat', 'backup.zip', '{"format":')))
+  ).toMatch(/백업.*파일/);
 });

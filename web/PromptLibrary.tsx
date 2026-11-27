@@ -1,5 +1,4 @@
 import { useI18n, message as descriptor, messageRef } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -369,10 +368,9 @@ export function PromptLibrary({
     preset: PromptPreset,
     created: boolean,
     creationOrganizationRevision?: number | null
-  ) {
-    if (!created || folder === 'all') return;
-    if (creationOrganizationRevision === null)
-      throw new UiError(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
+  ): Promise<boolean> {
+    if (!created || folder === 'all') return true;
+    if (creationOrganizationRevision === null) return false;
     const revision =
       creationOrganizationRevision ??
       (await callEndpoint(libraryEndpoints.readOrganization)).revision;
@@ -381,7 +379,7 @@ export function PromptLibrary({
       { items: [{ kind: 'prompt-preset', id: preset.id }], category: 'prompts', folderId: folder },
       revision
     );
-    if (!placed) throw new UiError(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
+    return !!placed;
   }
   async function clone(item: PromptPresetSummary) {
     if (mutation.current) return;
@@ -397,15 +395,11 @@ export function PromptLibrary({
       const copy = result.saved as PromptPreset;
       const warnings: string[] = [];
       try {
-        await placeCreated(copy, true, result.creationOrganizationRevision ?? null);
+        if (!(await placeCreated(copy, true, result.creationOrganizationRevision ?? null)))
+          warnings.push(descriptor('prompts.clonedPlacement', { error: '' }));
       } catch (error) {
         warnings.push(
-          descriptor('prompts.clonedPlacement', {
-            error:
-              (error as Error).message === descriptor('prompts.uiUnableToPlaceTheItemInTheFolder')
-                ? ''
-                : messageRef((error as Error).message),
-          })
+          descriptor('prompts.clonedPlacement', { error: messageRef((error as Error).message) })
         );
       }
       try {
@@ -438,15 +432,11 @@ export function PromptLibrary({
         values: template.values,
       });
       try {
-        await placeCreated(created, true);
+        if (!(await placeCreated(created, true)))
+          onError(descriptor('prompts.addedPlacement', { error: '' }));
       } catch (error) {
         onError(
-          descriptor('prompts.addedPlacement', {
-            error:
-              (error as Error).message === descriptor('prompts.uiUnableToPlaceTheItemInTheFolder')
-                ? ''
-                : messageRef((error as Error).message),
-          })
+          descriptor('prompts.addedPlacement', { error: messageRef((error as Error).message) })
         );
       }
       try {

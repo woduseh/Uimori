@@ -1,4 +1,5 @@
 import { UiError, uiMessage } from './ui-message.js';
+import { parseJsonInput } from './json-input.js';
 import { CHAT_BACKUP_FORMAT, CHAT_BACKUP_MAX_BYTES, type ChatBackup } from '../core/chat-backup.js';
 import {
   NATIVE_ARCHIVE_MAX_BYTES,
@@ -50,14 +51,18 @@ export async function inspectBackupFile(file: File): Promise<BackupFileContents>
         const local = new DataView(await file.slice(offset, offset + 30).arrayBuffer());
         const dataStart = offset + 30 + local.getUint16(26, true) + local.getUint16(28, true);
         if (local.getUint32(0, true) !== 0x04034b50 || dataStart + bytes > start) invalid();
-        const manifest = JSON.parse(await file.slice(dataStart, dataStart + bytes).text());
+        const manifest = parseJsonInput(
+          await file.slice(dataStart, dataStart + bytes).text(),
+          'transfer.m147'
+        ) as { format?: unknown; version?: unknown; kind?: unknown } | null;
+        const kind = manifest?.kind;
         if (
           manifest?.format !== 'uimori-archive' ||
           manifest.version !== 1 ||
-          !['resources', 'chat'].includes(manifest.kind)
+          (kind !== 'resources' && kind !== 'chat')
         )
-          invalid();
-        return { kind: manifest.kind, archive: true };
+          return invalid();
+        return { kind, archive: true };
       }
       cursor += 46 + length + extra + comment;
     }

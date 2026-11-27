@@ -350,8 +350,11 @@ export function toUiMessage(
   );
 }
 
-export function errorDescriptor(error: unknown): string {
-  return legacyMessageString(toUiMessage(error));
+export function errorDescriptor(
+  error: unknown,
+  fallback: MessageKey | UiMessage = 'errors.unexpected'
+): string {
+  return legacyMessageString(toUiMessage(error, fallback));
 }
 
 function appErrorCode(wire: ReceivedErrorWire): AppErrorCode | null {

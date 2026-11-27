@@ -203,12 +203,6 @@ export const messages = {
     ja: '選択したプロンプトが見つかりません。',
     zh: '找不到所选提示词。',
   },
-  'prompts.uiUnableToPlaceTheItemInTheFolder': {
-    ko: '폴더 배치를 완료하지 못했어요.',
-    en: 'Unable to place the item in the folder.',
-    ja: 'フォルダーへの配置を完了できませんでした。',
-    zh: '无法完成文件夹归类。',
-  },
   'prompts.uiPrompts': {
     ko: '프롬프트',
     en: 'Prompts',

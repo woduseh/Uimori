@@ -1188,9 +1188,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     let pendingRequest: Outbox | undefined;
     try {
       if (text.length > REQUEST_TEXT_MAX_CHARS)
-        throw new UiError(uiMessage('helpers.m016', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
+        throw new UiError(uiMessage('helpers.m016', { v0: REQUEST_TEXT_MAX_CHARS }));
       if (((saved?.selection ?? selection)?.text.length ?? 0) > REQUEST_TEXT_MAX_CHARS)
-        throw new UiError(uiMessage('helpers.m017', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
+        throw new UiError(uiMessage('helpers.m017', { v0: REQUEST_TEXT_MAX_CHARS }));
       let request = saved;
       if (!request) {
         request = {

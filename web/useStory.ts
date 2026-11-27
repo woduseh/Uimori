@@ -594,8 +594,7 @@ export function useStory() {
       refresh: (incremental) => refresh(selected, incremental),
       cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
       onError: (error) => {
-        if (readerCache.current?.key === readerQuery.current.key)
-          setError(error instanceof Error ? error : String(error));
+        if (readerCache.current?.key === readerQuery.current.key) setError(errorDescriptor(error));
       },
       active: navigation.current.destination === 'story' && !document.hidden,
     });
@@ -815,7 +814,7 @@ export function useStory() {
         }
       })
       .catch(() => {
-        if (alive) setError('입력 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.');
+        if (alive) setError(descriptor('main.requestDraftRestoreFailed'));
       })
       .finally(() => {
         if (!alive) return;
@@ -1519,7 +1518,7 @@ export function useStory() {
       }
     } catch (error) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(error instanceof Error ? error.message : descriptor('main.story15'));
+        setError(errorDescriptor(error, 'main.story15'));
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);
@@ -1541,8 +1540,7 @@ export function useStory() {
         select(next.id);
       }
     } catch (error) {
-      if (navigation.current.epoch === epoch)
-        setError(error instanceof Error ? error.message : descriptor('recent.copyFailed'));
+      if (navigation.current.epoch === epoch) setError(errorDescriptor(error, 'recent.copyFailed'));
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);

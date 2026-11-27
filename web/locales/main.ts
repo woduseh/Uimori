@@ -35,6 +35,12 @@ export const messages = {
     ja: '前回のリクエスト記録を消す',
     zh: '清除上次请求记录',
   },
+  'main.requestDraftRestoreFailed': {
+    ko: '입력 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
+    en: 'Could not restore the input draft. Check browser storage.',
+    ja: '入力の下書きを復元できませんでした。ブラウザーの保存領域を確認してください。',
+    zh: '无法恢复输入草稿，请检查浏览器存储空间。',
+  },
   'main.pendingRequestForgetFailed': {
     ko: '이전 요청 기록을 지우지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
     en: 'Could not clear the previous request record. Check browser storage.',

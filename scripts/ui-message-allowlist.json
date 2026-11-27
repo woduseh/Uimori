@@ -67,8 +67,8 @@
     "web/PackageStartPicker.tsx": 3,
     "web/ProfileEditor.tsx": 2,
     "web/PromptCombinationManager.tsx": 1,
-    "web/PromptEditor.tsx": 5,
-    "web/PromptLibrary.tsx": 10,
+    "web/PromptEditor.tsx": 4,
+    "web/PromptLibrary.tsx": 8,
     "web/PromptTemplatesDialog.tsx": 3,
     "web/PromptWorkspaceEditor.tsx": 2,
     "web/ProviderManagement.tsx": 2,
@@ -116,6 +116,6 @@
     "web/useHelperSessions.ts": 2,
     "web/useInputTranslation.ts": 1,
     "web/useSelectionRevision.ts": 1,
-    "web/useStory.ts": 7
+    "web/useStory.ts": 5
   }
 }
