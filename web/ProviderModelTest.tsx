@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { formatUiMessage, UiError, type UiMessage, uiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { providerEndpoints } from '#contracts';
@@ -196,7 +196,7 @@ function locationOutcome(record: TestDisplay | undefined): string {
   if (result.error === 'HTTP_429') return t('providers.vertexCompareBusy');
   if (result.error === 'HTTP_503') return t('providers.vertexCompareDown');
   if (result.error === 'TIMEOUT') return t('providers.vertexCompareTimeout');
-  return result.error ? translateMessage(result.error) : statusLabel[result.status];
+  return result.error || statusLabel[result.status];
 }
 
 function LocationResults({
@@ -430,7 +430,7 @@ export function ProviderModelTest({
                     <details>
                       <summary>{t('providers.m307')}</summary>
                       {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
-                      {result.error && <p className="error">{translateMessage(result.error)}</p>}
+                      {result.error && <p className="error">{result.error}</p>}
                     </details>
                   )}
                 </>

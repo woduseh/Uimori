@@ -1,6 +1,6 @@
 import { tryParseJson } from './json.js';
-import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -11,7 +11,7 @@ import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-pro
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { providerEndpoints } from '#contracts';
 import { ApiError, callEndpoint, definiteRejection } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { SaveButton } from './SaveButton.js';
 import { ToggleRow } from './ToggleRow.js';
 import './JevProviderSettings.css';
@@ -58,14 +58,14 @@ export function JevProviderSettings({
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [operation, setOperation] = useState<'save' | 'delete' | 'test' | 'settings' | null>(null);
-  const [settingsError, setSettingsError] = useState('');
+  const [settingsError, setSettingsError] = useState<UiMessage | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [conflict, setConflict] = useState(false);
   const [saveConflict, setSaveConflict] = useState(false);
   const [test, setTest] = useState<ProviderConnectionTest | null>(null);
-  const [testError, setTestError] = useState('');
+  const [testError, setTestError] = useState<UiMessage | null>(null);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const attemptRef = useRef<Attempt | null>(null);
   const lock = useRef(false);
@@ -92,7 +92,7 @@ export function JevProviderSettings({
 
   const acceptTest = useCallback((result: ProviderConnectionTest) => {
     setTest(result);
-    setTestError('');
+    setTestError(null);
     if (result.status !== 'running') {
       attemptRef.current = null;
       setAttempt(null);
@@ -104,20 +104,20 @@ export function JevProviderSettings({
     if (!active) return;
     const controller = new AbortController();
     setLoading(true);
-    setError('');
+    setError(null);
     void callEndpoint(providerEndpoints.readJev, {}, controller.signal)
       .then((next) => {
         if (controller.signal.aborted) return;
         setStatus(next);
-        setSettingsError('');
+        setSettingsError(null);
         setConflict(false);
         if (!attemptRef.current) {
           setTest(next.latestTest);
-          setTestError('');
+          setTestError(null);
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setError(legacyDescriptor('providers.m336'));
+        if (!controller.signal.aborted) setError(uiMessage('providers.m336'));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -134,7 +134,7 @@ export function JevProviderSettings({
           if (!controller.signal.aborted) acceptTest(result);
         })
         .catch(() => {
-          if (!controller.signal.aborted) setTestError(legacyDescriptor('providers.m337'));
+          if (!controller.signal.aborted) setTestError(uiMessage('providers.m337'));
         });
     }, 1000);
     return () => {
@@ -148,8 +148,8 @@ export function JevProviderSettings({
       return false;
     lock.current = true;
     setOperation(remove ? 'delete' : 'save');
-    setError('');
-    setMessage('');
+    setError(null);
+    setMessage(null);
     try {
       const next = remove
         ? await callEndpoint(providerEndpoints.deleteJevKey, { expectedRevision: status.revision })
@@ -161,17 +161,19 @@ export function JevProviderSettings({
       setStatus(next);
       setApiKey('');
       setTest(next.latestTest);
-      setMessage(remove ? legacyDescriptor('providers.m338') : legacyDescriptor('providers.m339'));
+      setMessage(remove ? uiMessage('providers.m338') : uiMessage('providers.m339'));
       return true;
     } catch (caught) {
       if (!alive.current) return false;
       if (caught instanceof ApiError && caught.code === 'REVISION_CONFLICT') {
         setConflict(true);
         setSaveConflict(true);
-        setError(legacyDescriptor('providers.m340'));
+        setError(uiMessage('providers.m340'));
       } else {
         setError(
-          definiteRejection(caught) ? errorDescriptor(caught) : legacyDescriptor('providers.m341')
+          definiteRejection(caught)
+            ? toUiMessage(caught, 'providers.m341')
+            : uiMessage('providers.m341')
         );
       }
       return false;
@@ -189,7 +191,7 @@ export function JevProviderSettings({
     if (!status || lock.current || busy || settingsError) return;
     lock.current = true;
     setOperation('settings');
-    setMessage('');
+    setMessage(null);
     try {
       const next = await callEndpoint(providerEndpoints.updateJevSettings, {
         expectedRevision: status.settings.revision,
@@ -199,15 +201,15 @@ export function JevProviderSettings({
       });
       if (!alive.current) return;
       setStatus(next);
-      setMessage(legacyDescriptor('providers.jevSettingsSaved'));
+      setMessage(uiMessage('providers.jevSettingsSaved'));
     } catch (caught) {
       if (alive.current)
         setSettingsError(
           caught instanceof ApiError && caught.code === 'REVISION_CONFLICT'
-            ? legacyDescriptor('providers.jevSettingsConflict')
+            ? uiMessage('providers.jevSettingsConflict')
             : definiteRejection(caught)
-              ? errorDescriptor(caught)
-              : legacyDescriptor('providers.jevSettingsFailed')
+              ? toUiMessage(caught, 'providers.jevSettingsFailed')
+              : uiMessage('providers.jevSettingsFailed')
         );
     } finally {
       lock.current = false;
@@ -219,8 +221,8 @@ export function JevProviderSettings({
     if (!status || lock.current || busy || apiKey || conflict) return;
     lock.current = true;
     setOperation('test');
-    setTestError('');
-    setMessage('');
+    setTestError(null);
+    setMessage(null);
     const previous = attemptRef.current;
     const next = previous ?? {
       expectedRevision: status.revision,
@@ -243,13 +245,13 @@ export function JevProviderSettings({
         if (revisionConflict) setConflict(true);
         setError(
           revisionConflict
-            ? legacyDescriptor('providers.m342')
+            ? uiMessage('providers.m342')
             : caught instanceof ApiError && caught.code === 'CONNECTION_TEST_RUNNING'
-              ? errorDescriptor(caught)
-              : legacyDescriptor('providers.m343')
+              ? toUiMessage(caught, 'providers.m343')
+              : uiMessage('providers.m343')
         );
       } else {
-        setTestError(legacyDescriptor('providers.m344'));
+        setTestError(uiMessage('providers.m344'));
       }
     } finally {
       lock.current = false;
@@ -314,7 +316,7 @@ export function JevProviderSettings({
                   disabled={busy || unresolved}
                   onChange={(event) => {
                     setApiKey(event.target.value);
-                    setMessage('');
+                    setMessage(null);
                   }}
                 />
                 <small className="ui-meta-row">
@@ -402,7 +404,7 @@ export function JevProviderSettings({
                 )}
                 {settingsError && (
                   <NoticeBanner tone="error">
-                    {translateMessage(settingsError)}{' '}
+                    {formatUiMessage(settingsError)}{' '}
                     <button
                       type="button"
                       className="link-button"
@@ -454,7 +456,7 @@ export function JevProviderSettings({
               </button>
             </div>
             {apiKey && <small>{t('providers.m376')}</small>}
-            {testError && <NoticeBanner tone="error">{translateMessage(testError)}</NoticeBanner>}
+            {testError && <NoticeBanner tone="error">{testError}</NoticeBanner>}
             {test && (
               <div role="status" className="jev-test-result provider-test-result">
                 {test.modelRevision !== status.revision && <p>{t('providers.m377')}</p>}
@@ -536,10 +538,10 @@ export function JevProviderSettings({
             </button>
           }
         >
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
-      <TransientNotice content={legacyUiMessage(message)} />
+      <TransientNotice content={message} />
     </section>
   );
 }

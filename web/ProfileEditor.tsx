@@ -1,7 +1,7 @@
 import { ScrollStrip } from './ScrollStrip.js';
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -101,8 +101,8 @@ export function ProfileEditor({
   const [localTab, setTab] = useState<ProfileSection>(initialTab);
   const selectedTab = activeTab ?? localTab;
   const tab = selectedTab === 'models' ? 'prompts' : selectedTab;
-  const [error, setError] = useState('');
-  const [status, setStatus] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [status, setStatus] = useState<UiMessage | null>(null);
   const retryLoreDefaults = useRetryableEffect(() => {
     let active = true;
     setLoreDefaultsError(false);
@@ -145,38 +145,38 @@ export function ProfileEditor({
   const change = (next: ChatProfile) => {
     setValue(next);
     setDirty(true);
-    setStatus('');
+    setStatus(null);
   };
   function discardChanges() {
     setValue(profile);
     setDirty(false);
     setLorePending(false);
     setLoreResetVersion((version) => version + 1);
-    setError('');
-    setStatus(legacyDescriptor('library.latestSettingsLoaded'));
+    setError(null);
+    setStatus(uiMessage('library.latestSettingsLoaded'));
     onError(null);
   }
-  async function save(work: () => Promise<ChatProfile>, message = t('library.chatSettingsSaved')) {
+  async function save(work: () => Promise<ChatProfile>) {
     if (lorePending) {
-      setError(legacyDescriptor('library.checkTheNumbersInLoreSettingsBefore'));
+      setError(uiMessage('library.checkTheNumbersInLoreSettingsBefore'));
       return false;
     }
     setSaving(true);
     onError(null);
-    setError('');
-    setStatus('');
+    setError(null);
+    setStatus(null);
     try {
       const accepted = await work();
       setValue(accepted);
       setDirty(false);
-      setStatus(message);
+      setStatus(uiMessage('library.chatSettingsSaved'));
       setSaving(false);
       void onSaved().catch((caught) => onError(toUiMessage(caught)));
       return true;
     } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      onError(legacyUiMessage(message));
+      const failure = toUiMessage(caught);
+      setError(failure);
+      onError(failure);
       return false;
     } finally {
       setSaving(false);
@@ -439,7 +439,7 @@ export function ProfileEditor({
         )}
         {error && (
           <p className="error" role="alert">
-            {translateMessage(error)}
+            {formatUiMessage(error)}
           </p>
         )}
         <div
@@ -462,7 +462,7 @@ export function ProfileEditor({
             aria-busy={saving}
           />
         </div>
-        <TransientNotice content={hideSaveActions ? null : legacyUiMessage(status)} />
+        <TransientNotice content={hideSaveActions ? null : status} />
       </form>
       {generationSettings}
       <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">

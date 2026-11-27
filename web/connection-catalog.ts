@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import type { Connection, LibraryConnection } from '../core/product.js';
 import { api } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 
 type Catalog = Connection['catalog'];
 
 export const connectionCatalogPath = (connectionId: string) =>
   `/connections/${encodeURIComponent(connectionId)}/catalog`;
 
-export type ConnectionCatalogState = { loading: boolean; error: string; retry: () => void };
+export type ConnectionCatalogState = {
+  loading: boolean;
+  error: UiMessage | null;
+  retry: () => void;
+};
 
 export function useConnectionCatalog(
   connection: LibraryConnection | undefined,
@@ -22,7 +27,7 @@ export function useConnectionCatalog(
     : '';
   const needed = active && !!connection && !listed;
   const [loaded, setLoaded] = useState<{ id: string; key: string; catalog: Catalog } | null>(null);
-  const [failure, setFailure] = useState<{ key: string; error: string } | null>(null);
+  const [failure, setFailure] = useState<{ key: string; error: UiMessage } | null>(null);
   useEffect(() => {
     if (!needed) return;
     let current = true;
@@ -31,11 +36,7 @@ export function useConnectionCatalog(
         if (current) setLoaded({ id, key: requestKey, catalog: value.catalog });
       },
       (caught: unknown) => {
-        if (current)
-          setFailure({
-            key: requestKey,
-            error: errorDescriptor(caught),
-          });
+        if (current) setFailure({ key: requestKey, error: toUiMessage(caught) });
       }
     );
     return () => {
@@ -43,10 +44,10 @@ export function useConnectionCatalog(
     };
   }, [needed, id, requestKey]);
   const retry = () => setAttempt((value) => value + 1);
-  if (!connection) return { connection: undefined, loading: false, error: '', retry };
+  if (!connection) return { connection: undefined, loading: false, error: null, retry };
   if (listed)
-    return { connection: { ...connection, catalog: listed }, loading: false, error: '', retry };
-  const error = failure?.key === requestKey ? failure.error : '';
+    return { connection: { ...connection, catalog: listed }, loading: false, error: null, retry };
+  const error = failure?.key === requestKey ? failure.error : null;
   return {
     connection: { ...connection, catalog: loaded?.id === id ? loaded.catalog : [] },
     loading: needed && !error && loaded?.key !== requestKey,

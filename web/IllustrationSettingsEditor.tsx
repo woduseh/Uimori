@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -83,9 +84,9 @@ function IllustrationEnvironmentEditor({
   const [saveConflict, setSaveConflict] = useState(false);
   const [operation, setOperation] = useState<'save' | 'reload' | null>(null);
   const busy = operation !== null;
-  const [loadError, setLoadError] = useState('');
-  const [saveError, setSaveError] = useState('');
-  const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState<UiMessage | null>(null);
+  const [saveError, setSaveError] = useState<UiMessage | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const [test, setTest] = useState<TestResult | null>(null);
   const [testing, setTesting] = useState(false);
   const lock = useRef(false);
@@ -95,9 +96,9 @@ function IllustrationEnvironmentEditor({
     try {
       const value = await api<IllustrationSettingsView>('/illustration-settings');
       setSaved(value);
-      setLoadError('');
+      setLoadError(null);
     } catch (error) {
-      setLoadError((error as Error).message);
+      setLoadError(toUiMessage(error));
     }
   }, []);
   useEffect(() => {
@@ -122,7 +123,7 @@ function IllustrationEnvironmentEditor({
       <LoadingState
         presentation="region"
         loading={!loadError}
-        error={legacyUiMessage(loadError)}
+        error={loadError}
         label={uiMessage('visuals.m041')}
         onRetry={() => void load()}
       />
@@ -131,7 +132,7 @@ function IllustrationEnvironmentEditor({
   const change = (next: Draft) => {
     setDraft(next);
     setDirty(true);
-    setMessage('');
+    setMessage(null);
   };
   const codexModels = library.models.filter(
     (model) =>
@@ -235,8 +236,8 @@ function IllustrationEnvironmentEditor({
     if (!dirty) return true;
     lock.current = true;
     setOperation('save');
-    setSaveError('');
-    setMessage('');
+    setSaveError(null);
+    setMessage(null);
     const { revision, ...body } = draft;
     return api<IllustrationSettingsView>(
       '/illustration-settings',
@@ -253,14 +254,14 @@ function IllustrationEnvironmentEditor({
         setDraft(structuredClone(accepted));
         setToken(undefined);
         setDirty(false);
-        setMessage(legacyDescriptor('visuals.m046'));
+        setMessage(uiMessage('visuals.m046'));
         return true;
       })
-      .catch((caught: Error) => {
+      .catch((caught: unknown) => {
         if (caught instanceof ApiError && caught.status === 409) {
-          setSaveError(legacyDescriptor('visuals.m089'));
+          setSaveError(uiMessage('visuals.m089'));
           setSaveConflict(true);
-        } else setSaveError(caught.message);
+        } else setSaveError(toUiMessage(caught));
         return false;
       })
       .finally(() => {
@@ -272,19 +273,19 @@ function IllustrationEnvironmentEditor({
     if (lock.current) return;
     lock.current = true;
     setOperation('reload');
-    setLoadError('');
-    setMessage('');
+    setLoadError(null);
+    setMessage(null);
     try {
       const value = await api<IllustrationSettingsView>('/illustration-settings');
       setSaved(value);
       setDraft(structuredClone(value));
       setToken(undefined);
       setDirty(false);
-      setSaveError('');
-      setMessage('');
+      setSaveError(null);
+      setMessage(null);
       setConfirmReload(false);
     } catch {
-      setLoadError(legacyDescriptor('visuals.m047'));
+      setLoadError(uiMessage('visuals.m047'));
     } finally {
       lock.current = false;
       setOperation(null);
@@ -327,7 +328,7 @@ function IllustrationEnvironmentEditor({
   const changeToken = (next: TokenChange) => {
     setToken(next);
     setDirty(true);
-    setMessage('');
+    setMessage(null);
     setNovelaiTest(null);
   };
   const novelaiSize = NOVELAI_SIZES.find(
@@ -836,7 +837,7 @@ function IllustrationEnvironmentEditor({
         }}
       >
         <p>{t('visuals.m087')}</p>
-        {loadError && <NoticeBanner tone="error">{translateMessage(loadError)}</NoticeBanner>}
+        {loadError && <NoticeBanner tone="error">{loadError}</NoticeBanner>}
         <DraftDiscardActions
           open={confirmReload}
           disabled={busy}
@@ -848,9 +849,9 @@ function IllustrationEnvironmentEditor({
       {conflict && dirty ? (
         <NoticeBanner tone="error">{t('visuals.m089')}</NoticeBanner>
       ) : saveError ? (
-        <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>
+        <NoticeBanner tone="error">{saveError}</NoticeBanner>
       ) : null}
-      <TransientNotice content={legacyUiMessage(message)} />
+      <TransientNotice content={message} />
       {loadError && !confirmReload && (
         <NoticeBanner
           tone="error"
@@ -865,7 +866,7 @@ function IllustrationEnvironmentEditor({
             </button>
           }
         >
-          {translateMessage(loadError)}
+          {loadError}
         </NoticeBanner>
       )}
     </section>

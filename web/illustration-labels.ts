@@ -1,9 +1,10 @@
 import { appErrorTakesParams, isAppErrorCode } from '#contracts';
 import { appErrorMessages } from './api-errors.js';
-import { message, t } from './i18n.js';
+import { t } from './i18n.js';
+import { uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 import type { Illustration } from '../core/illustration.js';
 
-const messages: Record<string, string> = {
+const messages: Record<string, MessageKey> = {
   ILLUSTRATION_STORYBOARD_INVALID: 'visuals.m180',
   ILLUSTRATION_PLACEMENT_INVALID: 'visuals.m181',
   ILLUSTRATION_SOURCE_UNAVAILABLE: 'visuals.m191',
@@ -79,9 +80,9 @@ export function illustrationErrorMessage(code: string | null | undefined): strin
   const { key, values } = illustrationError(code);
   return t(key, values);
 }
-export function illustrationErrorDescriptor(code: string): string {
+export function illustrationErrorUiMessage(code: string): UiMessage {
   const { key, values } = illustrationError(code);
-  return message(key, values);
+  return uiMessage(key, values);
 }
 export const illustrationGeneratorLabels: Record<Illustration['generator'], string> = {
   codex: 'Codex',

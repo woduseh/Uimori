@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, messageRef, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -68,10 +69,10 @@ export function ChatOptionSettings(props: Props) {
   const { fixed, oneoff } = base ? optionDraftValues(base, draft) : { fixed: {}, oneoff: {} };
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [readError, setReadError] = useState('');
-  const [message, setMessage] = useState('');
-  const [completion, setCompletion] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [readError, setReadError] = useState<UiMessage | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
+  const [completion, setCompletion] = useState<UiMessage | null>(null);
   const [conflict, setConflict] = useState(false);
   const [saveConflict, setSaveConflict] = useState(false);
   const [uncertain, setUncertain] = useState<Operation | null>(null);
@@ -93,7 +94,7 @@ export function ChatOptionSettings(props: Props) {
       if (version !== requestVersion.current) return;
       const draft = current.current;
       setLatest(state);
-      setReadError('');
+      setReadError(null);
       if (!draft.base || !draft.dirty) {
         setBase(state);
         setDraft({});
@@ -107,7 +108,7 @@ export function ChatOptionSettings(props: Props) {
         setConflict(true);
       }
     } catch (caught) {
-      if (version === requestVersion.current) setReadError((caught as Error).message);
+      if (version === requestVersion.current) setReadError(toUiMessage(caught));
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
@@ -167,8 +168,8 @@ export function ChatOptionSettings(props: Props) {
     requestVersion.current++;
     setBusy(true);
     setLoading(false);
-    setError('');
-    setCompletion('');
+    setError(null);
+    setCompletion(null);
     try {
       const accepted = await api<ChatOptionState>(operation.path, operation.body);
       setBase(accepted);
@@ -176,12 +177,12 @@ export function ChatOptionSettings(props: Props) {
       if (operation.kind !== 'cancel') setDraft({});
       setConflict(false);
       setUncertain(null);
-      setMessage('');
+      setMessage(null);
       setCompletion(
         {
-          fixed: legacyDescriptor('chatsettings.m106'),
-          oneoff: legacyDescriptor('chatsettings.m107'),
-          cancel: legacyDescriptor('chatsettings.m108'),
+          fixed: uiMessage('chatsettings.m106'),
+          oneoff: uiMessage('chatsettings.m107'),
+          cancel: uiMessage('chatsettings.m108'),
         }[operation.kind]
       );
       dispatchEvent(new Event('chat-options-changed'));
@@ -194,9 +195,9 @@ export function ChatOptionSettings(props: Props) {
       }
       setError(
         unresolved
-          ? legacyDescriptor('chatsettings.m109')
-          : legacyDescriptor('chatsettings.draftError', {
-              error: messageRef((caught as Error).message),
+          ? uiMessage('chatsettings.m109')
+          : uiMessage('chatsettings.draftError', {
+              error: toUiMessage(caught),
             })
       );
     } finally {
@@ -226,7 +227,7 @@ export function ChatOptionSettings(props: Props) {
         <LoadingState
           presentation="placeholder"
           loading={loading}
-          error={legacyUiMessage(readError)}
+          error={readError}
           label={uiMessage('chatsettings.m110')}
           onRetry={() => void refresh()}
           retryLabel={uiMessage('chatsettings.m111')}
@@ -258,11 +259,11 @@ export function ChatOptionSettings(props: Props) {
             setLatest(value);
             setDraft(keepInput ? review.draft : {});
             setConflict(false);
-            setError('');
-            setReadError('');
+            setError(null);
+            setReadError(null);
             setSaveConflict(false);
-            setMessage(keepInput ? legacyDescriptor('chatsettings.m113') : '');
-            setCompletion(keepInput ? '' : legacyDescriptor('chatsettings.m114'));
+            setMessage(keepInput ? uiMessage('chatsettings.m113') : null);
+            setCompletion(keepInput ? null : uiMessage('chatsettings.m114'));
           };
           return () => {
             const displayReview = reviewOptionDraft(input.base!, input.draft, value);
@@ -292,7 +293,7 @@ export function ChatOptionSettings(props: Props) {
                           <div className="settings-row" key={item.scope + ':' + item.id}>
                             <span className="settings-row-copy">
                               {item.label}
-                              <small>{translateMessage(item.reason)}</small>
+                              <small>{item.reason}</small>
                             </span>
                             <span className="settings-row-control">
                               {item.unset
@@ -400,7 +401,7 @@ export function ChatOptionSettings(props: Props) {
         {conflict && <NoticeBanner tone="error">{t('chatsettings.m132')}</NoticeBanner>}
         {readError && (
           <NoticeBanner tone="error">
-            {translateMessage(readError)}
+            {formatUiMessage(readError)}
             <button
               type="button"
               disabled={busy || loading || !!uncertain}
@@ -410,9 +411,9 @@ export function ChatOptionSettings(props: Props) {
             </button>
           </NoticeBanner>
         )}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-        {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
-        <TransientNotice content={legacyUiMessage(completion)} />
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        {message && <NoticeBanner>{message}</NoticeBanner>}
+        <TransientNotice content={completion} />
         {uncertain && (
           <button
             type="button"

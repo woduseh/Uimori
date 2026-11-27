@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -27,7 +27,7 @@ import type { IllustrationSettingsView } from '../core/illustration.js';
 import { isModelSelectable } from './model-selection.js';
 import { resourceEditorEndpoints } from '#contracts';
 import { api, ApiError, callEndpoint, saveDownload } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { IllustrationError } from '../core/illustration-errors.js';
 import { ValidationError } from '../core/validation-error.js';
 import { Dialog } from './Dialog.js';
@@ -35,7 +35,7 @@ import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { illustrationErrorDescriptor, illustrationGeneratorLabels } from './illustration-labels.js';
+import { illustrationErrorUiMessage, illustrationGeneratorLabels } from './illustration-labels.js';
 import { illustrationPresetText, illustrationPresetTitle } from './builtin-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
@@ -53,10 +53,8 @@ const localizedDefinition = (preset: IllustrationPreset): IllustrationPresetDefi
   ...illustrationPresetDefinition(preset),
   ...illustrationPresetText(preset),
 });
-const messageOf = (error: unknown) =>
-  error instanceof IllustrationError
-    ? illustrationErrorDescriptor(error.code)
-    : errorDescriptor(error);
+const messageOf = (error: unknown): UiMessage =>
+  error instanceof IllustrationError ? illustrationErrorUiMessage(error.code) : toUiMessage(error);
 const isWorkflowError = (error: unknown) =>
   error instanceof IllustrationError
     ? error.code.startsWith('COMFYUI_WORKFLOW_')
@@ -85,19 +83,19 @@ export function IllustrationPresetSettings({
   const [baseline, setBaseline] = useState('');
   const [operation, setOperation] = useState<'save' | 'other' | null>(null);
   const busy = operation !== null;
-  const [error, setError] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [importNotice, setImportNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [loadError, setLoadError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
+  const [importNotice, setImportNotice] = useState<UiMessage | null>(null);
   const [deleting, setDeleting] = useState<IllustrationPreset | null>(null);
   const [discard, setDiscard] = useState(false);
   const [saveConflict, setSaveConflict] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLElement>(null);
-  const [workflowError, setWorkflowError] = useState('');
+  const [workflowError, setWorkflowError] = useState<UiMessage | null>(null);
   const editorId = useId();
   function resetEditorDetails() {
-    setWorkflowError('');
+    setWorkflowError(null);
     editor.current?.querySelectorAll('details').forEach((details) => {
       details.open = false;
     });
@@ -112,7 +110,7 @@ export function IllustrationPresetSettings({
       const next = await api<IllustrationPresetCatalog>('/illustration-presets');
       if (alive.current && version === epoch.current) {
         setCatalog(next);
-        setLoadError('');
+        setLoadError(null);
       }
     } catch (cause) {
       if (alive.current && version === epoch.current) setLoadError(messageOf(cause));
@@ -140,9 +138,9 @@ export function IllustrationPresetSettings({
     if (locked.current) return false;
     locked.current = true;
     setOperation(saveAttempt ? 'save' : 'other');
-    setError('');
-    setNotice('');
-    setImportNotice('');
+    setError(null);
+    setNotice(null);
+    setImportNotice(null);
     try {
       await work();
       return true;
@@ -160,10 +158,10 @@ export function IllustrationPresetSettings({
   }
   async function save(asCopy = false): Promise<boolean> {
     if (!draft || (!dirty && !asCopy)) return true;
-    setWorkflowError('');
-    setError('');
-    setNotice('');
-    setImportNotice('');
+    setWorkflowError(null);
+    setError(null);
+    setNotice(null);
+    setImportNotice(null);
     let model: IllustrationPresetDefinition;
     try {
       model = validateIllustrationPreset(
@@ -172,10 +170,10 @@ export function IllustrationPresetSettings({
           : draft.model
       );
     } catch (cause) {
-      const message = messageOf(cause);
-      setError(message);
+      const failure = messageOf(cause);
+      setError(failure);
       if (isWorkflowError(cause)) {
-        setWorkflowError(message);
+        setWorkflowError(failure);
         requestAnimationFrame(() => {
           editor.current?.querySelector<HTMLTextAreaElement>('[data-workflow-editor]')?.focus();
         });
@@ -195,8 +193,8 @@ export function IllustrationPresetSettings({
       setBaseline(JSON.stringify(accepted));
       setNotice(
         draft.id && !asCopy
-          ? descriptor('visualpanels.savedAppliesFromTheNextGeneration')
-          : descriptor('visualpanels.savedApplyItToTheScopeYou')
+          ? uiMessage('visualpanels.savedAppliesFromTheNextGeneration')
+          : uiMessage('visualpanels.savedApplyItToTheScopeYou')
       );
       await refresh();
     }, !asCopy);
@@ -204,7 +202,7 @@ export function IllustrationPresetSettings({
   useSettingsSaveHandler(onSaveHandlerChange, () => save());
   function edit(preset?: IllustrationPreset, copy = false) {
     if (dirty) {
-      setError(descriptor('visualpanels.saveOrCloseYourCurrentEditsBefore'));
+      setError(uiMessage('visualpanels.saveOrCloseYourCurrentEditsBefore'));
       return;
     }
     resetEditorDetails();
@@ -219,20 +217,20 @@ export function IllustrationPresetSettings({
       model,
     });
     setBaseline(preset && !isCopy ? JSON.stringify(model) : '');
-    setError('');
-    setNotice('');
-    setImportNotice('');
+    setError(null);
+    setNotice(null);
+    setImportNotice(null);
   }
   function patch(patch: Partial<IllustrationPresetDefinition>) {
     setDraft((current) =>
       current ? { ...current, model: { ...current.model, ...patch } } : current
     );
-    setNotice('');
-    setImportNotice('');
+    setNotice(null);
+    setImportNotice(null);
   }
   async function importFile(file: File) {
     if (dirty) {
-      setError(descriptor('visualpanels.saveOrCloseYourCurrentEditsBefore2'));
+      setError(uiMessage('visualpanels.saveOrCloseYourCurrentEditsBefore2'));
       return;
     }
     await action(async () => {
@@ -244,7 +242,7 @@ export function IllustrationPresetSettings({
       resetEditorDetails();
       setDraft({ id: null, model });
       setBaseline('');
-      setImportNotice(descriptor('visualpanels.importedReviewTheContentAndSaveIt'));
+      setImportNotice(uiMessage('visualpanels.importedReviewTheContentAndSaveIt'));
     });
   }
   useEffect(() => {
@@ -259,7 +257,7 @@ export function IllustrationPresetSettings({
         <LoadingState
           presentation="region"
           loading={!loadError}
-          error={legacyUiMessage(loadError)}
+          error={loadError}
           label={uiMessage('visualpanels.loadingIllustrationPresets')}
           onRetry={() => void refresh()}
           retryLabel={uiMessage('visualpanels.reloadPresets')}
@@ -318,7 +316,7 @@ export function IllustrationPresetSettings({
         expectedRevision: p.revision,
       });
       await refresh();
-      setNotice(descriptor('visualpanels.presetChangedAppliesFromTheNextGeneration'));
+      setNotice(uiMessage('visualpanels.presetChangedAppliesFromTheNextGeneration'));
     });
   return (
     <section
@@ -390,11 +388,11 @@ export function IllustrationPresetSettings({
             ) : undefined
           }
         >
-          {translateMessage(error || loadError)}
+          {formatUiMessage((error ?? loadError)!)}
         </NoticeBanner>
       )}
-      <TransientNotice content={legacyUiMessage(notice)} />
-      {importNotice && <NoticeBanner>{translateMessage(importNotice)}</NoticeBanner>}
+      <TransientNotice content={notice} />
+      {importNotice && <NoticeBanner>{importNotice}</NoticeBanner>}
       <div
         className="illustration-preset-grid"
         aria-label={t('visualpanels.savedIllustrationPresets')}
@@ -496,7 +494,7 @@ export function IllustrationPresetSettings({
                         v0: illustrationPresetTitle(preset),
                       })}
                       onClick={() => {
-                        setError('');
+                        setError(null);
                         setDeleting(preset);
                       }}
                     >
@@ -655,7 +653,7 @@ export function IllustrationPresetSettings({
                     value={draft.model.comfyui.workflow}
                     placeholder={t('visualpanels.apiFormatJsonExportedFromComfyui')}
                     onChange={(event) => {
-                      setWorkflowError('');
+                      setWorkflowError(null);
                       patch({
                         comfyui: {
                           ...draft.model.comfyui,
@@ -666,7 +664,7 @@ export function IllustrationPresetSettings({
                   />
                   {workflowError && (
                     <small id={`${editorId}-workflow-error`} className="error">
-                      {translateMessage(workflowError)}
+                      {formatUiMessage(workflowError)}
                     </small>
                   )}
                 </label>
@@ -748,7 +746,7 @@ export function IllustrationPresetSettings({
           onDiscard={() => {
             setDraft(null);
             setDiscard(false);
-            setError('');
+            setError(null);
           }}
           discardLabel={t('visualpanels.discardChangesAndClose')}
         />
@@ -763,7 +761,7 @@ export function IllustrationPresetSettings({
         }}
       >
         <p>{t('visualpanels.deletePresetBotsAndChatsUsingIt', { v0: deleting?.title ?? '' })}</p>
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button autoFocus disabled={busy} onClick={() => setDeleting(null)}>
             {t('visualpanels.cancel')}
@@ -782,7 +780,7 @@ export function IllustrationPresetSettings({
                   if (draft?.id === deleting.id) setDraft(null);
                   setDeleting(null);
                   await refresh();
-                  setNotice(descriptor('visualpanels.presetDeleted'));
+                  setNotice(uiMessage('visualpanels.presetDeleted'));
                 });
             }}
           >

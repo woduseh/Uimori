@@ -1,7 +1,9 @@
 import { parseOwnJson } from './json.js';
-import { t, translateMessage, useI18n, messageRef, message as descriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
 import {
   UiError,
+  formatUiMessage,
   uiMessage,
   type MessageKey,
   type UiMessage,
@@ -164,7 +166,7 @@ export function LoreContextPolicyEditor({
       fingerprint: string;
     } | null>(null),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState<UiMessage | null>(null);
   const previous = useRef(serialized),
     sequence = useRef(0);
   useEffect(() => {
@@ -184,17 +186,18 @@ export function LoreContextPolicyEditor({
     }
   }, [serialized]);
   let policy: LoreContextPolicy | undefined,
-    validation = '',
+    validation: UiMessage | null = null,
     invalidField: string | undefined;
   try {
     policy = parseLorePolicyDraft(draft);
   } catch (caught) {
-    validation = (caught as Error).message;
+    validation = toUiMessage(caught);
     invalidField = caught instanceof PolicyDraftError ? caught.field : undefined;
   }
+  const pending = !!validation;
   useEffect(() => {
-    onPendingChange?.(!!validation);
-  }, [validation, onPendingChange]);
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
   useEffect(
     () => () => {
       sequence.current++;
@@ -213,7 +216,7 @@ export function LoreContextPolicyEditor({
   latest.current = fingerprint;
   function change(next: PolicyDraft) {
     setDraft(next);
-    setError('');
+    setError(null);
     try {
       onChange(parseLorePolicyDraft(next));
     } catch {}
@@ -223,7 +226,7 @@ export function LoreContextPolicyEditor({
     const version = ++sequence.current,
       source = fingerprint;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       const result = await api<Preview>(`/chats/${encodeURIComponent(chatId)}/prompt-preview`, {
         request: previewRequest,
@@ -235,7 +238,7 @@ export function LoreContextPolicyEditor({
         setPreview({ value: result, fingerprint: source });
     } catch (caught) {
       if (sequence.current === version && latest.current === source)
-        setError(descriptor('settings.m216', { v0: messageRef((caught as Error).message) }));
+        setError(uiMessage('settings.m216', { v0: toUiMessage(caught) }));
     } finally {
       if (sequence.current === version) setBusy(false);
     }
@@ -330,7 +333,7 @@ export function LoreContextPolicyEditor({
       </div>
       {validation && (
         <p className="error" role="alert">
-          {translateMessage(validation)}
+          {formatUiMessage(validation)}
         </p>
       )}
       {(validation || footerAction) && (
@@ -397,14 +400,14 @@ export function LoreContextPolicyEditor({
               </details>
               {preview.value.error && (
                 <p className="error" role="alert">
-                  {translateMessage(preview.value.error)}
+                  {preview.value.error}
                 </p>
               )}
             </div>
           )}
           {error && (
             <p className="error" role="alert">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
         </details>

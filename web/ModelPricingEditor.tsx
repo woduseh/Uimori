@@ -1,4 +1,4 @@
-import { t, useI18n, formatNumber, formatDate, translateMessage } from './i18n.js';
+import { t, useI18n, formatNumber, formatDate } from './i18n.js';
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
 import type { PricingSnapshot } from '../core/pricing-types.js';
 import {
@@ -327,7 +327,7 @@ export function ModelPricingEditor({
         )}
         {error ? (
           <p className="error" role="alert">
-            {translateMessage(error)}
+            {error}
           </p>
         ) : (
           <PricingSummary snapshot={snapshot} />

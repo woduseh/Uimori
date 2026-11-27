@@ -1,7 +1,7 @@
 import { pricingDraft, pricingPayload } from '../web/provider-model-draft.js';
 import { effectiveModelFamily } from '../core/model-family.js';
 import { describe, expect, test } from 'vitest';
-import { translateMessage } from '../web/i18n.js';
+import { formatUiMessage } from '../web/ui-message.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import {
   initialModel,
@@ -42,7 +42,7 @@ describe('model numeric drafts', () => {
     const studio: Connection = { ...connection, protocol: 'google-gemini-v1' };
     expect(
       modelDraftError({ ...initialModel(), modelId: 'gemini-4-hydrogen' }, studio, 'flex')
-    ).toBe('');
+    ).toBeNull();
   });
 
   test('keeps manual tokenizers through model and connection changes and omits automatic selection', () => {
@@ -78,13 +78,13 @@ describe('model numeric drafts', () => {
       },
     };
     for (const gemini of [vertex, studio]) {
-      expect(modelDraftError(selected, gemini)).toBe('');
+      expect(modelDraftError(selected, gemini)).toBeNull();
       const saved = modelPayload(selected, gemini);
       const restored = modelDraft({ ...saved, id: 'model', revision: 1 } as ModelPreset);
       expect(restored.safetySettings).toEqual(selected.safetySettings);
       expect(restored.safetySettings).not.toBe(selected.safetySettings);
     }
-    expect(modelDraftError(selected, anthropicConnection)).not.toBe('');
+    expect(modelDraftError(selected, anthropicConnection)).not.toBeNull();
     const changed = selectModelConnection(selected, anthropicConnection);
     expect(changed.safetySettings).toEqual({});
     expect(modelPayload(changed, anthropicConnection)).not.toHaveProperty('safetySettings');
@@ -108,10 +108,15 @@ describe('model numeric drafts', () => {
     ).toBe('batch');
   });
 
+  test('a rejected generation option never shows its contract code', () => {
+    const error = modelDraftError({ ...initialModel(), maxOutputTokens: '500001' }, connection);
+    expect(formatUiMessage(error!)).not.toMatch(/[A-Z]{3,}_[A-Z_]+/);
+  });
+
   test.each(['', '1.5', '500001'])(
     'rejects invalid required output tokens %j before saving',
     (maxOutputTokens) => {
-      expect(modelDraftError({ ...initialModel(), maxOutputTokens }, connection)).not.toBe('');
+      expect(modelDraftError({ ...initialModel(), maxOutputTokens }, connection)).not.toBeNull();
     }
   );
 
@@ -128,7 +133,7 @@ describe('model numeric drafts', () => {
         },
       };
       const changed = selectModelConnection(draft, anthropicConnection);
-      expect(modelDraftError(changed, anthropicConnection)).toBe('');
+      expect(modelDraftError(changed, anthropicConnection)).toBeNull();
       const payload = modelPayload(changed, anthropicConnection);
       expect(payload.evaluationTools).toEqual({
         contextMode,
@@ -161,7 +166,7 @@ describe('model numeric drafts', () => {
 
   test('an unknown gateway family can save common options without impersonating a known maker', () => {
     const unknown = { ...initialModel(), modelId: 'future-lab/model-1', topP: '0.8' };
-    expect(modelDraftError(unknown, vercelConnection)).toBe('');
+    expect(modelDraftError(unknown, vercelConnection)).toBeNull();
     expect(modelPayload(unknown, vercelConnection)).toMatchObject({ topP: 0.8 });
     expect(modelPayload(unknown, vercelConnection)).not.toHaveProperty('modelFamily');
     expect(modelPayload({ ...unknown, modelFamily: 'xai' }, vercelConnection)).toHaveProperty(
@@ -198,7 +203,7 @@ describe('model numeric drafts', () => {
       cacheMode: '',
       cacheTtl: '',
     });
-    expect(modelDraftError(after, vercelConnection)).toBe('');
+    expect(modelDraftError(after, vercelConnection)).toBeNull();
     const same = selectModelFamily(
       { ...initialModel(), reasoningEffort: 'high' },
       'openai',
@@ -213,7 +218,7 @@ describe('model numeric drafts', () => {
       modelId: 'openai/gpt-5.6-sol',
       providerOptions: '{\n  "gateway": {\n    "only": ["openai"]\n  }\n}',
     };
-    expect(modelDraftError(draft, vercelConnection)).toBe('');
+    expect(modelDraftError(draft, vercelConnection)).toBeNull();
     expect(modelPayload(draft, vercelConnection).providerOptions).toEqual({
       gateway: { only: ['openai'] },
     });
@@ -229,14 +234,11 @@ describe('model numeric drafts', () => {
   test.each(['{', '{"gateway":{"apiKey":"secret"}}'])(
     'reports invalid Vercel providerOptions %s without saving',
     (providerOptions) => {
-      expect(
-        translateMessage(
-          modelDraftError(
-            { ...initialModel(), modelId: 'openai/gpt-5.6-sol', providerOptions },
-            vercelConnection
-          )
-        )
-      ).toMatch(/providerOptions/);
+      const error = modelDraftError(
+        { ...initialModel(), modelId: 'openai/gpt-5.6-sol', providerOptions },
+        vercelConnection
+      );
+      expect(formatUiMessage(error!)).toMatch(/providerOptions/);
     }
   );
 });

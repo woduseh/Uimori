@@ -1,5 +1,6 @@
-import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -31,10 +32,10 @@ export function LoreContextDefaultsEditor({
   const [draft, setDraft] = useState<LoreContextDefaults | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const load = useCallback(async () => {
-    setError('');
+    setError(null);
     try {
       const value: LoreContextDefaults = await callEndpoint(
         promptEndpoints.readLoreContextDefaults
@@ -43,7 +44,7 @@ export function LoreContextDefaultsEditor({
       setDraft(structuredClone(value));
       setInvalid(false);
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     }
   }, []);
   useEffect(() => {
@@ -56,8 +57,8 @@ export function LoreContextDefaultsEditor({
     if (!draft || invalid || busy) return false;
     if (!dirty) return true;
     setBusy(true);
-    setError('');
-    setMessage('');
+    setError(null);
+    setMessage(null);
     try {
       const accepted: LoreContextDefaults = await callEndpoint(
         promptEndpoints.updateLoreContextDefaults,
@@ -65,10 +66,10 @@ export function LoreContextDefaultsEditor({
       );
       setSaved(accepted);
       setDraft(structuredClone(accepted));
-      setMessage(legacyDescriptor('settings.m197'));
+      setMessage(uiMessage('settings.m197'));
       return true;
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
       return false;
     } finally {
       setBusy(false);
@@ -81,7 +82,7 @@ export function LoreContextDefaultsEditor({
         <LoadingState
           presentation="region"
           loading={!error}
-          error={legacyUiMessage(error)}
+          error={error}
           label={uiMessage('settings.m199')}
           onRetry={() => void load()}
         />
@@ -94,7 +95,7 @@ export function LoreContextDefaultsEditor({
           value={policyOf(draft)}
           onChange={(policy) => {
             setDraft({ revision: draft.revision, ...policy });
-            setMessage('');
+            setMessage(null);
           }}
           onPendingChange={setInvalid}
           defaults={DEFAULT_LORE_CONTEXT}
@@ -112,8 +113,8 @@ export function LoreContextDefaultsEditor({
           }
         />
       </fieldset>
-      <TransientNotice content={legacyUiMessage(message)} />
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      <TransientNotice content={message} />
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </section>
   );
 }
