@@ -92,6 +92,13 @@ test('a catalog descriptor thrown as a plain Error converts back to its key and 
   );
   for (const value of [scene, uiMessage('shared.deleteQuestion', { title: scene })])
     expect(parseLegacyMessage(legacyMessageString(value))).toEqual(value);
+  const listed = uiMessage('shared.deleteQuestion', {
+    title: [scene, uiText(', '), uiMessage('errors.firstMessage'), uiText(', …')],
+  });
+  const roundTrip = parseLegacyMessage(legacyMessageString(listed));
+  expect(roundTrip).toEqual(listed);
+  setLocale('en');
+  expect(formatUiMessage(roundTrip!)).toBe(formatUiMessage(listed));
 });
 
 test('nested and listed values format in the language being shown', () => {

@@ -76,9 +76,24 @@ function parseLegacyValue(value: LegacyValue): UiMessageValue | null {
   if (typeof value !== 'object' || value === null) return value;
   if ('uiDate' in value) return new Date(value.uiDate);
   if (typeof value.uiMessage !== 'string') return null;
-  return value.uiMessage.includes(legacyPrefix)
-    ? parseLegacyMessage(value.uiMessage)
-    : uiText(value.uiMessage);
+  return parseLegacySequence(value.uiMessage);
+}
+
+function parseLegacySequence(text: string): UiMessage | UiMessage[] | null {
+  if (!text.includes(legacyPrefix)) return uiText(text);
+  const parts: UiMessage[] = [];
+  let rest = text;
+  while (rest) {
+    const start = rest.indexOf(legacyPrefix);
+    if (start) parts.push(uiText(start < 0 ? rest : rest.slice(0, start)));
+    if (start < 0) break;
+    const end = rest.indexOf(legacyEnd, start);
+    const part = end < 0 ? null : parseLegacyMessage(rest.slice(start, end + 1));
+    if (!part) return null;
+    parts.push(part);
+    rest = rest.slice(end + 1);
+  }
+  return parts.length === 1 ? parts[0] : parts;
 }
 
 export function parseLegacyMessage(text: string): UiMessage | null {
