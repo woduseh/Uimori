@@ -107,8 +107,21 @@ test('domains merge into one run per launch and skip specs whose required enviro
 test('a runner drops only harness options it does not accept and passes the rest on to reject', () => {
   const [, selfHost] = planVerification(map, ['reader', 'self-host'], { env: {} }).runs;
   assert.deepEqual(
-    runOptions(selfHost, ['--visual', '--workers', '2', '--grep', 'SH01', '--repeat-each', '5']),
-    { kept: ['--grep', 'SH01'], dropped: ['--visual', '--workers', '2', '--repeat-each', '5'] }
+    runOptions(selfHost, [
+      '--visual',
+      '--workers',
+      '2',
+      '--grep',
+      'SH01',
+      '--shard',
+      '1/3',
+      '--repeat-each',
+      '5',
+    ]),
+    {
+      kept: ['--grep', 'SH01'],
+      dropped: ['--visual', '--workers', '2', '--shard', '1/3', '--repeat-each', '5'],
+    }
   );
   assert.deepEqual(runOptions(selfHost, ['--grepp', 'SH01']), {
     kept: ['--grepp', 'SH01'],
