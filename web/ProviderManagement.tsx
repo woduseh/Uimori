@@ -1,4 +1,6 @@
 import { t, useI18n, formatNumber } from './i18n.js';
+import { copiedTitle } from './copy-title.js';
+import { RESOURCE_TITLE_MAX_CHARS } from '../core/content-limits.js';
 import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -414,7 +416,7 @@ export function ConnectionEditor({
     }
     const next = {
       ...connectionDraft(item),
-      ...(copy ? { title: item.title + t('shared.copySuffix'), enabled: false } : {}),
+      ...(copy ? { title: copiedTitle(item.title, RESOURCE_TITLE_MAX_CHARS), enabled: false } : {}),
     };
     dispatchDraft({ type: 'connection.open', value: next, editing: copy ? undefined : item, copy });
     setError(null);
@@ -434,7 +436,7 @@ export function ConnectionEditor({
     }
     const next = {
       ...modelDraft(item),
-      ...(copy ? { title: item.title + t('shared.copySuffix') } : {}),
+      ...(copy ? { title: copiedTitle(item.title, RESOURCE_TITLE_MAX_CHARS) } : {}),
     };
     dispatchDraft({ type: 'model.open', value: next, editing: copy ? undefined : item, copy });
     setModelSection('basic');

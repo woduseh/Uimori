@@ -262,3 +262,23 @@ test('CSV exports one grouping, includes coverage columns and neutralizes spread
   expect(csv.trim().split('\r\n')).toHaveLength(2);
   expect(csv).not.toContain('PRIVATE_CANARY');
 });
+
+test('CSV headers follow the requested language while rows and the formula guard stay identical', () => {
+  const store = fixture();
+  add(store, null, wire({ modelId: '=HYPERLINK("https://example.invalid")' }), result(0));
+  const report = usageReport(store, query);
+  const lines = (csv: string) => csv.trim().split('\r\n');
+  const korean = usageCsv(report, 'model');
+  for (const [lang, header] of [
+    ['en', '"Group","Provider ID","Calls"'],
+    ['ja', '"区分","プロバイダー ID","呼び出し"'],
+    ['zh', '"分组","提供商 ID","调用"'],
+  ] as const) {
+    const csv = usageCsv(report, 'model', lang);
+    expect(csv.startsWith(`﻿${header}`), lang).toBe(true);
+    expect(lines(csv)[0]!.split(',')).toHaveLength(13);
+    expect(lines(csv).slice(1)).toEqual(lines(korean).slice(1));
+  }
+  expect(lines(korean)[1]).toContain('"\'=HYPERLINK');
+  expect(korean.startsWith('﻿"구분","프로바이더 ID","호출"')).toBe(true);
+});

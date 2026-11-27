@@ -356,6 +356,7 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
     { method: 'GET', url: '/api/usage?from=2026-03-02&to=2026-03-01' },
     { method: 'GET', url: '/api/usage?from=2026-03-01&to=2026-03-01&group=day' },
     { method: 'GET', url: '/api/usage/export?from=2026-03-01&to=2026-03-01&group=week' },
+    { method: 'GET', url: '/api/usage/export?from=2026-03-01&to=2026-03-01&lang=fr' },
     { method: 'PUT', url: '/api/auto-translation-defaults', payload: [] },
     {
       method: 'PUT',

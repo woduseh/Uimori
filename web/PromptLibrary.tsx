@@ -1,4 +1,6 @@
 import { useI18n } from './i18n.js';
+import { copiedTitle } from './copy-title.js';
+import { RESOURCE_TITLE_MAX_CHARS } from '../core/content-limits.js';
 import { toUiMessage } from './api-errors.js';
 import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
@@ -392,7 +394,7 @@ export function PromptLibrary({
         kind: 'prompt-preset',
         sourceId: item.id,
         expectedSourceRevision: item.revision,
-        title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
+        title: copiedTitle(item.title, RESOURCE_TITLE_MAX_CHARS),
       });
       const copy = result.saved as PromptPreset;
       const warnings: UiMessage[] = [];

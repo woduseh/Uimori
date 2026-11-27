@@ -1,5 +1,6 @@
 import type { Chat } from '../core/types.js';
 import { api, ApiError, definiteRejection } from './api.js';
+import { getLocale } from './i18n.js';
 import { storageKeys } from './storage-keys.js';
 
 export async function requestChatFork(chatId: string, sourceId: string | null): Promise<Chat> {
@@ -18,6 +19,7 @@ export async function requestChatFork(chatId: string, sourceId: string | null): 
   try {
     next = await api<Chat>(`/chats/${chatId}/fork`, {
       fromRevision: sourceId,
+      titleLocale: getLocale(),
       idempotencyKey,
     });
   } catch (error) {

@@ -201,7 +201,8 @@ export function createAgentCollaboration(): AgentCollaboration {
 
 export function createAgentDefinition(
   kind: 'character' | 'lore' | 'custom',
-  id: string
+  id: string,
+  label?: { title: string; description: string }
 ): AgentDefinition {
   const agent: AgentDefinition = {
     id: agentId(id),
@@ -241,5 +242,5 @@ export function createAgentDefinition(
     ].join('\n');
     agent.tools = ['knowledge', 'notes', 'story'];
   } else if (kind !== 'custom') fail('INVALID_TEMPLATE');
-  return agent;
+  return label ? { ...agent, ...label } : agent;
 }

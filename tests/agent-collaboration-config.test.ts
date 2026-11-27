@@ -134,3 +134,11 @@ describe('JSON validation and detached output', () => {
     }
   });
 });
+
+test('a template created with a label keeps that title and description and the rest of the template', () => {
+  const label = { title: 'Custom collaborator', description: 'Choose the angle yourself.' };
+  const agent = createAgentDefinition('lore', 'lore', label);
+  expect(agent).toMatchObject({ ...label, tools: ['knowledge', 'notes', 'story'] });
+  expect(agent.instructions).toBe(createAgentDefinition('lore', 'lore').instructions);
+  expect(() => validateAgentCollaboration({ ...config(), agents: [agent] })).not.toThrow();
+});

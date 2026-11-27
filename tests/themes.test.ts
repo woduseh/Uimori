@@ -1,4 +1,5 @@
 import { describe } from 'vitest';
+import { copyTitle } from '../core/copy-title.js';
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -11,7 +12,6 @@ import {
   DEFAULT_THEME_ID,
   THEME_COLOR_KEYS,
   THEME_TITLE_MAX_CHARS,
-  copyTitle,
   defaultThemePreferences,
   resolvePaletteId,
   emptyTheme,
@@ -518,11 +518,12 @@ test('deleting a bot or chat drops only its appearance choices; a stale tab cann
 test('a copied title keeps its suffix within the title limit', () => {
   const long = '가'.repeat(THEME_TITLE_MAX_CHARS - 1);
   for (const title of [long, `${'a'.repeat(THEME_TITLE_MAX_CHARS - 4)}  😀😀`, 'Short']) {
-    const copied = copyTitle(title, ' 사본');
-    expect(copied.endsWith(' 사본'), title).toBe(true);
-    expect(validateTheme({ ...emptyTheme(), title: copied }).title).toBe(copied);
+    for (const suffix of [' 사본', ' copy', 'のコピー']) {
+      const copied = copyTitle(title, suffix, THEME_TITLE_MAX_CHARS);
+      expect(copied.endsWith(suffix), title).toBe(true);
+      expect(validateTheme({ ...emptyTheme(), title: copied }).title).toBe(copied);
+    }
   }
-  expect(copyTitle('Short', ' copy')).toBe('Short copy');
 });
 
 test('portable story UI themes use their own bot selection and the shared revisions', async () => {

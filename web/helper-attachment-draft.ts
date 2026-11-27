@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { tryParseJson } from './json.js';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { ProviderProtocol } from '../core/product.js';
@@ -265,7 +266,7 @@ async function appendHelperAttachmentFiles(
     const images: DraftImage[] = [],
       additions: DraftFile[] = [];
     for (const file of files) {
-      const name = file.name || 'attachment';
+      const name = file.name || t('helperAttachments.defaultName');
       if (!file.size || name.length > 300)
         throw new UiError(uiMessage('helperAttachments.openFailed'));
       if (['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {

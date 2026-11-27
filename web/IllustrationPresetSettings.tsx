@@ -1,4 +1,5 @@
 import { t, useI18n } from './i18n.js';
+import { copiedTitle } from './copy-title.js';
 import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -14,6 +15,7 @@ import {
   resolveIllustrationPreset,
   validateIllustrationPreset,
   ILLUSTRATION_PRESET_FILE_MAX_BYTES,
+  ILLUSTRATION_PRESET_TITLE_MAX_CHARS,
   ILLUSTRATION_WORKFLOW_MAX_CHARS,
   type IllustrationPreset,
   type IllustrationPresetCatalog,
@@ -166,7 +168,10 @@ export function IllustrationPresetSettings({
     try {
       model = validateIllustrationPreset(
         asCopy
-          ? { ...draft.model, title: `${draft.model.title.slice(0, 97)}${t('shared.copySuffix')}` }
+          ? {
+              ...draft.model,
+              title: copiedTitle(draft.model.title, ILLUSTRATION_PRESET_TITLE_MAX_CHARS),
+            }
           : draft.model
       );
     } catch (cause) {
@@ -210,7 +215,8 @@ export function IllustrationPresetSettings({
     const model = preset
       ? structuredClone(localizedDefinition(preset))
       : emptyIllustrationPreset(t('visualpanels.newIllustrationPreset'));
-    if (preset && isCopy) model.title = `${model.title.slice(0, 97)}${t('shared.copySuffix')}`;
+    if (preset && isCopy)
+      model.title = copiedTitle(model.title, ILLUSTRATION_PRESET_TITLE_MAX_CHARS);
     setDraft({
       id: preset && !isCopy ? preset.id : null,
       revision: preset && !isCopy ? preset.revision : undefined,

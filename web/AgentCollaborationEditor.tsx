@@ -118,7 +118,11 @@ export function AgentCollaborationEditor({
   });
   const addAgent = (kind: ReturnType<typeof templates>[number]['kind']) => {
     if (collaboration.agents.length >= 6) return;
-    const agent = createAgentDefinition(kind, `agent-${crypto.randomUUID()}`);
+    const { title, description } = templates().find((template) => template.kind === kind)!;
+    const agent = createAgentDefinition(kind, `agent-${crypto.randomUUID()}`, {
+      title,
+      description,
+    });
     update({ agents: [...collaboration.agents, agent] });
     setOpenAgents((current) => [...current, agent.id]);
     setShowTemplates(false);
