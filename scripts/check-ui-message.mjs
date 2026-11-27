@@ -62,8 +62,24 @@ function caughtText(node, names) {
   );
 }
 
-export function errorTextReads(source, file = 'web/input.tsx') {
-  const tree = parse(source, {
+export const plainErrorRemedy =
+  'an Error built from non-literal text; throw new UiError(uiMessage(key)) for a failure someone may see, or give a developer-only Error a string literal';
+
+const errorTypes = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'SyntaxError',
+  'DOMException',
+  'AggregateError',
+]);
+const literalText = (node) =>
+  !node ||
+  node.type === 'StringLiteral' ||
+  (node.type === 'TemplateLiteral' && !node.expressions.length);
+
+function parseSource(source, file) {
+  return parse(source, {
     sourceType: 'module',
     plugins: /\.[cm]?tsx?$/u.test(file)
       ? /x$/u.test(file)
@@ -71,8 +87,44 @@ export function errorTextReads(source, file = 'web/input.tsx') {
         : ['typescript']
       : ['jsx'],
   });
+}
+
+export function plainErrorTexts(source, file = 'web/input.tsx') {
   const lines = [];
-  walk(tree, (node, parent) => {
+  walk(parseSource(source, file), (node) => {
+    if (
+      (node.type === 'NewExpression' || node.type === 'CallExpression') &&
+      node.callee.type === 'Identifier' &&
+      errorTypes.has(node.callee.name)
+    ) {
+      const text = node.arguments[node.callee.name === 'AggregateError' ? 1 : 0];
+      if (!literalText(text)) lines.push(node.loc.start.line);
+    }
+    if (
+      (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') &&
+      node.superClass?.type === 'Identifier' &&
+      errorTypes.has(node.superClass.name)
+    )
+      walk(node.body, (inner) => {
+        if (
+          inner.type === 'CallExpression' &&
+          inner.callee.type === 'Super' &&
+          !literalText(inner.arguments[0])
+        )
+          lines.push(inner.loc.start.line);
+      });
+    if (
+      node.type === 'ThrowStatement' &&
+      (node.argument.type === 'StringLiteral' || node.argument.type === 'TemplateLiteral')
+    )
+      lines.push(node.loc.start.line);
+  });
+  return lines.sort((left, right) => left - right);
+}
+
+export function errorTextReads(source, file = 'web/input.tsx') {
+  const lines = [];
+  walk(parseSource(source, file), (node, parent) => {
     const member =
       (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
       (node.computed ? node.property.type === 'StringLiteral' : true) &&
@@ -117,21 +169,29 @@ export function readAllowlist(directory = root) {
   return { permanent, debt };
 }
 
-export function scanUiMessages(directory = root) {
+function scanSources(directory) {
   const counts = new Map();
+  const plain = [];
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
     if (exemptFiles.has(file)) continue;
-    const lines = errorTextReads(readFileSync(path, 'utf8'), file);
+    const source = readFileSync(path, 'utf8');
+    for (const line of plainErrorTexts(source, file))
+      plain.push(`${file}:${line}: ${plainErrorRemedy}`);
+    const lines = errorTextReads(source, file);
     if (lines.length) counts.set(file, lines);
   }
-  return counts;
+  return { counts, plain };
+}
+
+export function scanUiMessages(directory = root) {
+  return scanSources(directory).counts;
 }
 
 export function uiMessageErrors(directory = root, allowlist = readAllowlist(directory)) {
   const { permanent, debt } = allowlist;
-  const counts = scanUiMessages(directory);
-  const errors = [];
+  const { counts, plain } = scanSources(directory);
+  const errors = [...plain];
   for (const [file, lines] of counts) {
     const allowed = (permanent[file]?.count ?? 0) + (debt[file] ?? 0);
     if (lines.length > allowed)

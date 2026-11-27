@@ -5,21 +5,12 @@ import { emptyTheme, validateTheme } from '../core/themes.js';
 import { api, ApiError } from '../web/api.js';
 import { errorDescriptor, toUiMessage } from '../web/api-errors.js';
 import { DismissibleError } from '../web/DismissibleError.js';
-import {
-  loadLocale,
-  message,
-  messageRef,
-  setLocale,
-  t,
-  translateMessage,
-  UI_LOCALES,
-} from '../web/i18n.js';
+import { loadLocale, message, setLocale, t, translateMessage, UI_LOCALES } from '../web/i18n.js';
 import { LoadingState } from '../web/LoadingState.js';
 import { NoticeBanner } from '../web/NoticeBanner.js';
 import {
   formatUiMessage,
   legacyMessageString,
-  parseLegacyMessage,
   UiError,
   uiMessage,
   uiText,
@@ -77,28 +68,27 @@ test('thrown UI, API and core validation errors keep their catalog message acros
   expect(formatUiMessage(fromCore)).toBe('App CSS: Enter text of up to 1,000,000 characters.');
 });
 
-test('a catalog descriptor thrown as a plain Error converts back to its key and values', () => {
+test('only a UiError carries its catalog message; a descriptor in a plain Error does not', () => {
   const scene = uiMessage('errors.scene', { scene: 3 });
-  expect(toUiMessage(new Error(message('errors.scene', { scene: 3 })))).toEqual(scene);
-  const nested = message('shared.deleteQuestion', {
-    title: messageRef(message('errors.firstMessage')),
-  });
-  expect(toUiMessage(new Error(nested))).toEqual(
-    uiMessage('shared.deleteQuestion', { title: uiMessage('errors.firstMessage') })
+  expect(toUiMessage(new Error(message('errors.scene', { scene: 3 })))).toEqual(
+    uiMessage('errors.unexpected')
   );
-  const plain = message('shared.deleteQuestion', { title: messageRef('Alice') });
-  expect(parseLegacyMessage(plain)).toEqual(
-    uiMessage('shared.deleteQuestion', { title: uiText('Alice') })
-  );
-  for (const value of [scene, uiMessage('shared.deleteQuestion', { title: scene })])
-    expect(parseLegacyMessage(legacyMessageString(value))).toEqual(value);
   const listed = uiMessage('shared.deleteQuestion', {
     title: [scene, uiText(', '), uiMessage('errors.firstMessage'), uiText(', …')],
   });
-  const roundTrip = parseLegacyMessage(legacyMessageString(listed));
-  expect(roundTrip).toEqual(listed);
-  setLocale('en');
-  expect(formatUiMessage(roundTrip!)).toBe(formatUiMessage(listed));
+  for (const value of [
+    scene,
+    uiMessage('shared.deleteQuestion', { title: uiText('Alice') }),
+    uiMessage('shared.deleteQuestion', { title: scene }),
+    listed,
+  ]) {
+    const error = new UiError(value);
+    expect(toUiMessage(error)).toBe(value);
+    for (const locale of ['ko', 'en'] as const) {
+      setLocale(locale);
+      expect(translateMessage(error.message)).toBe(formatUiMessage(value));
+    }
+  }
 });
 
 test('nested and listed values format in the language being shown', () => {

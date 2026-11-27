@@ -7,7 +7,6 @@ import {
 import { ValidationError } from '../core/validation-error.js';
 import {
   formatUiMessage,
-  legacyErrorMessage,
   legacyMessageString,
   UiError,
   uiMessage,
@@ -345,9 +344,7 @@ export function toUiMessage(
   if (cause instanceof UiError) return cause.uiMessage;
   if (cause instanceof ValidationError)
     return appErrorUiMessage(cause.code, cause.params as ReceivedErrorWire['params']);
-  return (
-    legacyErrorMessage(cause) ?? (typeof fallback === 'string' ? uiMessage(fallback) : fallback)
-  );
+  return typeof fallback === 'string' ? uiMessage(fallback) : fallback;
 }
 
 export function errorDescriptor(

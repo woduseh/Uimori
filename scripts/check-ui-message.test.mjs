@@ -7,6 +7,7 @@ import {
   allowlistPath,
   readAllowlist,
   errorTextReads,
+  plainErrorTexts,
   shrinkAllowlist,
   uiMessageErrors,
 } from './check-ui-message.mjs';
@@ -61,6 +62,28 @@ test('calling a method named message is not a read, while stringifying a caught 
     '}',
   ].join('\n');
   assert.deepEqual(errorTextReads(source, 'web/View.tsx'), [7, 8, 9]);
+});
+
+test('an Error may carry only literal text, whatever builds or aliases the message', () => {
+  const source = [
+    "import { message as retainedMessage, t } from './i18n.js';",
+    "throw new Error(retainedMessage('transfer.m007'));",
+    "throw new Error(t('shared.savedFailure'));",
+    'if (invalid) throw new Error(invalid);',
+    "reject(new DOMException(t('transfer.m189'), 'AbortError'));",
+    'throw Error(`failed: $' + '{detail}`);',
+    'class DraftError extends Error {',
+    '  constructor(text: string) {',
+    '    super(text);',
+    '  }',
+    '}',
+    "throw new Error('FontProvider is missing');",
+    'throw new TypeError(`Clipboard unavailable`);',
+    "throw new UiError(uiMessage('shared.savedFailure'));",
+    "class Known extends Error { constructor() { super('KNOWN'); } }",
+    "throw 'raw';",
+  ].join('\n');
+  assert.deepEqual(plainErrorTexts(source, 'web/View.tsx'), [2, 3, 4, 5, 6, 9, 16]);
 });
 
 test('an unlisted read fails with its lines, and the core module is exempt', () => {

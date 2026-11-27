@@ -1,4 +1,5 @@
-import { translateMessage } from '../web/i18n.js';
+import { toUiMessage } from '../web/api-errors.js';
+import { formatUiMessage } from '../web/ui-message.js';
 
 export async function shownRejection(promise: Promise<unknown>): Promise<string> {
   const error = await promise.then(
@@ -7,14 +8,14 @@ export async function shownRejection(promise: Promise<unknown>): Promise<string>
     },
     (cause: unknown) => cause
   );
-  return translateMessage((error as Error).message);
+  return formatUiMessage(toUiMessage(error));
 }
 
 export function shownThrow(run: () => unknown): string {
   try {
     run();
   } catch (cause) {
-    return translateMessage((cause as Error).message);
+    return formatUiMessage(toUiMessage(cause));
   }
   throw new Error('expected a throw');
 }

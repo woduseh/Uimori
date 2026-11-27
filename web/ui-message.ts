@@ -1,5 +1,4 @@
 import type { MessageKey } from './locales/index.js';
-import ko from './locales/ko.js';
 import {
   formatMessage,
   getLocale,
@@ -66,65 +65,6 @@ export function legacyMessageString(value: UiMessage): string {
       isUiMessage(item) ? legacyMessageString(item) : item.map(legacyMessageString).join('')
     );
   return descriptor(value.key, value.values && (mapValues(value.values, nested) as MessageValues));
-}
-
-const legacyPrefix = '\u001fui:';
-const legacyEnd = '\u001e';
-type LegacyValue = string | number | boolean | { uiDate: number } | { uiMessage: string };
-
-function parseLegacyValue(value: LegacyValue): UiMessageValue | null {
-  if (typeof value !== 'object' || value === null) return value;
-  if ('uiDate' in value) return new Date(value.uiDate);
-  if (typeof value.uiMessage !== 'string') return null;
-  return parseLegacySequence(value.uiMessage);
-}
-
-function parseLegacySequence(text: string): UiMessage | UiMessage[] | null {
-  if (!text.includes(legacyPrefix)) return uiText(text);
-  const parts: UiMessage[] = [];
-  let rest = text;
-  while (rest) {
-    const start = rest.indexOf(legacyPrefix);
-    if (start) parts.push(uiText(start < 0 ? rest : rest.slice(0, start)));
-    if (start < 0) break;
-    const end = rest.indexOf(legacyEnd, start);
-    const part = end < 0 ? null : parseLegacyMessage(rest.slice(start, end + 1));
-    if (!part) return null;
-    parts.push(part);
-    rest = rest.slice(end + 1);
-  }
-  return parts.length === 1 ? parts[0] : parts;
-}
-
-export function parseLegacyMessage(text: string): UiMessage | null {
-  if (
-    !text.startsWith(legacyPrefix) ||
-    !text.endsWith(legacyEnd) ||
-    text.indexOf(legacyEnd) !== text.length - 1
-  )
-    return null;
-  try {
-    const parsed = JSON.parse(text.slice(legacyPrefix.length, -1)) as {
-      key?: unknown;
-      values?: Record<string, LegacyValue>;
-    };
-    if (typeof parsed?.key !== 'string' || !Object.hasOwn(ko, parsed.key)) return null;
-    const key = parsed.key as MessageKey;
-    if (!parsed.values) return uiMessage(key);
-    const values: Record<string, UiMessageValue> = {};
-    for (const [name, value] of Object.entries(parsed.values)) {
-      const item = parseLegacyValue(value);
-      if (item === null) return null;
-      values[name] = item;
-    }
-    return uiMessage(key, values);
-  } catch {
-    return null;
-  }
-}
-
-export function legacyErrorMessage(cause: unknown): UiMessage | null {
-  return cause instanceof Error ? parseLegacyMessage(cause.message) : null;
 }
 
 export class UiError extends Error {
