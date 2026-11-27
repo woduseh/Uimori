@@ -246,7 +246,7 @@ test('a call held again after an earlier grant can be confirmed again', async ()
     {},
     { request: '바꿔 줘', confirmations: [confirmation!.id] }
   );
-  expect(granted.finished('patch')).toMatchObject({ errorCode: 'SOURCE_CONFLICT' });
+  expect(granted.finished('patch')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
   const again = await runScriptedChatHelper(f.store(), f.chat.id, [call(), helperDone]);
   expect(again.finished('patch')).toMatchObject({ errorCode: 'CONFIRMATION_REQUIRED' });
   expect(readHelperTaskResults(f.store(), again.task.id).confirmations).toMatchObject([
@@ -262,7 +262,7 @@ test('a call held again after an earlier grant can be confirmed again', async ()
     {},
     { request: '다시 바꿔 줘', confirmations: [confirmation!.id] }
   );
-  expect(regranted.finished('patch')).toMatchObject({ errorCode: 'SOURCE_CONFLICT' });
+  expect(regranted.finished('patch')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
   expect(readHelperTaskResults(f.store(), again.task.id).confirmations).toMatchObject([
     { grantedBy: regranted.task.id, grantable: false },
   ]);

@@ -82,7 +82,7 @@ test('scene.request queues one composer run and refuses a second request or a st
   expect(f.started).toEqual([{ run: expect.objectContaining({ id: run.id }) }]);
   expect(f.finished('first')).toMatchObject({ denied: false });
   expect(f.finished('busy')).toMatchObject({ denied: true, errorCode: 'SCENE_REQUEST_BUSY' });
-  expect(f.finished('stale')).toMatchObject({ denied: true, errorCode: 'SOURCE_CONFLICT' });
+  expect(f.finished('stale')).toMatchObject({ denied: true, errorCode: 'REVISION_CONFLICT' });
   expect(f.results).toEqual([
     expect.objectContaining({
       operation: 'scene.request',

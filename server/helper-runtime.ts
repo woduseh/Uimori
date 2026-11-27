@@ -568,7 +568,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
           ? cause.code
           : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
             (status === 409
-              ? 'SOURCE_CONFLICT'
+              ? 'REVISION_CONFLICT'
               : status === 400
                 ? 'INVALID_ARGUMENTS'
                 : 'HELPER_TOOL_FAILED'));

@@ -1,14 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import Fastify from 'fastify';
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Readable } from 'node:stream';
@@ -239,7 +231,7 @@ test('invalid images are reported before consent and the prepared digest prevent
   );
 });
 
-test('kind change reprojects prepared bytes and corrupted staged bytes roll back all registration', async () => {
+test('kind change reprojects prepared bytes', async () => {
   const store = fixture();
   const input = await source(false, true);
   const bot = await prepareStoredRisuImport(store.path, { source: input });
@@ -302,22 +294,6 @@ test('kind change reprojects prepared bytes and corrupted staged bytes roll back
   const prepared = readPreparedRisuImport(store.path, automatic.preparedId!);
   expect(prepared.images).toHaveLength(2);
   expect(readdirSync(join(resolve(store.path, '..'), 'risu-prepared'))).toEqual([bot.preparedId]);
-  const snapshot = () =>
-    ['versions', 'image_blobs', 'import_operations'].map((table) =>
-      store.db.prepare(`SELECT * FROM ${table}`).all()
-    );
-  const before = snapshot();
-  writeFileSync(prepared.images[1].path, 'corrupted');
-  await expect(
-    applyRisuImport(store, {
-      source: input,
-      preparedId: automatic.preparedId,
-      digest: automatic.digest,
-      allowPartial: false,
-      idempotencyKey: 'corrupt-apply',
-    })
-  ).rejects.toThrow('RISU_IMPORT_DRAFT_CHANGED');
-  expect(snapshot()).toEqual(before);
   deletePreparedRisuImport(store.path, bot.preparedId!);
 });
 

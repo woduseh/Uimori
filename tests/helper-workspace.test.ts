@@ -370,7 +370,7 @@ describe('a helper save under an unsaved editor draft overwrites neither side', 
       }
       if (index === 1) {
         expect(request.input.results).toMatchObject([
-          { denied: true, result: { code: 'SOURCE_CONFLICT' } },
+          { denied: true, result: { code: 'REVISION_CONFLICT' } },
         ]);
         expect(description(f.store, resource.id)).toBe('사용자가 저장할 설명');
         return {
