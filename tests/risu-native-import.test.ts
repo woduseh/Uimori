@@ -366,7 +366,7 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   expect(() => store.product.get<Content>('content', id, revision)).toThrow(
     'content revision not found'
   );
-  expect(() => store.product.content(request, id)).toThrow(/Revision conflict/);
+  expect(() => store.product.content(request, id)).toThrow('REVISION_CONFLICT');
 });
 
 test('a card without first_mes keeps an empty chat even when alternate greetings exist', async () => {

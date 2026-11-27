@@ -27,11 +27,12 @@ import {
   writeRisuPreset,
   writeRisuZip,
 } from './risu-export-codec.js';
+import { AppError } from './app-errors.js';
 
 const extension = (image: PackageImage) =>
   image.mime === 'image/jpeg' ? 'jpg' : image.mime.slice(6);
 const failAsset = (): never => {
-  throw new HttpError(409, 'RISU_EXPORT_ASSET_UNAVAILABLE');
+  throw new AppError(409, 'RISU_EXPORT_ASSET_UNAVAILABLE');
 };
 export type RisuExport = { bytes: Buffer; filename: string; mediaType: string; revision: number };
 function filename(title: string, suffix: string) {
@@ -51,10 +52,10 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
   const standalone =
     content.kind === 'module' && !Object.keys(content.package.nativeRisu.card).length;
   if (standalone && !content.package.nativeRisu.module)
-    throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
+    throw new AppError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
   const pkg = structuredClone(content.package);
   if (!standalone && !Object.keys(pkg.nativeRisu.card).length)
-    throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
+    throw new AppError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
   const native = validateRisuContentSource(pkg.nativeRisu),
     card = native.card;
   stripDeprecatedRisuCardFields(card);
@@ -103,7 +104,7 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       ['card.json', 'module.risum'].includes(path) ||
       (files.has(path) && !files.get(path)!.equals(bytes))
     )
-      throw new HttpError(409, 'RISU_EXPORT_ASSET_PATH');
+      throw new AppError(409, 'RISU_EXPORT_ASSET_PATH');
     files.set(path, bytes);
   };
   const assets = (Array.isArray(card.assets) ? card.assets : []).map((entry) => {
@@ -155,14 +156,14 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       const metadataNames = new Set(metadata.filter(Array.isArray).map((entry) => entry[0]));
       for (const image of pkg.images ?? []) {
         if (consumed.has(image.id)) continue;
-        if (metadataNames.has(image.title)) throw new HttpError(409, 'RISU_EXPORT_MODULE_CONFLICT');
+        if (metadataNames.has(image.title)) throw new AppError(409, 'RISU_EXPORT_MODULE_CONFLICT');
         metadata.push([image.title, '', extension(image)]);
         metadataNames.add(image.title);
         bytes.push(imageBytes(image.id).bytes);
       }
       module.assets = metadata;
       if (metadata.length > RISU_IMPORT_MAX_ASSETS)
-        throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+        throw new AppError(413, 'RISU_EXPORT_TOO_LARGE');
       return {
         bytes: writeEmbeddedRisuModule(module, bytes),
         filename: filename(content.title, 'risum'),
@@ -202,7 +203,7 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       });
     }
   }
-  if (assets.length > RISU_IMPORT_MAX_ASSETS) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+  if (assets.length > RISU_IMPORT_MAX_ASSETS) throw new AppError(413, 'RISU_EXPORT_TOO_LARGE');
   card.assets = assets;
   files.set('card.json', exportJson({ spec: 'chara_card_v3', spec_version: '3.0', data: card }));
   return {
@@ -235,14 +236,23 @@ export function risuExportRoutes(app: FastifyInstance, store: Store): void {
       `/api/${path}/:id/risu-export`,
       { compress: false },
       async (request, reply) => {
-        assertLibraryVisible(store, kind, request.params.id);
-        const item = store.product.get<Content | PromptPreset>(kind, request.params.id);
-        if (request.query.expectedRevision !== undefined) {
-          const expected = Number(request.query.expectedRevision);
-          if (!Number.isSafeInteger(expected) || expected < 1)
-            throw new HttpError(400, 'RISU_EXPORT_REVISION_INVALID');
-          if (item.revision !== expected) throw new HttpError(409, 'RISU_EXPORT_REVISION_CHANGED');
+        const expected =
+          request.query.expectedRevision === undefined
+            ? undefined
+            : Number(request.query.expectedRevision);
+        if (expected !== undefined && (!Number.isSafeInteger(expected) || expected < 1))
+          throw new HttpError(400, 'Invalid expected revision');
+        let item: Content | PromptPreset;
+        try {
+          assertLibraryVisible(store, kind, request.params.id);
+          item = store.product.get<Content | PromptPreset>(kind, request.params.id);
+        } catch (error) {
+          if (expected !== undefined && error instanceof HttpError && error.statusCode === 404)
+            throw new AppError(409, 'REVISION_CONFLICT');
+          throw error;
         }
+        if (expected !== undefined && item.revision !== expected)
+          throw new AppError(409, 'REVISION_CONFLICT');
         const exported =
           kind === 'content'
             ? exportRisuContent(store.product, item as Content)

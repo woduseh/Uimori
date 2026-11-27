@@ -292,6 +292,6 @@ test('model references, prompt role and CAS are checked before storing collabora
       { title: 'Stale editor', role: 'main', program: f.program, expectedRevision: 2 },
       f.preset.id
     )
-  ).toThrow('Revision');
+  ).toThrow('REVISION_CONFLICT');
   expect(f.product.get<PromptPreset>('prompt-preset', f.preset.id)).toEqual(f.preset);
 });

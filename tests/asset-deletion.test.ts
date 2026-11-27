@@ -7,6 +7,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { assetDeletionRoutes, deleteChatAsset } from '../server/asset-deletion.js';
 import { imageJobInput } from '../server/package-images.js';
+import { updateAssetMetadata } from '../server/asset-metadata.js';
 
 const owned: { directory: string; store: Store; app: FastifyInstance }[] = [];
 afterEach(async () => {
@@ -96,6 +97,19 @@ test('cross-chat and malformed deletions preserve the uploaded bytes', async () 
   ).toBe(400);
   expect(store.product.asset(asset.id).bytes).toHaveLength(8);
   expect(published).toEqual([]);
+});
+
+test('a screen that still shows a deleted image gets IMAGE_NOT_FOUND for deletion and edits', () => {
+  const { store, chat, asset } = fixture();
+  deleteChatAsset(store, chat.id, asset.id, {});
+  expect(() => deleteChatAsset(store, chat.id, asset.id, {})).toThrow('IMAGE_NOT_FOUND');
+  expect(() =>
+    updateAssetMetadata(store, chat.id, asset.id, {
+      expectedRevision: asset.revision,
+      title: 'Renamed from a stale screen',
+      description: '',
+    })
+  ).toThrow('IMAGE_NOT_FOUND');
 });
 
 test('deletion preserves active execution and immutable completed image catalogs', () => {

@@ -7,7 +7,7 @@ const COOKIE_AGE_SECONDS = 400 * 24 * 60 * 60;
 export class AccessSessionRateLimitError extends HttpError {
   readonly retryAfterSeconds: number;
   constructor(retryAfterSeconds: number) {
-    super(429, '잠시 후 다시 로그인해 주세요.');
+    super(429, 'Too many login attempts');
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
@@ -79,7 +79,7 @@ export class AccessSessions {
         this.blockedUntil = this.now() + 60_000;
         this.failures = 0;
       }
-      throw new HttpError(401, '접속 토큰을 확인해 주세요.');
+      throw new HttpError(401, 'Access token rejected');
     }
     this.failures = 0;
     const token = randomBytes(32).toString('hex');

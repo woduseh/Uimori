@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
-import { HttpError } from './request-validation.js';
+
+import { AppError } from './app-errors.js';
 
 export type StoredRequestFile = { hash: string; bytes: Buffer };
 
@@ -19,18 +20,18 @@ export function initRequestFilesSchema(db: DatabaseSync): void {
 
 export function storeRequestFileBlob(db: DatabaseSync, file: StoredRequestFile): void {
   if (createHash('sha256').update(file.bytes).digest('hex') !== file.hash)
-    throw new HttpError(400, 'REQUEST_FILE_CHANGED');
+    throw new AppError(400, 'REQUEST_FILE_CHANGED');
   db.prepare(
     'INSERT INTO attachment_blobs(hash,bytes) VALUES(?,?) ON CONFLICT(hash) DO NOTHING'
   ).run(file.hash, file.bytes);
 }
 
 export function readRequestFileBlob(db: DatabaseSync, hash: string): StoredRequestFile {
-  if (!/^[a-f0-9]{64}$/u.test(hash)) throw new HttpError(404, 'REQUEST_FILE_MISSING');
+  if (!/^[a-f0-9]{64}$/u.test(hash)) throw new AppError(404, 'REQUEST_FILE_MISSING');
   const row = db.prepare('SELECT bytes FROM attachment_blobs WHERE hash=?').get(hash);
-  if (!row) throw new HttpError(404, 'REQUEST_FILE_MISSING');
+  if (!row) throw new AppError(404, 'REQUEST_FILE_MISSING');
   const bytes = Buffer.from(row.bytes as Uint8Array);
   if (createHash('sha256').update(bytes).digest('hex') !== hash)
-    throw new HttpError(409, 'REQUEST_FILE_CHANGED');
+    throw new AppError(409, 'REQUEST_FILE_CHANGED');
   return { hash, bytes };
 }

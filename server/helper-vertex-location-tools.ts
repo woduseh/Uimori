@@ -15,6 +15,7 @@ import {
 import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -235,7 +236,7 @@ export function updateVertexLocation(store: Store, value: unknown) {
   const expectedRevision = number(args.expectedRevision, 'connection revision', 1);
   if (!isVertexLocation(location)) throw new HelperToolError(400, 'INVALID_VERTEX_LOCATION');
   const { connection, endpoint } = vertexConnection(store, connectionId);
-  if (connection.revision !== expectedRevision) throw new HttpError(409, 'Revision conflict');
+  if (connection.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
   const saved =
     endpoint.location === location
       ? connection

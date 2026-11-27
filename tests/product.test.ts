@@ -216,7 +216,7 @@ describe('M1 product data with actual file SQLite', () => {
     expect(oldSnapshot.profile!).not.toHaveProperty('personaReference');
     expect(() =>
       product.content({ ...contentBody('module', 'STALE_WRITE'), expectedRevision: 1 }, lore.id)
-    ).toThrow('Revision conflict');
+    ).toThrow('REVISION_CONFLICT');
     expect(() =>
       updateTestProfile(product, chat.id, {
         expectedRevision: first.revision,
@@ -224,7 +224,7 @@ describe('M1 product data with actual file SQLite', () => {
         routes: applied.routes,
         image: applied.image,
       })
-    ).toThrow('Profile revision conflict');
+    ).toThrow('REVISION_CONFLICT');
   });
 
   test('P04 keeps manual model IDs and credential references separate from content and transport options', async () => {

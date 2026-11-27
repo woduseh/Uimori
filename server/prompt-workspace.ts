@@ -674,8 +674,7 @@ export function updatePromptWorkspace(
   const expected = number(b.expectedRevision, 'prompt workspace revision');
   const apply = () => {
     const prior = promptWorkspace(store);
-    if (prior.revision !== expected)
-      throw new HttpError(409, 'Current prompts changed; refresh before saving');
+    if (prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     const updates = Object.fromEntries(
       roles
         .filter((role) => b[role] !== undefined)

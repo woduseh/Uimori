@@ -6,6 +6,7 @@ import type { StorySnapshot, StoryDetail, SceneCommand } from '../core/story.js'
 import type { RunSnapshot } from '../core/types.js';
 import { StoryNotes } from './story-notes.js';
 import { readRunState, readRunStatus } from './run-projections.js';
+import { AppError } from './app-errors.js';
 
 type Row = Record<string, any>;
 export class StoryStore {
@@ -125,7 +126,7 @@ export class StoryStore {
   cancelCommand(id: string): SceneCommand {
     const command = this.command(id);
     if (command.runId && ['queued', 'running'].includes(readRunStatus(this.store, command.runId)))
-      throw new HttpError(409, '진행 중인 원문 생성을 먼저 취소해 주세요.');
+      throw new AppError(409, 'SCENE_COMMAND_RUN_ACTIVE');
     if (command.status !== 'consumed')
       this.db.prepare("UPDATE scene_commands SET status='cancelled' WHERE id=?").run(id);
     return this.command(id);

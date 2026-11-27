@@ -14,6 +14,7 @@ import {
 import { HttpError } from './request-validation.js';
 import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
 import type { PreparedRisuImport } from './risu-import-prepared.js';
+import { AppError } from './app-errors.js';
 
 export async function prepareRisuInWorker(input: {
   path: string;
@@ -52,7 +53,7 @@ export async function prepareRisuInWorker(input: {
   }
   const card = await readCharacterCardPath(input.path, input.name, input.kind, input.directory);
   if ((card.card.assets?.length ?? 0) > RISU_IMPORT_MAX_ASSETS)
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   const entries: { uri: string; read: () => Buffer }[] = [];
   const uris = new Set<string>();
   for (const raw of card.card.assets ?? []) {
@@ -82,7 +83,9 @@ export async function prepareRisuInWorker(input: {
       if (!stored.has(image.hash)) {
         total += image.bytes.length;
         if (total > RISU_IMPORT_MAX_PREPARED_BYTES)
-          throw new HttpError(413, 'RISU_IMPORT_IMAGES_TOO_LARGE');
+          throw new AppError(413, 'RISU_IMPORT_IMAGES_TOO_LARGE', {
+            maxBytes: RISU_IMPORT_MAX_PREPARED_BYTES,
+          });
         const path = join(input.directory, `${image.hash}.image`);
         writeFileSync(path, image.bytes, { flag: 'wx' });
         stored.set(image.hash, { ...descriptor, path, bytes: image.bytes.length });

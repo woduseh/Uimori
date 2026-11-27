@@ -233,7 +233,7 @@ test('RSEL04 a changed source keeps the proposal and saves nothing', async ({ pa
   let conflictCalls = 0;
   await page.route(`**/api/sources/${source.id}/text`, async (route) => {
     conflictCalls++;
-    await route.fulfill({ status: 409, json: { error: 'Source revision conflict' } });
+    await route.fulfill({ status: 409, json: { code: 'REVISION_CONFLICT' } });
   });
   await popover.getByRole('button', { name: '적용', exact: true }).click();
   await expect(

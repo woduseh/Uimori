@@ -1,10 +1,11 @@
 import { RISU_IMPORT_MAX_ASSETS, RISU_IMPORT_MAX_LORE_ENTRIES } from '../core/risu-import.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { HttpError, record, text } from './request-validation.js';
+import { record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export function moduleLoreEntries(lorebook: unknown) {
   if (!Array.isArray(lorebook) || lorebook.length > RISU_IMPORT_MAX_LORE_ENTRIES)
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   return lorebook.map((raw) => {
     const entry = record(raw);
     const known = [
@@ -62,7 +63,7 @@ export function moduleJsonDocument(
   projectAssets: ((() => Buffer) | undefined)[] = []
 ): Record<string, unknown> {
   const envelope = record(value);
-  if (envelope.type !== 'risuModule') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  if (envelope.type !== 'risuModule') throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   const module = record(envelope.module);
   const name = text(module.name, 'module name', 200);
   const description = text(module.description ?? '', 'module description', 100_000, true);
@@ -78,18 +79,17 @@ export function moduleJsonDocument(
     if (projectAsset) members.set(uri.slice('embeded://'.length), projectAsset);
     else if (data) {
       const bytes = Buffer.from(data[1], 'base64');
-      if (bytes.toString('base64') !== data[1])
-        throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+      if (bytes.toString('base64') !== data[1]) throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
       members.set(uri.slice('embeded://'.length), () => bytes);
     }
     assets.push({ name: title, uri, type });
   };
   if (module.assets !== undefined) {
     if (!Array.isArray(module.assets) || module.assets.length > RISU_IMPORT_MAX_ASSETS)
-      throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+      throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
     for (const [index, asset] of module.assets.entries()) {
       if (!Array.isArray(asset) || asset.length < 2)
-        throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+        throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
       addAsset(asset[0], asset[1], 'other', projectAssets[index]);
     }
   }

@@ -22,13 +22,15 @@ import { fields, HttpError, record } from './request-validation.js';
 import { readImportEnvelope } from './import-envelope.js';
 import { hasControl } from './import-envelope.js';
 import { uploadDirectory, UPLOAD_MAX_AGE_MS, UPLOAD_MAX_BYTES } from './uploads.js';
-import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
+import type { PreparedBundleImage } from './resource-bundle.js';
 import { typeScriptSourceHooks } from './risu-native-worker.js';
 import {
   acquireImportPreparation,
   checkImportPreparation,
   ownedImportStagingRoot,
 } from './import-preparation.js';
+import { AppError, appErrorFrom } from './app-errors.js';
+import { isAppErrorCode } from '#contracts';
 
 export type PreparedRisuImport = {
   version: 1;
@@ -47,7 +49,7 @@ const ID = /^[a-f0-9]{32}$/u;
 const active = new Set<string>();
 const directory = (dbPath: string) => join(dirname(resolve(dbPath)), 'risu-prepared');
 function pathFor(dbPath: string, id: string) {
-  if (!ID.test(id)) throw new HttpError(404, 'RISU_IMPORT_DRAFT_CHANGED');
+  if (!ID.test(id)) throw new AppError(404, 'RISU_IMPORT_DRAFT_CHANGED');
   return join(directory(dbPath), id);
 }
 export function deletePreparedRisuImport(dbPath: string, id: string) {
@@ -60,32 +62,20 @@ export function deletePreparedRisuImport(dbPath: string, id: string) {
   } catch {}
 }
 export function discardPreparedRisuImport(dbPath: string, id: string) {
-  if (active.has(pathFor(dbPath, id))) throw new HttpError(409, 'RISU_IMPORT_BUSY');
+  if (active.has(pathFor(dbPath, id))) throw new AppError(409, 'RISU_IMPORT_BUSY');
   deletePreparedRisuImport(dbPath, id);
 }
 export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisuImport {
   const path = pathFor(dbPath, id);
   if (!existsSync(join(path, 'manifest.json')))
-    throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+    throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   const value = JSON.parse(readFileSync(join(path, 'manifest.json'), 'utf8')) as PreparedRisuImport;
   if (value.version !== 1 || value.id !== id || Date.now() - value.createdAt > UPLOAD_MAX_AGE_MS)
-    throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (
-    value.transferDigest !== bundleDigest(value.file) ||
-    value.preview.digest !==
-      bundleDigest({
-        version: 8,
-        transfer: value.transferDigest,
-        kind: value.preview.kind,
-        findings: value.preview.findings,
-        lore: value.preview.lore,
-      })
-  )
-    throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  value.images = value.images.map((image) => {
-    if (!/^[a-f0-9]{64}$/u.test(image.hash)) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-    return { ...image, path: join(path, `${image.hash}.image`) };
-  });
+    throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+  value.images = value.images.map((image) => ({
+    ...image,
+    path: join(path, `${image.hash}.image`),
+  }));
   return value;
 }
 export function prunePreparedRisuImports(dbPath: string) {
@@ -119,7 +109,6 @@ export function findPreparedRisuImport(
       maxBytes: RISU_IMPORT_MAX_BYTES,
       extensions: /\.(?:charx|json|png|jpe?g|risum|zip)$/iu,
       invalid: 'RISU_IMPORT_INVALID_FILE',
-      tooLarge: 'RISU_IMPORT_TOO_LARGE',
     }).sha256;
   }
   for (const id of readdirSync(root)
@@ -146,7 +135,7 @@ const { parentPort, workerData } = require('node:worker_threads');
 ${typeScriptSourceHooks}
 import(workerData.module).then(module => module.prepareRisuInWorker(workerData.input))
 .then(() => parentPort.postMessage({ok:true}))
-.catch(error => parentPort.postMessage({ok:false, code:String(error.message), statusCode:error.statusCode || 400}));
+.catch(error => parentPort.postMessage({ok:false, code:String(error.message), statusCode:error.statusCode || 400, params:error.params}));
 `;
 async function worker(input: unknown, signal?: AbortSignal) {
   return new Promise<void>((accept, reject) => {
@@ -174,7 +163,13 @@ async function worker(input: unknown, signal?: AbortSignal) {
       void thread
         .terminate()
         .then(() =>
-          message.ok ? accept() : reject(new HttpError(message.statusCode, message.code))
+          message.ok
+            ? accept()
+            : reject(
+                isAppErrorCode(message.code)
+                  ? appErrorFrom(message.statusCode, message.code, message.params)
+                  : new HttpError(message.statusCode, message.code)
+              )
         );
     });
     thread.once('error', (error) => {
@@ -198,7 +193,7 @@ export async function prepareStoredRisuImport(
   const body = record(value);
   fields(body, ['source', 'kind', 'preparedId']);
   if (body.kind !== undefined && !['bot', 'persona', 'module'].includes(body.kind))
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   if (body.preparedId) {
     const prior = readPreparedRisuImport(dbPath, body.preparedId);
     if (prior.requestedKind === body.kind) return prior.preview;
@@ -250,18 +245,17 @@ export async function prepareStoredRisuImport(
         typeof source.uploadId !== 'string' ||
         !ID.test(source.uploadId)
       )
-        throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+        throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
       name = source.name;
       sourcePath = join(uploadDirectory(dbPath), `${source.uploadId}.bin`);
       if (!existsSync(sourcePath)) throw new HttpError(404, 'UPLOAD_NOT_FOUND');
       if (statSync(sourcePath).size > UPLOAD_MAX_BYTES)
-        throw new HttpError(413, 'UPLOAD_TOO_LARGE');
+        throw new AppError(413, 'UPLOAD_TOO_LARGE', { maxBytes: UPLOAD_MAX_BYTES });
     } else {
       const envelope = readImportEnvelope(source, {
         maxBytes: RISU_IMPORT_MAX_BYTES,
         extensions: /\.(?:charx|json|png|jpe?g|risum|zip)$/iu,
         invalid: 'RISU_IMPORT_INVALID_FILE',
-        tooLarge: 'RISU_IMPORT_TOO_LARGE',
       });
       name = envelope.name;
       sourcePath = join(workspace, 'source.bin');

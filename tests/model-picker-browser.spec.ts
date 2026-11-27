@@ -136,7 +136,7 @@ test('MP02 a rejected model save stays open without retrying and a lost response
     await route.fulfill({
       status: 409,
       contentType: 'application/json',
-      body: JSON.stringify({ error: 'Profile revision conflict' }),
+      body: JSON.stringify({ code: 'REVISION_CONFLICT' }),
     });
   });
   await picker.getByRole('button', { name: `${models[0].title} MP02` }).click();

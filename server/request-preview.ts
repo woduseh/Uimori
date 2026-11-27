@@ -272,7 +272,7 @@ export function requestPreviewRoutes(app: FastifyInstance, store: Store) {
 
 function previewImages(value: unknown): RequestImage[] {
   if (!Array.isArray(value) || value.length > REQUEST_IMAGE_MAX_COUNT)
-    throw new HttpError(400, '참고 이미지 목록을 확인해 주세요.');
+    throw new HttpError(400, 'Invalid preview images');
   try {
     return value.map((raw, index) => {
       const image = record(raw);
@@ -293,6 +293,6 @@ function previewImages(value: unknown): RequestImage[] {
       });
     });
   } catch {
-    throw new HttpError(400, '참고 이미지의 이름과 크기를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid preview image name or size');
   }
 }

@@ -411,7 +411,7 @@ export class Store {
           'UPDATE chats SET settings=?, settings_revision=settings_revision+1 WHERE id=? AND settings_revision=?'
         )
         .run(json(settings), id, expected);
-      if (Number(changed.changes) !== 1) throw new HttpError(409, 'Settings revision conflict');
+      if (Number(changed.changes) !== 1) throw new AppError(409, 'REVISION_CONFLICT');
       this.event(id, 'settings.updated', id);
       return this.chat(id);
     });
@@ -440,19 +440,19 @@ export class Store {
   assertRunAdmission(chatId: string, command: Parameters<Store['createRun']>[1]): Chat {
     const chat = this.chat(chatId);
     if (chat.headRevision !== command.expectedRevision)
-      throw new HttpError(409, 'Source revision conflict');
+      throw new AppError(409, 'REVISION_CONFLICT');
     if (
       command.expectedSourceHash !== undefined &&
       (!chat.headRevision || this.source(chat.headRevision).hash !== command.expectedSourceHash)
     )
-      throw new HttpError(409, 'Source hash conflict');
+      throw new AppError(409, 'REVISION_CONFLICT');
     if (chat.settingsRevision !== command.expectedSettingsRevision)
-      throw new HttpError(409, 'Settings revision conflict');
+      throw new AppError(409, 'REVISION_CONFLICT');
     if (
       command.expectedProfileRevision !== undefined &&
       this.product.profile(chatId).revision !== command.expectedProfileRevision
     )
-      throw new HttpError(409, 'Profile revision conflict');
+      throw new AppError(409, 'REVISION_CONFLICT');
     if (
       this.db
         .prepare("SELECT id FROM runs WHERE chat_id=? AND status IN ('queued','running')")
@@ -727,7 +727,7 @@ export class Store {
       chat.headRevision !== (replacement?.sourceRevision ?? run.parentRevision) ||
       (replacement && this.source(replacement.sourceRevision).hash !== replacement.sourceHash)
     )
-      throw new HttpError(409, 'Source revision changed');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const action = run.snapshot.storyUiAction;
     if (action) {
       const parent = this.sourceMetadata(action.sourceRevision);

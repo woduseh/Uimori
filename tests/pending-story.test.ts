@@ -29,7 +29,7 @@ function fixture() {
     puts++;
     const body = JSON.parse(String(init.body));
     if (body.expectedRevision !== profile.revision)
-      return Response.json({ error: 'Profile revision conflict' }, { status: 409 });
+      return Response.json({ code: 'REVISION_CONFLICT' }, { status: 409 });
     profile = {
       ...profile,
       revision: profile.revision + 1,

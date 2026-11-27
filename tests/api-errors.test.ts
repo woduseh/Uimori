@@ -31,16 +31,12 @@ test('unavailable models retain only the role code and show the current selectio
 });
 
 test('only recognized revision errors are described as a concurrent save', async () => {
-  for (const code of [
-    'Revision conflict',
-    'Source revision conflict',
-    'Settings revision conflict',
-    '초안이 변경됐어요. 현재 입력은 유지하고 변경 내용을 확인해 주세요.',
-  ])
-    expect(await rejected(409, code)).toMatchObject({
-      code: 'REVISION_CONFLICT',
-      message: expect.stringContaining('다른 요청이 먼저'),
-    });
+  expect(await rejectedWith(409, { code: 'REVISION_CONFLICT' })).toMatchObject({
+    code: 'REVISION_CONFLICT',
+    message: expect.stringContaining('다른 요청이 먼저'),
+  });
+  for (const error of ['Revision conflict', 'Source revision conflict'])
+    expect(await rejected(409, error)).toMatchObject({ code: null });
   const unknown = await rejected(409, 'INTERNAL_PATH:C:/private/provider-credential');
   expect(unknown.code).toBeNull();
   expect(unknown.message).toContain('현재 상태');

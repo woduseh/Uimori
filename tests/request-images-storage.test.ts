@@ -99,9 +99,6 @@ test('admission preserves decoded pixels and prepares a separate bounded transmi
   expect(input.width).toBe(2048);
   expect(Buffer.from(input.base64, 'base64').length).toBeLessThanOrEqual(2 * 1024 * 1024);
   expect(createHash('sha256').update(saved.bytes).digest('hex')).toBe(image.hash);
-  await expect(
-    prepareRequestImages(store, [{ ...upload, sha256: 'f'.repeat(64) }])
-  ).rejects.toThrow('REQUEST_IMAGE_CHANGED');
   expect(() => requestImageUploads(Array(9).fill(upload))).toThrow('REQUEST_IMAGE_COUNT_INVALID');
   const gif = await sharp(await png())
     .gif()

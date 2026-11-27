@@ -253,9 +253,9 @@ test('a terminal action receipt permits a new explicit attempt while a running o
     if (submissions.length === 1)
       return route.fulfill({ status: 503, json: { error: 'Synthetic unknown outcome' } });
     if (submissions.length === 2)
-      return route.fulfill({ status: 409, json: { error: 'RISU_NATIVE_ACTION_RUNNING' } });
+      return route.fulfill({ status: 409, json: { code: 'RISU_NATIVE_ACTION_RUNNING' } });
     if (submissions.length === 3)
-      return route.fulfill({ status: 409, json: { error: 'RISU_NATIVE_ACTION_FAILED' } });
+      return route.fulfill({ status: 409, json: { code: 'RISU_NATIVE_ACTION_FAILED' } });
     return route.continue();
   });
   for (const status of [503, 409, 409]) {

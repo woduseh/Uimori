@@ -42,7 +42,7 @@ export function requireRequestModel(
     target &&
     imageInputSupported(target.connection.protocol, target.modelId) === false
   )
-    throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
+    throw new AppError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
 }
 
 export function queueAutomaticRefusalRetry(

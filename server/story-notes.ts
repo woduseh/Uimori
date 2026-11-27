@@ -4,6 +4,7 @@ import { validateAuthorNote, visibleAuthorNotes, type AuthorNote } from '../core
 import { sourceHash, type SourceScope } from '../core/source-history.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 type Row = Record<string, any>;
 export class StoryNotes {
@@ -102,11 +103,10 @@ export class StoryNotes {
         if (prior.command !== command) throw new HttpError(409, 'Note request key reused');
         return JSON.parse(prior.result);
       }
-      if (this.revision(chatId) !== expectedRevision)
-        throw new HttpError(409, '메모가 변경됐어요. 새로고침한 뒤 다시 적용해 주세요.');
+      if (this.revision(chatId) !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       const chat = this.store.chat(chatId);
       if (body.expectedHeadRevision !== chat.headRevision)
-        throw new HttpError(409, '메모를 붙일 원문이 변경됐어요. 최신 원문을 확인해 주세요.');
+        throw new AppError(409, 'REVISION_CONFLICT');
       const scope = this.scope(chatId, chat.headRevision);
       if (replacesId && !this.entries(scope).some((note) => note.id === replacesId))
         throw new HttpError(409, 'Note no longer available in this chat');

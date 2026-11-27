@@ -264,10 +264,7 @@ export class ContextStore {
       body.expectedHeadRevision !== chat.headRevision ||
       number(body.expectedRevision, 'context revision', 0) !== this.head(scopeKey).revision
     )
-      throw new HttpError(
-        409,
-        '컨텍스트나 원문이 변경됐어요. 최신 내용을 확인한 뒤 다시 적용해 주세요.'
-      );
+      throw new AppError(409, 'REVISION_CONFLICT');
     return { scopeKey, chat };
   }
   edit(chatId: string, value: unknown, snapshot: RunSnapshot) {
@@ -296,7 +293,7 @@ export class ContextStore {
       prepared = withContextProjection(prepared, compacted, summary);
       const measured = measureMainContext(prepared);
       if (measured.estimatedInputTokens > prepared.contextPlan!.budget.inputTokenLimit)
-        throw new HttpError(400, 'CONTEXT_FIXED_INPUT_TOO_LARGE');
+        throw new AppError(400, 'CONTEXT_FIXED_INPUT_TOO_LARGE');
       prepared = {
         ...measured.snapshot,
         contextPlan: {
@@ -335,7 +332,7 @@ export class ContextStore {
           .prepare("SELECT 1 FROM context_jobs WHERE chat_id=? AND status IN ('queued','running')")
           .get(chatId)
       )
-        throw new HttpError(409, '컨텍스트 정리가 이미 진행 중이에요.');
+        throw new AppError(409, 'CONTEXT_COMPACTION_ACTIVE');
       const id = randomUUID(),
         time = new Date().toISOString();
       this.db

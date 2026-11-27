@@ -15,30 +15,31 @@ import {
   storeRequestFileBlob,
   type StoredRequestFile,
 } from './request-file-storage.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { deleteUpload, readUpload } from './uploads.js';
+import { AppError } from './app-errors.js';
 
 const HASH = /^[a-f0-9]{64}$/u;
 function invalidFormat(): never {
-  throw new HttpError(400, 'REQUEST_FILE_FORMAT_INVALID');
+  throw new AppError(400, 'REQUEST_FILE_FORMAT_INVALID');
 }
 
 function fileName(value: unknown): string {
   const name = text(value, 'file name', 300);
-  if (/[\p{Cc}/\\]/u.test(name)) throw new HttpError(400, 'REQUEST_FILE_NAME_INVALID');
+  if (/[\p{Cc}/\\]/u.test(name)) throw new AppError(400, 'REQUEST_FILE_NAME_INVALID');
   return name;
 }
 
 export function requestFileUploads(value: unknown): RequestFileUpload[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > REQUEST_FILE_MAX_COUNT)
-    throw new HttpError(400, 'REQUEST_FILE_COUNT_INVALID');
+    throw new AppError(400, 'REQUEST_FILE_COUNT_INVALID');
   return value.map((raw) => {
     const file = record(raw);
     fields(file, ['uploadId', 'sha256', 'name']);
     if (!/^[a-f0-9]{32}$/u.test(file.uploadId) || !HASH.test(file.sha256))
-      throw new HttpError(400, 'REQUEST_FILE_UPLOAD_INVALID');
+      throw new AppError(400, 'REQUEST_FILE_UPLOAD_INVALID');
     const name = fileName(file.name);
     if (!classifyRequestFile(name)) invalidFormat();
     return { uploadId: file.uploadId as string, sha256: file.sha256 as string, name };
@@ -120,7 +121,7 @@ export function prepareRequestFiles(
   uploads: readonly RequestFileUpload[]
 ): PreparedRequestFiles {
   if (uploads.length > REQUEST_FILE_MAX_COUNT)
-    throw new HttpError(400, 'REQUEST_FILE_COUNT_INVALID');
+    throw new AppError(400, 'REQUEST_FILE_COUNT_INVALID');
   const files: RequestFile[] = [];
   const blobs = new Map<string, StoredRequestFile>();
   let totalBytes = 0;
@@ -130,9 +131,9 @@ export function prepareRequestFiles(
     if (!type) invalidFormat();
     const bytes = readUpload(store.path, upload.uploadId, REQUEST_FILE_MAX_BYTES);
     totalBytes += bytes.length;
-    if (totalBytes > REQUEST_FILES_MAX_BYTES) throw new HttpError(413, 'REQUEST_FILES_TOO_LARGE');
+    if (totalBytes > REQUEST_FILES_MAX_BYTES) throw new AppError(413, 'REQUEST_FILES_TOO_LARGE');
     const hash = createHash('sha256').update(bytes).digest('hex');
-    if (hash !== upload.sha256) throw new HttpError(409, 'REQUEST_FILE_CHANGED');
+    if (hash !== upload.sha256) throw new AppError(409, 'REQUEST_FILE_CHANGED');
     let tokenEstimate: number | undefined;
     if (type.kind === 'text') {
       let decoded: string;
@@ -177,14 +178,14 @@ export function assertRequestFiles(store: Pick<Store, 'db'>, files: readonly Req
   );
   for (const file of files) {
     const row = exists.get(file.hash);
-    if (!row) throw new HttpError(400, 'REQUEST_FILE_MISSING');
-    if (row.size !== file.bytes) throw new HttpError(409, 'REQUEST_FILE_CHANGED');
+    if (!row) throw new AppError(400, 'REQUEST_FILE_MISSING');
+    if (row.size !== file.bytes) throw new AppError(409, 'REQUEST_FILE_CHANGED');
   }
 }
 
 export function readRequestFile(store: Pick<Store, 'db'>, file: RequestFile): ResolvedRequestFile {
   const blob = readRequestFileBlob(store.db, file.hash);
-  if (blob.bytes.length !== file.bytes) throw new HttpError(409, 'REQUEST_FILE_CHANGED');
+  if (blob.bytes.length !== file.bytes) throw new AppError(409, 'REQUEST_FILE_CHANGED');
   return { mime: file.mime, base64: blob.bytes.toString('base64') };
 }
 

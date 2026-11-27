@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { HttpError } from '../server/request-validation.js';
+import { AppError } from '../server/app-errors.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
 import { decodeRPack, encodeRPack } from '../server/compat/risu/rpack.js';
 
@@ -21,7 +21,7 @@ const file = (module: unknown, assets: Buffer[] = []) =>
 const expectInvalid = (bytes: Buffer) => {
   expect(() => readEmbeddedRisuModule(bytes)).toThrowError(
     expect.objectContaining({
-      constructor: HttpError,
+      constructor: AppError,
       statusCode: 400,
       message: 'RISU_IMPORT_INVALID_FILE',
     })

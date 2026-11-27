@@ -4,10 +4,11 @@ import {
   RISU_IMPORT_MAX_ZIP_MEMBERS,
   risuImportExpandedLimit,
 } from '../core/risu-import.js';
-import { HttpError } from './request-validation.js';
+
+import { AppError } from './app-errors.js';
 
 export const invalidCard = (): never => {
-  throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
 };
 export type CardRangeReader = (offset: number, length: number) => Buffer;
 

@@ -99,7 +99,7 @@ test('retained original/current/previous versions can be saved through the ordin
       text: original.text,
       expectedRevision: versions.currentRevision,
     })
-  ).toThrow('Source revision conflict');
+  ).toThrow('REVISION_CONFLICT');
   expect(sourceVersions(store, original.id).versions.map((item) => item.text)).toEqual([
     'Saved version 3',
     'Saved version 4',
@@ -288,7 +288,7 @@ test('CAS manual edit fences a late owned job while preserving prior execution e
       expectedRevision: job.revision!,
       expectedSourceHash: s.hash,
     })
-  ).toThrow('conflict');
+  ).toThrow('REVISION_CONFLICT');
   const forced = store.retranslate(s.id);
   expect(forced.id).not.toBe(job.id);
   expect(forced.previousResult).toMatchObject({ jobId: manual.id, result: { text: 'Manual' } });
@@ -331,7 +331,9 @@ test('source editing invalidates jobs and preserves both old and new snapshot hi
     )
   ).toThrow('no longer owns candidate');
   expect(store.detail(s.chatId).jobs.some((j) => j.id === job.id)).toBe(false);
-  expect(() => store.editSource(s.id, { text: 'bad', expectedRevision: 0 })).toThrow('conflict');
+  expect(() => store.editSource(s.id, { text: 'bad', expectedRevision: 0 })).toThrow(
+    'REVISION_CONFLICT'
+  );
   expect(store.editSource(s.id, { text: edited.text, expectedRevision: 1 }).editRevision).toBe(1);
   expect(store.requestTranslation(s.id).sourceHash).toBe(edited.hash);
 });
@@ -387,7 +389,7 @@ test('edited source exposes hidden slot CAS and rejects a stale translation edit
       expectedRevision: old.revision!,
       expectedSourceHash: s.hash,
     })
-  ).toThrow('conflict');
+  ).toThrow('REVISION_CONFLICT');
   const saved = store.editTranslation(s.id, {
     text: 'Current',
     expectedRevision: edited.translationRevision!,

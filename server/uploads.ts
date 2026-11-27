@@ -13,6 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 import { ownedImportStagingRoot } from './import-preparation.js';
 
@@ -24,7 +25,7 @@ export function uploadDirectory(dbPath: string): string {
   return join(dirname(resolve(dbPath)), 'uploads');
 }
 function uploadPath(dbPath: string, id: string): string {
-  if (!ID.test(id)) throw new HttpError(400, 'UPLOAD_NOT_FOUND');
+  if (!ID.test(id)) throw new AppError(400, 'UPLOAD_NOT_FOUND');
   return join(uploadDirectory(dbPath), `${id}.bin`);
 }
 
@@ -65,7 +66,7 @@ export async function storeUpload(
       stream.on('data', (chunk: Buffer) => {
         bytes += chunk.length;
         if (bytes > limit) {
-          abort(new HttpError(413, 'UPLOAD_TOO_LARGE'));
+          abort(new AppError(413, 'UPLOAD_TOO_LARGE', { maxBytes: limit }));
           return;
         }
         digest.update(chunk);
@@ -84,15 +85,15 @@ export async function storeUpload(
   }
   if (!bytes) {
     deleteUpload(dbPath, uploadId);
-    throw new HttpError(400, 'UPLOAD_EMPTY');
+    throw new AppError(400, 'UPLOAD_EMPTY');
   }
   return { uploadId, bytes, sha256: digest.digest('hex') };
 }
 
 export function readUpload(dbPath: string, id: string, limit = UPLOAD_MAX_BYTES): Buffer {
   const path = uploadPath(dbPath, id);
-  if (!existsSync(path)) throw new HttpError(404, 'UPLOAD_NOT_FOUND');
-  if (statSync(path).size > limit) throw new HttpError(413, 'UPLOAD_TOO_LARGE');
+  if (!existsSync(path)) throw new AppError(404, 'UPLOAD_NOT_FOUND');
+  if (statSync(path).size > limit) throw new AppError(413, 'UPLOAD_TOO_LARGE', { maxBytes: limit });
   return readFileSync(path);
 }
 
@@ -113,7 +114,7 @@ export function uploadRoutes(app: FastifyInstance, dbPath: string) {
   );
   app.post('/api/uploads', { bodyLimit: UPLOAD_MAX_BYTES }, async (request) => {
     if (request.headers['content-type'] !== 'application/octet-stream')
-      throw new HttpError(415, 'UPLOAD_CONTENT_TYPE');
+      throw new HttpError(415, 'Expected application/octet-stream');
     pruneUploads(dbPath);
     return storeUpload(dbPath, request.raw);
   });

@@ -174,7 +174,7 @@ test('replacement completion rejects edits to the retained head and does not ove
   store.startRun(retry.id);
   editSource(store, selected.source.id, { expectedRevision: 0, text: 'User correction' });
   expect(() => store.completeRun(retry.id, 'New response', selected.run.usage!)).toThrow(
-    /revision changed/
+    'REVISION_CONFLICT'
   );
   expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
   expect(store.source(selected.source.id).text).toBe('User correction');

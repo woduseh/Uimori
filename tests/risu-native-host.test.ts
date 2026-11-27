@@ -272,7 +272,7 @@ test('native button message merging keeps each user attachment on its identified
 
 test.each([
   ['role change', "setChatRole(id, 0, 'char')", 'RISU_NATIVE_REQUEST_IMAGE_IDENTITY'],
-  ['overfull merged scene', 'removeChat(id, 1)', '참고 이미지는 한 장면에 8장까지 묶을 수 있어요.'],
+  ['overfull merged scene', 'removeChat(id, 1)', 'RISU_NATIVE_ACTION_IMAGES_TOO_MANY'],
 ])('native button rejects %s without changing head or variables', async (_, code, error) => {
   const { store, chatId } = await setup(
     false,
@@ -807,9 +807,18 @@ end
   ).rejects.toThrow('RISU_NATIVE_ACTION_REPLAY_CONFLICT');
   await expect(
     applyNativeRisuAction(store, chatId, head!, { ...body, idempotencyKey: 'stale-form' })
-  ).rejects.toThrow('RISU_NATIVE_ACTION_STATE_CHANGED');
+  ).rejects.toThrow('REVISION_CONFLICT');
   expect(store.chat(chatId).headRevision).toBe(head);
   expect(readChatVariables(store, chatId).values.formCount).toBe('1');
+  const fromRewoundScreen = {
+    ...actionBody(store, chatId, 'survey', 'rewound-form'),
+    kind: 'form',
+    data,
+  };
+  store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(first, chatId);
+  await expect(applyNativeRisuAction(store, chatId, head!, fromRewoundScreen)).rejects.toThrow(
+    'REVISION_CONFLICT'
+  );
 });
 
 test('manual trigger IDs reach CBS and are part of the receipt', async () => {

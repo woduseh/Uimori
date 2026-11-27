@@ -1,16 +1,16 @@
 import { pruneUnusedData } from './unused-data.js';
-import { HttpError, fields, record } from './request-validation.js';
+import { fields, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 export function deleteChatAsset(store: Store, chatId: string, assetId: string, value: unknown) {
   fields(record(value), []);
   return store.transaction(() => {
     store.chat(chatId);
     const row = store.db.prepare('SELECT chat_id FROM assets WHERE id=?').get(assetId);
-    if (!row || row.chat_id !== chatId)
-      throw new HttpError(404, '이 이야기의 이미지를 찾지 못했어요.');
-    store.product.assertAvailable('asset', assetId);
+    if (!row || row.chat_id !== chatId) throw new AppError(404, 'IMAGE_NOT_FOUND');
+    if (store.product.isHidden('asset', assetId)) throw new AppError(404, 'IMAGE_NOT_FOUND');
     store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('asset',?)").run(assetId);
     store.event(chatId, 'asset.deleted', assetId);
     pruneUnusedData(store.db);

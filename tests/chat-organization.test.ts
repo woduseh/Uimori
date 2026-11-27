@@ -215,13 +215,13 @@ test('cross-bot moves, stale edits and invalid defaults fail without losing orga
     'Folder not found'
   );
   expect(() => org.move(chat.id, { expectedRevision: 9, folderId: null })).toThrow(
-    'revision conflict'
+    'REVISION_CONFLICT'
   );
   expect(() => org.updateFolder(bot.id, a.id, { expectedRevision: 9, title: 'Stale' })).toThrow(
-    'revision conflict'
+    'REVISION_CONFLICT'
   );
   expect(() => org.deleteFolder(bot.id, a.id, { expectedRevision: 9 })).toThrow(
-    'revision conflict'
+    'REVISION_CONFLICT'
   );
   expect(() =>
     org.createFolder(bot.id, {

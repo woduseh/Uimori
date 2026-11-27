@@ -45,8 +45,6 @@ export async function prepareRequestImages(
     blobs = new Map<string, StoredImage>();
   for (const upload of uploads) {
     const bytes = readUpload(store.path, upload.uploadId, IMAGE_INPUT_MAX_BYTES);
-    if (createHash('sha256').update(bytes).digest('hex') !== upload.sha256)
-      throw new AppError(409, 'REQUEST_IMAGE_CHANGED');
     await withImageProcessing(async () => {
       try {
         const source = sharp(bytes, {

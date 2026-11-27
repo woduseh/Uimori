@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { HttpError, record } from './request-validation.js';
 import { readRunStatus } from './run-projections.js';
+import { AppError } from './app-errors.js';
 
 export type NativeInteraction = {
   id: string;
@@ -101,9 +102,9 @@ export function nativeInteractionRoutes(app: FastifyInstance, store: Store) {
     async (request) => {
       const entry = entries(store).get(request.params.interactionId);
       if (!entry || entry.chatId !== request.params.id)
-        throw new HttpError(404, 'RISU_NATIVE_INTERACTION_EXPIRED');
+        throw new AppError(404, 'RISU_NATIVE_INTERACTION_EXPIRED');
       if (readRunStatus(store, entry.runId) !== 'running')
-        throw new HttpError(409, 'RISU_NATIVE_ACTION_INACTIVE');
+        throw new AppError(409, 'RISU_NATIVE_INTERACTION_EXPIRED');
       const body = record(request.body),
         answer = body.answer;
       if (

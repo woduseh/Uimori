@@ -4,11 +4,12 @@ import {
   RISU_IMPORT_MAX_ENTRY_BYTES,
   RISU_IMPORT_MAX_JSON_BYTES,
 } from '../core/risu-import.js';
-import { HttpError } from './request-validation.js';
+
 import { decodeRPack } from './compat/risu/rpack.js';
+import { AppError } from './app-errors.js';
 
 const invalid = (): never => {
-  throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
 };
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();

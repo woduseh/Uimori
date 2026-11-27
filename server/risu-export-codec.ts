@@ -10,14 +10,15 @@ import {
   risuImportExpandedLimit,
 } from '../core/risu-import.js';
 import { encodeRPack } from './compat/risu/rpack.js';
-import { HttpError } from './request-validation.js';
+
+import { AppError } from './app-errors.js';
 
 export const exportLimit = (size: number, maximum = RISU_IMPORT_MAX_UPLOAD_BYTES) => {
-  if (size > maximum) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+  if (size > maximum) throw new AppError(413, 'RISU_EXPORT_TOO_LARGE');
 };
 export function exportJson(value: unknown): Buffer {
   const bytes = Buffer.from(JSON.stringify(value));
-  if (bytes.length > RISU_IMPORT_MAX_JSON_BYTES) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+  if (bytes.length > RISU_IMPORT_MAX_JSON_BYTES) throw new AppError(413, 'RISU_EXPORT_TOO_LARGE');
   return bytes;
 }
 export function assertExportPath(path: string): void {
@@ -28,10 +29,10 @@ export function assertExportPath(path: string): void {
     path.startsWith('/') ||
     path.split('/').some((part) => !part || part === '.' || part === '..')
   )
-    throw new HttpError(409, 'RISU_EXPORT_ASSET_PATH');
+    throw new AppError(409, 'RISU_EXPORT_ASSET_PATH');
 }
 export function writeRisuZip(files: Map<string, Buffer>): Buffer {
-  if (files.size > RISU_IMPORT_MAX_ZIP_MEMBERS) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+  if (files.size > RISU_IMPORT_MAX_ZIP_MEMBERS) throw new AppError(413, 'RISU_EXPORT_TOO_LARGE');
   const storedSize = [...files].reduce(
     (size, [name, bytes]) => size + 76 + Buffer.byteLength(name) * 2 + bytes.length,
     22
@@ -72,7 +73,7 @@ export function writeRisuZip(files: Map<string, Buffer>): Buffer {
     entry.stored = true;
     size += increase;
   }
-  if (expanded > risuImportExpandedLimit(size)) throw new HttpError(413, 'RISU_EXPORT_TOO_LARGE');
+  if (expanded > risuImportExpandedLimit(size)) throw new AppError(413, 'RISU_EXPORT_TOO_LARGE');
   const local: Buffer[] = [],
     central: Buffer[] = [];
   let offset = 0;

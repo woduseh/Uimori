@@ -9,8 +9,7 @@ import { readRisuPresetFile } from '../server/risu-preset-file.js';
 const options = {
   maxBytes: 64,
   extensions: /\.json$/iu,
-  invalid: 'SAMPLE_INVALID_FILE',
-  tooLarge: 'SAMPLE_TOO_LARGE',
+  invalid: 'RISU_IMPORT_INVALID_FILE' as const,
 };
 const payload = Buffer.from('{"name":"sample"}');
 const inline = (bytes = payload, name = 'sample.json') => ({
@@ -98,7 +97,7 @@ test('the body must re-encode to exactly the bytes that were sent', () => {
 
 test('an oversized body answers with the caller limit code, whether or not it decodes', () => {
   for (const size of [options.maxBytes + 1, options.maxBytes + 3])
-    refuses(inline(Buffer.alloc(size, 0x61)), 413, options.tooLarge);
+    refuses(inline(Buffer.alloc(size, 0x61)), 413, 'RISU_IMPORT_TOO_LARGE');
   expect(
     readImportEnvelope(inline(Buffer.alloc(options.maxBytes, 0x61)), options).bytes
   ).toHaveLength(options.maxBytes);

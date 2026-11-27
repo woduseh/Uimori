@@ -59,7 +59,7 @@ async function presentation(error: Error) {
 test('a Risu stage failure reaches the reader as its code and is logged', async () => {
   const { response, lines } = await presentation(new Error('RISU_NATIVE_TIMEOUT'));
   expect(response.statusCode).toBe(500);
-  expect(response.json()).toEqual({ error: 'RISU_NATIVE_TIMEOUT' });
+  expect(response.json()).toEqual({ code: 'RISU_NATIVE_TIMEOUT' });
   expect(lines).toContain(
     'REQUEST_FAILED GET /api/chats/:id/sources/:sourceId/presentation RISU_NATIVE_TIMEOUT\n'
   );

@@ -31,6 +31,15 @@ export function storedModelRequired(error: unknown): string | undefined {
     : undefined;
 }
 
+export function appErrorFrom(statusCode: number, code: AppErrorCode, params?: unknown): AppError {
+  const create = AppError as unknown as new (
+    statusCode: number,
+    code: AppErrorCode,
+    params?: unknown
+  ) => AppError;
+  return new create(statusCode, code, params);
+}
+
 export class HelperToolError extends HttpError {
   readonly code: string;
   constructor(statusCode: number, code: string, detail?: string) {

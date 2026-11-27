@@ -1,6 +1,7 @@
 import { HttpError } from './request-validation.js';
 import { lstatSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { AppError } from './app-errors.js';
 
 let preparation: symbol | undefined;
 
@@ -36,7 +37,7 @@ export function checkImportPreparation(signal?: AbortSignal): void {
 
 export function acquireImportPreparation(signal?: AbortSignal): () => void {
   checkImportPreparation(signal);
-  if (preparation) throw new HttpError(409, 'RISU_IMPORT_BUSY');
+  if (preparation) throw new AppError(409, 'RISU_IMPORT_BUSY');
   const owner = Symbol('import preparation');
   preparation = owner;
   return () => {

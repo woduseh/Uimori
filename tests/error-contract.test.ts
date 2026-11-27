@@ -27,6 +27,11 @@ const parameterNames = {
   MODEL_UNAVAILABLE: { role: true },
   MANUSCRIPT_TRANSLATION_MISSING: { scenes: true, total: true },
   ILLUSTRATION_REFERENCES_TOO_MANY: { limit: true },
+  RISU_IMPORT_TOO_LARGE: { maxBytes: true },
+  RISU_IMPORT_IMAGES_TOO_LARGE: { maxBytes: true },
+  UPLOAD_TOO_LARGE: { maxBytes: true },
+  RISU_NATIVE_ACTION_IMAGES_TOO_MANY: { limit: true },
+  PACKAGE_START_TEXT_TOO_LONG: { limit: true },
 } satisfies { [C in ParameterizedCode]: Record<keyof AppErrorParams[C], true> };
 
 test('every catalogued code has a message in every locale whose arguments are its params', () => {

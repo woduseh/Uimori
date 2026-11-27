@@ -8,6 +8,7 @@ import {
 } from '../core/lore-context.js';
 import { HttpError, fields, number, record } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 type Row = { id: number; revision: number; body: string };
 
@@ -50,7 +51,7 @@ export function updateLoreContextDefaults(store: Store, value: unknown): LoreCon
   return store.transaction(() => {
     const prior = loreContextDefaults(store);
     if (prior.revision !== number(expectedRevision, 'lore context defaults revision'))
-      throw new HttpError(409, '로어 컨텍스트 기본값이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const revision = prior.revision + 1;
     store.db
       .prepare('UPDATE lore_context_defaults SET revision=?,body=? WHERE id=1')

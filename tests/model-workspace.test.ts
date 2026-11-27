@@ -424,7 +424,7 @@ test('pin writes reject stale revisions, invalid references and non-main prompts
   }
   pin(store, chat.id, { mainPromptPresetId: preset.id });
   expect(() => pin(store, chat.id, { mainModel: { id: local.id } }, before.revision)).toThrow(
-    /revision conflict/
+    'REVISION_CONFLICT'
   );
   expect(store.product.profile(chat.id).pinned).toEqual({ mainPromptPresetId: preset.id });
   store.db
@@ -432,7 +432,9 @@ test('pin writes reject stale revisions, invalid references and non-main prompts
       "UPDATE provider_settings SET body=json_set(body,'$.enabled',json('false')) WHERE kind='model' AND id=?"
     )
     .run(local.id);
-  expect(() => pin(store, chat.id, { mainModel: { id: local.id } })).toThrow(/비활성/);
+  expect(() => pin(store, chat.id, { mainModel: { id: local.id } })).toThrow(
+    'MODEL_SELECTION_UNAVAILABLE'
+  );
 });
 
 test('deleted or disabled pins block new main work while profile repair and global translation remain available', () => {

@@ -98,7 +98,7 @@ test('a terminal receipt for a deleted copy releases its retained key', async ()
 test('a definite rejection clears only its own pending identity', async () => {
   const { values } = storageFixture();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response(JSON.stringify({ error: 'Revision conflict' }), { status: 409 })
+    new Response(JSON.stringify({ code: 'REVISION_CONFLICT' }), { status: 409 })
   );
   await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({ status: 409 });
   expect(values.has(key)).toBe(false);

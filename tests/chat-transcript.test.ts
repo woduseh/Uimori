@@ -629,7 +629,7 @@ test('the transcript routes download the file and create the chat over HTTP', as
       payload: JSON.stringify({ transcript: { format: 'other' }, idempotencyKey: 'http-2' }),
     });
     expect(rejected.statusCode).toBe(400);
-    expect(rejected.json().error).toBe('CHAT_TRANSCRIPT_INVALID_FORMAT');
+    expect(rejected.json()).toEqual({ code: 'CHAT_TRANSCRIPT_INVALID' });
   } finally {
     await app.close();
     await rm(directory, { recursive: true, force: true });

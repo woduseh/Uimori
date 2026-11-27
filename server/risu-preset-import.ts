@@ -10,10 +10,11 @@ import type { PromptPreset } from '../core/product.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import type { RisuPresetImportPreview, RisuPresetImportResult } from '../core/risu-preset.js';
 import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
 import { readRisuPresetFile } from './risu-preset-file.js';
 import { importRisuPresetProgram } from './risu-preset-program.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 function analyze(value: unknown) {
   const input = readRisuPresetFile(value);
@@ -64,10 +65,10 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
   fields(body, ['source', 'digest', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   const { file, transfer, preview } = analyze(body.source);
-  if (body.digest !== preview.digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (typeof body.allowPartial !== 'boolean') throw new HttpError(400, 'RISU_PRESET_INVALID_FILE');
+  if (body.digest !== preview.digest) throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
   if (!body.allowPartial && preview.findings.some((finding) => finding.level === 'unsupported'))
-    throw new HttpError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
+    throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
   return store.transaction(() => {
     const receipt = applyNativeTransfer(store, {
       file,

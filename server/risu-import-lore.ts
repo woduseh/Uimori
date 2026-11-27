@@ -1,6 +1,6 @@
 import type { RisuContent } from '../core/risu-content.js';
 import { RISU_IMPORT_MAX_LORE_ENTRIES, type RisuImportPreview } from '../core/risu-import.js';
-import { HttpError, record } from './request-validation.js';
+import { record } from './request-validation.js';
 import {
   convertCharbook,
   interpretLoreDecorators,
@@ -9,6 +9,7 @@ import {
 } from './compat/risu/lorebook.js';
 import { object, string, type RisuCard, type RisuCardLoreEntry } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
+import { AppError } from './app-errors.js';
 
 type DecoratorNotice = 'position' | 'activation';
 const DECORATOR_NOTICES = {
@@ -154,7 +155,7 @@ export function importRisuLore({
   const book = object(card.character_book);
   const entries = book.entries === undefined ? [] : book.entries;
   if (!Array.isArray(entries) || entries.length > RISU_IMPORT_MAX_LORE_ENTRIES)
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   const preview: RisuImportPreview['lore'] = [];
   const lore: RisuContent['lore'] = [];
   const read = entries.map((raw) => record(raw) as RisuCardLoreEntry);

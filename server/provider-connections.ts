@@ -3,6 +3,7 @@ import { PROVIDER_PROTOCOLS, validateProviderEndpoint, type Connection } from '.
 import { isVertexFileReference, validCredentialRef } from '../core/credential-reference.js';
 import { fields, record, choice, number, text, boolean, HttpError } from './request-validation.js';
 import { apiKey } from './credentials.js';
+import { AppError } from './app-errors.js';
 import { prepareVertexAccount, validateVertexCredential } from './vertex-credentials.js';
 import type { ProductStore } from './product-store.js';
 import { sameVertexProject } from '../core/vertex-location.js';
@@ -26,12 +27,13 @@ function prepareConnection(product: ProductStore, value: unknown, id?: string) {
   try {
     endpoint = validateProviderEndpoint(protocol, rawEndpoint);
   } catch {
-    throw new HttpError(400, '이 프로토콜에 맞는 API 기본 주소를 입력해 주세요.');
+    throw new AppError(400, 'PROVIDER_ENDPOINT_INVALID');
   }
 
-  const prior = id ? product.get<Connection>('connection', id) : undefined;
   const expectedRevision = id ? number(body.expectedRevision, 'revision') : undefined;
-  if (prior && prior.revision !== expectedRevision) throw new HttpError(409, 'Revision conflict');
+  const prior = id
+    ? product.editedSetting<Connection>('connection', id, expectedRevision!)
+    : undefined;
   const writes: { reference: string; value: string }[] = [];
   const keyReference = (field: 'apiKey', previous: unknown): string | undefined => {
     if (Object.hasOwn(body, field) && body[field] !== '') {
@@ -79,13 +81,13 @@ function prepareConnection(product: ProductStore, value: unknown, id?: string) {
     catalogError: sameConnection ? prior.catalogError : null,
     catalogUpdatedAt: sameConnection ? (prior.catalogUpdatedAt ?? null) : null,
   };
-  return { value: connection, expectedRevision, writes };
+  return { value: connection, expectedRevision, writes, prior };
 }
 
 export function saveConnection(product: ProductStore, value: unknown, id?: string) {
   return product.store.transaction(() => {
-    const previous = id ? product.get<Connection>('connection', id) : undefined;
     const prepared = prepareConnection(product, value, id);
+    const previous = prepared.prior;
     const pending = prepared.writes.find(
       (write) => write.reference === prepared.value.credentialRef
     );

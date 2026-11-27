@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { managementImpact } from '../server/provider-management.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
+import { ProviderConnectionTestStore } from '../server/provider-connection-test.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 
 const owned: { directory: string; store: Store }[] = [];
@@ -79,19 +81,42 @@ test('model preparation is read only and create/update enforce the same CAS cont
   const updated = p.model(modelBody(c, { expectedRevision: 1, enabled: false }), m.id);
   expect(updated).toMatchObject(prepared.value);
   expect(() => p.prepareModel(modelBody(c, { expectedRevision: 1 }), m.id)).toThrow(
-    'Revision conflict'
+    'REVISION_CONFLICT'
   );
-  expect(() => p.model(modelBody(c, { expectedRevision: 1 }), m.id)).toThrow('Revision conflict');
+  expect(() => p.model(modelBody(c, { expectedRevision: 1 }), m.id)).toThrow('REVISION_CONFLICT');
   expect(() => p.prepareModel(modelBody(c), m.id)).toThrow('Invalid revision');
   expect(() => p.connection(connectionBody(), c.id)).toThrow('Invalid revision');
   p.connection(editConnection(c, { title: 'Renamed' }), c.id);
-  expect(() => p.connection(editConnection(c), c.id)).toThrow('Revision conflict');
+  expect(() => p.connection(editConnection(c), c.id)).toThrow('REVISION_CONFLICT');
   expect(p.get<ModelPreset>('model', m.id)).toEqual(updated);
   expect(() => p.get<ModelPreset>('model', m.id, 1)).toThrow('Setting not found');
   expect(count(s)).toBe(2);
   expect(
     s.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind IN ('model','connection')").get()
   ).toEqual({ n: 0 });
+});
+
+test('a screen that still shows a deleted connection or model gets a revision conflict', () => {
+  const s = database();
+  const p = s.product;
+  const c = p.connection(connectionBody()) as Connection;
+  const m = p.model(modelBody(c)) as ModelPreset;
+  const other = p.model(modelBody(c, { title: 'Other' })) as ModelPreset;
+  deleteLibraryItem(s, 'model', m.id, { expectedRevision: m.revision });
+  expect(() => p.model(modelBody(c, { expectedRevision: m.revision }), m.id)).toThrow(
+    'REVISION_CONFLICT'
+  );
+  expect(() =>
+    p.moveModel(m.id, { targetId: other.id, position: 'after', expectedOrder: [m.id, other.id] })
+  ).toThrow('REVISION_CONFLICT');
+  expect(() =>
+    new ProviderConnectionTestStore(s).create(m.id, {
+      expectedRevision: m.revision,
+      idempotencyKey: 'stale-test',
+    })
+  ).toThrow('REVISION_CONFLICT');
+  deleteLibraryItem(s, 'connection', c.id, { expectedRevision: c.revision });
+  expect(() => p.connection(editConnection(c), c.id)).toThrow('REVISION_CONFLICT');
 });
 
 test('catalog/error retention uses credential authority and old connection execution is revoked', () => {
@@ -122,7 +147,7 @@ test('catalog/error retention uses credential authority and old connection execu
     c.id
   ) as Connection;
   expect(changed).toMatchObject({ catalog: [], catalogUpdatedAt: null, catalogError: null });
-  expect(() => p.authorize(cached)).toThrow('authority changed');
+  expect(() => p.authorize(cached)).toThrow('PROVIDER_CONNECTION_UNAVAILABLE');
   expect(p.get('connection', cached.id)).toEqual(changed);
   expect(() => p.get('connection', cached.id, cached.revision)).toThrow('Setting not found');
   expect(cached).toMatchObject({
@@ -130,7 +155,7 @@ test('catalog/error retention uses credential authority and old connection execu
     credentialRef: c.credentialRef,
   });
   const disabled = p.connection(editConnection(changed, { enabled: false }), c.id) as Connection;
-  expect(() => p.authorize(changed)).toThrow('disabled');
+  expect(() => p.authorize(changed)).toThrow('PROVIDER_CONNECTION_UNAVAILABLE');
   expect(disabled.enabled).toBe(false);
 });
 

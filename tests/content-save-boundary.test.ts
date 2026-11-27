@@ -139,7 +139,7 @@ test('revision conflicts preserve the saved version and incoming native data', (
   const saved = store.product.content(input()) as Content;
   const incoming = { ...input(), expectedRevision: saved.revision + 1 };
   const before = structuredClone(incoming);
-  expect(() => store.product.content(incoming, saved.id)).toThrow('Revision conflict');
+  expect(() => store.product.content(incoming, saved.id)).toThrow('REVISION_CONFLICT');
   expect(incoming).toEqual(before);
   expect(store.product.get<Content>('content', saved.id)).toEqual(saved);
 });

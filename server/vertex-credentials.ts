@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 import { CredentialStore } from './credentials.js';
 import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import {
   ProviderContractError,
   type ProviderExecutionOptions,
@@ -35,7 +36,7 @@ function accountValue(value: unknown): ServiceAccount {
     typeof account.private_key !== 'string' ||
     !account.private_key.includes('PRIVATE KEY')
   )
-    throw new HttpError(400, 'Google 서비스 계정 JSON을 확인해 주세요.');
+    throw new AppError(400, 'VERTEX_SERVICE_ACCOUNT_INVALID');
   return {
     type: 'service_account',
     project_id: account.project_id,
@@ -56,11 +57,10 @@ function validateAccount(
   account: ServiceAccount
 ) {
   if (connection.protocol !== 'vertex-gemini-v1')
-    throw new HttpError(400, 'Vertex 연결이 필요해요.');
+    throw new AppError(400, 'VERTEX_CONNECTION_REQUIRED');
   validateVertexEndpoint(connection.endpoint);
   const project = new URL(connection.endpoint).pathname.match(/\/projects\/([^/]+)\//u)?.[1];
-  if (account.project_id !== project)
-    throw new HttpError(400, '서비스 계정과 API 주소의 프로젝트가 달라요.');
+  if (account.project_id !== project) throw new AppError(400, 'VERTEX_PROJECT_MISMATCH');
 }
 
 export function inspectVertexAccount(value: unknown) {
@@ -84,7 +84,7 @@ export function validateVertexCredential(
   const reference = connection.credentialRef;
   if (!reference || !isVertexFileReference(reference)) return;
   const saved = pendingValue ?? keys.get(reference);
-  if (!saved) throw new HttpError(400, '서비스 계정을 먼저 등록해 주세요.');
+  if (!saved) throw new AppError(400, 'VERTEX_SERVICE_ACCOUNT_MISSING');
   validateAccount(connection, accountValue(JSON.parse(saved)));
 }
 
@@ -97,7 +97,7 @@ export class VertexCredentialStore {
 
   private account(reference: string): ServiceAccount {
     const saved = this.keys.get(reference);
-    if (!saved) throw new HttpError(400, '서비스 계정을 먼저 등록해 주세요.');
+    if (!saved) throw new AppError(400, 'VERTEX_SERVICE_ACCOUNT_MISSING');
     return accountValue(JSON.parse(saved));
   }
 

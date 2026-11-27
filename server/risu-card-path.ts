@@ -18,10 +18,11 @@ import {
   RISU_IMPORT_MAX_UPLOAD_BYTES,
 } from '../core/risu-import.js';
 import type { ImportEnvelope } from './import-envelope.js';
-import { HttpError, record } from './request-validation.js';
+import { record } from './request-validation.js';
 import { base64File, readCardJson } from './risu-card-json.js';
 import { readCardModule } from './risu-card-module.js';
 import { invalidCard, readCardZip, type CardRangeReader } from './risu-card-zip.js';
+import { AppError } from './app-errors.js';
 
 const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -155,14 +156,14 @@ function readCardPng(
   }
   if (!ended || cursor !== size) return invalidCard();
   if (document === undefined) {
-    if (hasV2Card) throw new HttpError(400, 'RISU_IMPORT_V3_REQUIRED');
+    if (hasV2Card) throw new AppError(400, 'RISU_IMPORT_V3_REQUIRED');
     return invalidCard();
   }
   if (statSync(coverPath).size > RISU_IMPORT_MAX_ENTRY_BYTES) return invalidCard();
   members.set('__png_cover__.png', () => readFileSync(coverPath));
   const outer = record(document),
     card = record(outer.data);
-  if (outer.spec !== 'chara_card_v3') throw new HttpError(400, 'RISU_IMPORT_V3_REQUIRED');
+  if (outer.spec !== 'chara_card_v3') throw new AppError(400, 'RISU_IMPORT_V3_REQUIRED');
   // https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#assets (2026-11-20):
   // only an undefined assets field MUST behave as [{ type: 'icon', uri: 'ccdefault:', name: 'main', ext: 'png' }].
   if (card.assets === undefined)
@@ -183,7 +184,8 @@ function readCardPng(
 export async function readCardPath(path: string, name: string, workspaceDirectory?: string) {
   const size = statSync(path).size;
   if (size < 2) return invalidCard();
-  if (size > RISU_IMPORT_MAX_UPLOAD_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
+  if (size > RISU_IMPORT_MAX_UPLOAD_BYTES)
+    throw new AppError(413, 'RISU_IMPORT_TOO_LARGE', { maxBytes: RISU_IMPORT_MAX_UPLOAD_BYTES });
   const hash = createHash('sha256');
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   const file = fileReader(path),
@@ -221,7 +223,7 @@ export async function readCardPath(path: string, name: string, workspaceDirector
     mkdirSync(workspaceDirectory, { recursive: true });
     const document = await readCardJson(path, workspaceDirectory, members);
     const outer = record(document);
-    if (outer.spec === 'chara_card_v2') throw new HttpError(400, 'RISU_IMPORT_V3_REQUIRED');
+    if (outer.spec === 'chara_card_v2') throw new AppError(400, 'RISU_IMPORT_V3_REQUIRED');
     return { envelope, members, document };
   } finally {
     file.close();

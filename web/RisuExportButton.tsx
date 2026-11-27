@@ -2,17 +2,7 @@ import { t, useI18n, message as retainedMessage } from './i18n.js';
 import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
-import { readErrorWire } from '#contracts';
 import { throwApiError } from './api.js';
-
-const exportMessages = (): Record<string, string> => ({
-  RISU_EXPORT_MODULE_UNSUPPORTED: retainedMessage('transfer.m087'),
-  RISU_EXPORT_MODULE_CONFLICT: retainedMessage('transfer.m088'),
-  RISU_EXPORT_ASSET_UNAVAILABLE: retainedMessage('transfer.m089'),
-  RISU_EXPORT_ASSET_PATH: retainedMessage('transfer.m090'),
-  RISU_EXPORT_TOO_LARGE: retainedMessage('transfer.m091'),
-  RISU_EXPORT_REVISION_CHANGED: retainedMessage('transfer.m092'),
-});
 
 export function RisuExportButton({
   kind,
@@ -65,19 +55,10 @@ export function RisuExportButton({
                 revision,
               { signal: request.signal }
             );
-            if (!response.ok) {
-              const wire = readErrorWire(
-                await response
-                  .clone()
-                  .json()
-                  .catch(() => null)
-              );
-              const known = wire.error === undefined ? undefined : exportMessages()[wire.error];
-              if (known !== undefined) throw new Error(known);
+            if (!response.ok)
               await throwApiError(response, 'GET', {
                 emptyMessage: retainedMessage('transfer.m096'),
               });
-            }
             const blob = await response.blob();
             request.signal.throwIfAborted();
             const header = response.headers.get('Content-Disposition') ?? '';

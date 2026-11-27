@@ -110,7 +110,7 @@ test('update moves only the location and keeps the credential and model catalog'
     })
   ).toMatchObject({ revision: saved.revision, previousLocation: 'us' });
   for (const [args, message] of [
-    [{ location: 'eu', expectedRevision: connection.revision }, 'Revision conflict'],
+    [{ location: 'eu', expectedRevision: connection.revision }, 'REVISION_CONFLICT'],
     [{ location: 'us_central1', expectedRevision: saved.revision }, 'INVALID_VERTEX_LOCATION'],
     [
       { connectionId: other.id, location: 'us', expectedRevision: other.revision },

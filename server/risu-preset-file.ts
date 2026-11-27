@@ -6,9 +6,10 @@ import { cardZip } from './character-card-file.js';
 import { hasControl, readImportEnvelope } from './import-envelope.js';
 import { HttpError, record } from './request-validation.js';
 import { decodeRPack } from './compat/risu/rpack.js';
+import { AppError } from './app-errors.js';
 
 const invalid = (): never => {
-  throw new HttpError(400, 'RISU_PRESET_INVALID_FILE');
+  throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
 };
 const scalarBytes = new Map([
   [0xca, 4],
@@ -34,7 +35,8 @@ const textFields = new Map([
 ]);
 
 function utf8(bytes: Buffer): string {
-  if (bytes.length > RISU_IMPORT_MAX_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
+  if (bytes.length > RISU_IMPORT_MAX_BYTES)
+    throw new AppError(413, 'RISU_IMPORT_TOO_LARGE', { maxBytes: RISU_IMPORT_MAX_BYTES });
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
@@ -146,7 +148,7 @@ function binaryPreset(bytes: Buffer, rpack: boolean): Record<string, unknown> {
     const envelope = record(unpackPresetData(expanded));
     if (envelope.type !== 'preset') return invalid();
     if (envelope.presetVersion !== 0 && envelope.presetVersion !== 2)
-      throw new HttpError(400, 'RISU_PRESET_VERSION_UNSUPPORTED');
+      throw new AppError(400, 'RISU_PRESET_VERSION_UNSUPPORTED');
     const encrypted = envelope.preset ?? envelope.pres;
     if (!(encrypted instanceof Uint8Array) || encrypted.length < 16) return invalid();
     const decipher = createDecipheriv(
@@ -178,7 +180,7 @@ function binaryPreset(bytes: Buffer, rpack: boolean): Record<string, unknown> {
   } catch (error) {
     if (error instanceof HttpError) throw error;
     if (error instanceof Error && 'code' in error && error.code === 'ERR_BUFFER_TOO_LARGE')
-      throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
+      throw new AppError(413, 'RISU_IMPORT_TOO_LARGE', { maxBytes: RISU_IMPORT_MAX_BYTES });
     return invalid();
   }
 }
@@ -198,7 +200,6 @@ export function readRisuPresetFile(value: unknown): {
     maxBytes: RISU_IMPORT_MAX_BYTES,
     extensions: /\.(?:risup(?:reset)?|zip|json|preset)$/iu,
     invalid: 'RISU_PRESET_INVALID_FILE',
-    tooLarge: 'RISU_IMPORT_TOO_LARGE',
     minBytes: 2,
   });
   if (/\.risup(?:reset)?$/iu.test(name))
@@ -233,7 +234,8 @@ export function readRisuPresetFile(value: unknown): {
     if (!read) return invalid();
     const bytes = read();
     expanded += bytes.length;
-    if (expanded > RISU_IMPORT_MAX_BYTES) throw new HttpError(413, 'RISU_IMPORT_TOO_LARGE');
+    if (expanded > RISU_IMPORT_MAX_BYTES)
+      throw new AppError(413, 'RISU_IMPORT_TOO_LARGE', { maxBytes: RISU_IMPORT_MAX_BYTES });
     preset[field] = utf8(bytes);
   }
   return { preset, source, hash, format: 'risu-preset-project-zip' };

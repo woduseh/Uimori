@@ -4,6 +4,7 @@ import { ownsPromptCombination } from '../core/prompt-combinations.js';
 import { promptControls, resolveEditablePromptValues } from '../core/risu-prompt.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 export function updatePromptCombination(
   store: Store,
@@ -14,22 +15,29 @@ export function updatePromptCombination(
   const b = record(value);
   fields(b, ['expectedRevision', 'sourceRevision', 'title', 'values']);
   return store.transaction(() => {
-    store.product.assertAvailable('prompt-combination', id);
-    const item = store.product.get<SavedPromptCombination>('prompt-combination', id);
-    if (!item.owner)
-      throw new HttpError(409, '소속을 확인할 수 없는 이전 조합이에요. 새 조합으로 저장해 주세요.');
+    const saved = <T>(kind: string, savedId: string): T => {
+      try {
+        store.product.assertAvailable(kind, savedId);
+        return store.product.get<T>(kind, savedId);
+      } catch (error) {
+        if (error instanceof HttpError && error.statusCode === 404)
+          throw new AppError(409, 'REVISION_CONFLICT');
+        throw error;
+      }
+    };
+    const item = saved<SavedPromptCombination>('prompt-combination', id);
+    if (!item.owner) throw new AppError(409, 'PROMPT_COMBINATION_OWNER_MISSING');
     const current =
       item.owner.kind === 'preset'
-        ? store.product.get<PromptPreset>('prompt-preset', item.owner.id)
+        ? saved<PromptPreset>('prompt-preset', item.owner.id)
         : getWorkspace()[item.role];
-    if (item.owner.kind === 'preset') store.product.assertAvailable('prompt-preset', item.owner.id);
     if ('role' in current && current.role !== item.role)
       throw new HttpError(409, 'Prompt role mismatch');
     if (!ownsPromptCombination(item, item.owner, item.role))
       throw new HttpError(409, 'Prompt role mismatch');
     const sourceRevision = 'revision' in current ? current.revision : getWorkspace().revision;
     if (sourceRevision !== number(b.sourceRevision, 'prompt revision'))
-      throw new HttpError(409, '프롬프트 저장본이 변경됐어요. 조합을 다시 확인해 주세요.');
+      throw new AppError(409, 'REVISION_CONFLICT');
     return store.product.saveInTransaction(
       'prompt-combination',
       {

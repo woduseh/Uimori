@@ -13,6 +13,7 @@ import type { Store, Source, Job } from './store.js';
 import { SOURCE_TEXT_MAX_CHARS, TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { SourceVersions } from '../core/source-versions.js';
 import { displayTranslationJob } from '../core/translation-display.js';
+import { AppError } from './app-errors.js';
 
 export function sourceVersions(store: Store, id: string): SourceVersions {
   const source = store.source(id);
@@ -96,7 +97,7 @@ export function editSource(store: Store, id: string, value: unknown): Source {
   const expected = number(b.expectedRevision, 'source revision', 0);
   return store.transaction(() => {
     const source = store.source(id);
-    if (source.editRevision !== expected) throw new HttpError(409, 'Source revision conflict');
+    if (source.editRevision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (source.text === content) return source;
     store.db
       .prepare('INSERT INTO source_edits VALUES(?,?,?,?,?)')
@@ -274,8 +275,7 @@ export function editTranslation(store: Store, id: string, value: unknown): Job {
   return store.transaction(() => {
     const source = store.source(id);
     const latest = latestTranslation(store, id);
-    if (shownTranslationChanged(store, id, expected))
-      throw new HttpError(409, 'Translation revision conflict');
+    if (shownTranslationChanged(store, id, expected)) throw new AppError(409, 'REVISION_CONFLICT');
     stopTranslations(store, id);
     invalidateTranslationImages(store, id);
     const jobId = randomUUID();

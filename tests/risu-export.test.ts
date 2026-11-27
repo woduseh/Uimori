@@ -6,7 +6,9 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { crc32 } from 'node:zlib';
 import { Store } from '../server/store.js';
 import type { Content, PromptPreset } from '../core/product.js';
-import { exportRisuContent, exportRisuPrompt } from '../server/risu-export.js';
+import Fastify from 'fastify';
+import { exportRisuContent, exportRisuPrompt, risuExportRoutes } from '../server/risu-export.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { exportJson, writeEmbeddedRisuModule, writeRisuZip } from '../server/risu-export-codec.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
 import { cardZip, readCharacterCard } from '../server/character-card-file.js';
@@ -371,6 +373,26 @@ test('export rejects missing or unsafe embedded assets without dropping them', (
     if (uri.includes('missing')) edited.package.nativeRisu.assets = [];
     expect(() => exportRisuContent(store.product, edited)).toThrow(/RISU_EXPORT_ASSET/);
   }
+});
+
+test('exporting from a screen that still shows a deleted resource answers a revision conflict', async () => {
+  const { store } = fixture(),
+    saved = imported(store);
+  const app = Fastify();
+  app.setErrorHandler((error, _request, reply) =>
+    reply
+      .code((error as { statusCode?: number }).statusCode ?? 500)
+      .send({ code: (error as { code?: string }).code ?? (error as Error).message })
+  );
+  risuExportRoutes(app, store);
+  deleteLibraryItem(store, 'content', saved.id, { expectedRevision: saved.revision });
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/content/${saved.id}/risu-export?expectedRevision=${saved.revision}`,
+  });
+  await app.close();
+  expect(response.statusCode).toBe(409);
+  expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });
 });
 
 test('export rejects changed stored image bytes before returning an archive', () => {

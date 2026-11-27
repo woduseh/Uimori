@@ -244,7 +244,7 @@ test('long requests share one bound for new runs and outline writing, without st
     payload: request,
   });
   expect(response.statusCode, response.body).toBe(409);
-  expect(response.json()).toEqual({ error: 'Settings revision conflict' });
+  expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });
   const outline = app.store.outline.apply(
     created.id,
     {

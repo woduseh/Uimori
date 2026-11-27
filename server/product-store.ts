@@ -209,6 +209,20 @@ export class ProductStore {
     if (!r) throw new HttpError(404, `${kind} revision not found`);
     return parse(r.body);
   }
+  editedSetting<T extends { revision: number }>(
+    kind: 'connection' | 'model',
+    id: string,
+    expected: number
+  ): T {
+    if (
+      this.isHidden(kind, id) ||
+      !this.db.prepare('SELECT 1 FROM provider_settings WHERE kind=? AND id=?').get(kind, id)
+    )
+      throw new AppError(409, 'REVISION_CONFLICT');
+    const current = this.get<T>(kind, id);
+    if (current.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    return current;
+  }
   save(kind: string, value: Row, id?: string, expected?: number) {
     return this.store.transaction(() => this.saveInTransaction(kind, value, id, expected));
   }
@@ -225,7 +239,7 @@ export class ProductStore {
       throw new HttpError(409, 'New library identity already exists');
     if (id) this.assertAvailable(kind, id);
     const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
-    if (prior && prior.revision !== expected) throw new HttpError(409, 'Revision conflict');
+    if (prior && prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     const result: Row & ContentRef = {
       ...value,
       id: id ?? createId ?? randomUUID(),
@@ -373,13 +387,13 @@ export class ProductStore {
             'prompt workspace revision'
           )
         )
-          throw new HttpError(409, 'Current prompts changed; refresh before saving');
+          throw new AppError(409, 'REVISION_CONFLICT');
       } else {
         this.assertAvailable('prompt-preset', owner.id);
         const preset = this.get<PromptPreset>('prompt-preset', owner.id);
         if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
         if (preset.revision !== number(b.expectedRevision, 'prompt revision'))
-          throw new HttpError(409, 'Prompt preset changed; refresh before saving');
+          throw new AppError(409, 'REVISION_CONFLICT');
         program = preset.program;
       }
       const values = resolveEditablePromptValues(program, record(b.values));
@@ -465,9 +479,9 @@ export class ProductStore {
       'expectedRevision',
     ]);
     const expectedRevision = id ? number(b.expectedRevision, 'revision') : undefined;
-    const current = id ? this.get<ModelPreset>('model', id) : undefined;
-    if (current && current.revision !== expectedRevision)
-      throw new HttpError(409, 'Revision conflict');
+    const current = id
+      ? this.editedSetting<ModelPreset>('model', id, expectedRevision!)
+      : undefined;
     const displayOrder = current ? current.displayOrder : b.displayOrder;
     const connectionId = text(b.connectionId, 'connection ID', 100);
     if (validationConnection && validationConnection.id !== connectionId)
@@ -530,7 +544,11 @@ export class ProductStore {
     const targetId = text(body.targetId, 'display order target', 100);
     const position = choice(body.position, ['before', 'after'], 'display order position');
     return this.store.transaction(() => {
-      this.assertAvailable(kind, id);
+      if (
+        this.isHidden(kind, id) ||
+        !this.db.prepare('SELECT 1 FROM provider_settings WHERE kind=? AND id=?').get(kind, id)
+      )
+        throw new AppError(409, 'REVISION_CONFLICT');
       const model = this.get<ModelPreset | Connection>(kind, id);
       const group = (this.all(kind) as (ModelPreset | Connection)[])
         .filter(
@@ -634,7 +652,7 @@ export class ProductStore {
     return this.store.transaction(() => {
       const prior = this.profile(chatId);
       if (prior.revision !== number(b.expectedRevision, 'profile revision'))
-        throw new HttpError(409, 'Profile revision conflict');
+        throw new AppError(409, 'REVISION_CONFLICT');
       const pinned = b.pinned === undefined ? prior.pinned : validatePinnedProfile(b.pinned);
       const authorNote =
         b.authorNote === undefined
@@ -747,7 +765,7 @@ export class ProductStore {
     if (collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect'))
       for (const agent of collaboration.agents) {
         const model = agent.model
-          ? this.modelSnapshot(agent.model.id, undefined, requiredRole !== 'inspect')
+          ? this.modelSnapshot(agent.model.id, 'agent', requiredRole !== 'inspect')
           : models.main;
         if (!model) throw new AppError(400, 'PROMPT_COLLABORATION_MODEL_REQUIRED');
         collaborationModels[agent.id] = structuredClone(model);
@@ -874,7 +892,7 @@ export class ProductStore {
       current.protocol !== connection.protocol ||
       current.credentialRef !== connection.credentialRef
     )
-      throw new HttpError(403, 'Connection disabled or authority changed');
+      throw new AppError(403, 'PROVIDER_CONNECTION_UNAVAILABLE');
     return structuredClone(connection);
   }
   startAttempt(

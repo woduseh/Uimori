@@ -25,6 +25,7 @@ import { analyzeNativeRisuImport } from './risu-native-import.js';
 import type { Store } from './store.js';
 import { createPackageStart } from './package-start.js';
 import type { Content } from '../core/product.js';
+import { AppError } from './app-errors.js';
 
 function analyze(
   value: unknown,
@@ -48,7 +49,7 @@ export function discardRisuImport(dbPath: string, value: unknown) {
   fields(body, ['preparedId', 'uploadId']);
   for (const id of [body.preparedId, body.uploadId]) {
     if (id !== undefined && (typeof id !== 'string' || !/^[a-f0-9]{32}$/u.test(id)))
-      throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+      throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   }
   if (body.preparedId !== undefined) discardPreparedRisuImport(dbPath, body.preparedId);
   if (body.uploadId !== undefined) {
@@ -76,9 +77,9 @@ export async function applyRisuImport(
     'idempotencyKey',
   ]);
   if (body.createChat !== undefined && typeof body.createChat !== 'boolean')
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   if (body.preparedId !== undefined && typeof body.preparedId !== 'string')
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   const operationKey = `risu-result:${requestKey}`;
   const commandDigest = bundleDigest({
@@ -107,11 +108,11 @@ export async function applyRisuImport(
   const { file: originalFile, preview } =
     staged ?? analyze(body.source, body.kind as RisuImportKind | undefined, readStaged);
   if (staged && body.kind !== undefined && body.kind !== preview.kind)
-    throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (body.digest !== preview.digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (typeof body.allowPartial !== 'boolean') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+  if (body.digest !== preview.digest) throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
-    throw new HttpError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
+    throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
   if (body.imageHandoffIds !== undefined) {
     const policy = originalFile.contents[0].source.package!.imageHandoff;
     if (

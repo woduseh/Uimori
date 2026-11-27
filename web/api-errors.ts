@@ -13,13 +13,6 @@ import {
   type UiLocale,
 } from './i18n.js';
 import ko from './locales/ko.js';
-import { requestImageErrors } from './request-image-errors.js';
-import { requestFileErrors } from './request-file-errors.js';
-import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import {
-  RISU_IMPORT_MAX_UPLOAD_BYTES,
-  RISU_IMPORT_MAX_PREPARED_BYTES,
-} from '../core/risu-import.js';
 
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
@@ -97,7 +90,6 @@ export const appErrorMessages = {
   IMAGE_SELECTION_ROLE_REQUIRED: 'errors.IMAGE_SELECTION_ROLE_REQUIRED',
   REQUEST_IMAGE_COUNT_INVALID: 'errors.REQUEST_IMAGE_COUNT_INVALID',
   REQUEST_IMAGE_UPLOAD_INVALID: 'errors.REQUEST_IMAGE_UPLOAD_INVALID',
-  REQUEST_IMAGE_CHANGED: 'errors.REQUEST_IMAGE_CHANGED',
   REQUEST_IMAGE_ANIMATED: 'errors.REQUEST_IMAGE_ANIMATED',
   REQUEST_IMAGE_FORMAT_INVALID: 'errors.REQUEST_IMAGE_FORMAT_INVALID',
   REQUEST_IMAGE_DIMENSIONS_INVALID: 'errors.REQUEST_IMAGE_DIMENSIONS_INVALID',
@@ -182,6 +174,59 @@ export const appErrorMessages = {
   HELPER_COMPACTION_CODEX_NATIVE: 'errors.HELPER_COMPACTION_CODEX_NATIVE',
   HELPER_SUMMARY_TOO_LARGE: 'errors.HELPER_SUMMARY_TOO_LARGE',
   HELPER_SUMMARY_EMPTY: 'errors.HELPER_SUMMARY_EMPTY',
+  RISU_IMPORT_INVALID_FILE: 'errors.RISU_IMPORT_INVALID_FILE',
+  RISU_IMPORT_TOO_LARGE: 'errors.RISU_IMPORT_TOO_LARGE',
+  RISU_IMPORT_IMAGES_TOO_LARGE: 'errors.RISU_IMPORT_IMAGES_TOO_LARGE',
+  RISU_IMPORT_V3_REQUIRED: 'errors.RISU_IMPORT_V3_REQUIRED',
+  RISU_IMPORT_KIND: 'errors.RISU_IMPORT_KIND',
+  RISU_IMPORT_DRAFT_CHANGED: 'errors.RISU_IMPORT_DRAFT_CHANGED',
+  RISU_IMPORT_PARTIAL_REQUIRED: 'errors.RISU_IMPORT_PARTIAL_REQUIRED',
+  RISU_IMPORT_BUSY: 'errors.RISU_IMPORT_BUSY',
+  RISU_PRESET_INVALID_FILE: 'errors.RISU_PRESET_INVALID_FILE',
+  RISU_PRESET_VERSION_UNSUPPORTED: 'errors.RISU_PRESET_VERSION_UNSUPPORTED',
+  UPLOAD_TOO_LARGE: 'errors.UPLOAD_TOO_LARGE',
+  UPLOAD_EMPTY: 'errors.UPLOAD_EMPTY',
+  UPLOAD_NOT_FOUND: 'errors.UPLOAD_NOT_FOUND',
+  RISU_EXPORT_MODULE_UNSUPPORTED: 'errors.RISU_EXPORT_MODULE_UNSUPPORTED',
+  RISU_EXPORT_MODULE_CONFLICT: 'errors.RISU_EXPORT_MODULE_CONFLICT',
+  RISU_EXPORT_ASSET_UNAVAILABLE: 'errors.RISU_EXPORT_ASSET_UNAVAILABLE',
+  RISU_EXPORT_ASSET_PATH: 'errors.RISU_EXPORT_ASSET_PATH',
+  RISU_EXPORT_TOO_LARGE: 'errors.RISU_EXPORT_TOO_LARGE',
+  RISU_NATIVE_TIMEOUT: 'errors.RISU_NATIVE_TIMEOUT',
+  RISU_NATIVE_ACTION_FAILED: 'errors.RISU_NATIVE_ACTION_FAILED',
+  RISU_NATIVE_ACTION_CANCELLED: 'errors.RISU_NATIVE_ACTION_CANCELLED',
+  RISU_NATIVE_ACTION_INTERRUPTED: 'errors.RISU_NATIVE_ACTION_INTERRUPTED',
+  RISU_NATIVE_ACTION_RUNNING: 'errors.RISU_NATIVE_ACTION_RUNNING',
+  RISU_NATIVE_ACTION_IMAGES_TOO_MANY: 'errors.RISU_NATIVE_ACTION_IMAGES_TOO_MANY',
+  RISU_NATIVE_INTERACTION_EXPIRED: 'errors.RISU_NATIVE_INTERACTION_EXPIRED',
+  PACKAGE_START_CONVERSATION_STARTED: 'errors.PACKAGE_START_CONVERSATION_STARTED',
+  PACKAGE_START_OWNER_CHANGED: 'errors.PACKAGE_START_OWNER_CHANGED',
+  PACKAGE_START_TEXT_TOO_LONG: 'errors.PACKAGE_START_TEXT_TOO_LONG',
+  CHAT_TRANSCRIPT_INVALID: 'errors.CHAT_TRANSCRIPT_INVALID',
+  CHAT_TRANSCRIPT_UNSUPPORTED_VERSION: 'errors.CHAT_TRANSCRIPT_UNSUPPORTED_VERSION',
+  CHAT_TRANSCRIPT_INVALID_REQUEST: 'errors.CHAT_TRANSCRIPT_INVALID_REQUEST',
+  CHAT_TRANSCRIPT_INVALID_TEXT: 'errors.CHAT_TRANSCRIPT_INVALID_TEXT',
+  CHAT_TRANSCRIPT_INVALID_TRANSLATION: 'errors.CHAT_TRANSCRIPT_INVALID_TRANSLATION',
+  CONTEXT_FIXED_INPUT_TOO_LARGE: 'errors.CONTEXT_FIXED_INPUT_TOO_LARGE',
+  CONTEXT_COMPACTION_ACTIVE: 'errors.CONTEXT_COMPACTION_ACTIVE',
+  IMAGE_INPUT_UNSUPPORTED_MODEL: 'errors.IMAGE_INPUT_UNSUPPORTED_MODEL',
+  API_KEY_INVALID: 'errors.API_KEY_INVALID',
+  PROVIDER_ENDPOINT_INVALID: 'errors.PROVIDER_ENDPOINT_INVALID',
+  PROVIDER_CONNECTION_UNAVAILABLE: 'errors.PROVIDER_CONNECTION_UNAVAILABLE',
+  MODEL_SELECTION_UNAVAILABLE: 'errors.MODEL_SELECTION_UNAVAILABLE',
+  VERTEX_SERVICE_ACCOUNT_INVALID: 'errors.VERTEX_SERVICE_ACCOUNT_INVALID',
+  VERTEX_SERVICE_ACCOUNT_MISSING: 'errors.VERTEX_SERVICE_ACCOUNT_MISSING',
+  VERTEX_CONNECTION_REQUIRED: 'errors.VERTEX_CONNECTION_REQUIRED',
+  VERTEX_PROJECT_MISMATCH: 'errors.VERTEX_PROJECT_MISMATCH',
+  PROMPT_COMBINATION_OWNER_MISSING: 'errors.PROMPT_COMBINATION_OWNER_MISSING',
+  SCENE_COMMAND_RUN_ACTIVE: 'errors.SCENE_COMMAND_RUN_ACTIVE',
+  REQUEST_FILE_FORMAT_INVALID: 'errors.REQUEST_FILE_FORMAT_INVALID',
+  REQUEST_FILE_NAME_INVALID: 'errors.REQUEST_FILE_NAME_INVALID',
+  REQUEST_FILE_COUNT_INVALID: 'errors.REQUEST_FILE_COUNT_INVALID',
+  REQUEST_FILE_UPLOAD_INVALID: 'errors.REQUEST_FILE_UPLOAD_INVALID',
+  REQUEST_FILE_CHANGED: 'errors.REQUEST_FILE_CHANGED',
+  REQUEST_FILE_MISSING: 'errors.REQUEST_FILE_MISSING',
+  REQUEST_FILES_TOO_LARGE: 'errors.REQUEST_FILES_TOO_LARGE',
 } satisfies Record<AppErrorCode, string>;
 
 const MIB = 1024 * 1024;
@@ -234,109 +279,6 @@ function appErrorMessage(wire: ReceivedErrorWire): {
   };
 }
 
-const messages: Record<string, string> = {
-  ...requestImageErrors,
-  ...requestFileErrors,
-  RISU_NATIVE_TIMEOUT:
-    'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
-  RISU_NATIVE_CBS_TIMEOUT:
-    'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
-  RISU_LUA_PROGRAM_TIMEOUT:
-    'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
-  STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
-  STORY_GUIDE_CANCELLED: '작품 및 원작 참고가 중단됐어요.',
-  STORY_GUIDE_TIMEOUT: '작품 및 원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
-  STORY_GUIDE_FAILED:
-    '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
-  STORY_GUIDE_REFUSED: '모델이 작품 및 원작 참고 요청을 거절했어요.',
-  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '작품 및 원작 참고에 사용할 모델 호출 횟수가 부족해요.',
-  STORY_GUIDE_OUTPUT_TOO_LARGE: '참고 분석이 너무 길어요. 참고 범위를 좁혀 주세요.',
-  STORY_GUIDE_READ_CALL_LIMIT:
-    '추가 자료를 더 읽어야 해서 분석을 마치지 못했어요. 참고 범위를 좁혀 주세요.',
-  STORY_GUIDE_PROVIDER_FAILED:
-    '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
-  RISU_PRESET_INVALID_FILE:
-    '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json, manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
-  RISU_PRESET_INVALID: '프리셋의 프롬프트 구성과 옵션 형식을 확인해 주세요.',
-  RISU_PRESET_VERSION_UNSUPPORTED:
-    '이 프리셋 바이너리 버전은 아직 지원하지 않아요. RisuToki에서 프로젝트로 추출한 ZIP도 가져올 수 있어요.',
-  RISU_IMPORT_INVALID_FILE:
-    'v3 CHARX, JPEG, PNG, JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
-  RISU_IMPORT_TOO_LARGE: `캐릭터 카드 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하여야 해요.`,
-  RISU_IMPORT_IMAGES_TOO_LARGE: `저장할 이미지 합계가 ${RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024} MiB를 넘어요. 첨부 이미지를 줄인 파일을 선택해 주세요.`,
-  PACKAGE_START_CONVERSATION_STARTED:
-    '대화가 진행됐거나 원래 봇의 첫 메시지를 사용할 수 없어 바꾸지 못했어요. 선택 창을 닫고 현재 대화를 확인해 주세요.',
-  PACKAGE_START_OWNER_CHANGED: '채팅의 봇 설정이 바뀌었어요. 선택 창을 닫고 다시 열어 주세요.',
-  PACKAGE_START_TEXT_TOO_LONG: `첫 메시지 하나가 ${SOURCE_TEXT_MAX_CHARS.toLocaleString('en-US')}자 저장 상한을 넘었어요. 기본 첫 메시지와 대체 첫 메시지의 길이를 확인해 주세요.`,
-  UPLOAD_TOO_LARGE: `올릴 수 있는 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하예요.`,
-  RISU_IMPORT_V3_REQUIRED: 'Character Card v3 파일을 선택해 주세요. v2 카드는 지원하지 않아요.',
-  RISU_IMPORT_V2_UNSUPPORTED: 'Character Card v3 파일을 선택해 주세요. v2 카드는 지원하지 않아요.',
-  RISU_IMPORT_PREPARED_NOT_FOUND: '검토한 자료가 만료됐어요. 파일을 다시 선택해 주세요.',
-  RISU_IMPORT_CANCELLED: '자료 확인을 취소했어요.',
-  RISU_IMPORT_BUSY: '다른 자료를 준비하고 있어요. 완료 후 다시 시도해 주세요.',
-  UPLOAD_EMPTY: '빈 파일은 올릴 수 없어요. 파일을 다시 선택해 주세요.',
-  UPLOAD_NOT_FOUND:
-    '올려 둔 파일을 찾을 수 없어요. 검토 시간이 길어져 정리됐을 수 있으니 파일을 다시 선택해 주세요.',
-  UPLOAD_CONTENT_TYPE: '파일 업로드 형식이 올바르지 않아요.',
-  RISU_IMPORT_KIND:
-    '가져올 자료 종류를 확인해 주세요. 모듈 JSON과 프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
-  RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
-  RISU_IMPORT_PARTIAL_REQUIRED:
-    '자동 이식할 수 없는 부분을 확인하고 부분 가져오기에 동의해 주세요.',
-  CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
-    '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
-  CHAT_TRANSCRIPT_INVALID_REQUEST:
-    '본문 파일의 요청 문장이 허용 길이를 넘었거나 형식이 잘못됐어요.',
-  CHAT_TRANSCRIPT_INVALID_TEXT: '본문 파일에 비어 있거나 허용 길이를 넘은 응답이 있어요.',
-  CHAT_TRANSCRIPT_INVALID_TRANSLATION: '본문 파일의 번역 형식이나 길이를 확인해 주세요.',
-  CONTEXT_FIXED_INPUT_TOO_LARGE:
-    '고정된 입력만으로 모델의 컨텍스트 한도를 넘었어요. 프롬프트와 첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
-};
-for (const suffix of [
-  'INVALID',
-  'INVALID_SHAPE',
-  'UNKNOWN_FIELD',
-  'INVALID_FORMAT',
-  'INVALID_TIME',
-  'INVALID_TITLE',
-  'INVALID_REFERENCE',
-  'DUPLICATE_REFERENCE',
-  'INVALID_ENTRIES',
-  'INVALID_NOTES',
-  'INVALID_NOTE_ANCHOR',
-])
-  messages[`CHAT_TRANSCRIPT_${suffix}`] =
-    '본문 파일의 형식이 올바르지 않아요. 파일 내용을 확인해 주세요.';
-
-const settingErrors = new Set([
-  'Model disabled',
-  'Connection disabled or authority changed',
-  'Connection protocol changed; review and save the model settings',
-  'Setting not found',
-  'CONNECTION_NOT_AUTHORIZED',
-  'CREDENTIAL_UNAVAILABLE',
-  'ENDPOINT_NOT_APPROVED',
-]);
-const revisionErrors = new Set([
-  'Revision conflict',
-  'Profile revision conflict',
-  'Folder revision conflict',
-  'Organization revision conflict',
-  'Model revision conflict',
-  'Settings revision conflict',
-  'Story settings revision conflict',
-  'Source revision conflict',
-  'Source hash conflict',
-  'Source revision changed',
-  'Translation revision conflict',
-  'Current prompts changed; refresh before saving',
-  'Prompt preset changed; refresh before saving',
-  '초안이 변경됐어요. 현재 입력은 유지하고 변경 내용을 확인해 주세요.',
-]);
-const nativeActionConflict = /^RISU_NATIVE_ACTION_(?:FAILED|CANCELLED|INTERRUPTED|RUNNING)$/u;
-const unavailable =
-  '선택한 모델 또는 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 설정 > 프로바이더와 모델에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
-
 export function apiErrorDiagnostic(
   wire: ReceivedErrorWire,
   status: number,
@@ -347,35 +289,22 @@ export function apiErrorDiagnostic(
   return legacyErrorDiagnostic(wire.error, status, method);
 }
 
+function genericErrorKey(status: number): string {
+  return status >= 500
+    ? 'errors.serverFailed'
+    : status === 409
+      ? 'errors.conflict'
+      : 'errors.requestFailed';
+}
+
 function legacyErrorDiagnostic(error: unknown, status: number, method: string): ApiErrorDiagnostic {
   if (typeof error === 'string') {
-    const code = error;
-    if (Object.hasOwn(storyUiErrors, code)) return { code, message: ko[storyUiErrors[code]] };
-    if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
-    if (status === 409 && nativeActionConflict.test(code))
-      return {
-        code,
-        message:
-          '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)',
-      };
-    if (/^STORY_GUIDE_[A-Z0-9_]{1,100}$/.test(code))
-      return { code, message: messages.STORY_GUIDE_FAILED };
-    if (settingErrors.has(code)) return { code: 'MODEL_UNAVAILABLE', message: unavailable };
-    if (status === 409 && revisionErrors.has(code))
-      return {
-        code: 'REVISION_CONFLICT',
-        message: formatMessage('errors.revisionConflict', 'ko'),
-      };
+    if (Object.hasOwn(storyUiErrors, error))
+      return { code: error, message: ko[storyUiErrors[error]] };
     if (status === 409 && method === 'DELETE' && error.length <= 4000)
       return { code: null, message: error };
   }
-  const message =
-    status >= 500
-      ? '서버 작업을 완료하지 못했어요.'
-      : status === 409
-        ? '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요.'
-        : '요청을 처리할 수 없어요.';
-  return { code: null, message: `${message} (${status})` };
+  return { code: null, message: formatMessage(genericErrorKey(status), 'ko', { status }) };
 }
 
 export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method: string): string {
@@ -385,40 +314,18 @@ export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method:
     registerMessage(formatMessage(app.key, 'ko', app.values('ko')), render);
     return render();
   }
-  const error = wire.error;
-  const diagnostic = legacyErrorDiagnostic(error, status, method);
-  const code = diagnostic.code;
+  const diagnostic = legacyErrorDiagnostic(wire.error, status, method);
   const display = (key: string, values?: Record<string, string | number>) => {
     registerMessage(diagnostic.message, key, values);
     return t(key, values);
   };
-  if (code && Object.hasOwn(storyUiErrors, code)) return display(storyUiErrors[code]);
-  const limits: Record<string, number> = {
-    PACKAGE_START_TEXT_TOO_LONG: SOURCE_TEXT_MAX_CHARS,
-    RISU_IMPORT_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
-    UPLOAD_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
-    RISU_IMPORT_IMAGES_TOO_LARGE: RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024,
-  };
-  if (code === 'MODEL_UNAVAILABLE') return display('errors.modelUnavailable');
-  if (code && Object.hasOwn(ko, 'errors.' + code))
-    return display(
-      'errors.' + code,
-      Object.hasOwn(limits, code) ? { limit: limits[code] } : undefined
-    );
-  if (code === 'REVISION_CONFLICT') return display('errors.revisionConflict');
-  if (status === 409 && code && nativeActionConflict.test(code))
-    return display('errors.conflict', { status });
-  if (code?.startsWith('CHAT_TRANSCRIPT_') && Object.hasOwn(messages, code))
-    return display('errors.transcriptInvalid');
-  if (code) return diagnostic.message;
-  if (status === 409 && method === 'DELETE' && typeof error === 'string' && error.length <= 4000)
+  if (diagnostic.code) return display(storyUiErrors[diagnostic.code]);
+  if (
+    status === 409 &&
+    method === 'DELETE' &&
+    typeof wire.error === 'string' &&
+    wire.error.length <= 4000
+  )
     return diagnostic.message;
-  return display(
-    status >= 500
-      ? 'errors.serverFailed'
-      : status === 409
-        ? 'errors.conflict'
-        : 'errors.requestFailed',
-    { status }
-  );
+  return display(genericErrorKey(status), { status });
 }

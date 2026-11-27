@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export const hasControl = (value: string) =>
   [...value].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
@@ -11,8 +12,7 @@ export type ImportEnvelopeSource =
 export type ImportEnvelopeOptions = {
   maxBytes: number;
   extensions: RegExp;
-  invalid: string;
-  tooLarge: string;
+  invalid: 'RISU_IMPORT_INVALID_FILE' | 'RISU_PRESET_INVALID_FILE';
   minBytes?: number;
   staged?: (uploadId: string) => Buffer;
 };
@@ -33,7 +33,7 @@ function fileName(value: unknown, options: ImportEnvelopeOptions): string {
     /[/\\:]/u.test(value) ||
     !options.extensions.test(value)
   )
-    throw new HttpError(400, options.invalid);
+    throw new AppError(400, options.invalid);
   return value;
 }
 
@@ -43,7 +43,8 @@ export function readImportEnvelope(
 ): ImportEnvelope & { source: Extract<ImportEnvelopeSource, { base64: string }> };
 export function readImportEnvelope(value: unknown, options: ImportEnvelopeOptions): ImportEnvelope;
 export function readImportEnvelope(value: unknown, options: ImportEnvelopeOptions): ImportEnvelope {
-  const { maxBytes, invalid, tooLarge, minBytes = 1 } = options;
+  const { maxBytes, invalid, minBytes = 1 } = options;
+  const tooLarge = () => new AppError(413, 'RISU_IMPORT_TOO_LARGE', { maxBytes });
   const input = record(value);
   const readStaged =
     options.staged !== undefined && Object.hasOwn(input, 'uploadId') ? options.staged : undefined;
@@ -57,14 +58,14 @@ export function readImportEnvelope(value: unknown, options: ImportEnvelopeOption
     source = { name, uploadId };
   } else {
     const base64: unknown = input.base64;
-    if (typeof base64 !== 'string' || !base64) throw new HttpError(400, invalid);
-    if (base64.length > Math.ceil(maxBytes / 3) * 4) throw new HttpError(413, tooLarge);
+    if (typeof base64 !== 'string' || !base64) throw new AppError(400, invalid);
+    if (base64.length > Math.ceil(maxBytes / 3) * 4) throw tooLarge();
     bytes = Buffer.from(base64, 'base64');
-    if (bytes.length > maxBytes) throw new HttpError(413, tooLarge);
-    if (bytes.toString('base64') !== base64) throw new HttpError(400, invalid);
+    if (bytes.length > maxBytes) throw tooLarge();
+    if (bytes.toString('base64') !== base64) throw new AppError(400, invalid);
     source = { name, base64 };
   }
-  if (bytes.length < minBytes) throw new HttpError(400, invalid);
+  if (bytes.length < minBytes) throw new AppError(400, invalid);
   return {
     name,
     bytes,

@@ -111,7 +111,7 @@ test('greeting selection rejects stale ownership and subsequent attempts without
   createPackageStart(f.store, f.chat.id, f.command);
   expect(() =>
     createPackageStart(f.store, f.chat.id, { ...f.command, idempotencyKey: 'another' })
-  ).toThrow();
+  ).toThrow('REVISION_CONFLICT');
 });
 
 function selectedStart(f: ReturnType<typeof fixture>) {
@@ -185,11 +185,11 @@ test('opening changes reject stale hashes and heads and replay the exact result 
       ...initial.command,
       expectedSourceHash: '0'.repeat(64),
     })
-  ).toThrow('Source hash conflict');
+  ).toThrow('REVISION_CONFLICT');
   const first = createPackageStart(f.store, f.chat.id, initial.command);
   expect(() =>
     createPackageStart(f.store, f.chat.id, { ...initial.command, idempotencyKey: 'stale' })
-  ).toThrow('Source revision conflict');
+  ).toThrow('REVISION_CONFLICT');
   const source = f.store.source(first.run.sourceRevision!);
   createPackageStart(f.store, f.chat.id, {
     ...initial.command,
@@ -324,7 +324,7 @@ test('clearing requires current source identity and rejects progressed conversat
   const command = { ...initial.command, startId: null };
   expect(() =>
     createPackageStart(f.store, f.chat.id, { ...command, expectedSourceHash: '0'.repeat(64) })
-  ).toThrow('Source hash conflict');
+  ).toThrow('REVISION_CONFLICT');
   expect(() =>
     createPackageStart(f.store, f.chat.id, { ...command, idempotencyKey: f.command.idempotencyKey })
   ).toThrow('Idempotency key reused');
@@ -362,7 +362,7 @@ test('a single authored opening can be cleared with full admission revision chec
     { expectedProfileRevision: command.expectedProfileRevision + 1 },
   ])
     expect(() => createPackageStart(f.store, f.chat.id, { ...command, ...conflict })).toThrow(
-      'conflict'
+      'REVISION_CONFLICT'
     );
   expect(createPackageStart(f.store, f.chat.id, command)).toEqual({ run: null, created: true });
   expect(canChangePackageStart(f.store, f.chat.id)).toBe(false);

@@ -37,11 +37,11 @@ function period(value: unknown) {
       !Number.isFinite(Date.parse(`${date}T00:00:00.000Z`)) ||
       new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date
     )
-      throw new HttpError(400, '조회 날짜를 확인해 주세요.');
+      throw new HttpError(400, 'Invalid usage date');
   }
   const from = String(query.from),
     to = String(query.to);
-  if (from > to) throw new HttpError(400, '시작일은 종료일보다 늦을 수 없어요.');
+  if (from > to) throw new HttpError(400, 'Usage start date is after the end date');
   const after = new Date(`${from}T00:00:00${usageOffset}`).toISOString();
   const until = new Date(Date.parse(`${to}T00:00:00${usageOffset}`) + 86400_000).toISOString();
   return { from, to, after, until, group: query.group };
@@ -161,7 +161,7 @@ export function usageRoutes(app: FastifyInstance, store: Store) {
   app.get('/api/usage/export', (request, reply) => {
     const { group, from, to } = period(request.query);
     if (group !== undefined && !['day', 'model', 'kind'].includes(String(group)))
-      throw new HttpError(400, '내보내기 기준을 확인해 주세요.');
+      throw new HttpError(400, 'Invalid usage export group');
     const report = usageReport(store, request.query);
     return reply
       .type('text/csv; charset=utf-8')

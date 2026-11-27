@@ -6,6 +6,7 @@ import { decodeImage } from './package-images.js';
 import { HttpError } from './request-validation.js';
 import { object, string, type RisuCard, type RisuCardAsset } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
+import { AppError } from './app-errors.js';
 
 export type PreparedRisuAsset = { hash: string; mime: 'image/webp' };
 type AssetInput = {
@@ -56,7 +57,7 @@ export function importRisuAssets({
   let typedAsset = false;
   const included = new Set<string>();
   const assets = Array.isArray(card.assets) ? card.assets : [];
-  if (assets.length > RISU_IMPORT_MAX_ASSETS) throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  if (assets.length > RISU_IMPORT_MAX_ASSETS) throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   for (const [index, raw] of assets.entries()) {
     const asset = object(raw) as RisuCardAsset,
       uri = string(asset.uri),

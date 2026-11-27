@@ -13,6 +13,7 @@ import {
 } from '../core/package-start.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import type { Store } from './store.js';
+import { AppError } from './app-errors.js';
 
 export type PackageStartCommand = Omit<PackageStartRef, 'startId'> & {
   startId: string | null;
@@ -98,7 +99,7 @@ function clearPackageStart(store: Store, chatId: string, command: PackageStartCo
       expectedRevision: command.expectedRevision!,
     });
     if (!canChangePackageStart(store, chatId))
-      throw new HttpError(409, 'PACKAGE_START_CONVERSATION_STARTED');
+      throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
     const profile = chatVariableProfile(store, chatId);
     if (
       chat.botId !== command.packageId ||
@@ -109,7 +110,7 @@ function clearPackageStart(store: Store, chatId: string, command: PackageStartCo
           item.revision === command.packageRevision
       )
     )
-      throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
+      throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
     store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chatId);
     store.db
       .prepare('UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE chat_id=?')
@@ -199,7 +200,7 @@ export function createPackageStart(
           item.revision === command.packageRevision
       );
       if (!profile || !attachment || chat.botId !== command.packageId)
-        throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
+        throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
       const selected = resolvePackageStart(content.package!, ref.startId);
       prepared = { profile, selected };
       request = `[작성된 도입문] ${selected.title}`;
@@ -218,13 +219,13 @@ export function createPackageStart(
       (chat) => {
         if (command.expectedRevision) {
           if (!canChangePackageStart(store, chatId))
-            throw new HttpError(409, 'PACKAGE_START_CONVERSATION_STARTED');
+            throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
         } else if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
           throw new HttpError(409, 'PACKAGE_START_ALREADY_CONFIRMED');
         if (!prepared) throw new HttpError(409, 'PACKAGE_START_REPLAY_MISSING');
         const { profile, selected } = prepared;
         if (chat.botId !== command.packageId)
-          throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
+          throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
         const iso = new Date().toISOString();
         const snapshot: RunSnapshot = {
           chatId,

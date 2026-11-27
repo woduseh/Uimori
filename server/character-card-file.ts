@@ -10,12 +10,13 @@ import {
   type RisuImportKind,
 } from '../core/risu-import.js';
 import { readImportEnvelope } from './import-envelope.js';
-import { HttpError, record } from './request-validation.js';
+import { record } from './request-validation.js';
 import { moduleJsonDocument, moduleLoreEntries } from './risu-module-json.js';
 import { readEmbeddedRisuModule } from './risu-module-file.js';
+import { AppError } from './app-errors.js';
 
 const invalid = (): never => {
-  throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
 };
 
 export function cardZip(bytes: Buffer): Map<string, () => Buffer> {
@@ -29,7 +30,7 @@ export async function readCharacterCardPath(
   workspaceDirectory?: string
 ) {
   if (kind !== undefined && kind !== 'bot' && kind !== 'persona' && kind !== 'module')
-    throw new HttpError(400, 'RISU_IMPORT_KIND');
+    throw new AppError(400, 'RISU_IMPORT_KIND');
   const input = await readCardPath(path, name, workspaceDirectory);
   const result = finishCharacterCard(
     input.envelope,
@@ -48,12 +49,11 @@ export function readCharacterCard(
   readStaged?: (uploadId: string) => Buffer
 ) {
   if (kind !== undefined && kind !== 'bot' && kind !== 'persona' && kind !== 'module')
-    throw new HttpError(400, 'RISU_IMPORT_KIND');
+    throw new AppError(400, 'RISU_IMPORT_KIND');
   const envelope = readImportEnvelope(value, {
     maxBytes: RISU_IMPORT_MAX_BYTES,
     extensions: /./u,
     invalid: 'RISU_IMPORT_INVALID_FILE',
-    tooLarge: 'RISU_IMPORT_TOO_LARGE',
     minBytes: 2,
     staged: readStaged,
   });
@@ -71,7 +71,7 @@ function finishCharacterCard(
   const { name, bytes, sha256: hash } = envelope;
   const source: RisuImportSource | RisuImportStagedSource = envelope.source;
   if (/\.risum$/iu.test(name) || (bytes[0] === 111 && bytes[1] === 0)) {
-    if (kind === 'bot' || kind === 'persona') throw new HttpError(400, 'RISU_IMPORT_KIND');
+    if (kind === 'bot' || kind === 'persona') throw new AppError(400, 'RISU_IMPORT_KIND');
     const moduleData = preparedModule ?? readEmbeddedRisuModule(bytes);
     const { module } = moduleData;
     const assets = moduleData.assets.map((asset) =>
@@ -128,7 +128,7 @@ function finishCharacterCard(
   }
   const outer = record(document);
   if ((format === 'character-card-json' || moduleProject) && outer.type === 'risuModule') {
-    if (kind === 'bot' || kind === 'persona') throw new HttpError(400, 'RISU_IMPORT_KIND');
+    if (kind === 'bot' || kind === 'persona') throw new AppError(400, 'RISU_IMPORT_KIND');
     let assetFiles: string[] = [];
     if (moduleProject) {
       const markerBytes = members.get('.risutoki/workspace.json')?.();
@@ -185,7 +185,7 @@ function finishCharacterCard(
   }
   if (moduleProject) return invalid();
   if (requireV3 && outer.spec !== 'chara_card_v3')
-    throw new HttpError(400, 'RISU_IMPORT_V3_REQUIRED');
+    throw new AppError(400, 'RISU_IMPORT_V3_REQUIRED');
   if (outer.type !== undefined || outer.lorebook !== undefined || outer.regex !== undefined)
     return invalid();
   if (outer.spec !== undefined && !['chara_card_v2', 'chara_card_v3'].includes(String(outer.spec)))

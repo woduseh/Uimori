@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { assertModelSelection } from '../server/provider-selection.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { isModelSelectable } from '../web/model-selection.js';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 
@@ -102,8 +103,8 @@ test('disabled models retain assigned IDs but block new assignments and new snap
     modelBody(c, { expectedRevision: m.revision, enabled: false }),
     m.id
   ) as ModelPreset;
-  expect(() => assertModelSelection(s.product, ref(m))).toThrow('비활성');
-  expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('비활성');
+  expect(() => assertModelSelection(s.product, ref(m))).toThrow('MODEL_SELECTION_UNAVAILABLE');
+  expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('MODEL_SELECTION_UNAVAILABLE');
   expect(() => s.product.snapshot(chat.id)).toThrow(
     expect.objectContaining({
       code: 'MODEL_UNAVAILABLE',
@@ -154,12 +155,12 @@ test('ID-based selections follow current connections while protocol changes requ
     c.id
   ) as Connection;
   expect(isModelSelectable(m, [m], [disabled])).toBe(false);
-  expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('연결');
+  expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('MODEL_SELECTION_UNAVAILABLE');
   expect(assign(s, chat.id, { main: ref(m) }).routes.main).toEqual(ref(m));
   expect(() => s.product.snapshot(chat.id)).toThrow(
     expect.objectContaining({
       code: 'MODEL_UNAVAILABLE',
-      cause: expect.objectContaining({ message: expect.stringContaining('Connection disabled') }),
+      cause: expect.objectContaining({ code: 'PROVIDER_CONNECTION_UNAVAILABLE' }),
     })
   );
   const vertex = s.product.connection(
@@ -180,6 +181,13 @@ test('ID-based selections follow current connections while protocol changes requ
   ) as ModelPreset;
   expect(() => assertModelSelection(s.product, ref(vm))).not.toThrow();
   expect(isModelSelectable(vm, [flex], [vertex])).toBe(true);
+});
+
+test('selecting a model another tab deleted answers MODEL_SELECTION_UNAVAILABLE', () => {
+  const { s, chat, m } = setup();
+  deleteLibraryItem(s, 'model', m.id, { expectedRevision: m.revision });
+  expect(() => assertModelSelection(s.product, ref(m))).toThrow('MODEL_SELECTION_UNAVAILABLE');
+  expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('MODEL_SELECTION_UNAVAILABLE');
 });
 
 test('model draft validation uses explicit matching unsaved connection without any DB writes', () => {

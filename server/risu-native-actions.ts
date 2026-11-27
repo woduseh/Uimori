@@ -20,7 +20,22 @@ import { fields, HttpError, number, record, text } from './request-validation.js
 import type { Store } from './store.js';
 import { readRunSnapshot, readRunStatus, readStoredRunSnapshot } from './run-projections.js';
 import { ByteBoundedCache } from './byte-bounded-cache.js';
+import { AppError } from './app-errors.js';
 
+const replayCodes: Partial<
+  Record<
+    string,
+    | 'RISU_NATIVE_ACTION_FAILED'
+    | 'RISU_NATIVE_ACTION_CANCELLED'
+    | 'RISU_NATIVE_ACTION_INTERRUPTED'
+    | 'RISU_NATIVE_ACTION_RUNNING'
+  >
+> = {
+  failed: 'RISU_NATIVE_ACTION_FAILED',
+  cancelled: 'RISU_NATIVE_ACTION_CANCELLED',
+  interrupted: 'RISU_NATIVE_ACTION_INTERRUPTED',
+  running: 'RISU_NATIVE_ACTION_RUNNING',
+};
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -212,10 +227,24 @@ export async function applyNativeRisuAction(
     const run = store.run(String(prior.id));
     if (run.snapshot.nativeRisuAuthored?.commandHash !== commandHash)
       throw new HttpError(409, 'RISU_NATIVE_ACTION_REPLAY_CONFLICT');
-    if (run.status !== 'completed')
-      throw new HttpError(409, `RISU_NATIVE_ACTION_${run.status.toUpperCase()}`);
+    if (run.status !== 'completed') {
+      const code = replayCodes[run.status];
+      throw code
+        ? new AppError(409, code)
+        : new HttpError(409, `RISU_NATIVE_ACTION_${run.status.toUpperCase()}`);
+    }
     return { created: false, runId: run.id };
   }
+  const check = () => {
+    const chat = store.chat(chatId);
+    if (
+      chat.headRevision !== expectedHeadRevision ||
+      store.source(expectedHeadRevision).hash !== expectedHeadHash ||
+      readChatVariables(store, chatId).revision !== expectedVariableRevision
+    )
+      throw new AppError(409, 'REVISION_CONFLICT');
+  };
+  check();
   const captured = nativeSourceSnapshot(store, chatId, sourceId);
   const current = store.product.snapshot(chatId, 'inspect', captured.snapshot.parentRevision);
   const profile = captured.snapshot.profile;
@@ -237,15 +266,6 @@ export async function applyNativeRisuAction(
   }
   const context = nativeRisuContext(captured.snapshot);
   if (!context) throw new HttpError(400, 'RISU_NATIVE_CARD_REQUIRED');
-  const check = () => {
-    const chat = store.chat(chatId);
-    if (
-      chat.headRevision !== expectedHeadRevision ||
-      store.source(expectedHeadRevision).hash !== expectedHeadHash ||
-      readChatVariables(store, chatId).revision !== expectedVariableRevision
-    )
-      throw new HttpError(409, 'RISU_NATIVE_ACTION_STATE_CHANGED');
-  };
   const reserved = store.transaction(() => {
     check();
     const chat = store.chat(chatId);
@@ -364,13 +384,15 @@ export async function applyNativeRisuAction(
         };
       });
       if (requestImages.length > REQUEST_IMAGE_MAX_COUNT)
-        throw new HttpError(400, '참고 이미지는 한 장면에 8장까지 묶을 수 있어요.');
+        throw new AppError(400, 'RISU_NATIVE_ACTION_IMAGES_TOO_MANY', {
+          limit: REQUEST_IMAGE_MAX_COUNT,
+        });
       return { messages: authored, requestImages, sourceIdentity: identity };
     });
     return store.transaction(() => {
       check();
       if (readRunStatus(store, reserved.id) !== 'running')
-        throw new HttpError(409, 'RISU_NATIVE_ACTION_CANCELLED');
+        throw new AppError(409, 'RISU_NATIVE_ACTION_CANCELLED');
       store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(retained, chatId);
       let head = retained;
       let lastRunId = reserved.id;

@@ -12,6 +12,7 @@ import {
   ProviderConnectionTestStore,
   CONNECTION_TEST_TIMEOUT_MS,
 } from './provider-connection-test.js';
+import { AppError } from './app-errors.js';
 
 const CONNECTION_ID = 'typesafe-judgment';
 const input = {
@@ -75,8 +76,7 @@ export function jevProviderRoutes(
     const longContext = boolean(body.longContext);
     return store.transaction(() => {
       const previous = jevSettings(store.db);
-      if (previous.revision !== expected)
-        throw new HttpError(409, 'JEV_SETTINGS_REVISION_CONFLICT');
+      if (previous.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
       store.db
         .prepare(
           'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
@@ -116,7 +116,7 @@ export function jevProviderRoutes(
         return { view: journal.get(prior.id), created: false };
       }
       const current = credentials.status();
-      if (current.revision !== revision) throw new HttpError(409, 'JEV_REVISION_CONFLICT');
+      if (current.revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
       if (!current.configured) throw new HttpError(400, 'JEV_CREDENTIAL_REQUIRED');
       if (
         store.db

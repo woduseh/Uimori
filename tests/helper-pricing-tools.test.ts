@@ -80,7 +80,7 @@ test('helper pricing discovery and narrow revision update preserve model setting
       expectedRevision: model.revision,
       pricing: { ...pricing, rates: { ...pricing.rates, input: 100 } },
     })
-  ).toThrow('Revision conflict');
+  ).toThrow('REVISION_CONFLICT');
   call(store, 'model.pricing.update', {
     modelId: model.id,
     expectedRevision: saved.revision,

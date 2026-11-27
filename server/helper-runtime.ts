@@ -944,7 +944,7 @@ const providerAuthFailure = (code: string) =>
     'CREDENTIAL_UNAVAILABLE',
     'CONNECTION_NOT_AUTHORIZED',
     'ENDPOINT_NOT_APPROVED',
-    'Connection disabled or authority changed',
+    'PROVIDER_CONNECTION_UNAVAILABLE',
   ].includes(code);
 const summaryFailure = (result: ProviderResult): HelperCompactionFailure => {
   const code = result.error?.code ?? '';

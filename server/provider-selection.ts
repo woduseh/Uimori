@@ -1,4 +1,5 @@
 import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 import type { ProductStore } from './product-store.js';
 
@@ -8,11 +9,19 @@ export function assertModelSelection(
   previous: ModelRef | null = null
 ): void {
   if (!next) return;
-  store.assertAvailable('model', next.id);
-  const latest = store.get<ModelPreset>('model', next.id);
-  store.assertAvailable('connection', latest.connectionId);
+  let latest: ModelPreset;
+  let connection: Connection;
+  try {
+    store.assertAvailable('model', next.id);
+    latest = store.get<ModelPreset>('model', next.id);
+    store.assertAvailable('connection', latest.connectionId);
+    connection = store.get<Connection>('connection', latest.connectionId);
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404)
+      throw new AppError(409, 'MODEL_SELECTION_UNAVAILABLE');
+    throw error;
+  }
   if (previous?.id === next.id) return;
-  if (latest.enabled === false) throw new HttpError(400, '비활성 모델은 새로 선택할 수 없어요.');
-  const current = store.get<Connection>('connection', latest.connectionId);
-  if (!current.enabled) throw new HttpError(400, '비활성 연결의 모델은 새로 선택할 수 없어요.');
+  if (latest.enabled === false || !connection.enabled)
+    throw new AppError(400, 'MODEL_SELECTION_UNAVAILABLE');
 }

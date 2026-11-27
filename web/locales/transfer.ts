@@ -413,42 +413,6 @@ export const messages = {
     ja: '創作プロンプトとして保存',
     zh: '保存为创作提示词',
   },
-  'transfer.m087': {
-    ko: '이 모듈에는 내보낼 수 있는 Risu 원문이 없어요.',
-    en: 'This module has no Risu source to export.',
-    ja: 'このモジュールには書き出せるRisuソースがありません。',
-    zh: '此模块没有可导出的 Risu 源码。',
-  },
-  'transfer.m088': {
-    ko: '이 자료의 모듈 에셋 이름이 겹쳐요. 에셋을 확인해 주세요.',
-    en: 'Module asset names in this resource conflict. Check the assets.',
-    ja: 'この資料のモジュールアセット名が重複しています。アセットを確認してください。',
-    zh: '此资料的模块资产名称重复，请检查资产。',
-  },
-  'transfer.m089': {
-    ko: '원문에 연결된 에셋 파일을 찾을 수 없어요. 에셋 탭에서 확인해 주세요.',
-    en: 'An asset linked to the source is missing. Check the assets tab.',
-    ja: 'ソースに関連するアセットファイルが見つかりません。アセットタブで確認してください。',
-    zh: '找不到源码关联的资产文件，请检查资产标签页。',
-  },
-  'transfer.m090': {
-    ko: '원문 에셋의 파일 경로가 겹치거나 올바르지 않아요. 에셋을 확인해 주세요.',
-    en: 'Source asset paths conflict or are invalid. Check the assets.',
-    ja: 'ソースアセットのパスが重複しているか無効です。アセットを確認してください。',
-    zh: '源码资产的文件路径重复或无效，请检查资产。',
-  },
-  'transfer.m091': {
-    ko: '내보낼 자료가 파일 크기 한도를 넘었어요.',
-    en: 'The export exceeds the file size limit.',
-    ja: '書き出す資料がファイルサイズの上限を超えています。',
-    zh: '要导出的资料超过文件大小上限。',
-  },
-  'transfer.m092': {
-    ko: '자료가 다른 곳에서 변경됐어요. 최신 저장본을 확인한 뒤 다시 내보내 주세요.',
-    en: 'This resource changed elsewhere. Review the latest saved version, then export again.',
-    ja: '資料が別の場所で変更されました。最新の保存済み内容を確認してから再度書き出してください。',
-    zh: '资料已在其他位置更改，请检查最新已保存版本后重新导出。',
-  },
   'transfer.m093': {
     ko: '편집 내용을 저장한 뒤 내보내 주세요.',
     en: 'Save your edits before exporting.',

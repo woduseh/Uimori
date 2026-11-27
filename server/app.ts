@@ -166,6 +166,17 @@ type RecordBody = Record<string, unknown>;
 const DOCUMENT_CONTENT_SECURITY_POLICY =
   "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
+const transcriptErrorCodes = [
+  'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION',
+  'CHAT_TRANSCRIPT_INVALID_REQUEST',
+  'CHAT_TRANSCRIPT_INVALID_TEXT',
+  'CHAT_TRANSCRIPT_INVALID_TRANSLATION',
+] as const;
+function transcriptErrorCode(
+  message: string
+): (typeof transcriptErrorCodes)[number] | 'CHAT_TRANSCRIPT_INVALID' {
+  return transcriptErrorCodes.find((code) => code === message) ?? 'CHAT_TRANSCRIPT_INVALID';
+}
 function requestFailureLabel(error: unknown): string {
   if (!(error instanceof Error)) return 'NON_ERROR';
   if (/^[A-Z][A-Z0-9_]{2,100}$/u.test(error.message)) return error.message;
@@ -191,7 +202,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       target &&
       imageInputSupported(target.connection.protocol, target.modelId) === false
     )
-      throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
+      throw new AppError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
   };
   const requireJobModel = (id: string) => {
     const job = store.job(id);
@@ -945,7 +956,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (denied) throw new HttpError(403, denied);
   });
   app.setErrorHandler((error, request, reply) => {
-    const transferError =
+    const coreError =
       error instanceof NativeTransferError
         ? new AppError(
             400,
@@ -954,10 +965,12 @@ export async function createApp(options: AppOptions): Promise<App> {
               ? error.code
               : 'NATIVE_TRANSFER_FILE_INVALID'
           )
-        : undefined;
-    const startLimitCode =
-      (error instanceof RisuContentError || error instanceof PackageStartError) &&
-      error.message === 'PACKAGE_START_TEXT_TOO_LONG';
+        : (error instanceof RisuContentError || error instanceof PackageStartError) &&
+            error.message === 'PACKAGE_START_TEXT_TOO_LONG'
+          ? new AppError(400, 'PACKAGE_START_TEXT_TOO_LONG', { limit: SOURCE_TEXT_MAX_CHARS })
+          : error instanceof ChatTranscriptError
+            ? new AppError(400, transcriptErrorCode(error.message))
+            : undefined;
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =
@@ -974,8 +987,8 @@ export async function createApp(options: AppOptions): Promise<App> {
       .code(code)
       .send(
         errorWire(
-          transferError ?? error,
-          error instanceof HttpError || error instanceof ChatTranscriptError || startLimitCode
+          coreError ?? error,
+          error instanceof HttpError
             ? error.message
             : code === 400
               ? 'Invalid request'

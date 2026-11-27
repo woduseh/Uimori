@@ -22,6 +22,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { repairPromptCombinationValues } from '../core/prompt-combinations.js';
 import { initializePromptWorkspaceReferences } from '../server/prompt-workspace.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 
 const owned: { directory: string; app?: App }[] = [];
 test('legacy copied defaults become inheritance while values different from that baseline remain explicit', async () => {
@@ -177,6 +178,23 @@ test('obsolete same-owner combinations stay retained and can be repaired with bo
     409,
     'PUT'
   );
+  deleteLibraryItem(app.store, 'prompt-combination', combo.id, {
+    expectedRevision: repaired.revision,
+  });
+  expect(
+    await request(
+      app,
+      `/prompt-combinations/${combo.id}`,
+      {
+        expectedRevision: repaired.revision,
+        sourceRevision: saved.revision,
+        title: combo.title,
+        values: {},
+      },
+      409,
+      'PUT'
+    )
+  ).toEqual({ code: 'REVISION_CONFLICT' });
 });
 
 test('option combinations bind to a prompt owner and exact control meanings while preserving working source identity', async () => {

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export class CredentialStore {
   private readonly db: DatabaseSync;
@@ -22,7 +22,7 @@ export class CredentialStore {
   set(id: string, value: string | null, expectedRevision?: number): void {
     const current = this.status(id);
     if (expectedRevision !== undefined && current.revision !== expectedRevision)
-      throw new HttpError(409, '인증 정보가 변경됐어요. 다시 불러와 주세요.');
+      throw new AppError(409, 'REVISION_CONFLICT');
     this.db
       .prepare(`INSERT INTO credentials(id,revision,value) VALUES(?,?,?)
       ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,value=excluded.value`)
@@ -33,7 +33,7 @@ export class CredentialStore {
 export function apiKey(value: unknown): string | null {
   if (value === null || value === '') return null;
   if (typeof value !== 'string' || value.length > 4096 || !/^[\x21-\x7e]+$/u.test(value.trim()))
-    throw new HttpError(400, 'API 키를 확인해 주세요.');
+    throw new AppError(400, 'API_KEY_INVALID');
   return value.trim();
 }
 

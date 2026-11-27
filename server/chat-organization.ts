@@ -161,7 +161,7 @@ export class ChatOrganizationStore {
     const expected = number(b.expectedRevision, 'folder revision');
     return this.store.transaction(() => {
       const prior = this.folder(botId, id);
-      if (prior.revision !== expected) throw new HttpError(409, 'Folder revision conflict');
+      if (prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
       const title = b.title === undefined ? prior.title : text(b.title, 'folder title', 200);
       const persona =
         b.defaultPersona === undefined ? prior.defaultPersona : this.persona(b.defaultPersona);
@@ -177,7 +177,7 @@ export class ChatOrganizationStore {
     const expected = number(b.expectedRevision, 'folder revision');
     return this.store.transaction(() => {
       const folder = this.folder(botId, id);
-      if (folder.revision !== expected) throw new HttpError(409, 'Folder revision conflict');
+      if (folder.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
       const moved = this.orderedIds(botId, id);
       const unfiled = this.orderedIds(botId, null);
       this.store.db
@@ -252,7 +252,7 @@ export class ChatOrganizationStore {
       this.store.chat(chatId);
       const prior = this.metadata(chatId);
       if (!prior || prior.organizationRevision !== expected)
-        throw new HttpError(409, 'Organization revision conflict');
+        throw new AppError(409, 'REVISION_CONFLICT');
       if (folderId !== null) this.folder(prior.botId, folderId);
       const siblings = this.orderedIds(prior.botId, folderId).filter((id) => id !== chatId);
       const index = beforeChatId === null ? siblings.length : siblings.indexOf(beforeChatId);

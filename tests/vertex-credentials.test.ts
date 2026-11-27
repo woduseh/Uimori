@@ -116,7 +116,7 @@ test('direct connection saves reject missing or mismatched saved Vertex accounts
   const input = { title: 'Vertex', protocol: 'vertex-gemini-v1', endpoint, enabled: true };
   const missing = 'UIMORI_PROVIDER_VERTEX_FILE_' + 'A'.repeat(32);
   expect(() => store.product.connection({ ...input, credentialRef: missing })).toThrow(
-    '서비스 계정을 먼저 등록'
+    'VERTEX_SERVICE_ACCOUNT_MISSING'
   );
   expect(store.product.all('connection')).toEqual([]);
 
@@ -131,7 +131,7 @@ test('direct connection saves reject missing or mismatched saved Vertex accounts
       },
       saved.id
     )
-  ).toThrow('프로젝트가 달라요');
+  ).toThrow('VERTEX_PROJECT_MISMATCH');
   expect(store.product.get('connection', saved.id)).toEqual(saved);
   expect(JSON.parse(store.credentials.get(saved.credentialRef)!).private_key).toBe(
     account.private_key

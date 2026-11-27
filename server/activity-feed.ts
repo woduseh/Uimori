@@ -24,7 +24,7 @@ export function acknowledgeActivities(store: Store, chatId: string, keys: unknow
     keys.length > 100 ||
     keys.some((key) => typeof key !== 'string' || key.length > 1024 || key.length < 2)
   )
-    throw new HttpError(400, '확인할 작업 목록이 올바르지 않아요.');
+    throw new HttpError(400, 'Invalid activity keys');
   const save = store.db.prepare('INSERT OR IGNORE INTO app_metadata(key,value) VALUES(?,?)');
   let saved = 0;
   store.transaction(() => {
