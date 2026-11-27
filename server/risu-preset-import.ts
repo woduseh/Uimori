@@ -67,6 +67,8 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
   const body = record(value);
   fields(body, ['source', 'digest', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
+  const digest = text(body.digest, 'import digest', 100);
+  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
   const { file, transfer, preview } = analyze(body.source);
   const receiptKey: RetainedReceiptKey = `risu-preset:${requestKey}`;
   const command = { file, digest: transfer.digest, modelBindings: [], idempotencyKey: receiptKey };
@@ -76,12 +78,11 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
     )!;
     return { receipt, preset: store.product.stored<PromptPreset>('prompt-preset', saved.id) };
   };
-  if (body.digest !== preview.digest)
+  if (digest !== preview.digest)
     return savedOrDraftChanged(receiptKey, (key) => {
       const receipt = readResourceBundleReceipt(store, { ...command, idempotencyKey: key });
       return receipt && result(receipt);
     });
-  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
   if (!body.allowPartial && preview.findings.some((finding) => finding.level === 'unsupported'))
     throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
   return store.transaction(() => result(applyNativeTransfer(store, command)));

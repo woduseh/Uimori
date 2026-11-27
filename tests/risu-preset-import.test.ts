@@ -164,6 +164,15 @@ test('a saved import whose response was lost answers its receipt even when the p
   expect(() =>
     applyRisuPresetImport(store, { ...command, digest: 'stale', idempotencyKey: 'never-saved' })
   ).toThrow(expect.objectContaining({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' }));
+  const { allowPartial: _allowPartial, ...withoutAllowPartial } = command;
+  const { digest: _digest, ...withoutDigest } = command;
+  for (const invalid of [
+    { ...withoutAllowPartial, digest: 'digest-before-upgrade' },
+    withoutDigest,
+  ])
+    expect(() => applyRisuPresetImport(store, invalid)).toThrow(
+      expect.objectContaining({ statusCode: 400 })
+    );
 });
 
 test('a lost-response retry finds its preset receipt after hundreds of other imports', () => {
