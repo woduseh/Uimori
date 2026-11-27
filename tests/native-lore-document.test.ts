@@ -111,12 +111,12 @@ test('deleting a folder reparents children while preserving content, flags and u
 });
 
 test('new card and module folders retain their native representation and unique keys', () => {
-  const card = newLoreEntry([{ id: 17 }], false, true);
-  const module = newLoreEntry([], true, true);
-  expect(card).toMatchObject({ mode: 'folder', id: 18, name: '새 폴더', enabled: true });
+  const card = newLoreEntry([{ id: 17 }], false, true, 'Folder');
+  const module = newLoreEntry([], true, true, 'Folder');
+  expect(card).toMatchObject({ mode: 'folder', id: 18, name: 'Folder', enabled: true });
   expect(Array.isArray(card.keys)).toBe(true);
-  expect(module).toMatchObject({ mode: 'folder', comment: '새 폴더', alwaysActive: false });
-  expect(newLoreEntry([], true)).toMatchObject({ secondkey: '', selective: false });
+  expect(module).toMatchObject({ mode: 'folder', comment: 'Folder', alwaysActive: false });
+  expect(newLoreEntry([], true, false, 'Lore')).toMatchObject({ secondkey: '', selective: false });
   expect(loreFolderKey(card)).toMatch(/^\uf000folder:/u);
   expect(loreFolderKey(card)).not.toBe(loreFolderKey(module));
 });

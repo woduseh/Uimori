@@ -1,5 +1,5 @@
 import { parseOwnJson, tryParseJson } from './json.js';
-import { useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { isUiMessage, UiError, uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
@@ -909,7 +909,7 @@ export function useStory() {
           bitmap.close();
           return {
             id: crypto.randomUUID(),
-            name: file.name || '참고 이미지',
+            name: file.name || t('main.unnamedRequestImage'),
             blob: file,
             ...dimensions,
           };

@@ -731,6 +731,12 @@ export const messages = {
     ja: '参考画像を添付',
     zh: '附加参考图片',
   },
+  'main.unnamedRequestImage': {
+    ko: '참고 이미지',
+    en: 'Reference image',
+    ja: '参考画像',
+    zh: '参考图片',
+  },
   'main.m113': {
     ko: '창작 옵션',
     en: 'Writing options',

@@ -801,7 +801,12 @@ export function NativeRisuToggleEditor({
                         disabled={locked}
                         onClick={() =>
                           structural(() =>
-                            addToggleItem(value, current.id, type as NativeToggleType)
+                            addToggleItem(value, current.id, type as NativeToggleType, {
+                              label: t('native.newToggleItem'),
+                              options: [1, 2]
+                                .map((index) => t('native.newToggleOption', { index }))
+                                .join(','),
+                            })
                           )
                         }
                       >
