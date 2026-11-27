@@ -7,7 +7,7 @@ import { ValidationError } from '../core/validation-error.js';
 import { createApp } from '../server/app.js';
 import { UI_LOCALES } from '../core/ui-locale.js';
 import { messages } from '../web/locales/index.js';
-import { appErrorMessages } from '../web/api-errors.js';
+import { appErrorMessages, toUiMessage } from '../web/api-errors.js';
 import { RisuPromptError } from '../core/risu-prompt.js';
 import { AgentCollaborationError } from '../core/agent-collaboration.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
@@ -104,6 +104,12 @@ test('a core validator error thrown inside any route answers its catalogued code
     await app.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('an agent collaboration error the web raises locally shows its catalog message', () => {
+  expect(toUiMessage(new AgentCollaborationError('AGENT_COLLABORATION_UNKNOWN_CONTROL'))).toEqual(
+    expect.objectContaining({ key: 'errors.AGENT_COLLABORATION_INVALID' })
+  );
 });
 
 test('the helper shell bridge answers a core error with the code the app answers', () => {

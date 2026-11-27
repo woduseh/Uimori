@@ -4,6 +4,7 @@ import {
   isAppErrorCode,
   type ReceivedErrorWire,
 } from '#contracts';
+import { AgentCollaborationError } from '../core/agent-collaboration.js';
 import { ValidationError } from '../core/validation-error.js';
 import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js';
 import {
@@ -354,6 +355,8 @@ export function toUiMessage(
   if (cause instanceof ValidationError)
     return appErrorUiMessage(cause.code, cause.params as ReceivedErrorWire['params']);
   if (cause instanceof RisuPromptError) return appErrorUiMessage(risuPromptAppErrorCode(cause));
+  if (cause instanceof AgentCollaborationError)
+    return appErrorUiMessage('AGENT_COLLABORATION_INVALID');
   return typeof fallback === 'string' ? uiMessage(fallback) : fallback;
 }
 
