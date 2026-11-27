@@ -1,0 +1,10 @@
+{
+  "format": "uimori-snapshot-v1",
+  "id": "backup-20261127T103336864Z-bb2b1921-8417-4050-835f-aa85da26f608",
+  "createdAt": "2026-11-27T10:33:36.920Z",
+  "appVersion": "0.18.0",
+  "buildId": "v0.18.0-fixture",
+  "schema": 15,
+  "bytes": 1306624,
+  "sha256": "66fab12775362ecb859b907b4ae2fa1a144aaf899f5f9a017fbe81681e24ed27"
+}

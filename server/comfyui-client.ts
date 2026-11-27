@@ -15,7 +15,7 @@ import {
   type IllustrationImageMime,
 } from '../core/illustration.js';
 
-export type ComfyUIConnection = { baseUrl: string; authorizationEnv: string; disabled?: true };
+export type ComfyUIConnection = { baseUrl: string; authorizationEnv: string };
 export type ComfyUIRequestOptions = {
   signal: AbortSignal;
   resolveCredential?: (
@@ -71,7 +71,6 @@ async function headers(
   options: ComfyUIRequestOptions,
   json: boolean
 ): Promise<Record<string, string>> {
-  if (connection.disabled) throw new IllustrationError('CONNECTION_NOT_AUTHORIZED');
   options.signal.throwIfAborted();
   const result: Record<string, string> = json ? { 'content-type': 'application/json' } : {};
   if (connection.authorizationEnv) {

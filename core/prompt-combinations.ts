@@ -37,9 +37,7 @@ export function ownsPromptCombination(
   owner: PromptCombinationOwner,
   role: PromptRole
 ): boolean {
-  return (
-    item.role === role && item.owner !== undefined && canonical(item.owner) === canonical(owner)
-  );
+  return item.role === role && canonical(item.owner) === canonical(owner);
 }
 
 export function repairPromptCombinationValues(

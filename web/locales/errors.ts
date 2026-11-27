@@ -1931,12 +1931,6 @@ export const messages = {
     ja: 'サービスアカウントとAPI URLのプロジェクトが異なります。',
     zh: '服务账号与 API 地址属于不同的项目。',
   },
-  'errors.PROMPT_COMBINATION_OWNER_MISSING': {
-    ko: '어느 프롬프트에 속하는지 알 수 없는 이전 조합이에요. 새 조합으로 저장해 주세요.',
-    en: 'This older combination has no known prompt. Save it as a new combination.',
-    ja: 'どのプロンプトに属するか分からない以前の組み合わせです。新しい組み合わせとして保存してください。',
-    zh: '这是无法确认所属提示词的旧组合。请另存为新组合。',
-  },
   'errors.SCENE_COMMAND_RUN_ACTIVE': {
     ko: '진행 중인 원문 생성을 먼저 취소해 주세요.',
     en: 'Cancel the source generation in progress first.',

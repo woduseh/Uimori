@@ -1455,7 +1455,6 @@ export function retryIllustration(store: Store, id: string): Illustration {
       throw new AppError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     assertIllustrationSlot(store, job.sourceRevision, job);
-    if (job.input.comfyui?.disabled) throw new AppError(409, 'ILLUSTRATION_CONNECTION_DISABLED');
     if (
       job.input.generator === 'comfyui' &&
       job.diagnostic?.comfyui &&
@@ -1501,7 +1500,6 @@ export function claimIllustrationForReconcile(
       throw new AppError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
     if (!RETRYABLE_STATUSES.includes(job.status))
       throw new AppError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
-    if (job.input.comfyui.disabled) throw new AppError(409, 'ILLUSTRATION_CONNECTION_DISABLED');
     assertNoActiveIllustrationTarget(store, job);
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     store.db

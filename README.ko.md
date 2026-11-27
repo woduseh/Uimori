@@ -107,7 +107,7 @@
 **DB와 백업**
 
 - 기본 DB는 `.local/uimori.sqlite`예요.
-- 빈 DB와 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)의 DB만 열고, 구형 DB는 변경하지 않고 거절해요. 옛 백업은 당시 앱 버전과 함께 보관해요.
+- 빈 DB와 [현재 데이터 형식](docs/DATA-MIGRATIONS.md#현재-버전)의 DB만 열고, 구형 DB는 변경하지 않고 거절해요. 전체 복원과 `.uimori`·`.chat.uimori` 가져오기는 v0.18.0 이후 앱이 만든 백업을 지원하고, 그보다 옛 백업은 당시 앱 버전과 함께 보관해요.
 - **설정 → 데이터 관리 → 백업과 복원**에서 SQLite 백업을 저장해요. 개별 자료와 채팅은 새 사본으로 가져올 수 있어요. [백업·격리 DB 사용법](docs/USAGE.md)
 - 테스트용 개발 DB를 초기화하려면 서버를 종료한 뒤 `npm run reset:dev`를 실행해요.
 

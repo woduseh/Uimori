@@ -726,7 +726,6 @@ export async function runIllustrationJob(
       }));
     } else if (input.generator === 'comfyui') {
       if (!input.comfyui) throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
-      if (input.comfyui.disabled) throw new IllustrationError('CONNECTION_NOT_AUTHORIZED');
       const workflow = parseComfyWorkflow(input.comfyui.workflow);
       const model = input.comfyui.promptModel;
       const connection = await authorizedConnection(hooks, model);
@@ -877,7 +876,6 @@ export async function reconcileIllustrationJob(
     const connection = {
       baseUrl: job.input.comfyui!.baseUrl,
       authorizationEnv: job.input.comfyui!.authorizationEnv,
-      disabled: job.input.comfyui!.disabled,
     };
     const result = await fetchComfyUIResult(connection, promptId, {
       signal: hooks.signal,

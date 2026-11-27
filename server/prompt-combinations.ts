@@ -26,7 +26,6 @@ export function updatePromptCombination(
       }
     };
     const item = saved<SavedPromptCombination>('prompt-combination', id);
-    if (!item.owner) throw new AppError(409, 'PROMPT_COMBINATION_OWNER_MISSING');
     const current =
       item.owner.kind === 'preset'
         ? saved<PromptPreset>('prompt-preset', item.owner.id)

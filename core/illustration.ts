@@ -171,7 +171,6 @@ export type IllustrationJobInput = {
     pollIntervalMs: number;
     negativeGuidance: string;
     promptModel: ModelSnapshot;
-    disabled?: true;
   };
   novelai?: NovelAIRenderSettings & {
     negativeGuidance: string;

@@ -68,7 +68,7 @@ export type PromptCombinationOwner =
   | { kind: 'preset'; id: string }
   | { kind: 'workspace'; role: PromptRole };
 export type SavedPromptCombination = ContentRef & {
-  owner?: PromptCombinationOwner;
+  owner: PromptCombinationOwner;
   controls?: import('./risu-prompt.js').PromptControl[];
   title: string;
   role: PromptRole;

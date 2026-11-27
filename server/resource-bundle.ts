@@ -95,7 +95,7 @@ export function captureResourceBundle(
       const combinations = (
         store.product.all('prompt-combination') as SavedPromptCombination[]
       ).filter(
-        (combination) => combination.owner?.kind === 'preset' && combination.owner.id === item.id
+        (combination) => combination.owner.kind === 'preset' && combination.owner.id === item.id
       );
       file.prompts.push({ key, source, combinations });
       file.roots.push({ kind: item.kind, key });

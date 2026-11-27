@@ -110,7 +110,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 **Database and backups**
 
 - The default database is `.local/uimori.sqlite`.
-- Uimori opens only empty databases and databases in the [current data format](docs/DATA-MIGRATIONS.md#현재-버전); older databases are rejected without changes. Keep old backups together with the app version that created them.
+- Uimori opens only empty databases and databases in the [current data format](docs/DATA-MIGRATIONS.md#현재-버전); older databases are rejected without changes. Full restores and `.uimori`/`.chat.uimori` imports are supported for backups made by v0.18.0 or later; keep older backups together with the app version that created them.
 - Save a SQLite backup from **Settings → Data management → Backup and restore**. Individual resources and chats can be imported as new copies. [Backups and isolated databases](docs/USAGE.md)
 - To reset a disposable development database, stop the server and run `npm run reset:dev`.
 

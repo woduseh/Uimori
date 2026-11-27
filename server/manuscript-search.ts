@@ -8,11 +8,7 @@ import type {
 } from '../core/manuscript-search.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import { AppError } from './app-errors.js';
-import {
-  foldSearchText,
-  legacySearchIndexRemains,
-  moveLegacySearchIndex,
-} from './search-schema.js';
+import { foldSearchText } from './search-schema.js';
 import type { Store } from './store.js';
 
 export class ManuscriptSearch {
@@ -147,16 +143,10 @@ export class ManuscriptSearch {
     });
     return this.indexing;
   }
-  moveLegacyIndexBatch(): boolean {
-    if (this.closed || !this.writable() || !legacySearchIndexRemains(this.store.db)) return false;
-    return this.store.transaction(() => moveLegacySearchIndex(this.store.db, 128 * 1024));
-  }
   listen() {
     const tick = async () => {
       try {
         await this.refreshBatch();
-        if (!this.store.db.prepare('SELECT 1 FROM search_dirty_sources LIMIT 1').get())
-          this.moveLegacyIndexBatch();
       } catch {}
       if (!this.closed) {
         this.timer = setTimeout(() => void tick(), 1000);

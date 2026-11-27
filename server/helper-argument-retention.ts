@@ -45,20 +45,18 @@ export function redactHelperArgumentPreviews(
   );
 }
 
-export function releaseHelperConfirmationArguments(db: DatabaseSync, conversationId?: string) {
-  const scoped = conversationId ? 'AND t.conversation_id=?' : '';
-  const values = conversationId ? [conversationId] : [];
+export function releaseHelperConfirmationArguments(db: DatabaseSync, conversationId: string) {
   db.prepare(`UPDATE helper_events SET data=json_remove(data,'$.arguments') WHERE ${HELD}
     AND task_id IN (SELECT t.id FROM helper_tasks t WHERE EXISTS (SELECT 1 FROM helper_tasks later
-      WHERE later.conversation_id=t.conversation_id AND later.rowid>t.rowid) ${scoped})`).run(
-    ...values
+      WHERE later.conversation_id=t.conversation_id AND later.rowid>t.rowid) AND t.conversation_id=?)`).run(
+    conversationId
   );
   releaseGrants(
     db,
     `(t.status='completed' OR EXISTS (SELECT 1 FROM helper_tasks later
       WHERE later.conversation_id=t.conversation_id AND later.rowid>t.rowid
-        AND COALESCE(json_extract(later.snapshot,'$.requestGroupId'),later.id)=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id))) ${scoped}`,
-    values
+        AND COALESCE(json_extract(later.snapshot,'$.requestGroupId'),later.id)=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id))) AND t.conversation_id=?`,
+    [conversationId]
   );
 }
 

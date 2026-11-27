@@ -23,8 +23,6 @@ export function initFonts(store: Store) {
   store.db.exec(
     'CREATE TABLE IF NOT EXISTS font_assets(id TEXT PRIMARY KEY, metadata TEXT NOT NULL, bytes BLOB NOT NULL)'
   );
-  store.db.exec(`UPDATE font_assets SET metadata=json_remove(metadata,'$.sourceUrl','$.license')
-    WHERE json_type(metadata,'$.sourceUrl') IS NOT NULL OR json_type(metadata,'$.license') IS NOT NULL`);
   initialized.add(store);
 }
 export function fontPreferences(store: Store): FontPreferences {

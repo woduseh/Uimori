@@ -60,34 +60,6 @@ test('font bytes deduplicate without replacing the original title and selections
   expect(invalidations).toEqual(['fonts', 'fonts', 'fonts', 'fonts']);
 });
 
-test('opening existing fonts removes retired metadata while preserving files, identity and selections', () => {
-  const store = database();
-  const bytes = fixture();
-  const font = registerFont(store, { title: 'Existing font', bytes });
-  const preferences = selectFonts(store, {
-    expectedRevision: 0,
-    appFontId: font.id,
-    readerFontId: font.id,
-  });
-  store.db
-    .prepare('UPDATE font_assets SET metadata=? WHERE id=?')
-    .run(
-      JSON.stringify({ ...font, sourceUrl: 'https://example.com/font.ttf', license: 'Old note' }),
-      font.id
-    );
-  store.close();
-  stores.splice(stores.indexOf(store), 1);
-  const reopened = new Store(store.path);
-  stores.push(reopened);
-  expect(fontCatalog(reopened)).toEqual({ fonts: [font], preferences });
-  const row = reopened.db
-    .prepare('SELECT metadata,bytes FROM font_assets WHERE id=?')
-    .get(font.id)!;
-  expect(JSON.parse(String(row.metadata))).toEqual(font);
-  expect(Buffer.from(row.bytes as Uint8Array)).toEqual(bytes);
-  expect(registerFont(reopened, { title: 'Duplicate', bytes })).toEqual(font);
-  expect(fontCatalog(reopened)).toEqual({ fonts: [font], preferences });
-});
 test('rejects unsupported signatures and table ranges before storing any font', () => {
   const store = database();
   expect(() =>

@@ -162,17 +162,14 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
   const params: (string | number)[] =
     query.scope === 'chat' ? [query.chatId!] : query.scope === 'bot' ? [query.botId!] : [];
   const long = terms.filter((term) => [...term].length >= 3);
-  const legacy = long.length > 0 && !!db.prepare('SELECT 1 FROM search_fts_docsize LIMIT 1').get();
   // https://sqlite.org/fts5.html#the_trigram_tokenizer (2026-11-20): trigram matching is case
   // insensitive unless the case_sensitive option is set to 1.
   const fts = long.length
     ? `AND (EXISTS(SELECT 1 FROM search_dirty_sources d WHERE d.source_id=v.source_id)
-    OR v.source_id IN (SELECT d.source_id FROM search_trigrams f JOIN search_documents d ON d.id=f.rowid WHERE search_trigrams MATCH ?)
-    ${legacy ? 'OR v.source_id IN (SELECT d.source_id FROM search_fts f JOIN search_documents d ON d.id=f.rowid WHERE search_fts MATCH ?)' : ''})`
+    OR v.source_id IN (SELECT d.source_id FROM search_trigrams f JOIN search_documents d ON d.id=f.rowid WHERE search_trigrams MATCH ?))`
     : '';
   params.push(after);
   if (long.length) params.push(trigramQuery(long));
-  if (legacy) params.push(long.map((term) => `"${term.replaceAll('"', '""')}"`).join(' AND '));
   const rows = db
     .prepare(`WITH RECURSIVE visible(chat_id,source_id) AS (
     SELECT c.id,c.head_revision FROM chats c JOIN chat_organization o ON o.chat_id=c.id

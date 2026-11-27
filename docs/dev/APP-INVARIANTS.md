@@ -2,19 +2,18 @@
 
 Developer invariants not stated by code, schemas, or user guides. Entry files per feature live in [CODE-MAP](CODE-MAP.md), and verification runners live in [DEVELOPMENT](DEVELOPMENT.md).
 
-## Personal workspace schema 15 and startup upgrades
+## Personal workspace schema 15
 
-- **Startup row normalization (`upgradeStoredShapes`)**: Runs in one transaction on every DB open (including backups restored from SQLite snapshots), never changes revision numbers, and skips rows already in the current shape. User-visible startup backfills are listed in [DATA-MIGRATIONS](../DATA-MIGRATIONS.md#서버를-열-때-정리하는-저장-형식).
-- **Removed evaluation controls and legacy copy receipts**: `upgradeStoredShapes` strips `maximumToolRounds`, `terminalLateCorrections`, and `outputRecovery` from model `evaluationTools` (and save/validation reject them thereafter). Legacy chat copy records lacking a recorded copy command are left unmodified and return `CHAT_COPY_RECEIPT_UNVERIFIED` (409) on retry so the browser clears the leftover key.
+- **Backup horizon (v0.18.0)**: Opening a DB and importing `.uimori` or `.chat.uimori` archives read only the shapes v0.18.0 and later write; no row is rewritten on open. `tests/backup-horizon.test.ts` opens a v0.18.0 automatic-backup snapshot and imports archives exported by v0.18.0, so a change to a stored or archived shape either keeps reading those or ships its own migration with that test updated.
+- **Legacy copy receipts**: Chat copy records lacking a recorded copy command are left unmodified and return `CHAT_COPY_RECEIPT_UNVERIFIED` (409) on retry so the browser clears the leftover key.
 - **Single head and concurrency invariants**: Each chat owns its manuscript head (`chats.head_revision`) and execution state directly; the `branches` table, `branch_id` column, and API `branchId` are removed. Task owner/generation tracking, revision CAS, post-cancel late-save blocking, and request-key deduplication remain strictly enforced.
-- **`HelperLimits`**: Uses only `totalCalls` and `helperCalls`; the deprecated `artifacts` field is excluded and stripped from legacy rows on startup.
 - **Schema 15 on-demand tables**:
   - `helper_seed_messages`: Cloned dialogue from past helper session forks, created on demand at startup.
   - `execution_tool_diagnostics`: Lightweight tool diagnostic metadata owned by main, translation, and illustration tasks; does not replace replay receipts in `tool_events`.
   - `image_cleanup_candidates`: Deferred orphan image hashes waiting for active tasks to finish.
   - `helper_changes`: One record per helper task and target storing full pre-edit state (`baseline`) for turn rollback, UI diffs (`entries`), final-state hash (`result`), concurrent external save flag (`foreign_edit`), and rollback timestamp (`rolled_back_at`), deleted with `helper_tasks`. Rows predating these columns have an empty `result` and cannot be rolled back.
   - `theme_assets`: Theme font and image originals by hash, retained while referenced by a saved theme, its undo copy, or a retained `helper_changes` row, and separate from user fonts (`font_assets`) and body images (`image_blobs`). Unreferenced uploads are pruned on server startup after one day.
-  - `search_trigrams`: Derived trigram index created on demand without bumping schema 15; legacy `search_fts` rows migrate on idle ticks until `search_fts` is emptied ([MANUSCRIPT-SEARCH](../MANUSCRIPT-SEARCH.md)).
+  - `search_trigrams`: Derived trigram index created on demand without bumping schema 15; opening a DB drops the retired `search_fts` table ([MANUSCRIPT-SEARCH](../MANUSCRIPT-SEARCH.md)).
 - **`app_metadata` key conventions**:
   - `source-title:<sourceId>`: Optional scene names.
   - `illustration-presentation:<sourceId>`: Representative/display selection and translation placement for paragraph illustrations.
@@ -178,10 +177,9 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ### Index structure and change tracking (FTS5 trigram)
 
-- **Derived tables and dirty queue**: `search_documents`, `search_trigrams`, and migrating legacy `search_fts` are derived data not rebuilt in full on restart. Edit transactions enqueue only `(source_id, revision)` in `search_dirty_sources`; a read Worker normalizes small batches and the main server checks revisions before applying index updates.
+- **Derived tables and dirty queue**: `search_documents` and `search_trigrams` are derived data not rebuilt in full on restart. Edit transactions enqueue only `(source_id, revision)` in `search_dirty_sources`; a read Worker normalizes small batches and the main server checks revisions before applying index updates.
 - **Write bounds**: Each index write caps at roughly 256KiB of combined old and new text or up to 8 scenes; a single very large scene indexes alone so responsiveness of other operations beats total index completion time.
 - **Index storage format**: `search_documents.text` stores a single plain-text copy for snippets (no persisted lowercased copy) feeding the positionless trigram index `search_trigrams` (`detail=none`, `contentless_delete=1`); phrase queries narrow candidates via trigram AND and verify against stored plain text.
-- **Legacy migration (`moveLegacySearchIndex`)**: Migrates non-empty `search_text` rows from `search_fts` at ~128KiB per 1-second idle tick when no dirty indexing is pending, clears `search_text`, and empties `search_fts` once done (thereafter the 1s tick is read-only). Mid-migration searches consult both indexes and resume across restarts; columns and tables stay intact to preserve schema 15.
 - **Latest-body overlay**: Search overlays dirty documents with their latest text inside the same SQLite read transaction so saves and deletions appear immediately even when indexing lags.
 
 ### Search queries and segment scanning

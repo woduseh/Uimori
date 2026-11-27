@@ -392,7 +392,7 @@ export function initializePromptWorkspaceReferences(store: Store): void {
           : current.values);
       saved[role] = { presetId: source.id, values: structuredClone(explicit) };
       for (const combo of store.product.all('prompt-combination') as SavedPromptCombination[]) {
-        if (combo.role !== role || combo.owner?.kind !== 'workspace' || combo.owner.role !== role)
+        if (combo.role !== role || combo.owner.kind !== 'workspace' || combo.owner.role !== role)
           continue;
         const { id, revision, ...body } = combo;
         store.product.saveInTransaction(
