@@ -2,25 +2,12 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, extname, join, posix, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { docsOnly } from './ci-changes.mjs';
+import { docsOnly, is, withoutModuleExtension } from './change-classifier.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const defaultLimit = 30;
 const usage = 'Usage: node scripts/check-changed.mjs [<base>] [--limit <n>] [--all] [--list-json]';
-const biomeFile = /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u;
-const typeScriptInput = /(?:\.(?:ts|tsx|mts)|^package\.json|^tsconfig[^/]*\.json)$/u;
-const moduleFile = /^(?:core|server|web|runner|scripts|tests)\/.+\.(?:ts|tsx|mts|js|mjs)$/u;
-const moduleExtension = /\.(?:[cm]?[jt]sx?)$/u;
-const commentSource = /\.(?:ts|tsx|mts|cts|js|mjs|cjs|css)$/u;
-const vitestFile = /^tests\/.+\.test\.ts$/u;
-const toolingTestFile = /^(?:scripts\/[^/]+\.test\.mjs|tests\/[^/]+\.node\.test\.mjs)$/u;
-const fullSuiteInput =
-  /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u;
-const fullCommentScan = /^scripts\/(?:check-comments\.mjs|comment-allowlist\.json)$/u;
-const i18nInput = /^(?:web\/|scripts\/check-i18n\.mjs$)/u;
-const userGuide = /^docs\/[^/]+\.md$/u;
 const guideTest = 'tests/app-guides.test.ts';
-const distEntry = /^server\/(?:index|app)\.ts$/u;
 export const distTests = ['tests/background-work.test.ts', 'tests/server.test.ts'];
 const importSpecifier = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"](\.{1,2}\/[^'"]+)['"]/gu;
 
@@ -28,34 +15,28 @@ function unique(values) {
   return [...new Set(values)];
 }
 
-function withoutExtension(file) {
-  return file.replace(moduleExtension, '');
-}
-
 function importsAny(test, source, stems) {
   return [...source.matchAll(importSpecifier)].some(([, specifier]) =>
-    stems.has(withoutExtension(posix.join(posix.dirname(test), specifier)))
+    stems.has(withoutModuleExtension(posix.join(posix.dirname(test), specifier)))
   );
 }
-
-const hookFile = /^(?:\.githooks|\.claude\/hooks)\//u;
 
 function selectToolingTests(files, toolingTests, toolingSources = {}) {
   const selected = [];
   const stems = new Set();
   let unmatched = false;
   for (const file of files) {
-    if (toolingTestFile.test(file)) {
+    if (is.toolingTestFile(file)) {
       if (toolingTests.includes(file)) selected.push(file);
       continue;
     }
-    if (!file.startsWith('scripts/') && !hookFile.test(file)) continue;
-    stems.add(withoutExtension(file));
-    if (file.startsWith('scripts/') && /^scripts\/[^/]+$/u.test(file)) {
+    if (!is.scriptFile(file) && !is.hookFile(file)) continue;
+    stems.add(withoutModuleExtension(file));
+    if (is.topLevelScript(file)) {
       const paired = `${file.replace(/\.[^./]+$/u, '')}.test.mjs`;
       if (toolingTests.includes(paired)) selected.push(paired);
       else unmatched = true;
-    } else if (file.startsWith('scripts/')) unmatched = true;
+    } else if (is.scriptFile(file)) unmatched = true;
   }
   if (unmatched) return 'all';
   for (const test of toolingTests) {
@@ -81,9 +62,9 @@ export function selectChecks(
   testSources,
   { exists = () => true, toolingTests = [], toolingSources = {} } = {}
 ) {
-  const modules = files.filter((file) => moduleFile.test(file));
+  const modules = files.filter(is.moduleFile);
   const markers = files
-    .filter((file) => !moduleFile.test(file))
+    .filter((file) => !is.moduleFile(file))
     .flatMap((file) => {
       const extension = extname(file);
       return [basename(file), ...(extension ? [`'${extension}'`, `"${extension}"`] : [])];
@@ -93,34 +74,31 @@ export function selectChecks(
     (test) =>
       !modules.includes(test) && markers.some((marker) => testSources[test].includes(marker))
   );
-  const guideTests =
-    files.some((file) => userGuide.test(file)) && tests.includes(guideTest) ? [guideTest] : [];
-  const moduleNames = new Set(modules.map((file) => basename(withoutExtension(file))));
+  const guideTests = files.some(is.userGuide) && tests.includes(guideTest) ? [guideTest] : [];
+  const moduleNames = new Set(modules.map((file) => basename(withoutModuleExtension(file))));
   const directTests = unique([
-    ...modules.filter((file) => vitestFile.test(file) && exists(file)),
+    ...modules.filter((file) => is.vitestFile(file) && exists(file)),
     ...namedTests,
     ...guideTests,
     ...tests.filter((test) => moduleNames.has(basename(test, '.test.ts'))),
   ]).sort();
-  const moduleStems = new Set(modules.map(withoutExtension));
+  const moduleStems = new Set(modules.map(withoutModuleExtension));
   const firstHopTests = tests.filter(
     (test) => !directTests.includes(test) && importsAny(test, testSources[test], moduleStems)
   );
   return {
     docsOnly: docsOnly(files),
-    documentation: files.some((file) => file.endsWith('.md')),
-    biome: files.filter((file) => biomeFile.test(file) && exists(file)),
-    typeScript: files.some((file) => typeScriptInput.test(file)),
-    comments: files.some((file) => fullCommentScan.test(file))
-      ? 'all'
-      : files.filter((file) => commentSource.test(file)),
-    i18n: files.some((file) => i18nInput.test(file)),
+    documentation: files.some(is.markdownFile),
+    biome: files.filter((file) => is.biomeFile(file) && exists(file)),
+    typeScript: files.some(is.typeScriptInput),
+    comments: files.some(is.fullCommentScan) ? 'all' : files.filter(is.commentSource),
+    i18n: files.some(is.i18nInput),
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
     firstHopTests,
     tooling: selectToolingTests(files, toolingTests, toolingSources),
-    fullRequired: files.filter((file) => fullSuiteInput.test(file)),
-    notes: files.some((file) => distEntry.test(file))
+    fullRequired: files.filter(is.fullSuiteInput),
+    notes: files.some(is.distEntry)
       ? [
           `server/index.ts or server/app.ts changed: ${distTests.join(' and ')} execute dist, so they check this change only after \`npm run build\`; then run \`npm test -- ${distTests.join(' ')}\``,
         ]
@@ -187,7 +165,7 @@ function toolingTestFiles() {
     .flatMap((directory) =>
       readdirSync(join(root, directory)).map((name) => `${directory}/${name}`)
     )
-    .filter((file) => toolingTestFile.test(file));
+    .filter(is.toolingTestFile);
 }
 
 function collectChecks(base) {

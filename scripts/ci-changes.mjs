@@ -1,29 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { docsOnly, windowsSensitive } from './change-classifier.mjs';
 
-export function docsOnly(files) {
-  return (
-    files.length > 0 &&
-    files.every((file) =>
-      /^(?:docs\/(?:dev|plans|releases)\/[^\r\n]+\.md|README(?:\.ko)?\.md|AGENTS\.md|LICENSE)$/.test(
-        file
-      )
-    )
-  );
-}
-
-export function windowsSensitive(files) {
-  return (
-    !files.length ||
-    files.some(
-      (file) =>
-        !/^(?:web\/|docs\/[^\r\n]+\.md$|README(?:\.ko)?\.md$|AGENTS\.md$|LICENSE$|tests\/[^/]+\.spec\.ts$)/.test(
-          file
-        )
-    )
-  );
-}
+export { docsOnly, windowsSensitive };
 
 export function versionChanged(packageJsonAt, base, head = 'HEAD') {
   return JSON.parse(packageJsonAt(base)).version !== JSON.parse(packageJsonAt(head)).version;

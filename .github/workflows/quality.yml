@@ -31,7 +31,9 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          sparse-checkout: scripts/ci-changes.mjs
+          sparse-checkout: |
+            scripts/ci-changes.mjs
+            scripts/change-classifier.mjs
           sparse-checkout-cone-mode: false
       - id: changes
         run: node scripts/ci-changes.mjs

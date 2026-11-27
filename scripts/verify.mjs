@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runBrowserVerification } from './browser-verification.mjs';
+import { is } from './change-classifier.mjs';
 import { changedFiles } from './check-changed.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -31,8 +32,6 @@ const runnerScripts = {
 };
 const valueOptions = new Set(['--grep', '--workers', '--shard']);
 const harnessOptions = new Set([...valueOptions, '--visual']);
-const browserInput =
-  /^(?:web|core|server|runner)\/|^tests\/(?:fixtures\/|[^/]+\.spec\.ts$)|^playwright\.config\.ts$/u;
 const minimumTimeout = 900_000;
 const perFileTimeout = 60_000;
 const fullTimeout = 3_600_000;
@@ -209,7 +208,7 @@ export function selectChanged(map, files) {
         domain.specs.some((entry) => entry.file === file)
     );
     for (const [name] of matched) owners.add(name);
-    if (!matched.length && browserInput.test(file)) uncovered.push(file);
+    if (!matched.length && is.browserInput(file)) uncovered.push(file);
   }
   return {
     domains: Object.keys(map.domains).filter((name) => owners.has(name)),
