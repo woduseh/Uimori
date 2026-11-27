@@ -423,7 +423,6 @@ export class ProductStore {
         ? this.get<PromptPreset>('prompt-preset', id).program.collaboration
         : undefined;
       for (const agent of program.collaboration.agents) {
-        if (agent.model) this.get<ModelPreset>('model', agent.model.id);
         assertModelSelection(
           this,
           agent.model,
@@ -486,6 +485,14 @@ export class ProductStore {
     const connectionId = text(b.connectionId, 'connection ID', 100);
     if (validationConnection && validationConnection.id !== connectionId)
       throw new HttpError(400, 'Validation connection mismatch');
+    if (
+      !validationConnection &&
+      (this.isHidden('connection', connectionId) ||
+        !this.db
+          .prepare("SELECT 1 FROM provider_settings WHERE kind='connection' AND id=?")
+          .get(connectionId))
+    )
+      throw new AppError(409, 'REVISION_CONFLICT');
     const connection = validationConnection ?? this.get<Connection>('connection', connectionId);
     const modelId = text(b.modelId, 'model ID', 300);
     validateModelGeneration(b, connection.protocol);
@@ -887,6 +894,7 @@ export class ProductStore {
   authorize(connection: Connection) {
     const current = this.get<Connection>('connection', connection.id);
     if (
+      this.isHidden('connection', connection.id) ||
       !current.enabled ||
       current.endpoint !== connection.endpoint ||
       current.protocol !== connection.protocol ||

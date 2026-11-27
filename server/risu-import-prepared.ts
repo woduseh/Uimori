@@ -248,7 +248,7 @@ export async function prepareStoredRisuImport(
         throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
       name = source.name;
       sourcePath = join(uploadDirectory(dbPath), `${source.uploadId}.bin`);
-      if (!existsSync(sourcePath)) throw new HttpError(404, 'UPLOAD_NOT_FOUND');
+      if (!existsSync(sourcePath)) throw new AppError(404, 'UPLOAD_NOT_FOUND');
       if (statSync(sourcePath).size > UPLOAD_MAX_BYTES)
         throw new AppError(413, 'UPLOAD_TOO_LARGE', { maxBytes: UPLOAD_MAX_BYTES });
     } else {

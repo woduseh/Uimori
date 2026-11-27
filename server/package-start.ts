@@ -221,7 +221,7 @@ export function createPackageStart(
           if (!canChangePackageStart(store, chatId))
             throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
         } else if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
-          throw new HttpError(409, 'PACKAGE_START_ALREADY_CONFIRMED');
+          throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
         if (!prepared) throw new HttpError(409, 'PACKAGE_START_REPLAY_MISSING');
         const { profile, selected } = prepared;
         if (chat.botId !== command.packageId)

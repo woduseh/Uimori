@@ -251,7 +251,11 @@ export function createConnectionTestRunner(
             throw new ProviderContractError(options.signal.aborted ? 'SERVER_STOPPING' : 'TIMEOUT');
           stillAuthorized();
           const current = store.product.get<ModelPreset>('model', model.id);
-          if (current.enabled === false || current.revision !== model.revision)
+          if (
+            store.product.isHidden('model', model.id) ||
+            current.enabled === false ||
+            current.revision !== model.revision
+          )
             throw new ProviderContractError('CONNECTION_TEST_MODEL_CHANGED');
           try {
             store.product.authorize(authority);

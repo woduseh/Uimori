@@ -18,7 +18,7 @@ export function assertModelSelection(
     connection = store.get<Connection>('connection', latest.connectionId);
   } catch (error) {
     if (error instanceof HttpError && error.statusCode === 404)
-      throw new AppError(409, 'MODEL_SELECTION_UNAVAILABLE');
+      throw new AppError(400, 'MODEL_SELECTION_UNAVAILABLE');
     throw error;
   }
   if (previous?.id === next.id) return;

@@ -186,8 +186,23 @@ test('ID-based selections follow current connections while protocol changes requ
 test('selecting a model another tab deleted answers MODEL_SELECTION_UNAVAILABLE', () => {
   const { s, chat, m } = setup();
   deleteLibraryItem(s, 'model', m.id, { expectedRevision: m.revision });
-  expect(() => assertModelSelection(s.product, ref(m))).toThrow('MODEL_SELECTION_UNAVAILABLE');
+  expect(() => assertModelSelection(s.product, ref(m))).toThrow(
+    expect.objectContaining({ code: 'MODEL_SELECTION_UNAVAILABLE', statusCode: 400 })
+  );
   expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('MODEL_SELECTION_UNAVAILABLE');
+});
+
+test('a model added on a stale screen to a connection another tab deleted is refused', () => {
+  const { s, c } = setup();
+  deleteLibraryItem(s, 'connection', c.id, { expectedRevision: c.revision });
+  expect(() => s.product.model(modelBody(c))).toThrow(
+    expect.objectContaining({ code: 'REVISION_CONFLICT', statusCode: 409 })
+  );
+  const pending = s.product.connection(connectionBody()) as Connection;
+  s.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('connection',?)").run(pending.id);
+  expect(() => s.product.model(modelBody(pending))).toThrow(
+    expect.objectContaining({ code: 'REVISION_CONFLICT' })
+  );
 });
 
 test('model draft validation uses explicit matching unsaved connection without any DB writes', () => {

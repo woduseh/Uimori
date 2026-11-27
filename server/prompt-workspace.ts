@@ -741,10 +741,7 @@ export function updatePromptWorkspace(
       revision: prior.revision + 1,
     });
     for (const agent of result.main.program.collaboration?.agents ?? [])
-      if (agent.model) {
-        store.product.assertAvailable('model', agent.model.id);
-        store.product.get('model', agent.model.id);
-      }
+      assertModelSelection(store.product, agent.model, agent.model);
     savePromptWorkspace(store, result);
     recordPromptWorkspaceUpdate(store.db);
     return result;

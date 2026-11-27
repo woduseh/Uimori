@@ -173,6 +173,34 @@ describe('one-call provider connection diagnostics', () => {
     }
   });
 
+  test('never sends a paid connection test for a model deleted while it was authorizing', async () => {
+    let release!: (value: string) => void;
+    const { app, model } = await setup({ credentialRef: 'SYNTHETIC_CONNECTION_TEST_KEY' });
+    const probe = Fastify() as unknown as App;
+    providerConnectionTestRoutes(probe, app.store, {
+      signal: new AbortController().signal,
+      authenticated: () => true,
+      track: () => {},
+      resolveCredential: () =>
+        new Promise<string>((resolve) => {
+          release = resolve;
+        }),
+    });
+    try {
+      const started = await post(probe, model);
+      await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+      app.store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('model',?)").run(model.id);
+      release('SYNTHETIC_NEVER_PERSISTED_SECRET');
+      expect(await terminal(probe, started.id)).toMatchObject({
+        status: 'error',
+        error: 'CONNECTION_TEST_MODEL_CHANGED',
+      });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      await probe.close();
+    }
+  });
+
   test.each([
     [
       'refused',
