@@ -1,6 +1,6 @@
 # UI gallery
 
-`npm run verify:gallery` captures the built app with synthetic data on an isolated test server. It covers the configured screens in light and dark themes, then follows the first-chat journey in light mode. Viewport widths come from [`fixtures/browser-viewports.json`](../../fixtures/browser-viewports.json).
+`npm run verify -- gallery` captures the built app with synthetic data on an isolated test server. It covers the configured screens in light and dark themes, then follows the first-chat journey in light mode. Viewport widths come from [`fixtures/browser-viewports.json`](../../fixtures/browser-viewports.json).
 
 Build the current app with `npm run build` before capturing. The gallery accepts no CLI arguments; change the screen/journey definitions below to adjust its selection. Use a feature's shared browser runner when you need `--grep` or `--visual`.
 
@@ -38,7 +38,7 @@ Measurements use DOM visibility, which does not establish that an element is ins
 
 ## Copy review warnings
 
-Run `npm run verify:copy` from the repository root for high-confidence source warnings, or `node scripts/check-ui-copy.mjs --json` for warnings **and** the full review inventory. The scanner reads `.tsx`/`.jsx` under `web/` and statically parses Korean (`ko`) messages in `web/locales/*.ts`; it never executes locale modules, modifies UI files, renders the app or makes model calls. It resolves literal `t('key')` calls and retains their keys and source locations in the JSON output. The existing `npm run check:i18n` separately verifies all four translations, missing keys and ICU syntax.
+Run `npm run verify -- copy` from the repository root for high-confidence source warnings, or `node scripts/check-ui-copy.mjs --json` for warnings **and** the full review inventory. The scanner reads `.tsx`/`.jsx` under `web/` and statically parses Korean (`ko`) messages in `web/locales/*.ts`; it never executes locale modules, modifies UI files, renders the app or makes model calls. It resolves literal `t('key')` calls and retains their keys and source locations in the JSON output. The existing `npm run check:i18n` separately verifies all four translations, missing keys and ICU syntax.
 
 **Warnings** use conservative heuristics on text known at source level:
 

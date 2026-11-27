@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { assertBuild, json, newId, root } from './lib.mjs';
+import { readFeatureMap, verificationNames } from './verify.mjs';
 import {
   identityKey,
   isMain,
@@ -12,21 +13,20 @@ import {
   sha256,
 } from './release-common.mjs';
 
-export function requiredChecks(area = 'verify:browser-smoke', full = false, scripts = {}) {
-  if (
-    !/^verify:[a-z][a-z0-9-]*$/u.test(area) ||
-    !Object.hasOwn(scripts, area) ||
-    area === 'verify:browser' ||
-    /(?:live|gallery|visual)/u.test(area)
-  )
+const defaultArea = 'browser-smoke';
+const fullRegression = 'verify -- all';
+
+export function requiredChecks(area = defaultArea, full = false, featureMap = readFeatureMap()) {
+  const kind = verificationNames(featureMap).get(area)?.kind;
+  if (kind !== 'domain' && kind !== 'preset')
     throw new Error(
-      'Choose a local feature verify:* script; use --full for the complete regression'
+      'Choose a feature-map domain or preset for --area; use --full for the complete regression'
     );
   return [
     ...new Set([
       ...(full ? ['quality:full'] : ['quality', 'build']),
-      ...(full && area === 'verify:browser-smoke' ? [] : [area]),
-      ...(full ? ['verify:browser'] : []),
+      ...(full && area === defaultArea ? [] : [`verify -- ${area}`]),
+      ...(full ? [fullRegression] : []),
     ]),
   ];
 }
@@ -69,15 +69,13 @@ export async function verifyReleaseReceipt(receipt, identity, checks) {
 }
 
 export async function runReleaseChecks(
-  { area = 'verify:browser-smoke', full = false, signal } = {},
+  { area = defaultArea, full = false, signal } = {},
   dependencies = {}
 ) {
   const sourceIdentity = dependencies.fingerprint ?? releaseFingerprint;
   const buildIdentity = dependencies.assertBuild ?? assertBuild;
   const execute = dependencies.execute ?? runExternal;
-  const packageScripts =
-    dependencies.scripts ?? (await readJson(path.join(root, 'package.json'))).scripts;
-  const checks = requiredChecks(area, full, packageScripts);
+  const checks = requiredChecks(area, full, dependencies.featureMap);
   const identity = await sourceIdentity();
   const directory = path.join(
     dependencies.outputRoot ?? path.join(root, 'output/release/checks'),
@@ -137,9 +135,9 @@ export async function runReleaseChecks(
       log(`RUN ${name}`);
       summary.checks[name] = { command: name, status: 'RUNNING' };
       await json(report, summary);
-      const result = await execute(process.execPath, [cli, 'run', name], {
-        timeoutMs: name === 'verify:browser' ? 3_900_000 : 1_200_000,
-        log: path.join(directory, `${name.replaceAll(':', '-')}-${newId()}.log`),
+      const result = await execute(process.execPath, [cli, 'run', ...name.split(' ')], {
+        timeoutMs: name === fullRegression ? 3_900_000 : 1_200_000,
+        log: path.join(directory, `${name.replaceAll(/[^a-z0-9]+/gu, '-')}-${newId()}.log`),
         signal,
         env: { UIMORI_VISUAL_REVIEW: undefined, UIMORI_BENCHMARK: undefined },
       });
@@ -181,7 +179,9 @@ if (isMain(import.meta.url)) {
       flags: ['full', 'help'],
     });
     if (options.help)
-      console.log('npm run release:check -- [--area verify:browser-smoke] [--full]');
+      console.log(
+        `npm run release:check -- [--area <domain or preset, default ${defaultArea}>] [--full]`
+      );
     else {
       const controller = new AbortController();
       const cancel = () => controller.abort();

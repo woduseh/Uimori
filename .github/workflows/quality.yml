@@ -167,10 +167,10 @@ jobs:
         run: |
           npx playwright install --with-deps --no-shell chromium
           node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
-      - run: npm run verify:selfhost
-      - run: npm run verify:browser-smoke
+      - run: npm run verify -- self-host
+      - run: npm run verify -- browser-smoke
       - name: Reader recovery
-        run: npm run verify:browser -- --grep READERREC
+        run: npm run verify -- all --grep READERREC
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -211,7 +211,7 @@ jobs:
         run: |
           npx playwright install --with-deps --no-shell chromium
           node --input-type=module -e "import { appendFileSync } from 'node:fs'; import { chromium } from '@playwright/test'; appendFileSync(process.env.GITHUB_ENV, 'UIMORI_BROWSER_PATH=' + chromium.executablePath() + '\n');"
-      - run: npm run verify:browser -- --shard ${{ matrix.shard }}/3
+      - run: npm run verify -- all --shard ${{ matrix.shard }}/3
         env:
           UIMORI_CI_BROWSER_REPORT: output/ci/browser-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v7

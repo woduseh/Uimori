@@ -115,7 +115,7 @@ test('only a receipt for the current source protects linked browser evidence', a
   );
   await writeFile(
     path.join(directory, 'summary.json'),
-    JSON.stringify({ identity, checks: { 'verify:selfhost': { status: 'PASS', log } } })
+    JSON.stringify({ identity, checks: { 'verify -- self-host': { status: 'PASS', log } } })
   );
   assert.equal((await run({ keepPassed: 1, apply: true })).removed.length, 0);
   await mkdir(path.join(repository, 'core'));

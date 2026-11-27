@@ -204,6 +204,30 @@ test('commands in shell fences must name existing npm scripts and source paths',
   );
 });
 
+test('inline npm commands and script-shaped names must name existing npm scripts', () => {
+  withDocumentation(
+    {
+      'package.json': JSON.stringify({
+        scripts: { verify: 'node x', 'check:i18n': 'node y', 'release:check': 'node z' },
+      }),
+      'docs/dev/SPEC.md': [
+        'Run `npm run verify -- reader`, `npm run check:i18n` or `npm run release:check -- --area <domain>`.',
+        'Gone: `npm run verify:ui`, `verify:liquid-gallery` and `check:gone`.',
+        'Not scripts: `scene:ready`, `verify:*`, `npm run verify:<area>` and `a:b c`.',
+      ].join('\n'),
+      'docs/releases/v0.0.1.md': 'Historical: `npm run verify:ui`.',
+    },
+    (directory) => {
+      const spec = join(directory, 'docs/dev/SPEC.md');
+      assert.deepEqual(documentationErrors(directory), [
+        `${spec}: \`npm run verify:ui\` (package.json has no script named verify:ui)`,
+        `${spec}: \`verify:liquid-gallery\` (package.json has no script named verify:liquid-gallery)`,
+        `${spec}: \`check:gone\` (package.json has no script named check:gone)`,
+      ]);
+    }
+  );
+});
+
 test('case IDs in developer documents, including ranges, must name existing test cases', () => {
   withDocumentation(
     {

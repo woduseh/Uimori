@@ -64,8 +64,8 @@ results where geometry or animation is affected.
 
 Useful targeted checks after a matching build:
 
-- Menu or nested-dialog interactions: `npm run verify:browser -- --grep 'RACOM04|DEL01|THEMES'`
-- Shared surface/theme changes: `npm run verify:liquid-gallery`
+- Menu or nested-dialog interactions: `npm run verify -- all --grep 'RACOM04|DEL01|THEMES'`
+- Shared surface/theme changes: `npm run verify -- appearance`
 
 Run applicable project quality/build gates, not unrelated suites for their own
 sake. Screenshots and synthetic Chromium tests do not establish behavior in

@@ -35,18 +35,11 @@ const identity = {
 };
 const build = { buildId: 'c'.repeat(64), sourceHash: 'c'.repeat(64), distHash: 'd'.repeat(64) };
 const commit = 'e'.repeat(40);
-const scripts = Object.fromEntries(
-  [
-    'quality:full',
-    'quality',
-    'build',
-    'verify:ui',
-    'verify:browser-smoke',
-    'verify:selfhost',
-    'verify:browser',
-    'verify:visual',
-  ].map((name) => [name, 'fixture'])
-);
+const featureMap = {
+  domains: { reader: { title: 'Reader' }, 'self-host': { title: 'Self-host' } },
+  presets: { 'browser-smoke': { title: 'Smoke' } },
+};
+const fullRegression = 'verify -- all';
 
 async function directory(t) {
   await mkdir(artifactRoot, { recursive: true });
@@ -63,7 +56,7 @@ async function checksFixture(t) {
     buildMissing = false;
   const dependencies = {
     outputRoot,
-    scripts,
+    featureMap,
     npmCli: 'fixture-npm.mjs',
     log: () => {},
     fingerprint: async () => source,
@@ -72,7 +65,7 @@ async function checksFixture(t) {
       return build;
     },
     execute: async (_executable, args, options) => {
-      const name = args.at(-1);
+      const name = args.slice(args.indexOf('run') + 1).join(' ');
       calls.push(name);
       if (name === 'build') buildMissing = false;
       const override = nextFailure?.(name) ?? {};
@@ -108,36 +101,38 @@ async function checksFixture(t) {
 
 test('release options reject ambiguity and remote arguments are POSIX quoted', () => {
   assert.deepEqual(
-    parseOptions(['--area', 'verify:ui', '--full'], { values: ['area'], flags: ['full'] }),
-    { area: 'verify:ui', full: true }
+    parseOptions(['--area', 'reader', '--full'], { values: ['area'], flags: ['full'] }),
+    { area: 'reader', full: true }
   );
   for (const args of [['--full', '--full'], ['--area'], ['--skip-tests'], ['other']])
     assert.throws(() => parseOptions(args, { values: ['area'], flags: ['full'] }));
   assert.equal(shellQuote("a'; $(touch bad)"), "'a'\\''; $(touch bad)'");
   assert.throws(() => shellQuote('one\ntwo'));
-  assert.deepEqual(requiredChecks('verify:browser-smoke', true, scripts), [
+  assert.deepEqual(requiredChecks('browser-smoke', true, featureMap), [
     'quality:full',
-    'verify:browser',
+    fullRegression,
   ]);
-  assert.deepEqual(requiredChecks('verify:ui', true, scripts), [
+  assert.deepEqual(requiredChecks('reader', true, featureMap), [
     'quality:full',
-    'verify:ui',
-    'verify:browser',
+    'verify -- reader',
+    fullRegression,
   ]);
-  assert.deepEqual(requiredChecks('verify:browser-smoke', false, scripts), [
+  assert.deepEqual(requiredChecks(undefined, false, featureMap), [
     'quality',
     'build',
-    'verify:browser-smoke',
+    'verify -- browser-smoke',
   ]);
-  assert.deepEqual(requiredChecks('verify:ui', false, scripts), ['quality', 'build', 'verify:ui']);
-  for (const name of [
-    'verify:visual',
-    'verify:unknown',
-    'verify:browser',
-    'quality:full',
-    'verify:live',
-  ])
-    assert.throws(() => requiredChecks(name, false, scripts));
+  assert.deepEqual(requiredChecks('self-host', false, featureMap), [
+    'quality',
+    'build',
+    'verify -- self-host',
+  ]);
+  for (const name of ['all', 'gallery', 'copy', 'unknown', 'verify:ui', 'quality:full'])
+    assert.throws(() => requiredChecks(name, false, featureMap), /feature-map domain or preset/);
+});
+
+test('the default release area exists in the real feature map', () => {
+  assert.deepEqual(requiredChecks(), ['quality', 'build', 'verify -- browser-smoke']);
 });
 
 test('release identity covers deploy and packaging changes but ignores evidence and CI scheduling', async (t) => {
@@ -164,7 +159,7 @@ test('unchanged release reuses successful evidence and refreshes only a missing 
   const fixture = await checksFixture(t);
   const first = await fixture.run();
   assert.equal(first.status, 'PASS');
-  assert.deepEqual(fixture.calls, ['quality', 'build', 'verify:browser-smoke']);
+  assert.deepEqual(fixture.calls, ['quality', 'build', 'verify -- browser-smoke']);
   const second = await fixture.run();
   assert.equal(second.status, 'PASS');
   assert.equal(fixture.calls.length, 3);
@@ -175,47 +170,47 @@ test('unchanged release reuses successful evidence and refreshes only a missing 
 
 test('failed later check preserves earlier passes but cannot be bypassed by a narrower scope', async (t) => {
   const fixture = await checksFixture(t);
-  fixture.setFailure((name) => (name === 'verify:browser' ? { code: 1 } : {}));
+  fixture.setFailure((name) => (name === fullRegression ? { code: 1 } : {}));
   const first = await fixture.run({ full: true });
   assert.equal(first.status, 'FAIL');
   const narrower = await fixture.run();
   assert.equal(narrower.status, 'FAIL');
   assert.match(narrower.error, /recorded failures/);
-  assert.deepEqual(fixture.calls, ['quality:full', 'verify:browser']);
+  assert.deepEqual(fixture.calls, ['quality:full', fullRegression]);
   fixture.setFailure(undefined);
   const fixed = await fixture.run({ full: true });
   assert.equal(fixed.status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(2), ['verify:browser']);
+  assert.deepEqual(fixture.calls.slice(2), [fullRegression]);
 });
 
 test('unstarted optional checks remain recorded without blocking a narrower request', async (t) => {
   const fixture = await checksFixture(t);
   const previous = await fixture.run();
   previous.status = 'FAIL';
-  previous.requested.push('verify:browser');
+  previous.requested.push(fullRegression);
   await json(previous.report, previous);
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = await fixture.run();
     assert.equal(result.status, 'PASS');
-    assert.equal(result.checks['verify:browser'].status, 'NOT_RUN');
-    await verifyReleaseReceipt(result, identity, requiredChecks(undefined, false, scripts));
+    assert.equal(result.checks[fullRegression].status, 'NOT_RUN');
+    await verifyReleaseReceipt(result, identity, requiredChecks(undefined, false, featureMap));
     await assert.rejects(
-      verifyReleaseReceipt(result, identity, requiredChecks(undefined, true, scripts)),
+      verifyReleaseReceipt(result, identity, requiredChecks(undefined, true, featureMap)),
       /unavailable/
     );
   }
   assert.equal(fixture.calls.length, 3);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['quality:full', 'verify:browser']);
+  assert.deepEqual(fixture.calls.slice(3), ['quality:full', fullRegression]);
 });
 
 test('an interrupted started check still blocks narrowing until it is rerun', async (t) => {
   const fixture = await checksFixture(t);
   const previous = await fixture.run();
-  previous.checks['verify:browser'] = { command: 'verify:browser', status: 'RUNNING' };
+  previous.checks[fullRegression] = { command: fullRegression, status: 'RUNNING' };
   await json(previous.report, previous);
   await assert.rejects(
-    verifyReleaseReceipt(previous, identity, requiredChecks(undefined, false, scripts)),
+    verifyReleaseReceipt(previous, identity, requiredChecks(undefined, false, featureMap)),
     /Known failed checks/
   );
   const narrower = await fixture.run();
@@ -223,7 +218,7 @@ test('an interrupted started check still blocks narrowing until it is rerun', as
   assert.match(narrower.error, /recorded failures/);
   assert.equal(fixture.calls.length, 3);
   assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['quality:full', 'verify:browser']);
+  assert.deepEqual(fixture.calls.slice(3), ['quality:full', fullRegression]);
 });
 
 test('failed termination without a close event still produces a bounded timeout result', async () => {
@@ -261,19 +256,22 @@ test('changed source invalidates cache and mid-run source changes remain failure
 test('timeout, cancellation, missing logs and swapped commands cannot certify a release', async (t) => {
   const fixture = await checksFixture(t);
   const receipt = await fixture.run();
-  await verifyReleaseReceipt(receipt, identity, requiredChecks(undefined, false, scripts));
+  await verifyReleaseReceipt(receipt, identity, requiredChecks(undefined, false, featureMap));
   await assert.rejects(
     () => verifyReleaseReceipt(receipt, { ...identity, sourceHash: '9'.repeat(64) }, ['quality']),
     /stale/
   );
   await assert.rejects(
-    () => verifyReleaseReceipt(receipt, identity, ['verify:browser']),
+    () => verifyReleaseReceipt(receipt, identity, [fullRegression]),
     /unavailable/
   );
   const quality = receipt.checks['quality'];
   assert.equal(await cachedCheckPassed({ ...quality, timedOut: true }, 'quality'), false);
   assert.equal(await cachedCheckPassed({ ...quality, cancelled: true }, 'quality'), false);
-  assert.equal(await cachedCheckPassed({ ...quality, command: 'verify:ui' }, 'quality'), false);
+  assert.equal(
+    await cachedCheckPassed({ ...quality, command: 'verify -- reader' }, 'quality'),
+    false
+  );
   await writeFile(quality.log, 'changed log');
   assert.equal(await cachedCheckPassed(quality, 'quality'), false);
   fixture.setFailure(() => ({ code: 0, timedOut: true }));
@@ -356,7 +354,6 @@ async function releaseFixture(
   const calls = [];
   const dependencies = {
     outputRoot,
-    scripts,
     ssh: 'fixture-ssh',
     scp: 'fixture-scp',
     log: () => {},

@@ -246,7 +246,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ### Reader and renderer verification tests
 
-- **Browser and cross-cutting specs**: `tests/reader-navigation-browser.spec.ts`, `tests/reading-browser.spec.ts`, `tests/reading-markdown-browser.spec.ts`, `tests/risu-message-surface-browser.spec.ts` and `tests/risu-native-frame-browser.spec.ts` (`RSURFACE`), and `tests/risu-reading-markdown.test.ts`. Integrated UI runner (`verify:ui`) lives in [DEVELOPMENT](DEVELOPMENT.md#verification-runners).
+- **Browser and cross-cutting specs**: `tests/reader-navigation-browser.spec.ts`, `tests/reading-browser.spec.ts`, `tests/reading-markdown-browser.spec.ts`, `tests/risu-message-surface-browser.spec.ts` and `tests/risu-native-frame-browser.spec.ts` (`RSURFACE`), and `tests/risu-reading-markdown.test.ts`. Integrated UI runner (`npm run verify -- reader`) lives in [DEVELOPMENT](DEVELOPMENT.md#verification-runners).
 
 ## Reading state and bookmarks
 
@@ -260,7 +260,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ### Bookmark data model and atomic management
 
-- **Ownership and persistence boundary (`readingStateRoutes`)**: Bookmarks have no TTL and are never auto-deleted on anchor drift; reading positions and bookmarks delete only with their chat. Server routes always verify scene ownership in the current chat path, and position saves never trigger tokenization or body reparsing. End-to-end verification (`verify:personal-features`) lives in [DEVELOPMENT](DEVELOPMENT.md#personal-workspace-verification-scope).
+- **Ownership and persistence boundary (`readingStateRoutes`)**: Bookmarks have no TTL and are never auto-deleted on anchor drift; reading positions and bookmarks delete only with their chat. Server routes always verify scene ownership in the current chat path, and position saves never trigger tokenization or body reparsing. End-to-end verification (`npm run verify -- personal-workspace`) lives in [DEVELOPMENT](DEVELOPMENT.md#personal-workspace-verification-scope).
 
 ## Turn activity
 
@@ -325,7 +325,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ### Built-in layouts and palette sources of truth
 
-- **Sources of truth and user-theme preservation**: Built-in layouts and `BUILTIN_PALETTES` are the canonical sources of truth; cloned or imported user themes and their colors are never deleted or overwritten. `verify:liquid-gallery` verifies shared gallery compatibility through a user-theme copy fixture at [liquid-gallery.ts](../../tests/fixtures/liquid-gallery.ts).
+- **Sources of truth and user-theme preservation**: Built-in layouts and `BUILTIN_PALETTES` are the canonical sources of truth; cloned or imported user themes and their colors are never deleted or overwritten. `npm run verify -- appearance` verifies shared gallery compatibility through a user-theme copy fixture at [liquid-gallery.ts](../../tests/fixtures/liquid-gallery.ts).
 - **Backup boundary and scope**: Theme JSON stores layout original colors and excludes separate palettes and scope bindings (preserved in workspace SQLite backups), and theme edits/deletions never alter manuscripts or model inputs. Expression panels, BGM, TTS, and input translation are out of scope; verification commands and `UIMORI_NARRATIVE_DEMO_DIR` live in [DEVELOPMENT](DEVELOPMENT.md#builds-and-evidence) and [DEVELOPMENT](DEVELOPMENT.md#verification-runners).
 
 ## Usage report and backfill

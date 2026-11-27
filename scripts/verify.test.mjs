@@ -1,13 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import {
-  parseArguments,
-  planVerification,
-  readFeatureMap,
-  selectChanged,
-  verificationNames,
-} from './verify.mjs';
+import { parseArguments, planVerification, selectChanged, verificationNames } from './verify.mjs';
 
 const map = {
   version: 1,
@@ -141,19 +134,4 @@ test('options follow the names, and --changed takes an optional base first', () 
     options: ['--workers', '2'],
   });
   assert.throws(() => parseArguments(['--grep', 'LIB']), /Usage/u);
-});
-
-test('every verify:* alias in package.json calls npm run verify with known names', () => {
-  const names = verificationNames(readFeatureMap());
-  const scripts = JSON.parse(
-    readFileSync(new URL('../package.json', import.meta.url), 'utf8')
-  ).scripts;
-  const aliases = Object.entries(scripts).filter(([name]) => name.startsWith('verify:'));
-  assert.ok(aliases.length > 0);
-  const prefix = 'npm run verify -- ';
-  for (const [alias, command] of aliases) {
-    assert.ok(command.startsWith(prefix), `${alias} must call ${prefix}<name>: ${command}`);
-    for (const name of parseArguments(command.slice(prefix.length).split(' ')).names)
-      assert.ok(names.has(name), `${alias} names unknown verification ${name}`);
-  }
 });

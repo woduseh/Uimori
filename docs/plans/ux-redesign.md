@@ -114,7 +114,7 @@
 - 단계의 항목이 독립이면 항목 단위로 검증하고 커밋해요.
 - 파일은 이름과 심볼로 찾아요. 이 문서는 줄 번호를 적지 않았어요.
 - 영역을 고치기 전에 그 파일의 최근 커밋 메시지를 읽어요. 2026-11-19의 UI 검토 커밋들은 채택하지 않은 안과 그 이유를 본문에 적어 두었어요.
-- 화면 문구를 더하면 모든 UI 언어에 넣고 `npm run check:i18n`과 `npm run verify:copy`를 돌려요.
+- 화면 문구를 더하면 모든 UI 언어에 넣고 `npm run check:i18n`과 `npm run verify -- copy`를 돌려요.
 - 새 테이블이나 열은 [DATA-MIGRATIONS](../DATA-MIGRATIONS.md)의 방식(스키마 버전을 올리지 않고 열 때 추가, 이전 앱이 무시할 수 있는 형태)을 따라요. 사용자가 2026-11-21에 이 계획의 스키마 변경을 미리 승인했고, 조건은 마이그레이션 지원이에요. 기존 작업실 DB가 데이터 손실 없이 그대로 열리고 새 구조가 채워져야 하며, 그 경로를 [database-schema.test.ts](../../tests/database-schema.test.ts)에서 기존 DB를 여는 테스트로 확인해요.
 - 검증 선택은 [DEVELOPMENT](../dev/DEVELOPMENT.md)를 따라요.
 

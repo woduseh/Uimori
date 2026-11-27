@@ -95,7 +95,7 @@ Developer and agent contract for provider transport encoding, Codex App Server i
 ### Local verification and official contracts
 
 - For installed-CLI preflight (`UIMORI_CODEX_PREFLIGHT=1` and `output/codex-preflight/summary.json`), see [DEVELOPMENT](DEVELOPMENT.md#builds-and-evidence).
-- Non-1:1 test suites: `tests/codex-image.test.ts`, `tests/codex-integration.test.ts`, and `npm run verify:providers` (390px Codex settings, mocked login, cancellation, and disconnect).
+- Non-1:1 test suites: `tests/codex-image.test.ts`, `tests/codex-integration.test.ts`, and `npm run verify -- providers` (390px Codex settings, mocked login, cancellation, and disconnect).
 - Official references: [App Server specification](https://learn.chatgpt.com/docs/app-server), [Authentication guide](https://learn.chatgpt.com/docs/auth), [Configuration schema](https://learn.chatgpt.com/config-schema.json).
 
 ## Model parameters, cache quirks and connection tests
@@ -240,7 +240,7 @@ Authoritative option definitions live in `modelCapability` and `validateModelOpt
 
 ### Implementation
 
-Settings and runtime coverage are in `tests/evaluation-settings.test.ts` and `tests/evaluation-runtime.test.ts`. `npm run verify:evaluation` exercises the settings UI with synthetic data. Select checks according to [CHECKS](CHECKS.md).
+Settings and runtime coverage are in `tests/evaluation-settings.test.ts` and `tests/evaluation-runtime.test.ts`. `npm run verify -- chat-settings` exercises the settings UI with synthetic data. Select checks according to [CHECKS](CHECKS.md).
 
 ### Codex main native turns
 
@@ -317,7 +317,7 @@ Real main Codex Runs keep evaluation definitions, bootstrap and artifact process
 ### Verification and testing
 
 - Non-1:1 test suites: `tests/codex-image.test.ts`, `tests/novelai-illustration.test.ts` (`fetch` interception covering payloads, captions/5×5 grid, reference canvas fitting, Anlas/V5 gauge parsing, status classification, token boundaries, zero auto-retry, and prompt reuse), and storage/queue/API contract suites (`tests/illustration-core.test.ts`, `tests/illustration-store.test.ts`, `tests/illustration-retry.test.ts`, `tests/illustration-api.test.ts`).
-- Browser integration command: `npm run verify:illustration` (supports `--visual`; see [DEVELOPMENT](DEVELOPMENT.md#verification-runners)).
+- Browser integration command: `npm run verify -- illustration` (supports `--visual`; see [DEVELOPMENT](DEVELOPMENT.md#verification-runners)).
 
 ## Input translation
 
@@ -329,4 +329,4 @@ Real main Codex Runs keep evaluation definitions, bootstrap and artifact process
 
 ### Verification
 
-- `npm run verify:input-translation` plus cross-cutting suites `tests/request-edit.test.ts` and `tests/api-errors.test.ts` cover model/preset isolation, zero DB mutation on success or failure, truncated-output rejection, shutdown cancellation, temporary-original recovery, stale results, send uncertainty, final-only text retention, and clipboard copy using a temporary DB, synthetic responses, and local browser.
+- `npm run verify -- translation` plus cross-cutting suites `tests/request-edit.test.ts` and `tests/api-errors.test.ts` cover model/preset isolation, zero DB mutation on success or failure, truncated-output rejection, shutdown cancellation, temporary-original recovery, stale results, send uncertainty, final-only text retention, and clipboard copy using a temporary DB, synthetic responses, and local browser.

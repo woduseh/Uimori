@@ -13,6 +13,7 @@ const caseIdMention = /\b([A-Z][A-Z0-9]*[A-Z])(\d{2})(?:[-–]\1?(\d{2}))?(?![\d
 const termsShapedLikeCaseIds = new Set(['BM25']);
 const shellFence = /^(?:sh|bash|shell|zsh|console|powershell|pwsh|ps1)$/u;
 const repositoryCommand = /^(?:node|npm|npx)\s/u;
+const scriptShaped = /^([a-z][a-z0-9]*):[a-z0-9][a-z0-9:-]*$/u;
 const developerGuideHeading =
   /^#{2,6}\s+(?:(?:구현 참고|기술 명세|개발자)|\S.*\s구현 참고)(?:\s|\(|$)/u;
 const guideApiRoute =
@@ -312,6 +313,15 @@ export function documentationErrors(directory = root) {
   const scripts = existsSync(packageFile)
     ? (JSON.parse(readFileSync(packageFile, 'utf8')).scripts ?? {})
     : {};
+  const scriptNamespaces = new Set(Object.keys(scripts).map((name) => name.split(':')[0]));
+  const missingScript = (code) => {
+    const script =
+      /^npm\s+run(?:-script)?\s+([^\s-]\S*)/u.exec(code)?.[1] ??
+      (scriptNamespaces.has(scriptShaped.exec(code)?.[1]) ? code : undefined);
+    return script && !/<[^>]+>/u.test(script) && !Object.hasOwn(scripts, script)
+      ? script
+      : undefined;
+  };
   for (const file of files) {
     const content = readFileSync(file, 'utf8');
     for (const match of content.matchAll(/\]\(([^\s)]+)(?:\s+[^)]*)?\)/gu)) {
@@ -339,13 +349,14 @@ export function documentationErrors(directory = root) {
     for (const [, code] of content.matchAll(/`([^`\n]+)`/gu)) {
       for (const path of missingSourcePaths(code))
         broken.push(`${file}: \`${path}\` (no file or directory matches this path)`);
+      const script = missingScript(code.trim());
+      if (script) broken.push(`${file}: \`${code}\` (package.json has no script named ${script})`);
     }
     for (const { line, fence } of markdownLines(content)) {
       const command = line.trim();
       if (!shellFence.test(fence ?? '') || !repositoryCommand.test(command)) continue;
-      const script = /^npm\s+run(?:-script)?\s+([^\s-]\S*)/u.exec(command)?.[1];
-      if (script && !/<[^>]+>/u.test(script) && !Object.hasOwn(scripts, script))
-        broken.push(`${file}: ${command} (package.json has no script named ${script})`);
+      const script = missingScript(command);
+      if (script) broken.push(`${file}: ${command} (package.json has no script named ${script})`);
       for (const path of missingSourcePaths(command))
         broken.push(`${file}: ${command} (no file or directory matches ${path})`);
     }

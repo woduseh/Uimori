@@ -151,7 +151,7 @@ Storage paths and input limits (`TRANSLATION_GUIDE_LIMITS` enforced by `validate
 
 - `tests/translation-guides.test.ts`: Saving, validation, revert, import/export, request-time pinning, judgment recovery, and preview/writing separation.
 - `tests/translation-prompt-delivery.test.ts`: Serialized outputs across all seven provider protocols for default, Hermēneía, and context-omitted presets in both reference scopes (using local stubs), plus native CBS exclusion of background data under `source-only`.
-- Browser workflow checks run via `npm run verify:translation-guides` (see [Verification runners](DEVELOPMENT.md#verification-runners)).
+- Browser workflow checks run via `npm run verify -- translation` (see [Verification runners](DEVELOPMENT.md#verification-runners)).
 
 ## Built-in prompts
 
@@ -163,4 +163,4 @@ Storage paths and input limits (`TRANSLATION_GUIDE_LIMITS` enforced by `validate
 
 ### Verification scope
 
-`tests/risu-native-prompt-composition.test.ts` checks CBS composition for the built-in presets, and `npm run verify:browser -- --grep BPTUI` covers catalog addition and editing flows.
+`tests/risu-native-prompt-composition.test.ts` checks CBS composition for the built-in presets, and `npm run verify -- all --grep BPTUI` covers catalog addition and editing flows.

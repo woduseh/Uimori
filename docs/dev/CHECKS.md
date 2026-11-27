@@ -12,7 +12,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite |
 | Cross-cutting changes beyond focused coverage | Consider `npm run quality:full` and broader browser coverage for the interactions at risk |
 | Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |
-| Release candidate | `npm run release:check -- --area <verify:*>`; see [DEVELOPMENT](DEVELOPMENT.md#release-checks) |
+| Release candidate | `npm run release:check -- --area <domain>`; see [DEVELOPMENT](DEVELOPMENT.md#release-checks) |
 
 Use the smallest existing tests that exercise the affected behavior and plausible failures. Add tests for gaps that matter, rather than mirroring implementation. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
 

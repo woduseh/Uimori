@@ -41,7 +41,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run benchmark:story` | Repeated long-story timing at large fixture sizes (`tests/story-performance.manual.ts`, outside the default `npm test` collection); writes `story-performance.json` under `output/benchmarks/`. The same functional contracts run at minimal size in `tests/story-scale-invariants.test.ts`. |
 | `npm run eval:helper` | Lists the small helper behavior cases. After building, `-- --synthetic` checks the runner; explicit live configuration is described in [Helper evaluation](HELPER-EVALUATION.md). |
 
-Options follow the names and go to every run; the `verify:*` package scripts are one-line aliases that call `npm run verify` with one name. Runs of the [shared browser harness](../../scripts/browser-verification.mjs) accept `--grep <pattern>` to narrow their selection and `--visual` to enable extra visual checks. Runs execute one after another and stop at the first failure.
+Options follow the names and go to every run. Runs of the [shared browser harness](../../scripts/browser-verification.mjs) accept `--grep <pattern>` to narrow their selection and `--visual` to enable extra visual checks. Runs execute one after another and stop at the first failure.
 
 ```powershell
 npm run verify -- providers --grep PMUI02
@@ -135,7 +135,7 @@ Use the direct Node command for machine-readable JSON without npm's command bann
 
 ## Release checks
 
-`npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and one selected local feature check. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. An explicit feature area remains selected alongside the full suite. `--area` rejects the full browser, gallery and visual runners; use `--full` for the complete regression. Deployment-tooling changes normally select `verify:selfhost`. Local receipt matching and reuse remain developer conveniences. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
+`npm run release:check -- --area <name>` runs `quality`, a matching `build`, and `npm run verify -- <name>` for one [feature map](#feature-map) domain or preset. The default is `browser-smoke`; `--full` selects `quality:full` and replaces that default with `npm run verify -- all`. An explicit area remains selected alongside the full suite. `--area` rejects `all` and the engines such as `gallery`; use `--full` for the complete regression. Deployment-tooling changes normally select `self-host`. Local receipt matching and reuse remain developer conveniences. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
 
 After a matching build, `node scripts/test-tooling.mjs --files scripts/oracle-host-control.test.mjs scripts/oracle-smoke.test.mjs scripts/oracle-runner.test.mjs` checks temporary session cleanup, preserved maintenance outcomes and release diagnostics with disposable app/database and runner fixtures. These checks do not operate Oracle or establish production HTTPS behavior.
 
