@@ -26,7 +26,6 @@ export async function loadLocale(locale: UiLocale): Promise<void> {
 let current = readLocale();
 let requested = current;
 const listeners = new Set<() => void>();
-const formatted = new Map<string, { key: string; values?: MessageValues } | (() => string)>();
 const sources = new Map<string, string>();
 const normalized = (value: string) => value.replace(/\s+/gu, ' ').trim();
 for (const [key, value] of Object.entries(ko)) {
@@ -90,9 +89,7 @@ export function formatMessage(key: string, locale: UiLocale, values?: MessageVal
       Object.entries(values).map(([name, value]) => [
         name,
         typeof value === 'object' && !(value instanceof Date)
-          ? value.uiMessage.startsWith(messagePrefix) || formatted.has(value.uiMessage)
-            ? translateMessage(value.uiMessage)
-            : value.uiMessage
+          ? decodeMessages(value.uiMessage)
           : value,
       ])
     );
@@ -102,6 +99,7 @@ export function t(key: string, values?: MessageValues): string {
   return formatMessage(key, current, values);
 }
 const messagePrefix = '\u001fui:';
+const messageEnd = '\u001e';
 export function message(key: string, values?: MessageValues): string {
   return (
     messagePrefix +
@@ -115,49 +113,50 @@ export function message(key: string, values?: MessageValues): string {
             value instanceof Date ? { uiDate: value.getTime() } : value,
           ])
         ),
-    })
+    }) +
+    messageEnd
   );
 }
 export function messageRef(value: string): MessageReference {
   return { uiMessage: value };
 }
-export function registerMessage(
-  value: string,
-  key: string | (() => string),
-  values?: MessageValues
-): void {
-  formatted.set(value, typeof key === 'function' ? key : { key, values });
+function decodeDescriptor(json: string): string | null {
+  try {
+    const descriptor = JSON.parse(json) as {
+      key: string;
+      values?: Record<string, string | number | boolean | MessageReference | { uiDate: number }>;
+    };
+    if (!descriptor || typeof descriptor.key !== 'string' || !Object.hasOwn(ko, descriptor.key))
+      return null;
+    const values =
+      descriptor.values &&
+      Object.fromEntries(
+        Object.entries(descriptor.values).map(([name, item]) => [
+          name,
+          typeof item === 'object' && 'uiDate' in item ? new Date(item.uiDate) : item,
+        ])
+      );
+    return t(descriptor.key, values);
+  } catch {
+    return null;
+  }
 }
-export function legacyMessage(key: string, values?: MessageValues): string {
-  const value = formatMessage(key, 'ko', values);
-  registerMessage(value, key, values);
-  return value;
+function decodeMessages(value: string): string {
+  let decoded = '';
+  let index = 0;
+  for (;;) {
+    const start = value.indexOf(messagePrefix, index);
+    const end = start < 0 ? -1 : value.indexOf(messageEnd, start);
+    if (end < 0) return decoded + value.slice(index);
+    decoded +=
+      value.slice(index, start) +
+      (decodeDescriptor(value.slice(start + messagePrefix.length, end)) ??
+        value.slice(start, end + 1));
+    index = end + 1;
+  }
 }
 export function translateMessage(value: string): string {
-  if (value.startsWith(messagePrefix)) {
-    try {
-      const descriptor = JSON.parse(value.slice(messagePrefix.length)) as {
-        key: string;
-        values?: Record<string, string | number | boolean | MessageReference | { uiDate: number }>;
-      };
-      if (!descriptor || typeof descriptor.key !== 'string' || !Object.hasOwn(ko, descriptor.key))
-        return value;
-      const values =
-        descriptor.values &&
-        Object.fromEntries(
-          Object.entries(descriptor.values).map(([name, item]) => [
-            name,
-            typeof item === 'object' && 'uiDate' in item ? new Date(item.uiDate) : item,
-          ])
-        );
-      return t(descriptor.key, values);
-    } catch {
-      return value;
-    }
-  }
-  const retained = formatted.get(value);
-  if (retained)
-    return typeof retained === 'function' ? retained() : t(retained.key, retained.values);
+  if (value.includes(messagePrefix)) return decodeMessages(value);
   const key = sources.get(value) ?? sources.get(normalized(value));
   return key ? t(key) : value;
 }

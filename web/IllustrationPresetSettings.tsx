@@ -30,7 +30,7 @@ import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { illustrationErrorMessage, illustrationGeneratorLabels } from './illustration-labels.js';
+import { illustrationErrorDescriptor, illustrationGeneratorLabels } from './illustration-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
 import './settings-layout.css';
@@ -44,7 +44,7 @@ type Draft = {
 };
 const messageOf = (error: unknown) => {
   const message = (error as Error).message;
-  return /^COMFYUI_/u.test(message) ? illustrationErrorMessage(message) : message;
+  return /^COMFYUI_/u.test(message) ? illustrationErrorDescriptor(message) : message;
 };
 export function IllustrationPresetSettings({
   library,

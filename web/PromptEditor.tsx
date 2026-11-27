@@ -1,12 +1,4 @@
-import { ApiError } from './api.js';
-import {
-  t,
-  useI18n,
-  translateMessage,
-  registerMessage,
-  message as uiMessage,
-  messageRef,
-} from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -246,7 +238,7 @@ export function PromptEditor({
       ]);
       setStatus(uiMessage('prompts.uiPromptSaved'));
       setPlacing(true);
-      const warnings: (() => string)[] = [];
+      const warnings: string[] = [];
       try {
         await onSaved?.(
           accepted,
@@ -254,34 +246,26 @@ export function PromptEditor({
           result.creationOrganizationRevision ?? null
         );
       } catch (caught) {
-        warnings.push(() =>
-          t('prompts.savedPlacement', {
+        warnings.push(
+          uiMessage('prompts.savedPlacement', {
             error:
-              caught instanceof ApiError
-                ? caught.displayMessage
-                : (caught as Error).message ===
-                    uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
-                  ? ''
-                  : messageRef((caught as Error).message),
-          }).trimEnd()
+              (caught as Error).message === uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+                ? ''
+                : messageRef((caught as Error).message),
+          })
         );
       }
       try {
         await reload?.();
       } catch (caught) {
-        warnings.push(() =>
-          t('prompts.savedReload', {
-            error:
-              caught instanceof ApiError
-                ? caught.displayMessage
-                : messageRef((caught as Error).message),
+        warnings.push(
+          uiMessage('prompts.savedReload', {
+            error: messageRef((caught as Error).message),
           })
         );
       }
       if (warnings.length) {
-        const renderWarnings = () => warnings.map((render) => render()).join('\n');
-        const warning = renderWarnings();
-        registerMessage(warning, renderWarnings);
+        const warning = warnings.join('\n');
         setError(warning);
         onError(warning);
       }

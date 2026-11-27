@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { messages } from '../web/locales/index.js';
 
-const { scanI18nSource, messageArguments, checkI18n } = await import(
+const { scanI18nSource, messageArguments, checkI18n, findKoreanServerErrors } = await import(
   new URL('../scripts/check-i18n.mjs', import.meta.url).href
 );
 
@@ -160,20 +160,25 @@ describe('UI locale presentation boundary', () => {
     }
   });
 
-  test('legacy validation errors retain their Korean message while their UI and nested notice follow locale', async () => {
-    const { legacyMessage, message, messageRef, setLocale, translateMessage } = await loadedI18n();
+  test('validation errors, the notices that nest them and joined warnings follow the locale', async () => {
+    const { message, messageRef, setLocale, translateMessage } = await loadedI18n();
     setLocale('en');
-    const error = new Error(legacyMessage('shared.loadFailed'));
-    expect(error.message).toBe('불러오지 못했어요.');
+    const error = new Error(message('shared.loadFailed'));
     expect(translateMessage(error.message)).toBe('Could not load.');
     const notice = message('helpers.modelRefreshFailed', { error: messageRef(error.message) });
     expect(translateMessage(notice)).toBe(
       'The assistant model changed, but settings could not be refreshed: Could not load.'
     );
+    const joined = [notice, message('shared.loadFailed')].join('\n');
     setLocale('ja');
-    expect(error.message).toBe('불러오지 못했어요.');
     expect(translateMessage(notice)).toBe(
       'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。'
+    );
+    expect(translateMessage(joined)).toBe(
+      'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。\n読み込めませんでした。'
+    );
+    expect(translateMessage(`사용자 원고 · ${message('shared.loadFailed')}`)).toBe(
+      '사용자 원고 · 読み込めませんでした。'
     );
   });
 
@@ -184,6 +189,7 @@ describe('UI locale presentation boundary', () => {
       '\u001fui:broken-json',
       '\u001fui:{"key":"missing.external.key"}',
       '\u001fui:{"key":"outside.activeWork"}',
+      '\u001fui:{"key":"missing.external.key"}\u001e',
     ])
       expect(translateMessage(diagnostic)).toBe(diagnostic);
   });
@@ -279,6 +285,22 @@ test('static candidate scan sees attribute names, templates, status text and mod
   expect(() => messageArguments('{broken')).toThrow();
 });
 
+test('server errors carrying Korean text are rejected while labels and English errors pass', () => {
+  const source = [
+    "throw new HttpError(409, '충돌했어요');",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Source fixture must retain interpolation syntax for the parser.
+    'throw new errors.ImportError(`이름 ${name}`);',
+    "new Promise((_, reject) => reject(new Error('실패')));",
+    "throw '문자열';",
+    "throw new HttpError(400, 'Invalid request');",
+    "const label = '본문';",
+    'const cast = <string>value;',
+  ].join('\n');
+  expect(
+    findKoreanServerErrors(source, 'server/sample.ts').map((error: string) => error.split(':')[1])
+  ).toEqual(['1', '2', '3', '4']);
+});
+
 test('catalog checker rejects duplicate and missing keys, malformed ICU and wrong call arguments', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-i18n-check-'));
   try {
@@ -301,7 +323,7 @@ test('catalog checker rejects duplicate and missing keys, malformed ICU and wron
     );
     writeFileSync(
       join(directory, 'web/view.tsx'),
-      'import { message as uiMessage, legacyMessage as validationMessage, formatMessage as formatUi } from "./i18n.js"; t("unknown.key"); t("good", { wrong: 1 }); uiMessage("unknown.alias"); validationMessage("unknown.legacyAlias"); formatUi("good", "en", { wrong: 2 });'
+      'import { message as uiMessage, t as translate, formatMessage as formatUi } from "./i18n.js"; t("unknown.key"); t("good", { wrong: 1 }); uiMessage("unknown.alias"); translate("unknown.translateAlias"); formatUi("good", "en", { wrong: 2 });'
     );
     const result = checkI18n(directory);
     expect(result.errors).toEqual(
@@ -312,7 +334,7 @@ test('catalog checker rejects duplicate and missing keys, malformed ICU and wron
         expect.stringContaining('locale argument mismatch'),
         expect.stringContaining('unknown message unknown.key'),
         expect.stringContaining('unknown message unknown.alias'),
-        expect.stringContaining('unknown message unknown.legacyAlias'),
+        expect.stringContaining('unknown message unknown.translateAlias'),
         expect.stringContaining('good requires [count], received [wrong]'),
       ])
     );

@@ -11,7 +11,7 @@ const patterns = {
   fullSuiteInput:
     /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u,
   fullCommentScan: /^scripts\/(?:check-comments\.mjs|comment-allowlist\.json)$/u,
-  i18nInput: /^(?:web\/|scripts\/check-i18n\.mjs$)/u,
+  i18nInput: /^(?:web\/|server\/|scripts\/check-i18n\.mjs$)/u,
   userGuide: /^docs\/[^/]+\.md$/u,
   distEntry: /^server\/(?:index|app)\.ts$/u,
   hookFile: /^(?:\.githooks|\.claude\/hooks)\//u,

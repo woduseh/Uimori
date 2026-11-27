@@ -1,4 +1,3 @@
-import { legacyMessage } from './i18n.js';
 import {
   t,
   useI18n,
@@ -83,9 +82,9 @@ export function RisuPresetImport({
     setNotice('');
     try {
       if (!/\.(risup|risupreset|json|zip)$/i.test(file.name))
-        throw new Error(legacyMessage('transfer.m065'));
-      if (!file.size) throw new Error(legacyMessage('transfer.m008'));
-      if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error(legacyMessage('transfer.m066'));
+        throw new Error(retainedMessage('transfer.m065'));
+      if (!file.size) throw new Error(retainedMessage('transfer.m008'));
+      if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error(retainedMessage('transfer.m066'));
       const nextSource = await readSource(file);
       const nextPreview = await api<RisuPresetImportPreview>('/risu-preset-imports/prepare', {
         source: nextSource,

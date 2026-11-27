@@ -4,17 +4,7 @@ import {
   isAppErrorCode,
   type ReceivedErrorWire,
 } from '#contracts';
-import {
-  t,
-  registerMessage,
-  formatMessage,
-  getLocale,
-  type MessageValues,
-  type UiLocale,
-} from './i18n.js';
-import ko from './locales/ko.js';
-
-type ApiErrorDiagnostic = { code: string | null; message: string };
+import { message, messageRef, translateMessage, type MessageValues } from './i18n.js';
 
 const storyUiErrors: Record<string, string> = {
   OUTPUT_STORY_UI_INVALID: 'storyUi.errorTranslation.details',
@@ -231,20 +221,17 @@ export const appErrorMessages = {
 
 const MIB = 1024 * 1024;
 
-function sceneList(scenes: unknown, total: unknown, locale: UiLocale): string {
+function sceneList(scenes: unknown, total: unknown): string {
   const numbers = String(scenes).split(',').map(Number);
   const labels = numbers.map((scene) =>
-    scene === 0
-      ? formatMessage('errors.firstMessage', locale)
-      : formatMessage('errors.scene', locale, { scene })
+    scene === 0 ? message('errors.firstMessage') : message('errors.scene', { scene })
   );
   return `${labels.join(', ')}${typeof total === 'number' && total > numbers.length ? ', …' : ''}`;
 }
 
 function messageValues(
   code: AppErrorCode,
-  params: ReceivedErrorWire['params'],
-  locale: UiLocale
+  params: ReceivedErrorWire['params']
 ): MessageValues | undefined {
   if (!params) return undefined;
   const values: MessageValues = Object.fromEntries(
@@ -256,37 +243,13 @@ function messageValues(
     ])
   );
   if (code === 'MANUSCRIPT_TRANSLATION_MISSING')
-    values.scenes = sceneList(params.scenes, params.total, locale);
+    values.scenes = messageRef(sceneList(params.scenes, params.total));
   return values;
 }
 
-function appErrorMessage(wire: ReceivedErrorWire): {
-  code: AppErrorCode;
-  key: string;
-  values: (locale: UiLocale) => MessageValues | undefined;
-} | null {
-  const code = isAppErrorCode(wire.code)
-    ? wire.code
-    : isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error)
-      ? wire.error
-      : null;
-  if (!code) return null;
-  const params = code === wire.code ? wire.params : undefined;
-  return {
-    code,
-    key: appErrorMessages[code],
-    values: (locale) => messageValues(code, params, locale),
-  };
-}
-
-export function apiErrorDiagnostic(
-  wire: ReceivedErrorWire,
-  status: number,
-  method: string
-): ApiErrorDiagnostic {
-  const app = appErrorMessage(wire);
-  if (app) return { code: app.code, message: formatMessage(app.key, 'ko', app.values('ko')) };
-  return legacyErrorDiagnostic(wire.error, status, method);
+function appErrorCode(wire: ReceivedErrorWire): AppErrorCode | null {
+  if (isAppErrorCode(wire.code)) return wire.code;
+  return isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error) ? wire.error : null;
 }
 
 function genericErrorKey(status: number): string {
@@ -297,35 +260,30 @@ function genericErrorKey(status: number): string {
       : 'errors.requestFailed';
 }
 
-function legacyErrorDiagnostic(error: unknown, status: number, method: string): ApiErrorDiagnostic {
+export function apiErrorMessage(
+  wire: ReceivedErrorWire,
+  status: number,
+  method: string
+): { code: string | null; message: string } {
+  const code = appErrorCode(wire);
+  if (code)
+    return {
+      code,
+      message: message(
+        appErrorMessages[code],
+        messageValues(code, code === wire.code ? wire.params : undefined)
+      ),
+    };
+  const { error } = wire;
   if (typeof error === 'string') {
     if (Object.hasOwn(storyUiErrors, error))
-      return { code: error, message: ko[storyUiErrors[error]] };
+      return { code: error, message: message(storyUiErrors[error]) };
     if (status === 409 && method === 'DELETE' && error.length <= 4000)
       return { code: null, message: error };
   }
-  return { code: null, message: formatMessage(genericErrorKey(status), 'ko', { status }) };
+  return { code: null, message: message(genericErrorKey(status), { status }) };
 }
 
 export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method: string): string {
-  const app = appErrorMessage(wire);
-  if (app) {
-    const render = () => t(app.key, app.values(getLocale()));
-    registerMessage(formatMessage(app.key, 'ko', app.values('ko')), render);
-    return render();
-  }
-  const diagnostic = legacyErrorDiagnostic(wire.error, status, method);
-  const display = (key: string, values?: Record<string, string | number>) => {
-    registerMessage(diagnostic.message, key, values);
-    return t(key, values);
-  };
-  if (diagnostic.code) return display(storyUiErrors[diagnostic.code]);
-  if (
-    status === 409 &&
-    method === 'DELETE' &&
-    typeof wire.error === 'string' &&
-    wire.error.length <= 4000
-  )
-    return diagnostic.message;
-  return display(genericErrorKey(status), { status });
+  return translateMessage(apiErrorMessage(wire, status, method).message);
 }

@@ -1,4 +1,4 @@
-import { legacyMessage, useI18n, translateMessage } from './i18n.js';
+import { message as uiMessage, useI18n, translateMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
@@ -141,7 +141,7 @@ export function NativeRisuPresetEditor({
   useUnappliedEditorField('prompt.native.source', pending);
   useEditorSavePreparation('prompt.native.source', (model) => {
     if (pendingParts.some((part) => part !== 'regex' && part !== 'toggles'))
-      throw new Error(legacyMessage('native.text_f70715474c'));
+      throw new Error(uiMessage('native.text_f70715474c'));
     return model;
   });
   const prepareProgram = (model: ResourceModel, patch: Record<string, unknown>): ResourceModel => {

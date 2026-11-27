@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { uploadPackageImage } from '../web/package-image-upload.js';
+import { shownRejection } from './shown-error.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -26,9 +27,9 @@ test('profile and inline authoring share upload validation and preserve the requ
     new File(['text'], 'fake.svg', { type: 'image/svg+xml' }),
     new File([new Uint8Array(64 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' }),
   ])
-    await expect(uploadPackageImage(invalid, new AbortController().signal, 'both')).rejects.toThrow(
-      '64MiB'
-    );
+    expect(
+      await shownRejection(uploadPackageImage(invalid, new AbortController().signal, 'both'))
+    ).toContain('64MiB');
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
@@ -77,13 +78,15 @@ test('an aborted late response and mismatched server MIME cannot become draft im
   fetch.mockResolvedValue(
     new Response(JSON.stringify({ hash: 'b'.repeat(64), mime: 'image/jpeg' }))
   );
-  await expect(
-    uploadPackageImage(
-      new File(['x'], 'wrong.png', { type: 'image/png' }),
-      new AbortController().signal,
-      'both'
+  expect(
+    await shownRejection(
+      uploadPackageImage(
+        new File(['x'], 'wrong.png', { type: 'image/png' }),
+        new AbortController().signal,
+        'both'
+      )
     )
-  ).rejects.toThrow('이미지 응답을 확인할 수 없어요.');
+  ).toBe('이미지 응답을 확인할 수 없어요.');
 });
 
 test('a coded server rejection shows its catalog message with the byte limit', async () => {

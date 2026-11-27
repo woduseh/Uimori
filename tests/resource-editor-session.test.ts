@@ -9,6 +9,7 @@ import {
 } from '../web/editor-recovery.js';
 import { ResourceEditorSession } from '../web/resource-editor-session.js';
 import { nativeContentDraft } from '../web/native-content-draft.js';
+import { shownRejection } from './shown-error.js';
 
 vi.mock('../web/api.js', async (original) => ({
   ...(await original<typeof import('../web/api.js')>()),
@@ -280,7 +281,7 @@ test('late refreshes cannot replace a newer save, and external revisions preserv
     conflict: true,
     local: { model: { text: 'Unsaved' } },
   });
-  await expect(session.save()).rejects.toThrow('저장된 자료가 바뀌었어요');
+  expect(await shownRejection(session.save())).toContain('저장된 자료가 바뀌었어요');
 });
 
 test('save conflicts preserve local input and clean reload restores the latest baseline', async () => {
@@ -367,7 +368,7 @@ test('a failed copy does not clear a pre-existing conflict or silently discard a
     copy: true,
     model: { title: 'Local changes' },
   });
-  await expect(session.discard()).rejects.toThrow('먼저 저장을 다시 시도');
+  expect(await shownRejection(session.discard())).toContain('먼저 저장을 다시 시도');
 
   vi.mocked(api).mockResolvedValueOnce({
     saved: saved({ ...model, title: 'Local changes' }, 1, 'copy'),
@@ -497,7 +498,7 @@ test('confirming a created resource preserves a later draft and detects another 
   });
   expect(result).toMatchObject({ creationIntent: true });
   expect(disk.get('content:created')).toMatchObject({ revision: 1, model: later });
-  await expect(session.save()).rejects.toThrow('저장된 자료가 바뀌었어요');
+  expect(await shownRejection(session.save())).toContain('저장된 자료가 바뀌었어요');
 
   vi.mocked(api).mockResolvedValueOnce(saved(external, 2, 'created'));
   const reopened = editor('created');

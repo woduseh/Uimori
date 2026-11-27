@@ -1140,10 +1140,10 @@ export const messages = {
     zh: '固定资料词元上限',
   },
   'settings.m209': {
-    ko: '{v0}: {v1}~{v2} 사이의 정수를 입력해 주세요.',
-    en: 'Enter an integer between {v1} and {v2} for {v0}.',
-    ja: '{v0}: {v1}～{v2}の整数を入力してください。',
-    zh: '{v0}：请输入 {v1} 至 {v2} 之间的整数。',
+    ko: '{v0}: {v1, number}~{v2, number} 사이의 정수를 입력해 주세요.',
+    en: 'Enter an integer between {v1, number} and {v2, number} for {v0}.',
+    ja: '{v0}: {v1, number}～{v2, number}の整数を入力してください。',
+    zh: '{v0}：请输入 {v1, number} 至 {v2, number} 之间的整数。',
   },
   'settings.m210': {
     ko: '관련성 기준과 토큰 한도를 입력해 주세요.',

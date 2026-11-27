@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
 import { cloneWithReceipt } from '../web/resource-create-retry.js';
+import { shownRejection } from './shown-error.js';
 
 vi.mock('../web/api.js', async (original) => ({
   ...(await original<typeof import('../web/api.js')>()),
@@ -67,7 +68,7 @@ test('a definite validation rejection permits a corrected request, but a rate li
 
 test('invalid retained clone input fails closed without issuing a new mutation', async () => {
   persisted.set(key, JSON.stringify({ ...input, sourceId: 'another' }));
-  await expect(cloneWithReceipt(key, input)).rejects.toThrow('복제 요청 기록');
+  expect(await shownRejection(cloneWithReceipt(key, input))).toContain('복제 요청 기록');
   expect(api).not.toHaveBeenCalled();
 });
 

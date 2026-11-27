@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { inspectBackupFile } from '../web/backup-file.js';
 import { nativeArchiveStream } from '../server/native-transfer-archive-codec.js';
+import { shownRejection } from './shown-error.js';
 
 async function archive(kind: 'resources' | 'chat', name: string) {
   const chunks: ArrayBuffer[] = [];
@@ -47,7 +48,8 @@ test('unknown or incomplete files stay outside both apply flows', async () => {
     '{"format":"uimori-chat-transcript","version":1}',
     'PK\u0003\u0004',
   ])
-    await expect(inspectBackupFile(new File([text], 'backup.uimori')), text).rejects.toThrow(
-      /백업.*파일/
-    );
+    expect(
+      await shownRejection(inspectBackupFile(new File([text], 'backup.uimori'))),
+      text
+    ).toMatch(/백업.*파일/);
 });

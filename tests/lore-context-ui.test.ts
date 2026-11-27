@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_LORE_CONTEXT, type LoreContextSnapshot } from '../core/lore-context.js';
 import { LoreContextDiagnostics } from '../web/LoreContextDiagnostics.js';
 import { parseLorePolicyDraft } from '../web/LoreContextPolicyEditor.js';
+import { shownThrow } from './shown-error.js';
 
 describe('lore context UI boundaries', () => {
   const valid = {
@@ -28,7 +29,7 @@ describe('lore context UI boundaries', () => {
     ] as const) {
       const draft = { ...valid, [key]: text },
         before = structuredClone(draft);
-      expect(() => parseLorePolicyDraft(draft)).toThrow('정수');
+      expect(shownThrow(() => parseLorePolicyDraft(draft))).toContain('정수');
       expect(draft).toEqual(before);
     }
   });
@@ -93,8 +94,12 @@ describe('lore context UI boundaries', () => {
       maxSelectedTokens: 5000,
       maxInputTokens: 28000,
     });
-    expect(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' })).toThrow('0~1');
-    expect(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '262001' })).toThrow('262,000');
-    expect(() => parseLorePolicyDraft({ ...draft, maxSelectedTokens: '' })).toThrow('입력');
+    expect(shownThrow(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' }))).toContain('0~1');
+    expect(
+      shownThrow(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '262001' }))
+    ).toContain('262,000');
+    expect(shownThrow(() => parseLorePolicyDraft({ ...draft, maxSelectedTokens: '' }))).toContain(
+      '입력'
+    );
   });
 });

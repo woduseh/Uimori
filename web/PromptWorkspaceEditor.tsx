@@ -397,7 +397,7 @@ export function PromptWorkspaceEditor({
             onChange={(event) => setComboName(event.target.value)}
           />
         </label>
-        {comboError && <NoticeBanner tone="error">{comboError}</NoticeBanner>}
+        {comboError && <NoticeBanner tone="error">{translateMessage(comboError)}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"

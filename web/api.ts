@@ -1,5 +1,5 @@
 import { MAINTENANCE_CLOSED, type MaintenanceStatus, readErrorWire } from '#contracts';
-import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
+import { apiErrorMessage } from './api-errors.js';
 import { t } from './i18n.js';
 import { writeOptionalStorage } from './optional-storage.js';
 import { forgetBotStorage, forgetChatStorage, storageKeys } from './storage-keys.js';
@@ -9,16 +9,11 @@ import { announceLocalChange } from './live-stream.js';
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | null;
-  private readonly display?: () => string;
-  constructor(message: string, status: number, code: string | null = null, display?: () => string) {
+  constructor(message: string, status: number, code: string | null = null) {
     super(message);
     this.status = status;
     this.code = code;
-    this.display = display;
     this.name = 'ApiError';
-  }
-  get displayMessage(): string {
-    return this.display?.() ?? this.message;
   }
 }
 export function definiteRejection(error: unknown): boolean {
@@ -74,11 +69,8 @@ export async function throwApiError(
     typeof window !== 'undefined'
   )
     window.dispatchEvent(new Event(maintenanceChangedEvent));
-  const diagnostic = apiErrorDiagnostic(payload, response.status, method);
-  apiErrorDisplay(payload, response.status, method);
-  throw new ApiError(diagnostic.message, response.status, diagnostic.code, () =>
-    apiErrorDisplay(payload, response.status, method)
-  );
+  const { message, code } = apiErrorMessage(payload, response.status, method);
+  throw new ApiError(message, response.status, code);
 }
 
 const runAdmission =

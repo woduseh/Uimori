@@ -46,17 +46,14 @@ export function scanI18nSource(source, file = 'input.tsx') {
     dynamicCalls = [];
   const tree = ast(source, file);
   const functions = new Map(
-    ['t', 'message', 'retainedMessage', 'legacyMessage', 'formatMessage'].map((name) => [
-      name,
-      name,
-    ])
+    ['t', 'message', 'retainedMessage', 'formatMessage'].map((name) => [name, name])
   );
   for (const entry of tree.program.body) {
     if (entry.type !== 'ImportDeclaration' || !/\/i18n\.[jt]s$/u.test(entry.source.value)) continue;
     for (const item of entry.specifiers) {
       if (
         item.type === 'ImportSpecifier' &&
-        ['t', 'message', 'legacyMessage', 'formatMessage'].includes(propertyName(item.imported))
+        ['t', 'message', 'formatMessage'].includes(propertyName(item.imported))
       )
         functions.set(item.local.name, propertyName(item.imported));
     }
@@ -105,6 +102,38 @@ export function scanI18nSource(source, file = 'input.tsx') {
     calls.push({ key: key.value, args, file, line: node.loc.start.line });
   });
   return { candidates, calls, dynamicCalls };
+}
+
+const hangul = /[가-힣]/u;
+const calleeName = (callee) =>
+  propertyName(callee?.type === 'MemberExpression' ? callee.property : callee) ?? '';
+const errorSite = (node) =>
+  node.type === 'ThrowStatement' ||
+  (node.type === 'NewExpression' && /Error$/u.test(calleeName(node.callee))) ||
+  (node.type === 'CallExpression' && calleeName(node.callee) === 'reject');
+
+export function findKoreanServerErrors(source, file = 'server/input.ts') {
+  const found = [];
+  const tree = parse(source, {
+    sourceType: 'module',
+    plugins: /x$/u.test(file) ? ['typescript', 'jsx'] : ['typescript'],
+  });
+  walk(tree, (node) => {
+    if (!errorSite(node)) return;
+    walk(node.type === 'ThrowStatement' ? node.argument : node.arguments, (inner) => {
+      const text =
+        inner.type === 'StringLiteral'
+          ? inner.value
+          : inner.type === 'TemplateElement'
+            ? inner.value.cooked
+            : null;
+      if (typeof text === 'string' && hangul.test(text))
+        found.push(
+          `${file}:${inner.loc.start.line}: Korean text in a server error; throw an AppError with a catalog code (packages/contracts) and give it a message in web/locales so the web renders it in the reader's language`
+        );
+    });
+  });
+  return [...new Set(found)];
 }
 
 const keyLikeStart = /^[A-Za-z][\w-]*\./u;
@@ -256,6 +285,8 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
       file: relative(root, path).replaceAll('\\', '/'),
       source: readFileSync(path, 'utf8'),
     }));
+  for (const { file, source } of sources)
+    if (file.startsWith('server/')) errors.push(...findKoreanServerErrors(source, file));
   const unused = findUnusedMessages(catalog, sources);
   for (const key of unused)
     errors.push(

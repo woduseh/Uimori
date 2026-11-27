@@ -1,4 +1,3 @@
-import { legacyMessage } from './i18n.js';
 import {
   t,
   useI18n,
@@ -125,8 +124,8 @@ export function RisuImport({
     setNotice('');
     try {
       if (!/\.(charx|jpe?g|png|risum|json|zip)$/i.test(file.name))
-        throw new Error(legacyMessage('transfer.m007'));
-      if (file.size === 0) throw new Error(legacyMessage('transfer.m008'));
+        throw new Error(retainedMessage('transfer.m007'));
+      if (file.size === 0) throw new Error(retainedMessage('transfer.m008'));
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
         throw new Error(
           retainedMessage('transfer.d001', {

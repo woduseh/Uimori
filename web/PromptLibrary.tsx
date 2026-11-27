@@ -1,5 +1,5 @@
 import { cloneWithReceipt } from './resource-create-retry.js';
-import { useI18n, registerMessage, message as uiMessage, messageRef } from './i18n.js';
+import { useI18n, message as uiMessage, messageRef } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -33,7 +33,7 @@ import type {
 } from '../core/product.js';
 import type { ResourceSaveResult } from '../core/resource-editing.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
-import { api, ApiError } from './api.js';
+import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
@@ -401,40 +401,29 @@ export function PromptLibrary({
         }
       );
       const copy = result.saved as PromptPreset;
-      const warnings: (() => string)[] = [];
+      const warnings: string[] = [];
       try {
         await placeCreated(copy, true, result.creationOrganizationRevision ?? null);
       } catch (error) {
-        warnings.push(() =>
-          t('prompts.clonedPlacement', {
+        warnings.push(
+          uiMessage('prompts.clonedPlacement', {
             error:
-              error instanceof ApiError
-                ? error.displayMessage
-                : (error as Error).message ===
-                    uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
-                  ? ''
-                  : messageRef((error as Error).message),
-          }).trimEnd()
+              (error as Error).message === uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+                ? ''
+                : messageRef((error as Error).message),
+          })
         );
       }
       try {
         await reload();
       } catch (error) {
-        warnings.push(() =>
-          t('prompts.clonedReload', {
-            error:
-              error instanceof ApiError
-                ? error.displayMessage
-                : messageRef((error as Error).message),
+        warnings.push(
+          uiMessage('prompts.clonedReload', {
+            error: messageRef((error as Error).message),
           })
         );
       }
-      if (warnings.length) {
-        const renderWarnings = () => warnings.map((render) => render()).join('\n');
-        const warning = renderWarnings();
-        registerMessage(warning, renderWarnings);
-        onError(warning);
-      }
+      if (warnings.length) onError(warnings.join('\n'));
     } catch (error) {
       onError((error as Error).message);
     } finally {
@@ -457,33 +446,19 @@ export function PromptLibrary({
       try {
         await placeCreated(created, true);
       } catch (error) {
-        const renderWarning = () =>
-          t('prompts.addedPlacement', {
+        onError(
+          uiMessage('prompts.addedPlacement', {
             error:
-              error instanceof ApiError
-                ? error.displayMessage
-                : (error as Error).message ===
-                    uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
-                  ? ''
-                  : messageRef((error as Error).message),
-          }).trimEnd();
-        const warning = renderWarning();
-        registerMessage(warning, renderWarning);
-        onError(warning);
+              (error as Error).message === uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+                ? ''
+                : messageRef((error as Error).message),
+          })
+        );
       }
       try {
         await reload();
       } catch (error) {
-        const renderWarning = () =>
-          t('prompts.addedReload', {
-            error:
-              error instanceof ApiError
-                ? error.displayMessage
-                : messageRef((error as Error).message),
-          });
-        const warning = renderWarning();
-        registerMessage(warning, renderWarning);
-        onError(warning);
+        onError(uiMessage('prompts.addedReload', { error: messageRef((error as Error).message) }));
       }
       return created;
     } finally {

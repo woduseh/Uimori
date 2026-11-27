@@ -2,9 +2,6 @@ import {
   t,
   translateMessage,
   useI18n,
-  getLocale,
-  formatMessage,
-  registerMessage,
   type MessageValues,
   messageRef,
   message as uiMessage,
@@ -26,31 +23,31 @@ import './lore-context.css';
 import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
 
-const tokenFields = (locale = getLocale()) =>
+const tokenFields = () =>
   [
     {
       key: 'maxRetainedTokens',
       labelKey: 'settings.m204',
-      label: formatMessage('settings.m204', locale),
+      label: t('settings.m204'),
       min: 0,
       max: 200_000,
-      unit: formatMessage('settings.m205', locale),
+      unit: t('settings.m205'),
     },
     {
       key: 'maxRetainedEntries',
       labelKey: 'settings.m206',
-      label: formatMessage('settings.m206', locale),
+      label: t('settings.m206'),
       min: 0,
       max: 256,
-      unit: formatMessage('settings.m207', locale),
+      unit: t('settings.m207'),
     },
     {
       key: 'maxPinnedTokens',
       labelKey: 'settings.m208',
-      label: formatMessage('settings.m208', locale),
+      label: t('settings.m208'),
       min: 1,
       max: 1_000_000,
-      unit: formatMessage('settings.m205', locale),
+      unit: t('settings.m205'),
     },
   ] as const;
 type PolicyDraft = {
@@ -73,34 +70,20 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   ),
   maxInputTokens: String(policy.judgment?.maxInputTokens ?? DEFAULT_JEV_JUDGMENT.maxInputTokens),
 });
-function policyError(
-  key: string,
-  values?: MessageValues,
-  displayValues?: () => MessageValues
-): Error {
-  const raw = formatMessage(key, 'ko', values);
-  registerMessage(raw, () => formatMessage(key, getLocale(), displayValues?.() ?? values));
-  return new Error(raw);
+function policyError(key: string, values?: MessageValues): Error {
+  return new Error(uiMessage(key, values));
 }
 
 export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
-  for (const field of tokenFields('ko')) {
+  for (const field of tokenFields()) {
     const raw = draft[field.key];
     const number = Number(raw);
     if (!raw.trim() || !Number.isSafeInteger(number) || number < field.min || number > field.max)
-      throw policyError(
-        'settings.m209',
-        {
-          v0: field.label,
-          v1: field.min.toLocaleString('ko-KR'),
-          v2: field.max.toLocaleString('ko-KR'),
-        },
-        () => ({
-          v0: formatMessage(field.labelKey, getLocale()),
-          v1: field.min.toLocaleString(getLocale()),
-          v2: field.max.toLocaleString(getLocale()),
-        })
-      );
+      throw policyError('settings.m209', {
+        v0: messageRef(uiMessage(field.labelKey)),
+        v1: field.min,
+        v2: field.max,
+      });
   }
   if (!draft.threshold?.trim() || !draft.maxSelectedTokens?.trim() || !draft.maxInputTokens?.trim())
     throw policyError('settings.m210');
@@ -114,19 +97,11 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
     ] as const) {
       const value = Number(draft[key]);
       if (!Number.isSafeInteger(value) || value < min || value > max)
-        throw policyError(
-          'settings.m209',
-          {
-            v0: formatMessage(label, 'ko'),
-            v1: min.toLocaleString('ko-KR'),
-            v2: max.toLocaleString('ko-KR'),
-          },
-          () => ({
-            v0: formatMessage(label, getLocale()),
-            v1: min.toLocaleString(getLocale()),
-            v2: max.toLocaleString(getLocale()),
-          })
-        );
+        throw policyError('settings.m209', {
+          v0: messageRef(uiMessage(label)),
+          v1: min,
+          v2: max,
+        });
     }
   }
   return validateLoreContextPolicy({

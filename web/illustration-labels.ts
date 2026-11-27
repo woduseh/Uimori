@@ -1,32 +1,19 @@
-import { t, formatMessage, type UiLocale } from './i18n.js';
+import { appErrorTakesParams, isAppErrorCode } from '#contracts';
+import { appErrorMessages } from './api-errors.js';
+import { message, t } from './i18n.js';
 import type { Illustration } from '../core/illustration.js';
 
 const messages: Record<string, string> = {
-  ILLUSTRATION_GENERATOR_UNCONFIGURED: 'visuals.m176',
-  ILLUSTRATION_CODEX_CONTENT_BLOCKED: 'visuals.m177',
-  ILLUSTRATION_ACTIVE: 'visuals.m178',
-  ILLUSTRATION_PLAN_ACTIVE: 'visuals.m179',
   ILLUSTRATION_STORYBOARD_INVALID: 'visuals.m180',
   ILLUSTRATION_PLACEMENT_INVALID: 'visuals.m181',
-  ILLUSTRATION_TARGET_UNAVAILABLE: 'visuals.m182',
-  ILLUSTRATION_TARGET_CONFLICT: 'visuals.m183',
-  ILLUSTRATION_PRESENTATION_CHANGED: 'visuals.m184',
-  ILLUSTRATION_LIMIT_REACHED: 'visuals.m185',
-  ILLUSTRATION_MODEL_REQUIRED: 'visuals.m186',
-  ILLUSTRATION_MODEL_UNAVAILABLE: 'visuals.m187',
-  ILLUSTRATION_CODEX_CONNECTION_REQUIRED: 'visuals.m188',
-  ILLUSTRATION_PROMPT_MODEL_REQUIRED: 'visuals.m189',
-  ILLUSTRATION_SOURCE_CHANGED: 'visuals.m190',
   ILLUSTRATION_SOURCE_UNAVAILABLE: 'visuals.m191',
   ILLUSTRATION_SOURCE_EMPTY: 'visuals.m192',
   ILLUSTRATION_SOURCE_SEGMENTS_INVALID: 'visuals.m193',
   ILLUSTRATION_IMAGE_INVALID: 'visuals.m194',
-  ILLUSTRATION_NOT_RETRYABLE: 'visuals.m195',
   ILLUSTRATION_CANCELLED: 'visuals.m196',
   ILLUSTRATION_INTERRUPTED: 'visuals.m197',
   ILLUSTRATION_SUPERSEDED: 'visuals.m198',
   ILLUSTRATION_FAILED: 'visuals.m199',
-  ILLUSTRATION_RESERVATION_FAILED: 'visuals.m200',
   ILLUSTRATION_PROMPT_REFUSED: 'visuals.m201',
   ILLUSTRATION_PROMPT_INVALID: 'visuals.m202',
   INPUT_CONTEXT_LIMIT_EXCEEDED: 'visuals.m203',
@@ -50,12 +37,8 @@ const messages: Record<string, string> = {
   CODEX_UNAVAILABLE: 'visuals.m220',
   CODEX_INVALID_CONNECTION: 'visuals.m221',
   TIMEOUT: 'visuals.m222',
-  COMFYUI_UNCONFIGURED: 'visuals.m223',
-  COMFYUI_WORKFLOW_MISSING: 'visuals.m224',
-  COMFYUI_WORKFLOW_INVALID: 'visuals.m225',
   COMFYUI_WORKFLOW_UI_FORMAT: 'visuals.m226',
   COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING: 'visuals.m227',
-  COMFYUI_BASE_URL_INVALID: 'visuals.m228',
   COMFYUI_CREDENTIAL_UNAVAILABLE: 'visuals.m229',
   COMFYUI_REDIRECT_REFUSED: 'visuals.m230',
   COMFYUI_UNREACHABLE: 'visuals.m231',
@@ -63,16 +46,13 @@ const messages: Record<string, string> = {
   COMFYUI_EXECUTION_FAILED: 'visuals.m233',
   COMFYUI_TIMEOUT: 'visuals.m234',
   COMFYUI_RESULT_PENDING: 'visuals.m235',
-  COMFYUI_RESULT_UNAVAILABLE: 'visuals.m236',
   COMFYUI_SUBMISSION_UNCERTAIN: 'visuals.m237',
-  ILLUSTRATION_NOT_RECONCILABLE: 'visuals.m238',
   COMFYUI_NO_IMAGE: 'visuals.m239',
   COMFYUI_IMAGE_INVALID: 'visuals.m240',
   COMFYUI_RESPONSE_INVALID: 'visuals.m241',
   COMFYUI_HTTP_5XX: 'visuals.m242',
   COMFYUI_HTTP_ERROR: 'visuals.m243',
   FIXTURE_FAILURE: 'visuals.m244',
-  NOVELAI_TOKEN_MISSING: 'visuals.novelaiTokenMissing',
   NOVELAI_UNAUTHORIZED: 'visuals.novelaiUnauthorized',
   NOVELAI_ANLAS_INSUFFICIENT: 'visuals.novelaiAnlasInsufficient',
   NOVELAI_BUSY: 'visuals.novelaiBusy',
@@ -82,20 +62,26 @@ const messages: Record<string, string> = {
   NOVELAI_RESPONSE_INVALID: 'visuals.novelaiResponseInvalid',
   NOVELAI_IMAGE_INVALID: 'visuals.novelaiImageInvalid',
 };
-export function illustrationErrorMessage(
-  code: string | null | undefined,
-  locale?: UiLocale
-): string {
+function illustrationError(code: string | null | undefined) {
   const key = !code
     ? 'visuals.m199'
-    : (messages[code] ??
-      (code.startsWith('ILLUSTRATION_PROMPT_')
-        ? 'visuals.m245'
-        : code.startsWith('MODEL_UNAVAILABLE:')
-          ? 'visuals.m187'
-          : 'visuals.m199'));
-  const values = key === 'visuals.m227' ? { placeholder: '{{prompt}}' } : undefined;
-  return locale ? formatMessage(key, locale, values) : t(key, values);
+    : isAppErrorCode(code) && !appErrorTakesParams(code)
+      ? appErrorMessages[code]
+      : (messages[code] ??
+        (code.startsWith('ILLUSTRATION_PROMPT_')
+          ? 'visuals.m245'
+          : code.startsWith('MODEL_UNAVAILABLE:')
+            ? 'visuals.m187'
+            : 'visuals.m199'));
+  return { key, values: key === 'visuals.m227' ? { placeholder: '{{prompt}}' } : undefined };
+}
+export function illustrationErrorMessage(code: string | null | undefined): string {
+  const { key, values } = illustrationError(code);
+  return t(key, values);
+}
+export function illustrationErrorDescriptor(code: string): string {
+  const { key, values } = illustrationError(code);
+  return message(key, values);
 }
 export const illustrationGeneratorLabels: Record<Illustration['generator'], string> = {
   codex: 'Codex',

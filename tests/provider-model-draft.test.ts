@@ -1,6 +1,7 @@
 import { pricingDraft, pricingPayload } from '../web/provider-model-draft.js';
 import { effectiveModelFamily } from '../core/model-family.js';
 import { describe, expect, test } from 'vitest';
+import { translateMessage } from '../web/i18n.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import {
   initialModel,
@@ -229,9 +230,11 @@ describe('model numeric drafts', () => {
     'reports invalid Vercel providerOptions %s without saving',
     (providerOptions) => {
       expect(
-        modelDraftError(
-          { ...initialModel(), modelId: 'openai/gpt-5.6-sol', providerOptions },
-          vercelConnection
+        translateMessage(
+          modelDraftError(
+            { ...initialModel(), modelId: 'openai/gpt-5.6-sol', providerOptions },
+            vercelConnection
+          )
         )
       ).toMatch(/providerOptions/);
     }

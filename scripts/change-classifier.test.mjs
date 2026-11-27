@@ -29,6 +29,7 @@ const classTable = {
     'typeScriptInput',
     'moduleFile',
     'commentSource',
+    'i18nInput',
     'distEntry',
     'browserInput',
   ],
@@ -37,6 +38,7 @@ const classTable = {
     'typeScriptInput',
     'moduleFile',
     'commentSource',
+    'i18nInput',
     'browserInput',
   ],
   'web/ChatComposer.tsx': [

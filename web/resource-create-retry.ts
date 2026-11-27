@@ -1,5 +1,5 @@
 import { api, ApiError, definiteRejection } from './api.js';
-import { legacyMessage } from './i18n.js';
+import { message } from './i18n.js';
 
 export async function cloneWithReceipt<T>(
   storageKey: string,
@@ -20,7 +20,7 @@ export async function cloneWithReceipt<T>(
     typeof command.idempotencyKey !== 'string' ||
     !command.idempotencyKey
   )
-    throw new Error(legacyMessage('shared.resourceCloneRecordInvalid'));
+    throw new Error(message('shared.resourceCloneRecordInvalid'));
   if (!raw) sessionStorage.setItem(storageKey, JSON.stringify(command));
   try {
     const result = await api<T>('/resources/clone', command);

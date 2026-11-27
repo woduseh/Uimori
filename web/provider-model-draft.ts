@@ -1,10 +1,4 @@
-import { formatNumber, formatMessage, registerMessage, type MessageValues } from './i18n.js';
-
-function validationMessage(key: string, values?: MessageValues): string {
-  const raw = formatMessage(key, 'ko', values);
-  registerMessage(raw, key, values);
-  return raw;
-}
+import { formatNumber, message as validationMessage, messageRef } from './i18n.js';
 import type { GeminiSafetySettings } from '../core/gemini-safety.js';
 import type {
   LibraryConnection,
@@ -367,7 +361,9 @@ export function modelDraftError(
     return '';
   } catch (error) {
     return validationMessage('providers.m577', {
-      value0: error instanceof Error ? error.message : validationMessage('providers.m328'),
+      value0: messageRef(
+        error instanceof Error ? error.message : validationMessage('providers.m328')
+      ),
     });
   }
 }
