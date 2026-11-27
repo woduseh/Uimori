@@ -1,13 +1,6 @@
 import { parseOwnJson, tryParseJson } from './json.js';
 import { useI18n } from './i18n.js';
-import {
-  isUiMessage,
-  sameUiMessage,
-  UiError,
-  uiMessage,
-  type MessageKey,
-  type UiMessage,
-} from './ui-message.js';
+import { isUiMessage, UiError, uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
 import {
@@ -240,7 +233,7 @@ function changedParagraphPosition(detail: ReaderDetail, target: ReaderTarget, pa
     : null;
 }
 
-type ErrorState = { error: UiMessage | null; code: string | null };
+type ErrorState = { error: UiMessage | null; code: string | null; fromLibrary?: true };
 const noError: ErrorState = { error: null, code: null };
 const caughtError = (cause: unknown, fallback?: MessageKey): ErrorState => ({
   error: toUiMessage(cause, fallback),
@@ -283,19 +276,20 @@ export function useStory() {
   const [errorState, updateError] = useState<ErrorState>(noError);
   const error = errorState.error;
   const errorCode = errorState.code;
-  const setError = useCallback(
-    (value: UiMessage | Error | null | ((current: UiMessage | null) => UiMessage | null)) => {
-      updateError((old) => {
-        if (typeof value === 'function') {
-          const next = value(old.error);
-          return next === old.error ? old : { error: next, code: next ? old.code : null };
-        }
-        if (value === null) return noError;
-        return isUiMessage(value) ? { error: value, code: null } : caughtError(value);
-      });
-    },
-    []
-  );
+  const setError = useCallback((value: UiMessage | Error | null) => {
+    updateError(
+      value === null
+        ? noError
+        : isUiMessage(value)
+          ? { error: value, code: null }
+          : caughtError(value)
+    );
+  }, []);
+  const setLibraryFailure = useCallback((cause: unknown) => {
+    updateError((old) =>
+      old.error && !old.fromLibrary ? old : { ...caughtError(cause), fromLibrary: true }
+    );
+  }, []);
   const setCaughtError = useCallback((cause: unknown, fallback?: MessageKey) => {
     updateError(caughtError(cause, fallback));
   }, []);
@@ -573,12 +567,12 @@ export function useStory() {
     return libraryFlight.current;
   }, []);
   const retryLibrary = useCallback(() => {
-    setError((current) => (sameUiMessage(current, libraryError) ? null : current));
+    updateError((old) => (old.fromLibrary ? noError : old));
     return loadLibrary();
-  }, [libraryError, loadLibrary, setError]);
+  }, [loadLibrary]);
   useEffect(() => {
     const refreshLibrary = () => {
-      void loadLibrary().catch((caught) => setError(caught));
+      void loadLibrary().catch(setLibraryFailure);
     };
     const onStorage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) refreshLibrary();
@@ -587,7 +581,7 @@ export function useStory() {
     addEventListener('focus', refreshLibrary);
     const live = watchLive({
       match: (frame) => helperDataFrame(frame) || promptWorkspaceFrame(frame),
-      refresh: () => loadLibrary().catch((caught) => setError(caught)),
+      refresh: () => loadLibrary().catch(setLibraryFailure),
       minIntervalMs: helperRefreshSpacing,
     });
     return () => {
@@ -596,10 +590,11 @@ export function useStory() {
       live.dispose();
       libraryRequest.current++;
     };
-  }, [loadLibrary, setError]);
+  }, [loadLibrary, setLibraryFailure]);
   useEffect(() => {
-    void Promise.all([loadChats(), loadLibrary()]).catch((e) => setError(e));
-  }, [loadChats, loadLibrary, setError]);
+    void loadChats().catch(setError);
+    void loadLibrary().catch(setLibraryFailure);
+  }, [loadChats, loadLibrary, setError, setLibraryFailure]);
   useEffect(() => {
     readerCache.current = null;
     setDetail(null);
@@ -654,7 +649,7 @@ export function useStory() {
         }
         if (message.kind === 'profile.updated')
           void loadLibrary().catch((e) => {
-            if (alive) setError(e);
+            if (alive) setLibraryFailure(e);
           });
         sync.request(message.seq ?? 0, message.kind === 'snapshot');
       },
@@ -666,7 +661,7 @@ export function useStory() {
       document.removeEventListener('visibilitychange', visibility);
       detach();
     };
-  }, [selected, refresh, loadChats, loadLibrary, setError, setCaughtError]);
+  }, [selected, refresh, loadChats, loadLibrary, setError, setCaughtError, setLibraryFailure]);
   useEffect(() => {
     readerSync.current?.setActive(destination === 'story' && !document.hidden);
   }, [destination]);
@@ -2055,6 +2050,7 @@ export function useStory() {
     codexWarning,
     error,
     errorCode,
+    errorFromLibrary: !!errorState.fromLibrary,
     notice,
     connected,
     nativeInteractionRevision,

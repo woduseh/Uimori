@@ -552,3 +552,27 @@ test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete l
   expect(saved.ok(), await saved.text()).toBe(true);
   expect((await saved.json()).title).toBe(title);
 });
+
+test('LIBLOAD a chat list failure stays visible beside a library failure with the same text and after the library retry', async ({
+  page,
+}) => {
+  let failLibrary = true;
+  await page.route('**/api/chats', (route) => route.abort('failed'));
+  await page.route('**/api/library?view=summary', (route) =>
+    failLibrary ? route.abort('failed') : route.continue()
+  );
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  const retry = page
+    .getByRole('region', { name: '서재', exact: true })
+    .getByRole('button', { name: '다시 불러오기', exact: true });
+  await expect(retry).toBeVisible();
+  const banner = page
+    .getByRole('alert')
+    .filter({ has: page.getByRole('button', { name: '오류 메시지 닫기', exact: true }) });
+  await expect(banner).toBeVisible();
+  failLibrary = false;
+  await retry.click();
+  await expect(page.getByTestId('library-panel')).toBeVisible();
+  await expect(banner).toBeVisible();
+});

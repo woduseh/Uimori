@@ -240,6 +240,46 @@ test('legacy uses count wrapper calls and descriptor imports by what is imported
   );
 });
 
+test('every way of reaching the wrapper or a descriptor API counts, not only a direct call', () => {
+  const uses = (lines) => legacyMessageUses(lines.join('\n'), 'web/View.tsx');
+  const wrapper = "import { legacyUiMessage } from './ui-message.js';";
+  assert.deepEqual(uses([wrapper, 'export const a = texts.map(legacyUiMessage);']), {
+    apis: [],
+    wrappers: 1,
+  });
+  assert.equal(uses([wrapper, 'export const a = legacyUiMessage?.(text);']).wrappers, 1);
+  assert.equal(
+    uses([wrapper, 'const w = legacyUiMessage;', 'const v = w;', 'export const a = [w(x), v(y)];'])
+      .wrappers,
+    4
+  );
+  assert.equal(
+    uses([
+      "import { legacyUiMessage as one, legacyUiMessage as two } from './ui-message.js';",
+      'export const a = [one(x), two(y)];',
+    ]).wrappers,
+    2
+  );
+  assert.deepEqual(
+    uses([
+      "import * as ui from './ui-message.js';",
+      "import * as i18n from './i18n.js';",
+      'export const a = [ui.legacyUiMessage(x), ui?.["legacyUiMessage"](y), i18n.translateMessage(s)];',
+      'const { messageRef, legacyUiMessage: w } = i18n;',
+      'const { legacyUiMessage: z } = ui;',
+      'export const b = [z(x), i18n.t(k)];',
+    ]),
+    { apis: ['messageRef', 'translateMessage'], wrappers: 4 }
+  );
+  assert.deepEqual(
+    uses([
+      "export { legacyUiMessage, legacyMessageString } from './ui-message.js';",
+      "export * from './i18n.js';",
+    ]),
+    { apis: ['legacyMessageString', 'message', 'messageRef', 'translateMessage'], wrappers: 1 }
+  );
+});
+
 test('legacy wrappers and descriptor files only shrink, and shrinking drops an emptied section', () => {
   const wrapping = "import { legacyUiMessage } from './ui-message.js';\n";
   withRepository(
@@ -261,9 +301,9 @@ test('legacy wrappers and descriptor files only shrink, and shrinking drops an e
       };
       const shrink = '(node scripts/check-ui-message.mjs --shrink)';
       assert.deepEqual(uiMessageErrors(directory, allowlist), [
-        `web/Grown.tsx: 2 legacyUiMessage calls, ${allowlistPath} allows 1; ${legacyWrapperRemedy}`,
-        `${allowlistPath}: web/Shrunk.tsx now has 1 legacyUiMessage calls; lower legacyWrappers from 3 to 1 ${shrink}`,
-        `${allowlistPath}: web/Clean.tsx has no legacyUiMessage calls; remove its legacyWrappers entry ${shrink}`,
+        `web/Grown.tsx: 2 legacyUiMessage uses, ${allowlistPath} allows 1; ${legacyWrapperRemedy}`,
+        `${allowlistPath}: web/Shrunk.tsx now has 1 legacyUiMessage uses; lower legacyWrappers from 3 to 1 ${shrink}`,
+        `${allowlistPath}: web/Clean.tsx has no legacyUiMessage uses; remove its legacyWrappers entry ${shrink}`,
         `web/New.tsx: uses the legacy descriptor API (translateMessage) but is not in legacyDescriptors; ${legacyDescriptorRemedy}`,
         `${allowlistPath}: web/Clean.tsx no longer uses a legacy descriptor API; remove it from legacyDescriptors ${shrink}`,
       ]);
