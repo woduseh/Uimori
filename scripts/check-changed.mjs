@@ -46,8 +46,11 @@ function selectToolingTests(files, toolingTests, toolingSources = {}, scriptSour
     if (!is.scriptFile(file) && !is.hookFile(file)) continue;
     stems.add(withoutModuleExtension(file));
     if (is.topLevelScript(file)) {
-      const paired = `${file.replace(/\.[^./]+$/u, '')}.test.mjs`;
-      if (toolingTests.includes(paired)) selected.push(paired);
+      const stem = file.replace(/\.[^./]+$/u, '');
+      const paired = [`${stem}.test.mjs`, `${stem}.test.ts`].find((test) =>
+        toolingTests.includes(test)
+      );
+      if (paired) selected.push(paired);
       else unmatched = true;
     } else if (is.scriptFile(file)) unmatched = true;
   }
@@ -107,6 +110,7 @@ export function selectChecks(
     comments: files.some(is.fullCommentScan) ? 'all' : files.filter(is.commentSource),
     i18n: files.some(is.i18nInput),
     uiMessage: files.some(is.uiMessageInput),
+    scriptImports: files.some(is.scriptImportInput),
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
     firstHopTests,
@@ -188,7 +192,7 @@ function scriptFiles() {
     .flatMap((directory) =>
       readdirSync(join(root, directory)).map((name) => `${directory}/${name}`)
     )
-    .filter((file) => file.endsWith('.mjs') && !is.toolingTestFile(file));
+    .filter((file) => /\.(?:mjs|ts)$/u.test(file) && !is.toolingTestFile(file));
 }
 
 function readSources(files) {
@@ -345,6 +349,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       );
     if (checks.i18n) statics.push(run('i18n', node, ['scripts/check-i18n.mjs']));
     if (checks.uiMessage) statics.push(run('ui-message', node, ['scripts/check-ui-message.mjs']));
+    if (checks.scriptImports)
+      statics.push(run('script-imports', node, ['scripts/check-script-imports.mjs']));
     if (checks.vitest.length) listing = affectedTests(checks.vitest);
   }
   const results = await Promise.all(statics);

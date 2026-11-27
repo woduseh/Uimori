@@ -24,6 +24,7 @@ async function defaultFiles() {
     [
       ['tests', '.node.test.mjs'],
       ['scripts', '.test.mjs'],
+      ['scripts', '.test.ts'],
     ].map(async ([directory, suffix]) =>
       (await readdir(path.join(root, directory), { withFileTypes: true }))
         .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))

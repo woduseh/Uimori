@@ -13,9 +13,12 @@
     "types": ["node", "vite/client"],
     "paths": {
       "#contracts": ["./packages/contracts/src/index.ts"],
-      "#contracts/operations": ["./packages/contracts/src/operations.ts"]
+      "#contracts/operations": ["./packages/contracts/src/operations.ts"],
+      "#dist/*": ["./*"]
     },
-    "noEmit": true
+    "noEmit": true,
+    "allowJs": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["core", "packages", "server", "web", "tests", "*.config.ts"]
+  "include": ["core", "packages", "server", "web", "tests", "scripts", "*.config.ts"]
 }

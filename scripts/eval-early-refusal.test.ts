@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./eval-early-refusal.mjs', import.meta.url));
@@ -15,8 +15,9 @@ const REFUSAL = 'I cannot continue this story.';
 const CHARACTER_REFUSAL = 'She said no.';
 const KEY = 'synthetic-eval-key';
 
-const filler = (length) => CANARY.repeat(Math.ceil(length / CANARY.length)).slice(0, length);
-const paragraphs = (count) => Array.from({ length: count }, () => filler(198)).join('\n\n');
+const filler = (length: number) =>
+  CANARY.repeat(Math.ceil(length / CANARY.length)).slice(0, length);
+const paragraphs = (count: number) => Array.from({ length: count }, () => filler(198)).join('\n\n');
 const texts = {
   refusalFirst: `${REFUSAL}\n\n${filler(4000)}`,
   refusalLater: `${filler(1000)}\n\n${REFUSAL}\n\n${filler(3000)}`,
@@ -43,10 +44,10 @@ export default async function (url, init) {
 }
 `;
 
-async function fixture(t) {
-  const { Store } = await import('../dist/server/store.js');
-  const { JevCredentialStore } = await import('../dist/server/jev-credentials.js');
-  const { mainJudgmentInput } = await import('../dist/server/main-judgment.js');
+async function fixture(t: TestContext) {
+  const { Store } = await import('#dist/server/store.js');
+  const { JevCredentialStore } = await import('#dist/server/jev-credentials.js');
+  const { mainJudgmentInput } = await import('#dist/server/main-judgment.js');
   const directory = await mkdtemp(join(tmpdir(), 'uimori-eval-early-refusal-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, 'evaluation.sqlite');
@@ -62,9 +63,9 @@ async function fixture(t) {
     const insertRun = store.db.prepare(
       "INSERT INTO runs(id,chat_id,status,request,snapshot,request_key,command,error,created_at,updated_at) VALUES(?,'chat-canary-id',?,?,?,?,'{}',?,?,?)"
     );
-    const run = (id, status, error, snapshot) =>
+    const run = (id: string, status: string, error: string | null, snapshot: unknown) =>
       insertRun.run(id, status, CANARY, JSON.stringify(snapshot), id, error, at, at);
-    const judged = (text) => ({ mainJudgment: mainJudgmentInput(text, 0.9) });
+    const judged = (text: string) => ({ mainJudgment: mainJudgmentInput(text, 0.9) });
     run('run-refusal-first', 'refused', 'MAIN_RESPONSE_REFUSED', judged(texts.refusalFirst));
     run('run-refusal-duplicate', 'refused', 'MAIN_RESPONSE_REFUSED', judged(texts.refusalFirst));
     run('run-refusal-later', 'refused', 'MAIN_RESPONSE_REFUSED', judged(texts.refusalLater));
@@ -88,7 +89,7 @@ async function fixture(t) {
   return { path, stubPath, log: join(directory, 'calls.jsonl') };
 }
 
-function evaluate(args, environment, input) {
+function evaluate(args: string[], environment: Record<string, string>, input?: string) {
   const result = spawnSync(process.execPath, args, {
     env: { ...process.env, TYPESAFE_API_KEY: '', ...environment },
     input,
@@ -97,12 +98,12 @@ function evaluate(args, environment, input) {
   return { status: result.status, stderr: result.stderr, stdout: result.stdout };
 }
 
-const digest = async (path) =>
+const digest = async (path: string) =>
   createHash('sha256')
     .update(await readFile(path))
     .digest('hex');
 
-const calls = async (log) =>
+const calls = async (log: string) =>
   existsSync(log)
     ? (await readFile(log, 'utf8'))
         .trim()
@@ -128,7 +129,7 @@ test('evaluation replays the server judgment on prefixes and prints only aggrega
   for (const secret of [CANARY, 'Private', REFUSAL, CHARACTER_REFUSAL, 'chat-canary-id', KEY])
     assert.equal(run.stdout.includes(secret), false, secret);
 
-  const { mainJudgmentRequest } = await import('../dist/server/main-judgment.js');
+  const { mainJudgmentInput, mainJudgmentRequest } = await import('#dist/server/main-judgment.js');
   const requests = await calls(log);
   assert.equal(requests.length, 16);
   for (const request of requests) {
@@ -136,7 +137,7 @@ test('evaluation replays the server judgment on prefixes and prints only aggrega
     assert.equal(request.authorization, `Bearer ${KEY}`);
     assert.deepEqual(request.body, {
       model: 'jev-latest',
-      ...mainJudgmentRequest({ response: request.body.state.response }),
+      ...mainJudgmentRequest(mainJudgmentInput(request.body.state.response)),
     });
   }
 

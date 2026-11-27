@@ -1,13 +1,13 @@
-import { createApp } from '../../dist/server/app.js';
+import { createApp } from '#dist/server/app.js';
 import { randomUUID } from 'node:crypto';
 
-const errors = [];
+const errors: string[] = [];
 process.on('unhandledRejection', (error) => errors.push(String(error)));
 const options = { dbPath: process.argv[2], buildId: 'background-failure', testMode: true };
 const app = await createApp(options);
-let runId;
+let runId: string | undefined;
 let failureWrites = 0;
-let responseStatus;
+let responseStatus: number | undefined;
 try {
   const title = 'Synthetic background failure';
   const owner = app.store.product.content({
@@ -44,7 +44,7 @@ try {
 }
 const reopened = await createApp(options);
 try {
-  const recovered = reopened.store.run(runId);
+  const recovered = reopened.store.run(runId!);
   const attempts = reopened.store.product.attempts(recovered.chatId);
   console.log(
     JSON.stringify({

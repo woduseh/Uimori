@@ -3,8 +3,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import path from 'node:path';
-import { chromium } from '@playwright/test';
+import { type Browser, chromium } from '@playwright/test';
 import {
   assertBuild,
   browserPath,
@@ -15,16 +16,24 @@ import {
   root,
   startServer,
 } from './lib.mjs';
-import { projectNativeRisuPackage } from '../dist/server/risu-native-projection.js';
+import { projectNativeRisuPackage } from '#dist/server/risu-native-projection.js';
 
 const targetChars = Number(process.env.UIMORI_PROFILE_CHARS ?? 40_000);
 const durationMs = Number(process.env.UIMORI_PROFILE_MS ?? 70_000);
 const tickMs = 50;
+type StreamProfile = {
+  longTasks: { start: number; duration: number; attribution: string[] }[];
+  frames: number[];
+  recording: boolean;
+};
+type LongTaskEntry = PerformanceEntry & {
+  attribution?: { containerType?: string; name: string }[];
+};
 const directory = path.resolve(
   process.argv[2] ?? path.join(root, 'output/benchmarks', `streaming-profile-${newId()}`)
 );
 
-function syntheticScene(length) {
+function syntheticScene(length: number) {
   const sentences = [
     '비가 그친 골목에는 젖은 돌바닥 냄새가 남아 있었다.',
     '미라는 우산을 접고 낡은 서점의 문을 밀었다.',
@@ -43,7 +52,7 @@ function syntheticScene(length) {
   return text.slice(0, length);
 }
 
-async function api(base, method, url, data) {
+async function api(base: string, method: string, url: string, data?: unknown) {
   const response = await fetch(base + url, {
     method,
     headers: data ? { 'content-type': 'application/json' } : {},
@@ -54,7 +63,7 @@ async function api(base, method, url, data) {
   return JSON.parse(text);
 }
 
-function percentile(values, fraction) {
+function percentile(values: number[], fraction: number) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
   return (
@@ -66,7 +75,7 @@ const identity = await assertBuild();
 await mkdir(directory, { recursive: true });
 const scene = syntheticScene(targetChars);
 let release = () => {};
-const started = new Promise((resolve) => {
+const started = new Promise<void>((resolve) => {
   release = resolve;
 });
 let streamedAt = 0;
@@ -91,10 +100,10 @@ const provider = createServer(async (request, response) => {
 });
 provider.listen(0, '127.0.0.1');
 await once(provider, 'listening');
-const endpoint = `http://127.0.0.1:${provider.address().port}/turn`;
+const endpoint = `http://127.0.0.1:${(provider.address() as AddressInfo).port}/turn`;
 
 const children = new Set();
-let browser;
+let browser: Browser | undefined;
 try {
   const { ready } = await startServer(
     localVerificationEnv({
@@ -164,11 +173,11 @@ try {
   });
   const page = await context.newPage();
   await page.addInitScript(() => {
-    const profile = { longTasks: [], frames: [], recording: false };
-    window.__streamProfile = profile;
+    const profile: StreamProfile = { longTasks: [], frames: [], recording: false };
+    Reflect.set(window, '__streamProfile', profile);
     new PerformanceObserver((list) => {
       if (!profile.recording) return;
-      for (const entry of list.getEntries())
+      for (const entry of list.getEntries() as LongTaskEntry[])
         profile.longTasks.push({
           start: entry.startTime,
           duration: entry.duration,
@@ -176,7 +185,7 @@ try {
         });
     }).observe({ type: 'longtask', buffered: false });
     let previous = 0;
-    const frame = (time) => {
+    const frame = (time: number) => {
       if (profile.recording && previous) profile.frames.push(time - previous);
       previous = time;
       requestAnimationFrame(frame);
@@ -209,7 +218,7 @@ try {
       (await cdp.send('Performance.getMetrics')).metrics.map((item) => [item.name, item.value])
     );
   await page.evaluate(() => {
-    window.__streamProfile.recording = true;
+    (Reflect.get(window, '__streamProfile') as StreamProfile).recording = true;
   });
   const before = await metrics();
   sseFrames = 0;
@@ -227,14 +236,15 @@ try {
   }
   const after = await metrics();
   const recorded = await page.evaluate(() => {
-    window.__streamProfile.recording = false;
+    const profile = Reflect.get(window, '__streamProfile') as StreamProfile;
+    profile.recording = false;
     return {
-      ...window.__streamProfile,
+      ...profile,
       domNodes: document.getElementsByTagName('*').length,
     };
   });
   const finalSource = (await api(base, 'GET', `/api/chats/${chat.id}`)).sources.at(-1);
-  const delta = (name) => Math.round((after[name] - before[name]) * 1000) / 1000;
+  const delta = (name: string) => Math.round((after[name] - before[name]) * 1000) / 1000;
   const longTaskDurations = recorded.longTasks.map((task) => task.duration);
   const report = {
     kind: 'uimori-streaming-profile-v1',

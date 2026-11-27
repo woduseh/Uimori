@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import { mock } from 'node:test';
 import { Agent, getGlobalDispatcher } from 'undici';
@@ -8,10 +9,10 @@ import { providerFetchOptions, transportFailureCode } from '../../core/provider-
 const phase = process.argv[2];
 assert.ok(['headers', 'body'].includes(phase));
 const secret = 'synthetic-clock-secret-never-a-real-key';
-const pendingResponses = new Map();
-const seen = [];
-const headersSeen = new Set();
-const outcomes = new Map();
+const pendingResponses = new Map<string | undefined, ServerResponse>();
+const seen: (string | undefined)[] = [];
+const headersSeen = new Set<string>();
+const outcomes = new Map<string, { status: string; text?: string; code?: string }>();
 const baseline = new Agent();
 const controller = new AbortController();
 const init = {
@@ -19,7 +20,7 @@ const init = {
   body: 'synthetic request',
   headers: { authorization: `Bearer ${secret}` },
   signal: controller.signal,
-  redirect: 'error',
+  redirect: 'error' as const,
 };
 const globalDispatcher = getGlobalDispatcher();
 const fixedInit = providerFetchOptions(init);
@@ -36,33 +37,33 @@ const server = createServer(async (request, response) => {
     response.write('first fragment; ');
   }
 });
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
-const io = async (predicate) => {
+await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+const io = async (predicate: () => boolean) => {
   for (let turn = 0; turn < 2000 && !predicate(); turn++) {
     mock.timers.tick(1);
     await nextTurn();
   }
   assert.ok(predicate(), 'Local network did not reach the requested test state');
 };
-const advance = async (milliseconds) => {
+const advance = async (milliseconds: number) => {
   for (let elapsed = 0; elapsed < milliseconds; elapsed += 500) {
     mock.timers.tick(500);
     await nextTurn();
   }
 };
-let requests = [];
+let requests: Promise<unknown>[] = [];
 try {
   mock.timers.enable({ apis: ['setTimeout'] });
   // Node 26 MockTimers' refresh does not repeatedly schedule Undici's fast
   // timer. Use its supported optional-refresh fallback, only in this process.
   const mockedSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = (...args) => {
+  globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
     const timer = mockedSetTimeout(...args);
-    timer.refresh = undefined;
+    Reflect.set(timer, 'refresh', undefined);
     return timer;
-  };
-  const start = (name, options) =>
+  }) as typeof setTimeout;
+  const start = (name: string, options: RequestInit & { dispatcher: Agent }) =>
     fetch(`${origin}/${name}`, options)
       .then((response) => {
         headersSeen.add(name);
@@ -89,10 +90,10 @@ try {
     false,
     'The app deadline remains in charge after the idle-timeout boundary'
   );
-  pendingResponses.get('/fixed').end('completed after virtual 315 seconds');
+  pendingResponses.get('/fixed')!.end('completed after virtual 315 seconds');
   await Promise.all(requests);
-  assert.equal(outcomes.get('fixed').status, 'completed');
-  assert.ok(outcomes.get('fixed').text.endsWith('completed after virtual 315 seconds'));
+  assert.equal(outcomes.get('fixed')!.status, 'completed');
+  assert.ok(outcomes.get('fixed')!.text!.endsWith('completed after virtual 315 seconds'));
   assert.deepEqual(seen.sort(), ['/baseline', '/fixed']);
   assert.equal(getGlobalDispatcher(), globalDispatcher);
   assert.equal(JSON.stringify([...outcomes]).includes(secret), false);

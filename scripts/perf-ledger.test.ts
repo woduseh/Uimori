@@ -4,20 +4,20 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(new URL('./perf-ledger.mjs', import.meta.url));
 const CANARY = 'Private manuscript canary sentence';
 
-async function fixtureDatabase(t) {
-  const { Store } = await import('../dist/server/store.js');
+async function fixtureDatabase(t: TestContext) {
+  const { Store } = await import('#dist/server/store.js');
   const directory = await mkdtemp(join(tmpdir(), 'uimori-perf-ledger-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, 'ledger.sqlite');
   const store = new Store(path);
   const dayAgo = Date.now() - 86_400_000;
-  const at = (offsetMs) => new Date(dayAgo + offsetMs).toISOString();
+  const at = (offsetMs: number) => new Date(dayAgo + offsetMs).toISOString();
   const db = store.db;
   store.transaction(() => {
     db.prepare(
@@ -94,7 +94,7 @@ async function fixtureDatabase(t) {
   return path;
 }
 
-function runLedger(args, env, input) {
+function runLedger(args: string[], env: Record<string, string>, input?: string) {
   const result = spawnSync(process.execPath, args, {
     env: { ...process.env, ...env },
     input,
@@ -104,7 +104,7 @@ function runLedger(args, env, input) {
   return result.stdout;
 }
 
-const digest = async (path) =>
+const digest = async (path: string) =>
   createHash('sha256')
     .update(await readFile(path))
     .digest('hex');
@@ -125,7 +125,7 @@ test('ledger reads aggregates from stdin mode without exposing stored text or id
   assert.equal(ledger.ledger, 1);
   assert.equal(ledger.since, `${since}T00:00:00.000Z`);
   assert.equal(ledger.database.schemaVersion, 15);
-  for (const [name, section] of Object.entries(ledger))
+  for (const [name, section] of Object.entries<{ error?: string } | null>(ledger))
     assert.equal(section?.error, undefined, `${name}: ${section?.error}`);
 
   const writing = ledger.streaming.windowByUsageKind.writing;
@@ -149,7 +149,7 @@ test('ledger reads aggregates from stdin mode without exposing stored text or id
 });
 
 test('ledger accepts a path argument and reports empty statistics for a database without data', async (t) => {
-  const { Store } = await import('../dist/server/store.js');
+  const { Store } = await import('#dist/server/store.js');
   const directory = await mkdtemp(join(tmpdir(), 'uimori-perf-ledger-empty-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, 'empty.sqlite');

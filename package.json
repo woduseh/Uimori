@@ -6,7 +6,8 @@
   "type": "module",
   "imports": {
     "#contracts": "./packages/contracts/src/index.js",
-    "#contracts/operations": "./packages/contracts/src/operations.js"
+    "#contracts/operations": "./packages/contracts/src/operations.js",
+    "#dist/*": "./dist/*"
   },
   "engines": {
     "node": ">=26.13.0 <27"
@@ -22,7 +23,7 @@
     "lint": "biome lint . --error-on-warnings",
     "lint:fix": "biome lint --write . --error-on-warnings",
     "lint:architecture": "biome lint core packages server web --only=style/noRestrictedImports --error-on-warnings",
-    "quality": "biome check . --error-on-warnings && tsc --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs && node scripts/check-ui-message.mjs",
+    "quality": "biome check . --error-on-warnings && tsc --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs && node scripts/check-ui-message.mjs && node scripts/check-script-imports.mjs",
     "quality:full": "npm run quality && npm run test:tooling && npm test",
     "check:changed": "node scripts/check-changed.mjs",
     "check:unit-diff": "node scripts/check-unit-diff.mjs",
@@ -35,13 +36,14 @@
     "test:tooling:fast": "node scripts/test-tooling.mjs",
     "test:windows": "vitest run tests/server.test.ts tests/backup-service.test.ts tests/backup-file.test.ts tests/maintenance.test.ts tests/database-schema.test.ts tests/personal-workspace-flow.test.ts tests/helper-cli.test.ts tests/helper-shell.test.ts tests/codex-process.test.ts tests/codex-runtime.test.ts tests/request-files-storage.test.ts tests/native-transfer-archive.test.ts tests/import-envelope.test.ts",
     "benchmark:story": "node scripts/benchmark-story.mjs",
-    "eval:helper": "node scripts/helper-eval.mjs",
+    "eval:helper": "node scripts/helper-eval.ts",
     "doctor": "node scripts/doctor.mjs",
     "cleanup": "node scripts/cleanup.mjs",
     "verify": "node scripts/verify.mjs",
     "test:personal": "vitest run tests/personal-workspace-flow.test.ts tests/database-schema.test.ts tests/access-session.test.ts",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "check:ui-message": "node scripts/check-ui-message.mjs"
+    "check:ui-message": "node scripts/check-ui-message.mjs",
+    "check:script-imports": "node scripts/check-script-imports.mjs"
   },
   "dependencies": {
     "@a2ui/agent": "0.1.0",

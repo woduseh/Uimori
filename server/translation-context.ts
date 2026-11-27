@@ -15,7 +15,10 @@ export function retainPrunedTranslation(db: DatabaseSync, id: string, result: st
   if (pin) pin.removedResult = result;
 }
 
-export function captureTranslationReferences(store: Store, snapshot: RunSnapshot) {
+export function captureTranslationReferences(
+  store: Store,
+  snapshot: Pick<RunSnapshot, 'chatId' | 'history'>
+) {
   const history = snapshot.history.map((item) => [
     item.revision,
     item.contentHash ?? sourceHash(item.text),

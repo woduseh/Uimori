@@ -5,6 +5,19 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { root, newId, removeOwned } from './lib.mjs';
+import type { Store } from '#dist/server/store.js';
+
+type Snapshot = ReturnType<typeof snapshot>;
+type CaseReport = { id: string; checks?: Record<string, boolean>; [field: string]: unknown };
+type InputMeasurement = {
+  estimatedInputTokens: number;
+  preparationMs: number;
+  compactionMs: number;
+};
+type ScriptedWire = {
+  messages: { role: string; tool_call_id?: string; content: string }[];
+  tools: { function: { name: string } }[];
+};
 
 const cases = [
   {
@@ -48,11 +61,9 @@ const { values } = parseArgs({
     output: { type: 'string' },
   },
 });
-const selected = values.case ? cases.filter((c) => values.case.split(',').includes(c.id)) : cases;
-if (
-  !selected.length ||
-  (values.case && values.case.split(',').some((id) => !cases.some((c) => c.id === id)))
-)
+const caseIds = values.case?.split(',');
+const selected = caseIds ? cases.filter((c) => caseIds.includes(c.id)) : cases;
+if (!selected.length || caseIds?.some((id) => !cases.some((c) => c.id === id)))
   throw new Error(`Unknown case. Choose: ${cases.map((c) => c.id).join(', ')}`);
 if (values.synthetic && values.live) throw new Error('Choose either --synthetic or --live.');
 if (values.list || values['dry-run'] || (!values.synthetic && !values.live)) {
@@ -70,7 +81,7 @@ if (values.list || values['dry-run'] || (!values.synthetic && !values.live)) {
   );
 }
 
-function integer(value, name, min = 1, max = Number.MAX_SAFE_INTEGER) {
+function integer(value: number, name: string, min = 1, max = Number.MAX_SAFE_INTEGER) {
   if (!Number.isSafeInteger(value) || value < min || value > max)
     throw new Error(`Invalid ${name}`);
   return value;
@@ -143,7 +154,7 @@ const authoredTables = [
   'library_folders',
   'library_placements',
 ];
-function snapshot(store) {
+function snapshot(store: Store) {
   return Object.fromEntries(
     authoredTables.map((table) => [
       table,
@@ -151,35 +162,35 @@ function snapshot(store) {
     ])
   );
 }
-function differences(before, after) {
+function differences(before: Snapshot, after: Snapshot) {
   return Object.entries(before).flatMap(([table, rows]) =>
     JSON.stringify(rows) === JSON.stringify(after[table])
       ? []
       : [{ table, before: rows, after: after[table] }]
   );
 }
-function withoutTarget(state, id) {
+function withoutTarget(state: Snapshot, id: string) {
   return { ...state, versions: state.versions.filter((r) => r.kind !== 'content' || r.id !== id) };
 }
-function tally(items, key) {
-  return items.reduce((counts, item) => {
-    const name = item[key];
+function tally(items: Record<string, unknown>[], key: string) {
+  return items.reduce<Record<string, number>>((counts, item) => {
+    const name = String(item[key]);
     counts[name] = (counts[name] ?? 0) + 1;
     return counts;
   }, {});
 }
-const hash = (text) => createHash('sha256').update(text).digest('hex');
+const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 
 async function main() {
   const config = await configuration();
   const secret = config.apiKeyEnv ? process.env[config.apiKeyEnv] : undefined;
   const [{ Store }, { HelperRuntime }, { ResponseStreamStore }, workspace, native] =
     await Promise.all([
-      import('../dist/server/store.js'),
-      import('../dist/server/helper-runtime.js'),
-      import('../dist/server/response-stream.js'),
-      import('../dist/server/prompt-workspace.js'),
-      import('../dist/server/risu-native-projection.js'),
+      import('#dist/server/store.js'),
+      import('#dist/server/helper-runtime.js'),
+      import('#dist/server/response-stream.js'),
+      import('#dist/server/prompt-workspace.js'),
+      import('#dist/server/risu-native-projection.js'),
     ]);
   const build = JSON.parse(await readFile(path.join(root, 'dist/build-identity.json'), 'utf8'));
   const report = {
@@ -207,7 +218,9 @@ async function main() {
       blockedRequests: 0,
       monetaryCeiling: null,
     },
-    cases: [],
+    cases: [] as CaseReport[],
+    finishedAt: undefined as string | undefined,
+    automaticChecksPassed: undefined as boolean | undefined,
   };
   const output = path.resolve(
     values.output ?? path.join(root, 'output/helper-evals', `${newId()}.json`)
@@ -232,7 +245,7 @@ async function main() {
       const directory = await mkdtemp(path.join(tmpdir(), 'uimori-helper-eval-'));
       const store = new Store(path.join(directory, 'fixture.sqlite'));
       const controller = new AbortController();
-      const work = [];
+      const work: Promise<unknown>[] = [];
       try {
         const connection = store.product.connection({
           title: 'Evaluation connection',
@@ -261,7 +274,7 @@ async function main() {
           helperModel: { id: model.id },
           contextModel: { id: context.id },
         });
-        const createBot = (name, description) => {
+        const createBot = (name: string, description: string) => {
           const card = { name, description, creator_notes: 'Synthetic evaluation data' };
           const pkg = native.projectNativeRisuPackage(
             {
@@ -336,7 +349,7 @@ async function main() {
           }
           tasks.push(runtime.workspace.task(task.id));
           turn++;
-          if (tasks.at(-1).status !== 'completed') break;
+          if (tasks.at(-1)!.status !== 'completed') break;
         }
         const after = snapshot(store);
         const saved = store.product.stored('content', bot.id);
@@ -346,7 +359,7 @@ async function main() {
         expected.package.revision++;
         expected.package.nativeRisu.card.name = 'Mira';
         const operations = Number(
-          store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get().n
+          store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()!.n
         );
         const checks = {
           allRequestsCompleted:
@@ -360,14 +373,16 @@ async function main() {
             : operations === 0,
         };
         const events = runtime.workspace.events(conversation.id);
-        const inputs = events.filter((e) => e.kind === 'input.measured').map((e) => e.data);
+        const inputs = events
+          .filter((e) => e.kind === 'input.measured')
+          .map((e) => e.data as InputMeasurement);
         const attempts = store.db
           .prepare(`SELECT h.purpose,a.model_id,a.status,a.input_tokens,a.output_tokens,
           a.cost_usd,a.raw_usage,a.estimated_usd,a.estimate_status FROM helper_task_attempts h
           JOIN attempts a ON a.id=h.attempt_id ORDER BY a.rowid`)
           .all();
-        const metric = (field) => ({
-          knownSum: attempts.reduce((sum, a) => sum + (a[field] ?? 0), 0),
+        const metric = (field: string) => ({
+          knownSum: attempts.reduce((sum, a) => sum + Number(a[field] ?? 0), 0),
           unknownCalls: attempts.filter((a) => a[field] === null).length,
         });
         report.cases.push({
@@ -392,7 +407,9 @@ async function main() {
             httpRequests: caseRequests,
             modelAttempts: tally(attempts, 'purpose'),
             toolCalls: tally(
-              events.filter((e) => e.kind === 'tool.finished').map((e) => e.data),
+              events
+                .filter((e) => e.kind === 'tool.finished')
+                .map((e) => e.data as Record<string, unknown>),
               'name'
             ),
             providerInputTokens: metric('input_tokens'),
@@ -411,7 +428,11 @@ async function main() {
           `${scenario.id}: persistence/completion ${Object.values(checks).every(Boolean) ? 'PASS' : 'FAIL'}; ${caseRequests} HTTP calls; semantic quality unscored`
         );
       } catch (error) {
-        report.cases.push({ id: scenario.id, error: error.message, semanticReview: 'unmeasured' });
+        report.cases.push({
+          id: scenario.id,
+          error: error instanceof Error ? error.message : String(error),
+          semanticReview: 'unmeasured',
+        });
       } finally {
         controller.abort();
         await Promise.allSettled(work);
@@ -432,12 +453,18 @@ async function main() {
   }
 }
 
-function scriptedResponse(caseId, wire, round, turn, bot) {
-  const result = (id) =>
-    JSON.parse(wire.messages.findLast((m) => m.role === 'tool' && m.tool_call_id === id).content);
-  const call = (id, name, args) => ({ id, name, args });
-  let tools;
-  let text;
+function scriptedResponse(
+  caseId: string,
+  wire: ScriptedWire,
+  round: number,
+  turn: number,
+  bot: { id: string }
+) {
+  const result = (id: string) =>
+    JSON.parse(wire.messages.findLast((m) => m.role === 'tool' && m.tool_call_id === id)!.content);
+  const call = (id: string, name: string, args: unknown) => ({ id, name, args });
+  let tools: ReturnType<typeof call>[] | undefined;
+  let text: string | undefined;
   if (caseId === 'recent-history') {
     if (turn === 1)
       assert.ok(
@@ -488,7 +515,7 @@ function scriptedResponse(caseId, wire, round, turn, bot) {
       }),
     ];
   else {
-    assert.ok(result('search').items.some((i) => i.text.includes('Age: 27')));
+    assert.ok(result('search').items.some((i: { text: string }) => i.text.includes('Age: 27')));
     text =
       caseId === 'short-fact'
         ? `Harin is 27 in saved bot ${bot.id}.`
@@ -502,7 +529,7 @@ function scriptedResponse(caseId, wire, round, turn, bot) {
           id: t.id,
           type: 'function',
           function: {
-            name: wire.tools.find((v) => v.function.name === t.name.replaceAll('.', '_')).function
+            name: wire.tools.find((v) => v.function.name === t.name.replaceAll('.', '_'))!.function
               .name,
             arguments: JSON.stringify(t.args),
           },

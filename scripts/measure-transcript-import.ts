@@ -1,4 +1,4 @@
-import { createSyntheticBot } from './synthetic-story.mjs';
+import { createSyntheticBot } from './synthetic-story.ts';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { assertBuild, root } from './lib.mjs';
 const args = process.argv.slice(2);
 if (args.some((arg) => !/^--(?:runtime|counts|label)=/.test(arg)))
   throw new Error('UNKNOWN_ARGUMENT');
-const option = (name, fallback) =>
+const option = (name: string, fallback: string) =>
   args.find((arg) => arg.startsWith(`--${name}=`))?.slice(name.length + 3) ?? fallback;
 const runtime = path.resolve(root, option('runtime', 'dist'));
 const inside = path.relative(root, runtime);
@@ -22,8 +22,13 @@ if (!counts.length || counts.some((value) => !Number.isInteger(value) || value <
   throw new Error('INVALID_COUNTS');
 const identity =
   runtime === path.join(root, 'dist') ? await assertBuild() : { diagnosticRuntime: inside };
-const { Store } = await import(pathToFileURL(path.join(runtime, 'server/store.js')).href);
-const { importChatTranscript, exportChatTranscript } = await import(
+const { Store }: typeof import('#dist/server/store.js') = await import(
+  pathToFileURL(path.join(runtime, 'server/store.js')).href
+);
+const {
+  importChatTranscript,
+  exportChatTranscript,
+}: typeof import('#dist/server/chat-transcript.js') = await import(
   pathToFileURL(path.join(runtime, 'server/chat-transcript.js')).href
 );
 const base = path.join(root, 'output', 'transcript-storage');
@@ -48,9 +53,12 @@ for (const count of counts) {
         translation: null,
       })),
     };
-    const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    const hash = (value: unknown) =>
+      createHash('sha256').update(JSON.stringify(value)).digest('hex');
     const start = performance.now();
-    const timer = new Promise((done) => setTimeout(() => done(performance.now() - start), 0));
+    const timer = new Promise<number>((done) =>
+      setTimeout(() => done(performance.now() - start), 0)
+    );
     const imported = importChatTranscript(
       store,
       { transcript, idempotencyKey: 'measurement' },
@@ -61,9 +69,9 @@ for (const count of counts) {
     const snapshotBytes = Number(
       store.db
         .prepare('SELECT SUM(length(snapshot)) AS n FROM runs WHERE chat_id=?')
-        .get(imported.chat.id).n
+        .get(imported.chat.id)!.n
     );
-    const attempts = Number(store.db.prepare('SELECT COUNT(*) AS n FROM attempts').get().n);
+    const attempts = Number(store.db.prepare('SELECT COUNT(*) AS n FROM attempts').get()!.n);
     const roundTripMatches =
       hash(exportChatTranscript(store, imported.chat.id).entries) === hash(transcript.entries);
     if (attempts || !roundTripMatches) throw new Error('IMPORT_PRESERVATION_FAILED');
