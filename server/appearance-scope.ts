@@ -6,9 +6,7 @@ export function assertAppearanceTargetLive(
   scope: 'global' | 'bot' | 'chat',
   targetId: string
 ) {
-  const gone =
-    scope === 'bot'
-      ? !store.product.isLive('content', targetId)
-      : scope === 'chat' && !store.db.prepare('SELECT 1 FROM chats WHERE id=?').get(targetId);
-  if (gone) throw new AppError(409, 'REVISION_CONFLICT');
+  if (scope === 'chat') store.writableChat(targetId);
+  else if (scope === 'bot' && !store.product.isLive('content', targetId))
+    throw new AppError(409, 'REVISION_CONFLICT');
 }

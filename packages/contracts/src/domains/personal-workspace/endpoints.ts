@@ -6,6 +6,7 @@ export const personalWorkspaceEndpoints = {
     operation: 'personal-workspace.readUsage',
     method: 'GET',
     path: '/usage',
+    cache: 'no-store',
   }),
   readBackups: defineEndpoint<typeof operations.readBackups>()({
     operation: 'personal-workspace.readBackups',
@@ -57,6 +58,7 @@ export const personalWorkspaceEndpoints = {
     operation: 'personal-workspace.readPush',
     method: 'GET',
     path: '/push',
+    cache: 'no-store',
   }),
   preparePush: defineEndpoint<typeof operations.preparePush>()({
     operation: 'personal-workspace.preparePush',

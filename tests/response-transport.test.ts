@@ -269,3 +269,22 @@ test('a repeated run request key honors Prefer: return=minimal', async () => {
   expect((await post({ ...payload, request: 'Different request' })).statusCode).toBe(409);
   app.controls.release('run');
 });
+
+test('private reads mark refusals no-store as well as answers', async () => {
+  const app = await application();
+  for (const url of [
+    '/api/usage?from=2026-11-01&to=2026-11-28',
+    '/api/push?clientId=synthetic-client',
+    '/api/lore-context-defaults',
+    '/api/maintenance',
+  ]) {
+    for (const [request, status] of [
+      [url, 200],
+      [`${url}${url.includes('?') ? '&' : '?'}unknown=1`, 400],
+    ] as const) {
+      const response = await app.inject({ url: request, headers: local });
+      expect(response.statusCode, `${request}: ${response.body}`).toBe(status);
+      expect(response.headers['cache-control'], request).toBe('no-store');
+    }
+  }
+});

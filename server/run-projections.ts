@@ -1,6 +1,7 @@
 import { executionSnapshot } from './execution-snapshot.js';
 import { translationSnapshot } from '../core/translation-context.js';
 import type { Run, RunReceipt, RunSnapshot } from '../core/types.js';
+import { prefersMinimal } from './endpoint.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -23,11 +24,8 @@ export function readRunState(
   return row;
 }
 
-// https://www.rfc-editor.org/rfc/rfc7240.html#section-4.2 (2026-11-20): `Prefer: return=minimal`
-// asks for only a minimal response to a successful request; what counts as minimal is at the
-// server's discretion.
 export function runResponse(prefer: unknown, run: Run): Run | RunReceipt {
-  if (!/(?:^|[\s,;])return=minimal(?:$|[\s,;])/u.test(String(prefer ?? ''))) return run;
+  if (!prefersMinimal(prefer)) return run;
   const { snapshot: _snapshot, inputs: _inputs, toolEvents: _toolEvents, ...receipt } = run;
   return receipt;
 }

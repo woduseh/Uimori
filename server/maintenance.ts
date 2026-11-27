@@ -99,10 +99,7 @@ export function maintenanceRoutes(
     app,
     selfHostEndpoints.readMaintenance,
     selfHostOperations.readMaintenance,
-    (_input, _request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      return { ...state(), activeWork: activeWork() };
-    }
+    () => ({ ...state(), activeWork: activeWork() })
   );
   registerEndpoint(
     app,

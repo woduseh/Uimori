@@ -308,6 +308,11 @@ export class Store {
     if (!row) throw new AppError(404, 'LIBRARY_ITEM_DELETED');
     return this.mapChat(row);
   }
+  writableChat(id: string): Chat {
+    const row = this.db.prepare(`${CHAT_SELECT} WHERE c.id=?`).get(id) as Row | undefined;
+    if (!row) throw new AppError(409, 'REVISION_CONFLICT');
+    return this.mapChat(row);
+  }
   chats(): Chat[] {
     return (this.db.prepare(`${CHAT_SELECT} ORDER BY c.created_at,c.id`).all() as Row[]).map(
       (row) => this.mapChat(row)

@@ -6,6 +6,7 @@ export const selfHostEndpoints = {
     operation: 'self-host.readMaintenance',
     method: 'GET',
     path: '/maintenance',
+    cache: 'no-store',
   }),
   setMaintenance: defineEndpoint<typeof operations.setMaintenance>()({
     operation: 'self-host.setMaintenance',

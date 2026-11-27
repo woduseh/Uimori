@@ -28,6 +28,12 @@ export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.ou
   throw error;
 }
 
+// https://www.rfc-editor.org/rfc/rfc7240.html#section-4.2 (2026-11-20): `Prefer: return=minimal`
+// asks for only a minimal response to a successful request; what counts as minimal is at the
+// server's discretion.
+export const prefersMinimal = (prefer: unknown): boolean =>
+  /(?:^|[\s,;])return=minimal(?:$|[\s,;])/u.test(String(prefer ?? ''));
+
 export const endpointUrl = (endpoint: Endpoint): string => `/api${endpoint.path}`;
 
 type Output<Op extends Operation> = z.output<Op['output']> | typeof NOT_MODIFIED;
@@ -63,7 +69,8 @@ export function registerEndpoint<Op extends Operation>(
         reply
       );
       if (output === NOT_MODIFIED) return reply.code(304).send();
-      if (checked) operation.output.parse(output);
+      if (checked && (!endpoint.preferMinimal || prefersMinimal(request.headers.prefer)))
+        operation.output.parse(output);
       if (endpoint.status !== undefined) reply.code(endpoint.status);
       return output;
     },

@@ -150,10 +150,7 @@ export function usageRoutes(app: FastifyInstance, store: Store) {
     app,
     personalWorkspaceEndpoints.readUsage,
     personalWorkspaceOperations.readUsage,
-    (range, _request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      return usageReport(store, range);
-    }
+    (range) => usageReport(store, range)
   );
   app.get('/api/usage/export', (request, reply) => {
     const { group, ...range } = parseInput(usageExportQuery, request.query);
