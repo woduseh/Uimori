@@ -1,6 +1,15 @@
 export const runtimeRoots = ['core', 'packages', 'server', 'web', 'runner'];
 export const sourceRoots = [...runtimeRoots, 'scripts', 'tests'];
 const browserRoots = runtimeRoots.filter((root) => root !== 'runner');
+export const scriptImportDirectories = [
+  'scripts',
+  'tests',
+  'runner',
+  'deploy',
+  '.githooks',
+  '.claude/hooks',
+];
+const scriptImportSource = '\\.(?:mjs|js|cjs|ts|tsx|mts|cts)$';
 
 const patterns = {
   biomeFile: /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u,
@@ -10,7 +19,10 @@ const patterns = {
   commentSource: /\.(?:ts|tsx|mts|cts|js|mjs|cjs|css)$/u,
   vitestFile: /^tests\/.+\.test\.ts$/u,
   toolingTestFile: /^(?:scripts\/[^/]+\.test\.(?:mjs|ts)|tests\/[^/]+\.node\.test\.mjs)$/u,
-  scriptImportInput: /^(?!(?:server|core|web|packages|dist)\/)[^\r\n]*\.(?:mjs|js|cjs)$/u,
+  scriptImportInput: new RegExp(
+    `^(?:(?:${scriptImportDirectories.map((name) => name.replace('.', '\\.')).join('|')})/[^\\r\\n]+|[^/\\r\\n]+)${scriptImportSource}`,
+    'u'
+  ),
   fullSuiteInput:
     /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u,
   fullCommentScan: /^scripts\/(?:check-comments\.mjs|comment-allowlist\.json)$/u,

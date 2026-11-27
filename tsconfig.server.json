@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": false,
     "allowImportingTsExtensions": false,
+    "allowJs": false,
     "outDir": "dist",
     "rootDir": ".",
     "sourceMap": true

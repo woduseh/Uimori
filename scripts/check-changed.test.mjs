@@ -108,7 +108,7 @@ test('a scripts change runs its paired tooling test, or the whole tooling suite 
   assert.equal(checkChanged.toolingNeedsBuild('all'), true);
   assert.equal(
     checkChanged.toolingNeedsBuild(['scripts/perf-ledger.test.ts'], {
-      'scripts/perf-ledger.test.ts': "import '../dist/server/app.js';",
+      'scripts/perf-ledger.test.ts': "import '#dist/server/app.js';",
     }),
     true
   );
@@ -266,13 +266,14 @@ test('comments check only the changed files, and i18n runs for the runtime sourc
   );
 });
 
-test('JavaScript outside the app runs the script import check and tsc when the program includes it', () => {
+test('sources outside the app run the script import check, and JavaScript runs tsc when the program includes it', () => {
   const select = (file) => checkChanged.selectChecks([file], {});
   assert.equal(select('scripts/doctor.mjs').scriptImports, true);
   assert.equal(select('tests/fixtures/worker.mjs').scriptImports, true);
   assert.equal(select('.githooks/pre-push.mjs').scriptImports, true);
-  assert.equal(select('scripts/helper-eval.ts').scriptImports, false);
+  assert.equal(select('scripts/helper-eval.ts').scriptImports, true);
   assert.equal(select('server/worker.mjs').scriptImports, false);
+  assert.equal(select('server/app.ts').scriptImports, false);
   assert.equal(select('scripts/lib.mjs').typeScript, true);
   assert.equal(select('runner/runner.mjs').typeScript, false);
 });
