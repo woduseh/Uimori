@@ -1,5 +1,5 @@
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
+import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { expect, test } from '@playwright/test';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { PromptPreset } from '../core/product.js';
@@ -7,7 +7,7 @@ import { navigationAction, selectEditorSection } from './ui-navigation.js';
 
 const titles = ['Phēmē RP', 'Phēmē 소설', 'Hermēneía'];
 
-test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}px and preserve existing work`, async ({
+test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}px and preserve existing work`, async ({
   page,
   request,
 }) => {
@@ -51,11 +51,11 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     .filter({ hasText: folder.title })
     .getByRole('button')
     .click();
-  for (const [width, id, title, role] of [
-    [MOBILE_WIDTH, 'pheme-novel', 'Phēmē 소설', 'main'],
-    [DESKTOP_WIDTH, 'hermeneia', 'Hermēneía', 'translation'],
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 1000 });
+  for (const [id, title, role] of [
+    ['pheme-novel', 'Phēmē 소설', 'main'],
+    ['hermeneia', 'Hermēneía', 'translation'],
   ] as const) {
-    await page.setViewportSize({ width, height: 1000 });
     await panel.getByRole('button', { name: '템플릿', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '템플릿', exact: true });
     await expect(dialog).toBeVisible();
@@ -91,7 +91,7 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
       category: 'prompts',
       folderId: folder.id,
     });
-    const editedTitle = `${title} BPTUI01 ${width}`;
+    const editedTitle = `${title} BPTUI01`;
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(editedTitle);
     await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
     await expect

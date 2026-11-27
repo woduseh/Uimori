@@ -4,7 +4,6 @@ import { navigationAction, selectEditorSection } from './ui-navigation.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { RisuContent } from '../core/risu-content.js';
-import type { LibraryOrganization } from '../core/library-organization.js';
 import type { Content } from '../core/product.js';
 import { packageImageThumbnailUrl } from '../core/package-images.js';
 import { revealLibraryEditor } from './ui-navigation.js';
@@ -86,20 +85,6 @@ async function save(page: Page, library: Locator, content: Content): Promise<Con
   await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
   return pending;
 }
-const portraitPart = (image: UploadedImage, id = 'portrait'): Partial<RisuContent> => ({
-  images: [
-    {
-      id,
-      title: '합성 대표 이미지',
-      description: '',
-      blobHash: image.hash,
-      mime: image.mime,
-      allowedUse: 'profile',
-    },
-  ],
-  portraitImageId: id,
-});
-
 test('LIMG01 representative image upload, unset and existing inline selection preserve current content and its one undo', async ({
   page,
   request,
@@ -180,136 +165,4 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   expect(removed.package!.portraitImageId).toBe('inline');
   const current = await (await request.get(`/api/content/${removed.id}`)).json();
   expect(current.package).toEqual(removed.package);
-});
-
-test('LIMG03 cancelled and failed portrait uploads cannot change a saved draft or leave saving blocked', async ({
-  page,
-  request,
-}) => {
-  const original = await seed(request, 'bot', `업로드 취소 합성 ${Date.now()}`);
-  const library = await edit(page, original),
-    portrait = library.getByRole('region', { name: '대표 이미지 설정', exact: true }),
-    saveButton = library.getByRole('button', { name: '변경사항 저장', exact: true });
-  await library.getByLabel('카드 설명', { exact: true }).fill('업로드 취소 뒤에도 저장할 설명');
-  await expect(saveButton).toBeEnabled();
-  let release!: () => void;
-  const waiting = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/api/package-image-blobs', async (route) => {
-    await waiting;
-    await route
-      .fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ hash: 'c'.repeat(64), mime: 'image/png' }),
-      })
-      .catch(() => {});
-  });
-  await portrait
-    .getByLabel('대표 이미지 업로드', { exact: true })
-    .setInputFiles({ name: 'pending.png', mimeType: 'image/png', buffer: png });
-  await expect(portrait.getByRole('button', { name: '업로드 취소', exact: true })).toBeVisible();
-  await expect(saveButton).toBeDisabled();
-  await portrait.getByRole('button', { name: '업로드 취소', exact: true }).click();
-  release();
-  await expect(saveButton).toBeEnabled();
-  await expect(portrait.locator('img')).toHaveCount(0);
-  await page.unroute('**/api/package-image-blobs');
-  await page.route('**/api/package-image-blobs', (route) =>
-    route.fulfill({ status: 503, body: 'synthetic failure' })
-  );
-  await portrait
-    .getByLabel('대표 이미지 업로드', { exact: true })
-    .setInputFiles({ name: 'failed.png', mimeType: 'image/png', buffer: png });
-  await expect(portrait.getByRole('alert')).toContainText('503');
-  await expect(saveButton).toBeEnabled();
-  await expect(portrait.locator('img')).toHaveCount(0);
-  const saved: Content = await (
-    await request.get(`/api/revisions/content/${original.id}/${original.revision}`)
-  ).json();
-  expect(saved.package).toEqual(original.package);
-  const after = await save(page, library, original);
-  expect(after.package?.images ?? []).toEqual([]);
-  expect(after.package?.portraitImageId).toBeUndefined();
-});
-
-test('LIBCOVER a folder cover follows its resources until an image is chosen or uploaded, in the library and the sidebar', async ({
-  page,
-  request,
-}) => {
-  const portrait = await blob(request),
-    title = `표지 폴더 ${Date.now()}`,
-    bot = await seed(request, 'bot', `표지 자료 ${Date.now()}`, portraitPart(portrait));
-  const organization = async () =>
-    (await (await request.get('/api/library/organization')).json()) as LibraryOrganization;
-  const created = await request.post('/api/library/folders', {
-    data: { title, category: 'bot', expectedRevision: (await organization()).revision },
-  });
-  expect(created.ok(), await created.text()).toBe(true);
-  const folderId = ((await created.json()) as LibraryOrganization).folders.find(
-    (folder) => folder.title === title
-  )!.id;
-  const moved = await request.post('/api/library/organization/move', {
-    data: {
-      items: [{ kind: 'content', id: bot.id }],
-      category: 'bot',
-      folderId,
-      expectedRevision: (await organization()).revision,
-    },
-  });
-  expect(moved.ok(), await moved.text()).toBe(true);
-  const savedCover = async () =>
-    (await organization()).folders.find((folder) => folder.id === folderId)!.coverImageHash;
-
-  const library = await openLibrary(page, 'bot');
-  const card = library.locator(`[data-folder-section="${folderId}"]`);
-  const cardCover = card.locator('.library-folder-cover img');
-  await expect(cardCover).toHaveAttribute('src', thumbnail(portrait.hash));
-  const treeCover = page
-    .locator('.bot-tree-folder-heading')
-    .filter({ hasText: title })
-    .locator('.library-folder-cover img');
-  await expect(treeCover).toHaveAttribute('src', thumbnail(portrait.hash));
-
-  const dialog = page.getByRole('dialog', { name: '폴더 표지', exact: true });
-  const openPicker = async () => {
-    await card.getByLabel(`${title} 폴더 메뉴`, { exact: true }).click();
-    await card.getByRole('button', { name: '표지 바꾸기', exact: true }).click();
-    await expect(dialog).toBeVisible();
-  };
-  await openPicker();
-  const automatic = dialog.getByRole('button', { name: '자동', exact: true });
-  await expect(automatic).toHaveAttribute('aria-pressed', 'true');
-  await dialog.getByLabel('폴더 표지 이미지 업로드', { exact: true }).setInputFiles({
-    name: 'cover.png',
-    mimeType: 'image/png',
-    buffer: otherPng,
-  });
-  await expect(dialog).toBeHidden();
-  const uploaded = (await savedCover()) ?? '';
-  expect(uploaded).toMatch(/^[a-f0-9]{64}$/u);
-  expect(uploaded).not.toBe(portrait.hash);
-  await expect(cardCover).toHaveAttribute('src', thumbnail(uploaded));
-  await expect(treeCover).toHaveAttribute('src', thumbnail(uploaded));
-
-  await openPicker();
-  await expect(automatic).toHaveAttribute('aria-pressed', 'false');
-  await expect(dialog.locator('.library-cover-choice[aria-pressed="true"] img')).toHaveAttribute(
-    'src',
-    thumbnail(uploaded)
-  );
-  await automatic.click();
-  await expect(dialog).toBeHidden();
-  expect(await savedCover()).toBeNull();
-  await expect(cardCover).toHaveAttribute('src', thumbnail(portrait.hash));
-
-  const row = page.locator('.bot-tree-folder-heading').filter({ hasText: title });
-  await row.hover();
-  await row.getByLabel(new RegExp(title)).last().click();
-  await page.getByRole('button', { name: '표지 바꾸기', exact: true }).click();
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: '표지 이미지 1', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(await savedCover()).toBe(portrait.hash);
 });

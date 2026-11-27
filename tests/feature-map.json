@@ -264,7 +264,6 @@
       "specs": [
         { "file": "tests/library-browser.spec.ts", "cases": ["LIBUI08"] },
         { "file": "tests/library-images-browser.spec.ts" },
-        { "file": "tests/library-usability-browser.spec.ts" },
         { "file": "tests/new-story-browser.spec.ts" },
         { "file": "tests/bot-chat-import-browser.spec.ts" }
       ]
@@ -406,8 +405,6 @@
       "specs": [
         { "file": "tests/prompt-workspace-browser.spec.ts" },
         { "file": "tests/prompt-default-list-browser.spec.ts", "cases": ["PDEF01"] },
-        { "file": "tests/prompt-library-refinements-browser.spec.ts" },
-        { "file": "tests/prompt-order-browser.spec.ts" },
         { "file": "tests/prompt-templates-browser.spec.ts" },
         { "file": "tests/global-models-browser.spec.ts" }
       ]

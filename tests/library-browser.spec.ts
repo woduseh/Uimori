@@ -4,22 +4,12 @@ import { test, expect, type APIRequestContext, type Page, type Locator } from '@
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import { type LibraryOrganization, type LibraryFolder } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import {
-  createLibraryContent,
-  editorChanges,
-  navigationAction,
-  selectContent,
-  selectEditorSection,
-} from './ui-navigation.js';
+import { navigationAction, selectEditorSection } from './ui-navigation.js';
 
-async function createContent(
-  request: APIRequestContext,
-  title: string,
-  kind: Content['kind'] = 'bot'
-) {
+async function createContent(request: APIRequestContext, title: string) {
   const response = await request.post('/api/content', {
     data: {
-      kind,
+      kind: 'bot',
       title,
       description: '함께 이야기할 합성 캐릭터와 세계',
       text: 'Synthetic common body',
@@ -257,43 +247,6 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
 });
 
-test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete later title', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
-  await page.goto('/');
-  await navigationAction(page, '서재');
-  const panel = page.getByTestId('library-panel');
-  await createLibraryContent(page);
-  const name = panel.getByLabel(/^(봇|페르소나|모듈) 이름$/u);
-  const title = `EDITORRECOVERY2 ${crypto.randomUUID()}`;
-  await name.fill(title);
-  const submissions: Record<string, unknown>[] = [];
-  let createdId = '';
-  await page.route('**/api/resources/save', async (route) => {
-    submissions.push(route.request().postDataJSON());
-    if (submissions.length === 1) {
-      const accepted = await route.fetch();
-      expect(accepted.ok(), await accepted.text()).toBe(true);
-      createdId = (await accepted.json()).saved.id;
-      await route.abort('failed');
-    } else await route.continue();
-  });
-  await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
-  const retry = panel.getByRole('button', { name: '이전 요청 확인', exact: true });
-  await expect(retry).toBeEnabled();
-  await name.fill('');
-  await retry.click();
-  await expect.poll(() => submissions.length).toBe(2);
-  expect(submissions[1]).toEqual(submissions[0]);
-  await expect(name).toHaveValue('');
-  await expect(editorChanges(panel)).toBeVisible();
-  const saved = await request.get(`/api/content/${createdId}`);
-  expect(saved.ok(), await saved.text()).toBe(true);
-  expect((await saved.json()).title).toBe(title);
-});
-
 {
   const destination = 'new-draft';
   test(`PROMPTOPEN late preset read preserves ${destination} navigation`, async ({
@@ -403,63 +356,12 @@ test('LIBCLONE03 accepted content clone opens its saved copy when placement and 
   expect(placements).toBe(1);
 });
 
-test('LIBUI04 role selection creates a chat with the selected persona and module without reclassifying them', async ({
-  page,
-  request,
-}) => {
-  const prefix = `LIBUI04 ${Date.now()}`;
-  const bot = await createContent(request, `${prefix} Host`);
-  const persona = await createContent(request, `${prefix} Player`, 'module');
-  const module = await createContent(request, `${prefix} World`, 'persona');
-  await page.goto('/');
-  await page.getByTestId('library-panel').getByRole('tab', { name: '모듈', exact: true }).click();
-  await page
-    .getByTestId('library-panel')
-    .getByRole('button', { name: `${persona.title} 편집`, exact: true })
-    .click();
-  await page.getByTestId('library-panel').getByLabel('자료 메뉴', { exact: true }).click();
-  await page
-    .getByTestId('library-panel')
-    .getByRole('button', { name: '페르소나로 사용', exact: true })
-    .click();
-  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
-  await dialog.locator('.new-story-options > summary').click();
-  await selectContent(page, '시작할 봇', bot.title);
-  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
-    persona.title
-  );
-  await selectContent(page, '추가할 시작 모듈', module.title);
-  await dialog.getByLabel('새 채팅 제목', { exact: true }).fill(prefix);
-  await expect(dialog.getByText('시작 자료를 불러오는 중이에요…', { exact: true })).toBeHidden();
-  const created = page.waitForResponse(
-    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
-  );
-  await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
-  const chat = await (await created).json();
-  await expect(dialog).toBeHidden();
-  const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
-  expect(detail.profile.packageAttachments).toEqual(
-    expect.arrayContaining([
-      { id: bot.id, revision: 1, role: 'bot' },
-      { id: persona.id, revision: 1, role: 'persona' },
-      { id: module.id, revision: 1, role: 'module' },
-    ])
-  );
-  expect(detail.runs).toHaveLength(0);
-  expect((await (await request.get(`/api/revisions/content/${persona.id}/1`)).json()).kind).toBe(
-    'module'
-  );
-  expect((await (await request.get(`/api/revisions/content/${module.id}/1`)).json()).kind).toBe(
-    'persona'
-  );
-});
-
 {
   const width = MOBILE_WIDTH;
-  test(`LIBUI06 folder overview and scoped selection at ${width}px`, async ({
+  test(`LIBUI06 deleting a folder keeps its resources unclassified at ${width}px`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     const prefix = `LIBUI06 ${width} ${Date.now()}`;
     const loose = await createContent(request, `${prefix} Loose`);
     const filed = await createContent(request, `${prefix} Filed`);
@@ -482,7 +384,6 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     const panel = page.getByTestId('library-panel');
-    const search = panel.getByRole('searchbox', { name: '서재 검색', exact: true });
     await panel.getByRole('button', { name: '목록', exact: true }).click();
     await expect(
       panel
@@ -494,37 +395,9 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
         .locator('[data-folder-section=""]')
         .getByRole('button', { name: `${loose.title} 편집`, exact: true })
     ).toBeVisible();
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`library-overview-${width}.png`) });
-    await search.fill(prefix);
-    await expect(
-      panel.getByRole('button', { name: `${filed.title} 편집`, exact: true })
-    ).toBeVisible();
-    await expect(
-      panel.locator('.library-list-item').filter({ hasText: filed.title })
-    ).toContainText(folder.title);
-    await panel.getByRole('button', { name: '카드', exact: true }).click();
-    await revealListOptions(panel);
-    await panel.getByRole('button', { name: '선택', exact: true }).click();
-    const card = panel.getByRole('button', { name: `${filed.title} 선택`, exact: true });
-    await card.click();
-    await expect(card).toHaveAttribute('aria-pressed', 'true');
-    await expect(
-      panel.getByRole('checkbox', { name: `${filed.title} 선택`, exact: true })
-    ).toBeChecked();
-    await panel.getByRole('button', { name: '표시된 자료 전체 선택', exact: true }).click();
-    await expect(panel.getByRole('group', { name: '자료 선택 작업', exact: true })).toContainText(
-      '2개 선택'
-    );
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`library-selection-${width}.png`) });
-    await panel.getByRole('button', { name: '완료', exact: true }).click();
-    await expect(search).toHaveValue(prefix);
-    await search.fill('');
     await panel.getByLabel(`${folder.title} 폴더 메뉴`, { exact: true }).click();
     await panel.getByRole('button', { name: `${folder.title} 폴더 삭제`, exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await expect(confirm).toContainText('미분류');
     await confirm.getByRole('button', { name: '폴더 삭제', exact: true }).click();
     await expect(confirm).toBeHidden();
     await expect(

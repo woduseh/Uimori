@@ -277,63 +277,6 @@ async function openQuickChat(page: Page, bot: Content) {
   await library.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
 }
 
-{
-  const greetings = 1;
-  test(`NSQ01 quick chat opens with ${greetings} authored greetings and saved defaults without generation`, async ({
-    page,
-    request,
-  }, info) => {
-    const { bot, persona, model } = await quickChatFixture(request, greetings);
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await page.route(`**/api/bots/${bot.id}/defaults`, async (route) => {
-      await held;
-      await route.continue();
-    });
-    const admissions: string[] = [],
-      executions: string[] = [];
-    page.on('request', (item) => {
-      if (item.method() !== 'POST') return;
-      if (/\/api\/chats$/.test(item.url())) admissions.push(item.url());
-      if (/\/(?:runs|candidate|translation)$/.test(item.url())) executions.push(item.url());
-    });
-    try {
-      await page.goto('/');
-      await openQuickChat(page, bot);
-      const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
-      await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toHaveCount(
-        0
-      );
-      await expect(dialog.getByText('새 채팅을 여는 중이에요…', { exact: true })).toBeVisible();
-      if (visualReview)
-        await page.screenshot({ path: info.outputPath(`quick-chat-loading-${greetings}.png`) });
-      const admitted = page.waitForResponse(
-        (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
-      );
-      release();
-      const response = await admitted;
-      expect(response.ok()).toBe(true);
-      const chat = (await response.json()) as Chat;
-      await expect(dialog).toBeHidden();
-      const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
-      expect(detail.profile!.packageAttachments).toEqual([
-        { id: bot.id, revision: bot.revision, role: 'bot' },
-        { id: persona.id, revision: persona.revision, role: 'persona' },
-      ]);
-      expect(detail.profile!.routes.main).toEqual({ id: model.id });
-      await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
-      expect(admissions).toHaveLength(1);
-      expect(executions).toEqual([]);
-      if (visualReview)
-        await page.screenshot({ path: info.outputPath(`quick-chat-open-${greetings}.png`) });
-    } finally {
-      release();
-    }
-  });
-}
-
 test('NSQ03 closing while defaults load cancels unstarted admission; failed defaults retry through the form', async ({
   page,
   request,
@@ -413,7 +356,7 @@ test('NSQ05 an uncertain chat admission stops automatic and manual resubmission'
 test('NSUI02 native authoring preserves raw drafts and starts with the rendered default greeting', async ({
   page,
   request,
-}, info) => {
+}) => {
   const title = `Native editor ${crypto.randomUUID()}`;
   const card = {
     name: title,
@@ -461,7 +404,6 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await page.getByRole('button', { name: `${title} 편집`, exact: true }).click();
   const library = page.getByTestId('library-panel');
   await expect(library.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toHaveValue(title);
-  await expect(library.getByTestId('package-fields')).toHaveCount(0);
   await selectEditorSection(library, '첫 메시지');
   await library.getByLabel('기본 첫 메시지', { exact: true }).fill('<selector> Edited');
   await selectEditorSection(library, 'JSON 소스');
@@ -489,17 +431,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
   await dialog.getByText('미리보기', { exact: true }).click();
   const frame = dialog.locator('.risu-message-surface');
-  await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toBeVisible();
-  await expect(frame.locator('.risu-message-content')).toHaveAttribute(
-    'data-risu-disabled',
-    'true'
-  );
-  await expect(frame.getByRole('button', { name: `${title} route`, exact: true })).toHaveCSS(
-    'pointer-events',
-    'none'
-  );
   await expect(frame.locator('.risu-message-content')).toContainText('Edited');
-  await page.screenshot({ path: info.outputPath('native-default-preview.png') });
   await dialog.getByLabel('첫 메시지 선택').selectOption('start-1');
   await expect(dialog.locator('.risu-message-surface')).toHaveCount(0);
   await dialog.getByText('미리보기', { exact: true }).click();

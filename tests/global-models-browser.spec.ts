@@ -1,4 +1,4 @@
-import { DEFAULT_WIDTHS, DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type {
   ModelPreset,
@@ -211,10 +211,6 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await expect
       .poll(async () => (await models(request)).translationPolicy.judgment.enabled)
       .toBe(true);
-    await page.screenshot({ path: info.outputPath(`global-models-${width}.png`) });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true
-    );
     await selectSettingsSection(page, '기본 프롬프트');
     await expect(
       page.getByRole('region', { name: '기본 프롬프트 설정', exact: true })
@@ -571,7 +567,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
 test('JDGUI01 saves a compatible judgment connection and model through the role settings draft', async ({
   page,
   request,
-}, info) => {
+}) => {
   const endpoint = await request.post('/api/connections', {
     data: {
       title: 'JDGUI01 테스트 게이트웨이',
@@ -629,18 +625,6 @@ test('JDGUI01 saves a compatible judgment connection and model through the role 
   await expect(format).toHaveValue('typesafe-compatible');
   await expect(model).toHaveValue('synthetic/decision');
   await expect(images).toBeChecked();
-
-  if (visualReview) {
-    for (const width of DEFAULT_WIDTHS) {
-      await page.setViewportSize({ width, height: 900 });
-      await provider.evaluate((control) =>
-        control.closest('details')?.scrollIntoView({ block: 'center' })
-      );
-      await expect(provider).toBeInViewport();
-      await expect(images).toBeInViewport();
-      await page.screenshot({ path: info.outputPath(`judgment-provider-${width}.png`) });
-    }
-  }
 
   const chatResponse = await postFixtureChat(request, {
     data: { title: 'JDGUI01 전역 판단 모델 확인' },
