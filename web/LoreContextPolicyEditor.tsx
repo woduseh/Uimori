@@ -22,6 +22,7 @@ import {
 import type { PromptCompilation } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
+import { requestImageError } from './request-image-errors.js';
 import './lore-context.css';
 import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
@@ -400,7 +401,8 @@ export function LoreContextPolicyEditor({
               </details>
               {preview.value.error && (
                 <p className="error" role="alert">
-                  {preview.value.error}
+                  {requestImageError(preview.value.error) ??
+                    t('settings.promptPreviewProviderFailed', { code: preview.value.error })}
                 </p>
               )}
             </div>

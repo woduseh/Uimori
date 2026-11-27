@@ -8,6 +8,7 @@ import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { callEndpoint, definiteRejection } from './api.js';
 import { ProviderRejectionNotice, rejectionMessage } from './provider-rejection.js';
+import { providerFailureKey } from './provider-failure.js';
 import { vertexLocationOptions } from '../core/vertex-location.js';
 import { vertexLocationLabel } from './vertex-location-label.js';
 import { IconButton } from './IconButton.js';
@@ -196,7 +197,12 @@ function locationOutcome(record: TestDisplay | undefined): string {
   if (result.error === 'HTTP_429') return t('providers.vertexCompareBusy');
   if (result.error === 'HTTP_503') return t('providers.vertexCompareDown');
   if (result.error === 'TIMEOUT') return t('providers.vertexCompareTimeout');
-  return result.error || statusLabel[result.status];
+  return result.error ? connectionTestFailure(result.error) : statusLabel[result.status];
+}
+function connectionTestFailure(code: string): string {
+  if (code === 'ENDPOINT_NOT_APPROVED') return t('providers.m308');
+  if (code === 'SERVER_RESTARTED' || code === 'SERVER_STOPPING') return t('providers.m334');
+  return t(providerFailureKey(code));
 }
 
 function LocationResults({
@@ -423,8 +429,8 @@ export function ProviderModelTest({
                 <>
                   {result.rejection ? (
                     <p>{rejectionMessage(result.rejection)}</p>
-                  ) : result.error === 'ENDPOINT_NOT_APPROVED' ? (
-                    <p>{t('providers.m308')}</p>
+                  ) : result.error ? (
+                    <p>{connectionTestFailure(result.error)}</p>
                   ) : null}
                   {(result.error || result.rejection) && (
                     <details>

@@ -11,6 +11,7 @@ import { validateProviderPrompt, type PromptHistoryMessage } from '../core/risu-
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import {
   ContextCompactionError,
+  contextFailureCode,
   prepareInputContext,
   type ContextCompactionHooks,
 } from '../server/context-compaction.js';
@@ -22,6 +23,11 @@ import {
 } from '../server/context-planning.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
+import { ProviderContractError } from '../core/provider-errors.js';
+import { AppError } from '../server/app-errors.js';
+import { HttpError } from '../server/request-validation.js';
+
+const emptyUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const origin = 'http://127.0.0.1:44999';
@@ -675,6 +681,44 @@ describe('input context projection and durable summary calls', () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(unsaved.results).toEqual([]);
   });
+
+  test.each([
+    [new Error('SQLITE_BUSY: database is locked at /private/path'), 'CONTEXT_COMPACTION_FAILED'],
+    [new ProviderContractError('INVALID_CONTEXT_INPUT'), 'INVALID_CONTEXT_INPUT'],
+  ])(
+    'a failure outside the known codes is stored as a code, never its text',
+    async (cause, code) => {
+      const log = observed({
+        measureInput: () => {
+          throw cause;
+        },
+      });
+      const error = await failure(prepareInputContext(await snapshot(oldScenes()), log.hooks));
+      expect(error.code).toBe(code);
+      expect(error.plan.error).toBe(code);
+      expect(log.progress.at(-1)?.error).toBe(code);
+    }
+  );
+});
+
+test('a context job failure is stored as a context code, a model requirement or the generic code', () => {
+  const plan = { error: 'CONTEXT_COMPACTION_TIMEOUT' } as ContextPlan;
+  expect(
+    contextFailureCode(new ContextCompactionError('CONTEXT_COMPACTION_TIMEOUT', emptyUsage, plan))
+  ).toBe('CONTEXT_COMPACTION_TIMEOUT');
+  expect(contextFailureCode(new AppError(409, 'MODEL_REQUIRED', { role: 'context' }))).toBe(
+    'MODEL_REQUIRED:context'
+  );
+  expect(contextFailureCode(new HttpError(409, 'CONTEXT_INPUT_MISSING'))).toBe(
+    'CONTEXT_INPUT_MISSING'
+  );
+  expect(contextFailureCode(new Error('MODEL_REQUIRED:context'))).toBe('MODEL_REQUIRED:context');
+  expect(
+    contextFailureCode(Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' }))
+  ).toBe('SQLITE_BUSY');
+  expect(
+    contextFailureCode(new TypeError("Cannot read properties of undefined (reading 'x')"))
+  ).toBe('CONTEXT_COMPACTION_FAILED');
 });
 
 test('manual compaction fits one source prefix without rebuilding the writer input for every scene', async () => {

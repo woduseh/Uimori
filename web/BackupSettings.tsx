@@ -1,5 +1,5 @@
 import { t, useI18n, formatDate, formatNumber, translateStoredCode } from './i18n.js';
-import { uiMessage, type UiMessage } from './ui-message.js';
+import { type MessageKey, uiMessage, type UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -21,7 +21,7 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
-const statusMessages: Record<BackupStatusCode, string> = {
+const statusMessages: Record<BackupStatusCode, MessageKey> = {
   BACKUP_DISK_FULL: 'settings.backupDiskFull',
   BACKUP_PERMISSION_DENIED: 'settings.backupPermissionDenied',
   BACKUP_FAILED: 'settings.backupFailed',

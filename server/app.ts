@@ -67,7 +67,7 @@ import { activityFeed, acknowledgedActivities, acknowledgeActivities } from './a
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { type MainHooks } from './model-runner.js';
-import { prepareInputContext } from './context-compaction.js';
+import { contextFailureCode, prepareInputContext } from './context-compaction.js';
 import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
 import { createNativeRisuHost } from './risu-native-host.js';
 import { nativeInteractionRoutes } from './risu-native-interactions.js';
@@ -642,11 +642,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           );
         } catch (error) {
           if (hooks.signal.aborted) store.context.cancel(scope.chatId, job.id);
-          else
-            store.context.fail(
-              job.id,
-              error instanceof Error ? error.message : 'CONTEXT_COMPACTION_FAILED'
-            );
+          else store.context.fail(job.id, contextFailureCode(error));
           throw error;
         }
       },

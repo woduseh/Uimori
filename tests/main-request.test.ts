@@ -23,6 +23,8 @@ import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import type { Store } from '../server/store.js';
 import * as chatVariables from '../server/chat-variables.js';
+import * as mainRequest from '../server/main-request.js';
+import { ProviderContractError } from '../core/provider-errors.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
@@ -397,15 +399,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       )
     ).toBe(false);
   });
-  test('NMR01 preview route and runner use byte-equivalent encoder bodies, current once, no call during preview', async () => {
-    const server = await loopbackProvider(async (_request, response) =>
-      writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
-    );
-    closes.push(server.close);
-    const work = await snapshot(`${server.origin}/v1/responses`),
-      frozen = compileSnapshotPrompt(work),
-      built = buildMainProviderRequest(frozen),
-      expected = encodeMainPreview(built.request, work.profile!.models.main!);
+  async function previewMainPrompt(work: RunSnapshot) {
     const app = Fastify();
     closes.push(() => app.close());
     const fake = {
@@ -444,6 +438,35 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         values: { writing_mode: 'fiction' },
       },
     });
+    return { fake, variables, response };
+  }
+
+  test.each([
+    [new Error('PRIVATE_ENCODER_DETAIL at line 3'), 'PROMPT_PREVIEW_FAILED'],
+    [new ProviderContractError('IMAGE_INPUT_UNSUPPORTED_MODEL'), 'IMAGE_INPUT_UNSUPPORTED_MODEL'],
+  ])(
+    'a preview whose provider mapping fails answers a code, not the exception text',
+    async (cause, code) => {
+      const work = await snapshot('https://provider.invalid/v1/responses');
+      vi.spyOn(mainRequest, 'encodeMainPreview').mockImplementation(() => {
+        throw cause;
+      });
+      const { response } = await previewMainPrompt(work);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ provider: null, error: code });
+    }
+  );
+
+  test('NMR01 preview route and runner use byte-equivalent encoder bodies, current once, no call during preview', async () => {
+    const server = await loopbackProvider(async (_request, response) =>
+      writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
+    );
+    closes.push(server.close);
+    const work = await snapshot(`${server.origin}/v1/responses`),
+      frozen = compileSnapshotPrompt(work),
+      built = buildMainProviderRequest(frozen),
+      expected = encodeMainPreview(built.request, work.profile!.models.main!);
+    const { fake, variables, response } = await previewMainPrompt(work);
     expect(response.statusCode).toBe(200);
     expect(variables).toHaveBeenCalledWith(fake, work.chatId);
     expect(response.json().provider.body).toEqual(expected.body);

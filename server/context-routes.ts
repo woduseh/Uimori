@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { RunSnapshot } from '../core/types.js';
 import type { ContextJob } from './context-store.js';
 import { HttpError, record } from './request-validation.js';
+import { contextFailureCode } from './context-compaction.js';
 import type { Store } from './store.js';
 
 export type ContextRouteHooks = {
@@ -51,10 +52,7 @@ export function contextRoutes(app: FastifyInstance, store: Store, hooks: Context
             );
             store.context.finish(job.id, snapshot);
           } catch (error) {
-            store.context.fail(
-              job.id,
-              error instanceof Error ? error.message : 'CONTEXT_COMPACTION_FAILED'
-            );
+            store.context.fail(job.id, contextFailureCode(error));
           }
         })().finally(() => active.delete(job.id))
       );

@@ -1,10 +1,11 @@
 import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { type UiMessage, uiMessage } from './ui-message.js';
+import { formatUiMessage, type UiMessage, uiMessage } from './ui-message.js';
 import { useState } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
+import { knownContextError } from './context-error.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
@@ -56,6 +57,16 @@ export function LoreSelectionStatus({ snapshot }: { snapshot: Run['snapshot'] })
   );
 }
 
+function runErrorText(error: string): string {
+  const judgment = mainJudgmentError(error);
+  if (judgment) return judgment;
+  const context =
+    error.startsWith('CONTEXT_') || error.startsWith('MODEL_REQUIRED:')
+      ? knownContextError(error)
+      : undefined;
+  return context ? formatUiMessage(context) : error;
+}
+
 export function RunNotices({
   run,
   readyContext = true,
@@ -65,16 +76,18 @@ export function RunNotices({
 }) {
   useI18n();
   if (run.packageStart?.mode === 'authored') return null;
-  const showError =
+  const shownError =
     run.error &&
     !(run.status === 'cancelled' && run.error === 'Run cancelled') &&
-    !(run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error);
+    !(run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error)
+      ? run.error
+      : null;
   return (
     <>
       {(readyContext || run.contextSummary?.status !== 'ready') && (
         <ContextSummaryStatus summary={run.contextSummary} />
       )}
-      {showError && <p className="error">{mainJudgmentError(run.error) ?? run.error}</p>}
+      {shownError && <p className="error">{runErrorText(shownError)}</p>}
       {run.rejection && <ProviderRejectionNotice rejection={run.rejection} />}
       {run.status === 'refused' && <p className="error">{t('visuals.m278')}</p>}
     </>

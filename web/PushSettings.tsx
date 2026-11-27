@@ -1,5 +1,5 @@
 import { useI18n, translateStoredCode } from './i18n.js';
-import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { type MessageKey, UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -35,7 +35,7 @@ const labels: [keyof PushPreferences, string][] = [
   ['illustration', 'outside.prefIllustration'],
   ['showTitle', 'outside.prefTitle'],
 ];
-const deviceErrors: Record<PushDeviceError, string> = {
+const deviceErrors: Record<PushDeviceError, MessageKey> = {
   PUSH_RETRYING: 'outside.pushRetrying',
   PUSH_DELIVERY_FAILED: 'outside.pushDeliveryFailure',
 };

@@ -187,7 +187,7 @@ describe('UI locale presentation boundary', () => {
 
   test('stored status codes follow the locale while text stored by 0.18.x stays verbatim', async () => {
     const { setLocale, translateStoredCode } = await loadedI18n();
-    const keys = { BACKUP_DISK_FULL: 'settings.backupDiskFull' };
+    const keys = { BACKUP_DISK_FULL: 'settings.backupDiskFull' } as const;
     expect(translateStoredCode('BACKUP_DISK_FULL', keys)).toBe(
       '저장 공간이 부족해요. 기존 백업은 유지했어요.'
     );

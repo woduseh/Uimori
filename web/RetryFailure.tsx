@@ -3,6 +3,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { HistoryIcon, IssueIcon } from './ui-icons.js';
 import './retry-failure.css';
 import { mainJudgmentError } from './main-judgment-error.js';
+import { providerFailureKey } from './provider-failure.js';
 
 export const helperResponseRefused = (error?: string | null) =>
   /^(HELPER_RESPONSE_REFUSED(:|$)|SAFETY$|PROHIBITED_CONTENT$|BLOCKLIST$|SPII$|RECITATION$|ANTHROPIC_REFUSAL$)/u.test(
@@ -50,21 +51,11 @@ export function RetryFailure({
               ? t('shared.unknownSlot')
               : error?.includes('UNSUPPORTED_OPTIONS')
                 ? t('shared.unsupportedOptions')
-                : error?.includes('429')
-                  ? t('shared.rateLimit')
-                  : helperResponseRefused(error)
-                    ? t('errors.HELPER_RESPONSE_REFUSED')
-                    : error === 'HELPER_TASK_TIMEOUT'
-                      ? t('errors.HELPER_TASK_TIMEOUT')
-                      : error?.includes('TIMEOUT')
-                        ? t('shared.timeoutFailure')
-                        : error?.includes('TRANSPORT_ERROR')
-                          ? t('shared.connectionFailure')
-                          : /HTTP_40[13]/u.test(error ?? '')
-                            ? t('shared.authFailure')
-                            : /HTTP_5\d\d/u.test(error ?? '')
-                              ? t('shared.providerFailure')
-                              : t('shared.responseFailure');
+                : helperResponseRefused(error)
+                  ? t('errors.HELPER_RESPONSE_REFUSED')
+                  : error === 'HELPER_TASK_TIMEOUT'
+                    ? t('errors.HELPER_TASK_TIMEOUT')
+                    : t(providerFailureKey(error));
   return (
     <div
       className="turn-failure chat-retry-failure"
