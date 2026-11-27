@@ -1,4 +1,4 @@
-import { useI18n, message as uiMessage } from './i18n.js';
+import { useI18n, message as legacyDescriptor } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
 import { api } from './api.js';
@@ -55,7 +55,7 @@ export function useActivityFeed() {
       }
     } catch (reason) {
       if (order === seq.current)
-        setError(reason instanceof Error ? reason.message : uiMessage('helpers.m308'));
+        setError(reason instanceof Error ? reason.message : legacyDescriptor('helpers.m308'));
     }
   }, []);
   const acknowledge = useCallback(async (items: ActivityFeedItem[]) => {
@@ -86,7 +86,7 @@ export function useActivityFeed() {
       }));
       setError('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : uiMessage('helpers.m309'));
+      setError(reason instanceof Error ? reason.message : legacyDescriptor('helpers.m309'));
     } finally {
       for (const item of eligible) inFlight.current.delete(item.acknowledgementKey);
     }

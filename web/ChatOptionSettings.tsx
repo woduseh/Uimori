@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, messageRef, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, messageRef, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -178,9 +178,9 @@ export function ChatOptionSettings(props: Props) {
       setMessage('');
       setCompletion(
         {
-          fixed: uiMessage('chatsettings.m106'),
-          oneoff: uiMessage('chatsettings.m107'),
-          cancel: uiMessage('chatsettings.m108'),
+          fixed: legacyDescriptor('chatsettings.m106'),
+          oneoff: legacyDescriptor('chatsettings.m107'),
+          cancel: legacyDescriptor('chatsettings.m108'),
         }[operation.kind]
       );
       dispatchEvent(new Event('chat-options-changed'));
@@ -193,8 +193,10 @@ export function ChatOptionSettings(props: Props) {
       }
       setError(
         unresolved
-          ? uiMessage('chatsettings.m109')
-          : uiMessage('chatsettings.draftError', { error: messageRef((caught as Error).message) })
+          ? legacyDescriptor('chatsettings.m109')
+          : legacyDescriptor('chatsettings.draftError', {
+              error: messageRef((caught as Error).message),
+            })
       );
     } finally {
       lock.current = false;
@@ -258,8 +260,8 @@ export function ChatOptionSettings(props: Props) {
             setError('');
             setReadError('');
             setSaveConflict(false);
-            setMessage(keepInput ? uiMessage('chatsettings.m113') : '');
-            setCompletion(keepInput ? '' : uiMessage('chatsettings.m114'));
+            setMessage(keepInput ? legacyDescriptor('chatsettings.m113') : '');
+            setCompletion(keepInput ? '' : legacyDescriptor('chatsettings.m114'));
           };
           return () => {
             const displayReview = reviewOptionDraft(input.base!, input.draft, value);

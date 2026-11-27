@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n, getLocale, message as uiMessage } from './i18n.js';
+import { t, translateMessage, useI18n, getLocale, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -230,7 +230,7 @@ export function ModelWorkspaceEditor({
         setDraft(editable(accepted as ModelWorkspace));
         setJudgmentEdited(false);
         setDirty(false);
-        setMessage(uiMessage('settings.m1'));
+        setMessage(legacyDescriptor('settings.m1'));
         void refresh();
         return true;
       })
@@ -269,7 +269,7 @@ export function ModelWorkspaceEditor({
       setConfirmReload(false);
       void refresh();
     } catch {
-      setReloadError(uiMessage('settings.m2'));
+      setReloadError(legacyDescriptor('settings.m2'));
     } finally {
       lock.current = false;
       setOperation(null);

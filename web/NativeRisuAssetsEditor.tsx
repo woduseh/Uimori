@@ -1,4 +1,4 @@
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { ImageMetadataFields } from './ImageMetadataFields.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ActionMenu } from './ActionMenu.js';
@@ -92,7 +92,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   async function filesChosen(files: File[], replacing?: string) {
     if (!files.length || upload.current) return;
     if (!replacing && (latest.current.value.images?.length ?? 0) + files.length > 2000) {
-      setError(uiMessage('native.text_1ec208bab4'));
+      setError(legacyDescriptor('native.text_1ec208bab4'));
       return;
     }
     const token = ++generation.current,
@@ -125,7 +125,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           failures.push({
             file: file.name,
             message:
-              cause instanceof Error ? errorDescriptor(cause) : uiMessage('native.text_6d75f11c59'),
+              cause instanceof Error
+                ? errorDescriptor(cause)
+                : legacyDescriptor('native.text_6d75f11c59'),
           });
         }
       }
@@ -168,7 +170,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       setNotice({ key: 'native.referenceNameCopied' });
     } catch {
       setNotice(null);
-      setError(uiMessage('helpers.m130'));
+      setError(legacyDescriptor('helpers.m130'));
     }
   }
   const images = value.images ?? [],
@@ -472,7 +474,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 setError(
                   cause instanceof Error
                     ? errorDescriptor(cause)
-                    : uiMessage('native.text_949e1ae936')
+                    : legacyDescriptor('native.text_949e1ae936')
                 );
               }
             }}

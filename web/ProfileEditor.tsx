@@ -1,5 +1,5 @@
 import { ScrollStrip } from './ScrollStrip.js';
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -151,12 +151,12 @@ export function ProfileEditor({
     setLorePending(false);
     setLoreResetVersion((version) => version + 1);
     setError('');
-    setStatus(uiMessage('library.latestSettingsLoaded'));
+    setStatus(legacyDescriptor('library.latestSettingsLoaded'));
     onError('');
   }
   async function save(work: () => Promise<ChatProfile>, message = t('library.chatSettingsSaved')) {
     if (lorePending) {
-      setError(uiMessage('library.checkTheNumbersInLoreSettingsBefore'));
+      setError(legacyDescriptor('library.checkTheNumbersInLoreSettingsBefore'));
       return false;
     }
     setSaving(true);

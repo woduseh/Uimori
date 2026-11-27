@@ -14,7 +14,7 @@ import { diffText, TEXT_DIFF_LIMITS } from '../core/text-diff.js';
 import { ApiError } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
-import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
+import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { useFocusFallback } from './useFocusFallback.js';
 import { LoadingState } from './LoadingState.js';
@@ -350,7 +350,7 @@ export function ReaderSelectionTools({
   };
   return (
     <>
-      {copied > 0 && <TransientNotice key={copied} content={uiMessage('helpers.m129')} />}
+      {copied > 0 && <TransientNotice key={copied} content={legacyDescriptor('helpers.m129')} />}
       {barVisible &&
         selected &&
         createPortal(
@@ -540,7 +540,7 @@ function RevisionPopover({
         setSaveError(
           cause instanceof Error
             ? cause.message
-            : uiMessage('reader.couldNotSaveYourEditsArePreserved')
+            : legacyDescriptor('reader.couldNotSaveYourEditsArePreserved')
         );
     } finally {
       setSaving(false);

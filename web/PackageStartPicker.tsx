@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor, messageRef } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { ListRestart } from 'lucide-react';
 import type { Content } from '../core/product.js';
@@ -132,7 +132,9 @@ export function PackageStartPicker({
         });
       } catch (cause) {
         onError(
-          uiMessage('library.openingRefreshError', { error: messageRef((cause as Error).message) })
+          legacyDescriptor('library.openingRefreshError', {
+            error: messageRef((cause as Error).message),
+          })
         );
       }
     } catch (cause) {
@@ -143,7 +145,7 @@ export function PackageStartPicker({
         setError((cause as Error).message);
       } else {
         setUncertain(true);
-        setError(uiMessage('library.couldNotConfirmTheResultCheckThe'));
+        setError(legacyDescriptor('library.couldNotConfirmTheResultCheckThe'));
       }
     } finally {
       submitting.current = false;

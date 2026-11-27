@@ -1,5 +1,5 @@
 import { parseOwnJson } from './json.js';
-import { useI18n, message as uiMessage } from './i18n.js';
+import { useI18n, message as legacyDescriptor } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
 import { api, ApiError } from './api.js';
@@ -251,7 +251,7 @@ export function useHelperSessions(
           if (!disposed)
             setErrors((old) => ({
               ...old,
-              [group]: cause instanceof Error ? cause.message : uiMessage('helpers.m210'),
+              [group]: cause instanceof Error ? cause.message : legacyDescriptor('helpers.m210'),
             }));
           throw cause;
         }
@@ -337,7 +337,7 @@ export function useHelperSessions(
       if (alive.current)
         setErrors((old) => ({
           ...old,
-          [group]: cause instanceof Error ? cause.message : uiMessage('helpers.m211'),
+          [group]: cause instanceof Error ? cause.message : legacyDescriptor('helpers.m211'),
         }));
     } finally {
       createLock.current = false;

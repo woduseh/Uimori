@@ -1,5 +1,5 @@
 import { SettingsSearch, hasSettingsSearch } from './SettingsSearch.js';
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import { readSettingsLocation, rememberSettingsLocation } from './settings-location.js';
@@ -251,7 +251,7 @@ export function ChatSettingsPanel({
     setSaveNotice('');
     try {
       if (await saveGroup.save({ profile: profileDirty, runtime: runtimeDirty }))
-        setSaveNotice(uiMessage('library.chatSettingsSaved'));
+        setSaveNotice(legacyDescriptor('library.chatSettingsSaved'));
       else
         requestAnimationFrame(() => {
           root.current

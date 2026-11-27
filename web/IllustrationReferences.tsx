@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -161,12 +161,12 @@ export function IllustrationReferencesEditor({
       return false;
     }
     if (chatProfiles.some((item) => !item.name.trim() || !item.appearance.trim())) {
-      onError(uiMessage('visuals.profileRequired'));
+      onError(legacyDescriptor('visuals.profileRequired'));
       return false;
     }
     const names = chatProfiles.map((item) => illustrationProfileNameKey(item.name));
     if (new Set(names).size !== names.length) {
-      onError(uiMessage('visuals.duplicateCharacterName'));
+      onError(legacyDescriptor('visuals.duplicateCharacterName'));
       return false;
     }
     lock.current = true;
@@ -195,7 +195,7 @@ export function IllustrationReferencesEditor({
       dirtyDraft.current = false;
       setDirty(false);
       setConflict(false);
-      setMessage(uiMessage('visuals.m031'));
+      setMessage(legacyDescriptor('visuals.m031'));
       return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {

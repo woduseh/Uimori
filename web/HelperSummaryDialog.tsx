@@ -3,7 +3,7 @@ import type { HelperContextSummaryView } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { Dialog } from './Dialog.js';
-import { formatNumber, t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
+import { formatNumber, t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { SummaryEditor } from './SummaryEditor.js';
@@ -12,7 +12,7 @@ import './helper-summary.css';
 export type HelperSummaryDraft = { text: string; revision: number };
 
 const failure = (caught: unknown) =>
-  caught instanceof Error ? caught.message : uiMessage('helperSummary.loadFailed');
+  caught instanceof Error ? caught.message : legacyDescriptor('helperSummary.loadFailed');
 
 export function HelperSummaryDialog({
   open,
@@ -97,14 +97,14 @@ export function HelperSummaryDialog({
       );
       focus.current = 'trigger';
       onDraftChange(null);
-      await onChanged(uiMessage('helperSummary.saved'));
+      await onChanged(legacyDescriptor('helperSummary.saved'));
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
         const latest = await load();
         if (latest?.summary === draft.text) {
           focus.current = 'trigger';
           onDraftChange(null);
-          await onChanged(uiMessage('helperSummary.saved'));
+          await onChanged(legacyDescriptor('helperSummary.saved'));
           return;
         }
       }
@@ -127,7 +127,7 @@ export function HelperSummaryDialog({
         )
       );
       setConfirmReset(false);
-      await onChanged(uiMessage('helperSummary.resetDone'));
+      await onChanged(legacyDescriptor('helperSummary.resetDone'));
     } catch (caught) {
       setConfirmReset(false);
       setError(failure(caught));

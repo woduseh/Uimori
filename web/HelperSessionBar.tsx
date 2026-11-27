@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
 import {
   useCallback,
   useEffect,
@@ -128,7 +128,7 @@ export function HelperSessionBar(props: Props) {
       if (version !== projectReadVersion.current) return;
       setProjectsLoaded(false);
       projectReadError.current =
-        cause instanceof Error ? cause.message : uiMessage('helperNavigation.loadFailed');
+        cause instanceof Error ? cause.message : legacyDescriptor('helperNavigation.loadFailed');
       setProjectError(projectReadError.current);
     }
   }, []);
@@ -157,7 +157,7 @@ export function HelperSessionBar(props: Props) {
         }
       } catch (cause) {
         if (!disposed)
-          setReadError(cause instanceof Error ? cause.message : uiMessage('helpers.m168'));
+          setReadError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m168'));
       } finally {
         if (!disposed) timer = setTimeout(() => void load(), 1200);
       }
@@ -223,7 +223,7 @@ export function HelperSessionBar(props: Props) {
         clearPendingHelperRequest(storageKey, pending);
       }
       setCopyError(
-        cause instanceof Error ? cause.message : uiMessage('helperNavigation.copyFailed')
+        cause instanceof Error ? cause.message : legacyDescriptor('helperNavigation.copyFailed')
       );
     } finally {
       setCopying(null);
@@ -279,7 +279,7 @@ export function HelperSessionBar(props: Props) {
       return true;
     } catch (cause) {
       setProjectError(
-        cause instanceof Error ? cause.message : uiMessage('helperNavigation.saveFailed')
+        cause instanceof Error ? cause.message : legacyDescriptor('helperNavigation.saveFailed')
       );
       return false;
     } finally {
@@ -349,7 +349,7 @@ export function HelperSessionBar(props: Props) {
       const value = await api<HelperConversationDeletion>(
         `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
       ).catch((cause) => {
-        setReadError(cause instanceof Error ? cause.message : uiMessage('helpers.m168'));
+        setReadError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m168'));
         return null;
       });
       if (value) {
@@ -357,7 +357,7 @@ export function HelperSessionBar(props: Props) {
         setReadError('');
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : uiMessage('helpers.m169'));
+      setError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m169'));
     } finally {
       setWorking(false);
     }
@@ -547,7 +547,9 @@ export function HelperSessionBar(props: Props) {
             })()
               .catch((cause) =>
                 setProjectError(
-                  cause instanceof Error ? cause.message : uiMessage('helperNavigation.saveFailed')
+                  cause instanceof Error
+                    ? cause.message
+                    : legacyDescriptor('helperNavigation.saveFailed')
                 )
               )
               .finally(() => setProjectWorking(false));
@@ -626,7 +628,7 @@ export function HelperSessionBar(props: Props) {
                   setProjectError(
                     cause instanceof Error
                       ? cause.message
-                      : uiMessage('helperNavigation.saveFailed')
+                      : legacyDescriptor('helperNavigation.saveFailed')
                   )
                 )
                 .finally(() => setProjectWorking(false));
@@ -661,7 +663,9 @@ export function HelperSessionBar(props: Props) {
               })
               .catch((cause) =>
                 setProjectError(
-                  cause instanceof Error ? cause.message : uiMessage('helperNavigation.saveFailed')
+                  cause instanceof Error
+                    ? cause.message
+                    : legacyDescriptor('helperNavigation.saveFailed')
                 )
               )
               .finally(() => setProjectWorking(false));
@@ -834,7 +838,7 @@ export function HelperSessionBar(props: Props) {
                   try {
                     await deleteHelperSessionRecovery(deleting.id);
                   } catch {
-                    setCleanupFailure(uiMessage('helpers.m194'));
+                    setCleanupFailure(legacyDescriptor('helpers.m194'));
                   }
                   setDeleting(null);
                   props.onDelete(deleting.id);

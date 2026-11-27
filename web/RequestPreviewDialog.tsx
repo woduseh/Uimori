@@ -1,5 +1,5 @@
 import { parseOwnJson } from './json.js';
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { RequestImagePreview } from '../core/request-images.js';
@@ -106,7 +106,9 @@ export function RequestPreviewDialog({
           setFailure({
             key,
             message:
-              cause instanceof Error ? cause.message : uiMessage('reader.couldNotLoadThePreview'),
+              cause instanceof Error
+                ? cause.message
+                : legacyDescriptor('reader.couldNotLoadThePreview'),
           });
       });
     return () => {

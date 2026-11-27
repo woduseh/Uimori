@@ -1,4 +1,4 @@
-import { useI18n, message as uiMessage } from './i18n.js';
+import { useI18n, message as legacyDescriptor } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   HelperContextCompactionSummary,
@@ -204,7 +204,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       needsRefresh = false;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
-        setError(cause instanceof Error ? cause.message : uiMessage('helpers.m207'));
+        setError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m207'));
     };
     const queuedTask = (taskId: string | null) =>
       taskId !== null &&
@@ -322,7 +322,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       }
     } catch (cause) {
       if (selectedScope.current === scopeKey)
-        setError(cause instanceof Error ? cause.message : uiMessage('helpers.m208'));
+        setError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m208'));
     } finally {
       earlierLock.current = false;
       if (alive.current) setLoadingEarlier(false);

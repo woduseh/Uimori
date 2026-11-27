@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
 import { useState } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
@@ -198,7 +198,7 @@ export function RunTaskDetails({
                 text={() => run.partialText!}
                 label={t('visuals.m282')}
                 copiedLabel={t('visuals.m281')}
-                onFailure={() => onError(uiMessage('visuals.m280'))}
+                onFailure={() => onError(legacyDescriptor('visuals.m280'))}
               />
             )
           }
@@ -254,7 +254,7 @@ export function RunTaskDetails({
         <TraceFooter
           id={run.id}
           raw={record.value ? () => rawRunRecord(record.value!) : undefined}
-          onCopyFailed={() => onError(uiMessage('visuals.historyCopyFailed'))}
+          onCopyFailed={() => onError(legacyDescriptor('visuals.historyCopyFailed'))}
         />
       )}
     </div>

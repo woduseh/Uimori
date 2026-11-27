@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -110,7 +110,7 @@ export function HelperArtifactCard({
       );
       setDraftError(
         failed || stored.some((result) => result.status === 'rejected')
-          ? uiMessage('helpers.m128')
+          ? legacyDescriptor('helpers.m128')
           : ''
       );
     }
@@ -125,9 +125,9 @@ export function HelperArtifactCard({
     setMessage('');
     try {
       await navigator.clipboard.writeText(text);
-      setMessage(uiMessage('helpers.m129'));
+      setMessage(legacyDescriptor('helpers.m129'));
     } catch {
-      setCopyError(uiMessage('helpers.m130'));
+      setCopyError(legacyDescriptor('helpers.m130'));
     }
   }
   const selected =

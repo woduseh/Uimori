@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -252,12 +252,12 @@ function IllustrationEnvironmentEditor({
         setDraft(structuredClone(accepted));
         setToken(undefined);
         setDirty(false);
-        setMessage(uiMessage('visuals.m046'));
+        setMessage(legacyDescriptor('visuals.m046'));
         return true;
       })
       .catch((caught: Error) => {
         if (caught instanceof ApiError && caught.status === 409) {
-          setSaveError(uiMessage('visuals.m089'));
+          setSaveError(legacyDescriptor('visuals.m089'));
           setSaveConflict(true);
         } else setSaveError(caught.message);
         return false;
@@ -283,7 +283,7 @@ function IllustrationEnvironmentEditor({
       setMessage('');
       setConfirmReload(false);
     } catch {
-      setLoadError(uiMessage('visuals.m047'));
+      setLoadError(legacyDescriptor('visuals.m047'));
     } finally {
       lock.current = false;
       setOperation(null);

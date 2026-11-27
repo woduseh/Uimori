@@ -13,7 +13,7 @@ import {
   writeOptionalStorage,
 } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
-import { message as uiMessage } from './i18n.js';
+import { message as legacyDescriptor } from './i18n.js';
 
 type DraftIdentity = { key: string; epoch: number; revision: number; text: string };
 type Original = { id: string; text: string };
@@ -82,7 +82,7 @@ export function useInputTranslation(options: Options) {
       originalRef.current.key === key ? originalRef.current.value : readOriginal(key);
     const value = previous ?? { id: crypto.randomUUID(), text };
     originalRef.current = { key, value };
-    if (!saveOriginal(key, value)) setError(uiMessage('chatsettings.m159'));
+    if (!saveOriginal(key, value)) setError(legacyDescriptor('chatsettings.m159'));
     setOriginal(value);
   }
   async function translate() {
@@ -145,7 +145,9 @@ export function useInputTranslation(options: Options) {
         latest.epoch === captured.epoch
       )
         setError(
-          cause instanceof Error ? cause.message : uiMessage('prompts.uiUnableToTranslateInput')
+          cause instanceof Error
+            ? cause.message
+            : legacyDescriptor('prompts.uiUnableToTranslateInput')
         );
     } finally {
       if (pending.current === controller) {

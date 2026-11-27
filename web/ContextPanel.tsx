@@ -1,4 +1,10 @@
-import { t, translateMessage, translateStoredCode, useI18n, message as uiMessage } from './i18n.js';
+import {
+  t,
+  translateMessage,
+  translateStoredCode,
+  useI18n,
+  message as legacyDescriptor,
+} from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -128,7 +134,7 @@ export function ContextPanel({
   }, [draft, notesDirty, busy, onDirtyChange]);
   useUnsavedInput(notesDirty ? { domain: 'notes', chatId } : null);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : uiMessage('settings.m273');
+    const text = caught instanceof Error ? caught.message : legacyDescriptor('settings.m273');
     setError(text);
     onError(text);
   }
@@ -240,7 +246,7 @@ export function ContextPanel({
         summary: draft.text,
       }),
       'PUT',
-      uiMessage('settings.m274'),
+      legacyDescriptor('settings.m274'),
       true
     );
   }
@@ -389,7 +395,7 @@ export function ContextPanel({
                       `${base}/compact`,
                       keyed(command()),
                       'POST',
-                      uiMessage('settings.m291')
+                      legacyDescriptor('settings.m291')
                     )
                   }
                 >
@@ -405,7 +411,7 @@ export function ContextPanel({
                       `${base}/jobs/${id(working.id)}/cancel`,
                       {},
                       'POST',
-                      uiMessage('settings.m293')
+                      legacyDescriptor('settings.m293')
                     )
                   }
                 >
