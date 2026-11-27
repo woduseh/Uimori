@@ -1,4 +1,6 @@
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LanguageSelect } from './LanguageSelect.js';
 import { createContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
@@ -14,7 +16,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [session, setSession] = useState<Session | null>(null);
   const [token, setToken] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const revision = useRef(0);
   const signingIn = useRef(false);
@@ -31,7 +33,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           setError(
             expired && next.required && !next.authenticated
               ? uiMessage('outside.sessionExpired')
-              : ''
+              : null
           );
         }
       } catch {
@@ -74,7 +76,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       {!session && !error && (
         <LoadingState presentation="placeholder" label={t('outside.checkingWorkspace')} />
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {session?.required && (
         <form
           className="editor-grid"
@@ -84,7 +86,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
             signingIn.current = true;
             ++revision.current;
             setBusy(true);
-            setError('');
+            setError(null);
             try {
               await api('/session', { token });
               setToken('');
@@ -99,7 +101,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
                   ? uiMessage('outside.checkToken')
                   : error instanceof ApiError && error.status === 429
                     ? uiMessage('outside.tooManyConnections')
-                    : (error as Error).message
+                    : toUiMessage(error, 'outside.checkServer')
               );
             } finally {
               signingIn.current = false;

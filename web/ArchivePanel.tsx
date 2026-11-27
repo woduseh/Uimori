@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
-import { uiMessage, UiError } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, UiError, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { BackupSettings } from './BackupSettings.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackupFileImport } from './BackupFileImport.js';
@@ -28,7 +29,7 @@ export function ArchivePanel({
   const [busy, setBusy] = useState(false);
   const [importDirty, setImportDirty] = useState(false);
   const [backupDirty, setBackupDirty] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const backupSave = useRef<SettingsSaveHandler | null>(null);
   const registerBackupSave = useCallback<SettingsSaveRegistration>((handler) => {
     backupSave.current = handler;
@@ -64,7 +65,7 @@ export function ArchivePanel({
               disabled={busy}
               onClick={async () => {
                 setBusy(true);
-                setError('');
+                setError(null);
                 onError('');
                 try {
                   const response = await fetch('/api/backup');
@@ -79,7 +80,7 @@ export function ArchivePanel({
                   link.click();
                   setTimeout(() => URL.revokeObjectURL(url), 1000);
                 } catch (caught) {
-                  setError((caught as Error).message);
+                  setError(toUiMessage(caught));
                 } finally {
                   setBusy(false);
                 }
@@ -95,7 +96,7 @@ export function ArchivePanel({
           </details>
           {error && (
             <p role="alert" className="error">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
         </div>

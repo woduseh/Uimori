@@ -1,5 +1,6 @@
-import { useI18n, translateMessage, translateStoredCode, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { useI18n, translateStoredCode } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
@@ -44,9 +45,9 @@ export function PushSettings() {
   const [clientId] = useState(browserClientId);
   const [info, setInfo] = useState<PushInfo | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [warning, setWarning] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
+  const [warning, setWarning] = useState<UiMessage | null>(null);
   const supported =
     isSecureContext &&
     'Notification' in window &&
@@ -57,16 +58,16 @@ export function PushSettings() {
   );
   const recheck = useRetryableEffect(() => {
     const controller = new AbortController();
-    setError('');
+    setError(null);
     void callEndpoint(endpoints.readPush, { clientId }, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
           setInfo(value);
-          setError('');
+          setError(null);
         }
       })
       .catch((caught) => {
-        if (!controller.signal.aborted) setError(caught.message);
+        if (!controller.signal.aborted) setError(toUiMessage(caught));
       });
     if (supported) setPermission(Notification.permission);
     return () => controller.abort();
@@ -74,9 +75,9 @@ export function PushSettings() {
   async function enable() {
     if (!supported || busy || !info?.available) return;
     setBusy(true);
-    setError('');
-    setNotice('');
-    setWarning('');
+    setError(null);
+    setNotice(null);
+    setWarning(null);
     try {
       const granted =
         Notification.permission === 'default'
@@ -84,7 +85,7 @@ export function PushSettings() {
           : Notification.permission;
       setPermission(granted);
       if (granted !== 'granted') {
-        setWarning(descriptor('outside.permissionDeclined'));
+        setWarning(uiMessage('outside.permissionDeclined'));
         return;
       }
       const prepared = await callEndpoint(endpoints.preparePush, { clientId });
@@ -121,9 +122,9 @@ export function PushSettings() {
         preferences: prepared.device?.preferences ?? DEFAULT_PUSH_PREFERENCES,
       });
       setInfo(saved);
-      setNotice(descriptor('outside.pushOn'));
+      setNotice(uiMessage('outside.pushOn'));
     } catch (caught) {
-      setError((caught as Error).message || descriptor('outside.pushFailure'));
+      setError(toUiMessage(caught, 'outside.pushFailure'));
     } finally {
       setBusy(false);
     }
@@ -131,26 +132,26 @@ export function PushSettings() {
   async function disable() {
     if (!info?.device || busy) return;
     setBusy(true);
-    setError('');
-    setNotice('');
-    setWarning('');
+    setError(null);
+    setNotice(null);
+    setWarning(null);
     try {
       const saved = await callEndpoint(endpoints.unsubscribePush, {
         clientId,
         expectedRevision: info.device.revision,
       });
       setInfo(saved);
-      setNotice(descriptor('outside.pushOff'));
+      setNotice(uiMessage('outside.pushOff'));
       try {
         const registration = await navigator.serviceWorker.getRegistration('/');
         const subscription = await registration?.pushManager.getSubscription();
         await subscription?.unsubscribe();
       } catch {
-        setNotice('');
-        setWarning(descriptor('outside.unsubscribeFailure'));
+        setNotice(null);
+        setWarning(uiMessage('outside.unsubscribeFailure'));
       }
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -158,9 +159,9 @@ export function PushSettings() {
   async function change(key: keyof PushPreferences, value: boolean) {
     if (!info?.device || busy) return;
     setBusy(true);
-    setError('');
-    setNotice('');
-    setWarning('');
+    setError(null);
+    setNotice(null);
+    setWarning(null);
     try {
       setInfo(
         await callEndpoint(endpoints.updatePush, {
@@ -170,7 +171,7 @@ export function PushSettings() {
         })
       );
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -178,14 +179,14 @@ export function PushSettings() {
   async function test() {
     if (!info?.device || busy) return;
     setBusy(true);
-    setError('');
-    setNotice('');
-    setWarning('');
+    setError(null);
+    setNotice(null);
+    setWarning(null);
     try {
       await callEndpoint(endpoints.testPush, { clientId });
-      setNotice(descriptor('outside.testQueued'));
+      setNotice(uiMessage('outside.testQueued'));
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -264,7 +265,7 @@ export function PushSettings() {
         </NoticeBanner>
       )}
       <TransientNotice content={notice} />
-      {warning && <NoticeBanner>{translateMessage(warning)}</NoticeBanner>}
+      {warning && <NoticeBanner>{warning}</NoticeBanner>}
       {error && (
         <NoticeBanner
           tone="error"
@@ -274,7 +275,7 @@ export function PushSettings() {
             </button>
           }
         >
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
     </section>

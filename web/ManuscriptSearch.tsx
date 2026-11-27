@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import type { UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderTarget } from '../core/reader-target.js';
 import type {
@@ -69,7 +71,7 @@ export function ManuscriptSearchPanel({
   const [kinds, setKinds] = useState<SearchKind[]>(['original', 'translation', 'request']);
   const [result, setResult] = useState<ManuscriptSearchResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [localComposing, setComposing] = useState(false);
   const composing = localComposing || queryComposing;
   const currentRequest = useRef<AbortController | null>(null);
@@ -87,7 +89,7 @@ export function ManuscriptSearchPanel({
       return;
     }
     setBusy(true);
-    setError('');
+    setError(null);
     const scoped =
       value.scope === 'chat' && chatId
         ? { scope: value.scope, chatId }
@@ -105,7 +107,7 @@ export function ManuscriptSearchPanel({
         cursor && old ? { ...next, items: [...old.items, ...next.items] } : next
       );
     } catch (caught) {
-      if (!controller.signal.aborted) setError((caught as Error).message);
+      if (!controller.signal.aborted) setError(toUiMessage(caught));
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
@@ -117,7 +119,7 @@ export function ManuscriptSearchPanel({
     currentRequest.current?.abort();
     setResult(null);
     setTitleLimit(query.trim() ? 5 : 30);
-    setError('');
+    setError(null);
     setBusy(false);
     if (composing || [...query.trim()].length < automaticSearchLength(query)) return;
     const timer = setTimeout(() => void execute.current(), 300);
@@ -275,7 +277,7 @@ export function ManuscriptSearchPanel({
             </button>
           }
         >
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
       {result && <h3 className="manuscript-search-result-heading">{t('transfer.m232')}</h3>}

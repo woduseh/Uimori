@@ -1,16 +1,16 @@
-import { getLocale, localeChangedEvent, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { getLocale, localeChangedEvent } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { notificationIntent, type NotificationIntent } from '../core/push.js';
 type InstallPrompt = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
-type InstallState = { installed: boolean; available: boolean; error: string };
+type InstallState = { installed: boolean; available: boolean; error: UiMessage | null };
 const listeners = new Set<() => void>();
 let prompt: InstallPrompt | null = null;
 let registration: Promise<ServiceWorkerRegistration> | null = null;
-let snapshot: InstallState = { installed: false, available: false, error: '' };
-const serverSnapshot: InstallState = { installed: false, available: false, error: '' };
+let snapshot: InstallState = { installed: false, available: false, error: null };
+const serverSnapshot: InstallState = { installed: false, available: false, error: null };
 const publish = (value: Partial<InstallState>) => {
   snapshot = { ...snapshot, ...value };
   for (const listener of listeners) listener();
@@ -38,12 +38,12 @@ export async function promptInstall() {
   if (!prompt) return;
   const current = prompt;
   prompt = null;
-  publish({ available: false, error: '' });
+  publish({ available: false, error: null });
   try {
     await current.prompt();
     await current.userChoice;
   } catch {
-    publish({ error: descriptor('outside.installRetry') });
+    publish({ error: uiMessage('outside.installRetry') });
   }
 }
 
@@ -118,7 +118,7 @@ export function startPwa() {
   });
   addEventListener('appinstalled', () => {
     prompt = null;
-    publish({ installed: true, available: false, error: '' });
+    publish({ installed: true, available: false, error: null });
   });
   const register = () => {
     void pwaRegistration().catch(() => {});

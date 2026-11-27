@@ -1,4 +1,6 @@
-import { t, translateMessage, useI18n, messageRef, message as uiMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { Dialog } from './Dialog.js';
@@ -48,8 +50,8 @@ export function SettingsEditor({
   const [revision, setRevision] = useState(chat.settingsRevision);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [localError, setLocalError] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
+  const [localError, setLocalError] = useState<UiMessage | null>(null);
   const [confirmReload, setConfirmReload] = useState(false);
   const [globalAutoTranslate, setGlobalAutoTranslate] = useState<boolean | null>(null);
   const [generationDefaults, setGenerationDefaults] = useState<ChatGenerationDefaults | null>(null);
@@ -86,15 +88,15 @@ export function SettingsEditor({
   }, [chat.settings, chat.settingsRevision, dirty, revision]);
   function update<K extends keyof Settings>(key: K, next: Settings[K]) {
     setDirty(true);
-    setMessage('');
+    setNotice(null);
     setValue((old) => ({ ...old, [key]: next }));
   }
   function discard() {
     setValue(chat.settings);
     setRevision(chat.settingsRevision);
     setDirty(false);
-    setLocalError('');
-    setMessage('');
+    setLocalError(null);
+    setNotice(null);
     onError('');
   }
   async function save() {
@@ -117,7 +119,7 @@ export function SettingsEditor({
       return false;
     }
     setSaving(true);
-    setLocalError('');
+    setLocalError(null);
     try {
       const saved = await api<Chat>(
         `/chats/${chat.id}/settings`,
@@ -127,16 +129,15 @@ export function SettingsEditor({
       setValue(saved.settings);
       setRevision(saved.settingsRevision);
       setDirty(false);
-      setMessage(uiMessage('settings.m79'));
+      setNotice(uiMessage('settings.m79'));
       onError('');
       setSaving(false);
       void onSaved().catch((error) => {
-        setLocalError(uiMessage('settings.m80', { v0: messageRef((error as Error).message) }));
+        setLocalError(uiMessage('settings.m80', { v0: toUiMessage(error) }));
       });
       return true;
     } catch (error) {
-      const text = (error as Error).message;
-      setLocalError(text);
+      setLocalError(toUiMessage(error));
       return false;
     } finally {
       setSaving(false);
@@ -247,7 +248,7 @@ export function SettingsEditor({
                   onChange={(event) => {
                     const choice = event.target.value;
                     setDirty(true);
-                    setMessage('');
+                    setNotice(null);
                     setValue(
                       ({
                         autoRefusalRetryEnabled: _enabled,
@@ -326,10 +327,10 @@ export function SettingsEditor({
             </div>
           )}
         </fieldset>
-        <TransientNotice content={hideSaveActions ? '' : message} />
+        <TransientNotice content={hideSaveActions ? null : notice} />
         {localError && (
           <NoticeBanner tone="error" className="full">
-            {translateMessage(localError)}
+            {localError}
           </NoticeBanner>
         )}
       </form>

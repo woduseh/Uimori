@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   CHAT_BACKUP_VERSION,
@@ -13,6 +13,7 @@ import type {
   NativeTransferReceipt,
 } from '../core/native-transfer.js';
 import { api, apiBinary, definiteRejection } from './api.js';
+import { toUiMessage } from './api-errors.js';
 import { inspectBackupFile } from './backup-file.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -42,8 +43,8 @@ export function BackupFileImport({
   const [reading, setReading] = useState(false),
     [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
-  const [error, setError] = useState(''),
-    [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null),
+    [notice, setNotice] = useState<UiMessage | null>(null);
   const input = useRef<HTMLInputElement>(null),
     version = useRef(0),
     lock = useRef(false);
@@ -63,8 +64,8 @@ export function BackupFileImport({
     const current = ++version.current;
     setSelection(null);
     setDatabase(false);
-    setError('');
-    setMessage('');
+    setError(null);
+    setNotice(null);
     setReading(!!file);
     if (!file) return;
     lock.current = true;
@@ -109,10 +110,7 @@ export function BackupFileImport({
         setSelection({ kind: 'chat', backup, key });
       }
     } catch (caught) {
-      if (current === version.current)
-        setError(
-          caught instanceof SyntaxError ? descriptor('transfer.m126') : (caught as Error).message
-        );
+      if (current === version.current) setError(toUiMessage(caught, 'transfer.m126'));
     } finally {
       lock.current = false;
       if (current === version.current) setReading(false);
@@ -123,8 +121,8 @@ export function BackupFileImport({
     if (!selection || lock.current) return;
     lock.current = true;
     setBusy(true);
-    setError('');
-    setMessage('');
+    setError(null);
+    setNotice(null);
     try {
       if (selection.kind === 'resources') {
         const result = await api<NativeTransferReceipt>(
@@ -138,7 +136,7 @@ export function BackupFileImport({
             modelBindings: [],
           }
         );
-        setMessage(descriptor('transfer.d006', { v0: result.items.length }));
+        setNotice(uiMessage('transfer.d006', { v0: result.items.length }));
       } else {
         const result = await api<ChatBackupImport>(
           selection.archive ? '/chats/import-backup-archive' : '/chats/import-backup',
@@ -149,8 +147,8 @@ export function BackupFileImport({
             idempotencyKey: selection.key,
           }
         );
-        setMessage(
-          descriptor('transfer.d007', {
+        setNotice(
+          uiMessage('transfer.d007', {
             v0: result.chat.title,
             v1: result.chats.length,
             v2: result.sources,
@@ -160,10 +158,10 @@ export function BackupFileImport({
       setSelection(null);
       setUncertain(false);
       if (input.current) input.current.value = '';
-      await onImported().catch(() => setError(descriptor('transfer.m127')));
+      await onImported().catch(() => setError(uiMessage('transfer.m127')));
     } catch (caught) {
       setUncertain(uncertain || !definiteRejection(caught));
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -248,8 +246,8 @@ export function BackupFileImport({
         )}
         {busy && <LoadingState presentation="inline" label={t('transfer.m145')} />}
         {uncertain && <NoticeBanner>{t('transfer.m146')}</NoticeBanner>}
-        {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {notice && <NoticeBanner>{notice}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       </div>
     </section>
   );

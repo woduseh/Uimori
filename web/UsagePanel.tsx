@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
+import { t, useI18n, formatNumber, formatDate } from './i18n.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import { CalendarDays, Download } from 'lucide-react';
@@ -111,7 +113,7 @@ export function UsagePanel({
   );
   const [report, setReport] = useState<UsageReport | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<{ query: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<{ query: string; error: UiMessage } | null>(null);
   useEffect(() => {
     if (
       period !== 'custom' ||
@@ -139,7 +141,7 @@ export function UsagePanel({
         }
       })
       .catch((caught) => {
-        if (!controller.signal.aborted) setFailure({ query, message: caught.message });
+        if (!controller.signal.aborted) setFailure({ query, error: toUiMessage(caught) });
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);
@@ -156,7 +158,7 @@ export function UsagePanel({
     setDraft(next);
   }
   const current = report?.from === range.from && report.to === range.to ? report : null;
-  const error = failure?.query === query ? failure.message : '';
+  const error = failure?.query === query ? failure.error : null;
   const invalid = period === 'custom' && !validUsageRange(draft);
   const exports = (group: string) =>
     `/api/usage/export?${new URLSearchParams({ ...range, group })}`;
@@ -269,7 +271,7 @@ export function UsagePanel({
       {!current && (
         <LoadingState
           loading={busy}
-          error={translateMessage(error)}
+          error={error}
           label={t('visualpanels.loadingUsage')}
           errorLabel={t('visualpanels.couldNotLoadUsage')}
           onRetry={retry}
@@ -288,7 +290,7 @@ export function UsagePanel({
           }
         >
           <p>{t('visualpanels.refreshFailedShowingPreviousResults')}</p>
-          <p>{translateMessage(error)}</p>
+          <p>{formatUiMessage(error)}</p>
         </NoticeBanner>
       )}
       {current && (

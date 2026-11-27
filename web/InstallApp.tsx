@@ -1,4 +1,4 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n } from './i18n.js';
 import { useState, useSyncExternalStore } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { Check, Download } from 'lucide-react';
@@ -37,7 +37,7 @@ export function InstallApp() {
           {isSecureContext ? t('outside.browserInstall') : t('outside.secureInstall')}
         </p>
       )}
-      {state.error && <NoticeBanner tone="error">{translateMessage(state.error)}</NoticeBanner>}
+      {state.error && <NoticeBanner tone="error">{state.error}</NoticeBanner>}
     </section>
   );
 }

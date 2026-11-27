@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import {
   createContext,
@@ -49,7 +50,7 @@ function BookmarkEditor({
   const [title, setTitle] = useState(item.title);
   const [note, setNote] = useState(item.note);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [discard, setDiscard] = useState(false);
   const lock = useRef(false);
   const dirty = title !== item.title || note !== item.note;
@@ -63,7 +64,7 @@ function BookmarkEditor({
     if (lock.current) return false;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     let attempted = false;
     try {
       if (!title.trim()) throw new UiError(uiMessage('reader.enterABookmarkName'));
@@ -78,7 +79,7 @@ function BookmarkEditor({
       );
       return true;
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
       if (attempted) onSaveError?.();
       throw caught;
     } finally {
@@ -146,7 +147,7 @@ function BookmarkEditor({
           </fieldset>
           {error && (
             <p role="alert" className="error">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
         </form>
@@ -168,10 +169,10 @@ export function BookmarkButton({
 }) {
   useI18n();
   const [saved, setSaved] = useState<Bookmark | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const pending = useRef<{
     id: string;
     title: string;
@@ -194,8 +195,8 @@ export function BookmarkButton({
       pending.current = { ...location, id: crypto.randomUUID(), title, note: '' };
     }
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       setSaved(
         await callEndpoint(endpoints.addBookmark, {
@@ -204,9 +205,9 @@ export function BookmarkButton({
         })
       );
       pending.current = null;
-      setNotice(descriptor('reader.bookmarkAdded'));
+      setNotice(uiMessage('reader.bookmarkAdded'));
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -224,7 +225,7 @@ export function BookmarkButton({
       <TransientNotice content={notice} />
       {error && (
         <span role="alert" className="error">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </span>
       )}
       {saved && editing && (
@@ -251,24 +252,24 @@ export function BookmarkList({
   useI18n();
   const [items, setItems] = useState<Bookmark[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [mutationFailed, setMutationFailed] = useState(false);
   const [editing, setEditing] = useState<Bookmark | null>(null);
   const reloadBookmarks = useRetryableEffect(() => {
     const controller = new AbortController();
     setLoaded(false);
-    setError('');
+    setError(null);
     setMutationFailed(false);
     void callEndpoint(endpoints.listBookmarks, { chatId }, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
           setItems(value);
           setLoaded(true);
-          setError('');
+          setError(null);
         }
       })
       .catch((caught) => {
-        if (!controller.signal.aborted) setError(caught.message);
+        if (!controller.signal.aborted) setError(toUiMessage(caught));
       });
     return () => controller.abort();
   }, [chatId]);
@@ -280,7 +281,7 @@ export function BookmarkList({
       {loaded && !items.length && <p>{t('reader.noBookmarksYetAddOneBelowAScene')}</p>}
       {error && (
         <p role="alert" className="error">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
       {(error || mutationFailed) && (
@@ -307,9 +308,10 @@ export function BookmarkList({
               onClick={() => setEditing(item)}
             />
             <DeleteButton
-              path={`/bookmarks/${item.id}`}
+              endpoint={endpoints.deleteBookmark}
+              params={{ id: item.id }}
               revision={item.revision}
-              title={t('reader.valueBookmark', { v0: item.title })}
+              title={uiMessage('reader.valueBookmark', { v0: item.title })}
               description=""
               iconOnly
               onDeleted={() => setItems((old) => old.filter((value) => value.id !== item.id))}

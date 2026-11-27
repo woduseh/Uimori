@@ -1,12 +1,6 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatDate,
-  formatNumber,
-  message as retainedMessage,
-  translateStoredCode,
-} from './i18n.js';
+import { t, useI18n, formatDate, formatNumber, translateStoredCode } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -58,13 +52,13 @@ export function BackupSettings({
   const [dirty, setDirty] = useState(false);
   const [operation, setOperation] = useState<'save' | 'backup' | null>(null);
   const busy = operation !== null;
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [confirmReload, setConfirmReload] = useState(false);
   function reloadSettings() {
     setConfirmReload(false);
-    setError('');
-    setMessage('');
+    setError(null);
+    setNotice(null);
     setDraft(null);
     setDirty(false);
     refreshStatus();
@@ -87,7 +81,7 @@ export function BackupSettings({
         setDraft((old) => old ?? value.settings);
         if (value.status === 'running') timer = setTimeout(() => void load(), 1500);
       } catch (caught) {
-        if (!controller.signal.aborted) setError((caught as Error).message);
+        if (!controller.signal.aborted) setError(toUiMessage(caught));
       }
     };
     void load();
@@ -110,14 +104,14 @@ export function BackupSettings({
   const change = (value: Partial<Settings>) => {
     setDraft((old) => old && { ...old, ...value });
     setDirty(true);
-    setMessage('');
+    setNotice(null);
   };
   async function save(): Promise<boolean> {
     if (!draft || invalid || busy) return false;
     if (!dirty) return true;
     setOperation('save');
-    setError('');
-    setMessage('');
+    setError(null);
+    setNotice(null);
     try {
       const saved = await callEndpoint(personalWorkspaceEndpoints.updateBackupSettings, {
         expectedRevision: draft.revision,
@@ -128,11 +122,11 @@ export function BackupSettings({
       });
       setDraft(saved);
       setDirty(false);
-      setMessage(retainedMessage('transfer.m150'));
+      setNotice(uiMessage('transfer.m150'));
       refreshStatus();
       return true;
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
       return false;
     } finally {
       setOperation(null);
@@ -142,12 +136,12 @@ export function BackupSettings({
   async function start() {
     if (busy) return;
     setOperation('backup');
-    setError('');
+    setError(null);
     try {
       await callEndpoint(personalWorkspaceEndpoints.startBackup);
       refreshStatus();
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
     } finally {
       setOperation(null);
     }
@@ -234,7 +228,7 @@ export function BackupSettings({
               </button>
             }
           >
-            {translateMessage(error)}
+            {error}
           </NoticeBanner>
         )}
         {status && (
@@ -318,7 +312,7 @@ export function BackupSettings({
         {!status && !error && (
           <LoadingState presentation="placeholder" label={t('transfer.m173')} />
         )}
-        <TransientNotice content={message} />
+        <TransientNotice content={notice} />
         <Dialog
           open={confirmReload}
           title={t('transfer.m174')}
