@@ -1,7 +1,6 @@
 import { updateAssetMetadata } from './asset-metadata.js';
 import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { processImageUpload } from './image-processing.js';
-import { databaseBackupStream } from './database-backup.js';
 import { nativeRisuDraftPreview, nativeRisuPreview } from './risu-native-preview.js';
 import { nativeRisuCbsFunctionCatalog } from './risu-native-cbs.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
@@ -20,15 +19,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { forkChat } from './chat-fork.js';
-import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
-import { exportManuscript, manuscriptExportMetadata } from './manuscript-export.js';
-import {
-  importChatBackup,
-  exportChatBackupArchive,
-  importChatBackupArchiveRequest,
-} from './chat-backup.js';
-import { prepareNativeArchiveRequest } from './native-transfer-archive.js';
-import { CHAT_BACKUP_MAX_BYTES } from '../core/chat-backup.js';
+import { transferRoutes } from './transfer-routes.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';
@@ -68,45 +59,7 @@ export function productRoutes(
     options.publish(chat.id);
     return chat;
   });
-  app.get<{ Params: { id: string } }>('/api/chats/:id/transcript', async (request, reply) =>
-    reply
-      .header('Content-Disposition', 'attachment; filename="chat-transcript.json"')
-      .send(exportChatTranscript(store, request.params.id))
-  );
-  app.get<{ Params: { id: string } }>('/api/chats/:id/manuscript', async (request) =>
-    manuscriptExportMetadata(store, request.params.id)
-  );
-  app.post<{ Params: { id: string } }>('/api/chats/:id/manuscript', async (request) =>
-    exportManuscript(store, request.params.id, request.body)
-  );
-  app.post('/api/chats/import-transcript', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
-    const result = importChatTranscript(store, request.body, 'library');
-    if (result.created) options.publish(result.chat.id);
-    return result;
-  });
-  app.get<{ Params: { id: string } }>('/api/chats/:id/backup-archive', (request, reply) =>
-    reply
-      .type('application/zip')
-      .header('Content-Disposition', 'attachment; filename="chat-backup.uimori"')
-      .send(exportChatBackupArchive(store, request.params.id))
-  );
-  app.post('/api/chats/prepare-backup-archive', (request, reply) =>
-    prepareNativeArchiveRequest(store, request, reply, 'chat')
-  );
-  app.post('/api/chats/import-backup-archive', (request) => {
-    const result = importChatBackupArchiveRequest(store, request.body);
-    if (result.created) options.publish(result.chat.id);
-    return result;
-  });
-  app.post(
-    '/api/chats/import-backup',
-    { bodyLimit: CHAT_BACKUP_MAX_BYTES + 1024 },
-    async (request) => {
-      const result = await importChatBackup(store, request.body);
-      if (result.created) options.publish(result.chat.id);
-      return result;
-    }
-  );
+  transferRoutes(app, store, options.publish);
   const sessions = new AccessSessions(store.db, options);
   const authenticated = (cookie?: string) => sessions.authenticated(cookie);
   app.addHook('onRequest', async (request) => {
@@ -473,11 +426,5 @@ export function productRoutes(
       .type(a.asset.mime)
       .send(a.bytes);
   });
-  app.get('/api/backup', async (_request, reply) =>
-    reply
-      .header('Content-Disposition', 'attachment; filename="uimori-backup.sqlite"')
-      .type('application/vnd.sqlite3')
-      .send(await databaseBackupStream(store))
-  );
   return { authenticated, sessionHash: (cookie?: string) => sessions.sessionHash(cookie) };
 }

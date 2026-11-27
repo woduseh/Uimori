@@ -11,7 +11,8 @@ import type { ContentAttachment } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Chat, Store } from './store.js';
 import type { ReferenceSource } from './product-store.js';
-import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
+import { HttpError } from './request-validation.js';
+import type { ImportChatTranscript } from '#contracts/operations';
 import { successfulTranslation } from './translation-artifacts.js';
 import { assertRequestImages } from './request-images.js';
 import { updateSceneContext } from './scene-context.js';
@@ -83,14 +84,12 @@ export type ChatTranscriptImport = {
 
 export function importChatTranscript(
   store: Store,
-  value: unknown,
+  input: ImportChatTranscript,
   attachments: ReferenceSource
 ): ChatTranscriptImport {
-  const body = record(value);
-  fields(body, ['transcript', 'title', 'idempotencyKey']);
-  const transcript = validateChatTranscript(body.transcript);
-  const title = body.title === undefined ? transcript.title : chatTitle(body.title);
-  const key = `transcript:${text(body.idempotencyKey, 'import request', 160)}`;
+  const transcript = validateChatTranscript(input.transcript);
+  const title = input.title ?? transcript.title;
+  const key = `transcript:${input.idempotencyKey}`;
   const digest = createHash('sha256')
     .update(JSON.stringify({ ...transcript, exportedAt: undefined, title }))
     .digest('hex');

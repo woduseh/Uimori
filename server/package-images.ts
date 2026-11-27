@@ -6,10 +6,10 @@ import { HttpError, fields, isSha256Hex, record, text } from './request-validati
 import { AppError } from './app-errors.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { readerEndpoints, type RequestImagesInput } from '#contracts';
-import { readerOperations } from '#contracts/operations';
+import { libraryEndpoints, readerEndpoints, type RequestImagesInput } from '#contracts';
+import { libraryOperations, readerOperations, transferRawInputs } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
-import { registerEndpoint } from './endpoint.js';
+import { noStoreRefusals, parseInput, registerEndpoint } from './endpoint.js';
 import {
   packageImages,
   PACKAGE_IMAGE_MIMES,
@@ -441,30 +441,32 @@ export function packageImageRoutes(
   store: Store,
   hooks: { publish: (id: string) => void; pump: () => void }
 ) {
-  app.post('/api/package-image-blobs', { bodyLimit: 90 * 1024 * 1024 }, async (request) => {
-    const blob = putImageBlob(
-      store.product,
-      await processImageUpload({ base64: record(request.body).base64 })
-    );
-    return { hash: blob.hash, mime: blob.mime, url: `/api/package-image-blobs/${blob.hash}` };
-  });
-  app.get<{ Params: { hash: string }; Querystring: { w?: string } }>(
-    '/api/package-image-blobs/:hash',
-    async (request, reply) => {
-      const width = request.query.w;
-      if (width !== undefined && width !== String(PACKAGE_IMAGE_THUMBNAIL_WIDTH))
-        throw new HttpError(400, 'Unsupported image width');
-      const image =
-        width === undefined
-          ? readImage(store.db, request.params.hash)
-          : { mime: 'image/webp', bytes: await packageImageThumbnail(store, request.params.hash) };
-      return reply
-        .header('X-Content-Type-Options', 'nosniff')
-        .header('Cache-Control', 'private, max-age=31536000, immutable')
-        .type(image.mime)
-        .send(image.bytes);
+  registerEndpoint(
+    app,
+    libraryEndpoints.uploadPackageImage,
+    libraryOperations.uploadPackageImage,
+    async (input) => {
+      const blob = putImageBlob(store.product, await processImageUpload(input));
+      return { hash: blob.hash, mime: blob.mime, url: `/api/package-image-blobs/${blob.hash}` };
     }
   );
+  app.get('/api/package-image-blobs/:hash', { onSend: noStoreRefusals }, async (request, reply) => {
+    const { hash, w: width } = parseInput(transferRawInputs.packageImageBlob, {
+      ...(request.query as object),
+      ...(request.params as object),
+    });
+    if (width !== undefined && width !== String(PACKAGE_IMAGE_THUMBNAIL_WIDTH))
+      throw new HttpError(400, 'Unsupported image width');
+    const image =
+      width === undefined
+        ? readImage(store.db, hash)
+        : { mime: 'image/webp', bytes: await packageImageThumbnail(store, hash) };
+    return reply
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'private, max-age=31536000, immutable')
+      .type(image.mime)
+      .send(image.bytes);
+  });
   registerEndpoint(
     app,
     readerEndpoints.requestImages,

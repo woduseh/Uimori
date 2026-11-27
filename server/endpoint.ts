@@ -34,6 +34,20 @@ export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.ou
 export const prefersMinimal = (prefer: unknown): boolean =>
   /(?:^|[\s,;])return=minimal(?:$|[\s,;])/u.test(String(prefer ?? ''));
 
+export async function noStore(_request: FastifyRequest, reply: FastifyReply, payload: unknown) {
+  reply.header('Cache-Control', 'no-store');
+  return payload;
+}
+
+export async function noStoreRefusals(
+  _request: FastifyRequest,
+  reply: FastifyReply,
+  payload: unknown
+) {
+  if (reply.statusCode >= 400) reply.header('Cache-Control', 'no-store');
+  return payload;
+}
+
 export const endpointUrl = (endpoint: Endpoint): string => `/api${endpoint.path}`;
 
 type Output<Op extends Operation> = z.output<Op['output']> | typeof NOT_MODIFIED;
@@ -54,14 +68,7 @@ export function registerEndpoint<Op extends Operation>(
     url: endpointUrl(endpoint),
     config: { admission: endpoint.admission, cache: endpoint.cache },
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
-    ...(endpoint.cache === 'no-store'
-      ? {
-          onSend: async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
-            reply.header('Cache-Control', 'no-store');
-            return payload;
-          },
-        }
-      : {}),
+    ...(endpoint.cache === 'no-store' ? { onSend: noStore } : {}),
     handler: async (request, reply) => {
       const output = await handler(
         parseInput<Op['input']>(operation.input, endpointInput(endpoint, request)),

@@ -3,12 +3,9 @@ import { toUiMessage } from './api-errors.js';
 import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useRef, useState } from 'react';
-import type {
-  ManuscriptExportMetadata,
-  ManuscriptExportMode,
-  ManuscriptExportResult,
-} from '../core/manuscript-export.js';
-import { api } from './api.js';
+import type { ManuscriptExportMetadata, ManuscriptExportMode } from '../core/manuscript-export.js';
+import { transferEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { Dialog } from './Dialog.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
@@ -39,12 +36,7 @@ export function ManuscriptExportDialog({
     setRange(false);
     setBusy(false);
     setError(null);
-    void api<ManuscriptExportMetadata>(
-      `/chats/${chatId}/manuscript`,
-      undefined,
-      'GET',
-      controller.signal
-    )
+    void callEndpoint(transferEndpoints.readManuscript, { id: chatId }, controller.signal)
       .then((next) => {
         if (active.current !== generation) return;
         setMetadata(next);
@@ -66,7 +58,8 @@ export function ManuscriptExportDialog({
     setBusy(true);
     setError(null);
     try {
-      const result = await api<ManuscriptExportResult>(`/chats/${chatId}/manuscript`, {
+      const result = await callEndpoint(transferEndpoints.exportManuscript, {
+        id: chatId,
         mode,
         expectedHeadRevision: metadata.headRevision,
         ...(range ? { fromScene: from, toScene: to } : {}),

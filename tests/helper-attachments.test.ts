@@ -353,7 +353,7 @@ test('deleting helper text keeps the same uploaded image available to an unsaved
       const response = await app.inject({
         method: 'POST',
         url: '/api/package-image-blobs',
-        payload: { mime: 'image/png', base64: bytes.toString('base64') },
+        payload: { base64: bytes.toString('base64') },
       });
       expect(response.statusCode, response.body).toBe(200);
       return response.json() as { hash: string; mime: 'image/webp' };

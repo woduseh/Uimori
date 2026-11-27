@@ -25,6 +25,7 @@ import { promptsCases } from './stale-tab/prompts.js';
 import { providersCases } from './stale-tab/providers.js';
 import { readerCases } from './stale-tab/reader.js';
 import { resourceEditorsCases } from './stale-tab/resource-editors.js';
+import { transferCases } from './stale-tab/transfer.js';
 import { translationCases } from './stale-tab/translation.js';
 
 const domainFiles: DomainCases[] = [
@@ -36,6 +37,7 @@ const domainFiles: DomainCases[] = [
   providersCases,
   readerCases,
   resourceEditorsCases,
+  transferCases,
   translationCases,
 ];
 const matrix: Record<string, Entry> = Object.fromEntries(

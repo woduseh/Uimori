@@ -7,6 +7,7 @@ import { providerEndpoints } from './domains/providers/endpoints.js';
 import { readerEndpoints } from './domains/reader/endpoints.js';
 import { resourceEditorEndpoints } from './domains/resource-editors/endpoints.js';
 import { selfHostEndpoints } from './domains/self-host/endpoints.js';
+import { transferEndpoints } from './domains/transfer/endpoints.js';
 import { translationEndpoints } from './domains/translation/endpoints.js';
 
 export const allEndpoints = {
@@ -19,5 +20,6 @@ export const allEndpoints = {
   reader: readerEndpoints,
   resourceEditors: resourceEditorEndpoints,
   'self-host': selfHostEndpoints,
+  transfer: transferEndpoints,
   translation: translationEndpoints,
 };

@@ -3,7 +3,8 @@ import type {
   ManuscriptExportResult,
 } from '../core/manuscript-export.js';
 import type { Store } from './store.js';
-import { choice, fields, HttpError, number, record } from './request-validation.js';
+import { HttpError } from './request-validation.js';
+import type { ExportManuscript } from '#contracts/operations';
 import { AppError } from './app-errors.js';
 import { successfulTranslation } from './translation-artifacts.js';
 
@@ -46,23 +47,18 @@ export function manuscriptExportMetadata(store: Store, chatId: string): Manuscri
 export function exportManuscript(
   store: Store,
   chatId: string,
-  value: unknown
+  { mode, fromScene, toScene, expectedHeadRevision }: Omit<ExportManuscript, 'id'>
 ): ManuscriptExportResult {
-  const body = record(value);
-  fields(body, ['mode', 'fromScene', 'toScene', 'expectedHeadRevision']);
-  const mode = choice(body.mode, ['source', 'translation'], 'manuscript mode');
-  const chat = store.chat(chatId);
-  if (body.expectedHeadRevision !== chat.headRevision)
+  const chat = store.writableChat(chatId);
+  if (expectedHeadRevision !== chat.headRevision)
     throw new AppError(409, 'MANUSCRIPT_RANGE_CHANGED');
   const scenes = manuscriptScenes(store, chatId, chat.headRevision);
   if (!scenes.length) throw new AppError(400, 'MANUSCRIPT_EMPTY');
-  for (const bound of [body.fromScene, body.toScene])
+  for (const bound of [fromScene, toScene])
     if (bound !== undefined && (!Number.isSafeInteger(bound) || bound < 0 || bound > 1e9))
       throw new AppError(400, 'MANUSCRIPT_RANGE_INVALID');
-  const from =
-    body.fromScene === undefined ? scenes[0].number : number(body.fromScene, 'start scene', 0);
-  const to =
-    body.toScene === undefined ? scenes.at(-1)!.number : number(body.toScene, 'end scene', 0);
+  const from = fromScene ?? scenes[0].number;
+  const to = toScene ?? scenes.at(-1)!.number;
   if (
     from > to ||
     !scenes.some((scene) => scene.number === from) ||
@@ -100,7 +96,7 @@ export function exportManuscript(
     .replace(/[<>:"/\\|?*\p{Cc}]/gu, '_')
     .replace(/[. ]+$/gu, '')
     .slice(0, 100);
-  const range = body.fromScene !== undefined || body.toScene !== undefined ? `-${from}-${to}` : '';
+  const range = fromScene !== undefined || toScene !== undefined ? `-${from}-${to}` : '';
   return {
     title,
     range,

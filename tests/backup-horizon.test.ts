@@ -16,7 +16,7 @@ import { defaultIllustrationSettings } from '../core/illustration.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { uploadDirectory } from '../server/uploads.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
-import { nativeTransferRoutes } from '../server/native-transfer.js';
+import { transferRoutes } from '../server/transfer-routes.js';
 import { importChatBackupArchiveRequest } from '../server/chat-backup.js';
 import type { Content, PromptPreset, SavedPromptCombination } from '../core/product.js';
 
@@ -145,7 +145,7 @@ test('.uimori and .chat.uimori archives exported by v0.18.0 import as new copies
     'resources'
   );
   const app = Fastify();
-  nativeTransferRoutes(app, store);
+  transferRoutes(app, store, () => {});
   const applied = await app.inject({
     method: 'POST',
     url: '/api/native-transfers/apply-archive',

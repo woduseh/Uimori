@@ -32,7 +32,7 @@ const otherPng = Buffer.from(
 type UploadedImage = { hash: string; mime: NonNullable<RisuContent['images']>[number]['mime'] };
 async function blob(request: APIRequestContext, bytes = png): Promise<UploadedImage> {
   const response = await request.post('/api/package-image-blobs', {
-    data: { mime: 'image/png', base64: bytes.toString('base64') },
+    data: { base64: bytes.toString('base64') },
   });
   expect(response.ok(), await response.text()).toBe(true);
   return response.json();

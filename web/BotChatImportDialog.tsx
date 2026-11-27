@@ -7,7 +7,8 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
 import { validateChatTranscript, type ChatTranscript } from '../core/chat-transcript.js';
 import type { Content } from '../core/product.js';
-import { api, definiteRejection } from './api.js';
+import { transferEndpoints } from '#contracts';
+import { callEndpoint, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import './bot-chat-import.css';
@@ -73,13 +74,10 @@ export function BotChatImportDialog({
     setBusy(true);
     setError(null);
     try {
-      const result = await api<{ chat: { title: string }; skippedAttachments: unknown[] }>(
-        '/chats/import-transcript',
-        {
-          transcript: selection.transcript,
-          idempotencyKey: selection.idempotencyKey,
-        }
-      );
+      const result = await callEndpoint(transferEndpoints.importTranscript, {
+        transcript: selection.transcript,
+        idempotencyKey: selection.idempotencyKey,
+      });
       setSelection(null);
       setUncertain(false);
       if (fileInput.current) fileInput.current.value = '';

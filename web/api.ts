@@ -117,8 +117,6 @@ function announceChanges(invalidates: readonly Invalidation[]) {
 }
 
 const legacyLibraryWrites = new Set([
-  '/native-transfers/apply',
-  '/native-transfers/apply-archive',
   '/risu-imports/apply',
   '/prompt-presets',
   '/prompt-combinations',

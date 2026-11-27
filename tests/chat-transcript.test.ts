@@ -153,7 +153,7 @@ describe('Markdown manuscript export', () => {
       expectedRevision: 0,
       text: '<p>Edited scene.</p>\nStatus: ready',
     });
-    const body = { mode: 'source', expectedHeadRevision: second.id };
+    const body = { mode: 'source' as const, expectedHeadRevision: second.id };
     expect(exportManuscript(store, chat.id, body)).toEqual({
       title: 'Original story',
       range: '',
@@ -177,7 +177,7 @@ describe('Markdown manuscript export', () => {
   test('saved translations must match each current source and never fall back to source', async () => {
     const store = await database();
     const { chat, first, second } = authoredChat(store);
-    const body = { mode: 'translation', expectedHeadRevision: second.id };
+    const body = { mode: 'translation' as const, expectedHeadRevision: second.id };
     expect(() => exportManuscript(store, chat.id, body)).toThrow(
       expect.objectContaining({
         code: 'MANUSCRIPT_TRANSLATION_MISSING',

@@ -5,6 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   writeFileSync,
   rmSync,
   existsSync,
@@ -14,12 +15,14 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { Store } from '../server/store.js';
-import { nativeTransferRoutes } from '../server/native-transfer.js';
+import { transferRoutes } from '../server/transfer-routes.js';
 import { uploadDirectory } from '../server/uploads.js';
 import { putImageBlob } from '../server/package-images.js';
 import { processImage } from '../server/image-processing.js';
 import { readImage } from '../server/image-storage.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
+import { bundleDigest } from '../server/resource-bundle.js';
+import type { ChatCopy } from '../core/chat-backup.js';
 import { readNativeArchive } from '../server/native-transfer-archive-codec.js';
 import {
   exportChatBackupArchive,
@@ -45,6 +48,7 @@ import { remapIllustrationPackageReferences } from '../server/illustration-refer
 import { saveChatGenerationDefaults } from '../server/chat-generation-defaults.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -123,7 +127,7 @@ test('12,288 logical assets export as one binary image and reimport preserves na
   const source = database(),
     original = await bot(source, 12_288),
     app = Fastify();
-  nativeTransferRoutes(app, source);
+  transferRoutes(app, source, () => {});
   const exported = await app.inject({
     method: 'POST',
     url: '/api/native-transfers/export-archive',
@@ -140,7 +144,7 @@ test('12,288 logical assets export as one binary image and reimport preserves na
   expect(members.size).toBe(2);
   const target = database(),
     destination = Fastify();
-  nativeTransferRoutes(destination, target);
+  transferRoutes(destination, target, () => {});
   const preview = await prepareNativeArchive(target, upload(target, archive), 'resources');
   const command = {
     preparedId: preview.preparedId,
@@ -182,7 +186,7 @@ test('corrupt archive image is rejected before any resource or blob registration
   const source = database(),
     original = await bot(source),
     app = Fastify();
-  nativeTransferRoutes(app, source);
+  transferRoutes(app, source, () => {});
   const result = await app.inject({
     method: 'POST',
     url: '/api/native-transfers/export-archive',
@@ -407,7 +411,7 @@ test('native archive cancellation releases the shared preparation budget before 
   const source = database(),
     original = await bot(source),
     app = Fastify();
-  nativeTransferRoutes(app, source);
+  transferRoutes(app, source, () => {});
   const exported = await app.inject({
     method: 'POST',
     url: '/api/native-transfers/export-archive',
@@ -558,4 +562,140 @@ test('a chat backup carries a deleted pinned prompt and its fixed options and re
     'Held pinned prompt'
   );
   expect(new ChatOptionsStore(target).get(restored.id).fixedValues).toEqual({ tone: 'bold' });
+});
+
+test('a chat archive with a prompt preset in a bot slot is refused whole, a bot in the pin slot is not pinned, and the untouched copy restores', async () => {
+  const source = database();
+  const chat = createFixtureChat(source, 'Swapped slots');
+  const prompt = source.product.promptPreset({
+    title: 'Pinned prompt',
+    role: 'main',
+    program: nativePrompt('Write'),
+  }) as { id: string };
+  const profile = source.product.profile(chat.id);
+  source.product.updateProfile(chat.id, {
+    expectedRevision: profile.revision,
+    image: profile.image,
+    pinned: { mainPromptPresetId: prompt.id },
+  });
+  const archive = await bytes(exportChatBackupArchive(source, chat.id));
+  const target = database();
+  const prepare = async (edit?: (copy: ChatCopy, botId: string, promptId: string) => void) => {
+    const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
+    const path = join(
+      uploadDirectory(target.path),
+      'native-prepared',
+      preview.preparedId,
+      'prepared.json'
+    );
+    const staged = JSON.parse(readFileSync(path, 'utf8'));
+    const { resources, backup } = staged.manifest;
+    edit?.(backup.chats[0], resources.contents[0].source.id, resources.prompts[0].source.id);
+    writeFileSync(path, JSON.stringify(staged));
+    return { preparedId: preview.preparedId, digest: bundleDigest(staged.manifest) };
+  };
+
+  const promptAsBot = await prepare((copy, _bot, promptId) => {
+    copy.transcript.packageAttachments[0].id = promptId;
+  });
+  expect(() =>
+    importChatBackupArchiveRequest(target, { ...promptAsBot, idempotencyKey: 'prompt-as-bot' })
+  ).toThrow('CHAT_BACKUP_INVALID');
+  expect(target.chats()).toEqual([]);
+  expect(target.product.all('content')).toEqual([]);
+
+  const botAsPrompt = await prepare((copy, botId) => {
+    copy.state.profile.pinned = { mainPromptPresetId: botId };
+  });
+  const unpinned = importChatBackupArchiveRequest(target, {
+    ...botAsPrompt,
+    idempotencyKey: 'bot-as-prompt',
+  }).chat;
+  expect(target.product.profile(unpinned.id).pinned).toBeUndefined();
+
+  const restored = importChatBackupArchiveRequest(target, {
+    ...(await prepare()),
+    idempotencyKey: 'untouched',
+  }).chat;
+  const restoredProfile = target.product.profile(restored.id);
+  const pinned = restoredProfile.pinned!.mainPromptPresetId!;
+  expect(target.product.stored<{ title: string }>('prompt-preset', pinned).title).toBe(
+    'Pinned prompt'
+  );
+  const bot = restoredProfile.packageAttachments!.find((ref) => ref.role === 'bot')!;
+  expect(target.product.isLive('content', bot.id)).toBe(true);
+});
+
+test('an archive import retry is the same request in any binding order', async () => {
+  const source = database();
+  const connection = source.product.connection({
+    title: 'Archive agent connection',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:49999/turn',
+    enabled: true,
+  });
+  const model = source.product.model({
+    title: 'Archive agent model',
+    connectionId: connection.id,
+    modelId: 'synthetic-model',
+    maxOutputTokens: 1024,
+    temperature: null,
+  }) as { id: string };
+  const agent = (id: string) => ({
+    ...createAgentDefinition('custom', id),
+    model: { id: model.id },
+  });
+  const prompt = source.product.promptPreset({
+    title: 'Two agents',
+    role: 'main',
+    program: {
+      ...nativePrompt('Write'),
+      collaboration: {
+        ...createAgentCollaboration(),
+        enabled: true,
+        agents: [agent('reviewer'), agent('editor')],
+      },
+    },
+  }) as { id: string };
+  const app = Fastify();
+  transferRoutes(app, source, () => {});
+  const exported = await app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/export-archive',
+    payload: { items: [{ kind: 'prompt-preset', id: prompt.id }] },
+  });
+  await app.close();
+  const target = database(),
+    destination = Fastify();
+  transferRoutes(destination, target, () => {});
+  const preview = await prepareNativeArchive(
+    target,
+    upload(target, exported.rawPayload),
+    'resources'
+  );
+  const modelBindings = preview.modelRequirements.map((item) => ({
+    requirementKey: item.key,
+    mode: 'inherit-main' as const,
+  }));
+  expect(modelBindings).toHaveLength(2);
+  const apply = (bindings: typeof modelBindings) =>
+    destination.inject({
+      method: 'POST',
+      url: '/api/native-transfers/apply-archive',
+      payload: {
+        preparedId: preview.preparedId,
+        digest: preview.digest,
+        idempotencyKey: 'archive-binding-order',
+        modelBindings: bindings,
+      },
+    });
+  const first = await apply(modelBindings);
+  expect(first.statusCode, first.body).toBe(200);
+  const reordered = await apply([...modelBindings].reverse());
+  expect(reordered.statusCode, reordered.body).toBe(200);
+  expect(reordered.json()).toEqual({ ...first.json(), created: false });
+  expect(
+    target.product.all('prompt-preset').filter((item) => item.title === 'Two agents')
+  ).toHaveLength(1);
+  await destination.close();
 });

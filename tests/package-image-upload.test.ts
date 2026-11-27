@@ -21,7 +21,7 @@ test('profile and inline authoring share upload validation and preserve the requ
   });
   const [url, options] = fetch.mock.calls[0];
   expect(url).toBe('/api/package-image-blobs');
-  expect(JSON.parse(options.body)).toEqual({ mime: 'image/png', base64: 'iVBORw==' });
+  expect(JSON.parse(options.body)).toEqual({ base64: 'iVBORw==' });
   for (const invalid of [
     new File([], 'empty.png', { type: 'image/png' }),
     new File(['text'], 'fake.svg', { type: 'image/svg+xml' }),

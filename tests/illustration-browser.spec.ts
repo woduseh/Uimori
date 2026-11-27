@@ -533,7 +533,6 @@ for (const width of [MOBILE_WIDTH]) {
     const title = `기본 외형 ${width} ${Date.now()}`;
     const imageResponse = await request.post('/api/package-image-blobs', {
       data: {
-        mime: 'image/png',
         base64: (
           await sharp({
             create: { width: 96, height: 128, channels: 3, background: '#826c94' },
