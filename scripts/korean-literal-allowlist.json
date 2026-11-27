@@ -36,10 +36,6 @@
       "count": 2,
       "reason": "The reading preview's prose sample and its credit are a fixed public-domain Korean passage; docs/I18N.md keeps theme and reading preview fixtures as written."
     },
-    "web/resource-editor-session.ts": {
-      "count": 1,
-      "reason": "The title an untitled default prompt carries in the helper capture is a model input, which docs/I18N.md keeps out of the UI language."
-    },
     "web/story-ui-preview.ts": {
       "count": 24,
       "reason": "The story UI theme preview is a fixed Korean story fixture; docs/I18N.md keeps theme and reading preview fixtures as written."
