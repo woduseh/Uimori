@@ -191,7 +191,7 @@ test('corrupt archive image is rejected before any resource or blob registration
   archive[dataOffset + 10] ^= 1;
   const target = database();
   await expect(prepareNativeArchive(target, upload(target, archive), 'resources')).rejects.toThrow(
-    '자료 백업 파일'
+    'NATIVE_TRANSFER_FILE_INVALID'
   );
   expect(target.product.all('content')).toHaveLength(0);
   expect(target.db.prepare('SELECT count(*) AS n FROM image_blobs').get()!.n).toBe(0);

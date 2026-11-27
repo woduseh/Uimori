@@ -21,7 +21,7 @@ function captureTransferResources(store: Store, value: unknown): PreparedNativeT
   const body = record(value);
   fields(body, ['items']);
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 1000)
-    throw new HttpError(400, '내보낼 자료를 선택해 주세요.');
+    throw new HttpError(400, 'Select 1 to 1000 resources');
   const items = body.items.map((value) => {
     const item = record(value);
     if (!['content', 'prompt-preset'].includes(item.kind))

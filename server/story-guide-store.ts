@@ -6,7 +6,8 @@ import {
   type StoryGuideState,
 } from '../core/story-guide.js';
 import type { RunSnapshot } from '../core/types.js';
-import { fields, HttpError, number, record } from './request-validation.js';
+import { fields, number, record } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 
 export function initStoryGuide(db: DatabaseSync): void {
@@ -45,8 +46,7 @@ export class StoryGuideStore {
     const config = normalizeStoryGuideConfig(body.config);
     return this.store.transaction(() => {
       const current = this.get(chatId);
-      if (current.revision !== expectedRevision)
-        throw new HttpError(409, '원작 참고 설정이 바뀌었어요. 다시 읽어 주세요.');
+      if (current.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       if (JSON.stringify(current.config) === JSON.stringify(config)) return current;
       this.store.db
         .prepare(`INSERT INTO chat_story_guides(chat_id,revision,config,brief) VALUES(?,?,?,NULL)

@@ -25,7 +25,8 @@ import { CHAT_BACKUP_FORMAT, CHAT_BACKUP_VERSION, type ChatBackup } from '../cor
 import { validateChatTranscript } from '../core/chat-transcript.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import type { Store } from './store.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import {
   bundleDigest,
   importPreparedResourceBundle,
@@ -67,7 +68,7 @@ export type PreparedArchive = {
   createdAt: number;
 };
 const invalid = (): never => {
-  throw new HttpError(400, '자료 백업 파일을 확인해 주세요.');
+  throw new AppError(400, 'NATIVE_TRANSFER_FILE_INVALID');
 };
 const imagePath = (hash: string) => `images/${hash}.bin`;
 function archiveBytes(metadataBytes: number, images: BinaryImage[]) {
@@ -155,7 +156,9 @@ export function exportNativeArchive(
     const metadata = Buffer.from(JSON.stringify(manifest));
     const estimated = archiveBytes(metadata.length, images);
     if (metadata.length > NATIVE_ARCHIVE_METADATA_MAX_BYTES || estimated > NATIVE_ARCHIVE_MAX_BYTES)
-      throw new HttpError(413, '자료 백업은 512MiB까지 내보낼 수 있어요.');
+      throw new AppError(413, 'NATIVE_TRANSFER_EXPORT_TOO_LARGE', {
+        maxBytes: NATIVE_ARCHIVE_MAX_BYTES,
+      });
     const entries = [
       { name: 'manifest.json', read: () => metadata },
       ...images.map((image) => ({
@@ -299,7 +302,9 @@ export async function prepareNativeArchive(
       if (!blobs.has(image.hash)) {
         total += image.bytes;
         if (total > NATIVE_ARCHIVE_MAX_BYTES)
-          throw new HttpError(413, '자료 이미지가 512MiB를 넘어요.');
+          throw new AppError(413, 'NATIVE_TRANSFER_IMPORT_TOO_LARGE', {
+            maxBytes: NATIVE_ARCHIVE_MAX_BYTES,
+          });
         const path = join(directory, `${image.hash}.bin`);
         writeFileSync(path, processed.bytes);
         blobs.set(image.hash, { ...image, path });
@@ -368,7 +373,9 @@ export async function prepareNativeArchive(
       metadataBytes > NATIVE_ARCHIVE_METADATA_MAX_BYTES ||
       archiveBytes(metadataBytes, manifest.images) > NATIVE_ARCHIVE_MAX_BYTES
     )
-      throw new HttpError(413, '변환한 자료 백업이 512MiB를 넘어요.');
+      throw new AppError(413, 'NATIVE_TRANSFER_IMPORT_TOO_LARGE', {
+        maxBytes: NATIVE_ARCHIVE_MAX_BYTES,
+      });
     const checked = validatePreparedNativeTransfer(manifest.resources);
     const images = [...blobs.values()];
     const preview: NativeTransferPrepare = {
@@ -458,15 +465,12 @@ export function readPreparedArchive(
 ): PreparedArchive {
   const directory = preparedPath(store, id),
     path = join(directory, 'prepared.json');
-  if (!existsSync(path))
-    throw new HttpError(410, '자료 가져오기가 만료됐어요. 파일을 다시 선택해 주세요.');
+  if (!existsSync(path)) throw new AppError(410, 'NATIVE_TRANSFER_EXPIRED');
   const result = JSON.parse(readFileSync(path, 'utf8')) as PreparedArchive;
-  if (
-    result.createdAt < Date.now() - UPLOAD_MAX_AGE_MS ||
-    result.manifest.kind !== kind ||
-    bundleDigest(result.manifest) !== digest
-  )
-    throw new HttpError(409, '가져올 자료가 변경됐어요. 다시 확인해 주세요.');
+  if (result.createdAt < Date.now() - UPLOAD_MAX_AGE_MS)
+    throw new AppError(410, 'NATIVE_TRANSFER_EXPIRED');
+  if (result.manifest.kind !== kind || bundleDigest(result.manifest) !== digest)
+    throw new AppError(409, 'NATIVE_TRANSFER_DRAFT_CHANGED');
   result.images = result.images.map((image) => ({
     ...image,
     path: join(directory, `${image.hash}.bin`),
@@ -504,7 +508,6 @@ export function nativeTransferArchiveRoutes(
         prepared.manifest.resources,
         prepared.images,
         {
-          digest: bundleDigest(prepared.manifest.resources),
           idempotencyKey: `resources:${key}`,
           modelBindings: body.modelBindings,
         }

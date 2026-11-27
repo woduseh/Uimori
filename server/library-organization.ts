@@ -1,4 +1,5 @@
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
@@ -74,8 +75,7 @@ export class LibraryOrganizationStore {
   private edit(expected: unknown, action: () => void) {
     const revision = number(expected, 'library organization revision');
     return this.store.transaction(() => {
-      if (this.snapshot().revision !== revision)
-        throw new HttpError(409, '서재 정리가 변경됐어요. 새로고침한 뒤 다시 시도해 주세요.');
+      if (this.snapshot().revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
       action();
       this.bump();
       return this.snapshot();

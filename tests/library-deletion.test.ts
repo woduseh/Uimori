@@ -48,7 +48,7 @@ test('removes unreferenced resources physically while enforcing revision conflic
     b = s.product.content(content('Keep'));
   const changed = s.product.content({ ...content('Changed'), expectedRevision: 1 }, a.id);
   expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 1 })).toThrow(
-    '항목이 변경'
+    'REVISION_CONFLICT'
   );
   expect(deleteLibraryItem(s, 'content', a.id, { expectedRevision: changed.revision })).toEqual({
     deleted: true,

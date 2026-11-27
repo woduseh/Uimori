@@ -1,7 +1,7 @@
 import { legacyMessage } from './i18n.js';
 import { RISU_ASSET_MAX } from '../core/risu-limits.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
-import { sessionRequiredEvent } from './api.js';
+import { api } from './api.js';
 
 export const maxPackageImages = RISU_ASSET_MAX;
 
@@ -22,17 +22,12 @@ export async function uploadPackageImage(
   let binary = '';
   for (let start = 0; start < bytes.length; start += 32_768)
     binary += String.fromCharCode(...bytes.subarray(start, start + 32_768));
-  const response = await fetch('/api/package-image-blobs', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mime: file.type, base64: btoa(binary) }),
-    signal,
-  });
-  signal.throwIfAborted();
-  if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
-  if (!response.ok)
-    throw new Error(legacyMessage('library.couldNotUploadTheImage', { v0: response.status }));
-  const result: { hash: string; mime: PackageImage['mime'] } = await response.json();
+  const result = await api<{ hash: string; mime: PackageImage['mime'] }>(
+    '/package-image-blobs',
+    { mime: file.type, base64: btoa(binary) },
+    'POST',
+    signal
+  );
   signal.throwIfAborted();
   if (!/^[a-f0-9]{64}$/u.test(result.hash) || result.mime !== 'image/webp')
     throw new Error(legacyMessage('library.couldNotValidateTheImageResponse'));

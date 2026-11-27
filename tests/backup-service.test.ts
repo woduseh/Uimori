@@ -62,7 +62,7 @@ test('consistent snapshot restores saved prose, blobs and settings without start
     .run('synthetic-private-setting', 'retained');
   expect(service.settings()).toMatchObject({ enabled: false, retain: 7, hour: 3 });
   service.start();
-  expect(() => service.start()).toThrow('이미 백업');
+  expect(() => service.start()).toThrow('BACKUP_RUNNING');
   await service.settle();
   const status = await service.status();
   expect(status.error).toBeNull();

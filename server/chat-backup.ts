@@ -107,7 +107,6 @@ export function importPreparedChatBackup(
       };
     }
     const receipt = importPreparedResourceBundle(store, file, prepared.images, {
-      digest: bundleDigest(file),
       idempotencyKey: `resources:${key}`,
       modelBindings: [],
     });

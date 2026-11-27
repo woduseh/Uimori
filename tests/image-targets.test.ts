@@ -220,7 +220,7 @@ test('writer ownership never reserves original or translated JEV images, includi
   expect(images(store, source)).toHaveLength(0);
   translate(store, source);
   expect(images(store, source)).toHaveLength(0);
-  expect(() => selectOriginal(store, source)).toThrow('이미지 담당을 JEV로');
+  expect(() => selectOriginal(store, source)).toThrow('IMAGE_SELECTION_ROLE_REQUIRED');
 });
 
 test('JEV ownership reserves original and translated placement despite a legacy translation opt-out', () => {

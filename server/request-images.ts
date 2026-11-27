@@ -10,6 +10,7 @@ import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { readImage, storeImage, type StoredImage } from './image-storage.js';
 import { withImageProcessing } from './image-processing.js';
 import { fields, HttpError, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 import { deleteUpload, readUpload } from './uploads.js';
 
@@ -20,12 +21,12 @@ const MAX_INPUT_BYTES = 2 * 1024 * 1024;
 export function requestImageUploads(value: unknown): RequestImageUpload[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > REQUEST_IMAGE_MAX_COUNT)
-    throw new HttpError(400, 'REQUEST_IMAGE_COUNT_INVALID');
+    throw new AppError(400, 'REQUEST_IMAGE_COUNT_INVALID');
   return value.map((raw) => {
     const image = record(raw);
     fields(image, ['uploadId', 'sha256', 'name']);
     if (!/^[a-f0-9]{32}$/u.test(image.uploadId) || !HASH.test(image.sha256))
-      throw new HttpError(400, 'REQUEST_IMAGE_UPLOAD_INVALID');
+      throw new AppError(400, 'REQUEST_IMAGE_UPLOAD_INVALID');
     return {
       uploadId: image.uploadId as string,
       sha256: image.sha256 as string,
@@ -45,7 +46,7 @@ export async function prepareRequestImages(
   for (const upload of uploads) {
     const bytes = readUpload(store.path, upload.uploadId, IMAGE_INPUT_MAX_BYTES);
     if (createHash('sha256').update(bytes).digest('hex') !== upload.sha256)
-      throw new HttpError(409, 'REQUEST_IMAGE_CHANGED');
+      throw new AppError(409, 'REQUEST_IMAGE_CHANGED');
     await withImageProcessing(async () => {
       try {
         const source = sharp(bytes, {
@@ -54,18 +55,18 @@ export async function prepareRequestImages(
           failOn: 'error',
         });
         const meta = await source.metadata();
-        if ((meta.pages ?? 1) !== 1) throw new HttpError(400, 'REQUEST_IMAGE_ANIMATED');
+        if ((meta.pages ?? 1) !== 1) throw new AppError(400, 'REQUEST_IMAGE_ANIMATED');
         if (!['png', 'jpeg', 'webp', 'heif', 'avif', 'tiff'].includes(meta.format ?? ''))
-          throw new HttpError(400, 'REQUEST_IMAGE_FORMAT_INVALID');
+          throw new AppError(400, 'REQUEST_IMAGE_FORMAT_INVALID');
         if (!meta.width || !meta.height || meta.width > 16383 || meta.height > 16383)
-          throw new HttpError(400, 'REQUEST_IMAGE_DIMENSIONS_INVALID');
+          throw new AppError(400, 'REQUEST_IMAGE_DIMENSIONS_INVALID');
         const stored = await source
           .rotate()
           .webp({ lossless: true, effort: 4 })
           .toBuffer({ resolveWithObject: true });
         const hash = createHash('sha256').update(stored.data).digest('hex');
         if (stored.data.length > IMAGE_INPUT_MAX_BYTES)
-          throw new HttpError(400, 'REQUEST_IMAGE_TOO_LARGE');
+          throw new AppError(400, 'REQUEST_IMAGE_TOO_LARGE');
         blobs.set(hash, { hash, mime: 'image/webp', bytes: stored.data });
         let input = stored;
         if (
@@ -98,7 +99,7 @@ export async function prepareRequestImages(
         });
       } catch (error) {
         if (error instanceof HttpError) throw error;
-        throw new HttpError(400, 'REQUEST_IMAGE_INVALID');
+        throw new AppError(400, 'REQUEST_IMAGE_INVALID');
       }
     });
   }
@@ -143,5 +144,5 @@ export function assertRequestImages(
   const exists = store.db.prepare("SELECT 1 FROM image_blobs WHERE hash=? AND mime='image/webp'");
   for (const image of images)
     for (const hash of [image.hash, image.input.hash])
-      if (!exists.get(hash)) throw new HttpError(400, 'REQUEST_IMAGE_MISSING');
+      if (!exists.get(hash)) throw new AppError(400, 'REQUEST_IMAGE_MISSING');
 }

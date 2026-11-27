@@ -9,6 +9,7 @@ import { APP_VERSION } from './app-version.js';
 import { DATABASE_SCHEMA_VERSION } from './database-schema.js';
 import { createDatabaseSnapshot } from './database-backup.js';
 import { HttpError, fields, record } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 
 const SETTINGS = 'scheduled-backup-settings';
@@ -139,9 +140,8 @@ export class BackupService {
     fields(body, ['expectedRevision', 'enabled', 'hour', 'minute', 'retain']);
     const current = this.settings();
     if (body.expectedRevision !== current.revision)
-      throw new HttpError(409, 'BACKUP_SETTINGS_CHANGED');
-    if (typeof body.enabled !== 'boolean')
-      throw new HttpError(400, '백업 사용 여부를 확인해 주세요.');
+      throw new AppError(409, 'BACKUP_SETTINGS_CHANGED');
+    if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'Invalid backup enabled flag');
     for (const [key, maximum, minimum] of [
       ['hour', 23, 0],
       ['minute', 59, 0],
@@ -152,7 +152,7 @@ export class BackupService {
         Number(body[key]) < minimum ||
         Number(body[key]) > maximum
       )
-        throw new HttpError(400, '백업 시간이나 보관 개수를 확인해 주세요.');
+        throw new HttpError(400, 'Invalid backup schedule');
     }
     const changedSchedule =
       !current.enabled || current.hour !== body.hour || current.minute !== body.minute;
@@ -177,7 +177,7 @@ export class BackupService {
       entries = await readdir(this.directory, { withFileTypes: true });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-      throw new HttpError(503, '백업 목록을 읽지 못했어요. 저장 위치와 권한을 확인해 주세요.');
+      throw new AppError(503, 'BACKUP_LIST_UNAVAILABLE');
     }
     const result: BackupManifest[] = [];
     for (const entry of entries) {
@@ -214,12 +214,12 @@ export class BackupService {
   }
   async download(id: string) {
     if (!ID.test(id) || !(await this.list()).some((entry) => entry.id === id))
-      throw new HttpError(404, '백업을 찾지 못했어요.');
+      throw new HttpError(404, 'Backup not found');
     return createReadStream(join(this.directory, id, 'uimori.sqlite'));
   }
   start(scheduled = false, now = new Date()): void {
-    if (this.closed || !this.canRun()) throw new HttpError(503, '백업을 시작할 수 없는 상태예요.');
-    if (this.active) throw new HttpError(409, '이미 백업을 만들고 있어요.');
+    if (this.closed || !this.canRun()) throw new AppError(503, 'BACKUP_UNAVAILABLE');
+    if (this.active) throw new AppError(409, 'BACKUP_RUNNING');
     if (scheduled) {
       const settings = this.settings();
       this.save(SETTINGS, {

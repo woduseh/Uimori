@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
 import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 
 export const MAX_IMAGE_INPUT_BYTES = IMAGE_INPUT_MAX_BYTES;
@@ -71,8 +72,9 @@ function assertWebpStructure(bytes: Buffer): void {
 }
 
 export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
-  if (!bytes.length || bytes.length > MAX_IMAGE_INPUT_BYTES)
-    throw new HttpError(400, '이미지는 64MiB 이하 파일을 사용해 주세요.');
+  if (!bytes.length) throw new AppError(400, 'IMAGE_INVALID');
+  if (bytes.length > MAX_IMAGE_INPUT_BYTES)
+    throw new AppError(400, 'IMAGE_TOO_LARGE', { maxBytes: MAX_IMAGE_INPUT_BYTES });
   return withImageProcessing(async () => {
     try {
       const input = sharp(bytes, { animated: true, limitInputPixels: MAX_PIXELS, failOn: 'error' });
@@ -88,12 +90,9 @@ export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
         frames > MAX_FRAMES ||
         width * height * frames > MAX_PIXELS
       )
-        throw new HttpError(
-          400,
-          '이미지 해상도나 전체 애니메이션 프레임 크기가 처리 범위를 넘어요.'
-        );
+        throw new AppError(400, 'IMAGE_DIMENSIONS_TOO_LARGE');
       if (!['png', 'jpeg', 'webp', 'gif', 'heif', 'avif', 'tiff'].includes(metadata.format ?? ''))
-        throw new HttpError(400, '지원하지 않는 이미지 형식이에요.');
+        throw new AppError(400, 'IMAGE_FORMAT_UNSUPPORTED');
       if (metadata.format === 'webp') assertWebpStructure(bytes);
       const output =
         metadata.format === 'webp'
@@ -117,17 +116,15 @@ export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
       };
     } catch (error) {
       if (error instanceof HttpError) throw error;
-      throw new HttpError(400, '이미지를 읽거나 WebP로 변환하지 못했어요.');
+      throw new AppError(400, 'IMAGE_INVALID');
     }
   });
 }
 
 export async function processImageUpload(value: { base64: unknown }) {
-  if (
-    typeof value.base64 !== 'string' ||
-    value.base64.length > Math.ceil(MAX_IMAGE_INPUT_BYTES / 3) * 4
-  )
-    throw new HttpError(400, '이미지 파일 크기를 확인해 주세요.');
+  if (typeof value.base64 !== 'string') throw new HttpError(400, 'Invalid image upload');
+  if (value.base64.length > Math.ceil(MAX_IMAGE_INPUT_BYTES / 3) * 4)
+    throw new AppError(400, 'IMAGE_TOO_LARGE', { maxBytes: MAX_IMAGE_INPUT_BYTES });
   const image = await processImage(Buffer.from(value.base64, 'base64'));
   return { mime: image.mime, base64: image.bytes.toString('base64') };
 }

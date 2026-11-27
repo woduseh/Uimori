@@ -1,6 +1,7 @@
 import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, number, record } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
@@ -26,15 +27,11 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
   return store.transaction(() => {
     assertLibraryVisible(store, kind, id);
     const latest = store.product.get<{ revision: number }>(kind, id);
-    if (latest.revision !== expected)
-      throw new HttpError(409, '항목이 변경됐어요. 새로고침한 뒤 다시 삭제해 주세요.');
+    if (latest.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (kind === 'prompt-preset') {
       const workspace = promptWorkspace(store);
       if (workspace.main.presetId === id || workspace.translation.presetId === id)
-        throw new HttpError(
-          409,
-          '기본 프롬프트로 사용 중이에요. 다른 프롬프트를 선택한 뒤 삭제해 주세요.'
-        );
+        throw new AppError(409, 'LIBRARY_PROMPT_IN_USE');
     }
     if (kind === 'connection') {
       store.db

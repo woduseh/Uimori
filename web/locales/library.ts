@@ -1769,12 +1769,6 @@ export const messages = {
     ja: '64MiB以下のPNG、JPEG、WebP、AVIF、GIFが必要です。',
     zh: '需要不超过64MiB的PNG、JPEG、WebP、AVIF或GIF。',
   },
-  'library.couldNotUploadTheImage': {
-    ko: '이미지를 업로드하지 못했어요. ({v0})',
-    en: 'Could not upload the image. ({v0})',
-    ja: '画像をアップロードできませんでした。（{v0}）',
-    zh: '无法上传图片。（{v0}）',
-  },
   'library.couldNotValidateTheImageResponse': {
     ko: '이미지 응답을 확인할 수 없어요.',
     en: 'Could not validate the image response.',

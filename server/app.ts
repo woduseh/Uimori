@@ -33,7 +33,7 @@ import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
-import { errorWire } from './app-errors.js';
+import { AppError, errorWire } from './app-errors.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -946,8 +946,16 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (denied) throw new HttpError(403, denied);
   });
   app.setErrorHandler((error, request, reply) => {
-    const transferCode =
-      error instanceof NativeTransferError && /^NATIVE_TRANSFER_[A-Z0-9_]{1,100}$/.test(error.code);
+    const transferError =
+      error instanceof NativeTransferError
+        ? new AppError(
+            400,
+            error.code === 'NATIVE_TRANSFER_FORMAT' ||
+              error.code === 'NATIVE_TRANSFER_MODULE_BINDINGS'
+              ? error.code
+              : 'NATIVE_TRANSFER_FILE_INVALID'
+          )
+        : undefined;
     const startLimitCode =
       (error instanceof RisuContentError || error instanceof PackageStartError) &&
       error.message === 'PACKAGE_START_TEXT_TOO_LONG';
@@ -967,11 +975,8 @@ export async function createApp(options: AppOptions): Promise<App> {
       .code(code)
       .send(
         errorWire(
-          error,
-          error instanceof HttpError ||
-            error instanceof ChatTranscriptError ||
-            transferCode ||
-            startLimitCode
+          transferError ?? error,
+          error instanceof HttpError || error instanceof ChatTranscriptError || startLimitCode
             ? error.message
             : code === 400
               ? 'Invalid request'

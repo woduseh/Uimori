@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { PackageImage } from '../core/package-images.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export type StoredImage = { hash: string; mime: PackageImage['mime']; bytes: Buffer };
 export type EncodedImage = {
@@ -19,7 +19,7 @@ export function storeImage(db: DatabaseSync, image: StoredImage): void {
 
 export function readImage(db: DatabaseSync, hash: string): StoredImage {
   const row = db.prepare('SELECT hash,mime,bytes FROM image_blobs WHERE hash=?').get(hash);
-  if (!row) throw new HttpError(404, '이미지를 찾을 수 없어요.');
+  if (!row) throw new AppError(404, 'IMAGE_NOT_FOUND');
   return {
     hash: String(row.hash),
     mime: row.mime as StoredImage['mime'],

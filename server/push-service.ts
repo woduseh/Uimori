@@ -15,6 +15,7 @@ import {
   type VapidKeys,
 } from './push-transport.js';
 import { HttpError, fields, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 
 type Options = {
@@ -25,16 +26,12 @@ type Options = {
   now?: () => number;
 };
 const KEYS = 'push-vapid-keys';
-const client = (value: unknown) => {
-  const id = text(value, 'browser ID', 100);
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, '브라우저 식별자를 확인해 주세요.');
-  return id;
-};
+const client = (value: unknown) => text(value, 'browser ID', 100);
 function preferences(value: unknown): PushPreferences {
   const body = record(value);
   fields(body, Object.keys(DEFAULT_PUSH_PREFERENCES));
   if (Object.keys(DEFAULT_PUSH_PREFERENCES).some((key) => typeof body[key] !== 'boolean'))
-    throw new HttpError(400, '알림 종류를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid push preferences');
   return body as PushPreferences;
 }
 
@@ -59,9 +56,9 @@ export class PushService {
   }
   private authority(cookie?: string): string {
     if (!this.options.origin?.startsWith('https://'))
-      throw new HttpError(409, '완료 알림은 HTTPS 개인 서버에서 사용할 수 있어요.');
+      throw new HttpError(409, 'Push requires an HTTPS origin');
     const session = this.options.sessionHash(cookie);
-    if (!session) throw new HttpError(401, '완료 알림을 사용하려면 작업실에 로그인해 주세요.');
+    if (!session) throw new HttpError(401, 'Push requires a signed-in session');
     return session;
   }
   private device(clientId: string, session: string) {
@@ -100,7 +97,7 @@ export class PushService {
   }
   subscribe(value: unknown, cookie?: string): PushInfo {
     const session = this.authority(cookie);
-    if (!this.keys()) throw new HttpError(409, '알림 연결을 먼저 준비해 주세요.');
+    if (!this.keys()) throw new HttpError(409, 'Push keys are not prepared');
     const body = record(value);
     fields(body, ['clientId', 'expectedRevision', 'subscription', 'preferences']);
     const id = client(body.clientId);
@@ -112,7 +109,7 @@ export class PushService {
         !Number.isSafeInteger(body.expectedRevision) ||
         body.expectedRevision !== (current?.revision ?? 0)
       )
-        throw new HttpError(409, 'PUSH_SETTINGS_CHANGED');
+        throw new AppError(409, 'PUSH_SETTINGS_CHANGED');
       const now = new Date(this.now()).toISOString();
       const previous = this.store.db
         .prepare('SELECT id FROM push_subscriptions WHERE endpoint=?')
@@ -147,9 +144,9 @@ export class PushService {
     const id = client(body.clientId),
       choices = preferences(body.preferences);
     const current = this.device(id, session);
-    if (!current) throw new HttpError(404, '이 기기의 알림 연결이 없어요.');
+    if (!current) throw new AppError(404, 'PUSH_SETTINGS_CHANGED');
     if (body.expectedRevision !== current.revision)
-      throw new HttpError(409, 'PUSH_SETTINGS_CHANGED');
+      throw new AppError(409, 'PUSH_SETTINGS_CHANGED');
     this.store.db
       .prepare(
         'UPDATE push_subscriptions SET preferences=?,revision=revision+1,updated_at=? WHERE id=?'
@@ -164,7 +161,7 @@ export class PushService {
     const id = client(body.clientId),
       current = this.device(id, session);
     if (current && body.expectedRevision !== current.revision)
-      throw new HttpError(409, 'PUSH_SETTINGS_CHANGED');
+      throw new AppError(409, 'PUSH_SETTINGS_CHANGED');
     if (current) {
       this.active.get(String(current.id))?.abort();
       this.store.db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(current.id);
@@ -174,7 +171,7 @@ export class PushService {
   test(clientId: string, cookie?: string) {
     const session = this.authority(cookie);
     const current = this.device(client(clientId), session);
-    if (!current) throw new HttpError(404, '이 기기의 알림을 먼저 켜 주세요.');
+    if (!current) throw new AppError(404, 'PUSH_SETTINGS_CHANGED');
     const now = new Date(this.now()).toISOString();
     if (
       this.store.db
@@ -183,7 +180,7 @@ export class PushService {
         )
         .get(current.id, new Date(this.now() - 30_000).toISOString())
     )
-      throw new HttpError(429, '잠시 후 다시 테스트해 주세요.');
+      throw new AppError(429, 'PUSH_TEST_RATE_LIMITED');
     this.store.db
       .prepare(
         `INSERT INTO push_outbox(subscription_id,event_key,kind,next_at,expires_at,created_at) VALUES(?,?,'test',?,?,?)`

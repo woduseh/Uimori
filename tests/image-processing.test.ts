@@ -63,9 +63,7 @@ test('a truncated WebP is rejected before storage without decoding its pixels', 
     .toBuffer();
   expect((await processImage(original)).bytes).toBe(original);
   for (const truncated of [original.subarray(0, original.length - 1), original.subarray(0, 30)])
-    await expect(processImage(Buffer.from(truncated))).rejects.toThrow(
-      '이미지를 읽거나 WebP로 변환하지 못했어요.'
-    );
+    await expect(processImage(Buffer.from(truncated))).rejects.toThrow('IMAGE_INVALID');
 });
 
 test('WebP intake preserves animated bytes and checks the container of every frame', async () => {
@@ -103,7 +101,7 @@ test('WebP intake preserves animated bytes and checks the container of every fra
   expect((await processImage(repainted)).bytes).toBe(repainted);
   const overrun = Buffer.from(original);
   overrun.writeUInt32LE(overrun.readUInt32LE(lastFrame + 28) + 64, lastFrame + 28);
-  await expect(processImage(overrun)).rejects.toThrow('이미지를 읽거나 WebP로 변환하지 못했어요.');
+  await expect(processImage(overrun)).rejects.toThrow('IMAGE_INVALID');
 });
 
 test('Codex reference transmission bounds pixels without modifying stored image bytes or enlarging small references', async () => {

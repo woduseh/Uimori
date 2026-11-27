@@ -85,3 +85,24 @@ test('an aborted late response and mismatched server MIME cannot become draft im
     )
   ).rejects.toThrow('이미지 응답을 확인할 수 없어요.');
 });
+
+test('a coded server rejection shows its catalog message with the byte limit', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ code: 'IMAGE_TOO_LARGE', params: { maxBytes: 64 * 1024 * 1024 } }),
+          { status: 400 }
+        )
+      )
+  );
+  await expect(
+    uploadPackageImage(
+      new File(['x'], 'large.png', { type: 'image/png' }),
+      new AbortController().signal,
+      'both'
+    )
+  ).rejects.toMatchObject({ code: 'IMAGE_TOO_LARGE', message: expect.stringContaining('64 MiB') });
+});

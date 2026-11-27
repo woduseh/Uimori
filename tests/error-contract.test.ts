@@ -14,6 +14,9 @@ type ParameterizedCode = {
 
 const parameterNames = {
   INPUT_TRANSLATION_TOO_LONG: { limit: true },
+  NATIVE_TRANSFER_EXPORT_TOO_LARGE: { maxBytes: true },
+  NATIVE_TRANSFER_IMPORT_TOO_LARGE: { maxBytes: true },
+  IMAGE_TOO_LARGE: { maxBytes: true },
 } satisfies { [C in ParameterizedCode]: Record<keyof AppErrorParams[C], true> };
 
 test('every catalogued code has a message in every locale whose arguments are its params', () => {

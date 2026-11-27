@@ -124,7 +124,7 @@ test('config CAS preserves newer edits and prior advice while reserved runs keep
     brief: generated,
   });
   expect(() => store.storyGuide.update(chat.id, { expectedRevision: 1, config })).toThrow(
-    '설정이 바뀌었어요'
+    'REVISION_CONFLICT'
   );
   expect(store.storyGuide.saveBrief(chat.id, generated)).toBe(false);
   expect(store.storyGuide.get(chat.id).brief).toEqual(generated);

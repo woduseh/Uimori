@@ -3,6 +3,7 @@ import { readRunSnapshot } from './run-projections.js';
 import { storeImage, readImage } from './image-storage.js';
 import { assertPackageImageReferences } from './package-image-references.js';
 import { HttpError, fields, isSha256Hex, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { FastifyInstance } from 'fastify';
@@ -18,7 +19,7 @@ import type { ProductStore } from './product-store.js';
 import type { Store, Job, Source } from './store.js';
 import { ByteBoundedCache } from './byte-bounded-cache.js';
 import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
-import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { RISU_AGGREGATE_IMAGES_MAX } from '../core/risu-limits.js';
 
 export type PackageImageBlob = {
@@ -33,7 +34,7 @@ export function decodeImage(
   encoded: unknown
 ): { bytes: Buffer; mime: PackageImageBlob['mime']; hash: string } {
   if (!PACKAGE_IMAGE_MIMES.includes(mime as PackageImageBlob['mime']))
-    throw new HttpError(400, 'PNG, JPEG, WebP, AVIF 또는 GIF 이미지를 선택해 주세요.');
+    throw new HttpError(400, 'Unsupported image type');
   const base64 = text(encoded, 'image bytes', 90 * 1024 * 1024);
   if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(base64)) throw new HttpError(400, 'Invalid image encoding');
   const bytes = Buffer.from(base64, 'base64');
@@ -382,13 +383,13 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
   return store.transaction(() => {
     const source = store.source(sourceId);
     if (!store.product.profile(source.chatId).image)
-      throw new HttpError(409, '이미지 담당을 JEV로 선택한 뒤 다시 배치해 주세요.');
+      throw new AppError(409, 'IMAGE_SELECTION_ROLE_REQUIRED');
     const job = latestImageJob(store, sourceId, mode);
     if (
       source.hash !== request.expectedSourceHash ||
       (job?.revision ?? 0) !== request.expectedRevision
     )
-      throw new HttpError(409, 'Image selection revision conflict');
+      throw new AppError(409, 'REVISION_CONFLICT');
     let target: ImageTarget = { mode: 'original', textHash: source.hash };
     if (mode === 'translation') {
       const translation = successfulTranslation(store, source);
@@ -397,7 +398,7 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
         translation.id !== request.expectedTranslationJobId ||
         translation.revision !== request.expectedTranslationRevision
       )
-        throw new HttpError(409, 'Translation image target changed');
+        throw new AppError(409, 'REVISION_CONFLICT');
       validateTranslationArtifact(translation, source);
       target = {
         mode,
@@ -471,45 +472,6 @@ export function packageImageRoutes(
         .send(image.bytes);
     }
   );
-  app.post('/api/package-bundles/export', { bodyLimit: 8 * 1024 * 1024 }, async (request) => {
-    const b = record(request.body);
-    fields(b, ['package']);
-    const pkg = validateRisuContent(b.package);
-    assertPackageImages(store.product, pkg);
-    return {
-      format: 'uimori-package-bundle',
-      version: 1,
-      package: pkg,
-      images: [...new Set((pkg.images ?? []).map((image) => image.blobHash))].map((hash) =>
-        store.product.get('package-image', hash, 1)
-      ),
-    };
-  });
-  app.post('/api/package-bundles/prepare', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
-    const b = record(request.body);
-    fields(b, ['format', 'version', 'package', 'images']);
-    if (
-      b.format !== 'uimori-package-bundle' ||
-      b.version !== 1 ||
-      !Array.isArray(b.images) ||
-      b.images.length > 2000
-    )
-      throw new HttpError(400, 'Invalid package bundle');
-    const pkg = validateRisuContent(b.package),
-      blobs = b.images.map(validateImageBlob);
-    const hashes = new Set((pkg.images ?? []).map((image) => image.blobHash));
-    if (
-      blobs.length !== hashes.size ||
-      new Set(blobs.map((blob) => blob.hash)).size !== blobs.length ||
-      blobs.some((blob) => !hashes.has(blob.hash))
-    )
-      throw new HttpError(400, 'Package bundle images mismatch');
-    return store.transaction(() => {
-      for (const blob of blobs) putValidatedImageBlob(store.product, blob);
-      assertPackageImages(store.product, pkg);
-      return { package: pkg };
-    });
-  });
   app.post<{ Params: { id: string } }>('/api/sources/:id/images', async (request) => {
     const job = requestImages(store, request.params.id, request.body);
     hooks.publish(job.chatId);

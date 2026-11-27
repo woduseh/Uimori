@@ -1,6 +1,6 @@
 import { crc32 } from 'node:zlib';
 import { Readable } from 'node:stream';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import {
   NATIVE_ARCHIVE_MAX_BYTES,
   NATIVE_ARCHIVE_METADATA_MAX_BYTES,
@@ -10,7 +10,7 @@ export {
   NATIVE_ARCHIVE_METADATA_MAX_BYTES,
 } from '../core/native-archive.js';
 const invalid = (): never => {
-  throw new HttpError(400, '자료 백업 파일을 확인해 주세요.');
+  throw new AppError(400, 'NATIVE_TRANSFER_FILE_INVALID');
 };
 
 export function nativeArchiveStream(

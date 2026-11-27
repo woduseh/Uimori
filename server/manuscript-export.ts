@@ -4,6 +4,7 @@ import type {
 } from '../core/manuscript-export.js';
 import type { Store } from './store.js';
 import { choice, fields, HttpError, number, record } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { successfulTranslation } from './translation-artifacts.js';
 
 function manuscriptScenes(store: Store, chatId: string, head: string | null) {
@@ -56,12 +57,12 @@ export function exportManuscript(
   const mode = choice(body.mode, ['source', 'translation'], 'manuscript mode');
   const chat = store.chat(chatId);
   if (body.expectedHeadRevision !== chat.headRevision)
-    throw new HttpError(409, 'MANUSCRIPT_RANGE_CHANGED');
+    throw new AppError(409, 'MANUSCRIPT_RANGE_CHANGED');
   const scenes = manuscriptScenes(store, chatId, chat.headRevision);
-  if (!scenes.length) throw new HttpError(400, 'MANUSCRIPT_EMPTY');
+  if (!scenes.length) throw new AppError(400, 'MANUSCRIPT_EMPTY');
   for (const bound of [body.fromScene, body.toScene])
     if (bound !== undefined && (!Number.isSafeInteger(bound) || bound < 0 || bound > 1e9))
-      throw new HttpError(400, 'MANUSCRIPT_RANGE_INVALID');
+      throw new AppError(400, 'MANUSCRIPT_RANGE_INVALID');
   const from =
     body.fromScene === undefined ? scenes[0].number : number(body.fromScene, 'start scene', 0);
   const to =
@@ -71,7 +72,7 @@ export function exportManuscript(
     !scenes.some((scene) => scene.number === from) ||
     !scenes.some((scene) => scene.number === to)
   )
-    throw new HttpError(400, 'MANUSCRIPT_RANGE_INVALID');
+    throw new AppError(400, 'MANUSCRIPT_RANGE_INVALID');
   const selected = scenes.filter((scene) => scene.number >= from && scene.number <= to);
   const selectedIds = new Set(selected.map((scene) => scene.id));
   const history = store.history(chat.headRevision).filter((item) => selectedIds.has(item.revision));

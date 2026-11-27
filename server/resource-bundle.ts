@@ -191,7 +191,7 @@ function applyPreparedBundle(
     else
       for (const image of checked.file.images) {
         if (!('base64' in image) || typeof image.base64 !== 'string')
-          throw new HttpError(400, 'Invalid image payload');
+          throw new Error('Unprepared transfer image without payload');
         putValidatedImageBlob(store.product, { ...image, base64: image.base64 });
       }
     for (const key of checked.persistOrder) {
@@ -242,20 +242,18 @@ export function importPreparedResourceBundle(
   store: Store,
   file: PreparedNativeTransferFile,
   images: PreparedBundleImage[],
-  value: { digest: string; modelBindings?: unknown[]; idempotencyKey: string }
+  value: { modelBindings?: unknown[]; idempotencyKey: string }
 ): NativeTransferReceipt {
   const checked = validatePreparedNativeTransfer(file);
-  const digest = bundleDigest(checked.file);
-  if (value.digest !== digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   const supplied = new Map(images.map((image) => [image.hash, image]));
   if (
     supplied.size !== images.length ||
     supplied.size !== checked.file.images.length ||
     checked.file.images.some((image) => supplied.get(image.hash)?.mime !== image.mime)
   )
-    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+    throw new AppError(400, 'NATIVE_TRANSFER_FILE_INVALID');
   const preview: NativeTransferPrepare = {
-    digest,
+    digest: bundleDigest(checked.file),
     entries: checked.entries,
     modelRequirements: checked.modelRequirements,
     warnings: checked.warnings,
@@ -270,13 +268,7 @@ export function importPreparedResourceBundle(
   return applyPreparedBundle(store, value, { checked, preview }, () => {
     for (const image of images) {
       if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
-      const bytes = readFileSync(image.path);
-      if (
-        bytes.length !== image.bytes ||
-        createHash('sha256').update(bytes).digest('hex') !== image.hash
-      )
-        throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-      storeImage(store.db, { hash: image.hash, mime: image.mime, bytes });
+      storeImage(store.db, { hash: image.hash, mime: image.mime, bytes: readFileSync(image.path) });
     }
   });
 }

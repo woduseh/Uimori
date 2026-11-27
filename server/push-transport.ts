@@ -2,6 +2,7 @@ import { createHash, ECDH } from 'node:crypto';
 import { generateRequestDetails } from 'web-push';
 import type { PushEnvelope, PushSubscriptionData } from '../core/push.js';
 import { fields, record, HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export type VapidKeys = { publicKey: string; privateKey: string };
 export type PushDelivery = { status: number; retryAfterSeconds?: number };
@@ -16,12 +17,12 @@ export type PushSender = (
 
 export function pushEndpoint(value: unknown): URL {
   if (typeof value !== 'string' || value.length > 4096)
-    throw new HttpError(400, '알림 주소를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid push endpoint');
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new HttpError(400, '알림 주소를 확인해 주세요.');
+    throw new HttpError(400, 'Invalid push endpoint');
   }
   const host = url.hostname;
   const supported =
@@ -37,7 +38,7 @@ export function pushEndpoint(value: unknown): URL {
     url.hash ||
     !supported
   )
-    throw new HttpError(400, '지원하는 브라우저의 HTTPS Push 주소가 아니에요.');
+    throw new AppError(400, 'PUSH_ENDPOINT_UNSUPPORTED');
   return url;
 }
 export function validatePushSubscription(value: unknown): PushSubscriptionData {
@@ -53,7 +54,7 @@ export function validatePushSubscription(value: unknown): PushSubscriptionData {
       !/^[a-z0-9_-]+={0,2}$/i.test(value) ||
       Buffer.from(value, 'base64url').length !== size
     )
-      throw new HttpError(400, '브라우저 알림 암호화 키를 확인해 주세요.');
+      throw new HttpError(400, 'Invalid push subscription key');
     return Buffer.from(value, 'base64url');
   };
   const publicKey = decode(keys.p256dh, 65);
@@ -61,7 +62,7 @@ export function validatePushSubscription(value: unknown): PushSubscriptionData {
     if (publicKey[0] !== 4) throw new Error();
     ECDH.convertKey(publicKey, 'prime256v1');
   } catch {
-    throw new HttpError(400, '브라우저 알림 공개 키가 올바르지 않아요.');
+    throw new HttpError(400, 'Invalid push public key');
   }
   return {
     endpoint,

@@ -7,6 +7,7 @@ import type {
   SearchKind,
 } from '../core/manuscript-search.js';
 import { HttpError, fields, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import {
   foldSearchText,
   legacySearchIndexRemains,
@@ -31,11 +32,8 @@ export class ManuscriptSearch {
     signal?: AbortSignal
   ): Promise<T> {
     if (this.closed || signal?.aborted)
-      return Promise.reject(new HttpError(503, '검색이 중단됐어요.'));
-    if (this.workers.size >= 4)
-      return Promise.reject(
-        new HttpError(429, '진행 중인 검색이 있어요. 잠시 후 다시 검색해 주세요.')
-      );
+      return Promise.reject(new AppError(503, 'SEARCH_INTERRUPTED'));
+    if (this.workers.size >= 4) return Promise.reject(new AppError(429, 'SEARCH_BUSY'));
     return new Promise((resolve, reject) => {
       const extension = import.meta.url.endsWith('.ts') ? 'ts' : 'js';
       const worker = new Worker(
@@ -57,7 +55,7 @@ export class ManuscriptSearch {
         else resolve(value!);
       };
       const abort = () => {
-        finish(undefined, new HttpError(408, '검색 범위를 좁혀 다시 검색해 주세요.'));
+        finish(undefined, new AppError(408, 'SEARCH_TIMEOUT'));
         void worker.terminate();
       };
       const timer = setTimeout(abort, 8000);
@@ -66,21 +64,16 @@ export class ManuscriptSearch {
         if (message.error)
           finish(
             undefined,
-            new HttpError(
-              message.error === 'SEARCH_CURSOR_STALE' ? 409 : 400,
-              message.error === 'SEARCH_CURSOR_STALE'
-                ? 'SEARCH_CURSOR_STALE'
-                : '검색을 완료하지 못했어요. 검색어나 범위를 확인해 주세요.'
-            )
+            message.error === 'SEARCH_CURSOR_STALE'
+              ? new AppError(409, 'SEARCH_CURSOR_STALE')
+              : new AppError(400, 'SEARCH_FAILED')
           );
         else finish(message.result);
       });
-      worker.once('error', () =>
-        finish(undefined, new HttpError(503, '검색을 완료하지 못했어요.'))
-      );
+      worker.once('error', () => finish(undefined, new AppError(503, 'SEARCH_FAILED')));
       worker.once('exit', () => {
         this.workers.delete(worker);
-        if (!settled) finish(undefined, new HttpError(503, '검색이 중단됐어요.'));
+        if (!settled) finish(undefined, new AppError(503, 'SEARCH_INTERRUPTED'));
       });
     });
   }
@@ -89,14 +82,14 @@ export class ManuscriptSearch {
     fields(body, ['query', 'scope', 'chatId', 'botId', 'kinds', 'cursor', 'limit']);
     const query = text(body.query, 'search query', 500).trim();
     if (!['workspace', 'chat', 'bot'].includes(String(body.scope)))
-      throw new HttpError(400, '검색 범위를 확인해 주세요.');
+      throw new HttpError(400, 'Invalid search scope');
     if (
       !Array.isArray(body.kinds) ||
       !body.kinds.length ||
       body.kinds.length > 3 ||
       body.kinds.some((kind) => !['original', 'translation', 'request'].includes(kind))
     )
-      throw new HttpError(400, '검색 대상을 확인해 주세요.');
+      throw new HttpError(400, 'Invalid search kinds');
     const scope = body.scope as ManuscriptSearchQuery['scope'];
     const chatId = scope === 'chat' ? text(body.chatId, 'chat', 120) : undefined;
     const botId = scope === 'bot' ? text(body.botId, 'bot', 120) : undefined;
@@ -104,7 +97,7 @@ export class ManuscriptSearch {
     if (botId) this.store.organization.bot(botId);
     const limit = body.limit === undefined ? 20 : Number(body.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 50)
-      throw new HttpError(400, '검색 페이지 크기를 확인해 주세요.');
+      throw new HttpError(400, 'Invalid search page size');
     const cursor = body.cursor == null ? null : text(body.cursor, 'cursor', 1500);
     return this.work(
       'search',

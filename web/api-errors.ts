@@ -72,13 +72,70 @@ export const appErrorMessages = {
   RESOURCE_UNDO_UNAVAILABLE: 'errors.RESOURCE_UNDO_UNAVAILABLE',
   RESOURCE_BUNDLE_MODULE_CYCLE: 'errors.RESOURCE_BUNDLE_MODULE_CYCLE',
   NATIVE_TRANSFER_DRAFT_CHANGED: 'errors.NATIVE_TRANSFER_DRAFT_CHANGED',
+  BACKUP_SETTINGS_CHANGED: 'errors.BACKUP_SETTINGS_CHANGED',
+  BACKUP_LIST_UNAVAILABLE: 'errors.BACKUP_LIST_UNAVAILABLE',
+  BACKUP_UNAVAILABLE: 'errors.BACKUP_UNAVAILABLE',
+  BACKUP_RUNNING: 'errors.BACKUP_RUNNING',
+  NATIVE_TRANSFER_FORMAT: 'errors.NATIVE_TRANSFER_FORMAT',
+  NATIVE_TRANSFER_MODULE_BINDINGS: 'errors.NATIVE_TRANSFER_MODULE_BINDINGS',
+  NATIVE_TRANSFER_FILE_INVALID: 'errors.NATIVE_TRANSFER_FILE_INVALID',
+  NATIVE_TRANSFER_EXPORT_TOO_LARGE: 'errors.NATIVE_TRANSFER_EXPORT_TOO_LARGE',
+  NATIVE_TRANSFER_IMPORT_TOO_LARGE: 'errors.NATIVE_TRANSFER_IMPORT_TOO_LARGE',
+  NATIVE_TRANSFER_EXPIRED: 'errors.NATIVE_TRANSFER_EXPIRED',
+  PUSH_SETTINGS_CHANGED: 'errors.PUSH_SETTINGS_CHANGED',
+  PUSH_TEST_RATE_LIMITED: 'errors.PUSH_TEST_RATE_LIMITED',
+  PUSH_ENDPOINT_UNSUPPORTED: 'errors.PUSH_ENDPOINT_UNSUPPORTED',
+  IMAGE_TOO_LARGE: 'errors.IMAGE_TOO_LARGE',
+  IMAGE_DIMENSIONS_TOO_LARGE: 'errors.IMAGE_DIMENSIONS_TOO_LARGE',
+  IMAGE_FORMAT_UNSUPPORTED: 'errors.IMAGE_FORMAT_UNSUPPORTED',
+  IMAGE_INVALID: 'errors.IMAGE_INVALID',
+  IMAGE_NOT_FOUND: 'errors.IMAGE_NOT_FOUND',
+  IMAGE_SELECTION_ROLE_REQUIRED: 'errors.IMAGE_SELECTION_ROLE_REQUIRED',
+  REQUEST_IMAGE_COUNT_INVALID: 'errors.REQUEST_IMAGE_COUNT_INVALID',
+  REQUEST_IMAGE_UPLOAD_INVALID: 'errors.REQUEST_IMAGE_UPLOAD_INVALID',
+  REQUEST_IMAGE_CHANGED: 'errors.REQUEST_IMAGE_CHANGED',
+  REQUEST_IMAGE_ANIMATED: 'errors.REQUEST_IMAGE_ANIMATED',
+  REQUEST_IMAGE_FORMAT_INVALID: 'errors.REQUEST_IMAGE_FORMAT_INVALID',
+  REQUEST_IMAGE_DIMENSIONS_INVALID: 'errors.REQUEST_IMAGE_DIMENSIONS_INVALID',
+  REQUEST_IMAGE_TOO_LARGE: 'errors.REQUEST_IMAGE_TOO_LARGE',
+  REQUEST_IMAGE_INVALID: 'errors.REQUEST_IMAGE_INVALID',
+  REQUEST_IMAGE_MISSING: 'errors.REQUEST_IMAGE_MISSING',
+  LIBRARY_PROMPT_IN_USE: 'errors.LIBRARY_PROMPT_IN_USE',
+  SEARCH_CURSOR_STALE: 'errors.SEARCH_CURSOR_STALE',
+  SEARCH_INTERRUPTED: 'errors.SEARCH_INTERRUPTED',
+  SEARCH_BUSY: 'errors.SEARCH_BUSY',
+  SEARCH_TIMEOUT: 'errors.SEARCH_TIMEOUT',
+  SEARCH_FAILED: 'errors.SEARCH_FAILED',
+  MANUSCRIPT_RANGE_CHANGED: 'errors.MANUSCRIPT_RANGE_CHANGED',
+  MANUSCRIPT_EMPTY: 'errors.MANUSCRIPT_EMPTY',
+  MANUSCRIPT_RANGE_INVALID: 'errors.MANUSCRIPT_RANGE_INVALID',
 } satisfies Record<AppErrorCode, string>;
+
+const MIB = 1024 * 1024;
+
+function messageValues(params: ReceivedErrorWire['params']): MessageValues | undefined {
+  return (
+    params &&
+    Object.fromEntries(
+      Object.entries(params).map(([name, value]) => [
+        name,
+        name.endsWith('Bytes') && typeof value === 'number'
+          ? `${Math.round((value / MIB) * 10) / 10} MiB`
+          : value,
+      ])
+    )
+  );
+}
 
 function appErrorMessage(
   wire: ReceivedErrorWire
 ): { code: AppErrorCode; key: string; values?: MessageValues } | null {
   if (isAppErrorCode(wire.code))
-    return { code: wire.code, key: appErrorMessages[wire.code], values: wire.params };
+    return {
+      code: wire.code,
+      key: appErrorMessages[wire.code],
+      values: messageValues(wire.params),
+    };
   return isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error)
     ? { code: wire.error, key: appErrorMessages[wire.error] }
     : null;
@@ -105,13 +162,6 @@ const messages: Record<string, string> = {
     '추가 자료를 더 읽어야 해서 분석을 마치지 못했어요. 참고 범위를 좁혀 주세요.',
   STORY_GUIDE_PROVIDER_FAILED:
     '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
-  MANUSCRIPT_RANGE_CHANGED: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
-  MANUSCRIPT_EMPTY: '내보낼 원고가 아직 없어요.',
-  MANUSCRIPT_RANGE_INVALID: '내보낼 장면 범위를 확인해 주세요.',
-  PUSH_SETTINGS_CHANGED: '다른 창에서 알림 설정이 바뀌었어요. 연결을 다시 확인한 뒤 변경해 주세요.',
-  SEARCH_CURSOR_STALE: '검색 조건이 바뀌었어요. 처음부터 다시 검색해 주세요.',
-  BACKUP_SETTINGS_CHANGED: '다른 창에서 백업 설정이 바뀌었어요. 백업 설정을 다시 열어 주세요.',
-
   RISU_PRESET_INVALID_FILE:
     '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json, manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
   RISU_PRESET_INVALID: '프리셋의 프롬프트 구성과 옵션 형식을 확인해 주세요.',
@@ -140,18 +190,6 @@ const messages: Record<string, string> = {
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
   RISU_IMPORT_PARTIAL_REQUIRED:
     '자동 이식할 수 없는 부분을 확인하고 부분 가져오기에 동의해 주세요.',
-  NATIVE_TRANSFER_FORMAT:
-    '지원하지 않는 자료 파일 형식이나 버전이에요. Uimori의 자료 파일 내보내기로 만든 파일을 선택해 주세요.',
-  NATIVE_TRANSFER_TOO_LARGE:
-    '자료 파일이 64 MB 한도를 넘었어요. 내보낼 자료를 나누어 선택해 주세요.',
-  NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED:
-    '프롬프트의 보조 에이전트 모델을 모두 연결한 뒤 가져와 주세요.',
-  NATIVE_TRANSFER_IMPORT_CONFLICT:
-    '같은 가져오기 요청에 다른 파일이나 모델 연결이 지정됐어요. 기존 요청의 결과를 먼저 확인해 주세요.',
-  NATIVE_TRANSFER_MODULE_BINDINGS:
-    '연결된 모듈 정보가 맞지 않아요. 필요한 모듈을 포함해 자료 파일을 다시 내보내 주세요.',
-  NATIVE_TRANSFER_SOURCE_CHANGED:
-    '자료의 수정 번호가 달라졌어요. 최신 자료를 확인한 뒤 다시 내보내 주세요.',
   HELPER_EFFECTS_ALREADY_COMMITTED:
     '이 요청의 변경 사항은 이미 저장됐어요. 저장된 결과를 확인하고 남은 작업만 새 요청으로 알려 주세요.',
   HELPER_RESUME_UNAVAILABLE: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',
@@ -175,10 +213,6 @@ const messages: Record<string, string> = {
   DRAFT_DISCARDED: '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
   CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
     '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
-  CHAT_TRANSCRIPT_IMPORT_CONFLICT:
-    '같은 가져오기 요청의 본문이나 제목이 달라졌어요. 기존에 가져온 채팅을 먼저 확인해 주세요.',
-  CHAT_TRANSCRIPT_IMPORT_UNVERIFIABLE:
-    '과거 가져오기 기록으로는 같은 요청인지 확인할 수 없어요. 기존 채팅을 먼저 확인하고, 새 사본이 필요하면 파일을 다시 선택해 주세요.',
   CHAT_TRANSCRIPT_INVALID_REQUEST:
     '본문 파일의 요청 문장이 허용 길이를 넘었거나 형식이 잘못됐어요.',
   CHAT_TRANSCRIPT_INVALID_TEXT: '본문 파일에 비어 있거나 허용 길이를 넘은 응답이 있어요.',
@@ -216,7 +250,6 @@ const revisionErrors = new Set([
   'Profile revision conflict',
   'Folder revision conflict',
   'Organization revision conflict',
-  'Image selection revision conflict',
   'Model revision conflict',
   'Settings revision conflict',
   'Story settings revision conflict',

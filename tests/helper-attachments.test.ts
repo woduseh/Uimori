@@ -336,7 +336,7 @@ test('deleting helper conversations retains shared attachments and reclaims the 
   );
   expect(readImage(f.store.db, hash).bytes.length).toBeGreaterThan(0);
   f.runtime.deleteConversation(copy.id, f.workspace.deletionImpact(copy.id).request);
-  expect(() => readImage(f.store.db, hash)).toThrow('이미지를 찾을 수 없어요.');
+  expect(() => readImage(f.store.db, hash)).toThrow('IMAGE_NOT_FOUND');
 });
 
 test('deleting helper text keeps the same uploaded image available to an unsaved resource draft', async () => {
