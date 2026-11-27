@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -26,12 +27,12 @@ export function BotDefaultPersona({
   const [mode, setMode] = useState<BotPersonaDefault['mode']>('inherit');
   const [personaId, setPersonaId] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const lock = useRef(false);
   const path = `/bots/${encodeURIComponent(bot.id)}/defaults`;
   const retryLoad = useRetryableEffect(() => {
     let alive = true;
-    setError('');
+    setError(null);
     void api<BotDefaults>(path)
       .then((value) => {
         if (!alive) return;
@@ -40,7 +41,7 @@ export function BotDefaultPersona({
         setPersonaId(value.persona.mode === 'persona' ? value.persona.persona.id : '');
       })
       .catch((cause) => {
-        if (alive) setError((cause as Error).message);
+        if (alive) setError(toUiMessage(cause));
       });
     return () => {
       alive = false;
@@ -51,7 +52,7 @@ export function BotDefaultPersona({
     if (!saved || lock.current || (mode === 'persona' && !selected)) return;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await api<BotDefaults>(
         path,
@@ -66,7 +67,7 @@ export function BotDefaultPersona({
       );
       onClose();
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -92,7 +93,7 @@ export function BotDefaultPersona({
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={legacyUiMessage(error)}
+            error={error}
             errorLabel={uiMessage('library.couldNotLoadTheDefaultPersona')}
             label={uiMessage('library.loadingDefaults')}
             onRetry={retryLoad}
@@ -127,7 +128,7 @@ export function BotDefaultPersona({
             )}
           </>
         )}
-        {saved && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {saved && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <SaveButton
           disabled={!saved || busy || (mode === 'persona' && !selected)}
           label={t('library.saveDefaultPersona')}

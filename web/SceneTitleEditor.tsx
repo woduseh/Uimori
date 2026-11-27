@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 import { useContext, useLayoutEffect, useRef, useState } from 'react';
 import type { ReaderNavigationItem } from '../core/types.js';
 import { api } from './api.js';
@@ -18,7 +20,7 @@ export function SceneTitleEditor({
   useI18n();
   const [title, setTitle] = useState(item.title ?? '');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [discard, setDiscard] = useState(false);
   const lock = useRef(false);
   const dirty = title !== (item.title ?? '');
@@ -33,13 +35,13 @@ export function SceneTitleEditor({
     if (lock.current) return false;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await api(`/sources/${item.id}/title`, { title, expectedTitle: item.title ?? '' }, 'PATCH');
       onClose();
       return true;
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
       throw cause;
     } finally {
       lock.current = false;
@@ -106,7 +108,7 @@ export function SceneTitleEditor({
           </fieldset>
           {error && (
             <p role="alert" className="error">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
         </form>

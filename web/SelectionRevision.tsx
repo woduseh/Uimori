@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { uiMessage } from './ui-message.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -139,9 +139,7 @@ export function SelectionRevision(props: Props) {
               {t('reader.theDraftOrSelectionChangedYourInputIsPreserved')}
             </NoticeBanner>
           )}
-          {revision.error && (
-            <NoticeBanner tone="error">{translateMessage(revision.error)}</NoticeBanner>
-          )}
+          {revision.error && <NoticeBanner tone="error">{revision.error}</NoticeBanner>}
           {busy && (
             <LoadingState
               presentation="inline"

@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
+import { t, useI18n, formatNumber, formatDate } from './i18n.js';
 import { useState } from 'react';
 import type { Attempt } from '../core/product.js';
 import type { RequestLore } from '../core/request-lore.js';
@@ -138,7 +138,7 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
             <tbody>
               {estimate.lines.map((line) => (
                 <tr key={line.kind}>
-                  <th>{translateMessage(pricingRateLabels[line.kind])}</th>
+                  <th>{pricingRateLabels[line.kind]}</th>
                   <td>
                     {line.tokens === null ? t('visualpanels.unknown') : formatNumber(line.tokens)}
                   </td>

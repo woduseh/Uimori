@@ -162,7 +162,7 @@ function stopChat(id) __effects.stopChat = true end
 local function __notify(kind, message)
   if __input.event == 'display' or __input.event == 'editDisplay' then error('RISU_NATIVE_DISPLAY_INTERACTION_DENIED') end
   if type(message) ~= 'string' then error('RISU_NATIVE_INTERACTION_ARGUMENT') end
-  __effects.notifications[#__effects.notifications + 1] = {kind=kind, message=message}
+  __effects.notifications[#__effects.notifications + 1] = {kind=kind, text=message}
 end
 function alertNormal(id, message) __notify('normal', message) end
 function alertError(id, message) __notify('error', message) end

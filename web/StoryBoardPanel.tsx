@@ -4,7 +4,8 @@ import type { StoryUiStyleSetting } from '../core/story-ui-style.js';
 import type { Job, Source } from '../core/types.js';
 import { api } from './api.js';
 import { t, useI18n } from './i18n.js';
-import { legacyUiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { StoryUi } from './LazyStoryUi.js';
@@ -38,7 +39,7 @@ export function useStoryBoard(
     chatId: '',
     pins: [],
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [loading, setLoading] = useState(false);
   const enabled = !!chatId && (storyUi || hasStoryBoardPins(sources));
   const revision = [
@@ -55,7 +56,7 @@ export function useStoryBoard(
     }
     const controller = new AbortController();
     setLoading(true);
-    setError('');
+    setError(null);
     void api<{ pins: StoryBoardPin[] }>(
       `/chats/${encodeURIComponent(chatId)}/story-ui/pins${at ? `?at=${encodeURIComponent(at)}` : ''}`,
       undefined,
@@ -64,7 +65,7 @@ export function useStoryBoard(
     )
       .then((response) => setResult({ chatId, pins: response.pins }))
       .catch((cause) => {
-        if (!controller.signal.aborted) setError((cause as Error).message);
+        if (!controller.signal.aborted) setError(toUiMessage(cause));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -174,7 +175,7 @@ export function StoryBoardPanel({
             actionNote={t('storyUi.boardAction')}
           />
         ) : board.loading || board.error ? (
-          <LoadingState loading={board.loading} error={legacyUiMessage(board.error)} />
+          <LoadingState loading={board.loading} error={board.error} />
         ) : (
           <p className="story-board-empty">{t('storyUi.boardEmpty')}</p>
         )}

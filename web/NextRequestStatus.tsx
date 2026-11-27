@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookText, ListTree, SlidersHorizontal, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
 import { api } from './api.js';
-import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
+import { formatNumber, t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { OUTLINE_REFRESH_EVENT } from './outline-helper.js';
 import type { ChatOptionState } from '../core/chat-options.js';
@@ -37,7 +39,7 @@ export function NextRequestStatus({
     storyGuide: false,
   });
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const generation = useRef(0);
   const base = `/chats/${encodeURIComponent(chatId)}`;
   const load = useCallback(async () => {
@@ -76,21 +78,21 @@ export function NextRequestStatus({
   if (!count) return null;
   async function clear() {
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await api(`${base}/outline/focus`, { nodeId: null }, 'PUT');
       generation.current++;
       setState((old) => ({ ...old, focus: null }));
       dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     } finally {
       setBusy(false);
     }
   }
   const failure = error && (
     <span className="error" role="alert">
-      {translateMessage(error)}
+      {formatUiMessage(error)}
     </span>
   );
   if (compact)

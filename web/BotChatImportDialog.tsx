@@ -1,6 +1,7 @@
 import { readJsonFile } from './json-input.js';
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -30,8 +31,8 @@ export function BotChatImportDialog({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const lock = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   async function read(file?: File) {
@@ -39,8 +40,8 @@ export function BotChatImportDialog({
     lock.current = true;
     setBusy(true);
     setSelection(null);
-    setError('');
-    setMessage('');
+    setError(null);
+    setNotice(null);
     try {
       if (file.size > 60 * 1024 * 1024) throw new UiError(uiMessage('transfer.m101'));
       let transcript: ChatTranscript;
@@ -60,7 +61,7 @@ export function BotChatImportDialog({
       });
       setSelection({ name: file.name, transcript, idempotencyKey: crypto.randomUUID() });
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught, 'transfer.m102'));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -70,7 +71,7 @@ export function BotChatImportDialog({
     if (!selection || lock.current) return;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       const result = await api<{ chat: { title: string }; skippedAttachments: unknown[] }>(
         '/chats/import-transcript',
@@ -82,17 +83,17 @@ export function BotChatImportDialog({
       setSelection(null);
       setUncertain(false);
       if (fileInput.current) fileInput.current.value = '';
-      setMessage(
-        descriptor('transfer.transcriptImported', {
+      setNotice(
+        uiMessage('transfer.transcriptImported', {
           title: result.chat.title,
           skipped: result.skippedAttachments.length,
         })
       );
-      await onImported().catch(() => setError(descriptor('transfer.m104')));
+      await onImported().catch(() => setError(uiMessage('transfer.m104')));
     } catch (caught) {
       const unresolved = uncertain || !definiteRejection(caught);
       setUncertain(unresolved);
-      setError(unresolved ? descriptor('transfer.m105') : (caught as Error).message);
+      setError(unresolved ? uiMessage('transfer.m105') : toUiMessage(caught));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -147,8 +148,8 @@ export function BotChatImportDialog({
             label={selection ? uiMessage('transfer.m118') : uiMessage('transfer.m119')}
           />
         )}
-        {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {notice && <NoticeBanner>{notice}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       </section>
       <div className="form-actions">
         <button

@@ -25,6 +25,7 @@ import './streaming-response.css';
 type StoryStyle = import('../core/story-ui-style.js').StoryUiStyleSetting;
 
 type StreamingStoryProps = { text: string; style?: StoryStyle; runId?: string };
+class ResponseStreamError extends Error {}
 
 function streamingParagraphs(text: string, finished: boolean) {
   return finished ? { complete: text, pending: '' } : splitCompletedParagraphs(text);
@@ -200,7 +201,7 @@ export function StreamingResponse({
     const receive = (page: ResponseStreamPage) => {
       if (closed || terminal) return;
       if (page.taskKind !== taskKind || page.taskId !== taskId || !Array.isArray(page.chunks))
-        throw new Error('RESPONSE_STREAM_IDENTITY_MISMATCH');
+        throw new ResponseStreamError('RESPONSE_STREAM_IDENTITY_MISMATCH');
       let added = false;
       for (const chunk of page.chunks) {
         if (chunk.seq <= cursor) continue;
@@ -211,7 +212,7 @@ export function StreamingResponse({
           !Number.isSafeInteger(chunk.offset) ||
           chunk.offset !== (offsets.get(key) ?? 0) + chunk.text.length
         )
-          throw new Error('RESPONSE_STREAM_OFFSET_MISMATCH');
+          throw new ResponseStreamError('RESPONSE_STREAM_OFFSET_MISMATCH');
         offsets.set(key, chunk.offset);
         cursor = chunk.seq;
         texts.set(key, (texts.get(key) ?? '') + chunk.text);
@@ -265,7 +266,8 @@ export function StreamingResponse({
           if (closed) return;
           receive(page);
           textArrived = cursor > requested;
-          if (page.hasMore && !textArrived) throw new Error('RESPONSE_STREAM_CURSOR_STALLED');
+          if (page.hasMore && !textArrived)
+            throw new ResponseStreamError('RESPONSE_STREAM_CURSOR_STALLED');
           receivePushed();
         } while (!terminal && page.hasMore && shown.current && !document.hidden);
         if (!reading()) return;
@@ -306,7 +308,7 @@ export function StreamingResponse({
             setLoaded(true);
             return;
           }
-        } else if (error instanceof Error && error.message.startsWith('RESPONSE_STREAM_')) {
+        } else if (error instanceof ResponseStreamError) {
           stop();
           return;
         }

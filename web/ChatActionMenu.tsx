@@ -1,6 +1,6 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { uiMessage, type UiMessage } from './ui-message.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Copy, LoaderCircle, PinOff } from 'lucide-react';
 import type { Chat } from '../core/types.js';
@@ -150,7 +150,7 @@ function ChatTitleEditor({
   const [baseTitle, setBaseTitle] = useState(chat.title);
   const [baseTitleRevision, setBaseTitleRevision] = useState(chat.titleRevision ?? 0);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const lock = useRef(false);
   const observedTitleRevision = useRef(chat.titleRevision ?? 0);
   const dirty = draft !== baseTitle;
@@ -167,7 +167,7 @@ function ChatTitleEditor({
     if (lock.current || !draft.trim()) return;
     lock.current = true;
     setSaving(true);
-    setError('');
+    setError(null);
     try {
       const updated = await api<Chat>(
         `/chats/${encodeURIComponent(chat.id)}/title`,
@@ -180,7 +180,7 @@ function ChatTitleEditor({
       await onChatsChanged();
       onClose();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : retainedMessage('transfer.m258'));
+      setError(toUiMessage(reason, 'transfer.m258'));
     } finally {
       lock.current = false;
       setSaving(false);
@@ -213,7 +213,7 @@ function ChatTitleEditor({
             setDraft(chat.title);
             setBaseTitle(chat.title);
             setBaseTitleRevision(chat.titleRevision ?? 0);
-            setError('');
+            setError(null);
             onClose();
           }}
         >
@@ -231,7 +231,7 @@ function ChatTitleEditor({
       )}
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
     </form>

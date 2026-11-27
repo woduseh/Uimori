@@ -11,7 +11,7 @@ import {
 import type { Attempt } from '../core/product.js';
 import { AttemptDetail } from './AttemptInspector.js';
 import { formatNumber, t, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoadingState } from './LoadingState.js';
@@ -529,13 +529,13 @@ export function useChatTrace(chatId: string, revision: number | string, enabled 
   return useApiRecord<ChatTraceCall[]>(`/chats/${chatId}/attempts`, revision, enabled);
 }
 
-export function TraceLoading({ error, retry }: { error: string; retry: () => void }) {
+export function TraceLoading({ error, retry }: { error: UiMessage | null; retry: () => void }) {
   useI18n();
   return (
     <LoadingState
       presentation="inline"
       loading={!error}
-      error={legacyUiMessage(error)}
+      error={error}
       label={uiMessage('shared.loadingDetails')}
       onRetry={retry}
     />

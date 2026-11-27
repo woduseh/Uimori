@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, formatNumber, message as retainedMessage } from './i18n.js';
-import { uiMessage, legacyUiMessage, type UiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { memo, useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
@@ -163,7 +164,7 @@ export const BotNavigation = memo(function BotNavigation(
   const [busy, setBusy] = useState(false);
   const [coverFolderId, setCoverFolderId] = useState<string | null>(null);
   const [removingFolder, setRemovingFolder] = useState<LibraryFolder | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const lock = useRef(false);
   const dragEntry = useRef<{ entry: Entry; revision: number } | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
@@ -258,7 +259,7 @@ export const BotNavigation = memo(function BotNavigation(
     if (lock.current || !library?.organization) return;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await (callEndpoint as (endpoint: LibraryWrite, input: object) => Promise<unknown>)(
         endpoint,
@@ -268,9 +269,9 @@ export const BotNavigation = memo(function BotNavigation(
       setEditing(null);
       return true;
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m282');
+      const message = toUiMessage(reason, 'transfer.m282');
       setError(message);
-      onError(legacyUiMessage(message));
+      onError(message);
       await onLibraryChanged().catch(() => {});
       return false;
     } finally {
@@ -641,7 +642,7 @@ export const BotNavigation = memo(function BotNavigation(
                 library={library}
                 selected={selected}
                 feed={activityFeed.feed}
-                error={translateMessage(activityFeed.error)}
+                error={activityFeed.error}
                 onSelect={onSelect}
                 onCopyChat={props.onCopyChat}
                 copyingChats={props.copyingChats}
@@ -772,7 +773,7 @@ export const BotNavigation = memo(function BotNavigation(
             )}
             {view.mode === 'bots' && error && (
               <p className="error" role="alert">
-                {translateMessage(error)}
+                {formatUiMessage(error)}
               </p>
             )}
           </div>
@@ -828,7 +829,7 @@ export const BotNavigation = memo(function BotNavigation(
           </label>
           {error && (
             <p className="error" role="alert">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
           <button disabled={busy || !title.trim()}>{t('transfer.m308')}</button>

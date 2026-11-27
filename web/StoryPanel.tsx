@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
@@ -65,7 +66,7 @@ function StoryPanelEditor({
   );
   const [detail, setDetail] = useState<StoryDetail | null>(null);
   const request = useRef(0);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [contextDirty, setContextDirty] = useState(false);
   const contextSave = useRef<(() => Promise<boolean>) | null>(null);
   const registerContextSave = useRef((handler: (() => Promise<boolean>) | null) => {
@@ -78,10 +79,9 @@ function StoryPanelEditor({
   }, [hasUnsavedChanges, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   function report(caught: unknown) {
-    const text =
-      caught instanceof Error ? caught.message : legacyDescriptor('reader.couldNotCompleteTheTask');
-    setError(text);
-    onError(legacyUiMessage(text));
+    const failure = toUiMessage(caught, 'reader.couldNotCompleteTheTask');
+    setError(failure);
+    onError(failure);
   }
   async function load() {
     const valid = capture(),
@@ -111,7 +111,7 @@ function StoryPanelEditor({
       {!hideHeading && <h3>{t('reader.memoryAndContext')}</h3>}
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
       <ContextPanel
