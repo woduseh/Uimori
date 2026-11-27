@@ -89,29 +89,38 @@ function parseSource(source, file) {
   });
 }
 
-export function plainErrorTexts(source, file = 'web/input.tsx') {
+const isClass = (node) => node.type === 'ClassDeclaration' || node.type === 'ClassExpression';
+const errorText = (type, args) => args[type === 'AggregateError' ? 1 : 0];
+
+function ownSuperCalls(body, visit) {
+  for (const [key, value] of Object.entries(body)) {
+    if (ignored.has(key) || !value || typeof value !== 'object') continue;
+    for (const child of Array.isArray(value) ? value : [value]) {
+      if (!child || typeof child !== 'object') continue;
+      if (child.type === 'CallExpression' && child.callee.type === 'Super') visit(child);
+      if (!isClass(child)) ownSuperCalls(child, visit);
+    }
+  }
+}
+
+function plainErrorLines(tree) {
   const lines = [];
-  walk(parseSource(source, file), (node) => {
+  walk(tree, (node) => {
     if (
       (node.type === 'NewExpression' || node.type === 'CallExpression') &&
       node.callee.type === 'Identifier' &&
-      errorTypes.has(node.callee.name)
-    ) {
-      const text = node.arguments[node.callee.name === 'AggregateError' ? 1 : 0];
-      if (!literalText(text)) lines.push(node.loc.start.line);
-    }
+      errorTypes.has(node.callee.name) &&
+      !literalText(errorText(node.callee.name, node.arguments))
+    )
+      lines.push(node.loc.start.line);
     if (
-      (node.type === 'ClassDeclaration' || node.type === 'ClassExpression') &&
+      isClass(node) &&
       node.superClass?.type === 'Identifier' &&
       errorTypes.has(node.superClass.name)
     )
-      walk(node.body, (inner) => {
-        if (
-          inner.type === 'CallExpression' &&
-          inner.callee.type === 'Super' &&
-          !literalText(inner.arguments[0])
-        )
-          lines.push(inner.loc.start.line);
+      ownSuperCalls(node.body, (call) => {
+        if (!literalText(errorText(node.superClass.name, call.arguments)))
+          lines.push(call.loc.start.line);
       });
     if (
       node.type === 'ThrowStatement' &&
@@ -122,9 +131,17 @@ export function plainErrorTexts(source, file = 'web/input.tsx') {
   return lines.sort((left, right) => left - right);
 }
 
+export function plainErrorTexts(source, file = 'web/input.tsx') {
+  return plainErrorLines(parseSource(source, file));
+}
+
 export function errorTextReads(source, file = 'web/input.tsx') {
+  return errorTextLines(parseSource(source, file));
+}
+
+function errorTextLines(tree) {
   const lines = [];
-  walk(parseSource(source, file), (node, parent) => {
+  walk(tree, (node, parent) => {
     const member =
       (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
       (node.computed ? node.property.type === 'StringLiteral' : true) &&
@@ -175,10 +192,9 @@ function scanSources(directory) {
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
     if (exemptFiles.has(file)) continue;
-    const source = readFileSync(path, 'utf8');
-    for (const line of plainErrorTexts(source, file))
-      plain.push(`${file}:${line}: ${plainErrorRemedy}`);
-    const lines = errorTextReads(source, file);
+    const tree = parseSource(readFileSync(path, 'utf8'), file);
+    for (const line of plainErrorLines(tree)) plain.push(`${file}:${line}: ${plainErrorRemedy}`);
+    const lines = errorTextLines(tree);
     if (lines.length) counts.set(file, lines);
   }
   return { counts, plain };

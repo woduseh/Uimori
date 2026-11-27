@@ -86,6 +86,32 @@ test('an Error may carry only literal text, whatever builds or aliases the messa
   assert.deepEqual(plainErrorTexts(source, 'web/View.tsx'), [2, 3, 4, 5, 6, 9, 16]);
 });
 
+test('a subclass is held to its own base, and a nested class only to its own', () => {
+  const source = [
+    'class Many extends AggregateError {',
+    "  constructor(errors: Error[]) { super(errors, 'MANY'); }",
+    '}',
+    'class Mixed extends AggregateError {',
+    '  constructor(errors: Error[], text: string) { super(errors, text); }',
+    '}',
+    'class Outer extends Error {',
+    "  constructor() { super('OUTER'); }",
+    '  inner = class extends Base {',
+    '    constructor(text: string) { super(text); }',
+    '  };',
+    '}',
+    'class Plain extends Base {',
+    '  constructor(text: string) {',
+    '    super(text);',
+    '    this.failure = class extends Error {',
+    '      constructor(text: string) { super(text); }',
+    '    };',
+    '  }',
+    '}',
+  ].join('\n');
+  assert.deepEqual(plainErrorTexts(source, 'web/View.tsx'), [5, 17]);
+});
+
 test('an unlisted read fails with its lines, and the core module is exempt', () => {
   withRepository(
     {
