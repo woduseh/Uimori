@@ -1,23 +1,14 @@
 import type { Content, Library } from './product.js';
 
-export type LibraryCategory = 'bot' | 'persona' | 'module' | 'prompts';
-export type LibraryItemKey = { kind: 'content' | 'prompt-preset'; id: string };
-export type LibraryFolder = {
-  id: string;
-  category: LibraryCategory;
-  title: string;
-  sortPosition: number;
-  coverImageHash: string | null;
-};
-export type LibraryPlacement = LibraryItemKey & {
-  category: LibraryCategory;
-  folderId: string | null;
-};
-export type LibraryOrganization = {
-  revision: number;
-  folders: LibraryFolder[];
-  items: LibraryPlacement[];
-};
+export type {
+  LibraryCategory,
+  LibraryFolder,
+  LibraryItemKey,
+  LibraryOrganization,
+  LibraryPlacement,
+} from '#contracts';
+import type { LibraryItemKey, LibraryPlacement } from '#contracts';
+
 export const libraryItemKey = (item: LibraryItemKey) => `${item.kind}:${item.id}`;
 export function placementCategory(
   placement: LibraryPlacement | undefined,

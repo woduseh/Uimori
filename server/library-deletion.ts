@@ -1,8 +1,10 @@
 import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { removeThemeScope } from './themes.js';
 import { pruneUnusedData } from './unused-data.js';
-import { HttpError, fields, number, record } from './request-validation.js';
+import { type DeleteLibraryItem, deletionEndpoints, type Endpoint } from '#contracts';
+import { deletionOperations } from '#contracts/operations';
 import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
@@ -17,18 +19,17 @@ export type LibraryKind =
   | 'connection'
   | 'model';
 export function assertLibraryVisible(store: Store, kind: string, id: string) {
-  if (store.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id))
-    throw new HttpError(404, 'Library item not found');
+  store.product.assertAvailable(kind, id);
 }
 
-export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, value: unknown) {
-  const body = record(value);
-  fields(body, ['expectedRevision']);
-  const expected = number(body.expectedRevision, 'revision');
+export function deleteLibraryItem(
+  store: Store,
+  kind: LibraryKind,
+  id: string,
+  { expectedRevision }: Pick<DeleteLibraryItem, 'expectedRevision'>
+) {
   return store.transaction(() => {
-    assertLibraryVisible(store, kind, id);
-    const latest = store.product.get<{ revision: number }>(kind, id);
-    if (latest.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    store.product.editable(kind, id, expectedRevision);
     if (kind === 'prompt-preset') {
       const workspace = promptWorkspace(store);
       if (workspace.main.presetId === id || workspace.translation.presetId === id)
@@ -101,21 +102,20 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
     forgetHelperConfirmationTargets(store.db, [{ kind, id }]);
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);
-    return { deleted: true, id };
+    return { deleted: true as const, id };
   });
 }
 
 export function libraryDeletionRoutes(app: FastifyInstance, store: Store) {
-  const routes: Record<LibraryKind, string> = {
-    content: 'content',
-    'prompt-preset': 'prompt-presets',
-    'prompt-combination': 'prompt-combinations',
-    connection: 'connections',
-    model: 'model-presets',
-  };
-  for (const [kind, path] of Object.entries(routes) as [LibraryKind, string][]) {
-    app.delete<{ Params: { id: string } }>(`/api/${path}/:id`, async (request) =>
-      deleteLibraryItem(store, kind, request.params.id, request.body)
+  const routes: [LibraryKind, Endpoint<typeof deletionOperations.deleteLibraryItem>][] = [
+    ['content', deletionEndpoints.deleteContent],
+    ['prompt-preset', deletionEndpoints.deletePromptPreset],
+    ['prompt-combination', deletionEndpoints.deletePromptCombination],
+    ['connection', deletionEndpoints.deleteConnection],
+    ['model', deletionEndpoints.deleteModelPreset],
+  ];
+  for (const [kind, endpoint] of routes)
+    registerEndpoint(app, endpoint, deletionOperations.deleteLibraryItem, (input) =>
+      deleteLibraryItem(store, kind, input.id, input)
     );
-  }
 }

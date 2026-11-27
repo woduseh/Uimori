@@ -335,6 +335,12 @@ export const messages = {
     ja: 'このプリセットは現在のプロンプトとして使用中です。現在のプロンプト設定で別のプリセットを選んでから削除してください。',
     zh: '此预设正用作当前提示词。请先在当前提示词设置中选择其他预设，再删除。',
   },
+  'errors.LIBRARY_ITEM_DELETED': {
+    ko: '다른 곳에서 삭제된 항목이에요. 목록을 새로 고친 뒤 다시 골라 주세요.',
+    en: 'This item was deleted elsewhere. Refresh the list and choose again.',
+    ja: 'この項目は別の場所で削除されました。一覧を更新してから選び直してください。',
+    zh: '此项目已在其他地方删除。请刷新列表后重新选择。',
+  },
   'errors.IMAGE_TOO_LARGE': {
     ko: '이미지는 {maxBytes} 이하 파일을 사용해 주세요.',
     en: 'Use an image file of {maxBytes} or less.',

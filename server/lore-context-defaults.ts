@@ -6,9 +6,12 @@ import {
   type LoreContextDefaults,
   type LoreContextPolicy,
 } from '../core/lore-context.js';
-import { HttpError, fields, number, record } from './request-validation.js';
+import { promptEndpoints, type UpdateLoreContextDefaults } from '#contracts';
+import { promptOperations } from '#contracts/operations';
+import { HttpError } from './request-validation.js';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
-import { AppError } from './app-errors.js';
+import { assertRevision } from './app-errors.js';
 
 type Row = { id: number; revision: number; body: string };
 
@@ -30,18 +33,10 @@ export function loreContextDefaults(store: Store): LoreContextDefaults {
   return { revision: row.revision, ...validateLoreContextPolicy(JSON.parse(row.body)) };
 }
 
-export function updateLoreContextDefaults(store: Store, value: unknown): LoreContextDefaults {
-  const body = record(value);
-  fields(body, [
-    'expectedRevision',
-    'enabled',
-    'tokenEstimator',
-    'maxRetainedTokens',
-    'maxRetainedEntries',
-    'maxPinnedTokens',
-    'judgment',
-  ]);
-  const { expectedRevision, ...policyValue } = body;
+export function updateLoreContextDefaults(
+  store: Store,
+  { expectedRevision, ...policyValue }: UpdateLoreContextDefaults
+): LoreContextDefaults {
   let policy: LoreContextPolicy;
   try {
     policy = validateLoreContextPolicy(policyValue);
@@ -50,8 +45,7 @@ export function updateLoreContextDefaults(store: Store, value: unknown): LoreCon
   }
   return store.transaction(() => {
     const prior = loreContextDefaults(store);
-    if (prior.revision !== number(expectedRevision, 'lore context defaults revision'))
-      throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(prior.revision, expectedRevision);
     const revision = prior.revision + 1;
     store.db
       .prepare('UPDATE lore_context_defaults SET revision=?,body=? WHERE id=1')
@@ -61,10 +55,19 @@ export function updateLoreContextDefaults(store: Store, value: unknown): LoreCon
 }
 
 export function loreContextDefaultRoutes(app: FastifyInstance, store: Store) {
-  app.get('/api/lore-context-defaults', async (_request, reply) =>
-    reply.header('Cache-Control', 'no-store').send(loreContextDefaults(store))
+  registerEndpoint(
+    app,
+    promptEndpoints.readLoreContextDefaults,
+    promptOperations.readLoreContextDefaults,
+    (_input, _request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      return loreContextDefaults(store);
+    }
   );
-  app.put('/api/lore-context-defaults', async (request) =>
-    updateLoreContextDefaults(store, request.body)
+  registerEndpoint(
+    app,
+    promptEndpoints.updateLoreContextDefaults,
+    promptOperations.updateLoreContextDefaults,
+    (input) => updateLoreContextDefaults(store, input)
   );
 }

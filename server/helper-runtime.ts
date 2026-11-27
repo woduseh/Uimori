@@ -1,3 +1,5 @@
+import { libraryCategory, libraryOperations } from '#contracts/operations';
+import { parseInput } from './endpoint.js';
 import {
   HELPER_PRESENTATION_TOOLS,
   presentationReadOnly,
@@ -3692,16 +3694,25 @@ export class HelperRuntime {
       if (args.action === 'read') return this.store.libraryOrganization.snapshot();
       this.workspace.assertRunning(task.id);
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () => {
+        const organization = this.store.libraryOrganization;
         if (args.action === 'create-folder')
-          return this.store.libraryOrganization.createFolder(args.body);
-        if (args.action === 'move') return this.store.libraryOrganization.move(args.body);
+          return organization.createFolder(
+            parseInput(libraryOperations.createFolder.input, args.body)
+          );
+        if (args.action === 'move')
+          return organization.move(parseInput(libraryOperations.moveItems.input, args.body));
         if (args.action === 'update-folder' || args.action === 'delete-folder') {
           const { folderId, category, ...body } = record(args.body);
-          const expectedCategory = text(category, 'library category', 20);
-          const id = text(folderId, 'library folder ID', 100);
+          const expectedCategory = parseInput(libraryCategory, category);
           return args.action === 'delete-folder'
-            ? this.store.libraryOrganization.deleteFolder(id, body, expectedCategory)
-            : this.store.libraryOrganization.updateFolder(id, body, expectedCategory);
+            ? organization.deleteFolder(
+                parseInput(libraryOperations.deleteFolder.input, { ...body, id: folderId }),
+                expectedCategory
+              )
+            : organization.updateFolder(
+                parseInput(libraryOperations.updateFolder.input, { ...body, id: folderId }),
+                expectedCategory
+              );
         }
         throw new HelperToolError(400, 'INVALID_LIBRARY_ACTION');
       });

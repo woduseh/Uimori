@@ -1,4 +1,3 @@
-import { cloneWithReceipt } from './resource-create-retry.js';
 import { useI18n, message as uiMessage, messageRef } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -24,16 +23,15 @@ import {
   SortIcon,
   TemplateIcon,
 } from './ui-icons.js';
-import type {
-  Library,
-  PromptPreset,
-  PromptPresetSummary,
-  PromptRole,
-  PromptWorkspace,
-} from '../core/product.js';
-import type { ResourceSaveResult } from '../core/resource-editing.js';
-import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
-import { api } from './api.js';
+import type { Library, PromptPreset, PromptPresetSummary, PromptRole } from '../core/product.js';
+import type { LibraryItemKey } from '../core/library-organization.js';
+import {
+  deletionEndpoints,
+  libraryEndpoints,
+  promptEndpoints,
+  resourceEditorEndpoints,
+} from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
@@ -302,7 +300,7 @@ export function PromptLibrary({
     setApplyingDefault(true);
     setDefaultNotice('');
     try {
-      await api<PromptWorkspace>('/prompt-workspace/apply', {
+      await callEndpoint(promptEndpoints.applyPreset, {
         expectedRevision: workspace.revision,
         role: item.role,
         presetId: item.id,
@@ -377,11 +375,10 @@ export function PromptLibrary({
       throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
     const revision =
       creationOrganizationRevision ??
-      (await api<LibraryOrganization>('/library/organization')).revision;
+      (await callEndpoint(libraryEndpoints.readOrganization)).revision;
     const placed = await organizer.mutate(
-      '/library/organization/move',
+      libraryEndpoints.moveItems,
       { items: [{ kind: 'prompt-preset', id: preset.id }], category: 'prompts', folderId: folder },
-      'POST',
       revision
     );
     if (!placed) throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
@@ -391,15 +388,12 @@ export function PromptLibrary({
     mutation.current = true;
     setMutating(true);
     try {
-      const result = await cloneWithReceipt<ResourceSaveResult>(
-        storageKeys.resourceClone('prompt-preset', item.id),
-        {
-          kind: 'prompt-preset',
-          sourceId: item.id,
-          expectedSourceRevision: item.revision,
-          title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
-        }
-      );
+      const result = await callEndpoint(resourceEditorEndpoints.cloneResource, {
+        kind: 'prompt-preset',
+        sourceId: item.id,
+        expectedSourceRevision: item.revision,
+        title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
+      });
       const copy = result.saved as PromptPreset;
       const warnings: string[] = [];
       try {
@@ -436,7 +430,7 @@ export function PromptLibrary({
     mutation.current = true;
     setMutating(true);
     try {
-      const template = await api<PromptTemplate>(`/prompt-templates/${encodeURIComponent(id)}`);
+      const template = (await callEndpoint(promptEndpoints.readTemplate, { id })) as PromptTemplate;
       const created = await api<PromptPreset>('/prompt-presets', {
         title: template.title,
         role: template.role,
@@ -593,7 +587,8 @@ export function PromptLibrary({
             </div>
             <div className="action-menu-group">
               <DeleteButton
-                path={`/prompt-presets/${encodeURIComponent(item.id)}`}
+                endpoint={deletionEndpoints.deletePromptPreset}
+                params={{ id: item.id }}
                 revision={item.revision}
                 title={item.title}
                 onDeleted={reload}

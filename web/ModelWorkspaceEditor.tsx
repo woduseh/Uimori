@@ -25,7 +25,8 @@ import {
   SUMMARY_LENGTH_VALUES,
   type SummaryLength,
 } from '../core/summary-length.js';
-import { api, ApiError } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { MAX_TRANSLATION_PREVIOUS_SCENE_TOKENS } from '../core/translation-settings.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
@@ -209,28 +210,24 @@ export function ModelWorkspaceEditor({
     setOperation('save');
     setSaveError('');
     setMessage('');
-    return api<ModelWorkspace>(
-      '/model-workspace',
-      {
-        expectedRevision: draft.revision,
-        routes: draft.routes,
-        judgment,
-        judgmentPricing: judgmentPrices ?? [],
-        mainJudgmentEnabled: draft.mainJudgmentEnabled === true,
-        mainJudgmentThreshold: draft.mainJudgmentThreshold,
-        titleModel: draft.titleModel ?? null,
-        helperModel: draft.helperModel ?? null,
-        helperTaskTimeoutMinutes,
-        helperConfirmPaidGeneration: draft.helperConfirmPaidGeneration === true,
-        contextModel: draft.contextModel ?? null,
-        summaryLength: draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
-        scriptModel: draft.scriptModel ?? null,
-        translationPolicy: draft.translationPolicy,
-      },
-      'PUT'
-    )
+    return callEndpoint(promptEndpoints.updateModelWorkspace, {
+      expectedRevision: draft.revision,
+      routes: draft.routes,
+      judgment,
+      judgmentPricing: judgmentPrices ?? [],
+      mainJudgmentEnabled: draft.mainJudgmentEnabled === true,
+      mainJudgmentThreshold: draft.mainJudgmentThreshold,
+      titleModel: draft.titleModel ?? null,
+      helperModel: draft.helperModel ?? null,
+      helperTaskTimeoutMinutes,
+      helperConfirmPaidGeneration: draft.helperConfirmPaidGeneration === true,
+      contextModel: draft.contextModel ?? null,
+      summaryLength: draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
+      scriptModel: draft.scriptModel ?? null,
+      translationPolicy: draft.translationPolicy,
+    })
       .then((accepted) => {
-        setDraft(editable(accepted));
+        setDraft(editable(accepted as ModelWorkspace));
         setJudgmentEdited(false);
         setDirty(false);
         setMessage(uiMessage('settings.m1'));
@@ -263,7 +260,7 @@ export function ModelWorkspaceEditor({
     setOperation('reload');
     setReloadError('');
     try {
-      const accepted = await api<ModelWorkspace>('/model-workspace');
+      const accepted = (await callEndpoint(promptEndpoints.readModelWorkspace)) as ModelWorkspace;
       setDraft(editable(accepted));
       setJudgmentEdited(false);
       setDirty(false);
@@ -890,7 +887,7 @@ export function ModelWorkspaceEditor({
         title={t('settings.m67')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
-          const value = await api<ModelWorkspace>('/model-workspace');
+          const value = (await callEndpoint(promptEndpoints.readModelWorkspace)) as ModelWorkspace;
           const modelName = (ref: ModelRef | null | undefined) =>
             library.models.find((model) => model.id === ref?.id)?.title ??
             (ref ? t('settings.m38') : t('settings.m68'));

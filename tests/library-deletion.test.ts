@@ -59,7 +59,9 @@ test('removes unreferenced resources physically while enforcing revision conflic
   expect(() => s.product.get('content', a.id, 1)).toThrow('content revision not found');
   expect(() => s.product.get('content', a.id)).toThrow('content revision not found');
   expect(s.product.get('content', b.id)).toEqual(b);
-  expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 2 })).toThrow('not found');
+  expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 2 })).toThrow(
+    'REVISION_CONFLICT'
+  );
 });
 
 test('historical and current content references do not block removing a library entry', () => {
@@ -88,6 +90,15 @@ test('prompt copies and chat contents survive preset deletion', () => {
   const before = s.product.profile(chat.id);
   deleteLibraryItem(s, 'prompt-preset', prompt.id, { expectedRevision: 1 });
   deleteLibraryItem(s, 'prompt-combination', combination.id, { expectedRevision: 1 });
+  expect(() =>
+    s.product.promptCombination({
+      title: 'Saved from a stale tab',
+      role: 'main',
+      values: {},
+      owner: { kind: 'preset', id: prompt.id },
+      expectedRevision: 1,
+    })
+  ).toThrow('REVISION_CONFLICT');
   expect(s.product.profile(chat.id)).toEqual(before);
   expect(() => s.product.get('prompt-preset', prompt.id, 1)).toThrow('revision not found');
   expect(() => s.product.get('prompt-combination', combination.id, 1)).toThrow(

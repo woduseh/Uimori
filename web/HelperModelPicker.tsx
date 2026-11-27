@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Library, ModelWorkspace } from '../core/product.js';
-import { api } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { ChatModelPicker } from './ChatModelPicker.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -55,8 +56,9 @@ export function HelperModelPicker({
     setReadError('');
     setWriteError('');
     setReading(true);
-    void api<ModelWorkspace>('/model-workspace', undefined, 'GET', controller.signal)
-      .then((value) => {
+    void callEndpoint(promptEndpoints.readModelWorkspace, {}, controller.signal)
+      .then((read) => {
+        const value = read as ModelWorkspace;
         if (epoch.current === owner) {
           setWorkspace((old) => (old && old.revision > value.revision ? old : value));
           setNeedsRead(false);
@@ -89,16 +91,12 @@ export function HelperModelPicker({
     setWriteError('');
     setNotice('');
     try {
-      const value = await api<ModelWorkspace>(
-        '/model-workspace',
-        {
-          expectedRevision: current.revision,
-          routes: current.routes,
-          translationPolicy: current.translationPolicy,
-          helperModel: modelId ? { id: modelId } : null,
-        },
-        'PUT'
-      );
+      const value = (await callEndpoint(promptEndpoints.updateModelWorkspace, {
+        expectedRevision: current.revision,
+        routes: current.routes,
+        translationPolicy: current.translationPolicy,
+        helperModel: modelId ? { id: modelId } : null,
+      })) as ModelWorkspace;
       setAccepted((old) => (old && old.revision > value.revision ? old : value));
       if (value.revision >= latestRevision.current) {
         latestRevision.current = value.revision;

@@ -31,9 +31,7 @@ function prepareConnection(product: ProductStore, value: unknown, id?: string) {
   }
 
   const expectedRevision = id ? number(body.expectedRevision, 'revision') : undefined;
-  const prior = id
-    ? product.editedSetting<Connection>('connection', id, expectedRevision!)
-    : undefined;
+  const prior = id ? product.editable<Connection>('connection', id, expectedRevision!) : undefined;
   const writes: { reference: string; value: string }[] = [];
   const keyReference = (field: 'apiKey', previous: unknown): string | undefined => {
     if (Object.hasOwn(body, field) && body[field] !== '') {

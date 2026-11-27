@@ -70,7 +70,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
         await request.put('/api/model-workspace', {
           data: {
             expectedRevision: before.revision,
-            routes: { main: null, translation: null, status: null },
+            routes: { main: null, translation: null },
             mainJudgmentEnabled: true,
             mainJudgmentThreshold: 0.9,
             helperConfirmPaidGeneration: false,

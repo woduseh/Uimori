@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { resourceEditorEndpoints as endpoints } from '#contracts';
+import { resourceEditorOperations as operations } from '#contracts/operations';
+import type { ResourceModel } from '../core/resource-editing.js';
 import type { Store } from './store.js';
-import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
-import { choice, fields, HttpError, number, record, text } from './request-validation.js';
+import { registerEndpoint } from './endpoint.js';
 import {
   cloneResource,
   readPreviousResource,
@@ -10,69 +12,33 @@ import {
   undoResource,
 } from './resource-service.js';
 
-const kinds = ['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'];
-export function resourceKind(value: unknown): ResourceKind {
-  if (!kinds.includes(String(value))) throw new HttpError(400, 'Invalid resource kind');
-  return value as ResourceKind;
-}
-
 export function resourceRoutes(app: FastifyInstance, store: Store) {
-  app.get<{ Params: { kind: string; id: string } }>('/api/resources/:kind/:id', (request) =>
-    readResource(store, resourceKind(request.params.kind), request.params.id)
+  registerEndpoint(app, endpoints.readResource, operations.readResource, ({ kind, id }) =>
+    readResource(store, kind, id)
   );
-  app.post('/api/resources/clone', (request) => {
-    const body = record(request.body);
-    fields(body, [
-      'kind',
-      'sourceId',
-      'expectedSourceRevision',
-      'title',
-      'syncNativeName',
-      'idempotencyKey',
-    ]);
-    if (body.syncNativeName !== undefined && typeof body.syncNativeName !== 'boolean')
-      throw new HttpError(400, 'Invalid syncNativeName');
-    return cloneResource(store, {
-      kind: choice(body.kind, ['content', 'prompt-preset'], 'clone resource kind'),
-      sourceId: text(body.sourceId, 'source ID', 100),
-      expectedSourceRevision: number(body.expectedSourceRevision, 'source revision'),
-      title: text(body.title, 'title', 200),
-      ...(body.syncNativeName === undefined ? {} : { syncNativeName: body.syncNativeName }),
-      ...(body.idempotencyKey === undefined
-        ? {}
-        : { idempotencyKey: text(body.idempotencyKey, 'request key', 200) }),
-    });
-  });
-  app.post('/api/resources/save', { bodyLimit: 48 * 1024 * 1024 }, (request) => {
-    const body = record(request.body);
-    fields(body, ['kind', 'id', 'expectedRevision', 'model', 'idempotencyKey']);
-    return saveResource(store, {
-      kind: resourceKind(body.kind),
-      id: body.id == null ? null : text(body.id, 'resource ID', 100),
-      expectedRevision:
-        body.expectedRevision === undefined ? undefined : number(body.expectedRevision, 'revision'),
-      model: record(body.model) as ResourceModel,
-      ...(body.idempotencyKey === undefined
-        ? {}
-        : { idempotencyKey: text(body.idempotencyKey, 'request key', 200) }),
-    });
-  });
-  app.get<{ Params: { kind: string; id: string } }>(
-    '/api/resources/:kind/:id/previous',
-    (request) => {
-      const kind = resourceKind(request.params.kind);
-      readResource(store, kind, request.params.id);
-      return readPreviousResource(store, kind, request.params.id);
+  registerEndpoint(app, endpoints.cloneResource, operations.cloneResource, (input) =>
+    cloneResource(store, input)
+  );
+  registerEndpoint(app, endpoints.saveResource, operations.saveResource, (input) =>
+    saveResource(store, {
+      ...input,
+      id: input.id ?? null,
+      model: input.model as ResourceModel,
+    })
+  );
+  registerEndpoint(
+    app,
+    endpoints.readPreviousResource,
+    operations.readPreviousResource,
+    ({ kind, id }) => {
+      readResource(store, kind, id);
+      return readPreviousResource(store, kind, id);
     }
   );
-  app.post<{ Params: { kind: string; id: string } }>('/api/resources/:kind/:id/undo', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision']);
-    return undoResource(
-      store,
-      resourceKind(request.params.kind),
-      request.params.id,
-      number(body.expectedRevision, 'revision')
-    );
-  });
+  registerEndpoint(
+    app,
+    endpoints.undoResource,
+    operations.undoResource,
+    ({ kind, id, expectedRevision }) => undoResource(store, kind, id, expectedRevision)
+  );
 }

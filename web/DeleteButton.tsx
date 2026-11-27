@@ -2,7 +2,8 @@ import { t, useI18n, type MessageReference } from './i18n.js';
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
-import { api } from './api.js';
+import type { Endpoint, EndpointInput } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { toUiMessage } from './api-errors.js';
@@ -18,8 +19,16 @@ import {
 import './deletion.css';
 
 type Title = string | MessageReference | UiMessage;
-type Props = {
-  path: string;
+type Target<E extends Endpoint> =
+  | {
+      endpoint: E;
+      params: Omit<EndpointInput<E>, 'expectedRevision'>;
+      path?: never;
+      preparePath?: never;
+      body?: never;
+    }
+  | { path: string; preparePath?: string; body?: Record<string, unknown>; endpoint?: never };
+type Props<E extends Endpoint> = Target<E> & {
   revision?: number;
   title: Title;
   label?: DisplayMessage;
@@ -27,28 +36,35 @@ type Props = {
   description?: DisplayMessage;
   disabled?: boolean;
   iconOnly?: boolean;
-  preparePath?: string;
-  body?: Record<string, unknown>;
   onDeleted: () => Promise<void> | void;
   onError?: (message: string) => void;
 };
-export function DeleteButton({
-  path,
-  revision,
-  title,
-  label = uiMessage('shared.delete'),
-  confirmLabel,
-  description = uiMessage('shared.deleteDescription'),
-  disabled,
-  iconOnly = false,
-  preparePath,
-  body,
-  onDeleted,
-  onError,
-}: Props) {
+const sendDelete = callEndpoint as (
+  endpoint: Endpoint,
+  input: Record<string, unknown>
+) => Promise<unknown>;
+
+export function DeleteButton<E extends Endpoint>(props: Props<E>) {
+  const request = props as {
+    endpoint?: Endpoint;
+    params?: Record<string, unknown>;
+    path?: string;
+    preparePath?: string;
+    body?: Record<string, unknown>;
+  };
+  const {
+    revision,
+    title,
+    label = uiMessage('shared.delete'),
+    confirmLabel,
+    description = uiMessage('shared.deleteDescription'),
+    disabled,
+    iconOnly = false,
+    onDeleted,
+    onError,
+  } = props;
   useI18n();
   const [target, setTarget] = useState<{
-    path: string;
     title: Title;
     body: Record<string, unknown>;
   } | null>(null);
@@ -67,10 +83,11 @@ export function DeleteButton({
     setBusy(true);
     setError(null);
     try {
-      const request = preparePath
-        ? (await api<{ request: Record<string, unknown> }>(preparePath)).request
-        : (body ?? (revision === undefined ? {} : { expectedRevision: revision }));
-      setTarget({ path, title, body: request });
+      const revisionBody = revision === undefined ? {} : { expectedRevision: revision };
+      const body = request.preparePath
+        ? (await api<{ request: Record<string, unknown> }>(request.preparePath)).request
+        : (request.body ?? revisionBody);
+      setTarget({ title, body });
     } catch (caught) {
       fail(caught);
     } finally {
@@ -84,7 +101,9 @@ export function DeleteButton({
     setBusy(true);
     setError(null);
     try {
-      await api(target.path, target.body, 'DELETE');
+      if (request.endpoint)
+        await sendDelete(request.endpoint, { ...request.params, ...target.body });
+      else await api(request.path!, target.body, 'DELETE');
       flushSync(() => setTarget(null));
       await onDeleted();
     } catch (caught) {

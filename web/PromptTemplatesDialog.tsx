@@ -3,7 +3,8 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
 import type { PromptPreset, PromptRole } from '../core/product.js';
-import { api } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { Dialog } from './Dialog.js';
 import { AddIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
@@ -54,7 +55,7 @@ export function PromptTemplatesDialog({
     setTemplates(null);
     setLoadError('');
     setFailure(null);
-    void api<PromptTemplateSummary[]>('/prompt-templates')
+    void callEndpoint(promptEndpoints.listTemplates)
       .then((items) => {
         if (active) setTemplates(items);
       })

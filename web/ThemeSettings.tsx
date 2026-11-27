@@ -37,8 +37,8 @@ import {
   type ThemeDefinition,
 } from '../core/themes.js';
 import { THEME_PALETTE_ID } from '../core/theme-palettes.js';
-import { appearanceEndpoints } from '#contracts';
-import { api, ApiError, callEndpoint, saveDownload } from './api.js';
+import { appearanceEndpoints, resourceEditorEndpoints } from '#contracts';
+import { ApiError, callEndpoint, saveDownload } from './api.js';
 import { errorDescriptor } from './api-errors.js';
 import { appearanceTarget, useThemes } from './ThemeContext.js';
 import { parseJsonInput } from './json-input.js';
@@ -271,12 +271,13 @@ export function ThemeSettings({
     await action(async () => {
       const model = validateTheme(draft.model);
       themeTemplate(model.templateHtml);
-      const result = await api<{ saved: Theme }>('/resources/save', {
+      const accepted = await callEndpoint(resourceEditorEndpoints.saveResource, {
         kind: 'theme',
         id: draft.id,
         expectedRevision: draft.revision,
         model,
       });
+      const result = { saved: accepted.saved as Theme };
       setDraft({
         id: result.saved.id,
         revision: result.saved.revision,

@@ -1,6 +1,5 @@
 import { ScrollStrip } from './ScrollStrip.js';
 import { useShortcut } from './shortcuts.js';
-import { cloneWithReceipt } from './resource-create-retry.js';
 import {
   t,
   useI18n,
@@ -49,11 +48,7 @@ import { changedValuePaths } from './editor-values.js';
 import { useCodeFieldBases } from './change-review.js';
 import { CodeFieldBaseContext } from './CodeField.js';
 import type { EditorReveal } from './code-field-reveal.js';
-import {
-  editableResource,
-  type ContentEditModel,
-  type ResourceSaveResult,
-} from '../core/resource-editing.js';
+import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
 import {
   useEffect,
@@ -65,9 +60,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
-import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
+import type { LibraryItemKey } from '../core/library-organization.js';
 import { placementCategory } from '../core/library-organization.js';
-import { api } from './api.js';
+import { deletionEndpoints, libraryEndpoints, resourceEditorEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { refValue } from './content-ref.js';
 import { nativeContentDraft, withNativeContentTitle } from './native-content-draft.js';
 import { validateRisuContent } from '../core/risu-content.js';
@@ -104,6 +100,7 @@ import {
   useCollapsedFolders,
   useLibraryFolderEditor,
   useLibraryItemDrag,
+  moveInput,
   useLibraryOrganization,
   type FolderFilter,
 } from './LibraryFolders.js';
@@ -124,7 +121,7 @@ import {
   type LibrarySort,
 } from './library-list-preferences.js';
 import { readOptionalJson } from './optional-storage.js';
-import { storageKeys } from './storage-keys.js';
+import { forgetBotStorage, storageKeys } from './storage-keys.js';
 
 const contentLabelKeys: Record<ContentKind, string> = {
   bot: 'library.bot',
@@ -455,11 +452,10 @@ export function LibraryPanel({
       throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
     const revision =
       creationOrganizationRevision ??
-      (await api<LibraryOrganization>('/library/organization')).revision;
+      (await callEndpoint(libraryEndpoints.readOrganization)).revision;
     const placed = await organizer.mutate(
-      '/library/organization/move',
-      { items: [{ kind: 'content', id: item.id }], category: tab, folderId },
-      'POST',
+      libraryEndpoints.moveItems,
+      moveInput([{ kind: 'content', id: item.id }], tab, folderId),
       revision
     );
     if (!placed) throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
@@ -487,15 +483,12 @@ export function LibraryPanel({
       if (action === 'edit') {
         setEditing({ kind: full.kind, item: full });
       } else if (action === 'clone') {
-        const result = await cloneWithReceipt<ResourceSaveResult>(
-          storageKeys.resourceClone('content', full.id),
-          {
-            kind: 'content',
-            sourceId: full.id,
-            expectedSourceRevision: full.revision,
-            title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
-          }
-        );
+        const result = await callEndpoint(resourceEditorEndpoints.cloneResource, {
+          kind: 'content',
+          sourceId: full.id,
+          expectedSourceRevision: full.revision,
+          title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
+        });
         const copy = result.saved as Content;
         const warnings: string[] = [];
         try {
@@ -652,10 +645,12 @@ export function LibraryPanel({
         </div>
         <div className="action-menu-group">
           <DeleteButton
-            path={`/content/${encodeURIComponent(item.id)}`}
+            endpoint={deletionEndpoints.deleteContent}
+            params={{ id: item.id }}
             revision={item.revision}
             title={item.title}
             onDeleted={async () => {
+              forgetBotStorage(item.id);
               cancelOpening();
               await reload();
             }}
@@ -1642,7 +1637,8 @@ function ContentEditor({
                   {selected && (
                     <div className="action-menu-group">
                       <DeleteButton
-                        path={`/content/${encodeURIComponent(selected.id)}`}
+                        endpoint={deletionEndpoints.deleteContent}
+                        params={{ id: selected.id }}
                         revision={selected.revision}
                         title={selected.title}
                         label={t('library.deleteResource')}
@@ -1650,6 +1646,7 @@ function ContentEditor({
                         description={t('library.removeThisResourceFromTheListAnd')}
                         onError={onError}
                         onDeleted={async () => {
+                          forgetBotStorage(selected.id);
                           onDeleted();
                           await reload();
                         }}

@@ -7,7 +7,7 @@ import { recordHelperTaskResult } from './helper-task-results.js';
 import { appearanceOperations, fontId, fontTitle } from '#contracts/operations';
 import { HelperToolError } from './app-errors.js';
 import { parseInput } from './endpoint.js';
-import { fields, record, text, number, HttpError } from './request-validation.js';
+import { fields, record, text, HttpError } from './request-validation.js';
 import {
   fontCatalog,
   fontPreferences,
@@ -246,22 +246,18 @@ export function invokePresentationTool(
     return deleteFont(store, parseInput(fontId, args.id));
   }
   if (name === 'palette.save') {
-    fields(args, ['id', 'expectedRevision', 'model']);
-    const saved = savePalette(
-      store,
-      args.model,
-      args.id === undefined ? undefined : text(args.id, 'palette ID', 100),
-      args.expectedRevision === undefined ? undefined : number(args.expectedRevision, 'revision', 0)
-    );
+    const saved =
+      args.id === undefined
+        ? savePalette(store, parseInput(appearanceOperations.createPalette.input, args).model)
+        : (() => {
+            const input = parseInput(appearanceOperations.updatePalette.input, args);
+            return savePalette(store, input.model, input.id, input.expectedRevision);
+          })();
     return { ...saved, preferencesRevision: themePreferences(store).revision };
   }
   if (name === 'palette.delete') {
-    fields(args, ['id', 'expectedRevision']);
-    return deletePalette(
-      store,
-      text(args.id, 'palette ID', 100),
-      number(args.expectedRevision, 'revision', 1)
-    );
+    const { id, expectedRevision } = parseInput(appearanceOperations.deletePalette.input, args);
+    return deletePalette(store, id, expectedRevision);
   }
   if (name === 'theme.select')
     return selectTheme(store, parseInput(appearanceOperations.selectTheme.input, args));

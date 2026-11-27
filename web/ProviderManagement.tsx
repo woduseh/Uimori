@@ -62,6 +62,7 @@ import type {
 } from '../core/product.js';
 import { PROVIDER_CHOICES, providerDefinition } from '../core/provider-definitions.js';
 import { providerLabel } from './builtin-labels.js';
+import { deletionEndpoints } from '#contracts';
 import { api, ApiError } from './api.js';
 import {
   initialModel,
@@ -320,7 +321,8 @@ export function ConnectionEditor({
   }
   const deleteConnection = (item: LibraryConnection) => (
     <DeleteButton
-      path={`/connections/${encodeURIComponent(item.id)}`}
+      endpoint={deletionEndpoints.deleteConnection}
+      params={{ id: item.id }}
       revision={item.revision}
       title={item.title}
       label={t('providers.m3')}
@@ -332,7 +334,8 @@ export function ConnectionEditor({
   );
   const deleteModel = (item: ModelPreset, iconOnly = false) => (
     <DeleteButton
-      path={`/model-presets/${encodeURIComponent(item.id)}`}
+      endpoint={deletionEndpoints.deleteModelPreset}
+      params={{ id: item.id }}
       revision={item.revision}
       title={item.title}
       label={t('providers.m5')}

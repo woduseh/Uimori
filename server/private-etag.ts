@@ -4,7 +4,6 @@ import type { FastifyInstance } from 'fastify';
 export const REVALIDATED_ROUTES: ReadonlySet<string> = new Set([
   '/api/activity-feed',
   '/api/library',
-  '/api/prompt-workspace',
   '/api/chats',
   '/api/chats/:id/reader',
   '/api/connections/:id/catalog',

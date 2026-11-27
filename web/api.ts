@@ -3,6 +3,7 @@ import {
   type EndpointInput,
   type EndpointOutput,
   endpointRequest,
+  type Invalidation,
   MAINTENANCE_CLOSED,
   type MaintenanceStatus,
   readErrorWire,
@@ -11,7 +12,7 @@ import { apiErrorMessage } from './api-errors.js';
 import { t } from './i18n.js';
 import { UiError, type UiMessage } from './ui-message.js';
 import { writeOptionalStorage } from './optional-storage.js';
-import { forgetBotStorage, forgetChatStorage, storageKeys } from './storage-keys.js';
+import { storageKeys } from './storage-keys.js';
 import { promptWorkspaceChange } from './live-frames.js';
 import { announceLocalChange } from './live-stream.js';
 
@@ -46,13 +47,6 @@ export function rememberMaintenance(next: MaintenanceStatus | undefined): void {
 }
 export const libraryChangedKey = storageKeys.libraryChanged;
 
-function forgetDeletedStorage(path: string) {
-  const [, collection, id] = /^\/(chats|content)\/([^/?]+)$/u.exec(path) ?? [];
-  if (!id) return;
-  if (collection === 'chats') forgetChatStorage(decodeURIComponent(id));
-  else forgetBotStorage(decodeURIComponent(id));
-}
-
 async function readApiResponse<T>(response: Response, notifySession = true): Promise<T> {
   if (response.ok) return (await response.json()) as T;
   return throwApiError(response, { notifySession });
@@ -80,11 +74,12 @@ export async function throwApiError(
 const runAdmission =
   /^(?:\/runs\/[^/]+\/(?:retry|rejudge|candidate|cancel)|\/chats\/[^/]+\/(?:runs|story-ui\/actions)|\/scene-commands\/[^/]+\/run)$/u;
 
-export async function api<T>(
+async function requestJson<T>(
   path: string,
-  body?: unknown,
-  method = 'POST',
-  signal?: AbortSignal
+  body: unknown,
+  method: string,
+  signal: AbortSignal | undefined,
+  headers: Record<string, string> = {}
 ): Promise<T> {
   const response = await fetch(
     `/api${path}`,
@@ -93,47 +88,58 @@ export async function api<T>(
       : {
           method,
           signal,
-          headers: {
-            'Content-Type': 'application/json',
-            ...(runAdmission.test(path) ? { Prefer: 'return=minimal' } : {}),
-          },
+          headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify(body),
         }
   );
-  const result = await readApiResponse<T>(response, path.split('?')[0] !== '/session');
-  if (method === 'DELETE' && body !== undefined) forgetDeletedStorage(path);
-  const providerSettingsChanged =
-    body !== undefined && /^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path);
-  if (
-    body !== undefined &&
-    (providerSettingsChanged ||
-      path === '/native-transfers/apply' ||
-      path === '/native-transfers/apply-archive' ||
-      path === '/risu-imports/apply' ||
-      /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/(?:prompt-workspace|model-workspace)(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
-        path
-      ))
-  ) {
+  return readApiResponse<T>(response, path.split('?')[0] !== '/session');
+}
+
+function announceChanges(invalidates: readonly Invalidation[]) {
+  const providerSettings = invalidates.includes('provider-settings');
+  if (providerSettings || invalidates.includes('library'))
     writeOptionalStorage('local', libraryChangedKey, `${Date.now()}:${Math.random()}`);
-  }
-  if (
-    body !== undefined &&
-    (path.startsWith('/prompt-workspace') ||
-      path.startsWith('/model-workspace') ||
-      providerSettingsChanged)
-  )
-    announceLocalChange(promptWorkspaceChange, { echoed: !providerSettingsChanged });
+  if (providerSettings || invalidates.includes('prompt-workspace'))
+    announceLocalChange(promptWorkspaceChange, { echoed: !providerSettings });
+}
+
+function legacyInvalidation(path: string): Invalidation[] {
+  if (/^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path)) return ['provider-settings'];
+  return path === '/native-transfers/apply' ||
+    path === '/native-transfers/apply-archive' ||
+    path === '/risu-imports/apply' ||
+    /^(?:\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/prompt-combinations(?:$|\/))/.test(path)
+    ? ['library']
+    : [];
+}
+
+export async function api<T>(
+  path: string,
+  body?: unknown,
+  method = 'POST',
+  signal?: AbortSignal
+): Promise<T> {
+  const result = await requestJson<T>(
+    path,
+    body,
+    method,
+    signal,
+    runAdmission.test(path) ? { Prefer: 'return=minimal' } : {}
+  );
+  if (body !== undefined) announceChanges(legacyInvalidation(path));
   return result;
 }
 
-export function callEndpoint<E extends Endpoint>(
+export async function callEndpoint<E extends Endpoint>(
   endpoint: E,
   ...[input, signal]: Record<string, never> extends EndpointInput<E>
     ? [input?: EndpointInput<E>, signal?: AbortSignal]
     : [input: EndpointInput<E>, signal?: AbortSignal]
 ): Promise<EndpointOutput<E>> {
   const { path, body } = endpointRequest(endpoint, input as Record<string, unknown> | undefined);
-  return api<EndpointOutput<E>>(path, body, endpoint.method, signal);
+  const result = await requestJson<EndpointOutput<E>>(path, body, endpoint.method, signal);
+  if (endpoint.invalidates) announceChanges(endpoint.invalidates);
+  return result;
 }
 
 export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSignal): Promise<T> {

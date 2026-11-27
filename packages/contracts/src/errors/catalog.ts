@@ -76,6 +76,7 @@ export type AppErrorParams = {
   REQUEST_IMAGE_INVALID: undefined;
   REQUEST_IMAGE_MISSING: undefined;
   LIBRARY_PROMPT_IN_USE: undefined;
+  LIBRARY_ITEM_DELETED: undefined;
   SEARCH_CURSOR_STALE: undefined;
   SEARCH_INTERRUPTED: undefined;
   SEARCH_BUSY: undefined;
@@ -330,6 +331,7 @@ const takesParams = {
   REQUEST_IMAGE_INVALID: false,
   REQUEST_IMAGE_MISSING: false,
   LIBRARY_PROMPT_IN_USE: false,
+  LIBRARY_ITEM_DELETED: false,
   SEARCH_CURSOR_STALE: false,
   SEARCH_INTERRUPTED: false,
   SEARCH_BUSY: false,

@@ -11,12 +11,6 @@ export const messages = {
     ja: '資料作成の復旧記録を読み取れませんでした。ページを再読み込みしてから再試行してください。',
     zh: '无法读取资料创建的恢复记录。请刷新页面后重试。',
   },
-  'shared.resourceCloneRecordInvalid': {
-    ko: '이전 복제 요청 기록을 읽을 수 없어요.',
-    en: 'Could not read the previous duplicate request record.',
-    ja: '前回の複製リクエスト記録を読み取れません。',
-    zh: '无法读取上一次复制请求的记录。',
-  },
   'shared.loading': {
     ko: '불러오는 중이에요…',
     en: 'Loading…',

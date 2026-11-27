@@ -1,13 +1,15 @@
 import { useSyncExternalStore } from 'react';
 import type { PromptWorkspace } from '../core/product.js';
-import { api, libraryChangedKey } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { callEndpoint, libraryChangedKey } from './api.js';
 import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 import { createPromptWorkspaceStore } from './prompt-workspace-store.js';
 
 const store = createPromptWorkspaceStore({
-  load: (signal) => api<PromptWorkspace>('/prompt-workspace', undefined, 'GET', signal),
+  load: async (signal) =>
+    (await callEndpoint(promptEndpoints.readWorkspace, {}, signal)) as PromptWorkspace,
   listen: (reload) => {
     const storage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) reload();

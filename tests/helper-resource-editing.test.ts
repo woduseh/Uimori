@@ -632,7 +632,7 @@ test('preset clones keep native names by default and can synchronize them atomic
     }).text
   ).toBe('Preserved authored prompt');
   expect(() => clone('Bad', 'true' as unknown as boolean)).toThrow(
-    'syncNativeName must be a boolean'
+    'INVALID_REQUEST: syncNativeName'
   );
 });
 

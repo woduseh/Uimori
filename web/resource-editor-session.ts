@@ -1,5 +1,6 @@
 import { message } from './i18n.js';
-import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
+import { resourceEditorEndpoints as endpoints } from '#contracts';
+import { ApiError, callEndpoint, definiteRejection, libraryChangedKey } from './api.js';
 import { errorDescriptor } from './api-errors.js';
 import {
   editableResource,
@@ -137,8 +138,11 @@ export class ResourceEditorSession {
       restoreVersion: this.state.restoreVersion + 1,
     });
   }
-  private path() {
-    return `/resources/${this.options.kind}/${encodeURIComponent(this.state.document.targetId ?? '')}`;
+  private target() {
+    return { kind: this.options.kind, id: this.state.document.targetId ?? '' };
+  }
+  private readTarget() {
+    return callEndpoint(endpoints.readResource, this.target()) as Promise<SavedResource>;
   }
   open(): Promise<void> {
     this.disposed = false;
@@ -146,7 +150,7 @@ export class ResourceEditorSession {
     const load = ++this.loadVersion;
     this.opening = (async () => {
       try {
-        const saved = this.options.targetId ? await api<SavedResource>(this.path()) : null;
+        const saved = this.options.targetId ? await this.readTarget() : null;
         if (this.disposed || load !== this.loadVersion) return;
         let recovered: RecoveryBuffer<ResourceModel> | undefined;
         let recoveryFailed = false;
@@ -315,7 +319,7 @@ export class ResourceEditorSession {
     await this.open();
     if (!this.state.document.targetId || this.state.saving) return;
     const load = ++this.loadVersion;
-    const saved = await api<SavedResource>(this.path());
+    const saved = await this.readTarget();
     if (this.disposed || load !== this.loadVersion || this.state.saving) return;
     if (saved.revision <= (this.state.document.baseRevision ?? 0)) return;
     if (this.state.dirty) this.emit({ conflict: true });
@@ -333,7 +337,7 @@ export class ResourceEditorSession {
     const load = ++this.loadVersion;
     const generation = this.generation;
     const id = this.state.document.targetId;
-    const saved = id ? await api<SavedResource>(this.path()) : null;
+    const saved = id ? await this.readTarget() : null;
     if (this.disposed || load !== this.loadVersion || generation !== this.generation) return;
     this.adopt(
       saved ? editableResource(this.options.kind, saved) : this.options.initialModel,
@@ -345,13 +349,14 @@ export class ResourceEditorSession {
   async readSaved() {
     const id = this.state.document.targetId;
     if (!id) return null;
-    const saved = await api<SavedResource>(this.path());
+    const saved = await this.readTarget();
     return { revision: saved.revision, model: editableResource(this.options.kind, saved) };
   }
   async readPrevious() {
     if (!this.state.document.targetId) return null;
     try {
-      return await api<{ savedRevision: number; model: ResourceModel }>(`${this.path()}/previous`);
+      const previous = await callEndpoint(endpoints.readPreviousResource, this.target());
+      return { savedRevision: previous.savedRevision, model: previous.model as ResourceModel };
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;
@@ -400,13 +405,13 @@ export class ResourceEditorSession {
         });
         persisted = true;
       }
-      const result = await api<ResourceSaveResult>('/resources/save', {
+      const result = (await callEndpoint(endpoints.saveResource, {
         kind: this.options.kind,
         id: creation ? null : document.targetId,
         expectedRevision: creation ? undefined : (document.baseRevision ?? undefined),
         model: creation?.model ?? prepared,
         ...(creation ? { idempotencyKey: creation.key } : {}),
-      });
+      })) as ResourceSaveResult;
       admitted = true;
       this.pendingCreation = null;
       const targetId =
@@ -469,9 +474,10 @@ export class ResourceEditorSession {
       throw new Error(message('shared.unsavedRequired'));
     const generation = this.generation;
     const load = ++this.loadVersion;
-    const result = await api<ResourceSaveResult>(`${this.path()}/undo`, {
-      expectedRevision: this.state.document.baseRevision,
-    });
+    const result = (await callEndpoint(endpoints.undoResource, {
+      ...this.target(),
+      expectedRevision: this.state.document.baseRevision ?? 0,
+    })) as ResourceSaveResult;
     if (!this.disposed && load === this.loadVersion && generation === this.generation) {
       this.adopt(
         editableResource(this.options.kind, result.saved),

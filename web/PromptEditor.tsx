@@ -1,3 +1,4 @@
+import { deletionEndpoints } from '#contracts';
 import { t, useI18n, message as uiMessage, messageRef } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
@@ -352,7 +353,8 @@ export function PromptEditor({
             </div>
             <div className="action-menu-group">
               <DeleteButton
-                path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+                endpoint={deletionEndpoints.deletePromptPreset}
+                params={{ id: draft.base.id }}
                 revision={draft.base.revision}
                 title={draft.base.title}
                 label={t('prompts.uiDeletePrompt')}

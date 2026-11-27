@@ -1,33 +1,24 @@
-import { HttpError, fields, number, record, text } from './request-validation.js';
-import { AppError } from './app-errors.js';
+import {
+  type CreateLibraryFolder,
+  type DeleteLibraryFolder,
+  libraryEndpoints,
+  type LibraryCategory,
+  type LibraryFolder,
+  type LibraryOrganization,
+  type LibraryPlacement,
+  type MoveLibraryItems,
+  type UpdateLibraryFolder,
+} from '#contracts';
+import { libraryOperations } from '#contracts/operations';
+import { HttpError } from './request-validation.js';
+import { assertRevision } from './app-errors.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Content } from '../core/product.js';
-import type {
-  LibraryCategory,
-  LibraryFolder,
-  LibraryItemKey,
-  LibraryOrganization,
-  LibraryPlacement,
-} from '../core/library-organization.js';
-import { libraryItemKey } from '../core/library-organization.js';
 import type { Store } from './store.js';
 import { queueImageCleanup } from './unused-data.js';
-
-const categories = ['bot', 'persona', 'module', 'prompts'];
-function category(value: unknown): LibraryCategory {
-  if (typeof value !== 'string' || !categories.includes(value))
-    throw new HttpError(400, 'Invalid library category');
-  return value as LibraryCategory;
-}
-function itemKey(value: unknown): LibraryItemKey {
-  const item = record(value);
-  fields(item, ['kind', 'id']);
-  if (!['content', 'prompt-preset'].includes(item.kind))
-    throw new HttpError(400, 'Invalid library item kind');
-  return { kind: item.kind, id: text(item.id, 'library item ID', 100) };
-}
+import { registerEndpoint } from './endpoint.js';
 
 export function initLibraryFolderCovers(db: DatabaseSync) {
   db.exec(`CREATE TABLE IF NOT EXISTS library_folder_covers(
@@ -72,10 +63,9 @@ export class LibraryOrganizationStore {
   private bump() {
     this.store.db.exec('UPDATE library_organization_state SET revision=revision+1 WHERE id=1');
   }
-  private edit(expected: unknown, action: () => void) {
-    const revision = number(expected, 'library organization revision');
+  private edit(expected: number, action: () => void) {
     return this.store.transaction(() => {
-      if (this.snapshot().revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
+      assertRevision(this.snapshot().revision, expected);
       action();
       this.bump();
       return this.snapshot();
@@ -93,19 +83,15 @@ export class LibraryOrganizationStore {
     this.store.db.prepare('DELETE FROM library_placements WHERE kind=? AND id=?').run(kind, id);
     this.bump();
   }
-  private folder(id: string, expectedCategory?: string) {
+  private folder(id: string, expectedCategory?: LibraryCategory) {
     const folder = this.snapshot().folders.find((item) => item.id === id);
     if (!folder) throw new HttpError(404, 'Library folder not found');
-    if (expectedCategory !== undefined && category(expectedCategory) !== folder.category)
+    if (expectedCategory !== undefined && expectedCategory !== folder.category)
       throw new HttpError(409, 'Folder is outside this category');
     return folder;
   }
-  createFolder(value: unknown) {
-    const b = record(value);
-    fields(b, ['expectedRevision', 'category', 'title']);
-    const kind = category(b.category),
-      title = text(b.title, 'folder title', 200).trim();
-    return this.edit(b.expectedRevision, () => {
+  createFolder({ expectedRevision, category: kind, title }: CreateLibraryFolder) {
+    return this.edit(expectedRevision, () => {
       const count = this.snapshot().folders.filter((folder) => folder.category === kind).length;
       this.store.db
         .prepare('INSERT INTO library_folders VALUES(?,?,?,?)')
@@ -120,29 +106,21 @@ export class LibraryOrganizationStore {
     this.store.db.prepare('DELETE FROM library_folder_covers WHERE folder_id=?').run(id);
     queueImageCleanup(this.store.db, [String(previous.hash)]);
   }
-  private setCover(id: string, value: unknown) {
+  private setCover(id: string, hash: string | null) {
     this.clearCover(id);
-    if (value === null) return;
-    const hash = text(value, 'folder cover image', 64);
+    if (hash === null) return;
     if (!this.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash))
       throw new HttpError(400, 'Folder cover image not found');
     this.store.db.prepare('INSERT INTO library_folder_covers VALUES(?,?)').run(id, hash);
   }
-  updateFolder(id: string, value: unknown, expectedCategory?: string) {
-    const b = record(value);
-    fields(b, ['expectedRevision', 'title', 'beforeFolderId', 'coverImageHash']);
-    if (b.title === undefined && b.beforeFolderId === undefined && b.coverImageHash === undefined)
-      throw new HttpError(400, 'Folder update is empty');
-    return this.edit(b.expectedRevision, () => {
+  updateFolder(input: UpdateLibraryFolder, expectedCategory?: LibraryCategory) {
+    const { id, title, coverImageHash, beforeFolderId: anchor } = input;
+    return this.edit(input.expectedRevision, () => {
       const folder = this.folder(id, expectedCategory);
-      if (b.title !== undefined)
-        this.store.db
-          .prepare('UPDATE library_folders SET title=? WHERE id=?')
-          .run(text(b.title, 'folder title', 200).trim(), id);
-      if (b.coverImageHash !== undefined) this.setCover(id, b.coverImageHash);
-      if (b.beforeFolderId !== undefined) {
-        const anchor =
-          b.beforeFolderId === null ? null : text(b.beforeFolderId, 'folder anchor', 100);
+      if (title !== undefined)
+        this.store.db.prepare('UPDATE library_folders SET title=? WHERE id=?').run(title, id);
+      if (coverImageHash !== undefined) this.setCover(id, coverImageHash);
+      if (anchor !== undefined) {
         const siblings = this.snapshot()
           .folders.filter((item) => item.category === folder.category && item.id !== id)
           .map((item) => item.id);
@@ -159,10 +137,8 @@ export class LibraryOrganizationStore {
       update.run(index, id);
     });
   }
-  deleteFolder(id: string, value: unknown, expectedCategory?: string) {
-    const b = record(value);
-    fields(b, ['expectedRevision']);
-    return this.edit(b.expectedRevision, () => {
+  deleteFolder({ id, expectedRevision }: DeleteLibraryFolder, expectedCategory?: LibraryCategory) {
+    return this.edit(expectedRevision, () => {
       const folder = this.folder(id, expectedCategory);
       this.clearCover(id);
       this.store.db
@@ -176,22 +152,12 @@ export class LibraryOrganizationStore {
       );
     });
   }
-  move(value: unknown) {
-    const b = record(value);
-    fields(b, ['expectedRevision', 'items', 'category', 'folderId']);
-    if (!Array.isArray(b.items) || !b.items.length || b.items.length > 1000)
-      throw new HttpError(400, 'Select 1 to 1000 library items');
-    const items = b.items.map(itemKey),
-      destination = category(b.category);
-    const folderId = b.folderId === null ? null : text(b.folderId, 'library folder ID', 100);
-    if (new Set(items.map(libraryItemKey)).size !== items.length)
-      throw new HttpError(400, 'Duplicate library item');
-    return this.edit(b.expectedRevision, () => {
+  move({ expectedRevision, items, category: destination, folderId }: MoveLibraryItems) {
+    return this.edit(expectedRevision, () => {
       if (folderId !== null && this.folder(folderId).category !== destination)
         throw new HttpError(400, 'Destination folder belongs to another category');
       for (const item of items) {
-        if ((item.kind === 'prompt-preset') !== (destination === 'prompts'))
-          throw new HttpError(400, 'Prompt presets and content use separate categories');
+        this.store.product.assertAvailable(item.kind, item.id);
         this.store.product.get(item.kind, item.id);
       }
       const move = this.store.db.prepare(
@@ -204,13 +170,19 @@ export class LibraryOrganizationStore {
 
 export function libraryOrganizationRoutes(app: FastifyInstance, store: Store) {
   const org = store.libraryOrganization;
-  app.get('/api/library/organization', async () => org.snapshot());
-  app.post('/api/library/folders', async (request) => org.createFolder(request.body));
-  app.patch<{ Params: { id: string } }>('/api/library/folders/:id', async (request) =>
-    org.updateFolder(request.params.id, request.body)
+  const endpoints = libraryEndpoints,
+    operations = libraryOperations;
+  registerEndpoint(app, endpoints.readOrganization, operations.readOrganization, () =>
+    org.snapshot()
   );
-  app.delete<{ Params: { id: string } }>('/api/library/folders/:id', async (request) =>
-    org.deleteFolder(request.params.id, request.body)
+  registerEndpoint(app, endpoints.createFolder, operations.createFolder, (input) =>
+    org.createFolder(input)
   );
-  app.post('/api/library/organization/move', async (request) => org.move(request.body));
+  registerEndpoint(app, endpoints.updateFolder, operations.updateFolder, (input) =>
+    org.updateFolder(input)
+  );
+  registerEndpoint(app, endpoints.deleteFolder, operations.deleteFolder, (input) =>
+    org.deleteFolder(input)
+  );
+  registerEndpoint(app, endpoints.moveItems, operations.moveItems, (input) => org.move(input));
 }

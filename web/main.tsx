@@ -171,7 +171,7 @@ import {
   type SidePanelTab,
 } from './side-panel.js';
 import { modelLabel } from './storyLabels.js';
-import { storageKeys, sweepUnregisteredStorage } from './storage-keys.js';
+import { forgetChatStorage, storageKeys, sweepUnregisteredStorage } from './storage-keys.js';
 import './style.css';
 import './product.css';
 import './sidebar.css';
@@ -1988,7 +1988,10 @@ function App() {
                           description={t('main.m073')}
                           disabled={!!s.active}
                           onError={s.setError}
-                          onDeleted={() => s.loadChats()}
+                          onDeleted={() => {
+                            forgetChatStorage(s.selected!);
+                            return s.loadChats();
+                          }}
                         />
                       )}
                     </div>

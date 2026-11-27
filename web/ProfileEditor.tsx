@@ -9,13 +9,14 @@ import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import type { ExternalJudgmentProvider } from '../core/judgment-settings.js';
-import { api } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
 import { ContentAttachments } from './ContentAttachments.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
-import type { LoreContextDefaults, LoreContextPolicy } from '../core/lore-context.js';
+import type { LoreContextPolicy } from '../core/lore-context.js';
 import './library.css';
 import './settings-actions.css';
 import { useRetryableEffect } from './useRetryableEffect.js';
@@ -103,7 +104,7 @@ export function ProfileEditor({
   const retryLoreDefaults = useRetryableEffect(() => {
     let active = true;
     setLoreDefaultsError(false);
-    void api<LoreContextDefaults>('/lore-context-defaults')
+    void callEndpoint(promptEndpoints.readLoreContextDefaults)
       .then(({ revision: _revision, ...policy }) => {
         if (active) setLoreDefaults(policy);
       })

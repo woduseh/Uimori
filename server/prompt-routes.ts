@@ -3,6 +3,9 @@ import { readRunSnapshot } from './run-projections.js';
 import { PROMPT_HTTP_BODY_MAX_BYTES, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
+import { promptEndpoints } from '#contracts';
+import { promptOperations } from '#contracts/operations';
+import { registerEndpoint } from './endpoint.js';
 import { defaultProfile } from '../core/product.js';
 import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
 import { planNativeMessages } from '../core/provider-messages.js';
@@ -31,9 +34,11 @@ import {
 
 export function promptRoutes(app: FastifyInstance, store: Store) {
   requestPreviewRoutes(app, store);
-  app.get('/api/prompt-templates', async () => builtinPromptTemplates());
-  app.get<{ Params: { id: string } }>('/api/prompt-templates/:id', async (request) => {
-    const template = builtinPromptTemplate(request.params.id);
+  registerEndpoint(app, promptEndpoints.listTemplates, promptOperations.listTemplates, () =>
+    builtinPromptTemplates()
+  );
+  registerEndpoint(app, promptEndpoints.readTemplate, promptOperations.readTemplate, ({ id }) => {
+    const template = builtinPromptTemplate(id);
     if (!template) throw new HttpError(404, 'Unknown prompt template');
     return template;
   });

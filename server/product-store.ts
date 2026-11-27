@@ -187,8 +187,15 @@ export class ProductStore {
   isHidden(kind: string, id: string): boolean {
     return !!this.db.prepare('SELECT 1 FROM library_hidden WHERE kind=? AND id=?').get(kind, id);
   }
+  private stored(kind: string, id: string): boolean {
+    const table = isProviderSetting(kind) ? 'provider_settings' : 'versions';
+    return (
+      !this.isHidden(kind, id) &&
+      !!this.db.prepare(`SELECT 1 FROM ${table} WHERE kind=? AND id=?`).get(kind, id)
+    );
+  }
   assertAvailable(kind: string, id: string) {
-    if (this.isHidden(kind, id)) throw new HttpError(404, 'Library item deleted');
+    if (!this.stored(kind, id)) throw new AppError(404, 'LIBRARY_ITEM_DELETED');
   }
   get<T>(kind: string, id: string, revision?: number): T {
     if (kind === 'package-image') return encodedImage(this.db, id) as T;
@@ -210,16 +217,8 @@ export class ProductStore {
     if (!r) throw new HttpError(404, `${kind} revision not found`);
     return parse(r.body);
   }
-  editedSetting<T extends { revision: number }>(
-    kind: 'connection' | 'model',
-    id: string,
-    expected: number
-  ): T {
-    if (
-      this.isHidden(kind, id) ||
-      !this.db.prepare('SELECT 1 FROM provider_settings WHERE kind=? AND id=?').get(kind, id)
-    )
-      throw new AppError(409, 'REVISION_CONFLICT');
+  editable<T extends { revision: number }>(kind: string, id: string, expected?: number): T {
+    if (!this.stored(kind, id)) throw new AppError(409, 'REVISION_CONFLICT');
     const current = this.get<T>(kind, id);
     if (current.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     return current;
@@ -238,9 +237,7 @@ export class ProductStore {
           .get(createId, createId, createId))
     )
       throw new HttpError(409, 'New library identity already exists');
-    if (id) this.assertAvailable(kind, id);
-    const prior = id ? this.get<Row & ContentRef>(kind, id) : null;
-    if (prior && prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    const prior = id ? this.editable<Row & ContentRef>(kind, id, expected) : null;
     const result: Row & ContentRef = {
       ...value,
       id: id ?? createId ?? randomUUID(),
@@ -391,11 +388,12 @@ export class ProductStore {
         )
           throw new AppError(409, 'REVISION_CONFLICT');
       } else {
-        this.assertAvailable('prompt-preset', owner.id);
-        const preset = this.get<PromptPreset>('prompt-preset', owner.id);
+        const preset = this.editable<PromptPreset>(
+          'prompt-preset',
+          owner.id,
+          number(b.expectedRevision, 'prompt revision')
+        );
         if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
-        if (preset.revision !== number(b.expectedRevision, 'prompt revision'))
-          throw new AppError(409, 'REVISION_CONFLICT');
         program = preset.program;
       }
       const values = resolveEditablePromptValues(program, record(b.values));
@@ -480,9 +478,7 @@ export class ProductStore {
       'expectedRevision',
     ]);
     const expectedRevision = id ? number(b.expectedRevision, 'revision') : undefined;
-    const current = id
-      ? this.editedSetting<ModelPreset>('model', id, expectedRevision!)
-      : undefined;
+    const current = id ? this.editable<ModelPreset>('model', id, expectedRevision!) : undefined;
     const displayOrder = current ? current.displayOrder : b.displayOrder;
     const connectionId = text(b.connectionId, 'connection ID', 100);
     if (validationConnection && validationConnection.id !== connectionId)

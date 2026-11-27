@@ -1,3 +1,5 @@
+import { resourceEditorOperations } from '#contracts/operations';
+import { parseInput } from './endpoint.js';
 import { illustrationPresetCatalog, deleteIllustrationPreset } from './illustration-presets.js';
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { themeCatalog, deleteTheme } from './themes.js';
@@ -11,7 +13,7 @@ import type { Store } from './store.js';
 import { cloneResource, readResource, saveResource, undoResource } from './resource-service.js';
 import { deleteLibraryItem } from './library-deletion.js';
 import { HelperToolError } from './app-errors.js';
-import { fields, record, number, text } from './request-validation.js';
+import { number, text } from './request-validation.js';
 import { patchHelperResource, readHelperResource } from './helper-resource-editing.js';
 import { patchHelperResources } from './helper-resource-batch.js';
 import { readHelperResources, validateHelperPreset } from './helper-resource-inspection.js';
@@ -556,22 +558,10 @@ export function invokeResourceTool(
     );
   const kind = args.kind as ResourceKind;
   if (name === 'resource.clone') {
-    fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title', 'syncNativeName']);
-    if (args.syncNativeName !== undefined && typeof args.syncNativeName !== 'boolean')
-      throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'syncNativeName must be a boolean');
-    if (kind !== 'content' && kind !== 'prompt-preset')
-      throw new HelperToolError(
-        400,
-        'INVALID_ARGUMENTS',
-        'Only content and prompt-preset can be cloned'
-      );
-    const result = cloneResource(store, {
-      kind,
-      sourceId: text(args.sourceId, 'source resource ID', 100),
-      expectedSourceRevision: number(args.expectedSourceRevision, 'source revision'),
-      title: text(args.title, 'title', 200),
-      ...(args.syncNativeName === undefined ? {} : { syncNativeName: args.syncNativeName }),
-    });
+    const result = cloneResource(
+      store,
+      parseInput(resourceEditorOperations.cloneResource.input, args)
+    );
     return { ...summary(result), source: result.source };
   }
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
@@ -588,15 +578,16 @@ export function invokeResourceTool(
   }
   const expectedRevision =
     args.expectedRevision === undefined ? undefined : number(args.expectedRevision, 'revision');
-  if (name === 'resource.save')
+  if (name === 'resource.save') {
+    const input = parseInput(resourceEditorOperations.saveResource.input, args);
     return summary(
       saveResource(store, {
-        kind,
-        id,
-        expectedRevision,
-        model: record(args.model) as ResourceModel,
+        ...input,
+        id: input.id ?? null,
+        model: input.model as ResourceModel,
       })
     );
+  }
   if (!id || expectedRevision === undefined)
     throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id and expectedRevision are required');
   if (name === 'resource.undo') return summary(undoResource(store, kind, id, expectedRevision));

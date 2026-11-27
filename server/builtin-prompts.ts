@@ -30,7 +30,7 @@ const templates = [
 ] as const;
 
 export function builtinPromptTemplates() {
-  return structuredClone(templates);
+  return templates.map((template) => ({ ...template }));
 }
 
 export function builtinPromptTemplate(id: string) {

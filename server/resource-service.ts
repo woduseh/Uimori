@@ -15,25 +15,42 @@ import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HttpError } from './request-validation.js';
 import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
-import { AppError } from './app-errors.js';
+import { AppError, assertRevision } from './app-errors.js';
+import type { CloneResource } from '#contracts';
 
 type CreationReceipt = { kind: ResourceKind; id: string; organizationRevision?: number };
 
-function creationReceipt(operation: 'save' | 'clone', key: string, payload: unknown) {
-  const receiptKey = `resource:${operation}:${key}`;
+function creationReceipt(key: string, payload: unknown) {
+  const receiptKey = `resource:save:${key}`;
   const digest = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   return { receiptKey, digest };
 }
 
 export function readResource(store: Store, kind: ResourceKind, id: string): SavedResource {
-  if (kind === 'illustration-preset') return readIllustrationPreset(store, id);
-  if (kind === 'theme') return readTheme(store, id);
-  return kind === 'prompt-workspace' ? promptWorkspace(store) : store.product.get(kind, id);
+  if (kind === 'prompt-workspace') return promptWorkspace(store);
+  try {
+    if (kind === 'illustration-preset') return readIllustrationPreset(store, id);
+    if (kind === 'theme') return readTheme(store, id);
+    store.product.assertAvailable(kind, id);
+    return store.product.get(kind, id);
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404)
+      throw new AppError(404, 'LIBRARY_ITEM_DELETED');
+    throw error;
+  }
+}
+
+function readForEdit(store: Store, kind: ResourceKind, id: string): SavedResource {
+  try {
+    return readResource(store, kind, id);
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404)
+      throw new AppError(409, 'REVISION_CONFLICT');
+    throw error;
+  }
 }
 
 function readCreatedResource(store: Store, receipt: CreationReceipt): SavedResource {
-  if (store.product.isHidden(receipt.kind, receipt.id))
-    throw new AppError(410, 'RESOURCE_CREATION_REMOVED');
   try {
     return readResource(store, receipt.kind, receipt.id);
   } catch (error) {
@@ -56,7 +73,7 @@ export function saveResource(
   return store.transaction(() => {
     const receipt =
       !edit.id && edit.kind !== 'prompt-workspace' && edit.idempotencyKey
-        ? creationReceipt('save', edit.idempotencyKey, { kind: edit.kind, model: edit.model })
+        ? creationReceipt(edit.idempotencyKey, { kind: edit.kind, model: edit.model })
         : null;
     if (receipt) {
       const previous = readImportReceipt<CreationReceipt>(
@@ -74,7 +91,7 @@ export function saveResource(
         };
     }
     const id = edit.kind === 'prompt-workspace' ? 'current' : edit.id;
-    const previous = id ? readResource(store, edit.kind, id) : null;
+    const previous = id ? readForEdit(store, edit.kind, id) : null;
     const oldUndo = id
       ? store.db.prepare('SELECT model FROM resource_undo WHERE kind=? AND id=?').get(edit.kind, id)
           ?.model
@@ -88,7 +105,7 @@ export function saveResource(
         : edit.kind === 'theme'
           ? saveTheme(store, edit.model, id ?? undefined, edit.expectedRevision)
           : edit.kind === 'prompt-workspace'
-            ? updatePromptWorkspace(store, input)
+            ? updatePromptWorkspace(store, { ...edit.model, expectedRevision: previous!.revision })
             : edit.kind === 'content'
               ? (store.product.content(input, id ?? undefined) as SavedResource)
               : (store.product.promptPreset(input, id ?? undefined) as SavedResource);
@@ -134,47 +151,10 @@ export function saveResource(
   });
 }
 
-export function cloneResource(
-  store: Store,
-  request: {
-    kind: 'content' | 'prompt-preset';
-    sourceId: string;
-    expectedSourceRevision: number;
-    title: string;
-    syncNativeName?: boolean;
-    idempotencyKey?: string;
-  }
-) {
-  if (request.syncNativeName && request.kind !== 'prompt-preset')
-    throw new HttpError(400, 'syncNativeName requires a prompt preset');
+export function cloneResource(store: Store, request: CloneResource) {
   return store.transaction(() => {
-    const receipt = request.idempotencyKey
-      ? creationReceipt('clone', request.idempotencyKey, {
-          kind: request.kind,
-          sourceId: request.sourceId,
-          expectedSourceRevision: request.expectedSourceRevision,
-          title: request.title,
-          syncNativeName: request.syncNativeName ?? false,
-        })
-      : null;
-    if (receipt) {
-      const previous = readImportReceipt<
-        CreationReceipt & { source: { id: string; revision: number } }
-      >(store, receipt.receiptKey, receipt.digest);
-      if (previous)
-        return {
-          saved: readCreatedResource(store, previous),
-          created: false,
-          source: previous.source,
-          ...(previous.organizationRevision === undefined
-            ? {}
-            : { creationOrganizationRevision: previous.organizationRevision }),
-        };
-    }
-    store.product.assertAvailable(request.kind, request.sourceId);
-    const source = readResource(store, request.kind, request.sourceId);
-    if (source.revision !== request.expectedSourceRevision)
-      throw new AppError(409, 'REVISION_CONFLICT');
+    const source = readForEdit(store, request.kind, request.sourceId);
+    assertRevision(source.revision, request.expectedSourceRevision);
     const model = structuredClone(editableResource(request.kind, source));
     if (request.kind === 'content') {
       const content = model as ContentEditModel;
@@ -190,17 +170,7 @@ export function cloneResource(
       if (request.syncNativeName) preset.program.nativeRisuPreset.preset.name = request.title;
     }
     const result = saveResource(store, { kind: request.kind, id: null, model });
-    const origin = { id: request.sourceId, revision: source.revision };
-    if (receipt)
-      saveImportReceipt(store, receipt.receiptKey, receipt.digest, {
-        kind: request.kind,
-        id: (result.saved as { id: string }).id,
-        source: origin,
-        ...(result.creationOrganizationRevision === undefined
-          ? {}
-          : { organizationRevision: result.creationOrganizationRevision }),
-      });
-    return { ...result, source: origin };
+    return { ...result, source: { id: request.sourceId, revision: source.revision } };
   });
 }
 

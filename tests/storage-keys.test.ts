@@ -71,7 +71,6 @@ test('builders keep the key names browsers already hold', () => {
     storageKeys.outlineWorkspace('c1'),
     storageKeys.storyUiDraft('c1', 's1', 'h', 'b'),
     storageKeys.textDraft('s1', 'original'),
-    storageKeys.resourceClone('content', 'r1'),
     storageKeys.turnActivity('c1', 'r1'),
     storageKeys.helperTaskActivity('h1', 't1', true),
     storageKeys.helperTaskActivity('h1', 't1', false),
@@ -102,7 +101,6 @@ test('builders keep the key names browsers already hold', () => {
     'outline-workspace:c1',
     'uimori:story-ui-draft:c1:s1:h:b',
     'uimori:text-draft:s1:original',
-    'resource-clone:content:r1',
     'turn-activity:c1:r1',
     'helper-task-activity:h1:t1:settled',
     'helper-task-activity:h1:t1',
@@ -166,7 +164,6 @@ test('unsent work and recovery receipts are registered and therefore never swept
       'pending-profile:',
       'fork-command:',
       'scene-delete:',
-      'resource-clone:',
     ])
   );
   expect(storageFamilies.filter((family) => family.work && family.cap)).toEqual([]);

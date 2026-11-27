@@ -7,7 +7,8 @@ import type {
   LibraryItemKey,
   LibraryOrganization,
 } from '../core/library-organization.js';
-import { api } from './api.js';
+import { type EndpointInput, libraryEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -34,6 +35,16 @@ const categoryLabelKeys: Record<LibraryCategory, string> = {
   prompts: 'library.prompts',
 };
 export type FolderFilter = 'all' | string;
+export type LibraryWrite = (typeof libraryEndpoints)[Exclude<
+  keyof typeof libraryEndpoints,
+  'readOrganization'
+>];
+type WithoutRevision<T> = T extends unknown ? Omit<T, 'expectedRevision'> : never;
+export type LibraryWriteInput<E extends LibraryWrite> = WithoutRevision<EndpointInput<E>>;
+const sendLibraryWrite = callEndpoint as (
+  endpoint: LibraryWrite,
+  input: Record<string, unknown>
+) => Promise<LibraryOrganization>;
 
 export function useLibraryOrganization(
   library: Library | null,
@@ -58,7 +69,7 @@ export function useLibraryOrganization(
     if (!library) setOrganization(null);
     let alive = true;
     if (library)
-      void api<LibraryOrganization>('/library/organization')
+      void callEndpoint(libraryEndpoints.readOrganization)
         .then((value) => {
           if (alive && request === loadVersion.current) setOrganization(value);
         })
@@ -69,10 +80,9 @@ export function useLibraryOrganization(
       alive = false;
     };
   }, [library]);
-  async function mutate(
-    path: string,
-    body: Record<string, unknown>,
-    method = 'POST',
+  async function mutate<E extends LibraryWrite>(
+    endpoint: E,
+    input: LibraryWriteInput<E>,
     expectedRevision = organization?.revision
   ) {
     if (lock.current || expectedRevision === undefined) return false;
@@ -80,7 +90,7 @@ export function useLibraryOrganization(
     const request = ++loadVersion.current;
     setBusy(true);
     try {
-      const result = await api<LibraryOrganization>(path, { ...body, expectedRevision }, method);
+      const result = await sendLibraryWrite(endpoint, { ...input, expectedRevision });
       if (request === loadVersion.current) setOrganization(result);
       try {
         await reload();
@@ -96,7 +106,7 @@ export function useLibraryOrganization(
       onError((error as Error).message);
       try {
         const refresh = ++loadVersion.current;
-        const latest = await api<LibraryOrganization>('/library/organization');
+        const latest = await callEndpoint(libraryEndpoints.readOrganization);
         if (refresh === loadVersion.current) setOrganization(latest);
         await reload();
       } catch {}
@@ -109,6 +119,14 @@ export function useLibraryOrganization(
   return { organization, busy, mutate };
 }
 type LibraryOrganizer = ReturnType<typeof useLibraryOrganization>;
+
+export function moveInput(
+  items: LibraryItemKey[],
+  category: LibraryCategory,
+  folderId: string | null
+): LibraryWriteInput<typeof libraryEndpoints.moveItems> {
+  return { items, category, folderId } as LibraryWriteInput<typeof libraryEndpoints.moveItems>;
+}
 
 export function LibraryItemMenu({
   title,
@@ -202,7 +220,8 @@ export function useLibraryFolderEditor({
         </div>
         <div className="action-menu-group">
           <DeleteButton
-            path={`/library/folders/${encodeURIComponent(folder.id)}`}
+            endpoint={libraryEndpoints.deleteFolder}
+            params={{ id: folder.id }}
             revision={organization?.revision}
             title={folder.title}
             label={t('library.deleteFolder')}
@@ -229,11 +248,7 @@ export function useLibraryFolderEditor({
         portraits={coverFolder ? covers?.[coverFolder.id] : undefined}
         busy={busy}
         onApply={(coverImageHash) =>
-          mutate(
-            `/library/folders/${encodeURIComponent(coverFolder!.id)}`,
-            { coverImageHash },
-            'PATCH'
-          )
+          mutate(libraryEndpoints.updateFolder, { id: coverFolder!.id, coverImageHash })
         }
         onClose={() => setCoverFolderId(null)}
       />
@@ -249,14 +264,17 @@ export function useLibraryFolderEditor({
           onSubmit={async (event) => {
             event.preventDefault();
             if (!edit) return;
-            const success = await mutate(
-              edit.folder
-                ? `/library/folders/${encodeURIComponent(edit.folder.id)}`
-                : '/library/folders',
-              { title: title.trim(), ...(edit.folder ? {} : { category }) },
-              edit.folder ? 'PATCH' : 'POST',
-              edit.revision
-            );
+            const success = edit.folder
+              ? await mutate(
+                  libraryEndpoints.updateFolder,
+                  { id: edit.folder.id, title: title.trim() },
+                  edit.revision
+                )
+              : await mutate(
+                  libraryEndpoints.createFolder,
+                  { title: title.trim(), category },
+                  edit.revision
+                );
             if (success) setEdit(null);
           }}
         >
@@ -353,11 +371,10 @@ export function useLibraryItemDrag({
   }
   function move(id: string, folderId: string | null) {
     if (folderOf(id) === folderId) return;
-    void organizer.mutate('/library/organization/move', {
-      items: [{ kind, id }],
-      category,
-      folderId,
-    });
+    void organizer.mutate(
+      libraryEndpoints.moveItems,
+      moveInput([{ kind, id }], category, folderId)
+    );
   }
   function overFolder(folderId: string | null, event: DragEvent<HTMLElement>) {
     const source = dragged.current;
@@ -475,7 +492,7 @@ export function LibraryFolderChips({
       edgeOf(event) === 'before' ? folderId : (remaining[index + 1]?.id ?? null);
     clearFolderDrag();
     if (id === folderId || busy) return;
-    void mutate(`/library/folders/${encodeURIComponent(id)}`, { beforeFolderId }, 'PATCH');
+    void mutate(libraryEndpoints.updateFolder, { id, beforeFolderId });
   }
   return (
     <div className="library-folder-bar">
@@ -663,9 +680,8 @@ export function LibraryMoveDialog({
           if (!items || stale) return;
           if (
             await mutate(
-              '/library/organization/move',
-              { items, category: destination, folderId: folderId || null },
-              'POST',
+              libraryEndpoints.moveItems,
+              moveInput(items, destination, folderId || null),
               revision
             )
           )

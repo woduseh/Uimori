@@ -24,7 +24,8 @@ import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Library } from '../core/product.js';
 import type { IllustrationSettingsView } from '../core/illustration.js';
 import { isModelSelectable } from './model-selection.js';
-import { api, ApiError, saveDownload } from './api.js';
+import { resourceEditorEndpoints } from '#contracts';
+import { api, ApiError, callEndpoint, saveDownload } from './api.js';
 import { errorDescriptor } from './api-errors.js';
 import { IllustrationError } from '../core/illustration-errors.js';
 import { ValidationError } from '../core/validation-error.js';
@@ -181,12 +182,13 @@ export function IllustrationPresetSettings({
       return false;
     }
     return action(async () => {
-      const { saved } = await api<{ saved: IllustrationPreset }>('/resources/save', {
+      const result = await callEndpoint(resourceEditorEndpoints.saveResource, {
         kind: 'illustration-preset',
         id: asCopy ? null : draft.id,
         expectedRevision: asCopy ? undefined : draft.revision,
         model,
       });
+      const saved = result.saved as IllustrationPreset;
       const accepted = illustrationPresetDefinition(saved);
       setDraft({ id: saved.id, revision: saved.revision, model: accepted });
       setBaseline(JSON.stringify(accepted));

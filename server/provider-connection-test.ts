@@ -109,11 +109,7 @@ export class ProviderConnectionTestStore {
           throw new HttpError(409, 'Connection test key reused with different model or revision');
         return { view: this.get(prior.id) };
       }
-      const model = this.store.product.editedSetting<ModelPreset>(
-        'model',
-        modelId,
-        expectedRevision
-      );
+      const model = this.store.product.editable<ModelPreset>('model', modelId, expectedRevision);
       if (model.enabled === false) throw new HttpError(403, 'Connection test model disabled');
       const authority = this.store.product.get<Connection>('connection', model.connectionId);
       this.store.product.authorize(authority);

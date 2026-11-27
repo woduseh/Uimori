@@ -149,7 +149,6 @@ export const storageKeys = {
   chatVariableDraft: keyed('uimori:chat-variable-draft:', session, 'chat', one, { work: true }),
   storyUiDraft: keyed('uimori:story-ui-draft:', session, 'chat', joined, { work: true }),
   textDraft: keyed('uimori:text-draft:', session, 'chat', joined, { work: true }),
-  resourceClone: keyed('resource-clone:', session, 'transient', joined, { work: true }),
   helperResponseEdit: keyed('helper-response-edit:', session, 'helper-conversation', one, {
     work: true,
   }),

@@ -310,6 +310,34 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
       url: '/api/backups/settings',
       payload: { expectedRevision: 0, enabled: true, hour: 3, minute: 0, retain: 0 },
     },
+    {
+      method: 'POST',
+      url: '/api/library/organization/move',
+      payload: {
+        expectedRevision: 1,
+        items: [{ kind: 'prompt-preset', id: 'p1' }],
+        category: 'bot',
+        folderId: null,
+      },
+    },
+    { method: 'PATCH', url: '/api/library/folders/f1', payload: { expectedRevision: 1 } },
+    {
+      method: 'POST',
+      url: '/api/resources/clone',
+      payload: {
+        kind: 'content',
+        sourceId: 'c1',
+        expectedSourceRevision: 1,
+        title: 'Copy',
+        syncNativeName: true,
+      },
+    },
+    { method: 'DELETE', url: '/api/content/%20', payload: { expectedRevision: 1 } },
+    {
+      method: 'PUT',
+      url: '/api/lore-context-defaults',
+      payload: { expectedRevision: 1, enabled: true, retainAll: true },
+    },
   ] as const) {
     const response = await app.inject(request);
     expect(response.statusCode, request.url).toBe(400);

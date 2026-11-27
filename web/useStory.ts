@@ -58,12 +58,19 @@ import type {
   Content,
   CurrentPrompt,
   Library,
-  ModelWorkspace,
   PromptPreset,
 } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
-import { api, apiBinary, ApiError, definiteRejection, libraryChangedKey } from './api.js';
+import { promptEndpoints } from '#contracts';
+import {
+  api,
+  apiBinary,
+  ApiError,
+  callEndpoint,
+  definiteRejection,
+  libraryChangedKey,
+} from './api.js';
 import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useInputTranslation } from './useInputTranslation.js';
@@ -189,7 +196,7 @@ async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
   const [profile, options, workspace] = await Promise.all([
     api<ChatProfile>(`${chat}/profile`),
     api<ChatOptionState>(`${chat}/options`),
-    api<ModelWorkspace>('/model-workspace'),
+    callEndpoint(promptEndpoints.readModelWorkspace),
   ]);
   return {
     profileRevision: profile.revision,

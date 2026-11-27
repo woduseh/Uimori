@@ -8,6 +8,7 @@ import { Dialog } from './Dialog.js';
 import { SaveButton } from './SaveButton.js';
 import { CloseIcon, EditIcon, PinIcon } from './ui-icons.js';
 import { api } from './api.js';
+import { forgetChatStorage } from './storage-keys.js';
 
 type ChatActions = {
   chat: Chat;
@@ -87,7 +88,10 @@ export function ChatActionMenu({
           disabled={disabled}
           description={t('transfer.m241')}
           onError={onError}
-          onDeleted={onChatsChanged}
+          onDeleted={() => {
+            forgetChatStorage(chat.id);
+            return onChatsChanged();
+          }}
         />
       </div>
     </ActionMenu>

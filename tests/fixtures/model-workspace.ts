@@ -26,7 +26,7 @@ export function updateTestProfile(
     if (!isDeepStrictEqual(current.routes, routes))
       updateModelWorkspace(product.store, {
         expectedRevision: current.revision,
-        routes,
+        routes: routes as never,
         translationPolicy: current.translationPolicy,
       });
   }

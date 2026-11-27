@@ -1,8 +1,11 @@
 import { afterEach, expect, test, vi } from 'vitest';
+import { deletionEndpoints, libraryEndpoints, promptEndpoints } from '#contracts';
 import {
   api,
   apiBinary,
   ApiError,
+  callEndpoint,
+  libraryChangedKey,
   maintenanceChangedEvent,
   sessionRequiredEvent,
 } from '../web/api.js';
@@ -95,4 +98,30 @@ test('JSON and binary requests tolerate non-JSON errors and propagate transport 
     expect(b.session).not.toHaveBeenCalled();
     expect(b.maintenance).not.toHaveBeenCalled();
   }
+});
+
+test('a typed endpoint tells other tabs about the changes its tag names, and a read tells nobody', async () => {
+  const b = browser();
+  respond(200, { revision: 2 });
+  await callEndpoint(promptEndpoints.applyPreset, {
+    expectedRevision: 1,
+    role: 'main',
+    presetId: 'p1',
+  });
+  expect(b.setItem).toHaveBeenCalledWith(libraryChangedKey, expect.any(String));
+  expect(b.workspace).toHaveBeenLastCalledWith(expect.anything(), { echoed: true });
+  b.setItem.mockClear();
+  b.workspace.mockClear();
+  respond(200, { deleted: true, id: 'c1' });
+  await callEndpoint(deletionEndpoints.deleteConnection, { id: 'c1', expectedRevision: 1 });
+  expect(b.setItem).toHaveBeenCalledTimes(1);
+  expect(b.workspace).toHaveBeenLastCalledWith(expect.anything(), { echoed: false });
+  b.setItem.mockClear();
+  b.workspace.mockClear();
+  respond(200, { revision: 1, folders: [], items: [] });
+  await callEndpoint(libraryEndpoints.readOrganization);
+  respond(200, { deleted: true, id: 'b1' });
+  await callEndpoint(deletionEndpoints.deleteContent, { id: 'b1', expectedRevision: 1 });
+  expect(b.setItem).toHaveBeenCalledTimes(1);
+  expect(b.workspace).not.toHaveBeenCalled();
 });

@@ -91,7 +91,8 @@ test('reordering is category scoped and folder deletion moves members to unclass
     b = folder(store, 'B'),
     c = folder(store, 'C'),
     foreign = folder(store, 'Elsewhere', 'persona');
-  let current = store.libraryOrganization.updateFolder(c.id, {
+  let current = store.libraryOrganization.updateFolder({
+    id: c.id,
     expectedRevision: revision(store),
     beforeFolderId: a.id,
     title: 'First',
@@ -102,7 +103,8 @@ test('reordering is category scoped and folder deletion moves members to unclass
     b.id,
   ]);
   expect(() =>
-    store.libraryOrganization.updateFolder(a.id, {
+    store.libraryOrganization.updateFolder({
+      id: a.id,
       expectedRevision: current.revision,
       beforeFolderId: foreign.id,
     })
@@ -115,7 +117,10 @@ test('reordering is category scoped and folder deletion moves members to unclass
     category: 'bot',
     folderId: a.id,
   });
-  current = store.libraryOrganization.deleteFolder(a.id, { expectedRevision: current.revision });
+  current = store.libraryOrganization.deleteFolder({
+    id: a.id,
+    expectedRevision: current.revision,
+  });
   expect(
     current.folders.filter((item) => item.category === 'bot').map((item) => item.sortPosition)
   ).toEqual([0, 1]);
@@ -160,7 +165,8 @@ test('a chosen folder cover is validated, kept as a retention root and released 
   expect(target.coverImageHash).toBeNull();
   const hash = 'a'.repeat(64);
   expect(() =>
-    store.libraryOrganization.updateFolder(target.id, {
+    store.libraryOrganization.updateFolder({
+      id: target.id,
       expectedRevision: revision(store),
       coverImageHash: hash,
     })
@@ -168,14 +174,16 @@ test('a chosen folder cover is validated, kept as a retention root and released 
   store.db
     .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
     .run(hash, 'image/webp', new Uint8Array([1]));
-  const covered = store.libraryOrganization.updateFolder(target.id, {
+  const covered = store.libraryOrganization.updateFolder({
+    id: target.id,
     expectedRevision: revision(store),
     coverImageHash: hash,
   });
   expect(covered.folders.find((item) => item.id === target.id)!.coverImageHash).toBe(hash);
   pruneUnusedData(store.db, null);
   expect(store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
-  const cleared = store.libraryOrganization.updateFolder(target.id, {
+  const cleared = store.libraryOrganization.updateFolder({
+    id: target.id,
     expectedRevision: revision(store),
     coverImageHash: null,
   });
@@ -185,11 +193,12 @@ test('a chosen folder cover is validated, kept as a retention root and released 
   store.db
     .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
     .run(hash, 'image/webp', new Uint8Array([1]));
-  store.libraryOrganization.updateFolder(target.id, {
+  store.libraryOrganization.updateFolder({
+    id: target.id,
     expectedRevision: revision(store),
     coverImageHash: hash,
   });
-  store.libraryOrganization.deleteFolder(target.id, { expectedRevision: revision(store) });
+  store.libraryOrganization.deleteFolder({ id: target.id, expectedRevision: revision(store) });
   expect(store.db.prepare('SELECT 1 FROM library_folder_covers').get()).toBeUndefined();
   pruneUnusedData(store.db);
   expect(store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();

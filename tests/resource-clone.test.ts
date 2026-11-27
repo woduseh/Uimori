@@ -11,6 +11,7 @@ import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspa
 import { resourceRoutes } from '../server/resource-routes.js';
 import { cloneResource, saveResource } from '../server/resource-service.js';
 import { Store } from '../server/store.js';
+import { deleteTheme } from '../server/themes.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
@@ -225,8 +226,8 @@ test('stale, unavailable and missing sources never create a partial copy', async
   deleteLibraryItem(store, 'prompt-preset', source.id, { expectedRevision: source.revision });
   before = rows(store);
   organization = store.libraryOrganization.snapshot();
-  expect((await postClone(app, request)).statusCode).toBe(404);
-  expect((await postClone(app, { ...request, sourceId: 'missing-source' })).statusCode).toBe(404);
+  expect((await postClone(app, request)).statusCode).toBe(409);
+  expect((await postClone(app, { ...request, sourceId: 'missing-source' })).statusCode).toBe(409);
   expect(rows(store)).toEqual(before);
   expect(store.libraryOrganization.snapshot()).toEqual(organization);
 });
@@ -292,7 +293,7 @@ test('new-resource creation has a compact durable receipt and rejects conflictin
   );
 });
 
-test('creation and clone receipts report removed targets without admitting a new resource', async () => {
+test('a creation receipt reports its removed target without admitting a new resource', async () => {
   const { store, app } = fixture();
   const command = {
     kind: 'content',
@@ -302,21 +303,11 @@ test('creation and clone receipts report removed targets without admitting a new
   };
   const send = () => app.inject({ method: 'POST', url: '/api/resources/save', payload: command });
   const first = (await send()).json().saved as Content;
-  const clone = {
-    kind: 'content',
-    sourceId: first.id,
-    expectedSourceRevision: first.revision,
-    title: 'Also deleted',
-    idempotencyKey: 'removed-clone',
-  };
-  const copy = (await postClone(app, clone)).json().saved as Content;
   deleteLibraryItem(store, 'content', first.id, { expectedRevision: first.revision });
-  deleteLibraryItem(store, 'content', copy.id, { expectedRevision: copy.revision });
   const afterDeletion = rows(store);
-  for (const response of [await send(), await postClone(app, clone)]) {
-    expect(response.statusCode, response.body).toBe(410);
-    expect(response.json().message).toBe('RESOURCE_CREATION_REMOVED');
-  }
+  const response = await send();
+  expect(response.statusCode, response.body).toBe(410);
+  expect(response.json().message).toBe('RESOURCE_CREATION_REMOVED');
   expect(rows(store)).toEqual(afterDeletion);
 });
 
@@ -337,44 +328,6 @@ test('legacy compact receipts remain replayable without inventing a placement re
   expect(replay.statusCode, replay.body).toBe(200);
   expect(replay.json()).toMatchObject({ created: false, saved: { id: first.id } });
   expect(replay.json().creationOrganizationRevision).toBeUndefined();
-});
-
-test('a repeated clone returns its original identity after the source changes', async () => {
-  const { store, app } = fixture();
-  const source = store.product.promptPreset({
-    title: 'Original',
-    role: 'main',
-    program: nativePrompt('Text'),
-    values: {},
-  }) as PromptPreset;
-  const command = {
-    kind: 'prompt-preset',
-    sourceId: source.id,
-    expectedSourceRevision: source.revision,
-    title: 'Copy',
-    idempotencyKey: 'clone-preset-1',
-  };
-  const first = await postClone(app, command);
-  expect(first.statusCode, first.body).toBe(200);
-  store.product.promptPreset(
-    {
-      ...editableResource('prompt-preset', source),
-      title: 'Changed source',
-      expectedRevision: source.revision,
-    },
-    source.id
-  );
-  const beforeReplay = rows(store);
-  const again = await postClone(app, command);
-  expect(again.statusCode, again.body).toBe(200);
-  expect(rows(store)).toEqual(beforeReplay);
-  expect(again.json()).toMatchObject({
-    created: false,
-    saved: { id: first.json().saved.id, title: 'Copy' },
-    source: { id: source.id, revision: source.revision },
-  });
-  const incompatible = await postClone(app, { ...command, title: 'Another copy' });
-  expect(incompatible.statusCode).toBe(409);
 });
 
 test('the previous saved version is readable for comparison and undo toggles back to the newer one', async () => {
@@ -412,4 +365,33 @@ test('the previous saved version is readable for comparison and undo toggles bac
     model: { title: 'Second' },
   });
   expect((await previousOf('missing')).statusCode).toBe(404);
+});
+
+test('a stale editor reads a deleted resource as deleted and its save answers a revision conflict', async () => {
+  const { store, app } = fixture();
+  const bot = store.product.content(fixtureBotInput('Deleted elsewhere')) as Content;
+  const theme = saveResource(store, {
+    kind: 'theme',
+    id: null,
+    model: { title: 'Deleted theme' } as never,
+  }).saved;
+  deleteLibraryItem(store, 'content', bot.id, { expectedRevision: bot.revision });
+  deleteTheme(store, (theme as { id: string }).id, theme.revision);
+  const read = await app.inject(`/api/resources/content/${bot.id}`);
+  expect(read.statusCode).toBe(404);
+  expect(read.json().message).toBe('LIBRARY_ITEM_DELETED');
+  const before = rows(store);
+  for (const [kind, id, revision, model] of [
+    ['content', bot.id, bot.revision, editableResource('content', bot)],
+    ['theme', (theme as { id: string }).id, theme.revision, { title: 'Draft' }],
+  ] as const) {
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/api/resources/save',
+      payload: { kind, id, expectedRevision: revision, model },
+    });
+    expect(saved.statusCode, kind).toBe(409);
+    expect(saved.json().message, kind).toBe('REVISION_CONFLICT');
+  }
+  expect(rows(store)).toEqual(before);
 });

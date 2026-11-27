@@ -38,7 +38,11 @@ import { HelperToolError } from './app-errors.js';
 import { choice, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { USAGE_BREAKDOWNS, usageReport } from './usage-report.js';
-import { personalWorkspaceOperations, translationOperations } from '#contracts/operations';
+import {
+  personalWorkspaceOperations,
+  promptOperations,
+  translationOperations,
+} from '#contracts/operations';
 import { parseInput } from './endpoint.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { HelperTask, HelperTaskResultTarget } from '../core/helper.js';
@@ -822,10 +826,13 @@ export function invokeHelperSettingsTool(
     throw new HelperToolError(400, 'INVALID_SETTING');
   const expectedRevision = number(args.expectedRevision, 'settings revision', 0);
   if (setting === 'newChat.loreContext') {
-    const { revision, ...policy } = updateLoreContextDefaults(store, {
-      ...record(args.value),
-      expectedRevision,
-    });
+    const { revision, ...policy } = updateLoreContextDefaults(
+      store,
+      parseInput(promptOperations.updateLoreContextDefaults.input, {
+        ...record(args.value),
+        expectedRevision,
+      })
+    );
     return { setting, revision, value: policy };
   }
   if (autoTranslationSettings.includes(setting)) {
@@ -847,11 +854,14 @@ export function invokeHelperSettingsTool(
     };
   }
   if (promptPresetSettings.includes(setting)) {
-    const updated = applyWorkspacePromptPreset(store, {
-      expectedRevision,
-      role: setting === 'global.mainPromptPreset' ? 'main' : 'translation',
-      presetId: text(args.value, 'prompt preset ID', 100),
-    });
+    const updated = applyWorkspacePromptPreset(
+      store,
+      parseInput(promptOperations.applyPreset.input, {
+        expectedRevision,
+        role: setting === 'global.mainPromptPreset' ? 'main' : 'translation',
+        presetId: args.value,
+      })
+    );
     return {
       setting,
       revision: updated.revision,

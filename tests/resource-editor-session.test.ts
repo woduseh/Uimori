@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ContentEditModel, ResourceSaveResult } from '../core/resource-editing.js';
-import { api, ApiError } from '../web/api.js';
+import { endpointRequest } from '#contracts';
+import { ApiError } from '../web/api.js';
 import { uiText } from '../web/ui-message.js';
 import {
   readRecovery,
@@ -12,9 +13,13 @@ import { ResourceEditorSession } from '../web/resource-editor-session.js';
 import { nativeContentDraft } from '../web/native-content-draft.js';
 import { shownRejection } from './shown-error.js';
 
+const { api } = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../web/api.js', async (original) => ({
   ...(await original<typeof import('../web/api.js')>()),
-  api: vi.fn(),
+  callEndpoint: (...[endpoint, input]: Parameters<typeof endpointRequest>) => {
+    const { path, body } = endpointRequest(endpoint, input);
+    return body === undefined ? api(path) : api(path, body);
+  },
 }));
 vi.mock('../web/editor-recovery.js', () => ({
   readRecovery: vi.fn(),

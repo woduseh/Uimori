@@ -126,7 +126,10 @@ test('optional title model is independent of task routes, strict, CAS protected 
   expect(modelWorkspace(store).titleModel).toBeNull();
   const title = model(store, 'Title');
   const current = modelWorkspace(store);
-  const save = (titleModel: unknown, expectedRevision = modelWorkspace(store).revision) =>
+  const save = (
+    titleModel: { id: string } | null,
+    expectedRevision = modelWorkspace(store).revision
+  ) =>
     updateModelWorkspace(store, {
       expectedRevision,
       routes: current.routes,
@@ -137,7 +140,7 @@ test('optional title model is independent of task routes, strict, CAS protected 
   expect(selected.titleModel).toEqual({ id: title.id });
   expect(selected.routes).toEqual(emptyModelRoutes());
   expect(() => save(null, current.revision)).toThrow('REVISION_CONFLICT');
-  expect(() => save({ id: title.id, revision: 1 })).toThrow(/Unknown request field/);
+  expect(() => save({ id: title.id, revision: 1 } as never)).toThrow(/Unknown request field/);
   expect(() => save({ id: 'missing-title-model' })).toThrow();
   select(store, model(store, 'Main').id);
   expect(modelWorkspace(store).titleModel).toEqual({ id: title.id });

@@ -17,6 +17,8 @@ export type OperationOutput<Op extends Operation> = z.output<Op['output']>;
 
 export type HttpMethod = 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
 
+export type Invalidation = 'library' | 'prompt-workspace' | 'provider-settings';
+
 export type Endpoint<Op extends Operation = Operation> = {
   readonly operation: Op['name'];
   readonly method: HttpMethod;
@@ -25,6 +27,7 @@ export type Endpoint<Op extends Operation = Operation> = {
   readonly bodyLimit?: number;
   readonly admission?: 'always';
   readonly cache?: 'revalidate';
+  readonly invalidates?: readonly Invalidation[];
   readonly '~operation'?: Op;
 };
 

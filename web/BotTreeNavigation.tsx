@@ -25,7 +25,9 @@ import {
   EditIcon,
   ImagesIcon,
 } from './ui-icons.js';
-import { api } from './api.js';
+import { libraryEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
+import { type LibraryWriteInput, type LibraryWrite } from './LibraryFolders.js';
 import { chatActivitySummaries } from './chat-activity-summaries.js';
 import { useActivityFeed } from './useActivityFeed.js';
 import { ActivityNavigation } from './ActivityNavigation.js';
@@ -247,10 +249,9 @@ export const BotNavigation = memo(function BotNavigation(
       folder,
     })),
   ]);
-  async function mutate(
-    path: string,
-    body: object,
-    method = 'POST',
+  async function mutate<E extends LibraryWrite>(
+    endpoint: E,
+    input: LibraryWriteInput<E>,
     revision = library?.organization?.revision
   ) {
     if (lock.current || !library?.organization) return;
@@ -258,7 +259,10 @@ export const BotNavigation = memo(function BotNavigation(
     setBusy(true);
     setError('');
     try {
-      await api(path, { expectedRevision: revision, ...body }, method);
+      await (callEndpoint as (endpoint: LibraryWrite, input: object) => Promise<unknown>)(
+        endpoint,
+        { ...input, expectedRevision: revision }
+      );
       await onLibraryChanged();
       setEditing(null);
       return true;
@@ -332,9 +336,8 @@ export const BotNavigation = memo(function BotNavigation(
       const beforeFolderId = after ? (ordered[index + 1]?.id ?? null) : target.folder.id;
       if (
         await mutate(
-          `/library/folders/${source.entry.folder.id}`,
-          { beforeFolderId },
-          'PATCH',
+          libraryEndpoints.updateFolder,
+          { id: source.entry.folder.id, beforeFolderId },
           source.revision
         )
       )
@@ -350,13 +353,12 @@ export const BotNavigation = memo(function BotNavigation(
       if (!library || libraryCategory(library, bot) !== 'bot') return;
       if (
         !(await mutate(
-          '/library/organization/move',
+          libraryEndpoints.moveItems,
           {
             items: [{ kind: 'content', id: bot.id }],
             category: 'bot',
             folderId: destinationFolder,
           },
-          'POST',
           source.revision
         ))
       )
@@ -785,7 +787,7 @@ export const BotNavigation = memo(function BotNavigation(
         onConfirm={() => {
           const folder = removingFolder!;
           setRemovingFolder(null);
-          void mutate(`/library/folders/${folder.id}`, {}, 'DELETE');
+          void mutate(libraryEndpoints.deleteFolder, { id: folder.id });
         }}
       />
       <LibraryFolderCoverDialog
@@ -793,7 +795,7 @@ export const BotNavigation = memo(function BotNavigation(
         portraits={coverFolder ? folderPortraits(coverFolder.id) : undefined}
         busy={busy}
         onApply={async (coverImageHash) =>
-          (await mutate(`/library/folders/${coverFolder!.id}`, { coverImageHash }, 'PATCH')) ===
+          (await mutate(libraryEndpoints.updateFolder, { id: coverFolder!.id, coverImageHash })) ===
           true
         }
         onClose={() => setCoverFolderId(null)}
@@ -808,13 +810,9 @@ export const BotNavigation = memo(function BotNavigation(
           onSubmit={(event) => {
             event.preventDefault();
             if (title.trim())
-              void mutate(
-                editing === 'new' ? '/library/folders' : `/library/folders/${editing?.id}`,
-                editing === 'new'
-                  ? { category: 'bot', title: title.trim() }
-                  : { title: title.trim() },
-                editing === 'new' ? 'POST' : 'PATCH'
-              );
+              void (editing === 'new' || !editing
+                ? mutate(libraryEndpoints.createFolder, { category: 'bot', title: title.trim() })
+                : mutate(libraryEndpoints.updateFolder, { id: editing.id, title: title.trim() }));
           }}
         >
           <label>

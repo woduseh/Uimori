@@ -1,3 +1,5 @@
+import { deletionOperations, promptOperations } from '#contracts/operations';
+import { parseInput } from './endpoint.js';
 import type { HelperTask } from '../core/helper.js';
 import type { PromptRole, SavedPromptCombination } from '../core/product.js';
 import {
@@ -166,23 +168,19 @@ export function applyHelperPromptCombination(
     return { id: saved.id, revision: saved.revision, title: saved.title, values: saved.values };
   }
   if (name === 'prompt.combination.update') {
-    const { id: combinationId, ...body } = args;
     const saved = updatePromptCombination(
       store,
       () => promptWorkspace(store),
-      text(combinationId, 'option preset', 100),
-      body
+      parseInput(promptOperations.updateCombination.input, args)
     ) as SavedPromptCombination;
     report(saved);
     return { id: saved.id, revision: saved.revision, title: saved.title, values: saved.values };
   }
   if (name === 'prompt.combination.delete') {
-    fields(args, ['id', 'expectedRevision']);
-    const combinationId = text(args.id, 'option preset', 100);
+    const input = parseInput(deletionOperations.deleteLibraryItem.input, args);
+    const combinationId = input.id;
     const item = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
-    deleteLibraryItem(store, 'prompt-combination', combinationId, {
-      expectedRevision: args.expectedRevision,
-    });
+    deleteLibraryItem(store, 'prompt-combination', combinationId, input);
     report(item);
     return { deleted: true, id: combinationId, title: item.title };
   }

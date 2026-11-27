@@ -8,7 +8,8 @@ import {
   repairPromptCombinationValues,
 } from '../core/prompt-combinations.js';
 import { resolvePromptValues, type PromptValue } from '../core/risu-prompt.js';
-import { api } from './api.js';
+import { deletionEndpoints, promptEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { DeleteButton } from './DeleteButton.js';
 import { SettingsDetail } from './SettingsDetail.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -156,16 +157,13 @@ export function PromptCombinationManager({
                   setBusy(true);
                   setError('');
                   try {
-                    await api(
-                      `/prompt-combinations/${editing.item.id}`,
-                      {
-                        expectedRevision: editing.item.revision,
-                        sourceRevision: editing.sourceRevision,
-                        title: title.trim(),
-                        values,
-                      },
-                      'PUT'
-                    );
+                    await callEndpoint(promptEndpoints.updateCombination, {
+                      id: editing.item.id,
+                      expectedRevision: editing.item.revision,
+                      sourceRevision: editing.sourceRevision,
+                      title: title.trim(),
+                      values,
+                    });
                     await reload?.();
                     setEditing(null);
                   } catch (caught) {
@@ -221,7 +219,8 @@ export function PromptCombinationManager({
                   {compatible ? t('prompts.uiEdit') : t('prompts.uiEditOptions')}
                 </button>
                 <DeleteButton
-                  path={`/prompt-combinations/${item.id}`}
+                  endpoint={deletionEndpoints.deletePromptCombination}
+                  params={{ id: item.id }}
                   revision={item.revision}
                   title={item.title}
                   onDeleted={async () => {

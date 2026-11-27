@@ -8,7 +8,7 @@ import { ExpandIcon, EditIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
+import type { Library, PromptRole } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
 import {
   combinationOwner,
@@ -17,7 +17,8 @@ import {
 } from '../core/prompt-combinations.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { resolvePromptValues } from '../core/risu-prompt.js';
-import { api } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -134,8 +135,8 @@ export function PromptWorkspaceEditor({
     setApplying(true);
     setApplyError('');
     try {
-      await api<PromptWorkspace>('/prompt-workspace/apply', {
-        expectedRevision: current.document.baseRevision,
+      await callEndpoint(promptEndpoints.applyPreset, {
+        expectedRevision: current.document.baseRevision ?? 0,
         role,
         presetId,
       });

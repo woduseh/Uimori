@@ -5,7 +5,6 @@ import {
   SUMMARY_LENGTH_VALUES,
   type SummaryLengthSettings,
 } from '../core/summary-length.js';
-import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import {
   DEFAULT_HELPER_TASK_TIMEOUT_MINUTES,
@@ -60,7 +59,16 @@ import { assertModelSelection } from './provider-selection.js';
 import type { Store } from './store.js';
 import { promptCombinationRoutes } from './prompt-combinations.js';
 import { recordPromptWorkspaceUpdate } from './prompt-workspace-events.js';
-import { AppError } from './app-errors.js';
+import { AppError, assertRevision } from './app-errors.js';
+import {
+  type ApplyPromptCombination,
+  type ApplyPromptPreset,
+  promptEndpoints,
+  type UpdateModelWorkspace,
+  type UpdatePromptWorkspace,
+} from '#contracts';
+import { promptOperations } from '#contracts/operations';
+import { registerEndpoint } from './endpoint.js';
 
 const roles = ['main', 'translation'] as const;
 const roleValue = (value: unknown): PromptRole => {
@@ -554,28 +562,10 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     translationPolicy: current.translationPolicy,
   };
 }
-export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspace {
-  const input = record(value);
-  fields(input, [
-    'expectedRevision',
-    'routes',
-    'translationPolicy',
-    'mainJudgmentEnabled',
-    'mainJudgmentThreshold',
-    'judgment',
-    'judgmentPricing',
-    'titleModel',
-    'helperModel',
-    'helperTaskTimeoutMinutes',
-    'helperConfirmPaidGeneration',
-    'contextModel',
-    'scriptModel',
-    'summaryLength',
-  ]);
+export function updateModelWorkspace(store: Store, input: UpdateModelWorkspace): ModelWorkspace {
   return store.transaction(() => {
     const prior = promptWorkspace(store);
-    if (prior.revision !== number(input.expectedRevision, 'model workspace revision'))
-      throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(prior.revision, input.expectedRevision);
     const next = validatePromptWorkspace({
       ...prior,
       ...(Object.hasOwn(input, 'judgment') ? { judgment: input.judgment } : {}),
@@ -583,10 +573,10 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
         ? { judgmentPricing: input.judgmentPricing }
         : {}),
       titleModel: Object.hasOwn(input, 'titleModel')
-        ? validateTitleModel(input.titleModel)
+        ? (input.titleModel ?? null)
         : (prior.titleModel ?? null),
       helperModel: Object.hasOwn(input, 'helperModel')
-        ? validateTitleModel(input.helperModel)
+        ? (input.helperModel ?? null)
         : (prior.helperModel ?? null),
       helperTaskTimeoutMinutes: Object.hasOwn(input, 'helperTaskTimeoutMinutes')
         ? input.helperTaskTimeoutMinutes
@@ -595,12 +585,12 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
         ? input.helperConfirmPaidGeneration
         : prior.helperConfirmPaidGeneration,
       contextModel: Object.hasOwn(input, 'contextModel')
-        ? validateTitleModel(input.contextModel)
+        ? (input.contextModel ?? null)
         : (prior.contextModel ?? null),
       scriptModel: Object.hasOwn(input, 'scriptModel')
-        ? validateTitleModel(input.scriptModel)
+        ? (input.scriptModel ?? null)
         : (prior.scriptModel ?? null),
-      modelRoutes: validateModelRoutes(input.routes),
+      modelRoutes: input.routes,
       summaryLength: Object.hasOwn(input, 'summaryLength')
         ? validateSummaryLength(input.summaryLength)
         : validateSummaryLength(prior.summaryLength),
@@ -658,23 +648,13 @@ function connectionExists(store: Store, id: string) {
 
 export function updatePromptWorkspace(
   store: Store,
-  value: unknown,
+  b: UpdatePromptWorkspace,
   appliedPreset?: { role: PromptRole; id: string },
   inTransaction = false
 ): PromptWorkspace {
-  const b = record(value);
-  fields(b, [
-    'expectedRevision',
-    'main',
-    'translation',
-    'translationPolicy',
-    'mainJudgmentEnabled',
-    'mainJudgmentThreshold',
-  ]);
-  const expected = number(b.expectedRevision, 'prompt workspace revision');
   const apply = () => {
     const prior = promptWorkspace(store);
-    if (prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(prior.revision, b.expectedRevision);
     const updates = Object.fromEntries(
       roles
         .filter((role) => b[role] !== undefined)
@@ -794,18 +774,17 @@ export function freezeCurrentPrompts(
   };
 }
 
-export function applyWorkspacePromptPreset(store: Store, value: unknown) {
-  const b = record(value);
-  fields(b, ['expectedRevision', 'role', 'presetId']);
-  const role = roleValue(b.role);
-  const presetId = text(b.presetId, 'preset', 100);
+export function applyWorkspacePromptPreset(
+  store: Store,
+  { expectedRevision, role, presetId }: ApplyPromptPreset
+) {
   store.product.assertAvailable('prompt-preset', presetId);
   const preset = store.product.get<PromptPreset>('prompt-preset', presetId);
   if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
   return updatePromptWorkspace(
     store,
     {
-      expectedRevision: b.expectedRevision,
+      expectedRevision,
       [role]: {
         title: preset.title,
         program: preset.program,
@@ -823,37 +802,40 @@ export function promptWorkspaceRoutes(app: FastifyInstance, store: Store, publis
     publishAll();
     return result;
   };
-  app.get('/api/model-workspace', async () => modelWorkspace(store));
-  app.put('/api/model-workspace', async (request) =>
-    publishResult(updateModelWorkspace(store, request.body))
+  const endpoints = promptEndpoints,
+    operations = promptOperations;
+  registerEndpoint(app, endpoints.readModelWorkspace, operations.readModelWorkspace, () =>
+    modelWorkspace(store)
   );
-  app.get('/api/prompt-workspace', async () => promptWorkspace(store));
-  app.put('/api/prompt-workspace', { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES }, async (request) =>
-    publishResult(updatePromptWorkspace(store, request.body))
+  registerEndpoint(app, endpoints.updateModelWorkspace, operations.updateModelWorkspace, (input) =>
+    publishResult(updateModelWorkspace(store, input))
   );
-  app.post('/api/prompt-workspace/apply', async (request) =>
-    publishResult(applyWorkspacePromptPreset(store, request.body))
+  registerEndpoint(app, endpoints.readWorkspace, operations.readWorkspace, () =>
+    promptWorkspace(store)
   );
-  app.post('/api/prompt-workspace/apply-options', async (request) =>
-    publishResult(applyPromptCombination(store, request.body))
+  registerEndpoint(app, endpoints.updateWorkspace, operations.updateWorkspace, (input) =>
+    publishResult(updatePromptWorkspace(store, input))
+  );
+  registerEndpoint(app, endpoints.applyPreset, operations.applyPreset, (input) =>
+    publishResult(applyWorkspacePromptPreset(store, input))
+  );
+  registerEndpoint(app, endpoints.applyCombination, operations.applyCombination, (input) =>
+    publishResult(applyPromptCombination(store, input))
   );
 }
 
-export function applyPromptCombination(store: Store, value: unknown) {
-  const b = record(value);
-  fields(b, ['expectedRevision', 'role', 'combinationId']);
-  const role = roleValue(b.role);
-  store.product.assertAvailable('prompt-combination', text(b.combinationId, 'option preset', 100));
-  const preset = store.product.get<SavedPromptCombination>(
-    'prompt-combination',
-    text(b.combinationId, 'option preset', 100)
-  );
+export function applyPromptCombination(
+  store: Store,
+  { expectedRevision, role, combinationId }: ApplyPromptCombination
+) {
+  store.product.assertAvailable('prompt-combination', combinationId);
+  const preset = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
   if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
   const current = promptWorkspace(store)[role];
   if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))
     throw new AppError(409, 'PROMPT_COMBINATION_MISMATCH');
   return updatePromptWorkspace(store, {
-    expectedRevision: b.expectedRevision,
+    expectedRevision,
     [role]: { ...current, values: preset.values, optionValues: preset.values },
   });
 }

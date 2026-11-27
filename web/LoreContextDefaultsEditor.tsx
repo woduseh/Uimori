@@ -8,7 +8,8 @@ import {
   type LoreContextDefaults,
   type LoreContextPolicy,
 } from '../core/lore-context.js';
-import { api } from './api.js';
+import { promptEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { LoreContextPolicyEditor } from './LoreContextPolicyEditor.js';
 import { SaveButton } from './SaveButton.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -34,7 +35,9 @@ export function LoreContextDefaultsEditor({
   const load = useCallback(async () => {
     setError('');
     try {
-      const value = await api<LoreContextDefaults>('/lore-context-defaults');
+      const value: LoreContextDefaults = await callEndpoint(
+        promptEndpoints.readLoreContextDefaults
+      );
       setSaved(value);
       setDraft(structuredClone(value));
       setInvalid(false);
@@ -55,10 +58,9 @@ export function LoreContextDefaultsEditor({
     setError('');
     setMessage('');
     try {
-      const accepted = await api<LoreContextDefaults>(
-        '/lore-context-defaults',
-        { expectedRevision: draft.revision, ...policyOf(draft) },
-        'PUT'
+      const accepted: LoreContextDefaults = await callEndpoint(
+        promptEndpoints.updateLoreContextDefaults,
+        { expectedRevision: draft.revision, ...policyOf(draft) }
       );
       setSaved(accepted);
       setDraft(structuredClone(accepted));
