@@ -499,7 +499,10 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     } catch (cause) {
       setCompactErrors((old) => ({
         ...old,
-        [owner]: toUiMessage(cause, 'errors.HELPER_COMPACTION_FAILED'),
+        [owner]:
+          method === 'POST'
+            ? toUiMessage(cause, 'errors.HELPER_COMPACTION_FAILED')
+            : toUiMessage(cause),
       }));
     } finally {
       setCompactStarting((old) => ({ ...old, [owner]: false }));
@@ -1369,7 +1372,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }
       setErrors((old) => ({
         ...old,
-        [owner]: toUiMessage(cause, 'helpers.m207'),
+        [owner]:
+          'text' in mutation ? toUiMessage(cause) : toUiMessage(cause, 'helpers.deleteFailed'),
       }));
       return false;
     } finally {

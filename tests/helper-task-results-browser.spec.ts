@@ -371,9 +371,14 @@ test('HUSAGE02 HUSAGE03 the usage popover compacts manually, then the summary di
 }) => {
   const { chat, conversation, task } = await seed(request);
   const reply = '정리한 도우미 요약: 주인공은 아직 약속을 지키지 않았다.';
+  let releaseCompaction = () => {};
+  const compactionHeld = new Promise<void>((resolve) => {
+    releaseCompaction = resolve;
+  });
   const provider = createServer(async (incoming, response) => {
     for await (const _chunk of incoming) {
     }
+    await compactionHeld;
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     const events = [
       { type: 'text_delta', delta: reply },
@@ -470,6 +475,16 @@ test('HUSAGE02 HUSAGE03 the usage popover compacts manually, then the summary di
     await meter.click();
     const compactButton = body.getByRole('button', { name: '지금 대화 정리하기', exact: true });
     await compactButton.click();
+    await page.route(
+      `**/api/helper/conversations/${conversation.id}/compact`,
+      (route) => (route.request().method() === 'DELETE' ? route.abort('failed') : route.fallback()),
+      { times: 1 }
+    );
+    await body.getByRole('button', { name: '정리 취소', exact: true }).click();
+    await expect(body.getByRole('alert')).toHaveText(
+      '작업을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.'
+    );
+    releaseCompaction();
     await expect(
       page.locator('.transient-notice', {
         hasText: '대화 메시지 2개를 정리했어요. 다음 요청부터 요약본을 이어 써요.',
@@ -497,6 +512,12 @@ test('HUSAGE02 HUSAGE03 the usage popover compacts manually, then the summary di
     const save = dialog.getByRole('button', { name: '요약 저장', exact: true });
     await dialog.getByRole('button', { name: '요약 편집', exact: true }).click();
     await editor.fill('직접 고친 요약: 주인공은 약속을 아직 지키지 않았다.');
+    await page.route(`**${contextUrl}/summary`, (route) => route.abort('failed'), { times: 1 });
+    await save.click();
+    await expect(dialog.getByRole('alert')).toHaveText(
+      '작업을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.'
+    );
+    await expect(editor).toHaveValue('직접 고친 요약: 주인공은 약속을 아직 지키지 않았다.');
     await save.click();
     await expect(
       page.locator('.transient-notice', { hasText: '요약을 저장했어요.' })
@@ -544,6 +565,7 @@ test('HUSAGE02 HUSAGE03 the usage popover compacts manually, then the summary di
         .context
     ).toMatchObject({ compactedMessages: 0, summaryChars: 0 });
   } finally {
+    releaseCompaction();
     const current = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
     await request.put('/api/model-workspace', {
       data: {

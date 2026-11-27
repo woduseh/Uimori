@@ -51,7 +51,7 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
     text?: string;
     scope?: 'pair' | 'following';
   }[] = [];
-  let failNextMessageMutation = false;
+  let failNextMessageMutation: 'server' | 'network' | null = null;
   const streamHolds = new Map<string, Promise<void>>();
   const heldStreams = new Set<string>();
   let nextSeq = 0,
@@ -205,10 +205,10 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
     if (messageMatch && ['PATCH', 'DELETE'].includes(request.method())) {
       const view = views.get(messageMatch[1])!;
       messageMutations.push({ messageId: messageMatch[2], method: request.method(), ...body });
-      if (failNextMessageMutation) {
-        failNextMessageMutation = false;
-        return route.fulfill({ status: 503, json: { error: '합성 저장 실패' } });
-      }
+      const failure = failNextMessageMutation;
+      failNextMessageMutation = null;
+      if (failure === 'network') return route.abort('failed');
+      if (failure) return route.fulfill({ status: 503, json: { error: '합성 저장 실패' } });
       if (body.expectedRevision !== view.conversation.revision)
         return route.fulfill({ status: 409, json: { code: 'REVISION_CONFLICT' } });
       const selected = view.messages.find((item) => item.id === messageMatch[2])!;
@@ -435,8 +435,8 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
     posts,
     steerPosts,
     messageMutations,
-    failNextMessageMutation: () => {
-      failNextMessageMutation = true;
+    failNextMessageMutation: (failure: 'server' | 'network' = 'server') => {
+      failNextMessageMutation = failure;
     },
     results,
     rollbacks,

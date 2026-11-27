@@ -13,8 +13,6 @@ import './helper-summary.css';
 
 export type HelperSummaryDraft = { text: string; revision: number };
 
-const failure = (caught: unknown) => toUiMessage(caught, 'helperSummary.loadFailed');
-
 export function HelperSummaryDialog({
   open,
   conversationId,
@@ -62,7 +60,7 @@ export function HelperSummaryDialog({
     } catch (caught) {
       if (request === sequence.current) {
         setReadFailed(true);
-        setError(failure(caught));
+        setError(toUiMessage(caught, 'helperSummary.loadFailed'));
       }
       return null;
     }
@@ -109,7 +107,7 @@ export function HelperSummaryDialog({
           return;
         }
       }
-      setError(failure(caught));
+      setError(toUiMessage(caught));
     } finally {
       setSaving(false);
     }
@@ -131,7 +129,7 @@ export function HelperSummaryDialog({
       await onChanged(uiMessage('helperSummary.resetDone'));
     } catch (caught) {
       setConfirmReset(false);
-      setError(failure(caught));
+      setError(toUiMessage(caught));
       if (caught instanceof ApiError && caught.status === 409) await load();
     } finally {
       setSaving(false);

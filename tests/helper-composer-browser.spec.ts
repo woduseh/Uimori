@@ -158,6 +158,12 @@ test('HELPMESSAGE edits in older history keep their drafts through a conflict re
   await oldAnswer.getByLabel('메시지 메뉴', { exact: true }).click();
   await page.getByRole('button', { name: '요청과 응답 삭제', exact: true }).click();
   const pairConfirmation = page.getByRole('alertdialog', { name: '요청과 응답 삭제', exact: true });
+  state.failNextMessageMutation('network');
+  await pairConfirmation.getByRole('button', { name: '요청과 응답 삭제', exact: true }).click();
+  await expect(panel.locator('.notice-banner.notice-error')).toContainText(
+    '메시지를 삭제하지 못했어요.'
+  );
+  await expect(oldAnswer).toBeVisible();
   await pairConfirmation.getByRole('button', { name: '요청과 응답 삭제', exact: true }).click();
   await expect(pairConfirmation).toBeHidden();
   for (const messageId of removedPair)
@@ -191,6 +197,7 @@ test('HELPMESSAGE edits in older history keep their drafts through a conflict re
     { method: 'PATCH' },
     { method: 'PATCH' },
     { method: 'PATCH' },
+    { method: 'DELETE', scope: 'pair' },
     { method: 'DELETE', scope: 'pair' },
     { method: 'DELETE', scope: 'following' },
   ]);
