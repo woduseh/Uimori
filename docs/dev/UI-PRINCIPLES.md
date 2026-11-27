@@ -2,6 +2,8 @@
 
 Uimori is a writing and reading workspace. Keep the manuscript and composer prominent, frequent actions nearby, and occasional controls in contextual menus. This document keeps the app visually and behaviorally unified: the means of unity below, the contracts that protect the user's work, and the Korean terminology. Feature behavior lives in the feature documents and their tests; the current components and styles are the starting point for any change.
 
+[Contracts that stay](#contracts-that-stay) are binding. The means of unity and the screen notes record the current choices and are defaults: a change may depart from one when the result is better, says so in its report, and updates or removes the note. How a screen looks and feels is the user's call, so a conflict with a default is not a defect by itself.
+
 ## Working checklist
 
 1. State the user's task, the screen's primary action and the observable result before implementation. Resolve routine layout choices from existing patterns.
@@ -30,6 +32,8 @@ Motion guards:
 - Animate compositor-friendly properties (`opacity`, `transform`) first, with specific transition properties rather than `transition: all`.
 - Motion never shifts the manuscript layout, and source or translation text does not animate.
 - A dialog keeps neither `transform` nor `will-change` at rest. Menus inside a dialog are `position: fixed`, and a transformed ancestor would move them. Entrance motion must end at `transform: none`.
+- Motion is plain CSS in the existing components (`@starting-style` and named transition properties), without a motion dependency. Closing stays immediate, so nothing needs an exit timer, a closing state, animation-driven React state or a wrapper added only for animation. Native `showModal()` and `close()`, `details[open]`, checkbox semantics, focus and dismissal keep their owners.
+- No test pins durations, easing or entrance geometry, because those values changed with every motion pass. Review motion in the running app, including repeated open and close, nested confirmations, menu placement and small viewports.
 
 ### Shared controls
 

@@ -4,60 +4,19 @@ description: Run Uimori's standard browser verification loop for a UI or app cha
 ---
 # Uimori verify
 
-One loop for browser evidence. Paths are relative to the repository root. Which checks a change needs is decided in `docs/dev/CHECKS.md`; runner details and the feature-map rules live in `docs/dev/DEVELOPMENT.md`. Read those sections instead of copying them here.
+One loop for browser evidence. Paths are relative to the repository root. `docs/dev/CHECKS.md` decides which checks a change needs. Commands, options and report fields are in `docs/dev/DEVELOPMENT.md` under "Verification runners", "Feature map" and "Reset and cleanup". This file holds only the order and the judgment calls.
 
-## 1. Doctor
-
-```powershell
-npm run doctor
-```
-
-Run it when the environment is new or a previous run reported `BLOCKED`. A blocked browser, Node or child process is an environment problem: report it, do not work around it in tests.
-
-## 2. Build
-
-```powershell
-npm run build
-```
-
-Browser runs execute `dist` and refuse a build that does not match the source ("Run npm run build"). Finish the edits first, then build once.
-
-## 3. Verify the owning domain
-
-```powershell
-npm run verify -- --changed
-npm run verify -- <domain>
-npm run verify -- <domain> --grep <case-or-title> --visual
-```
-
-- `--changed` picks the domains whose `sources` or specs in `tests/feature-map.json` match the changed files. It prints which domains it chose, and the browser inputs no domain covers (it adds `browser-smoke` for those). Check that list against the change before trusting it.
-- Name the domain yourself when you know the owner; an unknown name prints every domain, preset and engine with its title.
-- `--grep` narrows a run for diagnosis. A narrowed run is not the domain's evidence; rerun the domain without it before reporting.
-- A `SKIP <spec>: set <VAR>` line means a spec needs private local material that is not configured. Report the skip; do not set variables to private data you were not given.
-- Only one browser run holds the machine at a time; a second one waits. Do not start parallel runs, and leave `npm run verify -- all` to the once-per-bundle full run.
-
-The last line of each run is JSON with `status`, `runId` and the path of `summary.json` under `output/playwright/<run-id>/`. Only `PASS` is a pass; `FAIL` and `BLOCKED` keep their traces and a copy of the databases under `evidence-db`.
-
-## 4. Review desktop and mobile screenshots
-
-For a change that alters what the user sees, rerun the domain with `--visual` (add `--grep` to the affected cases if the domain is large). Then:
-
-1. Open `summary.json` and read its `screenshots` list; the paths are relative to the run directory.
-2. Open the captures of the changed surface at both widths (`fixtures/browser-viewports.json` sets them; file names carry `mobile`/`desktop` or the width).
-3. Check the changed surface itself: layout at both widths, overflow, clipped text, focus and empty, loading and error states the change touches.
-4. If no capture shows the changed surface, say so; `npm run verify -- gallery` captures the main screens in light and dark themes.
-
-Screenshots support inspection; their existence alone does not prove the result looks right. Report what you looked at.
-
-## 5. Clean up
-
-```powershell
-npm run cleanup
-npm run cleanup -- --run <run-id>
-```
-
-Successful runs remove their temporary databases and apply bounded retention on their own. List the owned runs, and remove a failed run's artifacts once its evidence has been read or reported. Cleanup never stops unrelated processes.
+1. **Doctor**: `npm run doctor` when the environment is new or a run reported `BLOCKED`. A blocked browser, Node or child process is an environment problem: report it, do not work around it in tests.
+2. **Build**: `npm run build`, once, after the edits are finished.
+3. **Verify** the owning domain: `npm run verify -- <domain>`, or `npm run verify -- --changed`.
+   - Check the domains `--changed` printed against the change before trusting it.
+   - `--grep` is for diagnosis. A narrowed run is not the domain's evidence; rerun the domain without it before reporting.
+   - Report a `SKIP <spec>: set <VAR>` line. Do not set variables to private data you were not given.
+   - Leave `npm run verify -- all` to the once-per-bundle full run.
+   - Only `PASS` in the final JSON line is a pass.
+4. **Look**, for a change the user can see: rerun with `--visual`, read the `screenshots` list in the run's `summary.json`, and open the captures of the changed surface at both widths (`fixtures/browser-viewports.json` sets them). Check layout, overflow, clipped text, focus, and the empty, loading and error states the change touches. If no capture shows the changed surface, say so; `npm run verify -- gallery` captures the main screens in light and dark themes. A screenshot existing does not show that the result looks right.
+5. **Clean up**: once a failed run's evidence has been read or reported, remove it with `npm run cleanup -- --run <run-id>`.
 
 ## Report
 
-State the command, `runId`, test count and status for each run, any `SKIP` lines, which screenshots were reviewed at which width, and what was not covered: synthetic fixtures, not live providers or physical devices.
+State the command, `runId`, test count and status for each run, any `SKIP` lines, and which screenshots you looked at, at which width. Name the one to three screens and states the user should look at themself, because how it looks and feels is their call. Say what was not covered: the fixtures are synthetic, not live providers or physical devices.

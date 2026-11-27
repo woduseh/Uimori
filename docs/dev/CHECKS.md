@@ -14,7 +14,25 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |
 | Release candidate | `npm run release:check -- --area <domain>`; see [DEVELOPMENT](DEVELOPMENT.md#release-checks) |
 
-Use the smallest existing tests that exercise the affected behavior and plausible failures. Add tests for gaps that matter, rather than mirroring implementation. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
+Use the smallest existing tests that exercise the affected behavior and plausible failures. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
+
+## Which tests to keep
+
+This is a personal app: a miss found in use is recoverable, while tests that pin old behavior made each change of direction cost several test edits. Write or keep a test only when it protects one of these:
+
+- saved user data: writes, backup and restore, import and export, deletion boundaries;
+- typed but unsaved input surviving failure, reload and conflict;
+- credentials, sessions and access boundaries;
+- wire formats to providers and Risu file compatibility;
+- real concurrency and recovery failures;
+- one representative browser flow per feature;
+- deterministic structure: module cycles, import boundaries, i18n keys.
+
+Do not write, and remove when you touch the area: the same flow at another viewport or colour scheme; pixel, geometry, copy-text and class pins; assertions that a removed control is absent; failure, retry and conflict combinations repeated per form when one shared mechanism handles them; unit tests that mirror the implementation; several cases that fail for the same mistake; tests of diagnostic wording.
+
+Before deleting a browser case, name the component and action it exercises and find another browser case that mounts it. In the 2026-11 browser cut, a headless or server test named as the replacement usually did not cover the case, and most such deletions were restored in review.
+
+## What the commands cover
 
 `check:changed` counts deleted files as changes; only Biome is limited to files that still exist. It finds Vitest files through the import graph of changed modules and, for other files, by a test naming the file or its extension, so a test that locates files another way is missed; a root user guide under `docs/` also selects `tests/app-guides.test.ts`. A hub module such as `core/provider.ts` selects nearly the whole suite, so a local run executes at most 30 files (`--limit <n>`), tests named after or directly importing a changed module first, and prints how many it left out; `--all` or `CI=true` runs every affected file. A changed `scripts/` file runs its `scripts/<name>.test.mjs` and any tooling test that imports it, directly or through other scripts and hooks; `.githooks/` or `.claude/hooks/` changes do the same, or run the whole tooling suite when no such test exists. A selected tooling test that mentions `dist/` triggers a build first, as does the full tooling suite. Global configuration (`fullSuiteInput` in `scripts/change-classifier.mjs`) prints `scope: full-required`, because the import graph cannot show what it affects; run `quality:full` before finishing.
 
