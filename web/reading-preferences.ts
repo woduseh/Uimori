@@ -1,11 +1,11 @@
 import { storageKeys } from './storage-keys.js';
 export const QUOTE_PAIRS = [
-  { id: 'double', open: '"', close: '"', label: '"큰따옴표"' },
-  { id: 'curlyDouble', open: '“', close: '”', label: '“큰따옴표”' },
-  { id: 'single', open: "'", close: "'", label: "'작은따옴표'" },
-  { id: 'curlySingle', open: '‘', close: '’', label: '‘작은따옴표’' },
-  { id: 'corner', open: '「', close: '」', label: '「낫표」' },
-  { id: 'doubleCorner', open: '『', close: '』', label: '『겹낫표』' },
+  { id: 'double', open: '"', close: '"', labelKey: 'reader.quote.straightDouble' },
+  { id: 'curlyDouble', open: '“', close: '”', labelKey: 'reader.quote.curlyDouble' },
+  { id: 'single', open: "'", close: "'", labelKey: 'reader.quote.straightSingle' },
+  { id: 'curlySingle', open: '‘', close: '’', labelKey: 'reader.quote.curlySingle' },
+  { id: 'corner', open: '「', close: '」', labelKey: 'reader.quote.corner' },
+  { id: 'doubleCorner', open: '『', close: '』', labelKey: 'reader.quote.doubleCorner' },
 ] as const;
 
 export type QuotePairId = (typeof QUOTE_PAIRS)[number]['id'];

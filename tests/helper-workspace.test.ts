@@ -970,7 +970,7 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   expect(f.workspace.task(task.id)).toMatchObject({
     status: 'failed',
     error: 'UNEXPECTED_EOF',
-    completedEffects: { count: 1, labels: ['완료된 도우미 작업'] },
+    completedEffects: { count: 1 },
   });
   expect(send).toHaveBeenCalledTimes(2);
   const owner = owned.find((item) => item.store === f.store)!;
@@ -978,7 +978,7 @@ test('a saved change survives an explanation EOF and prevents whole-request retr
   owner.store = new Store(join(owner.path, 'story.sqlite'));
   const reopened = new HelperWorkspace(owner.store);
   const previous = reopened.task(task.id);
-  expect(previous.completedEffects).toEqual({ count: 1, labels: ['완료된 도우미 작업'] });
+  expect(previous.completedEffects).toEqual({ count: 1 });
   expect(() =>
     reopened.enqueue(conversation.id, 'retry-eof', previous.request, {
       ...previous.snapshot,

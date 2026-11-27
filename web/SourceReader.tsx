@@ -17,7 +17,7 @@ import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { displayTranslationJob, latestTranslation } from '../core/translation-display.js';
-import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
+import { resolveInlineImage } from './image-placement.js';
 import {
   Fragment,
   useCallback,
@@ -1207,7 +1207,7 @@ function SourceReaderContent({
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
-                    {translateMessage(IMAGE_POSITION_UNAVAILABLE)}
+                    {t('reader.imagePositionUnavailable')}
                   </p>
                 )}
               </div>
@@ -1221,7 +1221,7 @@ function SourceReaderContent({
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
-                    {translateMessage(IMAGE_POSITION_UNAVAILABLE)}
+                    {t('reader.imagePositionUnavailable')}
                   </p>
                 )}
               </div>

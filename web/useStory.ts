@@ -865,15 +865,15 @@ export function useStory() {
     )
       return;
     if (files.some((file) => file.size > IMAGE_INPUT_MAX_BYTES)) {
-      setError('참고 이미지는 파일당 64MB 이내로 첨부해 주세요.');
+      setError(uiMessage('main.story2'));
       return;
     }
     if (files.some((file) => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
-      setError('참고 이미지는 PNG, JPEG, 정지 WebP 파일로 첨부해 주세요.');
+      setError(uiMessage('main.story3'));
       return;
     }
     if (requestDraft.current.images.length + files.length > REQUEST_IMAGE_MAX_COUNT) {
-      setError('참고 이미지는 최대 8장까지 첨부할 수 있어요.');
+      setError(uiMessage('main.story4'));
       return;
     }
     const scope = { key: draftKey, epoch: navigation.current.epoch };
@@ -909,7 +909,7 @@ export function useStory() {
         currentDraftKey.current === scope.key &&
         navigation.current.epoch === scope.epoch
       )
-        setError('이미지를 열지 못했어요.');
+        setError(uiMessage('main.story5'));
     } finally {
       if (decoding.current === operation) {
         decoding.current = null;
@@ -1017,7 +1017,7 @@ export function useStory() {
               : { anchor, ratio: changed?.ratio, share: changed?.share, fallbackToSource: true }
             : {}),
         });
-        if (!validHash) setNotice('본문이 바뀌어 해당 장면의 시작으로 이동했어요.');
+        if (!validHash) setNotice(uiMessage('main.story6'));
         if (readerTarget.changedParagraph !== undefined) {
           arrival.current?.abort();
           arrival.current = new AbortController();
@@ -1373,9 +1373,7 @@ export function useStory() {
       if (!previous && sessionStorage.getItem(commandKey)) {
         submitLocks.current.delete(sentView);
         setSubmitting([...submitLocks.current]);
-        setError(
-          '이전 요청 기록을 읽을 수 없어 새 요청을 보내지 않았어요. 기록을 보존한 상태로 복구가 필요해요.'
-        );
+        setError(uiMessage('main.story7'));
         return false;
       }
       if (!preserveDraft) rememberRequestDraft(sentKey, requestDraft.current);
@@ -1435,10 +1433,7 @@ export function useStory() {
       }
       if (!preserveDraft) {
         await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
-          if (currentView.current === sentView)
-            setError(
-              '요청은 접수됐지만 기기의 초안을 비우지 못했어요. 다시 보내기 전에 확인해 주세요.'
-            );
+          if (currentView.current === sentView) setError(uiMessage('main.story10'));
         });
         if (currentDraftKey.current === sentKey && requestDraft.current.token === sentDraftToken) {
           sessionStorage.removeItem(sentKey);
@@ -1453,7 +1448,7 @@ export function useStory() {
           previous
             ? sessionStorage.getItem(sentKey)
               ? uiMessage('main.story11')
-              : '이전 요청이 접수된 것을 확인했어요.'
+              : uiMessage('main.story12')
             : ''
         );
       if (
@@ -1475,13 +1470,12 @@ export function useStory() {
       if (!unresolved) clearCommand(commandKey, idempotencyKey);
       if (!unresolved && queued) queued.state = 'rejected';
       if (currentView.current === sentView)
-        setError(error instanceof Error ? error : '요청이 접수됐는지 확인하지 못했어요.');
+        setError(error instanceof Error ? error : uiMessage('main.story13'));
     }
     try {
       await refresh(chat.id);
     } catch {
-      if (accepted && currentView.current === sentView)
-        setError('요청은 접수됐어요. 화면을 새로 불러오지 못해 연결을 확인하고 있어요.');
+      if (accepted && currentView.current === sentView) setError(uiMessage('main.story14'));
     } finally {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);
@@ -1492,7 +1486,7 @@ export function useStory() {
   const [forking, setForking] = useState<string[]>([]);
   const [forkOrigin, setForkOrigin] = useState<{
     id: string;
-    title: string;
+    title: string | null;
     forkId: string;
   } | null>(null);
   async function fork(sourceId: string) {
@@ -1509,18 +1503,14 @@ export function useStory() {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch) {
         setForkOrigin({
           id: chatId,
-          title: chats.find((chat) => chat.id === chatId)?.title ?? '원본 채팅',
+          title: chats.find((chat) => chat.id === chatId)?.title ?? null,
           forkId: next.id,
         });
         select(next.id);
       }
     } catch (error) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(
-          error instanceof Error
-            ? error.message
-            : '채팅 분기를 확인하지 못했어요. 다시 누르면 같은 요청을 확인해요.'
-        );
+        setError(error instanceof Error ? error.message : uiMessage('main.story15'));
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);
@@ -1608,7 +1598,7 @@ export function useStory() {
     setError('');
     setNotice('');
     let modelWriteAttempted = false;
-    let completion = '다음 요청에 적용할 설정을 저장했어요.';
+    let completion = uiMessage('main.story22');
     try {
       if (kind === 'model') {
         const model = library.models.find((item) => item.id === value);
@@ -1632,7 +1622,7 @@ export function useStory() {
         try {
           const refreshed = await refresh(chatId);
           if (refreshed && navigation.current.chat === chatId && navigation.current.epoch === epoch)
-            setNotice('다음 요청에 적용할 설정을 저장했어요.');
+            setNotice(uiMessage('main.story22'));
         } catch {
           if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
             setError(uiMessage('main.modelPickerRefreshFailed'));
@@ -1652,7 +1642,7 @@ export function useStory() {
             currentPrompt.program
           )
         )
-          throw new Error('현재 프롬프트와 옵션 정의가 일치하는 옵션 프리셋을 선택해 주세요.');
+          throw new Error(uiMessage('main.story16'));
         {
           const state = await api<ChatOptionState>(`/chats/${chatId}/options`);
           if (
@@ -1663,7 +1653,7 @@ export function useStory() {
               state.program
             )
           )
-            throw new Error('채팅의 창작 프롬프트가 바뀌었어요. 옵션 프리셋을 다시 확인해 주세요.');
+            throw new Error(uiMessage('main.story17'));
           await api(`/chats/${chatId}/options/fixed`, {
             expectedRevision: state.revision,
             operationId: crypto.randomUUID(),
@@ -1681,15 +1671,14 @@ export function useStory() {
           const id = value.slice(0, separator);
           const revision = Number(value.slice(separator + 1));
           if (separator <= 0 || !Number.isSafeInteger(revision) || revision < 1)
-            throw new Error('추가할 모듈을 다시 선택해 주세요.');
+            throw new Error(uiMessage('main.story18'));
           module = await api<Content>(`/content/${encodeURIComponent(id)}`);
         }
         if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
-        if (!module.package && !module.hasPackage)
-          throw new Error('추가할 모듈을 찾지 못했어요. 서재를 다시 확인해 주세요.');
+        if (!module.package && !module.hasPackage) throw new Error(uiMessage('main.story19'));
         const existing = profile.packageAttachments ?? [];
         if (existing.some((item) => item.id === module.id && item.role === 'module'))
-          throw new Error('이미 연결한 모듈이에요. 채팅 설정에서 확인해 주세요.');
+          throw new Error(uiMessage('main.story20'));
         await api(
           `/chats/${chatId}/profile`,
           {
@@ -1708,8 +1697,7 @@ export function useStory() {
           (item) =>
             (item.kind === 'persona' || item.package || item.hasPackage) && refValue(item) === value
         );
-        if (kind === 'persona' && value && !persona)
-          throw new Error('선택한 페르소나를 찾지 못했어요.');
+        if (kind === 'persona' && value && !persona) throw new Error(uiMessage('main.story21'));
         const packageAttachments =
           kind === 'persona'
             ? [...(profile.packageAttachments ?? [])]
@@ -1741,7 +1729,7 @@ export function useStory() {
             ? uiMessage('main.modelPickerUnknown')
             : error instanceof Error
               ? error
-              : '설정을 저장하지 못했어요.'
+              : uiMessage('main.story23')
         );
       await refresh(chatId).catch(() => undefined);
       return false;
@@ -1790,7 +1778,7 @@ export function useStory() {
       await refresh(chatId);
     } catch (caught) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(caught instanceof Error ? caught : '원문 생성을 취소하지 못했어요.');
+        setError(caught instanceof Error ? caught : uiMessage('main.story24'));
     } finally {
       cancelLocks.current.delete(runId);
       setCancelling([...cancelLocks.current]);
@@ -1978,9 +1966,7 @@ export function useStory() {
     setError('');
     return true;
   }
-  const pendingRequest = pendingCommand
-    ? pendingCommand.payload.request || '참고 이미지 요청'
-    : null;
+  const pendingRequest = pendingCommand ? pendingCommand.payload.request : null;
   const pendingEditedRunId = pendingCommand?.payload.editedRequest
     ? pendingCommand.payload.retryOf
     : undefined;

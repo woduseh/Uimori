@@ -145,7 +145,8 @@ export function AuthorNotesEditor({
       return true;
     } catch (caught) {
       if (!alive.current) return false;
-      const text = caught instanceof Error ? caught.message : t('library.couldNotSaveTheNote');
+      const text =
+        caught instanceof Error ? caught.message : uiMessage('library.couldNotSaveTheNote');
       setError(text);
       onError(text);
       if (caught instanceof ApiError && caught.status === 409) {

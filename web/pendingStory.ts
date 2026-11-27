@@ -40,7 +40,7 @@ export function savePendingStoryProfile(chatId: string, intent: NewStoryProfileI
 function readIntent(raw: string): NewStoryProfileIntent {
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('보관한 시작 설정을 읽을 수 없어요.');
+    throw new Error(uiMessage('transfer.m356'));
   const pending = value as Record<string, unknown>;
   const versioned = pending.version === 2 && pending.kind === 'new-story-profile';
   if (
@@ -52,7 +52,7 @@ function readIntent(raw: string): NewStoryProfileIntent {
         )
     )
   ) {
-    throw new Error('보관한 시작 설정을 읽을 수 없어요.');
+    throw new Error(uiMessage('transfer.m356'));
   }
   const packageAttachments =
     pending.packageAttachments === undefined
@@ -60,13 +60,13 @@ function readIntent(raw: string): NewStoryProfileIntent {
       : Array.isArray(pending.packageAttachments)
         ? pending.packageAttachments.map(validateContentAttachment)
         : null;
-  if (packageAttachments === null) throw new Error('보관한 시작 패키지를 읽을 수 없어요.');
+  if (packageAttachments === null) throw new Error(uiMessage('transfer.m357'));
   const profileBaseRevision = pending.profileBaseRevision;
   if (
     profileBaseRevision !== undefined &&
     (!Number.isSafeInteger(profileBaseRevision) || Number(profileBaseRevision) < 1)
   )
-    throw new Error('보관한 시작 설정을 읽을 수 없어요.');
+    throw new Error(uiMessage('transfer.m356'));
   let packageStart: NewStoryProfileIntent['packageStart'];
   if (pending.packageStart !== undefined) {
     const opening = pending.packageStart as Record<string, unknown>;
@@ -83,7 +83,7 @@ function readIntent(raw: string): NewStoryProfileIntent {
         (!Number.isSafeInteger(opening.expectedProfileRevision) ||
           Number(opening.expectedProfileRevision) < 1))
     )
-      throw new Error('보관한 시작 요청을 읽을 수 없어요.');
+      throw new Error(uiMessage('transfer.m358'));
     packageStart = {
       ...validatePackageStartRef({
         packageId: opening.packageId,

@@ -6,4 +6,4 @@ export type ManuscriptExportMetadata = {
 
 export type ManuscriptExportMode = 'source' | 'translation';
 
-export type ManuscriptExportResult = { filename: string; markdown: string };
+export type ManuscriptExportResult = { title: string; range: string; markdown: string };

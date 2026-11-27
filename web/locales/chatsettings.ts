@@ -509,12 +509,6 @@ export const messages = {
     ja: '詳細',
     zh: '高级',
   },
-  'chatsettings.m93': {
-    ko: '이미지',
-    en: 'Images',
-    ja: '画像',
-    zh: '图片',
-  },
   'chatsettings.m95': {
     ko: '채팅 변수',
     en: 'Chat variables',

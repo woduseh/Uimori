@@ -144,7 +144,9 @@ export function useInputTranslation(options: Options) {
         latest.key === captured.key &&
         latest.epoch === captured.epoch
       )
-        setError(cause instanceof Error ? cause.message : '입력을 번역하지 못했어요.');
+        setError(
+          cause instanceof Error ? cause.message : uiMessage('prompts.uiUnableToTranslateInput')
+        );
     } finally {
       if (pending.current === controller) {
         pending.current = null;

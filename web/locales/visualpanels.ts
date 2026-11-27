@@ -35,12 +35,6 @@ export const messages = {
     ja: '項目ID',
     zh: '条目 ID',
   },
-  'visualpanels.bodyText': {
-    ko: '본문',
-    en: 'Body text',
-    ja: '本文',
-    zh: '正文',
-  },
   'visualpanels.originalLayoutColors': {
     ko: '레이아웃 원래 색상',
     en: 'Original layout colors',

@@ -145,7 +145,7 @@ export function NativeRisuPresetEditor({
     return model;
   });
   const prepareProgram = (model: ResourceModel, patch: Record<string, unknown>): ResourceModel => {
-    if (!('program' in model)) throw new Error('프리셋 편집기에서 저장해 주세요.');
+    if (!('program' in model)) throw new Error(uiMessage('native.text_a52034ad77'));
     const input = { ...model.program.nativeRisuPreset.preset, ...patch };
     return {
       ...model,

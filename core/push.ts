@@ -14,14 +14,14 @@ export const DEFAULT_PUSH_PREFERENCES: PushPreferences = {
   illustration: false,
   showTitle: true,
 };
+export type PushDeviceError = 'PUSH_RETRYING' | 'PUSH_DELIVERY_FAILED';
 export type PushDevice = {
   revision: number;
   preferences: PushPreferences;
-  lastError: string | null;
+  lastError: PushDeviceError | string | null;
 };
 export type PushInfo = {
   available: boolean;
-  reason: string | null;
   publicKey: string | null;
   device: PushDevice | null;
 };

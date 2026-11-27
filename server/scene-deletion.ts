@@ -4,6 +4,7 @@ import { readerRunDismissalKey } from './run-reader-state.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
+import { CONTEXT_JOB_SCENE_DELETED } from '../core/context-plan.js';
 import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-deletion.js';
 import type { MessageChanges } from '../core/message-changes.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
@@ -289,9 +290,9 @@ export function deleteScenes(
     store.db.prepare('DELETE FROM chat_lore_state WHERE chat_id=?').run(chatId);
     store.db
       .prepare(
-        "UPDATE context_jobs SET snapshot=NULL,error=CASE WHEN status='completed' THEN error ELSE '삭제된 장면을 포함한 요청이에요. 새 요약을 요청해 주세요.' END WHERE chat_id=?"
+        "UPDATE context_jobs SET snapshot=NULL,error=CASE WHEN status='completed' THEN error ELSE ? END WHERE chat_id=?"
       )
-      .run(chatId);
+      .run(CONTEXT_JOB_SCENE_DELETED, chatId);
     for (const id of ids) {
       for (const row of store.db.prepare('SELECT text FROM source_edits WHERE source_id=?').all(id))
         rememberImages(row.text);

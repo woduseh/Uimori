@@ -1163,12 +1163,6 @@ export const messages = {
     ja: '原文の生成をキャンセルできませんでした。',
     zh: '无法取消原文生成。',
   },
-  'main.story25': {
-    ko: '참고 이미지 요청',
-    en: 'Reference image request',
-    ja: '参考画像のリクエスト',
-    zh: '参考图片请求',
-  },
   'main.story26': {
     ko: '원본 채팅',
     en: 'Original chat',

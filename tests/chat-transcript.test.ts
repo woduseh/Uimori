@@ -126,12 +126,13 @@ describe('Markdown manuscript export', () => {
     });
     const body = { mode: 'source', expectedHeadRevision: second.id };
     expect(exportManuscript(store, chat.id, body)).toEqual({
-      filename: 'Original story-원문.md',
+      title: 'Original story',
+      range: '',
       markdown: '<p>Edited scene.</p>\nStatus: ready\n\nScene two.\n',
     });
     const selected = exportManuscript(store, chat.id, { ...body, fromScene: 2, toScene: 2 });
     expect(selected.markdown).toBe('Scene two.\n');
-    expect(selected.filename).toBe('Original story-2-2-원문.md');
+    expect(selected).toMatchObject({ title: 'Original story', range: '-2-2' });
     expect(selected.markdown).not.toMatch(/Continue|Keep the narrator|modelCalls|request/);
     expect(() => exportManuscript(store, chat.id, { ...body, fromScene: 2, toScene: 1 })).toThrow(
       'MANUSCRIPT_RANGE_INVALID'

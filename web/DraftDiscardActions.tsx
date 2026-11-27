@@ -9,8 +9,8 @@ export function DraftDiscardActions({
   onDiscard,
   onSave,
   onSavingChange,
-  discardLabel = '초안 버리고 이동',
-  saveLabel = '저장하고 이동',
+  discardLabel = uiMessage('shared.discardLeave'),
+  saveLabel = uiMessage('shared.saveLeave'),
   disabled = false,
   open = true,
 }: {

@@ -331,7 +331,7 @@ test('HELPUI05 a failed request retries once as edited, saved effects block repl
 
   const stopped = state.addFailed(state.current());
   stopped.error = 'UNEXPECTED_EOF';
-  stopped.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
+  stopped.completedEffects = { count: 1 };
   stopped.resumable = true;
   await page.reload();
   panel = await openHelperPanel(page);
@@ -345,7 +345,7 @@ test('HELPUI05 a failed request retries once as edited, saved effects block repl
     `[data-testid="helper-task-activity"][data-task-id="${stopped.id}"]`
   );
   await stoppedDetails.locator(':scope > summary').click();
-  await expect(stoppedDetails.getByText('저장한 작업: 다음 요청 옵션')).toBeVisible();
+  await expect(stoppedDetails.getByText('저장한 작업: 완료된 도우미 작업')).toBeVisible();
   await expect(stoppedDetails.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
   expect(state.posts).toHaveLength(2);
   await actions.getByRole('button', { name: '이어서 하기', exact: true }).click();

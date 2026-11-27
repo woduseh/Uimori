@@ -32,6 +32,7 @@ export type ContextCheckpoint = ContextCheckpointRef & {
   createdAt: string;
   activated: boolean;
 };
+export const CONTEXT_JOB_SCENE_DELETED = 'CONTEXT_JOB_SCENE_DELETED';
 export type ContextJob = {
   priorities?: string;
   id: string;

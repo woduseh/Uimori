@@ -121,7 +121,7 @@ test('retention follows success, leaves unrelated data, and never prunes to make
   expect((await service.status()).status).toBe('failed');
   expect((await service.status()).lastSuccess!.id).toBe(first.id);
   expect((await service.list()).map((item) => item.id)).toEqual([first.id]);
-  expect((await service.status()).error).toContain('공간');
+  expect((await service.status()).error).toBe('BACKUP_DISK_FULL');
   service.start();
   await service.settle();
   expect(await service.list()).toHaveLength(1);

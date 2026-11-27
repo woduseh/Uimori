@@ -100,14 +100,14 @@ export function exportManuscript(
       scenes: missing.slice(0, 20).join(','),
       total: missing.length,
     });
-  const name =
-    chat.title
-      .replace(/[<>:"/\\|?*\p{Cc}]/gu, '_')
-      .replace(/[. ]+$/gu, '')
-      .slice(0, 100) || '원고';
+  const title = chat.title
+    .replace(/[<>:"/\\|?*\p{Cc}]/gu, '_')
+    .replace(/[. ]+$/gu, '')
+    .slice(0, 100);
   const range = body.fromScene !== undefined || body.toScene !== undefined ? `-${from}-${to}` : '';
   return {
-    filename: `${name}${range}-${mode === 'source' ? '원문' : '번역'}.md`,
+    title,
+    range,
     markdown: `${texts.join('\n\n')}\n`,
   };
 }

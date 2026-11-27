@@ -1,3 +1,4 @@
+import { message as uiMessage } from './i18n.js';
 export const nativeToggleTypes = [
   'toggle',
   'select',
@@ -51,10 +52,10 @@ export function serializeNativeToggleLines(lines: NativeToggleLine[]): string {
 
 export function serializeNativeToggleDefinition(item: NativeToggleDefinition): string {
   if ([item.key, item.label, item.options].some((part) => /[=\r\n]/.test(part))) {
-    throw new Error('정의 필드에는 등호나 줄바꿈을 넣을 수 없어요. 원문에서 편집해 주세요.');
+    throw new Error(uiMessage('native.toggleFieldInvalid'));
   }
   if (['toggle', 'select', 'text', 'textarea'].includes(item.type) && !item.key) {
-    throw new Error('변수 키를 입력해 주세요.');
+    throw new Error(uiMessage('native.variableKeyRequired'));
   }
   if (item.type === 'toggle') return `${item.key}=${item.label}`;
   if (item.type === 'select') return `${item.key}=${item.label}=select=${item.options}`;
@@ -66,13 +67,13 @@ export function nativeToggleGroupWarnings(lines: NativeToggleLine[]): string[] {
   let open = false;
   for (const [index, line] of lines.entries()) {
     if (line.definition?.type === 'group') {
-      if (open) warnings.push(`${index + 1}행: Risu 그룹은 중첩할 수 없어요.`);
+      if (open) warnings.push(uiMessage('native.nestedGroup', { line: index + 1 }));
       open = true;
     } else if (line.definition?.type === 'groupEnd') {
-      if (!open) warnings.push(`${index + 1}행: 대응하는 그룹 시작이 없어요.`);
+      if (!open) warnings.push(uiMessage('native.unmatchedGroup', { line: index + 1 }));
       open = false;
     }
   }
-  if (open) warnings.push('닫히지 않은 그룹이 있어요. 그룹 끝 항목을 추가해 주세요.');
+  if (open) warnings.push(uiMessage('native.unclosedGroup'));
   return warnings;
 }

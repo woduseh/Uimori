@@ -1,4 +1,4 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import type { PromptValue, RisuPrompt } from '../core/risu-prompt.js';
@@ -93,13 +93,6 @@ export function NativeRisuToggleEditor({
   prepareSave?: (model: ResourceModel, values: Snapshot) => ResourceModel;
 }) {
   const { t } = useI18n();
-  const warningMessage = (warning: string) => {
-    const nested = /^(\d+)행: Risu 그룹은 중첩할 수 없어요\.$/.exec(warning);
-    if (nested) return t('native.nestedGroup', { line: Number(nested[1]) });
-    const unmatched = /^(\d+)행: 대응하는 그룹 시작이 없어요\.$/.exec(warning);
-    if (unmatched) return t('native.unmatchedGroup', { line: Number(unmatched[1]) });
-    return translateMessage(warning);
-  };
   const names: Record<NativeToggleType, string> = {
     toggle: t('native.text_7019383fa3'),
     select: t('native.text_a73b2abf4a'),
@@ -139,9 +132,9 @@ export function NativeRisuToggleEditor({
   const pending = sourcePending || invalidPending;
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
-    if (invalidPending) throw new Error('잘못 입력된 토글 또는 변수 값을 확인해 주세요.');
+    if (invalidPending) throw new Error(uiMessage('native.text_1ad2d6a690'));
     if (!sourcePending) return model;
-    if (!prepareSave) throw new Error('변수와 토글 소스를 편집기에 적용해 주세요.');
+    if (!prepareSave) throw new Error(uiMessage('native.text_5d82dab127'));
     return prepareSave(model, { toggles: raw, variables: rawVariables });
   });
   useEffect(() => {
@@ -371,7 +364,7 @@ export function NativeRisuToggleEditor({
                       option,
                       (next) => {
                         if (next.includes(','))
-                          throw new Error('선택지 하나에는 쉼표를 넣을 수 없어요.');
+                          throw new Error(uiMessage('native.text_b349ed5327'));
                         return setOptions(options.map((entry, i) => (i === index ? next : entry)));
                       }
                     )}
@@ -1046,7 +1039,7 @@ export function NativeRisuToggleEditor({
       </footer>
       {doc.warnings.map((warning) => (
         <p key={warning} className="nt-notice">
-          {warningMessage(warning)}
+          {translateMessage(warning)}
         </p>
       ))}
       <Dialog

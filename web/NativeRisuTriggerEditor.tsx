@@ -1,4 +1,4 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -71,8 +71,8 @@ export function NativeRisuTriggerEditor({
     if (!draft) return model;
     const parsed: unknown = JSON.parse(draft.text);
     if (!record(parsed) || draft.index >= value.length)
-      throw new Error('트리거 JSON 객체를 확인해 주세요.');
-    if (!prepareSave) throw new Error('트리거 JSON을 편집기에 적용해 주세요.');
+      throw new Error(uiMessage('native.text_754e9dc1ea'));
+    if (!prepareSave) throw new Error(uiMessage('native.text_2bf65e9272'));
     return prepareSave(
       model,
       value.map((item, i) => (i === draft.index ? parsed : item))
@@ -127,17 +127,16 @@ export function NativeRisuTriggerEditor({
           disabled={disabled || !pending}
           onClick={() => {
             try {
-              if (index >= value.length)
-                throw new Error(
-                  '편집하던 항목을 찾을 수 없어요. 입력을 되돌린 뒤 다시 확인해 주세요.'
-                );
+              if (index >= value.length) throw new Error(uiMessage('native.text_782c2d04b2'));
               const parsed: unknown = JSON.parse(raw);
-              if (!record(parsed)) throw new Error('트리거는 JSON 객체로 입력해 주세요.');
+              if (!record(parsed)) throw new Error(uiMessage('native.text_30b7bf9cb8'));
               replace(parsed);
               setDraft(null);
               setError('');
             } catch (caught) {
-              setError(caught instanceof Error ? caught.message : 'JSON을 확인해 주세요.');
+              setError(
+                caught instanceof Error ? caught.message : uiMessage('native.text_b0acf3aee7')
+              );
             }
           }}
         >

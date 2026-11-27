@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { shownThrow } from './shown-error.js';
 import {
   parseNativeToggleLines,
   serializeNativeToggleDefinition,
@@ -46,8 +47,14 @@ describe('native toggle definition editor source preservation', () => {
 
   it('rejects form edits that would silently change native grammar', () => {
     const item = { type: 'toggle' as const, key: 'a', label: 'Label', options: '' };
-    expect(() => serializeNativeToggleDefinition({ ...item, label: 'x=y' })).toThrow('등호');
-    expect(() => serializeNativeToggleDefinition({ ...item, key: '' })).toThrow('변수 키');
-    expect(() => serializeNativeToggleDefinition({ ...item, label: 'x\ny' })).toThrow('줄바꿈');
+    expect(shownThrow(() => serializeNativeToggleDefinition({ ...item, label: 'x=y' }))).toContain(
+      '등호'
+    );
+    expect(shownThrow(() => serializeNativeToggleDefinition({ ...item, key: '' }))).toContain(
+      '변수 키'
+    );
+    expect(shownThrow(() => serializeNativeToggleDefinition({ ...item, label: 'x\ny' }))).toContain(
+      '줄바꿈'
+    );
   });
 });

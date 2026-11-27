@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import type { ComponentPropsWithRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { RunningIcon, SaveIcon } from './ui-icons.js';
@@ -13,7 +13,7 @@ type Props = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & 
 
 export function SaveButton({
   label,
-  text = '저장',
+  text = uiMessage('shared.save'),
   icon: Icon = SaveIcon,
   className = '',
   type = 'submit',
@@ -24,7 +24,7 @@ export function SaveButton({
   useI18n();
   const busy = ariaBusy === true || ariaBusy === 'true';
   const pendingText = text
-    ? text === '저장' || text === t('shared.save')
+    ? text === uiMessage('shared.save') || text === t('shared.save')
       ? t('shared.saving')
       : t('shared.working')
     : '';

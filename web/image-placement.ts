@@ -22,6 +22,3 @@ export function resolveInlineImage(
   );
   return matches.length === 1 ? matches[0] : undefined;
 }
-
-export const IMAGE_POSITION_UNAVAILABLE =
-  '표시 변환 후 이미지 위치를 확인할 수 없어 이 보기에서는 이미지를 생략했어요.';

@@ -91,7 +91,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   async function filesChosen(files: File[], replacing?: string) {
     if (!files.length || upload.current) return;
     if (!replacing && (latest.current.value.images?.length ?? 0) + files.length > 2000) {
-      setError('자료 하나에 이미지를 2,000개까지 등록할 수 있어요.');
+      setError(uiMessage('native.text_1ec208bab4'));
       return;
     }
     const token = ++generation.current,
@@ -123,7 +123,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           if (!current()) return;
           failures.push({
             file: file.name,
-            message: cause instanceof Error ? cause.message : '업로드하지 못했어요.',
+            message: cause instanceof Error ? cause.message : uiMessage('native.text_6d75f11c59'),
           });
         }
       }
@@ -467,7 +467,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 setUploadFailures([]);
               } catch (cause) {
                 setRemoving('');
-                setError(cause instanceof Error ? cause.message : '제거하지 못했어요.');
+                setError(
+                  cause instanceof Error ? cause.message : uiMessage('native.text_949e1ae936')
+                );
               }
             }}
           >

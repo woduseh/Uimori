@@ -165,6 +165,12 @@ function decodeMessages(value: string, locale: UiLocale = current): string {
     index = end + 1;
   }
 }
+export function translateStoredCode<Code extends string>(
+  value: string,
+  keys: Record<Code, string>
+): string {
+  return Object.hasOwn(keys, value) ? t(keys[value as Code]) : value;
+}
 export function translateMessage(value: string): string {
   if (value.includes(messagePrefix)) return decodeMessages(value);
   const key = sources.get(value) ?? sources.get(normalized(value));

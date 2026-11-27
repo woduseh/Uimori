@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
@@ -77,7 +77,8 @@ function StoryPanelEditor({
   }, [hasUnsavedChanges, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : t('reader.couldNotCompleteTheTask');
+    const text =
+      caught instanceof Error ? caught.message : uiMessage('reader.couldNotCompleteTheTask');
     setError(text);
     onError(text);
   }

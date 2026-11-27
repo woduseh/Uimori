@@ -1,4 +1,4 @@
-import { message } from './i18n.js';
+import { message, t } from './i18n.js';
 import { RISU_ASSET_MAX } from '../core/risu-limits.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
 import { api } from './api.js';
@@ -37,7 +37,7 @@ export async function uploadPackageImage(
       file.name
         .replace(/\.[^.]+$/u, '')
         .trim()
-        .slice(0, 200) || '이미지',
+        .slice(0, 200) || t('visuals.image'),
     description: '',
     blobHash: result.hash,
     mime: result.mime,

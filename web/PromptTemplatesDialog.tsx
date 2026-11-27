@@ -14,7 +14,11 @@ type PromptTemplateSummary = {
   id: string;
   title: string;
   role: PromptRole;
-  description: string;
+};
+const descriptions: Record<string, string> = {
+  pheme: 'prompts.template.rp',
+  'pheme-novel': 'prompts.template.novel',
+  hermeneia: 'prompts.template.translation',
 };
 export type PromptTemplate = PromptTemplateSummary & Pick<PromptPreset, 'program' | 'values'>;
 
@@ -106,7 +110,7 @@ export function PromptTemplatesDialog({
                     ? t('prompts.uiTranslation')
                     : t('prompts.uiWriting')}
                 </span>
-                <p>{translateMessage(template.description)}</p>
+                {Object.hasOwn(descriptions, template.id) && <p>{t(descriptions[template.id])}</p>}
               </div>
               <IconButton
                 type="button"

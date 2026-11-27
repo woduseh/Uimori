@@ -443,6 +443,12 @@ test('failed runs that captured deleted text lose that captured context and cann
   const f = manuscript(),
     failed = queued(f.store, f.chatId);
   f.store.finishRun(failed.id, 'failed', 'Synthetic provider failure');
+  const at = new Date().toISOString();
+  f.store.db
+    .prepare(`INSERT INTO context_jobs
+    (id,chat_id,request_key,command,status,snapshot,error,created_at,updated_at)
+    VALUES(?,?,?,?,'failed',?,?,?,?)`)
+    .run('failed-context', f.chatId, 'failed', '{}', '{}', 'PROVIDER_FAILED', at, at);
   const released = readStoredRunSnapshot(f.store, failed.id);
   expect(released.history).toEqual([]);
   expect(released.capturedSources).toContain(f.b.id);
@@ -450,6 +456,9 @@ test('failed runs that captured deleted text lose that captured context and cann
   const snapshot = readStoredRunSnapshot(f.store, failed.id);
   expect(snapshot.invalidatedBySceneDeletion).toBe(true);
   expect(snapshot.capturedSources).toBeUndefined();
+  expect(
+    f.store.db.prepare("SELECT snapshot,error FROM context_jobs WHERE id='failed-context'").get()
+  ).toEqual({ snapshot: null, error: 'CONTEXT_JOB_SCENE_DELETED' });
   expect(() => f.store.retryRun(failed.id, 'deleted-context-retry')).toThrow(
     'SCENE_DELETED_RETRY_UNAVAILABLE'
   );

@@ -3,7 +3,7 @@ import type { HelperContextSummaryView } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { Dialog } from './Dialog.js';
-import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
+import { formatNumber, t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { SummaryEditor } from './SummaryEditor.js';
@@ -12,7 +12,7 @@ import './helper-summary.css';
 export type HelperSummaryDraft = { text: string; revision: number };
 
 const failure = (caught: unknown) =>
-  caught instanceof Error ? caught.message : t('helperSummary.loadFailed');
+  caught instanceof Error ? caught.message : uiMessage('helperSummary.loadFailed');
 
 export function HelperSummaryDialog({
   open,

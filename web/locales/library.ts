@@ -1757,12 +1757,6 @@ export const messages = {
     ja: '表記{v0}を削除',
     zh: '删除用词{v0}',
   },
-  'library.delete': {
-    ko: '삭제',
-    en: 'Delete',
-    ja: '削除',
-    zh: '删除',
-  },
   'library.aPngJpegWebpAvifOrGif': {
     ko: '64MiB 이하 PNG, JPEG, WebP, AVIF 또는 GIF가 필요해요.',
     en: 'A PNG, JPEG, WebP, AVIF, or GIF up to 64 MiB is required.',
@@ -1942,12 +1936,6 @@ export const messages = {
     en: 'Term {number, number}',
     ja: '表記{number, number}',
     zh: '用词{number, number}',
-  },
-  'library.imagePositionUnavailable': {
-    ko: '표시 변환 후 이미지 위치를 확인할 수 없어 이 보기에서는 이미지를 생략했어요.',
-    en: 'Images were omitted in this view because their positions could not be determined after display transformations.',
-    ja: '表示変換後の画像位置を確認できず、この表示では画像を省略しました。',
-    zh: '显示转换后无法确认图片位置，因此在此视图省略图片。',
   },
   'library.folderInCategory': {
     ko: '{category} / {folder}',

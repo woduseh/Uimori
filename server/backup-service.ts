@@ -4,7 +4,12 @@ import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import type { FastifyInstance } from 'fastify';
-import type { BackupManifest, BackupSettings, BackupStatus } from '../core/backups.js';
+import type {
+  BackupManifest,
+  BackupSettings,
+  BackupStatus,
+  BackupStatusCode,
+} from '../core/backups.js';
 import { APP_VERSION } from './app-version.js';
 import { DATABASE_SCHEMA_VERSION } from './database-schema.js';
 import { createDatabaseSnapshot } from './database-backup.js';
@@ -78,11 +83,11 @@ function verifySnapshot(
     });
   });
 }
-function errorCode(error: unknown) {
+function errorCode(error: unknown): BackupStatusCode {
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
-  if (code === 'ENOSPC') return '저장 공간이 부족해요. 기존 백업은 유지했어요.';
-  if (code === 'EACCES' || code === 'EPERM') return '백업 저장 위치에 쓸 권한이 없어요.';
-  return '백업을 완성하지 못했어요. 기존 백업은 유지했어요. 저장 공간과 권한을 확인해 주세요.';
+  if (code === 'ENOSPC') return 'BACKUP_DISK_FULL';
+  if (code === 'EACCES' || code === 'EPERM') return 'BACKUP_PERMISSION_DENIED';
+  return 'BACKUP_FAILED';
 }
 
 export class BackupService {
@@ -117,7 +122,7 @@ export class BackupService {
       this.state = {
         ...this.state,
         status: 'failed',
-        error: '이전 백업이 중단됐어요. 완성된 백업만 목록에 표시해요.',
+        error: 'BACKUP_INTERRUPTED',
       };
     }
   }
@@ -233,7 +238,7 @@ export class BackupService {
         this.state = {
           ...this.state,
           status: 'failed',
-          error: '백업 상태를 기록하지 못했어요. 저장 공간을 확인해 주세요.',
+          error: 'BACKUP_STATE_UNRECORDED',
         };
       })
       .finally(() => {
@@ -283,7 +288,7 @@ export class BackupService {
           if (older.id !== id) await rm(join(this.directory, older.id), { recursive: true });
         }
       } catch {
-        this.state.warning = '새 백업은 저장했지만 오래된 백업 일부를 정리하지 못했어요.';
+        this.state.warning = 'BACKUP_PRUNE_INCOMPLETE';
       }
       this.save(STATE, this.state);
     } catch (error) {
@@ -309,7 +314,7 @@ export class BackupService {
       try {
         this.tick();
       } catch {
-        this.state.error = '예약 백업을 시작하지 못했어요.';
+        this.state.error = 'BACKUP_SCHEDULE_FAILED';
         this.state.status = 'failed';
       }
     }, 60_000);
@@ -317,7 +322,7 @@ export class BackupService {
     try {
       this.tick();
     } catch {
-      this.state.error = '예약 백업을 시작하지 못했어요.';
+      this.state.error = 'BACKUP_SCHEDULE_FAILED';
       this.state.status = 'failed';
     }
   }

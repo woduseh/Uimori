@@ -75,7 +75,9 @@ export function ManuscriptExportDialog({
       );
       const link = document.createElement('a');
       link.href = url;
-      link.download = result.filename;
+      link.download = `${result.title || t('main.m085')}${result.range}-${t(
+        mode === 'source' ? 'visualpanels.original' : 'visualpanels.translation'
+      )}.md`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       onClose();

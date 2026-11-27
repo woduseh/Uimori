@@ -1,3 +1,4 @@
+import { message as uiMessage } from './i18n.js';
 import {
   nativeRisuExtension,
   normalizeRisuContentSource,
@@ -22,17 +23,17 @@ export function editNativeSource(
   const next = structuredClone(native);
   if (part === 'card' || part === 'module') {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-      throw new Error('JSON 객체를 입력해 주세요.');
+      throw new Error(uiMessage('native.sourceObject'));
     next[part] = parsed as Record<string, unknown>;
   } else {
-    if (!Array.isArray(parsed)) throw new Error('JSON 배열을 입력해 주세요.');
+    if (!Array.isArray(parsed)) throw new Error(uiMessage('native.sourceArray'));
     if (part === 'greetings') {
       if (parsed.some((item) => typeof item !== 'string'))
-        throw new Error('첫 메시지는 문자열 배열로 입력해 주세요.');
+        throw new Error(uiMessage('native.sourceGreetings'));
       next.card.alternate_greetings = parsed;
     } else {
       if (parsed.some((item) => !item || typeof item !== 'object' || Array.isArray(item)))
-        throw new Error('각 항목은 JSON 객체여야 해요.');
+        throw new Error(uiMessage('native.sourceItems'));
       if (part === 'lore') {
         if (next.module && Array.isArray(next.module.lorebook))
           next.module = { ...next.module, lorebook: parsed };
@@ -55,7 +56,7 @@ export function resourceWithNativeSource(
   model: ResourceModel,
   source: RisuContentSource
 ): ContentEditModel {
-  if (!('package' in model)) throw new Error('콘텐츠 편집기에서만 카드 원문을 저장할 수 있어요.');
+  if (!('package' in model)) throw new Error(uiMessage('native.sourceCardEditor'));
   const native = normalizeRisuContentSource(source);
   const title = String(
     model.kind === 'module' ? (native.module?.name ?? native.card.name) : (native.card.name ?? '')

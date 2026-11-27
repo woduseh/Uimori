@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { Switch } from './BooleanControls.js';
 import { Prose } from './Prose.js';
 import {
@@ -160,11 +160,11 @@ export function ReadabilitySettings({
           <details className="reading-quote-settings">
             <summary data-reading-setting="punctuation">{t('reader.styleByPunctuation')}</summary>
             <div className="reading-quote-rules">
-              {QUOTE_PAIRS.map(({ id, label }) => (
+              {QUOTE_PAIRS.map(({ id, labelKey }) => (
                 <label key={id}>
-                  {translateMessage(label)}
+                  {t(labelKey)}
                   <select
-                    aria-label={t('reader.valueStyle', { v0: translateMessage(label) })}
+                    aria-label={t('reader.valueStyle', { v0: t(labelKey) })}
                     value={value.quoteRoles[id]}
                     onChange={(event) =>
                       onChange({

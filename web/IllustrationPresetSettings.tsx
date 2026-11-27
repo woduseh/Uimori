@@ -177,8 +177,8 @@ export function IllustrationPresetSettings({
       setBaseline(JSON.stringify(accepted));
       setNotice(
         draft.id && !asCopy
-          ? '저장했어요. 다음 생성부터 적용돼요.'
-          : '저장했어요. 사용할 범위에 적용해 주세요.'
+          ? uiMessage('visualpanels.savedAppliesFromTheNextGeneration')
+          : uiMessage('visualpanels.savedApplyItToTheScopeYou')
       );
       await refresh();
     }, !asCopy);
@@ -186,7 +186,7 @@ export function IllustrationPresetSettings({
   useSettingsSaveHandler(onSaveHandlerChange, () => save());
   function edit(preset?: IllustrationPreset, copy = false) {
     if (dirty) {
-      setError('현재 편집을 저장하거나 닫은 뒤 다른 프리셋을 열어 주세요.');
+      setError(uiMessage('visualpanels.saveOrCloseYourCurrentEditsBefore'));
       return;
     }
     resetEditorDetails();
@@ -214,7 +214,7 @@ export function IllustrationPresetSettings({
   }
   async function importFile(file: File) {
     if (dirty) {
-      setError('현재 편집을 저장하거나 닫은 뒤 가져와 주세요.');
+      setError(uiMessage('visualpanels.saveOrCloseYourCurrentEditsBefore2'));
       return;
     }
     await action(async () => {
@@ -224,7 +224,7 @@ export function IllustrationPresetSettings({
       resetEditorDetails();
       setDraft({ id: null, model });
       setBaseline('');
-      setImportNotice('가져왔어요. 내용을 확인한 뒤 저장해 주세요.');
+      setImportNotice(uiMessage('visualpanels.importedReviewTheContentAndSaveIt'));
     });
   }
   useEffect(() => {
@@ -298,7 +298,7 @@ export function IllustrationPresetSettings({
         expectedRevision: p.revision,
       });
       await refresh();
-      setNotice('프리셋을 변경했어요. 다음 생성부터 적용돼요.');
+      setNotice(uiMessage('visualpanels.presetChangedAppliesFromTheNextGeneration'));
     });
   return (
     <section
@@ -778,7 +778,7 @@ export function IllustrationPresetSettings({
                   if (draft?.id === deleting.id) setDraft(null);
                   setDeleting(null);
                   await refresh();
-                  setNotice('프리셋을 삭제했어요.');
+                  setNotice(uiMessage('visualpanels.presetDeleted'));
                 });
             }}
           >

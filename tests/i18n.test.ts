@@ -160,6 +160,22 @@ describe('UI locale presentation boundary', () => {
     }
   });
 
+  test('stored status codes follow the locale while text stored by 0.18.x stays verbatim', async () => {
+    const { setLocale, translateStoredCode } = await loadedI18n();
+    const keys = { BACKUP_DISK_FULL: 'settings.backupDiskFull' };
+    expect(translateStoredCode('BACKUP_DISK_FULL', keys)).toBe(
+      '저장 공간이 부족해요. 기존 백업은 유지했어요.'
+    );
+    setLocale('en');
+    expect(translateStoredCode('BACKUP_DISK_FULL', keys)).toBe(
+      'Not enough storage space. Existing backups were kept.'
+    );
+    expect(translateStoredCode('예약 백업을 시작하지 못했어요.', keys)).toBe(
+      '예약 백업을 시작하지 못했어요.'
+    );
+    expect(translateStoredCode('toString', keys)).toBe('toString');
+  });
+
   test('validation errors, the notices that nest them and joined warnings follow the locale', async () => {
     const { message, messageRef, setLocale, translateMessage } = await loadedI18n();
     setLocale('en');

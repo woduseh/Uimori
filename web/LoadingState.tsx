@@ -1,4 +1,4 @@
-import { translateMessage, useI18n } from './i18n.js';
+import { translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { RunningIcon } from './ui-icons.js';
 import './loading-state.css';
@@ -7,10 +7,10 @@ import './activity-status.css';
 export function LoadingState({
   error = '',
   loading = !error,
-  label = '불러오는 중이에요…',
-  errorLabel = '불러오지 못했어요.',
+  label = uiMessage('shared.loading'),
+  errorLabel = uiMessage('shared.loadFailed'),
   onRetry,
-  retryLabel = '다시 불러오기',
+  retryLabel = uiMessage('visuals.m033'),
   presentation = 'region',
 }: {
   loading?: boolean;

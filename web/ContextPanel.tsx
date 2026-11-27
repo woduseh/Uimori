@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, translateMessage, translateStoredCode, useI18n, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -6,7 +6,11 @@ import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/cont
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { SummaryEditor } from './SummaryEditor.js';
 import { useEffect, useRef, useState } from 'react';
-import type { ContextDetail, ContextJob as StoredContextJob } from '../core/context-plan.js';
+import {
+  CONTEXT_JOB_SCENE_DELETED,
+  type ContextDetail,
+  type ContextJob as StoredContextJob,
+} from '../core/context-plan.js';
 import type { AuthorNote } from '../core/notes.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
@@ -17,6 +21,9 @@ import './context.css';
 
 type ContextJob = Omit<StoredContextJob, 'snapshot'>;
 type SummaryDraft = { text: string; revision: number; headRevision: string | null };
+const jobErrors = {
+  [CONTEXT_JOB_SCENE_DELETED]: 'settings.contextJobSceneDeleted',
+};
 const id = encodeURIComponent;
 const pending = (job: ContextJob) => job.status === 'queued' || job.status === 'running';
 const origins = () => ({
@@ -117,7 +124,7 @@ export function ContextPanel({
   }, [draft, notesDirty, busy, onDirtyChange]);
   useUnsavedInput(notesDirty ? { domain: 'notes', chatId } : null);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : t('settings.m273');
+    const text = caught instanceof Error ? caught.message : uiMessage('settings.m273');
     setError(text);
     onError(text);
   }
@@ -229,7 +236,7 @@ export function ContextPanel({
         summary: draft.text,
       }),
       'PUT',
-      t('settings.m274'),
+      uiMessage('settings.m274'),
       true
     );
   }
@@ -368,7 +375,12 @@ export function ContextPanel({
                   className="secondary"
                   disabled={busy || Boolean(draft) || notesDirty || !current}
                   onClick={() =>
-                    void write(`${base}/compact`, keyed(command()), 'POST', t('settings.m291'))
+                    void write(
+                      `${base}/compact`,
+                      keyed(command()),
+                      'POST',
+                      uiMessage('settings.m291')
+                    )
                   }
                 >
                   {t('settings.m292')}
@@ -383,7 +395,7 @@ export function ContextPanel({
                       `${base}/jobs/${id(working.id)}/cancel`,
                       {},
                       'POST',
-                      t('settings.m293')
+                      uiMessage('settings.m293')
                     )
                   }
                 >
@@ -414,7 +426,7 @@ export function ContextPanel({
                   {latest.error && (
                     <details>
                       <summary>{t('settings.m303')}</summary>
-                      <p>{latest.error}</p>
+                      <p>{translateStoredCode(latest.error, jobErrors)}</p>
                     </details>
                   )}
                 </div>

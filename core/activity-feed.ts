@@ -5,7 +5,6 @@ export type ActivityFeedItem = {
   acknowledgementKey: string;
   kind: 'main' | 'translation' | 'image' | 'illustration';
   status: string;
-  label: string;
   at: string;
   sourceId: string | null;
   representation: 'original' | 'translation';

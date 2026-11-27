@@ -5,6 +5,7 @@ import {
   formatDate,
   formatNumber,
   message as retainedMessage,
+  translateStoredCode,
 } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -12,7 +13,11 @@ import { TransientNotice } from './TransientNotice.js';
 import './scheduled-backups.css';
 import { useEffect, useId, useState } from 'react';
 import { DatabaseBackup, Download, RefreshCw } from 'lucide-react';
-import type { BackupSettings as Settings, BackupStatus } from '../core/backups.js';
+import type {
+  BackupSettings as Settings,
+  BackupStatus,
+  BackupStatusCode,
+} from '../core/backups.js';
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
@@ -21,6 +26,15 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
+const statusMessages: Record<BackupStatusCode, string> = {
+  BACKUP_DISK_FULL: 'settings.backupDiskFull',
+  BACKUP_PERMISSION_DENIED: 'settings.backupPermissionDenied',
+  BACKUP_FAILED: 'settings.backupFailed',
+  BACKUP_INTERRUPTED: 'settings.backupInterrupted',
+  BACKUP_STATE_UNRECORDED: 'settings.backupStateUnrecorded',
+  BACKUP_SCHEDULE_FAILED: 'settings.backupScheduleFailed',
+  BACKUP_PRUNE_INCOMPLETE: 'settings.backupPruneIncomplete',
+};
 const date = (value: string) =>
   formatDate(new Date(value), {
     timeZone: 'Asia/Seoul',
@@ -243,9 +257,13 @@ export function BackupSettings({
               </div>
             </dl>
             {status.error && (
-              <NoticeBanner tone="error">{translateMessage(status.error)}</NoticeBanner>
+              <NoticeBanner tone="error">
+                {translateStoredCode(status.error, statusMessages)}
+              </NoticeBanner>
             )}
-            {status.warning && <NoticeBanner>{translateMessage(status.warning)}</NoticeBanner>}
+            {status.warning && (
+              <NoticeBanner>{translateStoredCode(status.warning, statusMessages)}</NoticeBanner>
+            )}
             <div className="backup-actions">
               <button
                 type="button"

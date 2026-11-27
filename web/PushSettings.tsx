@@ -1,4 +1,4 @@
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, translateStoredCode, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
@@ -7,7 +7,12 @@ import { RunningIcon } from './ui-icons.js';
 import './push-settings.css';
 import { useId, useState } from 'react';
 import { RefreshCw, Send } from 'lucide-react';
-import { DEFAULT_PUSH_PREFERENCES, type PushInfo, type PushPreferences } from '../core/push.js';
+import {
+  DEFAULT_PUSH_PREFERENCES,
+  type PushDeviceError,
+  type PushInfo,
+  type PushPreferences,
+} from '../core/push.js';
 import { api } from './api.js';
 import { pwaRegistration } from './pwa.js';
 import { browserClientId } from './browser-client.js';
@@ -27,6 +32,10 @@ const labels: [keyof PushPreferences, string][] = [
   ['illustration', 'outside.prefIllustration'],
   ['showTitle', 'outside.prefTitle'],
 ];
+const deviceErrors: Record<PushDeviceError, string> = {
+  PUSH_RETRYING: 'outside.pushRetrying',
+  PUSH_DELIVERY_FAILED: 'outside.pushDeliveryFailure',
+};
 export function PushSettings() {
   const { t } = useI18n();
   const id = useId();
@@ -224,7 +233,7 @@ export function PushSettings() {
         <LoadingState presentation="placeholder" label={t('outside.loadingPush')} />
       )}
       {!supported && <p className="muted">{t('outside.unsupportedPush')}</p>}
-      {info && !info.available && <p className="muted">{translateMessage(info.reason ?? '')}</p>}
+      {info && !info.available && <p className="muted">{t('outside.pushUnavailable')}</p>}
       {available && permission === 'denied' && <p className="muted">{t('outside.allowPush')}</p>}
       {available && info.device && (
         <details className="push-options">
@@ -253,7 +262,9 @@ export function PushSettings() {
         </details>
       )}
       {info?.device?.lastError && (
-        <NoticeBanner tone="error">{translateMessage(info.device.lastError)}</NoticeBanner>
+        <NoticeBanner tone="error">
+          {translateStoredCode(info.device.lastError, deviceErrors)}
+        </NoticeBanner>
       )}
       <TransientNotice message={notice} />
       {warning && <NoticeBanner>{translateMessage(warning)}</NoticeBanner>}

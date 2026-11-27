@@ -1513,7 +1513,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         {task.completedEffects && (
           <p>
             {t('helpers.m312', {
-              labels: task.completedEffects.labels.map(translateMessage).join(', '),
+              labels: t('helpers.m344'),
             })}
           </p>
         )}

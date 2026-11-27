@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { shownThrow } from './shown-error.js';
 import {
   addDefaultVariable,
   addToggleGroup,
@@ -61,7 +62,7 @@ describe('grouped toggle document', () => {
       '# unknown\r\na=A=select=,one,,\r\n=new=caption\r\n=more=caption\r\n=last=caption'
     );
     expect(editToggleItem(source, 1, {}, '')).toBe('# unknown\r\na=A=select=,one,,');
-    expect(() => editToggleItem(source, 1, {}, 'x=y')).toThrow('등호');
+    expect(shownThrow(() => editToggleItem(source, 1, {}, 'x=y'))).toContain('등호');
     const keyed = 'a=A\r\nfirst=Old=caption\nsecond=Keep=caption\r\nb=B';
     expect(editToggleItem(keyed, 0, {}, 'New\nKeep')).toBe(
       'a=A\r\nfirst=New=caption\nsecond=Keep=caption\r\nb=B'
@@ -75,8 +76,8 @@ describe('grouped toggle document', () => {
     ]) {
       expect(parseToggleDocument(source).warnings.length).toBeGreaterThan(0);
       expect(serializeNativeToggleLines(parseToggleDocument(source).lines)).toBe(source);
-      expect(() => addToggleGroup(source)).toThrow('그룹 경계');
-      expect(() => addToggleItem(source, -1, 'toggle')).toThrow('그룹 경계');
+      expect(shownThrow(() => addToggleGroup(source))).toContain('그룹 경계');
+      expect(shownThrow(() => addToggleItem(source, -1, 'toggle'))).toContain('그룹 경계');
     }
   });
 });
@@ -107,9 +108,11 @@ describe('default variable source table', () => {
     expect(addDefaultVariable('new_variable=x\r\nopaque')).toBe(
       'new_variable=x\r\nopaque\r\nnew_variable_2='
     );
-    expect(() => editDefaultVariable('a=x', 0, { value: 'x\ny=2' })).toThrow('줄바꿈');
-    expect(() => editDefaultVariable('a=x', 0, { key: 'x=y' })).toThrow('등호');
-    expect(() => editDefaultVariable('a=x', 0, { key: '   ' })).toThrow('변수 키');
+    expect(shownThrow(() => editDefaultVariable('a=x', 0, { value: 'x\ny=2' }))).toContain(
+      '줄바꿈'
+    );
+    expect(shownThrow(() => editDefaultVariable('a=x', 0, { key: 'x=y' }))).toContain('등호');
+    expect(shownThrow(() => editDefaultVariable('a=x', 0, { key: '   ' }))).toContain('변수 키');
     expect(editDefaultVariable(' spaced key =x', 0, { value: '000' })).toBe(' spaced key =000');
   });
 });

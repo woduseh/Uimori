@@ -192,21 +192,21 @@ function workspaceFallback(title: string, navigation: ReactNode, content: ReactN
 }
 const noSources: import('../core/types.js').Source[] = [];
 const LibraryPanel = deferredPanel(
-  '서재',
+  uiMessage('main.m001'),
   async () => ({
     default: (await import('./LibraryPanel.js')).LibraryPanel,
   }),
-  (content, props) => workspaceFallback('서재', props.headerLeading, content)
+  (content, props) => workspaceFallback(uiMessage('main.m001'), props.headerLeading, content)
 );
 const PromptLibrary = deferredPanel(
-  '프롬프트',
+  uiMessage('transfer.m286'),
   async () => ({
     default: (await import('./PromptLibrary.js')).PromptLibrary,
   }),
-  (content, props) => workspaceFallback('프롬프트', props.headerLeading, content)
+  (content, props) => workspaceFallback(uiMessage('transfer.m286'), props.headerLeading, content)
 );
 const ChatSettingsPanel = deferredPanel(
-  '채팅 설정',
+  uiMessage('main.m003'),
   async () => ({
     default: (await import('./ChatSettingsPanel.js')).ChatSettingsPanel,
   }),
@@ -216,11 +216,11 @@ const ChatSettingsPanel = deferredPanel(
     </Dialog>
   )
 );
-const NewStory = deferredPanel('새 채팅', async () => ({
+const NewStory = deferredPanel(uiMessage('transfer.m246'), async () => ({
   default: (await import('./NewStory.js')).NewStory,
 }));
 const AppSettingsPanel = deferredPanel(
-  '설정',
+  uiMessage('main.m005'),
   async () => ({
     default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
   }),
@@ -232,16 +232,16 @@ const AppSettingsPanel = deferredPanel(
 );
 
 const HelperPanel = deferredPanel(
-  '도우미',
+  uiMessage('visualpanels.helper'),
   async () => ({
     default: (await import('./HelperPanel.js')).HelperPanel,
   }),
   (content, props) => (props.open ? <aside className="helper-panel">{content}</aside> : null)
 );
-const TasksPanel = deferredPanel('작업 현황', async () => ({
+const TasksPanel = deferredPanel(uiMessage('main.m006'), async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
-const OutlinePanel = deferredPanel('플롯', async () => ({
+const OutlinePanel = deferredPanel(uiMessage('prompts.uiStoryOutline'), async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 const BotChatImportDialog = deferredPanel<ComponentProps<typeof BotChatImportDialogPanel>>(
@@ -2533,7 +2533,9 @@ function App() {
                 )}
                 {s.forkOrigin && s.forkOrigin.forkId === s.selected && (
                   <p className="composer-status fork-notice" role="status">
-                    <span>{t('main.forkNotice', { title: s.forkOrigin.title })}</span>
+                    <span>
+                      {t('main.forkNotice', { title: s.forkOrigin.title ?? t('main.story26') })}
+                    </span>
                     <button
                       type="button"
                       className="link-button"

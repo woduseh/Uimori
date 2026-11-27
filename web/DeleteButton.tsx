@@ -1,4 +1,10 @@
-import { t, translateMessage, useI18n, type MessageReference } from './i18n.js';
+import {
+  t,
+  translateMessage,
+  useI18n,
+  message as uiMessage,
+  type MessageReference,
+} from './i18n.js';
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
@@ -25,9 +31,9 @@ export function DeleteButton({
   path,
   revision,
   title,
-  label = '삭제',
+  label = uiMessage('shared.delete'),
   confirmLabel,
-  description = '목록에서 삭제해요. 과거 채팅과 실행에서 사용한 내용은 유지돼요.',
+  description = uiMessage('shared.deleteDescription'),
   disabled,
   iconOnly = false,
   preparePath,

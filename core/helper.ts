@@ -228,7 +228,7 @@ export type HelperTask = {
   startedAt: string | null;
   updatedAt: string;
   snapshot: HelperTaskSnapshot;
-  completedEffects?: { count: number; labels: string[] };
+  completedEffects?: { count: number };
   resumable?: true;
   instructions?: HelperInstruction[];
   estimatedCost?: import('./task-trace.js').TraceCostTotal;

@@ -40,17 +40,15 @@ export function BotChatImportDialog({
     setError('');
     setMessage('');
     try {
-      if (file.size > 60 * 1024 * 1024) throw new Error('본문 파일은 60MB까지 가져올 수 있어요.');
+      if (file.size > 60 * 1024 * 1024) throw new Error(retainedMessage('transfer.m101'));
       let transcript: ChatTranscript;
       try {
         transcript = validateChatTranscript(JSON.parse(await file.text()));
       } catch {
-        throw new Error('Uimori에서 내보낸 본문 JSON 파일을 선택해 주세요.');
+        throw new Error(retainedMessage('transfer.m102'));
       }
       if (transcript.packageAttachments.some((item) => item.role !== 'bot' && item.id === bot.id))
-        throw new Error(
-          '이 파일은 선택한 봇을 다른 역할의 자료로도 사용해요. 역할을 유지하려면 데이터 관리의 개별 채팅 가져오기를 이용해 주세요.'
-        );
+        throw new Error(retainedMessage('transfer.m103'));
       transcript = validateChatTranscript({
         ...transcript,
         packageAttachments: [

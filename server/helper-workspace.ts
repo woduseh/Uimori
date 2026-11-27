@@ -83,9 +83,7 @@ function taskData(row: Row): Omit<HelperTask, 'snapshot'> {
     createdAt: row.created_at,
     startedAt: row.started_at ?? null,
     updatedAt: row.updated_at,
-    ...(row.completed_effects
-      ? { completedEffects: { count: row.completed_effects, labels: ['완료된 도우미 작업'] } }
-      : {}),
+    ...(row.completed_effects ? { completedEffects: { count: row.completed_effects } } : {}),
     ...(row.resumable ? { resumable: true as const } : {}),
   };
 }

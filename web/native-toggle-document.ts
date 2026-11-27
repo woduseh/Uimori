@@ -74,8 +74,7 @@ export function parseToggleDocument(source: string) {
 
 function structural(source: string) {
   const doc = parseToggleDocument(source);
-  if (doc.warnings.length)
-    throw new Error('그룹 경계가 올바르지 않아요. 원문에서 그룹 시작과 끝을 먼저 수정해 주세요.');
+  if (doc.warnings.length) throw new Error(uiMessage('native.toggleBoundary'));
   return doc;
 }
 function eol(lines: NativeToggleLine[]) {
@@ -93,12 +92,12 @@ function fresh(raw: string, lines: NativeToggleLine[]): NativeToggleLine {
 }
 function groupOf(doc: ReturnType<typeof parseToggleDocument>, id: number) {
   const group = doc.groups.find((entry) => entry.id === id);
-  if (!group) throw new Error('그룹을 찾을 수 없어요.');
+  if (!group) throw new Error(uiMessage('native.groupNotFound'));
   return group;
 }
 function itemOf(doc: ReturnType<typeof parseToggleDocument>, index: number) {
   const item = doc.groups.flatMap((group) => group.items).find((entry) => entry.index === index);
-  if (!item) throw new Error('항목을 찾을 수 없어요.');
+  if (!item) throw new Error(uiMessage('native.itemNotFound'));
   return item;
 }
 function namedGroup(doc: ReturnType<typeof parseToggleDocument>, id: number) {
@@ -245,7 +244,7 @@ export function editToggleItem(
   )
     line.raw = serializeNativeToggleDefinition(next);
   if (caption !== undefined && caption !== item.caption) {
-    if (!controls.has(next.type)) throw new Error('설명은 입력 항목에만 연결할 수 있어요.');
+    if (!controls.has(next.type)) throw new Error(uiMessage('native.captionControlOnly'));
     const texts = caption ? caption.split(/\r\n|\r|\n/) : [];
     const captions = texts.map((label, offset) => {
       const previous = index + 1 + offset < item.end ? doc.lines[index + 1 + offset] : undefined;
@@ -290,9 +289,9 @@ export function editDefaultVariable(
   if (!entry || entry.key === null || entry.value === null) return source;
   const key = patch.key ?? entry.key;
   const value = patch.value ?? entry.value;
-  if (!key.trim()) throw new Error('변수 키를 입력해 주세요.');
-  if (/[=\r\n]/.test(key)) throw new Error('변수 키에는 등호나 줄바꿈을 넣을 수 없어요.');
-  if (/[\r\n]/.test(value)) throw new Error('변수 값에는 줄바꿈을 넣을 수 없어요.');
+  if (!key.trim()) throw new Error(uiMessage('native.variableKeyRequired'));
+  if (/[=\r\n]/.test(key)) throw new Error(uiMessage('native.variableKeyInvalid'));
+  if (/[\r\n]/.test(value)) throw new Error(uiMessage('native.variableValueInvalid'));
   const lines = parseNativeToggleLines(source);
   const line = lines[index];
   if (line) line.raw = `${key}=${value}`;

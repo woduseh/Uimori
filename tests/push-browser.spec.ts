@@ -111,7 +111,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
       return;
     }
     await route.fulfill({
-      json: { available: true, reason: null, publicKey: keys.publicKey, device },
+      json: { available: true, publicKey: keys.publicKey, device },
     });
   });
   await page.goto('/');

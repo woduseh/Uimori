@@ -273,6 +273,7 @@ test('transient failures retry the same event a bounded number, while expiration
   await f.service.tick();
   await f.service.tick();
   expect(requests).toBe(1);
+  expect(f.service.info(f.clientId, f.cookie).device!.lastError).toBe('PUSH_RETRYING');
   f.advance(31_000);
   await f.service.tick();
   expect(requests).toBe(2);
@@ -280,6 +281,7 @@ test('transient failures retry the same event a bounded number, while expiration
   await f.service.tick();
   expect(requests).toBe(2);
   expect(f.store.db.prepare('SELECT status FROM push_outbox').get()!.status).toBe('failed');
+  expect(f.service.info(f.clientId, f.cookie).device!.lastError).toBe('PUSH_DELIVERY_FAILED');
   f.service.test(f.clientId, f.cookie);
   await f.service.tick();
   expect(requests).toBe(3);

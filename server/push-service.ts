@@ -7,6 +7,7 @@ import {
   type PushInfo,
   type PushPreferences,
   type PushEnvelope,
+  type PushDeviceError,
 } from '../core/push.js';
 import {
   sendWebPush,
@@ -73,9 +74,6 @@ export class PushService {
     const device = available ? this.device(id, session!) : undefined;
     return {
       available,
-      reason: available
-        ? null
-        : '완료 알림은 접속 토큰으로 로그인한 HTTPS 개인 서버에서 사용할 수 있어요.',
       publicKey: available ? (this.keys()?.publicKey ?? null) : null,
       device: device
         ? {
@@ -295,9 +293,7 @@ export class PushService {
           row.id
         );
         db.prepare('UPDATE push_subscriptions SET last_error=? WHERE id=?').run(
-          retry
-            ? '알림 중계 연결을 다시 시도하고 있어요.'
-            : '알림을 전달하지 못했어요. 앱에서 작업 상태를 확인하거나 알림 연결을 다시 준비해 주세요.',
+          (retry ? 'PUSH_RETRYING' : 'PUSH_DELIVERY_FAILED') satisfies PushDeviceError,
           row.subscription_id
         );
       }

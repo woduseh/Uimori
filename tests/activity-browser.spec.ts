@@ -296,7 +296,6 @@ test('ACTUI19 sidebar activity hides empty sections and acknowledges a row or ev
     acknowledgementKey: JSON.stringify(['main', key, 0, at]),
     kind: 'main',
     status,
-    label: status === 'completed' ? '본문 완료' : '본문 실패',
     at,
     actionable: status === 'failed',
     canAcknowledge: true,

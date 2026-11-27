@@ -1,3 +1,4 @@
+import { message as uiMessage } from './i18n.js';
 import { themeMessageSheet } from './theme-message-style.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { createReadingDecorator } from './reading-dom.js';
@@ -180,7 +181,7 @@ export function mountRisuMessageSurface(
         if (!alive || current !== generation) return;
         locked = false;
         setDisabled();
-        onState({ busy: false, issue: '봇의 선택을 반영하지 못했어요. 다시 시도해 주세요.' });
+        onState({ busy: false, issue: uiMessage('native.cardActionFailed') });
       });
   };
   const click = (event: Event) => {
@@ -213,7 +214,7 @@ export function mountRisuMessageSurface(
         if (!value.name) continue;
         onState({
           busy: false,
-          issue: '봇 양식에서는 파일을 보낼 수 없어요. 파일 선택을 해제해 주세요.',
+          issue: uiMessage('native.cardFormFileUnsupported'),
         });
         return;
       }

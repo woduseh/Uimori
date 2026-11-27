@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { isApplePlatform } from './ChatComposer.js';
-import { t, useI18n } from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import {
   defaultShortcutBindings,
@@ -85,14 +85,18 @@ export function ShortcutSettings() {
       if (result.reason === 'browser-reserved') {
         setFeedback({
           action: recording,
-          message: t('shortcuts.errorBrowserReserved', { key: shortcutKeyLabel(key, apple) }),
+          message: uiMessage('shortcuts.errorBrowserReserved', {
+            key: shortcutKeyLabel(key, apple),
+          }),
         });
       } else if (result.reason === 'modifier-required') {
-        setFeedback({ action: recording, message: t('shortcuts.errorModifierRequired') });
+        setFeedback({ action: recording, message: uiMessage('shortcuts.errorModifierRequired') });
       } else if (result.reason === 'conflict') {
         setFeedback({
           action: recording,
-          message: t('shortcuts.errorConflict', { action: t(ACTION_LABELS[result.conflictWith]) }),
+          message: uiMessage('shortcuts.errorConflict', {
+            action: messageRef(uiMessage(ACTION_LABELS[result.conflictWith])),
+          }),
         });
       }
     };
@@ -126,7 +130,7 @@ export function ShortcutSettings() {
                 {!rebindable && <small>{t('shortcuts.fixedHint')}</small>}
                 {rowError && (
                   <small className="shortcut-settings-error" role="alert">
-                    {rowError}
+                    {translateMessage(rowError)}
                   </small>
                 )}
               </div>

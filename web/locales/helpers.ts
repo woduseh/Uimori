@@ -335,12 +335,6 @@ export const messages = {
     ja: 'アシスタント設定を保存',
     zh: '保存助手设置',
   },
-  'helpers.m059': {
-    ko: '저장',
-    en: 'Save',
-    ja: '保存',
-    zh: '保存',
-  },
   'helpers.m060': {
     ko: '이전 메시지 불러오기',
     en: 'Load earlier messages',

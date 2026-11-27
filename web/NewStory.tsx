@@ -234,8 +234,8 @@ export function NewStory({
     packageSelection,
   ]);
   function captureSelection(): StorySelection {
-    if (!defaultsReady) throw new Error('기본 페르소나를 확인한 뒤 시작해 주세요.');
-    if (!packagesReady) throw new Error('선택한 자료를 불러온 뒤 시작해 주세요.');
+    if (!defaultsReady) throw new Error(retainedMessage('transfer.m313'));
+    if (!packagesReady) throw new Error(retainedMessage('transfer.m314'));
     const selectedBot = bot
       ? (loadedContents[bot] ??
         [initialBot, ...library.contents].find((item) => item && refValue(item) === bot))
@@ -250,8 +250,7 @@ export function NewStory({
         ))
       : null;
     const selectedModules = modules.map((key) => loadedContents[key]);
-    if (selectedModules.some((item) => !item))
-      throw new Error('선택한 모듈을 불러온 뒤 시작해 주세요.');
+    if (selectedModules.some((item) => !item)) throw new Error(retainedMessage('transfer.m315'));
     if (!selectedBot || (persona && !selectedPersona))
       throw new Error(retainedMessage('transfer.m316'));
     if (
@@ -259,7 +258,7 @@ export function NewStory({
         (item) => item?.hasPackage && !item.package
       )
     )
-      throw new Error('선택한 패키지 본문을 불러오지 못했어요. 자료를 다시 골라 주세요.');
+      throw new Error(retainedMessage('transfer.m317'));
     const roleContents: [ContentRole, Content | null | undefined][] = [
       ['bot', selectedBot],
       ['persona', selectedPersona],

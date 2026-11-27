@@ -1,5 +1,5 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { CodeField } from './CodeField.js';
 import { codeFieldName } from './code-field-reveal.js';
 import type { ResourceModel } from '../core/resource-editing.js';
@@ -70,7 +70,7 @@ export function NativeRisuRegexEditor({
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
     if (!pending) return model;
-    if (!prepareSave) throw new Error('정규식 JSON을 편집기에 적용해 주세요.');
+    if (!prepareSave) throw new Error(uiMessage('native.text_28d932caad'));
     return prepareSave(model, parseNativeRegexJson(raw));
   });
   useEffect(() => {

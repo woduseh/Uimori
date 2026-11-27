@@ -191,12 +191,6 @@ export const messages = {
     ja: '下へ',
     zh: '下移',
   },
-  'native.text_fc81e222b9': {
-    ko: '삭제',
-    en: 'Delete',
-    ja: '削除',
-    zh: '删除',
-  },
   'native.text_1ec208bab4': {
     ko: '자료 하나에 이미지를 2,000개까지 등록할 수 있어요.',
     en: 'Each resource supports up to 2,000 images.',

@@ -13,7 +13,7 @@ import {
   helperTaskHasResults,
   useHelperTaskResults,
 } from './HelperTaskResults.js';
-import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
+import { formatNumber, t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import {
   matchesTaskHistoryFilter,
@@ -296,7 +296,7 @@ export function HelperTaskHistory({
                       <p>
                         {t('helpers.m315', {
                           count: formatNumber(task.completedEffects.count),
-                          labels: task.completedEffects.labels.map(translateMessage).join(', '),
+                          labels: t('helpers.m344'),
                         })}
                       </p>
                     )}

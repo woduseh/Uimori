@@ -98,18 +98,14 @@ export function BackupFileImport({
       } else {
         const backup = contents.backup;
         if (backup.version !== CHAT_BACKUP_VERSION)
-          throw new Error(
-            '이 버전의 채팅 백업은 지원하지 않아요. 파일을 만든 버전에 맞는 앱에서 확인해 주세요.'
-          );
+          throw new Error(retainedMessage('transfer.m123'));
         if (!Array.isArray(backup.chats) || !backup.chats.length || !backup.resources)
-          throw new Error('채팅 백업의 필수 정보가 없어요.');
+          throw new Error(retainedMessage('transfer.m124'));
         if (
           typeof backup.title !== 'string' ||
           !backup.chats.every((chat) => Array.isArray(chat?.transcript?.entries))
         )
-          throw new Error(
-            '채팅 백업의 제목 또는 본문 목록이 올바르지 않아요. 원본 파일을 확인해 주세요.'
-          );
+          throw new Error(retainedMessage('transfer.m125'));
         setSelection({ kind: 'chat', backup, key });
       }
     } catch (caught) {
