@@ -6,7 +6,7 @@ import type { RisuImportSource } from './risu-import.js';
 export type RisuPresetFinding = {
   code: string;
   level: 'unsupported' | 'warning';
-  message: string;
+  detail: string;
   blockIndex?: number;
 };
 

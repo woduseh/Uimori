@@ -729,8 +729,8 @@ test('lore directives decide activation by exact-case name and never reach the m
   expect(levels).not.toHaveProperty('lore-decorator:dont_activate');
   const unknown = preview.findings.find((finding) => finding.code === 'lore-decorator-unknown');
   expect(unknown?.level).toBe('unsupported');
-  expect(unknown?.message).toContain('@@ACTIVATE');
-  expect(unknown?.message).toContain('@@Depth');
+  expect(unknown?.detail).toContain('@@ACTIVATE');
+  expect(unknown?.detail).toContain('@@Depth');
 });
 
 const SURFACE_CODES = [

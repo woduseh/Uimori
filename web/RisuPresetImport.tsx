@@ -31,7 +31,7 @@ function presetFindingMessage(finding: RisuPresetImportPreview['findings'][numbe
     case 'RISU_PRESET_UNSUPPORTED_BLOCK': {
       const match =
         /^(\d+)번 블록\((.*)\)은 저장되지만 실행되지 않아요\. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요\.$/su.exec(
-          finding.message
+          finding.detail
         );
       if (match)
         return t('transfer.finding.unsupportedBlock', { index: Number(match[1]), type: match[2] });
@@ -40,13 +40,13 @@ function presetFindingMessage(finding: RisuPresetImportPreview['findings'][numbe
     case 'RISU_PRESET_HOST_SETTING': {
       const match =
         /^(utilOverride|customChainOfThought)로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요\. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요\.$/u.exec(
-          finding.message
+          finding.detail
         );
       if (match) return t('transfer.finding.hostSetting', { setting: match[1] });
       break;
     }
   }
-  return translateMessage(finding.message);
+  return translateMessage(finding.detail);
 }
 
 export function RisuPresetImport({

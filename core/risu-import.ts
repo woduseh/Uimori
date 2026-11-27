@@ -23,7 +23,7 @@ export type RisuImportKind = 'bot' | 'persona' | 'module';
 export type RisuImportFinding = {
   code: string;
   level: 'info' | 'warning' | 'unsupported';
-  message: string;
+  detail: string;
 };
 export type RisuImportPreview = {
   preparedId?: string;

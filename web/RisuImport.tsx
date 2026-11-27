@@ -59,7 +59,7 @@ function importFindingMessage(finding: RisuImportPreview['findings'][number]): s
   if (finding.code === 'lore-decorator-unknown') {
     const match =
       /^Risu가 인식하지 못하는 `@@` 지시문은 가져온 로어 본문에서 제외돼요\. Risu 원문에는 남아요: (.*?)(?: 외 (\d+)개)?$/su.exec(
-        finding.message
+        finding.detail
       );
     if (match)
       return t('transfer.finding.decoratorUnknown', {
@@ -67,7 +67,7 @@ function importFindingMessage(finding: RisuImportPreview['findings'][number]): s
         more: Number(match[2] ?? 0),
       });
   }
-  return translateMessage(finding.message);
+  return translateMessage(finding.detail);
 }
 
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
