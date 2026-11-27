@@ -34,18 +34,22 @@ async function presentation(error: Error) {
   });
   owned.push({ app, path });
   const bot = app.store.product.content(fixtureBotInput());
-  const chat = importChatTranscript(app.store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Presentation errors',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [{ request: 'First scene', text: '미라는 문턱에서 멈췄다.', translation: null }],
+  const chat = importChatTranscript(
+    app.store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Presentation errors',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [{ request: 'First scene', text: '미라는 문턱에서 멈췄다.', translation: null }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   const response = await app.inject({
     method: 'GET',

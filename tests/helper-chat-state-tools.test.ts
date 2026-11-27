@@ -47,21 +47,25 @@ function fixture() {
     risuai: { defaultVariables: `mood=calm\nscore=1\nlog=${'x'.repeat(400)}` },
   };
   const bot = store.product.content(input) as Content;
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Harbor story',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [
-        { request: 'Arrive.', text: 'The harbor bell rang once.', translation: null },
-        { request: 'Wait.', text: 'Fog rolled over the pier.', translation: null },
-      ],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Harbor story',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [
+          { request: 'Arrive.', text: 'The harbor bell rang once.', translation: null },
+          { request: 'Wait.', text: 'Fog rolled over the pier.', translation: null },
+        ],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const connection = store.product.connection({
     title: 'Synthetic connection',
     protocol: 'fixture-sse-v1',

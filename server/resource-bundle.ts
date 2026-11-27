@@ -1,6 +1,7 @@
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Store } from './store.js';
+import type { ReferenceSource } from './product-store.js';
 import type { Content, PromptPreset, SavedPromptCombination } from '../core/product.js';
 import {
   NATIVE_TRANSFER_FORMAT,
@@ -52,7 +53,8 @@ export function inspectBundle(value: unknown): NativeTransferPrepare {
 
 export function captureResourceBundle(
   store: Store,
-  selection: { kind: 'content' | 'prompt-preset'; id: string }[]
+  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
+  roots: ReferenceSource
 ): PreparedNativeTransferFile {
   const file: PreparedNativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
@@ -88,10 +90,10 @@ export function captureResourceBundle(
   };
   for (const item of selection) {
     if (item.kind === 'content') {
-      store.product.assertAvailable('content', item.id);
+      store.product.reference(roots, 'content', item.id);
       file.roots.push({ kind: item.kind, key: capture(item.id) });
     } else {
-      const source = store.product.available<PromptPreset>('prompt-preset', item.id);
+      const source = store.product.reference<PromptPreset>(roots, 'prompt-preset', item.id);
       const key = `prompt-${file.prompts.length + 1}`;
       const combinations = (
         store.product.all('prompt-combination') as SavedPromptCombination[]

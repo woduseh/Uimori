@@ -38,18 +38,22 @@ test('independent chat copies and portable restores keep authored plans and scop
     entries: [{ comment: 'Location', content: 'An old harbor', constant: true, enabled: true }],
   };
   const bot = store.product.content(input) as Content;
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Original',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [{ request: 'Begin', text: 'The story begins.', translation: null }],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Original',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [{ request: 'Begin', text: 'The story begins.', translation: null }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const outline = new OutlineStore(store);
   outline.apply(
     chat.id,

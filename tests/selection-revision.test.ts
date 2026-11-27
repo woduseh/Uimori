@@ -51,24 +51,28 @@ async function setup(withModel = true, timeoutMs?: number, translation: string |
   owned.push({ app, path });
   const { store } = app;
   const bot = store.product.content(fixtureBotInput());
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Selection revision',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [
-        {
-          request: 'First scene',
-          text: '아침이었다.\n\n미라는 슬펐다.\n\n그는 떠났다.',
-          translation,
-        },
-      ],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Selection revision',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [
+          {
+            request: 'First scene',
+            text: '아침이었다.\n\n미라는 슬펐다.\n\n그는 떠났다.',
+            translation,
+          },
+        ],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const source = store.source(chat.headRevision!);
   const connection = store.product.connection({
     title: 'Fixture',

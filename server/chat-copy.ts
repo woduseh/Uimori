@@ -91,11 +91,11 @@ export function restoreChatCopy(
   readBinary?: (reference: string) => Buffer
 ): Chat {
   return store.transaction(() => {
-    const imported = importChatTranscript(store, {
-      transcript: copy.transcript,
-      title,
-      idempotencyKey: requestKey,
-    });
+    const imported = importChatTranscript(
+      store,
+      { transcript: copy.transcript, title, idempotencyKey: requestKey },
+      'preserve'
+    );
     if (!imported.created) return imported.chat;
     try {
       return restoreCopiedState(store, copy, imported.chat, readBinary);
@@ -119,11 +119,15 @@ function restoreCopiedState(
     throw new AppError(400, 'CHAT_BACKUP_INVALID');
   const variables = validateChatVariableState(copy.state.variables);
   const profile = store.product.profile(chatId);
-  store.product.updateProfile(chatId, {
-    expectedRevision: profile.revision,
-    packageAttachments: profile.packageAttachments,
-    ...copy.state.profile,
-  });
+  store.product.updateProfile(
+    chatId,
+    {
+      expectedRevision: profile.revision,
+      packageAttachments: profile.packageAttachments,
+      ...copy.state.profile,
+    },
+    { packageAttachments: profile.packageAttachments, pinned: copy.state.profile.pinned }
+  );
   store.settings(chatId, chat.settingsRevision, copy.state.settings);
   if (copy.state.storyGuide)
     store.storyGuide.update(chatId, { expectedRevision: 0, config: copy.state.storyGuide });

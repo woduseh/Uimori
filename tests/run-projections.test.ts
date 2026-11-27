@@ -23,21 +23,25 @@ function fixture() {
   const store = new Store(join(path, 'app.sqlite'));
   owned.push({ path, store });
   const bot = store.product.content(fixtureBotInput('Bot', 'Current bot text'));
-  const { chat } = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Story',
-      notes: [],
-      packageAttachments: [{ id: bot.id, revision: 1, role: 'bot' }],
-      entries: [
-        { request: 'One', text: 'a'.repeat(20000), translation: null },
-        { request: 'Two', text: 'b'.repeat(20000), translation: null },
-      ],
+  const { chat } = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Story',
+        notes: [],
+        packageAttachments: [{ id: bot.id, revision: 1, role: 'bot' }],
+        entries: [
+          { request: 'One', text: 'a'.repeat(20000), translation: null },
+          { request: 'Two', text: 'b'.repeat(20000), translation: null },
+        ],
+      },
     },
-  });
+    'library'
+  );
   const source = store.source(chat.headRevision!);
   return { store, chat, source };
 }

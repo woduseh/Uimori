@@ -232,13 +232,13 @@ export function updateVertexLocation(store: Store, value: unknown) {
   const connectionId = text(args.connectionId, 'connection ID', 100);
   const location = text(args.location, 'location', 40);
   const expectedRevision = number(args.expectedRevision, 'connection revision', 1);
-  if (!isVertexLocation(location)) throw new HelperToolError(400, 'INVALID_VERTEX_LOCATION');
   const connection = store.product.editable<Connection>(
     'connection',
     connectionId,
     expectedRevision
   );
   const endpoint = vertexEndpoint(connection);
+  if (!isVertexLocation(location)) throw new HelperToolError(400, 'INVALID_VERTEX_LOCATION');
   const saved =
     endpoint.location === location
       ? connection

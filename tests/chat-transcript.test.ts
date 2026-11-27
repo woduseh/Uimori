@@ -22,6 +22,7 @@ import { exportManuscript, manuscriptExportMetadata } from '../server/manuscript
 import { readerDetail } from '../server/reader.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
+import { nativeContent } from './fixtures/native-content.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(async () => {
@@ -233,10 +234,14 @@ describe('chat transcript export and import', () => {
     });
     deleteLibraryItem(store, 'content', persona.id, { expectedRevision: persona.revision });
 
-    const imported = importChatTranscript(store, {
-      transcript: original,
-      idempotencyKey: 'deleted-default-import',
-    });
+    const imported = importChatTranscript(
+      store,
+      {
+        transcript: original,
+        idempotencyKey: 'deleted-default-import',
+      },
+      'library'
+    );
     const fork = forkChat(store, chat.id, {
       fromRevision: second.id,
       idempotencyKey: 'deleted-default-fork',
@@ -267,7 +272,11 @@ describe('chat transcript export and import', () => {
       { ...bot, role: 'persona' },
     ]);
     expect(validateChatTranscript(transcript)).toEqual(transcript);
-    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'shared-roles' });
+    const imported = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'shared-roles' },
+      'library'
+    );
     expect(imported.skippedAttachments).toEqual([]);
     const fork = forkChat(store, chat.id, {
       fromRevision: store.chat(chat.id).headRevision!,
@@ -373,7 +382,11 @@ describe('chat transcript export and import', () => {
     const transcript = exportChatTranscript(store, chat.id);
     expect(transcript.version).toBe(2);
     expect(transcript.notes[0]).toMatchObject({ kind: 'imported-memory', origin, atIndex: null });
-    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'attributed-copy' });
+    const imported = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'attributed-copy' },
+      'library'
+    );
     const fork = forkChat(store, imported.chat.id, {
       fromRevision: imported.chat.headRevision!,
       idempotencyKey: 'memory-fork',
@@ -413,7 +426,11 @@ describe('chat transcript export and import', () => {
     expect(JSON.stringify(transcript)).not.toMatch(/snapshot|usage|attempt|runId/);
     expect(validateChatTranscript(JSON.parse(JSON.stringify(transcript)))).toEqual(transcript);
 
-    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'import-1' });
+    const imported = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'import-1' },
+      'library'
+    );
     expect(imported.created).toBe(true);
     expect(imported.skippedAttachments).toEqual([]);
     const id = imported.chat.id;
@@ -468,12 +485,97 @@ describe('chat transcript export and import', () => {
     ]);
   });
 
+  test('a fork keeps the deleted bot, module and pinned model its chat holds', async () => {
+    const store = await database();
+    const { chat, glossary, second } = authoredChat(store);
+    const connection = store.product.connection({
+      title: 'Pinned connection',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    }) as { id: string; revision: number };
+    const model = store.product.model({
+      title: 'Pinned model',
+      connectionId: connection.id,
+      modelId: 'fixture',
+      maxOutputTokens: 1024,
+      temperature: null,
+    }) as { id: string; revision: number };
+    const profile = store.product.profile(chat.id);
+    store.product.updateProfile(chat.id, {
+      expectedRevision: profile.revision,
+      image: profile.image,
+      pinned: { mainModel: { id: model.id } },
+    });
+    const bot = store.product.stored<Content>(
+      'content',
+      profile.packageAttachments!.find((item) => item.role === 'bot')!.id
+    );
+    for (const [kind, item] of [
+      ['content', bot],
+      ['content', glossary],
+      ['model', model],
+    ] as const)
+      softDeleteLibraryItem(store, kind, item);
+
+    const fork = forkChat(store, chat.id, {
+      fromRevision: second.id,
+      idempotencyKey: 'deleted-held-fork',
+    });
+    const copied = store.product.profile(fork.id);
+    expect(copied.packageAttachments!.map(({ id, role }) => ({ id, role }))).toEqual([
+      { id: bot.id, role: 'bot' },
+      { id: glossary.id, role: 'module' },
+    ]);
+    expect(copied.pinned).toEqual({ mainModel: { id: model.id } });
+  });
+
+  test('a profile save keeps a deleted package it already holds and refuses a newly attached one', async () => {
+    const store = await database();
+    const { chat, glossary } = authoredChat(store);
+    const persona = store.product.content({
+      kind: 'persona',
+      title: 'Traveler',
+      description: 'Synthetic test data',
+      text: 'A traveler',
+      loading: 'pinned',
+      relatedIds: [],
+      package: nativeContent({ name: 'Traveler' }, {}, 'persona'),
+    }) as Content;
+    softDeleteLibraryItem(store, 'content', glossary);
+    softDeleteLibraryItem(store, 'content', persona);
+    const profile = store.product.profile(chat.id);
+    const held = profile.packageAttachments!;
+    expect(() =>
+      store.product.updateProfile(chat.id, {
+        expectedRevision: profile.revision,
+        image: profile.image,
+        packageAttachments: [
+          ...held,
+          { id: persona.id, revision: persona.revision, role: 'persona' },
+        ],
+      })
+    ).toThrow('LIBRARY_ITEM_DELETED');
+    const saved = store.product.updateProfile(chat.id, {
+      expectedRevision: profile.revision,
+      image: !profile.image,
+      packageAttachments: held,
+    });
+    expect(saved.packageAttachments!.map(({ id, role }) => ({ id, role }))).toEqual(
+      held.map(({ id, role }) => ({ id, role }))
+    );
+  });
+
   test('an import reports a deleted library package as skipped instead of attaching it', async () => {
     const store = await database();
     const { chat, glossary } = authoredChat(store);
     const transcript = exportChatTranscript(store, chat.id);
     softDeleteLibraryItem(store, 'content', glossary);
-    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'deleted-module' });
+    const imported = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'deleted-module' },
+      'library'
+    );
     expect(imported.skippedAttachments).toEqual([
       { id: glossary.id, revision: glossary.revision, role: 'module' },
     ]);
@@ -486,10 +588,18 @@ describe('chat transcript export and import', () => {
     const store = await database();
     const { chat } = authoredChat(store);
     const transcript = exportChatTranscript(store, chat.id);
-    const first = importChatTranscript(store, { transcript, idempotencyKey: 'same-key' });
+    const first = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'same-key' },
+      'library'
+    );
     for (let index = 0; index < 300; index++)
       saveImportReceipt(store, `resource-${index}`, 'digest', { index });
-    const replay = importChatTranscript(store, { transcript, idempotencyKey: 'same-key' });
+    const replay = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'same-key' },
+      'library'
+    );
     expect(replay).toEqual({ chat: first.chat, created: false, skippedAttachments: [] });
     expect(store.chats().filter((item) => item.title === 'Original story')).toHaveLength(2);
 
@@ -500,11 +610,15 @@ describe('chat transcript export and import', () => {
         { id: 'missing-module', revision: 3, role: 'module' },
       ],
     };
-    const partial = importChatTranscript(store, {
-      transcript: withUnknown,
-      title: 'Restored',
-      idempotencyKey: 'partial',
-    });
+    const partial = importChatTranscript(
+      store,
+      {
+        transcript: withUnknown,
+        title: 'Restored',
+        idempotencyKey: 'partial',
+      },
+      'library'
+    );
     expect(partial.chat.title).toBe('Restored');
     expect(partial.skippedAttachments).toEqual([
       { id: 'missing-module', revision: 3, role: 'module' },
@@ -513,16 +627,20 @@ describe('chat transcript export and import', () => {
       store.product.profile(partial.chat.id).packageAttachments!.map((item) => item.role)
     ).toEqual(['bot']);
     expect(
-      importChatTranscript(store, {
-        transcript: withUnknown,
-        title: 'Restored',
-        idempotencyKey: 'partial',
-      })
+      importChatTranscript(
+        store,
+        {
+          transcript: withUnknown,
+          title: 'Restored',
+          idempotencyKey: 'partial',
+        },
+        'library'
+      )
     ).toEqual({ ...partial, created: false });
 
     const withoutBot = { ...transcript, packageAttachments: [] };
     expect(() =>
-      importChatTranscript(store, { transcript: withoutBot, idempotencyKey: 'no-bot' })
+      importChatTranscript(store, { transcript: withoutBot, idempotencyKey: 'no-bot' }, 'library')
     ).toThrow('CHAT_TRANSCRIPT_BOT_REQUIRED');
   });
 
@@ -530,7 +648,11 @@ describe('chat transcript export and import', () => {
     const store = await database();
     const { chat } = authoredChat(store);
     const transcript = exportChatTranscript(store, chat.id);
-    const first = importChatTranscript(store, { transcript, idempotencyKey: 'portable-key' });
+    const first = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'portable-key' },
+      'library'
+    );
     const fresh = await database();
     const restored = await importChatBackup(fresh, {
       backup: legacyChatBackupFixture(store, first.chat.id),
@@ -545,11 +667,15 @@ describe('chat transcript export and import', () => {
         .all(first.chat.id, 'chat.transcript-import%')
         .map((row) => ({ ...row, kind: `${row.kind}.history` }))
     );
-    const imported = importChatTranscript(fresh, {
-      transcript: exportChatTranscript(fresh, restored.chat.id),
-      title: 'New destination import',
-      idempotencyKey: 'portable-key',
-    });
+    const imported = importChatTranscript(
+      fresh,
+      {
+        transcript: exportChatTranscript(fresh, restored.chat.id),
+        title: 'New destination import',
+        idempotencyKey: 'portable-key',
+      },
+      'library'
+    );
     expect(imported.created).toBe(true);
     expect(imported.chat.id).not.toBe(restored.chat.id);
   });
@@ -587,7 +713,7 @@ describe('chat transcript export and import', () => {
     ];
     for (const [value, code] of cases)
       expect(() =>
-        importChatTranscript(store, { transcript: value, idempotencyKey: code })
+        importChatTranscript(store, { transcript: value, idempotencyKey: code }, 'library')
       ).toThrow(new HttpError(400, code));
     expect(store.chats().length).toBe(before);
   });

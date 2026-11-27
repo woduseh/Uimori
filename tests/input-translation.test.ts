@@ -48,26 +48,30 @@ async function setup(withModel = true) {
     ],
   });
   const bot = store.product.content(input);
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Input translation scene',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [
-        { request: 'Old unrelated request', text: 'OLDER_SCENE_NOT_REQUIRED', translation: null },
-        {
-          request: 'Current request',
-          translation: null,
-          text:
-            'OLD_PREFIX_NOT_REQUIRED' + 'Reference text. '.repeat(500) + 'LATEST_SCENE_REFERENCE',
-        },
-      ],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Input translation scene',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [
+          { request: 'Old unrelated request', text: 'OLDER_SCENE_NOT_REQUIRED', translation: null },
+          {
+            request: 'Current request',
+            translation: null,
+            text:
+              'OLD_PREFIX_NOT_REQUIRED' + 'Reference text. '.repeat(500) + 'LATEST_SCENE_REFERENCE',
+          },
+        ],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const connection = store.product.connection({
     title: 'Fixture',
     protocol: 'fixture-sse-v1',

@@ -35,18 +35,22 @@ async function setup(expression: string, eventName: string, context: Record<stri
   const sourceText = normalizeStoryUiOutput(`A door opens.\n\n<a2ui>${expression}</a2ui>`);
   const block = parseStoryUi(sourceText).find((part) => part.kind === 'ui');
   if (!block) throw new Error('Fixture should contain a valid story UI block');
-  const imported = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'The sealed door',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [{ request: 'Enter the hall', text: sourceText, translation: null }],
+  const imported = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'The sealed door',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [{ request: 'Enter the hall', text: sourceText, translation: null }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const chat = store.settings(imported.id, imported.settingsRevision, {
     ...imported.settings,
     storyUi: true,

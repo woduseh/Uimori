@@ -41,7 +41,7 @@ export function legacyResourceBundleFixture(
   store: Store,
   items: { kind: 'content' | 'prompt-preset'; id: string }[]
 ): NativeTransferFile {
-  const metadata = captureResourceBundle(store, items);
+  const metadata = captureResourceBundle(store, items, 'preserve');
   return {
     ...metadata,
     images: metadata.images.map((image) => encodedImage(store.db, image.hash)),

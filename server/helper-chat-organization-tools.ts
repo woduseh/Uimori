@@ -3,7 +3,7 @@ import type { Content, ContentRef } from '../core/product.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
-import { HelperToolError } from './app-errors.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -66,6 +66,10 @@ export const HELPER_CHAT_ORGANIZATION_TOOLS: ProviderTool[] = [
     },
   },
 ];
+
+function assertRevision(current: number, expected: unknown) {
+  if (current !== number(expected, 'revision')) throw new AppError(409, 'REVISION_CONFLICT');
+}
 
 function personaRef(store: Store, value: unknown): ContentRef {
   const personaId = text(value, 'persona ID', 100);
@@ -165,10 +169,14 @@ export function applyHelperChatOrganization(
     }
     case 'update-folder': {
       fields(args, ['action', 'botId', 'folderId', 'expectedRevision', 'title', 'defaultPersona']);
-      const folder = organization.updateFolder(botId, text(args.folderId, 'folder ID', 100), {
-        expectedRevision: args.expectedRevision,
-        ...(args.title === undefined ? {} : { title: args.title }),
-        ...defaultPersona(),
+      const folderId = text(args.folderId, 'folder ID', 100);
+      const folder = store.transaction(() => {
+        assertRevision(organization.folder(botId, folderId).revision, args.expectedRevision);
+        return organization.updateFolder(botId, folderId, {
+          expectedRevision: args.expectedRevision,
+          ...(args.title === undefined ? {} : { title: args.title }),
+          ...defaultPersona(),
+        });
       });
       report(folder.revision);
       return { changedChatIds: [], folder };
@@ -238,12 +246,15 @@ export function applyHelperChatOrganization(
     case 'set-default-persona': {
       fields(args, ['action', 'botId', 'expectedRevision', 'persona']);
       const persona = text(args.persona, 'persona', 100);
-      const defaults = organization.updateDefaults(botId, {
-        expectedRevision: args.expectedRevision,
-        persona:
-          persona === 'inherit' || persona === 'none'
-            ? { mode: persona }
-            : { mode: 'persona', persona: personaRef(store, persona) },
+      const defaults = store.transaction(() => {
+        assertRevision(organization.defaults(botId).revision, args.expectedRevision);
+        return organization.updateDefaults(botId, {
+          expectedRevision: args.expectedRevision,
+          persona:
+            persona === 'inherit' || persona === 'none'
+              ? { mode: persona }
+              : { mode: 'persona', persona: personaRef(store, persona) },
+        });
       });
       report(defaults.revision);
       return { changedChatIds: [], defaults };

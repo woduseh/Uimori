@@ -187,4 +187,11 @@ test('a deleted connection refuses the update even when the location is unchange
       expectedRevision: revision,
     })
   ).toThrow('REVISION_CONFLICT');
+  expect(() =>
+    updateVertexLocation(store, {
+      connectionId: connection.id,
+      location: 'us_central1',
+      expectedRevision: revision,
+    })
+  ).toThrow('REVISION_CONFLICT');
 });

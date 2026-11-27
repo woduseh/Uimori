@@ -33,18 +33,22 @@ async function runHelper(steps: (chat: Chat) => transport.ProviderResult[]) {
   const store = new Store(join(directory, 'story.sqlite'));
   owned.push({ store, directory });
   const bot = store.product.content(fixtureBotInput('Harbor keeper')) as Content;
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Harbor story',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [{ request: 'Arrive.', text: 'The harbor bell rang once.', translation: null }],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Harbor story',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [{ request: 'Arrive.', text: 'The harbor bell rang once.', translation: null }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   selectFixtureModels(store);
   const started: ({ run: Run } | { job: Job })[] = [];
   const run = await runScriptedChatHelper(store, chat.id, steps(store.chat(chat.id)), {

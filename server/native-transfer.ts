@@ -31,7 +31,7 @@ function captureTransferResources(store: Store, value: unknown): PreparedNativeT
       id: text(item.id, 'resource ID', 100),
     };
   });
-  return captureResourceBundle(store, items);
+  return captureResourceBundle(store, items, 'library');
 }
 
 export function nativeTransferRoutes(app: FastifyInstance, store: Store) {

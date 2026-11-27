@@ -24,7 +24,7 @@ import {
   updateModelWorkspace,
   validateJudgmentPriceTarget,
 } from './prompt-workspace.js';
-import { HelperToolError } from './app-errors.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { backfillUnpricedCalls, backfillUnpricedJudgmentCalls } from './usage-backfill.js';
@@ -276,6 +276,8 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
     return { judgment: true, ...describe(current.judgmentPricing), ...backfill };
   }
   if (name === 'model.pricing.update') {
+    const expectedRevision = number(args.expectedRevision, 'model workspace revision');
+    if (expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
     if (target.connectionId && !pricedConnection(store, target))
       throw new HelperToolError(400, 'JUDGMENT_CONNECTION_INVALID');
     let pricing: JudgmentPricing | undefined;
@@ -292,7 +294,7 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
       (entry) => judgmentPriceKey(entry) !== key
     );
     updateModelWorkspace(store, {
-      expectedRevision: number(args.expectedRevision, 'model workspace revision'),
+      expectedRevision,
       routes: current.routes,
       translationPolicy: current.translationPolicy,
       judgmentPricing: pricing ? [...others, { ...target, pricing }] : others,

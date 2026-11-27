@@ -28,20 +28,24 @@ async function setup() {
   owned.push({ app, path });
   const { store } = app;
   const bot = store.product.content(fixtureBotInput('Mira', 'CANON_REFERENCE_MIRA'));
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Guide',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [
-        { request: 'USER_REVEALS_SECRET', text: 'MIRA_NOW_KNOWS_SECRET', translation: null },
-      ],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Guide',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [
+          { request: 'USER_REVEALS_SECRET', text: 'MIRA_NOW_KNOWS_SECRET', translation: null },
+        ],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const connection = store.product.connection({
     title: 'Fixture',
     protocol: 'fixture-sse-v1',

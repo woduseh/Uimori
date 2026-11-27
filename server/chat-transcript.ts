@@ -10,6 +10,7 @@ import type { Content, ContentRef } from '../core/product.js';
 import type { ContentAttachment } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Chat, Store } from './store.js';
+import type { ReferenceSource } from './product-store.js';
 import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
 import { successfulTranslation } from './translation-artifacts.js';
 import { assertRequestImages } from './request-images.js';
@@ -80,7 +81,11 @@ export type ChatTranscriptImport = {
   skippedAttachments: (ContentRef | ContentAttachment)[];
 };
 
-export function importChatTranscript(store: Store, value: unknown): ChatTranscriptImport {
+export function importChatTranscript(
+  store: Store,
+  value: unknown,
+  attachments: ReferenceSource
+): ChatTranscriptImport {
   const body = record(value);
   fields(body, ['transcript', 'title', 'idempotencyKey']);
   const transcript = validateChatTranscript(body.transcript);
@@ -102,24 +107,24 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
       };
     }
     const skippedAttachments: ChatTranscriptImport['skippedAttachments'] = [];
-    const attachments = transcript.packageAttachments.flatMap((ref) => {
+    const resolved = transcript.packageAttachments.flatMap((ref) => {
       try {
-        const content = store.product.available<Content>('content', ref.id);
+        const content = store.product.reference<Content>(attachments, 'content', ref.id);
         return [{ id: content.id, revision: content.revision, role: ref.role }];
       } catch {
         skippedAttachments.push(ref);
         return [];
       }
     });
-    const bot = attachments.find((ref) => ref.role === 'bot');
+    const bot = resolved.find((ref) => ref.role === 'bot');
     if (!bot) throw new AppError(400, 'CHAT_TRANSCRIPT_BOT_REQUIRED');
     const chat = store.createChat(title, { botId: bot.id, persona: null });
     const profile = store.product.profile(chat.id);
-    store.product.updateProfile(chat.id, {
-      expectedRevision: profile.revision,
-      packageAttachments: attachments,
-      image: profile.image,
-    });
+    store.product.updateProfile(
+      chat.id,
+      { expectedRevision: profile.revision, packageAttachments: resolved, image: profile.image },
+      { packageAttachments: resolved }
+    );
     const frozen = store.product.snapshot(chat.id);
     const notesAt = (at: number | null, head: string | null) => {
       for (const [index, note] of transcript.notes.entries())

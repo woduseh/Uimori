@@ -279,22 +279,26 @@ describe('Current checkpoint lifetime', () => {
       translationPolicy: workspace.translationPolicy,
     });
     const bot = store.product.content(fixtureBotInput()) as Content;
-    const chat = importChatTranscript(store, {
-      idempotencyKey: randomUUID(),
-      transcript: {
-        format: 'uimori-chat-transcript',
-        version: 2,
-        exportedAt: new Date().toISOString(),
-        title: 'Current summary',
-        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-        notes: [],
-        entries: Array.from({ length: count }, (_, i) => ({
-          request: 'Request ' + i,
-          text: ('Scene ' + i + '. ' + 'river '.repeat(600)).slice(0, 3000),
-          translation: null,
-        })),
+    const chat = importChatTranscript(
+      store,
+      {
+        idempotencyKey: randomUUID(),
+        transcript: {
+          format: 'uimori-chat-transcript',
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          title: 'Current summary',
+          packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+          notes: [],
+          entries: Array.from({ length: count }, (_, i) => ({
+            request: 'Request ' + i,
+            text: ('Scene ' + i + '. ' + 'river '.repeat(600)).slice(0, 3000),
+            translation: null,
+          })),
+        },
       },
-    }).chat;
+      'library'
+    ).chat;
     const snapshot = () =>
       prepareNativeRisuReadOnly(helperWritingSnapshot(store, chat.id), 'context');
     return { store, chat, model, helper, bot, snapshot };

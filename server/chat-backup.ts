@@ -75,7 +75,7 @@ export function exportChatBackupArchive(store: Store, chatId: string) {
     selected.set(`content:${ref.id}`, { kind: 'content', id: ref.id });
   const prompt = copy.state.profile.pinned?.mainPromptPresetId;
   if (prompt) selected.set(`prompt:${prompt}`, { kind: 'prompt-preset', id: prompt });
-  const resources = captureResourceBundle(store, [...selected.values()]);
+  const resources = captureResourceBundle(store, [...selected.values()], 'preserve');
   return exportNativeArchive(store, resources, {
     format: CHAT_BACKUP_FORMAT,
     version: CHAT_BACKUP_VERSION,
