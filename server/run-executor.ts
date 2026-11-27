@@ -1,4 +1,5 @@
 import { storedModelRequired } from './app-errors.js';
+import { contextFailureCode } from './context-failure.js';
 import { Store } from './store.js';
 import { normalizeStoryUiOutput } from './story-ui.js';
 import { storyUiAssetResolver } from './story-ui-assets.js';
@@ -716,7 +717,7 @@ export function createRunExecutor({
               store.finishRun(
                 id,
                 controller.signal.aborted ? 'cancelled' : 'failed',
-                error.message,
+                error.code,
                 undefined,
                 usage
               );
@@ -736,8 +737,10 @@ export function createRunExecutor({
               publish(run.chatId);
               return;
             }
+            const raw = error instanceof Error ? error.message : '';
             const message =
-              storedModelRequired(error) ?? (error instanceof Error ? error.message : '');
+              storedModelRequired(error) ??
+              (raw.startsWith('CONTEXT_') ? contextFailureCode(error) : raw);
             const safeError =
               message === 'Model call budget exhausted' ||
               message === 'TOOL_RESULT_MISMATCH' ||

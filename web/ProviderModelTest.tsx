@@ -197,12 +197,13 @@ function locationOutcome(record: TestDisplay | undefined): string {
   if (result.error === 'HTTP_429') return t('providers.vertexCompareBusy');
   if (result.error === 'HTTP_503') return t('providers.vertexCompareDown');
   if (result.error === 'TIMEOUT') return t('providers.vertexCompareTimeout');
-  return result.error ? connectionTestFailure(result.error) : statusLabel[result.status];
+  return (result.error && connectionTestFailure(result.error)) || statusLabel[result.status];
 }
-function connectionTestFailure(code: string): string {
+function connectionTestFailure(code: string): string | undefined {
   if (code === 'ENDPOINT_NOT_APPROVED') return t('providers.m308');
   if (code === 'SERVER_RESTARTED' || code === 'SERVER_STOPPING') return t('providers.m334');
-  return t(providerFailureKey(code));
+  const key = providerFailureKey(code);
+  return key === 'shared.responseFailure' ? undefined : t(key);
 }
 
 function LocationResults({
@@ -429,7 +430,7 @@ export function ProviderModelTest({
                 <>
                   {result.rejection ? (
                     <p>{rejectionMessage(result.rejection)}</p>
-                  ) : result.error ? (
+                  ) : result.error && connectionTestFailure(result.error) ? (
                     <p>{connectionTestFailure(result.error)}</p>
                   ) : null}
                   {(result.error || result.rejection) && (

@@ -9,7 +9,7 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { SummaryEditor } from './SummaryEditor.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ContextDetail, ContextJob as StoredContextJob } from '../core/context-plan.js';
-import { contextErrorMessage } from './context-error.js';
+import { ContextFailure } from './context-error.js';
 import type { AuthorNote } from '../core/notes.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
@@ -431,7 +431,7 @@ export function ContextPanel({
                   {latest.error && (
                     <details>
                       <summary>{t('settings.m303')}</summary>
-                      <p>{formatUiMessage(contextErrorMessage(latest.error))}</p>
+                      <ContextFailure error={latest.error} collapsed />
                     </details>
                   )}
                 </div>

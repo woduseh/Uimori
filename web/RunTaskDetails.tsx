@@ -1,11 +1,11 @@
 import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { formatUiMessage, type UiMessage, uiMessage } from './ui-message.js';
+import { type UiMessage, uiMessage } from './ui-message.js';
 import { useState } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
-import { knownContextError } from './context-error.js';
+import { ContextFailure } from './context-error.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
@@ -57,14 +57,18 @@ export function LoreSelectionStatus({ snapshot }: { snapshot: Run['snapshot'] })
   );
 }
 
-function runErrorText(error: string): string {
+function RunError({ error }: { error: string }) {
   const judgment = mainJudgmentError(error);
-  if (judgment) return judgment;
-  const context =
-    error.startsWith('CONTEXT_') || error.startsWith('MODEL_REQUIRED:')
-      ? knownContextError(error)
-      : undefined;
-  return context ? formatUiMessage(context) : error;
+  if (judgment) return <p className="error">{judgment}</p>;
+  return error.startsWith('CONTEXT_') ||
+    error.startsWith('MODEL_REQUIRED:') ||
+    error === 'CONNECTION_NOT_AUTHORIZED' ? (
+    <div className="error">
+      <ContextFailure error={error} />
+    </div>
+  ) : (
+    <p className="error">{error}</p>
+  );
 }
 
 export function RunNotices({
@@ -87,7 +91,7 @@ export function RunNotices({
       {(readyContext || run.contextSummary?.status !== 'ready') && (
         <ContextSummaryStatus summary={run.contextSummary} />
       )}
-      {shownError && <p className="error">{runErrorText(shownError)}</p>}
+      {shownError && <RunError error={shownError} />}
       {run.rejection && <ProviderRejectionNotice rejection={run.rejection} />}
       {run.status === 'refused' && <p className="error">{t('visuals.m278')}</p>}
     </>

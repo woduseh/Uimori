@@ -13,6 +13,17 @@ export type RequestImagePreview = Pick<RequestImage, 'name' | 'width' | 'height'
 export type RequestImagePart = { type: 'image'; image: RequestImage };
 
 export const REQUEST_IMAGE_MAX_COUNT = 8;
+export const STORED_REQUEST_IMAGE_ERRORS = [
+  'IMAGE_INPUT_UNSUPPORTED_MODEL',
+  'IMAGE_INPUT_UNSUPPORTED_PROTOCOL',
+  'IMAGE_INPUT_UNAVAILABLE',
+  'IMAGE_REQUEST_TOO_LARGE',
+  'RISU_NATIVE_REQUEST_IMAGE_IDENTITY',
+] as const;
+export type StoredRequestImageError = (typeof STORED_REQUEST_IMAGE_ERRORS)[number];
+const storedRequestImageErrors: ReadonlySet<string> = new Set(STORED_REQUEST_IMAGE_ERRORS);
+export const isStoredRequestImageError = (value: string): value is StoredRequestImageError =>
+  storedRequestImageErrors.has(value);
 
 export type ResolvedRequestImage = {
   mime: 'image/webp';

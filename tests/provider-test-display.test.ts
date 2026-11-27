@@ -38,3 +38,10 @@ test('a compared location with an unlisted stored code shows its family message,
   const markup = shown('TRANSPORT_ERROR', 'us-central1');
   expect(markup).toMatch(/provider-location-outcome">프로바이더에 연결하지 못했어요\./u);
 });
+
+test('a failure whose family adds nothing to the status line is not repeated under it', () => {
+  const markup = shown('CONNECTION_TEST_FAILED');
+  expect(markup).toContain('응답에 실패했어요.');
+  expect(markup).not.toContain('응답을 만들지 못했어요.');
+  expect(markup).toMatch(/<details>.*CONNECTION_TEST_FAILED.*<\/details>/su);
+});

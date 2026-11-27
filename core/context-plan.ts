@@ -1,5 +1,6 @@
 import type { Usage } from './types.js';
 import type { ContextBudget } from './context-budget.js';
+import { isStoredRequestImageError, type StoredRequestImageError } from './request-images.js';
 
 export type ContextCheckpointRef = { id: string; revision: number; hash: string };
 export type ContextBase = {
@@ -73,12 +74,38 @@ export const CONTEXT_ERROR_CODES = [
   'CONTEXT_TOOL_COMPACTION_FIXED_INPUT_TOO_LARGE',
   'CONTEXT_TOOL_COMPACTION_NO_PROGRESS',
   'CONTEXT_TOOL_RESULTS_TOO_LARGE',
+  'CONTEXT_WINDOW_EXCEEDED',
 ] as const;
 export type ContextErrorCode = (typeof CONTEXT_ERROR_CODES)[number];
 const contextErrorCodes: ReadonlySet<string> = new Set(CONTEXT_ERROR_CODES);
 export const isContextErrorCode = (value: string): value is ContextErrorCode =>
   contextErrorCodes.has(value);
 export const MODEL_REQUIRED_PATTERN = /^MODEL_REQUIRED:([a-z]+)$/u;
+export const CONTEXT_PROMPT_ERROR_CODES = [
+  'PROMPT_PREFILL_UNSUPPORTED',
+  'PROMPT_COMPLETED_ASSISTANT_AT_END_UNSUPPORTED',
+  'PROMPT_MID_SYSTEM_UNSUPPORTED',
+  'PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED',
+  'PROMPT_CACHE_UNSUPPORTED',
+  'PROMPT_CACHE_LIMIT',
+] as const;
+export type ContextPromptErrorCode = (typeof CONTEXT_PROMPT_ERROR_CODES)[number];
+const contextPromptErrorCodes: ReadonlySet<string> = new Set(CONTEXT_PROMPT_ERROR_CODES);
+export type ModelRequiredCode = `MODEL_REQUIRED:${string}`;
+export type ContextFailureCode =
+  | ContextErrorCode
+  | ContextPromptErrorCode
+  | StoredRequestImageError
+  | ModelRequiredCode;
+export function asContextFailureCode(value: string): ContextFailureCode | undefined {
+  if (MODEL_REQUIRED_PATTERN.test(value)) return value as ModelRequiredCode;
+  const base = value.split(':', 1)[0];
+  return isContextErrorCode(base) ||
+    contextPromptErrorCodes.has(base) ||
+    isStoredRequestImageError(base)
+    ? (base as ContextFailureCode)
+    : undefined;
+}
 export type ContextJob = {
   priorities?: string;
   id: string;

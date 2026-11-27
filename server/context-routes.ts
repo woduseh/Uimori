@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { RunSnapshot } from '../core/types.js';
 import type { ContextJob } from './context-store.js';
 import { HttpError, record } from './request-validation.js';
-import { contextFailureCode } from './context-compaction.js';
+import { contextFailureCode } from './context-failure.js';
 import type { Store } from './store.js';
 
 export type ContextRouteHooks = {

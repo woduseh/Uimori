@@ -33,6 +33,15 @@ import {
   prepareNativeRisuReadOnly,
 } from './risu-native-readonly.js';
 
+type PromptPreviewFailure = { code: string; detail?: string };
+function previewFailure(caught: unknown): PromptPreviewFailure {
+  if (!(caught instanceof ProviderContractError)) return { code: 'PROMPT_PREVIEW_FAILED' };
+  const split = caught.code.indexOf(':');
+  return split < 0
+    ? { code: caught.code }
+    : { code: caught.code.slice(0, split), detail: caught.code.slice(split + 1) };
+}
+
 export function promptRoutes(app: FastifyInstance, store: Store) {
   requestPreviewRoutes(app, store);
   registerEndpoint(app, promptEndpoints.listTemplates, promptOperations.listTemplates, () =>
@@ -207,7 +216,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
       }
       const target = profile.models[role as 'main' | 'translation'];
       let provider = null;
-      let error: string | undefined;
+      let error: PromptPreviewFailure | undefined;
       if (target)
         try {
           if (role === 'main') {
@@ -246,7 +255,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             };
           }
         } catch (caught) {
-          error = caught instanceof ProviderContractError ? caught.code : 'PROMPT_PREVIEW_FAILED';
+          error = previewFailure(caught);
         }
       return {
         compilation,
