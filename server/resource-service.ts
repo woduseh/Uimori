@@ -195,7 +195,10 @@ function parsedObject(value: string): object | null {
 }
 
 export function undoResource(store: Store, kind: ResourceKind, id: string, revision: number) {
-  const previous = readPreviousResource(store, kind, id);
-  if (previous.savedRevision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
-  return saveResource(store, { kind, id, expectedRevision: revision, model: previous.model });
+  return store.transaction(() => {
+    assertRevision(readForEdit(store, kind, id).revision, revision);
+    const previous = readPreviousResource(store, kind, id);
+    if (previous.savedRevision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
+    return saveResource(store, { kind, id, expectedRevision: revision, model: previous.model });
+  });
 }

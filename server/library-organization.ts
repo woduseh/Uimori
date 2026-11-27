@@ -85,7 +85,7 @@ export class LibraryOrganizationStore {
   }
   private folder(id: string, expectedCategory?: LibraryCategory) {
     const folder = this.snapshot().folders.find((item) => item.id === id);
-    if (!folder) throw new HttpError(404, 'Library folder not found');
+    if (!folder) throw new AppError(409, 'REVISION_CONFLICT');
     if (expectedCategory !== undefined && expectedCategory !== folder.category)
       throw new HttpError(409, 'Folder is outside this category');
     return folder;
@@ -121,6 +121,8 @@ export class LibraryOrganizationStore {
         this.store.db.prepare('UPDATE library_folders SET title=? WHERE id=?').run(title, id);
       if (coverImageHash !== undefined) this.setCover(id, coverImageHash);
       if (anchor !== undefined) {
+        if (anchor !== null && this.folder(anchor).category !== folder.category)
+          throw new HttpError(409, 'Folder order anchor is outside this category');
         const siblings = this.snapshot()
           .folders.filter((item) => item.category === folder.category && item.id !== id)
           .map((item) => item.id);
@@ -156,7 +158,9 @@ export class LibraryOrganizationStore {
     return this.edit(expectedRevision, () => {
       if (folderId !== null && this.folder(folderId).category !== destination)
         throw new HttpError(400, 'Destination folder belongs to another category');
-      for (const item of items) this.store.product.assertAvailable(item.kind, item.id);
+      for (const item of items)
+        if (!this.store.product.isLive(item.kind, item.id))
+          throw new AppError(409, 'REVISION_CONFLICT');
       const move = this.store.db.prepare(
         'UPDATE library_placements SET category=?,folder_id=? WHERE kind=? AND id=?'
       );

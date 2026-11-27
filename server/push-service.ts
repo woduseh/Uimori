@@ -155,7 +155,7 @@ export class PushService {
   test(clientId: string, cookie?: string) {
     const session = this.authority(cookie);
     const current = this.device(clientId, session);
-    if (!current) throw new AppError(404, 'REVISION_CONFLICT');
+    if (!current) throw new AppError(409, 'REVISION_CONFLICT');
     const now = new Date(this.now()).toISOString();
     if (
       this.store.db

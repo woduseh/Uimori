@@ -305,7 +305,7 @@ export class Store {
   }
   chat(id: string): Chat {
     const row = this.db.prepare(`${CHAT_SELECT} WHERE c.id=?`).get(id) as Row | undefined;
-    if (!row) throw new HttpError(404, 'Chat not found');
+    if (!row) throw new AppError(404, 'LIBRARY_ITEM_DELETED');
     return this.mapChat(row);
   }
   chats(): Chat[] {

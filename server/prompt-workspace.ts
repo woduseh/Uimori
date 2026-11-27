@@ -615,13 +615,7 @@ export function updateModelWorkspace(store: Store, input: UpdateModelWorkspace):
       judgment.provider !== 'typesafe' &&
       !isDeepStrictEqual(judgment, prior.judgment)
     ) {
-      let connection: Connection;
-      try {
-        connection = store.product.available<Connection>('connection', judgment.connectionId);
-      } catch (error) {
-        if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
-        throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
-      }
+      const connection = store.product.available<Connection>('connection', judgment.connectionId);
       if (!isJudgmentConnection(judgment.provider, connection))
         throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
     }

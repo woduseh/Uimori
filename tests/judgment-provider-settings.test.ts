@@ -103,12 +103,17 @@ test('official judgment selections reject the wrong destination, protocol, model
     for (const invalid of [
       { ...selection, connectionId: gateway.id },
       { ...selection, connectionId: disabled.id },
-      { ...selection, connectionId: 'unknown-connection' },
       { ...selection, provider: 'gemini', modelId: 'gemini-decision-1' },
     ])
       expect(() => updateModelWorkspace(store, { ...patch, judgment: invalid })).toThrow(
         'JUDGMENT_CONNECTION_INVALID'
       );
+    expect(() =>
+      updateModelWorkspace(store, {
+        ...patch,
+        judgment: { ...selection, connectionId: 'unknown-connection' },
+      })
+    ).toThrow('LIBRARY_ITEM_DELETED');
     expect(() =>
       updateModelWorkspace(store, { ...patch, judgment: { ...selection, modelId: 'other' } })
     ).toThrow('JUDGMENT_MODEL_INVALID');

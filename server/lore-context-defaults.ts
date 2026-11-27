@@ -37,15 +37,15 @@ export function updateLoreContextDefaults(
   store: Store,
   { expectedRevision, ...policyValue }: UpdateLoreContextDefaults
 ): LoreContextDefaults {
-  let policy: LoreContextPolicy;
-  try {
-    policy = validateLoreContextPolicy(policyValue);
-  } catch {
-    throw new HttpError(400, 'Invalid lore context defaults');
-  }
   return store.transaction(() => {
     const prior = loreContextDefaults(store);
     assertRevision(prior.revision, expectedRevision);
+    let policy: LoreContextPolicy;
+    try {
+      policy = validateLoreContextPolicy(policyValue);
+    } catch {
+      throw new HttpError(400, 'Invalid lore context defaults');
+    }
     const revision = prior.revision + 1;
     store.db
       .prepare('UPDATE lore_context_defaults SET revision=?,body=? WHERE id=1')
