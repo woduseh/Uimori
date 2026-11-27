@@ -1945,7 +1945,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         className="helper-messages"
         onScroll={() => {
           const node = scroll.current;
-          if (node && bottom.onScroll())
+          if (node && bottom.onScroll() && displayedScope.current === scopeKey)
             positions.current.set(scopeKey, { top: node.scrollTop, following: following.current });
         }}
       >
@@ -2271,6 +2271,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               if (node) {
                 following.current = false;
                 node.scrollIntoView({ block: 'center' });
+                if (scroll.current) bottom.place(scroll.current.scrollTop);
               }
             });
           }}
@@ -2355,6 +2356,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             />
             {liveActivityOpen && (
               <HelperLiveActivity
+                key={summarized.id}
                 taskId={summarized.id}
                 status={summarized.status}
                 visible={props.open}

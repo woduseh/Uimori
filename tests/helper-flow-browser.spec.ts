@@ -186,6 +186,7 @@ test('HELPUI07 the panel keeps its drafts, reading position, tone edits and Back
   await input.fill('도우미 입력 초안');
   const list = panel.locator('.helper-messages');
   const before = await list.evaluate((node) => node.scrollTop);
+  expect(before).toBeGreaterThan(300);
   expect(before).toBeLessThan(500);
   await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
   await expect(panel).toBeHidden();
