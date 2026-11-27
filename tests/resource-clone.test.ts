@@ -400,7 +400,7 @@ test('a prompt workspace save refuses fields the workspace does not have, withou
   const { store, app } = fixture();
   const workspace = promptWorkspace(store);
   const model = editableResource('prompt-workspace', workspace);
-  for (const extra of [{ mian: model.main }, { expectedRevision: workspace.revision + 5 }]) {
+  for (const extra of [{ mian: workspace.main }, { expectedRevision: workspace.revision + 5 }]) {
     const saved = await app.inject({
       method: 'POST',
       url: '/api/resources/save',
