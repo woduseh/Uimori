@@ -47,7 +47,6 @@
   "web/ModelWorkspaceEditor.tsx": 1,
   "web/NativeRisuAssetsEditor.tsx": 1,
   "web/NativeRisuPresetEditor.tsx": 1,
-  "web/NativeRisuRegexEditor.tsx": 2,
   "web/NativeRisuToggleEditor.tsx": 1,
   "web/NativeRisuTriggerEditor.tsx": 1,
   "web/NewStory.tsx": 5,

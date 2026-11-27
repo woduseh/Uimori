@@ -1,4 +1,5 @@
 import { message as uiMessage } from './i18n.js';
+import { parseJsonInput } from './json-input.js';
 export type RisuRegexRecord = Record<string, unknown>;
 
 export const regexRecord = (value: unknown): value is RisuRegexRecord =>
@@ -53,7 +54,7 @@ export function setNativeRegexOrder(flag: string, order: number) {
 }
 
 export function parseNativeRegexJson(text: string): RisuRegexRecord[] {
-  const value: unknown = JSON.parse(text);
+  const value = parseJsonInput(text);
   if (!Array.isArray(value) || value.some((item) => !regexRecord(item)))
     throw new Error(uiMessage('native.regexArrayRequired'));
   return value;

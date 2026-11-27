@@ -1,6 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
 import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { CodeField } from './CodeField.js';
+import { errorDescriptor } from './api-errors.js';
 import { codeFieldName } from './code-field-reveal.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useMemo, useState } from 'react';
@@ -88,7 +89,7 @@ export function NativeRisuRegexEditor({
       setRaw(JSON.stringify(next, null, 2));
       setError('');
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(errorDescriptor(caught));
     }
   }
   return (
@@ -330,7 +331,7 @@ export function NativeRisuRegexEditor({
               try {
                 write(parseNativeRegexJson(raw));
               } catch (caught) {
-                setError((caught as Error).message);
+                setError(errorDescriptor(caught));
               }
             }}
           >

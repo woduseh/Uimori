@@ -41,6 +41,7 @@ import { appearanceEndpoints } from '#contracts';
 import { api, ApiError, callEndpoint, saveDownload } from './api.js';
 import { errorDescriptor } from './api-errors.js';
 import { appearanceTarget, useThemes } from './ThemeContext.js';
+import { parseJsonInput } from './json-input.js';
 import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -350,7 +351,9 @@ export function ThemeSettings({
     }
     await action(async () => {
       if (file.size > 96 * 1024 * 1024) throw new Error(uiMessage('themeAssets.importTooLarge'));
-      const parsed = parseThemeFile(JSON.parse(await file.text()));
+      const parsed = parseThemeFile(
+        parseJsonInput(await file.text(), 'errors.THEME_FILE_UNSUPPORTED')
+      );
       const model = await adoptThemeFile(parsed.theme, parsed.files);
       themeTemplate(model.templateHtml);
       storyUiDraft.current = model.storyUi;

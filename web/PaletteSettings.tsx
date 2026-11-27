@@ -9,6 +9,7 @@ import {
   type ThemePalette,
 } from '../core/theme-palettes.js';
 import { useThemes } from './ThemeContext.js';
+import { parseJsonInput } from './json-input.js';
 import { paletteText } from './builtin-labels.js';
 import { appearanceEndpoints } from '#contracts';
 import { ApiError, callEndpoint } from './api.js';
@@ -84,7 +85,9 @@ export function usePaletteLibrary() {
   function importFile(file: File) {
     void run(async () => {
       if (file.size > 1024 * 1024) throw new Error(message('palettes.fileTooLarge'));
-      const model = parsePaletteFile(JSON.parse(await file.text()));
+      const model = parsePaletteFile(
+        parseJsonInput(await file.text(), 'errors.PALETTE_FILE_INVALID')
+      );
       setDraft({ id: null, model });
       setBaseline('');
       state.setPreview(null);

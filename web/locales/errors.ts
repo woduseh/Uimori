@@ -953,6 +953,12 @@ export const messages = {
     ja: '現在の状態ではこの依頼を完了できません。設定と作業状態を確認してください。({status})',
     zh: '当前状态下无法完成此请求。请检查设置和任务状态。({status})',
   },
+  'errors.invalidJson': {
+    ko: 'JSON 문법이 올바르지 않아요. 괄호, 쉼표와 따옴표를 확인해 주세요.',
+    en: 'The JSON is not valid. Check brackets, commas and quotes.',
+    ja: 'JSONの書式が正しくありません。括弧、カンマ、引用符を確認してください。',
+    zh: 'JSON 格式不正确。请检查括号、逗号和引号。',
+  },
   'errors.unexpected': {
     ko: '작업을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.',
     en: 'Could not complete the action. Try again in a moment.',

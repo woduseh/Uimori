@@ -9,6 +9,7 @@ import {
 import { AddIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { CodeField } from './CodeField.js';
+import { parseJsonInput } from './json-input.js';
 import { codeFieldName } from './code-field-reveal.js';
 import { NativeDeleteDialog } from './NativeDeleteDialog.js';
 import { useStudioItem } from './EditorStudio.js';
@@ -17,14 +18,6 @@ import './native-risu-trigger.css';
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
 }
 
 export function NativeRisuTriggerEditor({
@@ -77,7 +70,7 @@ export function NativeRisuTriggerEditor({
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
     if (!draft) return model;
-    const parsed = parseJson(draft.text);
+    const parsed = parseJsonInput(draft.text, 'native.text_754e9dc1ea');
     if (!record(parsed) || draft.index >= value.length)
       throw new Error(uiMessage('native.text_754e9dc1ea'));
     if (!prepareSave) throw new Error(uiMessage('native.text_2bf65e9272'));
@@ -136,7 +129,7 @@ export function NativeRisuTriggerEditor({
           onClick={() => {
             try {
               if (index >= value.length) throw new Error(uiMessage('native.text_782c2d04b2'));
-              const parsed = parseJson(raw);
+              const parsed = parseJsonInput(raw, 'native.text_30b7bf9cb8');
               if (!record(parsed)) throw new Error(uiMessage('native.text_30b7bf9cb8'));
               replace(parsed);
               setDraft(null);

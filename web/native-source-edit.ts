@@ -1,4 +1,5 @@
 import { message as uiMessage } from './i18n.js';
+import { parseJsonInput } from './json-input.js';
 import {
   nativeRisuExtension,
   normalizeRisuContentSource,
@@ -19,7 +20,7 @@ export function editNativeSource(
   part: NativeSourcePart,
   raw: string
 ): RisuContentSource {
-  const parsed: unknown = JSON.parse(raw);
+  const parsed = parseJsonInput(raw);
   const next = structuredClone(native);
   if (part === 'card' || part === 'module') {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))

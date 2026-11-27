@@ -40,6 +40,7 @@ import './illustration-presets.css';
 import './settings-layout.css';
 import { presentationFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
+import { parseJsonInput } from './json-input.js';
 
 type Draft = {
   id: string | null;
@@ -234,7 +235,9 @@ export function IllustrationPresetSettings({
     await action(async () => {
       if (file.size > ILLUSTRATION_PRESET_FILE_MAX_BYTES)
         throw new Error(uiMessage('visualpanels.importAnIllustrationPresetFileNoLarger'));
-      const model = parseIllustrationPresetFile(JSON.parse(await file.text()));
+      const model = parseIllustrationPresetFile(
+        parseJsonInput(await file.text(), 'errors.ILLUSTRATION_PRESET_FILE_UNSUPPORTED')
+      );
       resetEditorDetails();
       setDraft({ id: null, model });
       setBaseline('');
