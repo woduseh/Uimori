@@ -327,6 +327,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 ### Built-in layouts and palette sources of truth
 
 - **Sources of truth and user-theme preservation**: Built-in layouts and `BUILTIN_PALETTES` are the canonical sources of truth; cloned or imported user themes and their colors are never deleted or overwritten.
+- **Deleted scopes**: Deleting a bot or chat drops its theme, palette, story UI, background and illustration preset choices (`removeThemeScope`, `removeIllustrationPresetScope`) and leaves the themes and recipes themselves. A choice for a bot that is hidden or already purged, or a chat that no longer exists, answers 409 `REVISION_CONFLICT` (`assertAppearanceTargetLive`), because a bot deletion with no choice of its own bumps no preference revision a stale tab could trip on.
 - **Backup boundary and scope**: Theme JSON stores layout original colors and excludes separate palettes and scope bindings (preserved in workspace SQLite backups), and theme edits/deletions never alter manuscripts or model inputs. Expression panels, BGM, TTS, and input translation are out of scope; verification commands live in [DEVELOPMENT](DEVELOPMENT.md#builds-and-evidence) and [DEVELOPMENT](DEVELOPMENT.md#verification-runners).
 
 ## Usage report and backfill

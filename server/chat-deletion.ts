@@ -1,5 +1,6 @@
 import { detachAttemptUsage } from './usage-accounting.js';
 import { removeIllustrationPresetScope } from './illustration-presets.js';
+import { removeThemeScope } from './themes.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { fields, record } from './request-validation.js';
 import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
@@ -143,6 +144,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     for (const table of chatTables)
       store.db.prepare(`DELETE FROM ${table} WHERE chat_id=?`).run(chatId);
     removeIllustrationPresetScope(store, 'chat', chatId);
+    removeThemeScope(store, 'chat', chatId);
     store.db
       .prepare('DELETE FROM app_metadata WHERE key IN (?,?)')
       .run('illustration-continuity:' + chatId, CHAT_PIN_PREFIX + chatId);

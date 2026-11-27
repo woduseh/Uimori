@@ -30,6 +30,7 @@ import {
 } from '../server/illustrations.js';
 import { saveResource, undoResource } from '../server/resource-service.js';
 import { deleteChat } from '../server/chat-deletion.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import {
   chatWithSource,
   completedSource,
@@ -240,6 +241,20 @@ test('deleting a chat removes only its selection and keeps the shared recipe', (
   deleteChat(store, chat.id, {});
   expect(illustrationPresetPreferences(store).chatPresets).toEqual({});
   expect(readIllustrationPreset(store, preset.id)).toEqual(preset);
+});
+
+test('a stale tab cannot select a recipe for a deleted bot or chat', () => {
+  const store = databases.create();
+  const chat = createFixtureChat(store, 'Gone chat');
+  const preset = save(store, 'Shared');
+  deleteLibraryItem(store, 'content', chat.botId, {
+    expectedRevision: store.product.get<{ revision: number }>('content', chat.botId).revision,
+  });
+  expect(() => choose(store, preset.id, 'bot', chat.botId)).toThrow('REVISION_CONFLICT');
+  expect(illustrationPresetPreferences(store).botPresets).toEqual({});
+  deleteChat(store, chat.id, {});
+  expect(() => choose(store, preset.id, 'chat', chat.id)).toThrow('REVISION_CONFLICT');
+  expect(() => choose(store, preset.id, 'bot', chat.botId)).toThrow('REVISION_CONFLICT');
 });
 
 test('v1 preset files infer their generator and v2 files keep the explicit choice', () => {

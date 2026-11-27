@@ -11,6 +11,7 @@ import {
 } from '#contracts';
 import { appearanceOperations as operations } from '#contracts/operations';
 import { HttpError } from './request-validation.js';
+import { assertAppearanceTargetLive } from './appearance-scope.js';
 import { AppError, asAppError, assertRevision, HelperToolError } from './app-errors.js';
 import { NOT_MODIFIED, registerEndpoint } from './endpoint.js';
 import { matchesEntityTag } from './private-etag.js';
@@ -101,7 +102,22 @@ function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
   store.invalidated('themes');
   return next;
 }
+export function removeThemeScope(store: Store, scope: 'bot' | 'chat', id: string) {
+  const p = themePreferences(store);
+  const maps =
+    scope === 'bot'
+      ? [p.botThemes, p.botPalettes, p.botStoryUiThemes, p.botBackgrounds]
+      : [p.chatThemes, p.chatPalettes, p.chatBackgrounds];
+  let changed = false;
+  for (const map of maps)
+    if (map && Object.hasOwn(map, id)) {
+      delete map[id];
+      changed = true;
+    }
+  if (changed) writePreferences(store, p);
+}
 function assertSelectionTarget(store: Store, scope: SelectThemeRequest['scope'], targetId: string) {
+  assertAppearanceTargetLive(store, scope, targetId);
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
     if (content.kind !== 'bot') throw new HttpError(400, 'Invalid target ID: expected a bot');

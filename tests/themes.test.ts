@@ -30,9 +30,12 @@ import {
   themeCatalog,
   themePreferences,
   selectTheme,
+  selectThemeBackground,
   deleteTheme,
   readTheme,
 } from '../server/themes.js';
+import { deleteChat } from '../server/chat-deletion.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { saveResource, undoResource } from '../server/resource-service.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { invokePresentationTool } from '../server/helper-presentation-tools.js';
@@ -409,6 +412,70 @@ test('a stale tab gets a revision conflict or a catalogued code for themes and p
     expect(response.statusCode, `${request.method} ${request.url}`).toBe(409);
     expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });
   }
+});
+
+test('deleting a bot or chat drops only its appearance choices; a stale tab cannot reselect it', () => {
+  const store = database();
+  const bot = store.product.content(fixtureBotInput('Gone bot'));
+  const chat = store.createChat('Gone chat', { botId: bot.id });
+  const theme = saveResource(store, {
+    kind: 'theme',
+    id: null,
+    model: { ...emptyTheme('Story'), storyUi: { baseStyle: 'period', css: '' } },
+  }).saved as import('../core/themes.js').Theme;
+  const background = { imageHash: null, blur: 4, lightOverlay: 10, darkOverlay: 20 };
+  const current = () => themePreferences(store).revision;
+  for (const [scope, targetId] of [
+    ['bot', bot.id],
+    ['chat', chat.id],
+  ] as const) {
+    selectTheme(store, { scope, targetId, themeId: theme.id, expectedRevision: current() });
+    selectTheme(store, {
+      scope,
+      targetId,
+      dimension: 'palette',
+      paletteId: 'rose',
+      expectedRevision: current(),
+    });
+    selectThemeBackground(store, { scope, targetId, background, expectedRevision: current() });
+  }
+  selectTheme(store, {
+    scope: 'bot',
+    targetId: bot.id,
+    dimension: 'storyUi',
+    themeId: theme.id,
+    expectedRevision: current(),
+  });
+  const refused = (scope: 'bot' | 'chat', targetId: string) => {
+    const before = themePreferences(store);
+    expect(() =>
+      selectTheme(store, { scope, targetId, themeId: theme.id, expectedRevision: current() })
+    ).toThrow('REVISION_CONFLICT');
+    expect(() =>
+      selectThemeBackground(store, { scope, targetId, background, expectedRevision: current() })
+    ).toThrow('REVISION_CONFLICT');
+    expect(themePreferences(store)).toEqual(before);
+  };
+
+  deleteLibraryItem(store, 'content', bot.id, {
+    expectedRevision: store.product.get<{ revision: number }>('content', bot.id).revision,
+  });
+  let p = themePreferences(store);
+  expect([p.botThemes, p.botPalettes, p.botStoryUiThemes, p.botBackgrounds]).toEqual([
+    {},
+    {},
+    {},
+    {},
+  ]);
+  expect(p.chatThemes).toEqual({ [chat.id]: theme.id });
+  refused('bot', bot.id);
+
+  deleteChat(store, chat.id, {});
+  p = themePreferences(store);
+  expect([p.chatThemes, p.chatPalettes, p.chatBackgrounds]).toEqual([{}, {}, {}]);
+  expect(readTheme(store, theme.id)).toEqual(theme);
+  refused('chat', chat.id);
+  refused('bot', bot.id);
 });
 
 test('a copied title keeps its suffix within the title limit', () => {

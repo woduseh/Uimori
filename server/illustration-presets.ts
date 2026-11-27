@@ -4,6 +4,7 @@ import { HttpError, choice, fields, number, record, text } from './request-valid
 import { AppError, HelperToolError, validationAppError } from './app-errors.js';
 import { ValidationError } from '../core/validation-error.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
+import { assertAppearanceTargetLive } from './appearance-scope.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
   BUILTIN_ILLUSTRATION_PRESET,
@@ -99,6 +100,7 @@ export function selectIllustrationPreset(store: Store, value: unknown) {
     const p = illustrationPresetPreferences(store);
     if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (presetId) readIllustrationPreset(store, presetId);
+    assertAppearanceTargetLive(store, scope, targetId);
     if (scope === 'bot') store.organization.bot(targetId);
     if (scope === 'chat') store.chat(targetId);
     if (scope === 'global') p.defaultPresetId = presetId ?? DEFAULT_ILLUSTRATION_PRESET_ID;

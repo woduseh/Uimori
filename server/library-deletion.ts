@@ -1,4 +1,5 @@
 import { removeIllustrationPresetScope } from './illustration-presets.js';
+import { removeThemeScope } from './themes.js';
 import { pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, number, record } from './request-validation.js';
 import { AppError } from './app-errors.js';
@@ -92,6 +93,7 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
     }
     if (kind === 'content') {
       removeIllustrationPresetScope(store, 'bot', id);
+      removeThemeScope(store, 'bot', id);
       store.db.prepare('DELETE FROM app_metadata WHERE key=?').run(`bot-defaults:${id}`);
     }
     if (kind === 'content' || kind === 'prompt-preset')
