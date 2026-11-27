@@ -220,6 +220,23 @@ test('each Playwright worker gets its own server and database, kept as evidence 
   expect(summary.cleanup).toMatchObject({ status: 'PASS', runtimeRemoved: true });
 });
 
+test('repeating one file spreads its repetitions over the requested workers', async () => {
+  process.argv.push('--workers', '3');
+  const files = ['tests/one-browser.spec.ts'];
+  expect((await run({ files })).summary.workers).toBe(1);
+  expect(lib.command.mock.calls[0][0]).not.toContainEqual(expect.stringMatching(/^--repeat-each/u));
+  lib.command.mockClear();
+  process.argv.push('--repeat-each', '4');
+  expect((await run({ files })).summary.workers).toBe(3);
+  expect(lib.command.mock.calls[0][0]).toContain('--repeat-each=4');
+  for (const invalid of ['0', '1000']) {
+    process.argv.splice(-1, 1, invalid);
+    await expect(
+      runBrowserVerification({ name: 'harness-selftest', scope: 'invalid repeat', files })
+    ).rejects.toThrow('Use a repeat count from 1 to 999');
+  }
+});
+
 test('a stale build fails before launching any browser or server', async () => {
   lib.assertBuild.mockRejectedValue(new Error('stale build'));
   const { summary } = await run();
