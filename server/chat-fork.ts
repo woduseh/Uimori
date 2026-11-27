@@ -3,26 +3,34 @@ import { createHash } from 'node:crypto';
 import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
 import type { Chat, Store } from './store.js';
 import { AppError } from './app-errors.js';
+import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
 
-function numberedCopyTitle(store: Store, title: string): string {
+const COPY_LABELS: Record<UiLocale, string> = { ko: '사본', en: 'copy', ja: 'コピー', zh: '副本' };
+const COPY_SUFFIX_RUNS = new RegExp(
+  `(?: \\((?:${Object.values(COPY_LABELS).join('|')})(?: [1-9]\\d*)?\\))+`,
+  'gu'
+);
+
+function numberedCopyTitle(store: Store, title: string, locale: UiLocale): string {
   const base =
-    title.replace(/(?: \(사본(?: [1-9]\d*)?\))+/gu, (run, offset) =>
+    title.replace(COPY_SUFFIX_RUNS, (run, offset) =>
       offset + run.length === title.length ? '' : run
     ) || title;
+  const label = COPY_LABELS[locale];
   let last = 0;
   for (const row of store.db.prepare('SELECT title FROM chats').all()) {
     const existing = String(row.title);
-    const match = existing.match(/ \(사본 ([1-9]\d*)\)$/u);
-    if (!match || existing.slice(0, match.index) !== base) continue;
-    const number = Number(match[1]);
+    const match = existing.match(/ \(([^\s()]+) ([1-9]\d*)\)$/u);
+    if (!match || match[1] !== label || existing.slice(0, match.index) !== base) continue;
+    const number = Number(match[2]);
     if (Number.isSafeInteger(number)) last = Math.max(last, number);
   }
-  return `${base} (사본 ${last + 1})`;
+  return `${base} (${label} ${last + 1})`;
 }
 
 export function forkChat(store: Store, chatId: string, value: unknown): Chat {
   const body = record(value);
-  fields(body, ['fromRevision', 'title', 'idempotencyKey']);
+  fields(body, ['fromRevision', 'title', 'titleLocale', 'idempotencyKey']);
   const sourceId = body.fromRevision === null ? null : text(body.fromRevision, 'source ID', 100);
   const requestKey = text(body.idempotencyKey, 'copy request', 100);
   const requestedTitle = body.title === undefined ? null : chatTitle(body.title);
@@ -47,7 +55,8 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
       return store.chat(saved.chatId);
     }
     const original = store.chat(chatId);
-    const title = requestedTitle ?? numberedCopyTitle(store, original.title);
+    const title =
+      requestedTitle ?? numberedCopyTitle(store, original.title, supportedLocale(body.titleLocale));
     const copy = captureChatCopy(store, chatId, sourceId);
     const restored = restoreChatCopy(store, copy, `copy:${requestKey}`, title);
     store.db

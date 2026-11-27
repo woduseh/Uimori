@@ -84,6 +84,12 @@ export const messages = {
     ja: '画像は最大{images}枚、ファイルは最大{files}個まで添付できます。',
     zh: '最多可添加 {images} 张图片和 {files} 个文件。',
   },
+  'helperAttachments.defaultName': {
+    ko: '첨부 파일',
+    en: 'attachment',
+    ja: '添付ファイル',
+    zh: '附件',
+  },
   'helperAttachments.openFailed': {
     ko: '파일을 열지 못했어요.',
     en: 'Could not open the file.',

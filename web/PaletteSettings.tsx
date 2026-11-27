@@ -2,7 +2,8 @@ import { validatePalette, parsePaletteFile } from '../core/palette-files.js';
 import { useRef, useState } from 'react';
 import { t, useI18n } from './i18n.js';
 import { UiError, uiMessage, type UiMessage } from './ui-message.js';
-import { THEME_COLOR_KEYS, copyTitle, resolveTheme } from '../core/themes.js';
+import { THEME_COLOR_KEYS, THEME_TITLE_MAX_CHARS, resolveTheme } from '../core/themes.js';
+import { copiedTitle } from './copy-title.js';
 import {
   BUILTIN_PALETTES,
   type Palette,
@@ -66,7 +67,7 @@ export function usePaletteLibrary() {
       palette
         ? {
             title: copy
-              ? copyTitle(paletteText(palette).title, t('shared.copySuffix'))
+              ? copiedTitle(paletteText(palette).title, THEME_TITLE_MAX_CHARS)
               : paletteText(palette).title,
             description: paletteText(palette).description,
             colors: palette.colors,

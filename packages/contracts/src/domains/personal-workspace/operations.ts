@@ -19,7 +19,11 @@ const orderMessage = { message: 'Usage start date is after the end date', path: 
 export const usagePeriod = z.strictObject(usageRange).refine(ordered, orderMessage);
 export type UsagePeriod = z.infer<typeof usagePeriod>;
 export const usageExportQuery = z
-  .strictObject({ ...usageRange, group: z.enum(['day', 'model', 'kind']).default('day') })
+  .strictObject({
+    ...usageRange,
+    group: z.enum(['day', 'model', 'kind']).default('day'),
+    lang: z.enum(['ko', 'en', 'ja', 'zh']).default('ko'),
+  })
   .refine(ordered, orderMessage);
 
 const count = z.int().nonnegative();

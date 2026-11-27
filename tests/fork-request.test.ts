@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { ApiError, definiteRejection } from '../web/api.js';
 import { uiText } from '../web/ui-message.js';
+import { loadLocale, setLocale } from '../web/i18n.js';
 import { requestChatFork } from '../web/fork-request.js';
 
 const key = 'fork-command:chat:source';
@@ -52,8 +53,8 @@ test('an uncertain request retains its admission key for the next attempt', asyn
   await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
   const bodies = fetch.mock.calls.map(([, options]) => JSON.parse(String(options?.body)));
   expect(bodies).toEqual([
-    { fromRevision: 'source', idempotencyKey: pending },
-    { fromRevision: 'source', idempotencyKey: pending },
+    { fromRevision: 'source', titleLocale: 'ko', idempotencyKey: pending },
+    { fromRevision: 'source', titleLocale: 'ko', idempotencyKey: pending },
   ]);
   expect(values.has(key)).toBe(false);
 });
@@ -120,4 +121,17 @@ test('admission rejection classification retains the existing contract', () => {
   for (const status of [408, 500, 502, 503])
     expect(definiteRejection(new ApiError(uiText('Synthetic'), status))).toBe(false);
   expect(definiteRejection(new Error('Network failure'))).toBe(false);
+});
+
+test('the fork request carries the current UI language for the default copy title', async () => {
+  storageFixture();
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(accepted());
+  await loadLocale('en');
+  setLocale('en');
+  try {
+    await requestChatFork('chat', 'source');
+  } finally {
+    setLocale('ko');
+  }
+  expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body))).toMatchObject({ titleLocale: 'en' });
 });

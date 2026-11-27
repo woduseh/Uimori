@@ -1,4 +1,6 @@
 import { ScrollStrip } from './ScrollStrip.js';
+import { copiedTitle } from './copy-title.js';
+import { RESOURCE_TITLE_MAX_CHARS } from '../core/content-limits.js';
 import { useShortcut } from './shortcuts.js';
 import { t, useI18n, getLocale } from './i18n.js';
 import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
@@ -479,7 +481,7 @@ export function LibraryPanel({
           kind: 'content',
           sourceId: full.id,
           expectedSourceRevision: full.revision,
-          title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
+          title: copiedTitle(full.title, RESOURCE_TITLE_MAX_CHARS),
         });
         const copy = result.saved as Content;
         const warnings: UiMessage[] = [];
@@ -1316,18 +1318,19 @@ function ContentEditor({
     setError(null);
     try {
       const copying = !!copyKind;
+      const copyName = copiedTitle(value.title, RESOURCE_TITLE_MAX_CHARS);
       const result = state.creationPending
         ? await session.save()
         : await session.save(
             {
               kind: copyKind ?? value.kind,
-              title: copying ? value.title + t('shared.copySuffix') : value.title,
+              title: copying ? copyName : value.title,
               description: value.description,
               text: value.text,
               loading: value.loading,
               relatedIds: [],
               package: copying
-                ? withNativeContentTitle(packageSnapshot(), value.title + t('shared.copySuffix'))
+                ? withNativeContentTitle(packageSnapshot(), copyName)
                 : packageSnapshot(),
             } satisfies ContentEditModel,
             { copy: copying }

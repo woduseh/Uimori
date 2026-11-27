@@ -25,6 +25,7 @@ export type IllustrationPresetCatalog = {
   preferences: IllustrationPresetPreferences;
 };
 export const ILLUSTRATION_PRESET_FORMAT = 'uimori-illustration-preset';
+export const ILLUSTRATION_PRESET_TITLE_MAX_CHARS = 100;
 export const ILLUSTRATION_WORKFLOW_MAX_CHARS = 400_000;
 export const ILLUSTRATION_PRESET_FILE_MAX_BYTES = 16 * 1024 * 1024;
 export const DEFAULT_ILLUSTRATION_PRESET_ID = 'builtin:illustration-default';
@@ -98,7 +99,7 @@ function string(value: unknown, field: string, limit: number): string {
 }
 export function validateIllustrationPreset(value: unknown): IllustrationPresetDefinition {
   const v = object(value);
-  const title = string(v.title, 'title', 100).trim();
+  const title = string(v.title, 'title', ILLUSTRATION_PRESET_TITLE_MAX_CHARS).trim();
   if (!title)
     throw new ValidationError(400, 'ILLUSTRATION_PRESET_TITLE_REQUIRED', 'title: enter a name.');
   const comfyui = v.comfyui === undefined ? {} : object(v.comfyui);

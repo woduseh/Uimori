@@ -179,6 +179,65 @@ describe('independent stored-story fork without generation', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  test.each([
+    ['en', 'copy'],
+    ['ja', 'コピー'],
+    ['zh', '副本'],
+    ['ko', '사본'],
+  ] as const)(
+    'numbers %s copies with its own label and keeps the fork command stable',
+    async (locale, label) => {
+      const store = await database();
+      const chat = createFixtureChat(store, 'Names');
+      const first = source(store, chat.id, 'First scene.');
+      const body = { fromRevision: first.id, titleLocale: locale };
+      const a = forkChat(store, chat.id, { ...body, idempotencyKey: 'one' });
+      const b = forkChat(store, chat.id, { ...body, idempotencyKey: 'two' });
+      expect([a.title, b.title]).toEqual([`Names (${label} 1)`, `Names (${label} 2)`]);
+      expect(
+        forkChat(store, chat.id, { ...body, titleLocale: 'ko', idempotencyKey: 'one' })
+      ).toEqual(a);
+      const again = forkChat(store, a.id, {
+        fromRevision: a.headRevision,
+        titleLocale: locale,
+        idempotencyKey: 'again',
+      });
+      expect(again.title).toBe(`Names (${label} 3)`);
+    }
+  );
+
+  test('a copy made in another language recognizes every language label instead of stacking suffixes', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Names (copy 1)');
+    const first = source(store, chat.id, 'First scene.');
+    const korean = forkChat(store, chat.id, {
+      fromRevision: first.id,
+      titleLocale: 'ko',
+      idempotencyKey: 'ko',
+    });
+    expect(korean.title).toBe('Names (사본 1)');
+    const japanese = forkChat(store, korean.id, {
+      fromRevision: korean.headRevision,
+      titleLocale: 'ja',
+      idempotencyKey: 'ja',
+    });
+    expect(japanese.title).toBe('Names (コピー 1)');
+    expect(store.chat(chat.id).title).toBe('Names (copy 1)');
+  });
+
+  test('the default and an unknown language keep the Korean label', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Names');
+    const first = source(store, chat.id, 'First scene.');
+    expect(
+      forkChat(store, chat.id, { fromRevision: first.id, idempotencyKey: 'default' }).title
+    ).toBe('Names (사본 1)');
+    expect(
+      forkChat(store, chat.id, { fromRevision: first.id, titleLocale: 'xx', idempotencyKey: 'x' })
+        .title
+    ).toBe('Names (사본 2)');
+  });
+
   test.each(['Names (사본) (사본 2)', 'Names (사본 2)'])(
     'copying %s continues the numbered family without stacking suffixes',
     async (title) => {

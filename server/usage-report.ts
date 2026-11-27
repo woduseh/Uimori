@@ -7,6 +7,7 @@ import {
   type UsageTotals,
   usageExportQuery,
 } from '#contracts/operations';
+import type { UiLocale } from '../core/ui-locale.js';
 import type { Store } from './store.js';
 import { parseInput, registerEndpoint } from './endpoint.js';
 
@@ -98,13 +99,8 @@ export function usageReport(
     ),
   };
 }
-export function usageCsv(report: UsageReport, group: 'day' | 'model' | 'kind' = 'day'): string {
-  const csvCell = (value: unknown) => {
-    let text = String(value ?? '');
-    if (/^[\s]*[=+\-@]/u.test(text)) text = `'${text}`;
-    return `"${text.replaceAll('"', '""')}"`;
-  };
-  const header = [
+const USAGE_CSV_HEADERS: Record<UiLocale, readonly string[]> = {
+  ko: [
     '구분',
     '프로바이더 ID',
     '호출',
@@ -118,7 +114,64 @@ export function usageCsv(report: UsageReport, group: 'day' | 'model' | 'kind' = 
     '부분 추정 호출',
     '비용 미확인 호출',
     '진행 중 호출',
-  ];
+  ],
+  en: [
+    'Group',
+    'Provider ID',
+    'Calls',
+    'Known input tokens',
+    'Calls with unknown input',
+    'Known output tokens',
+    'Calls with unknown output',
+    'Provider-reported USD',
+    'Full estimate USD',
+    'Partial estimate USD',
+    'Partial estimate calls',
+    'Calls with unknown cost',
+    'Calls in progress',
+  ],
+  ja: [
+    '区分',
+    'プロバイダー ID',
+    '呼び出し',
+    '確認済み入力トークン',
+    '入力未確認の呼び出し',
+    '確認済み出力トークン',
+    '出力未確認の呼び出し',
+    'プロバイダー報告 USD',
+    '完全推定 USD',
+    '部分推定 USD',
+    '部分推定の呼び出し',
+    '費用未確認の呼び出し',
+    '進行中の呼び出し',
+  ],
+  zh: [
+    '分组',
+    '提供商 ID',
+    '调用',
+    '已知输入 token',
+    '输入未知的调用',
+    '已知输出 token',
+    '输出未知的调用',
+    '提供商报告 USD',
+    '完全估算 USD',
+    '部分估算 USD',
+    '部分估算调用',
+    '成本未知的调用',
+    '进行中的调用',
+  ],
+};
+export function usageCsv(
+  report: UsageReport,
+  group: 'day' | 'model' | 'kind' = 'day',
+  lang: UiLocale = 'ko'
+): string {
+  const csvCell = (value: unknown) => {
+    let text = String(value ?? '');
+    if (/^[\s]*[=+\-@]/u.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+  const header = USAGE_CSV_HEADERS[lang];
   const row = (label: string, provider: string, item: UsageTotals) =>
     [
       label,
@@ -153,7 +206,7 @@ export function usageRoutes(app: FastifyInstance, store: Store) {
     (range) => usageReport(store, range)
   );
   app.get('/api/usage/export', (request, reply) => {
-    const { group, ...range } = parseInput(usageExportQuery, request.query);
+    const { group, lang, ...range } = parseInput(usageExportQuery, request.query);
     return reply
       .type('text/csv; charset=utf-8')
       .header('Cache-Control', 'no-store')
@@ -161,6 +214,6 @@ export function usageRoutes(app: FastifyInstance, store: Store) {
         'Content-Disposition',
         `attachment; filename="uimori-usage-${range.from}-${range.to}.csv"`
       )
-      .send(usageCsv(usageReport(store, range), group));
+      .send(usageCsv(usageReport(store, range), group, lang));
   });
 }

@@ -1,4 +1,4 @@
-import { t, useI18n, formatNumber, formatDate } from './i18n.js';
+import { t, useI18n, formatNumber, formatDate, getLocale } from './i18n.js';
 import { formatUiMessage, type UiMessage, uiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
@@ -161,7 +161,7 @@ export function UsagePanel({
   const error = failure?.query === query ? failure.error : null;
   const invalid = period === 'custom' && !validUsageRange(draft);
   const exports = (group: string) =>
-    `/api/usage/export?${new URLSearchParams({ ...range, group })}`;
+    `/api/usage/export?${new URLSearchParams({ ...range, group, lang: getLocale() })}`;
   const rows: Row[] = (current?.models ?? []).map((item) => ({
     ...item,
     id: JSON.stringify([item.connectionId, item.modelId]),

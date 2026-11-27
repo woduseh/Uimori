@@ -23,10 +23,11 @@ import {
   StopIcon,
   CloseIcon,
 } from './ui-icons.js';
+import { copiedTitle } from './copy-title.js';
 import {
   THEME_COLOR_KEYS,
   DEFAULT_THEME_ID,
-  copyTitle,
+  THEME_TITLE_MAX_CHARS,
   emptyTheme,
   getBuiltinTheme,
   parseThemeFile,
@@ -247,7 +248,7 @@ export function ThemeSettings({
     if (storyOnly) model.storyUi = { baseStyle: 'default', css: '' };
     storyUiDraft.current = model.storyUi;
     const isCopy = copy || !!theme?.id.startsWith('builtin:');
-    if (theme && isCopy) model.title = copyTitle(model.title, t('shared.copySuffix'));
+    if (theme && isCopy) model.title = copiedTitle(model.title, THEME_TITLE_MAX_CHARS);
     setDraft({
       id: theme && !isCopy ? theme.id : null,
       revision: theme && !isCopy ? theme.revision : undefined,

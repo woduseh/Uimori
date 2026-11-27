@@ -69,15 +69,6 @@ export const DEFAULT_THEME_TEMPLATE =
   '<slot name="request"></slot><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot><slot></slot>';
 export const THEME_SLOTS = ['request', 'heading', 'body', 'actions'] as const;
 export const THEME_TITLE_MAX_CHARS = 100;
-export function copyTitle(title: string, suffix: string): string {
-  const characters = Array.from(title);
-  while (
-    characters.length &&
-    characters.join('').trimEnd().length + suffix.length > THEME_TITLE_MAX_CHARS
-  )
-    characters.pop();
-  return characters.join('').trimEnd() + suffix;
-}
 export function emptyTheme(title = '새 테마'): ThemeDefinition {
   return {
     title,
