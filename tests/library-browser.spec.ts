@@ -4,7 +4,12 @@ import { test, expect, type APIRequestContext, type Page, type Locator } from '@
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import { type LibraryOrganization, type LibraryFolder } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { navigationAction, selectEditorSection } from './ui-navigation.js';
+import {
+  createLibraryContent,
+  editorChanges,
+  navigationAction,
+  selectEditorSection,
+} from './ui-navigation.js';
 
 async function createContent(request: APIRequestContext, title: string) {
   const response = await request.post('/api/content', {
@@ -503,4 +508,41 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
   await page.reload();
   await expect(section.locator('[data-library-item-id]')).toHaveCount(2);
   await expect(panel.locator('.library-empty')).toHaveCount(0);
+});
+
+test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete later title', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  const panel = page.getByTestId('library-panel');
+  await createLibraryContent(page);
+  const name = panel.getByLabel(/^(봇|페르소나|모듈) 이름$/u);
+  const title = `EDITORRECOVERY2 ${crypto.randomUUID()}`;
+  await name.fill(title);
+  const submissions: Record<string, unknown>[] = [];
+  let createdId = '';
+  await page.route('**/api/resources/save', async (route) => {
+    submissions.push(route.request().postDataJSON());
+    if (submissions.length === 1) {
+      const accepted = await route.fetch();
+      expect(accepted.ok(), await accepted.text()).toBe(true);
+      createdId = (await accepted.json()).saved.id;
+      await route.abort('failed');
+    } else await route.continue();
+  });
+  await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
+  const retry = panel.getByRole('button', { name: '이전 요청 확인', exact: true });
+  await expect(retry).toBeEnabled();
+  await name.fill('');
+  await retry.click();
+  await expect.poll(() => submissions.length).toBe(2);
+  expect(submissions[1]).toEqual(submissions[0]);
+  await expect(name).toHaveValue('');
+  await expect(editorChanges(panel)).toBeVisible();
+  const saved = await request.get(`/api/content/${createdId}`);
+  expect(saved.ok(), await saved.text()).toBe(true);
+  expect((await saved.json()).title).toBe(title);
 });

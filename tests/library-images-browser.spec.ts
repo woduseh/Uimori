@@ -166,3 +166,55 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   const current = await (await request.get(`/api/content/${removed.id}`)).json();
   expect(current.package).toEqual(removed.package);
 });
+
+test('LIMG03 cancelled and failed portrait uploads cannot change a saved draft or leave saving blocked', async ({
+  page,
+  request,
+}) => {
+  const original = await seed(request, 'bot', `업로드 취소 합성 ${Date.now()}`);
+  const library = await edit(page, original),
+    portrait = library.getByRole('region', { name: '대표 이미지 설정', exact: true }),
+    saveButton = library.getByRole('button', { name: '변경사항 저장', exact: true });
+  await library.getByLabel('카드 설명', { exact: true }).fill('업로드 취소 뒤에도 저장할 설명');
+  await expect(saveButton).toBeEnabled();
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/package-image-blobs', async (route) => {
+    await waiting;
+    await route
+      .fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ hash: 'c'.repeat(64), mime: 'image/png' }),
+      })
+      .catch(() => {});
+  });
+  await portrait
+    .getByLabel('대표 이미지 업로드', { exact: true })
+    .setInputFiles({ name: 'pending.png', mimeType: 'image/png', buffer: png });
+  await expect(portrait.getByRole('button', { name: '업로드 취소', exact: true })).toBeVisible();
+  await expect(saveButton).toBeDisabled();
+  await portrait.getByRole('button', { name: '업로드 취소', exact: true }).click();
+  release();
+  await expect(saveButton).toBeEnabled();
+  await expect(portrait.locator('img')).toHaveCount(0);
+  await page.unroute('**/api/package-image-blobs');
+  await page.route('**/api/package-image-blobs', (route) =>
+    route.fulfill({ status: 503, body: 'synthetic failure' })
+  );
+  await portrait
+    .getByLabel('대표 이미지 업로드', { exact: true })
+    .setInputFiles({ name: 'failed.png', mimeType: 'image/png', buffer: png });
+  await expect(portrait.getByRole('alert')).toContainText('503');
+  await expect(saveButton).toBeEnabled();
+  await expect(portrait.locator('img')).toHaveCount(0);
+  const saved: Content = await (
+    await request.get(`/api/revisions/content/${original.id}/${original.revision}`)
+  ).json();
+  expect(saved.package).toEqual(original.package);
+  const after = await save(page, library, original);
+  expect(after.package?.images ?? []).toEqual([]);
+  expect(after.package?.portraitImageId).toBeUndefined();
+});

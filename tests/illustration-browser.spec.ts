@@ -18,6 +18,7 @@ import {
   openSourceActions,
   selectChatSettingsSection,
   selectEditorSection,
+  selectSettingsSection,
 } from './ui-navigation.js';
 
 test.setTimeout(60000);
@@ -653,3 +654,76 @@ for (const width of [MOBILE_WIDTH]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('ILUI02 mobile settings save illustration limits with CAS and expose the generator choice', async ({
+  page,
+  request,
+}, info) => {
+  await seed(request);
+  const before = await settings(request, { generator: undefined, maxPerSource: 2 });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '삽화');
+  const section = page.getByRole('region', { name: '삽화 설정', exact: true });
+  await expect(section).toBeVisible();
+  const generator = section.getByLabel('테스트 삽화 생성기', { exact: true });
+  await expect(generator).toHaveValue('');
+  await generator.selectOption('fixture');
+  await expect(section.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true })).toBeVisible();
+  const limit = section.getByLabel('장면당 최대 삽화 수', { exact: true });
+  await limit.fill('3');
+  await section.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true }).check();
+  await section
+    .getByRole('combobox', { name: '자동 생성 컷 수', exact: true })
+    .selectOption('auto');
+  await section.getByLabel('최소 컷 수', { exact: true }).fill('0');
+  await section.getByLabel('자동으로 고를 최대 컷 수', { exact: true }).fill('3');
+  await section.getByLabel('자동 재시도 횟수', { exact: true }).fill('2');
+  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
+  await expect(
+    page.locator('.transient-notice[role="status"]').filter({ hasText: '삽화 설정을 저장했어요' })
+  ).toBeVisible();
+  const saved = await request.get('/api/illustration-settings');
+  expect((await saved.json()) as IllustrationSettings).toMatchObject({
+    generator: 'fixture',
+    maxPerSource: 3,
+    automaticCountMode: 'auto',
+    automaticMinTargets: 0,
+    automaticMaxTargets: 3,
+    maxAutoRetries: 2,
+    revision: before.revision + 1,
+  });
+  await settings(request, { maxAutoRetries: 3 });
+  await limit.fill('4');
+  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
+  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 설정 저장본 확인' });
+  await expect(
+    conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
+  ).toBeFocused();
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('자동 재시도 횟수');
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('3');
+  expect(await conflictDialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await conflictDialog.press('Escape');
+  await expect(section.getByRole('alert')).toContainText('최신 설정을 불러와 주세요');
+  await expect(limit).toHaveValue('4');
+  await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
+  const reloadDialog = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
+  await expect(reloadDialog.getByRole('button', { name: '계속 편집' })).toBeFocused();
+  await reloadDialog.getByRole('button', { name: '계속 편집' }).click();
+  await expect(limit).toHaveValue('4');
+  await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
+  await page.route('**/api/illustration-settings', async (route) => {
+    if (route.request().method() === 'GET')
+      await route.fulfill({ status: 503, body: 'unavailable' });
+    else await route.continue();
+  });
+  await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
+  await expect(reloadDialog.getByRole('alert')).toContainText('설정을 불러오지 못했어요');
+  await expect(limit).toHaveValue('4');
+  await page.unroute('**/api/illustration-settings');
+  await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
+  await expect(section.getByLabel('자동 재시도 횟수', { exact: true })).toHaveValue('3');
+  await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
+  await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
+});

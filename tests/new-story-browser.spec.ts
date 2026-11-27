@@ -556,3 +556,60 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
     0
   );
 });
+
+{
+  const greetings = 1;
+  test(`NSQ01 quick chat opens with ${greetings} authored greetings and saved defaults without generation`, async ({
+    page,
+    request,
+  }, info) => {
+    const { bot, persona, model } = await quickChatFixture(request, greetings);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**/api/bots/${bot.id}/defaults`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    const admissions: string[] = [],
+      executions: string[] = [];
+    page.on('request', (item) => {
+      if (item.method() !== 'POST') return;
+      if (/\/api\/chats$/.test(item.url())) admissions.push(item.url());
+      if (/\/(?:runs|candidate|translation)$/.test(item.url())) executions.push(item.url());
+    });
+    try {
+      await page.goto('/');
+      await openQuickChat(page, bot);
+      const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+      await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toHaveCount(
+        0
+      );
+      await expect(dialog.getByText('새 채팅을 여는 중이에요…', { exact: true })).toBeVisible();
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`quick-chat-loading-${greetings}.png`) });
+      const admitted = page.waitForResponse(
+        (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
+      );
+      release();
+      const response = await admitted;
+      expect(response.ok()).toBe(true);
+      const chat = (await response.json()) as Chat;
+      await expect(dialog).toBeHidden();
+      const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+      expect(detail.profile!.packageAttachments).toEqual([
+        { id: bot.id, revision: bot.revision, role: 'bot' },
+        { id: persona.id, revision: persona.revision, role: 'persona' },
+      ]);
+      expect(detail.profile!.routes.main).toEqual({ id: model.id });
+      await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
+      expect(admissions).toHaveLength(1);
+      expect(executions).toEqual([]);
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`quick-chat-open-${greetings}.png`) });
+    } finally {
+      release();
+    }
+  });
+}
