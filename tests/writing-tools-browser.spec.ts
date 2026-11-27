@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { openChatMenu } from './ui-navigation.js';
 
 for (const width of [412]) {
@@ -41,7 +42,8 @@ for (const width of [412]) {
     const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });
     await expect(lore).toBeVisible();
     await expect(lore).toContainText('이 요청에는 로어 포함 기록이 없어요.');
-    await page.screenshot({ path: info.outputPath(`last-scene-lore-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`last-scene-lore-${width}.png`) });
     await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
     await expect(composer).toHaveValue('이 요청 초안은 그대로 남겨요.');
     await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
@@ -57,7 +59,8 @@ for (const width of [412]) {
     await dialog.getByRole('combobox', { name: '장면 범위', exact: true }).selectOption('range');
     await dialog.getByRole('combobox', { name: '끝 장면', exact: true }).selectOption('1');
     await expect(dialog.getByRole('alert')).toHaveCount(0);
-    await page.screenshot({ path: info.outputPath(`manuscript-export-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`manuscript-export-${width}.png`) });
     const nextDownload = page.waitForEvent('download');
     await dialog.getByRole('button', { name: 'Markdown 다운로드', exact: true }).click();
     const download = await nextDownload;

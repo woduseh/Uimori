@@ -4,6 +4,7 @@ import type { ResponseStreamPage } from '../core/response-stream.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 test.setTimeout(60000);
 
@@ -201,5 +202,6 @@ test('DISPLAY main complete mode waits for the canonical source across refresh a
   expect(reads).toBe(previous);
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).sources).toEqual(seeded.sources);
-  await page.screenshot({ path: info.outputPath('complete-main-canonical-source.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('complete-main-canonical-source.png') });
 });

@@ -2,6 +2,7 @@ import { test, expect, type Locator } from '@playwright/test';
 import { navigationAction, selectSettingsSection, visibleNavigation } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 test.setTimeout(60000);
 
@@ -94,14 +95,15 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
         'false'
       );
       await expect(result).toContainText('보라색 우산');
-      await page.screenshot({
-        path: info.outputPath(`search-${width}-resized-${resizedWidth}.png`),
-      });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`search-${width}-resized-${resizedWidth}.png`),
+        });
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath(`search-${width}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`search-${width}.png`) });
     await result.getByRole('button', { name: '번역 장면 열기', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(page.locator('[data-testid="source"]').first()).toHaveAttribute(
@@ -110,7 +112,8 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     );
     await expect(page.getByRole('heading', { name: chat.title, exact: true })).toBeVisible();
     expect(new URL(page.url()).searchParams.get('mode')).toBe('translation');
-    await page.screenshot({ path: info.outputPath(`reader-target-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`reader-target-${width}.png`) });
     await visibleNavigation(page);
     const opener = page
       .getByRole('button', { name: '전체 채팅 검색', exact: true })
@@ -172,7 +175,8 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
       await expect(panel.getByLabel('성공본 보관 개수')).toHaveValue('6');
     }
     await panel.getByRole('button', { name: '다시 확인', exact: true }).click();
-    await page.screenshot({ path: info.outputPath(`backup-discard-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`backup-discard-${width}.png`) });
     await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
     await expect(confirmation).toBeHidden();
     await expect(panel.getByLabel('성공본 보관 개수')).toHaveValue('5');
@@ -204,14 +208,17 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath(`backups-${width}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`backups-${width}.png`) });
   }
   const scheduled = panel.getByLabel('서버 자동 백업', { exact: true });
   await scheduled.check();
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     await scheduled.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`scheduled-backup-configuration-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`scheduled-backup-configuration-${width}.png`),
+      });
   }
   await scheduled.uncheck();
 });
@@ -263,10 +270,11 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     const resume = phone.getByRole('button', { name: '다른 기기에서 이어 읽기', exact: true });
     await expect(resume).toBeVisible();
     expect(phone.url()).toBe(before);
-    await phone.screenshot({
-      path: info.outputPath('reading-position-banner.png'),
-      animations: 'disabled',
-    });
+    if (visualReview)
+      await phone.screenshot({
+        path: info.outputPath('reading-position-banner.png'),
+        animations: 'disabled',
+      });
     await phone.getByRole('button', { name: '읽기 위치 안내 닫기', exact: true }).click();
     const refreshPosition = async () => {
       const refreshed = phone.waitForResponse(
@@ -308,7 +316,8 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     await refreshPosition();
     await expect(resume).toBeHidden();
     await expect(phone.getByRole('status', { name: '읽기 위치 동기화', exact: true })).toBeHidden();
-    await phone.screenshot({ path: info.outputPath('real-cross-device-resume.png') });
+    if (visualReview)
+      await phone.screenshot({ path: info.outputPath('real-cross-device-resume.png') });
   } finally {
     release();
     await second.close();
@@ -337,7 +346,7 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
   await expect(list.getByRole('region', { name: '이 채팅의 책갈피' })).toContainText(
     '이 대목에서 다시 이어 쓸 것'
   );
-  await page.screenshot({ path: info.outputPath('bookmarks-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('bookmarks-desktop.png') });
   await list.getByRole('button', { name: '비 오는 장면', exact: true }).click();
   await expect(list).not.toBeVisible();
   expect(new URL(page.url()).searchParams.get('source')).toBe(detail.sources[5].id);
@@ -430,7 +439,7 @@ test('PWUI04 real loopback usage receipts appear in period, model and purpose ta
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true
       );
-      await page.screenshot({ path: info.outputPath(`usage-${width}.png`) });
+      if (visualReview) await page.screenshot({ path: info.outputPath(`usage-${width}.png`) });
     }
     expect(calls).toBe(2);
   } finally {
@@ -499,7 +508,7 @@ test('PWUI05 app installation is explicit, registers a cache-free worker and nev
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath(`pwa-install-${width}.png`) });
+    if (visualReview) await page.screenshot({ path: info.outputPath(`pwa-install-${width}.png`) });
   }
   await context.setOffline(true);
   const offline = await page.evaluate(async () => {

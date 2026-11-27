@@ -14,6 +14,7 @@ import {
   openSourceActions,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
@@ -358,10 +359,11 @@ test('P09 copying a scene creates an independent chat and keeps each tab draft',
       exact: true,
     });
     await expect(copyScene).toBeVisible();
-    await page.screenshot({
-      path: info.outputPath('scene-copy-menu-412.png'),
-      animations: 'disabled',
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath('scene-copy-menu-412.png'),
+        animations: 'disabled',
+      });
     await copyScene.click();
     const response = await copiedResponse;
     expect(response.ok(), await response.text()).toBe(true);

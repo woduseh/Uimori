@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Locator } from '@playwright/
 import { randomUUID } from 'node:crypto';
 import type { ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 const original = '문은 열려 있었다.\n미라는 슬픔을 느꼈다.\n바람이 지나갔다.';
 const selected = '미라는 슬픔을 느꼈다.';
@@ -139,7 +140,8 @@ for (const width of [360]) {
     if (width <= 760)
       await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeHidden();
     await scene.getByLabel('앞뒤 문단만 문맥으로 보내기', { exact: true }).check();
-    await page.screenshot({ path: info.outputPath(`selected-revision-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`selected-revision-${width}.png`) });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );

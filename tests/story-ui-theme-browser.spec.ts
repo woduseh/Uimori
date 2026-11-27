@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 import type { ThemeCatalog } from '../core/themes.js';
 import type { ChatDetail, Run } from '../core/types.js';
@@ -7,7 +8,7 @@ import type { ChatDetail, Run } from '../core/types.js';
 test('creator previews, saves and applies a bot Story UI theme without changing the app theme', async ({
   page,
   request,
-}) => {
+}, info) => {
   const created = await postFixtureChat(request, { data: { title: 'Observatory Story UI' } });
   const chat = await created.json();
   const configured = await request.patch(`/api/chats/${chat.id}/settings`, {
@@ -95,5 +96,6 @@ test('creator previews, saves and applies a bot Story UI theme without changing 
   await expect(send).toBeVisible();
   await expect(send).not.toHaveCSS('background-color', 'rgb(214, 183, 237)');
   expect(await send.evaluate((element) => element.closest('[data-story-ui-custom]'))).toBeNull();
-  await page.screenshot({ path: 'output/story-ui-custom-theme.png', fullPage: true });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('story-ui-custom-theme.png'), fullPage: true });
 });

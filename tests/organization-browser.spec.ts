@@ -303,14 +303,14 @@ test('PIN01 chats pinned from either menu lead both sidebar tabs in pin order, s
   await expect(pinnedRows).toHaveCount(2);
   await expect(pinnedRows.locator('strong')).toHaveText([second.title, first.title]);
   await expect(nav.locator(`.activity-nav-chat-row[data-chat-id="${second.id}"]`)).toHaveCount(1);
-  await page.screenshot({ path: info.outputPath('pinned-activity.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('pinned-activity.png') });
 
   await page.reload();
   const restored = page.getByTestId('bot-navigation').filter({ visible: true });
   await restored.getByRole('tab', { name: '봇', exact: true }).click();
   const restoredRows = restored.locator('[data-activity-section="pinned"] [data-pinned-chat-id]');
   await expect(restoredRows.locator('strong')).toHaveText([second.title, first.title]);
-  await page.screenshot({ path: info.outputPath('pinned-bots.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('pinned-bots.png') });
   await restoredRows.filter({ hasText: first.title }).locator('.activity-nav-link').click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(first.id);
 

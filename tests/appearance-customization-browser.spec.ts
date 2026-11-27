@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
 async function openAppearance(page: Page, url = '/') {
@@ -90,7 +91,11 @@ for (const width of [412]) {
     await expect(choice).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
     await manager.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`custom-palette-${width}.png`), fullPage: true });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`custom-palette-${width}.png`),
+        fullPage: true,
+      });
     await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
     await page.getByRole('button', { name: '팔레트 기본값으로', exact: true }).click();
     for (const name of [title, `${title} imported`]) {
@@ -213,10 +218,12 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   await expect.poll(() => cssVariable(page, '--app-font-family')).toContain('uimori-font-');
   await expect.poll(() => cssVariable(page, '--reading-font-family')).toContain('uimori-font-');
   await fonts.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('uploaded-font-desktop.png'), fullPage: true });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('uploaded-font-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 412, height: 1000 });
   await fonts.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('uploaded-font-mobile.png'), fullPage: true });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('uploaded-font-mobile.png'), fullPage: true });
   await page.route(`**/api/fonts/${font.id}/file`, (route) =>
     route.fulfill({ status: 503, body: 'synthetic font unavailable' })
   );

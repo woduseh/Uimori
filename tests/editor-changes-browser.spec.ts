@@ -1,5 +1,4 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -13,7 +12,6 @@ import {
 } from './ui-navigation.js';
 import { expectCodeFieldValue } from './code-field.js';
 
-const SHOTS = 'output/change-review';
 const regexOut = [
   '<div class="status">',
   '  <span>{{getvar::mood}}</span>',
@@ -69,13 +67,12 @@ async function openBot(page: Page, title: string) {
 async function capture(page: Page, name: string, colorScheme: 'light' | 'dark' = 'light') {
   if (!visualReview) return;
   await page.emulateMedia({ colorScheme });
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
+  await shot(page, name);
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
 async function shot(page: Page, name: string) {
-  mkdirSync(SHOTS, { recursive: true });
-  await page.screenshot({ path: `${SHOTS}/${name}.png` });
+  if (visualReview) await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
 }
 
 async function editLore(page: Page, name: string, content: string) {

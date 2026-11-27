@@ -1,6 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
@@ -113,7 +114,8 @@ test('SHORTCUT08 shortcuts can be rebound, validated, persisted in browser stora
       .locator('.shortcut-settings-row', { hasText: '왼쪽 사이드바 접기와 펼치기' })
       .locator('kbd')
   ).toHaveText('Alt+B');
-  await page.screenshot({ path: test.info().outputPath('shortcut-settings.png') });
+  if (visualReview)
+    await page.screenshot({ path: test.info().outputPath('shortcut-settings.png') });
 
   await detail.getByRole('button', { name: '목록으로', exact: true }).click();
   await expect(displaySection).toContainText('1개 변경됨');

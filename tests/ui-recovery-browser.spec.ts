@@ -7,6 +7,7 @@ import { readRisuPresetFile } from '../server/risu-preset-file.js';
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { visualReview } from './fixtures/visual-review.js';
 import {
   editLibraryContent,
   editorSectionNames,
@@ -292,9 +293,10 @@ for (const viewport of viewports) {
         }
       }
       await editorFits(page, editor, save, 'fill');
-      await page.screenshot({
-        path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
-      });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
+        });
 
       await rawView.click();
       raw = definitions.getByLabel('토글 정의 소스', { exact: true });
@@ -401,7 +403,8 @@ for (const viewport of viewports) {
       ).toBeDisabled();
       await page.keyboard.press('Escape');
       await editorFits(page, editor, save);
-      await page.screenshot({ path: info.outputPath(`bot-basic-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`bot-basic-${viewport.name}.png`) });
 
       await selectEditorSection(editor, '첫 메시지');
       await editor.getByLabel('기본 첫 메시지', { exact: true }).fill(opening);
@@ -410,7 +413,8 @@ for (const viewport of viewports) {
       await selectEditorSection(editor, '첫 메시지');
       await expectCodeFieldValue(editor.getByLabel('기본 첫 메시지', { exact: true }), opening);
       await editorFits(page, editor, save);
-      await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 
       const sections = await editorSectionNames(editor);
       for (const label of [
@@ -426,7 +430,10 @@ for (const viewport of viewports) {
 
       await selectEditorSection(editor, '배경 HTML과 CSS');
       await studioSectionFits(page, editor);
-      await page.screenshot({ path: info.outputPath(`bot-advanced-display-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`bot-advanced-display-${viewport.name}.png`),
+        });
 
       await selectEditorSection(editor, '함께 쓰는 모듈');
       await studioSectionFits(page, editor);
@@ -459,7 +466,10 @@ for (const viewport of viewports) {
       await moduleListError.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await expect(moduleListError).toHaveCount(0);
       await expect(modulePicker).toBeEnabled();
-      await page.screenshot({ path: info.outputPath(`bot-advanced-modules-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`bot-advanced-modules-${viewport.name}.png`),
+        });
 
       const moduleDialogErrors: string[] = [];
       const recordConsoleError = (message: { type(): string; text(): string }) => {
@@ -482,9 +492,10 @@ for (const viewport of viewports) {
       expect(dialogBounds!.y).toBeGreaterThanOrEqual(0);
       expect(dialogBounds!.x + dialogBounds!.width).toBeLessThanOrEqual(viewport.width + 1);
       expect(dialogBounds!.y + dialogBounds!.height).toBeLessThanOrEqual(viewport.height + 1);
-      await page.screenshot({
-        path: info.outputPath(`bot-advanced-module-picker-${viewport.name}.png`),
-      });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`bot-advanced-module-picker-${viewport.name}.png`),
+        });
       await page.keyboard.press('Escape');
       await expect(moduleDialog).toBeHidden();
       await expect(modulePicker).toBeFocused();
@@ -494,7 +505,10 @@ for (const viewport of viewports) {
 
       await selectEditorSection(editor, '트리거 / Lua');
       await studioSectionFits(page, editor);
-      await page.screenshot({ path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`),
+        });
       await editor.getByLabel('트리거 이름', { exact: true }).fill('Edited arrival trigger');
       await editor.getByLabel('Lua 소스', { exact: true }).fill('return "edited"');
       await editor.getByText('실행 조건과 순서 (원문 편집)', { exact: true }).click();
@@ -523,7 +537,8 @@ for (const viewport of viewports) {
       }
       await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited display {{char}}');
       await studioSectionFits(page, editor);
-      await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
 
       await selectEditorSection(editor, 'JSON 소스');
       const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
@@ -551,7 +566,8 @@ for (const viewport of viewports) {
       expect(saved.package.nativeRisu.card).toMatchObject({ name: editedName, first_mes: opening });
       await expect(editor.locator('.resource-editor-status').getByRole('status')).toBeEmpty();
       await editorFits(page, editor, save);
-      await page.screenshot({ path: info.outputPath(`bot-saved-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`bot-saved-${viewport.name}.png`) });
 
       await openMenu(editor, '자료 메뉴');
       const exportButton = editor.getByRole('button', { name: 'CHARX 내보내기', exact: true });
@@ -642,11 +658,13 @@ for (const viewport of viewports) {
       await selectEditorSection(editor, '구성');
       await expectCodeFieldValue(editor.getByLabel('1번 프롬프트 본문', { exact: true }), body);
       await editorFits(page, editor, save);
-      await page.screenshot({ path: info.outputPath(`preset-body-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`preset-body-${viewport.name}.png`) });
 
       await selectEditorSection(editor, '정규식');
       await editor.getByLabel('정규식 바꿀 내용', { exact: true }).fill('Edited regex {{user}}');
-      await page.screenshot({ path: info.outputPath(`preset-regex-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`preset-regex-${viewport.name}.png`) });
       await selectEditorSection(editor, '구성');
 
       const responsePromise = nextSave(page);
@@ -666,7 +684,8 @@ for (const viewport of viewports) {
       ).toBeVisible();
       await expect(save).toBeDisabled();
       await editorFits(page, editor, save);
-      await page.screenshot({ path: info.outputPath(`preset-saved-${viewport.name}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`preset-saved-${viewport.name}.png`) });
 
       await openMenu(editor, '프롬프트 관리');
       const exportButton = editor.getByRole('button', { name: 'RISUP 내보내기', exact: true });

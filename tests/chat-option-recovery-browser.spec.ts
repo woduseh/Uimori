@@ -4,6 +4,7 @@ import type { PromptWorkspace } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 
 preservePromptWorkspace();
@@ -158,7 +159,10 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   await expect(
     dialog.getByRole('button', { name: '초안 버리고 저장본 불러오기', exact: true })
   ).toBeVisible();
-  await page.screenshot({ path: info.outputPath('chat-option-explicit-recovery-review-1440.png') });
+  if (visualReview)
+    await page.screenshot({
+      path: info.outputPath('chat-option-explicit-recovery-review-1440.png'),
+    });
   await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(oneoffTone).toHaveValue('다음 생성 문체');

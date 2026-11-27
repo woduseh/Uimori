@@ -12,6 +12,7 @@ import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { loopbackProvider, sse } from './fixtures/loopback-provider.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 preservePromptWorkspace();
 
@@ -167,7 +168,7 @@ test('QUEUE01 a request queued during a run is sent once after the run completes
     await composer(page).press('Control+Enter');
     await expect(page.getByText('이미 예약한 요청이 있어요.', { exact: false })).toBeVisible();
     await expect(composer(page)).toHaveValue('다음에 쓸 메모');
-    await page.screenshot({ path: info.outputPath('queued-request-1280.png') });
+    if (visualReview) await page.screenshot({ path: info.outputPath('queued-request-1280.png') });
     live.finish();
     await expect.poll(() => sent).toEqual(['계속 써 주세요.']);
     await expect(queued(page)).toHaveCount(0);

@@ -2,12 +2,13 @@ import { expect, test } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import type { ChatDetail, Run } from '../core/types.js';
 import { parseStoryUi } from '../core/story-ui.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { openHelper } from './ui-navigation.js';
 
 test('STORYUI generated source renders in the compiled app and submits a short continuation', async ({
   page,
   request,
-}) => {
+}, info) => {
   const created = await postFixtureChat(request, { data: { title: 'Story UI generated scene' } });
   const chat = await created.json();
   const saved = await request.patch(`/api/chats/${chat.id}/settings`, {
@@ -87,7 +88,8 @@ test('STORYUI generated source renders in the compiled app and submits a short c
   expect(after.sources.find((source) => source.id === before.chat.headRevision)?.text).toBe(
     before.sources.find((source) => source.id === before.chat.headRevision)?.text
   );
-  await page.screenshot({ path: 'output/story-ui-app.png', fullPage: true });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('story-ui-app.png'), fullPage: true });
 });
 
 test('STORYUI the status tab shows the latest pinned block up to the scene being read', async ({
@@ -160,7 +162,8 @@ test('STORYUI the status tab shows the latest pinned block up to the scene being
     .locator('.story-ui')
     .evaluate((node) => getComputedStyle(node).backgroundColor);
   await expect(body).toHaveCSS('background-color', blockPaper);
-  await page.screenshot({ path: info.outputPath('story-board-second-scene.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('story-board-second-scene.png') });
   await scrollTo(scenes[1]);
   await expect(board.getByText('HP 10', { exact: true })).toBeVisible();
   await board.getByRole('button', { name: '이야기 현황 닫기', exact: true }).click();

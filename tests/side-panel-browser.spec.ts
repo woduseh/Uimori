@@ -3,6 +3,7 @@ import type { PromptWorkspace } from '../core/product.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 preservePromptWorkspace();
 
@@ -103,7 +104,7 @@ test('SIDEPANEL01 outline and writing options share the right panel and keep the
   const intent = outline.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
   await intent.fill('본문을 보면서 고친 플롯 초안');
   expect(await panelWidth(page, '.story-workspace')).toBeGreaterThanOrEqual(768);
-  await page.screenshot({ path: info.outputPath('outline-tab-1440.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('outline-tab-1440.png') });
 
   await outline.getByRole('tab', { name: '창작 옵션', exact: true }).click();
   const options = page.locator('#chat-prompt-options');
@@ -133,7 +134,7 @@ test('SIDEPANEL01 outline and writing options share the right panel and keep the
   await expect(helper).toBeVisible();
   await expect(helper.getByRole('tab')).toHaveCount(0);
   await expect(helper.getByRole('button', { name: '도우미 닫기', exact: true })).toBeVisible();
-  await page.screenshot({ path: info.outputPath('outline-workspace-1440.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('outline-workspace-1440.png') });
   await outline.getByRole('button', { name: '플롯 닫기', exact: true }).click();
   await expect(outline).toHaveClass(/outline-sidecar/u);
   await expect(outline.getByRole('tab', { name: '플롯', exact: true })).toHaveAttribute(

@@ -15,6 +15,7 @@ import { readChatVariables } from '../server/chat-variables.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { RisuImportResult } from '../core/risu-import.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction } from './ui-navigation.js';
 import {
   DESKTOP_WIDTH,
@@ -25,7 +26,6 @@ import {
 
 const sampleRoot = process.env.UIMORI_RISU_SAMPLE_ROOT;
 const presetPath = process.env.UIMORI_RISU_SAMPLE_PRESET;
-const visualReview = process.env.UIMORI_VISUAL_REVIEW === '1';
 test.use({ trace: 'off', screenshot: 'off' });
 const cases = [
   {

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createReadingChat } from './fixtures/personal-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction, selectSettingsSection, sourceAction } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 
@@ -147,7 +148,8 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    await page.screenshot({ path: info.outputPath(`push-settings-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`push-settings-${width}.png`) });
   }
   await enabled.click();
   await expect(enabled).not.toBeChecked();
@@ -201,7 +203,8 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
   await expect(banner.getByRole('button', { name: '알림으로 이동', exact: true })).toBeDisabled();
   expect(page.url()).toBe(before);
   await expect(editor).toHaveValue('저장하지 않은 원고 초안');
-  await page.screenshot({ path: info.outputPath('notification-edit-preserved.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('notification-edit-preserved.png') });
   await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
   await page
     .getByRole('alertdialog', { name: '편집 취소', exact: true })

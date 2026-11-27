@@ -5,6 +5,7 @@ import type { Chat } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
 
 preservePromptWorkspace();
@@ -170,7 +171,8 @@ test('DECISION settings chat prompt option conflict review preserves local value
   }
   await expect(dialog.getByLabel('현재 저장본')).toContainText('다른 창의 저장 문체');
   await expect(dialog).toHaveCSS('opacity', '1');
-  await page.screenshot({ path: test.info().outputPath('option-review-chat-412.png') });
+  if (visualReview)
+    await page.screenshot({ path: test.info().outputPath('option-review-chat-412.png') });
   await expect(dialog.getByLabel('현재 저장본')).not.toContainText('보존할 내 문체');
   await dialog.getByRole('button', { name: '채팅 옵션 저장본 확인 닫기', exact: true }).click();
   await expect(field).toHaveValue('보존할 내 문체');

@@ -12,6 +12,7 @@ import type {
 } from '../core/illustration.js';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { visualReview } from './fixtures/visual-review.js';
 import {
   navigationAction,
   openChatSettings,
@@ -272,7 +273,7 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
   expect(
     (await illustrations(request, chat.id)).filter((item) => item.task === 'render')
   ).toHaveLength(1);
-  await page.screenshot({ path: info.outputPath('illustration-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('illustration-desktop.png') });
   expect((await detail(request, chat.id)).sources[0].text).toBe(source.text);
 });
 
@@ -318,7 +319,8 @@ for (const width of [360]) {
     await manual.getByRole('button', { name: '삽화 만들기', exact: true }).click();
     await expect(manual.getByRole('alert')).toHaveText('요청을 처리할 수 없어요. (400)');
     await expect(direction).toHaveValue(directionText);
-    await page.screenshot({ path: info.outputPath(`illustration-direction-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`illustration-direction-${width}.png`) });
     await page.keyboard.press('Escape');
     await openManual();
     await expect(direction).toHaveValue(directionText);
@@ -362,7 +364,8 @@ for (const width of [360]) {
     await redraw.getByRole('button', { name: '현재 설정으로 다시 그리기', exact: true }).click();
     await expect(redraw.getByRole('alert')).toHaveText('요청을 처리할 수 없어요. (400)');
     await expect(changes).toHaveValue(changesText);
-    await page.screenshot({ path: info.outputPath(`illustration-redraw-${width}.png`) });
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`illustration-redraw-${width}.png`) });
     rejectRedraw = false;
     await redraw.getByRole('button', { name: '현재 설정으로 다시 그리기', exact: true }).click();
     await expect(redraw).toBeHidden();
@@ -481,7 +484,7 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
     )
   ).toBe(after);
   await hero.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('storyboard-desktop.png') });
+  if (visualReview) await page.screenshot({ path: info.outputPath('storyboard-desktop.png') });
   const pages = page.context().pages().length;
   await firstInline.scrollIntoViewIfNeeded();
   const preview = firstInline.getByRole('button', { name: '삽화 크게 보기', exact: true });
@@ -491,7 +494,8 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   await expect(enlarged).toHaveCSS('opacity', '1');
   expect((await enlarged.boundingBox())!.width).toBeGreaterThan(1000);
   expect(page.context().pages()).toHaveLength(pages);
-  await page.screenshot({ path: info.outputPath('illustration-modal-desktop.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('illustration-modal-desktop.png') });
   await page.keyboard.press('Escape');
   await expect(enlarged).toBeHidden();
   await expect(preview).toBeFocused();
@@ -620,10 +624,11 @@ for (const width of [MOBILE_WIDTH]) {
     expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
       true
     );
-    await page.screenshot({
-      path: info.outputPath(`illustration-default-appearances-${width}.png`),
-      fullPage: true,
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`illustration-default-appearances-${width}.png`),
+        fullPage: true,
+      });
     const chatResponse = await request.post('/api/chats', {
       data: { title: `외형 상속 ${width}`, botId: bot.id },
     });
@@ -725,5 +730,6 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
   await expect(section.getByLabel('자동 재시도 횟수', { exact: true })).toHaveValue('3');
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
-  await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
 });

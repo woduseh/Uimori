@@ -6,6 +6,7 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 preservePromptWorkspace();
 
@@ -85,7 +86,8 @@ test('REQUESTPREVIEW current composer settings are estimated without generation'
       await expect(preview).toContainText('65,536');
       await expect(preview.getByRole('meter')).toHaveCount(1);
       expect(requests.at(-1)?.request).toBe(draft);
-      await page.screenshot({ path: info.outputPath(`request-preview-${width}.png`) });
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`request-preview-${width}.png`) });
       await dialog.getByRole('button', { name: '다음 요청 미리보기 닫기', exact: true }).click();
       await expect(composer).toHaveValue(draft);
       await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();

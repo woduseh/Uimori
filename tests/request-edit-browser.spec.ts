@@ -2,6 +2,7 @@ import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   return (await request.get(`/api/chats/${id}`)).json();
@@ -155,10 +156,11 @@ for (const width of [MOBILE_WIDTH]) {
     await page.reload();
     await edit.click();
     await expect(field).toHaveValue('수정한 합성 요청');
-    await page.screenshot({
-      path: info.outputPath(`request-edit-${width}.png`),
-      animations: 'disabled',
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`request-edit-${width}.png`),
+        animations: 'disabled',
+      });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );

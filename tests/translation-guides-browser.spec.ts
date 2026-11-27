@@ -2,6 +2,7 @@ import { test, expect, type Page, type APIRequestContext } from '@playwright/tes
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { readTranslationGuide } from '../core/translation-guide.js';
 import { navigationAction, selectEditorSection, discardEdits } from './ui-navigation.js';
 
@@ -61,10 +62,11 @@ for (const width of [412]) {
     });
     expect(saved.text).toBe(original.text);
     await page.getByLabel('봇 번역 지침', { exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: info.outputPath(`translation-guide-${width}.png`),
-      fullPage: true,
-    });
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`translation-guide-${width}.png`),
+        fullPage: true,
+      });
     const editor = page.getByRole('region', { name: '봇 번역 지침 편집기', exact: true });
     expect(await editor.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
     await page.getByRole('button', { name: '표기 추가', exact: true }).click();

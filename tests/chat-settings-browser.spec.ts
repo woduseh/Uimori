@@ -6,6 +6,7 @@ import type { StoryGuideDetail } from '../core/story-guide.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
@@ -235,7 +236,8 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     '가상의 항구 이야기'
   );
   await expect(search).toBeChecked();
-  await page.screenshot({ path: info.outputPath('story-guide-search-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('story-guide-search-mobile.png') });
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   const discard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
   await expect(discard).toBeVisible();

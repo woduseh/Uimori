@@ -1,4 +1,5 @@
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderActivity, Run } from '../core/types.js';
 
@@ -175,7 +176,8 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
   expect(state.historyReads).toEqual(['first', 'synthetic-older-page']);
   await expect(dialog.locator('[data-activity-id="older-failure-11"]')).toBeVisible();
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: info.outputPath('activity-notifications-mobile.png') });
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('activity-notifications-mobile.png') });
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
   await expect(rows).toHaveCount(0);
   await state.set([
