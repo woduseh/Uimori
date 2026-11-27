@@ -13,7 +13,8 @@ import {
   type PushInfo,
   type PushPreferences,
 } from '../core/push.js';
-import { api } from './api.js';
+import { personalWorkspaceEndpoints as endpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { pwaRegistration } from './pwa.js';
 import { browserClientId } from './browser-client.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
@@ -56,12 +57,7 @@ export function PushSettings() {
   const recheck = useRetryableEffect(() => {
     const controller = new AbortController();
     setError('');
-    void api<PushInfo>(
-      `/push?${new URLSearchParams({ clientId })}`,
-      undefined,
-      'GET',
-      controller.signal
-    )
+    void callEndpoint(endpoints.readPush, { clientId }, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
           setInfo(value);
@@ -90,7 +86,7 @@ export function PushSettings() {
         setWarning(uiMessage('outside.permissionDeclined'));
         return;
       }
-      const prepared = await api<PushInfo>('/push/prepare', { clientId });
+      const prepared = await callEndpoint(endpoints.preparePush, { clientId });
       if (!prepared.publicKey) throw new Error(uiMessage('outside.pushKeyFailure'));
       await pwaRegistration();
       const registration = await navigator.serviceWorker.ready;
@@ -112,10 +108,15 @@ export function PushSettings() {
         userVisibleOnly: true,
         applicationServerKey: key,
       });
-      const saved = await api<PushInfo>('/push/subscription', {
+      const { endpoint = '', keys, expirationTime } = subscription.toJSON();
+      const saved = await callEndpoint(endpoints.subscribePush, {
         clientId,
         expectedRevision: prepared.device?.revision ?? 0,
-        subscription: subscription.toJSON(),
+        subscription: {
+          endpoint,
+          keys: { p256dh: keys?.p256dh ?? '', auth: keys?.auth ?? '' },
+          expirationTime,
+        },
         preferences: prepared.device?.preferences ?? DEFAULT_PUSH_PREFERENCES,
       });
       setInfo(saved);
@@ -133,11 +134,10 @@ export function PushSettings() {
     setNotice('');
     setWarning('');
     try {
-      const saved = await api<PushInfo>(
-        '/push/subscription',
-        { clientId, expectedRevision: info.device.revision },
-        'DELETE'
-      );
+      const saved = await callEndpoint(endpoints.unsubscribePush, {
+        clientId,
+        expectedRevision: info.device.revision,
+      });
       setInfo(saved);
       setNotice(uiMessage('outside.pushOff'));
       try {
@@ -162,15 +162,11 @@ export function PushSettings() {
     setWarning('');
     try {
       setInfo(
-        await api<PushInfo>(
-          '/push/subscription',
-          {
-            clientId,
-            expectedRevision: info.device.revision,
-            preferences: { ...info.device.preferences, [key]: value },
-          },
-          'PUT'
-        )
+        await callEndpoint(endpoints.updatePush, {
+          clientId,
+          expectedRevision: info.device.revision,
+          preferences: { ...info.device.preferences, [key]: value },
+        })
       );
     } catch (caught) {
       setError((caught as Error).message);
@@ -185,7 +181,7 @@ export function PushSettings() {
     setNotice('');
     setWarning('');
     try {
-      await api('/push/test', { clientId });
+      await callEndpoint(endpoints.testPush, { clientId });
       setNotice(uiMessage('outside.testQueued'));
     } catch (caught) {
       setError((caught as Error).message);

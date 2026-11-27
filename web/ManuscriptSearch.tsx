@@ -8,7 +8,8 @@ import type {
 } from '../core/manuscript-search.js';
 import type { Chat } from '../core/types.js';
 import type { Library, ChatFolder } from '../core/product.js';
-import { api } from './api.js';
+import { personalWorkspaceEndpoints as endpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { CheckIcon, SearchIcon } from './ui-icons.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -88,10 +89,9 @@ export function ManuscriptSearchPanel({
     setBusy(true);
     setError('');
     try {
-      const next = await api<ManuscriptSearchResult>(
-        '/search',
+      const next = await callEndpoint(
+        endpoints.searchManuscripts,
         { ...value, chatId, botId, cursor, limit: 20 },
-        'POST',
         controller.signal
       );
       if (controller.signal.aborted) return;

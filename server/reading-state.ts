@@ -7,11 +7,19 @@ import type {
   ReadingPositions,
   PortableBookmark,
 } from '../core/reading-state.js';
-import { BOOKMARK_NOTE_MAX_CHARS, BOOKMARK_TITLE_MAX_CHARS } from '../core/reading-state.js';
 import type { ReaderTarget } from '../core/reader-target.js';
-import { fields, record, text, HttpError } from './request-validation.js';
+import { personalWorkspaceEndpoints } from '#contracts';
+import {
+  type AddBookmark,
+  personalWorkspaceOperations,
+  type ReaderTargetInput,
+  type SaveReadingPosition,
+  type UpdateBookmark,
+} from '#contracts/operations';
+import { fields, record, HttpError } from './request-validation.js';
 import type { Store } from './store.js';
-import { AppError } from './app-errors.js';
+import { AppError, assertRevision } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 
 export function initReadingState(db: DatabaseSync) {
   db.exec(`
@@ -28,53 +36,24 @@ export function initReadingState(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS bookmarks_chat ON bookmarks(chat_id,created_at,id);
   `);
 }
-const bounded = (value: unknown, max: number, name: string, empty = false) => {
-  if (typeof value !== 'string' || value.length > max || (!empty && !value.trim()))
-    throw new HttpError(400, `Invalid ${name}`);
-  return value;
-};
-const client = (value: unknown) => text(value, 'browser ID', 100);
-export function validateReaderTarget(store: Store, chatId: string, value: unknown): ReaderTarget {
-  const body = record(value);
-  fields(body, [
-    'chatId',
-    'sourceId',
-    'representation',
-    'contentHash',
-    'blockAnchor',
-    'offsetRatio',
-  ]);
+function resolveReaderTarget(
+  store: Store,
+  chatId: string,
+  target: ReaderTargetInput
+): ReaderTarget {
   const chat = store.chat(chatId);
-  const sourceId = text(body.sourceId, 'source', 120);
   const member = store.db
     .prepare(`WITH RECURSIVE chain(id) AS (SELECT ? UNION SELECT s.parent_revision FROM sources s JOIN chain c ON c.id=s.id WHERE s.parent_revision IS NOT NULL)
     SELECT 1 FROM chain c JOIN sources s ON s.id=c.id WHERE c.id=? AND s.chat_id=?`)
-    .get(chat.headRevision, sourceId, chatId);
+    .get(chat.headRevision, target.sourceId, chatId);
   if (!member) throw new AppError(404, 'READING_SCENE_NOT_FOUND');
-  if (!['original', 'translation'].includes(String(body.representation)))
-    throw new HttpError(400, 'Invalid reading representation');
-  if (
-    body.contentHash !== undefined &&
-    (typeof body.contentHash !== 'string' || !/^[a-f0-9]{64}$/.test(body.contentHash))
-  )
-    throw new HttpError(400, 'Invalid content hash');
-  if (
-    body.offsetRatio !== undefined &&
-    (typeof body.offsetRatio !== 'number' ||
-      !Number.isFinite(body.offsetRatio) ||
-      body.offsetRatio < 0 ||
-      body.offsetRatio > 1)
-  )
-    throw new HttpError(400, 'Invalid offset ratio');
   return {
     chatId,
-    sourceId,
-    representation: body.representation as ReaderTarget['representation'],
-    ...(body.contentHash !== undefined ? { contentHash: String(body.contentHash) } : {}),
-    ...(body.blockAnchor !== undefined
-      ? { blockAnchor: bounded(body.blockAnchor, 200, 'block anchor') }
-      : {}),
-    ...(body.offsetRatio !== undefined ? { offsetRatio: Number(body.offsetRatio) } : {}),
+    sourceId: target.sourceId,
+    representation: target.representation,
+    ...(target.contentHash !== undefined ? { contentHash: target.contentHash } : {}),
+    ...(target.blockAnchor !== undefined ? { blockAnchor: target.blockAnchor } : {}),
+    ...(target.offsetRatio !== undefined ? { offsetRatio: target.offsetRatio } : {}),
   };
 }
 function position(row: Record<string, unknown> | undefined): ReadingPosition | null {
@@ -88,35 +67,31 @@ function position(row: Record<string, unknown> | undefined): ReadingPosition | n
     : null;
 }
 export function readingPositions(store: Store, chatId: string, clientId: string): ReadingPositions {
-  const id = client(clientId);
   store.chat(chatId);
   return {
     own: position(
       store.db
         .prepare('SELECT * FROM reading_positions WHERE chat_id=? AND client_id=?')
-        .get(chatId, id)
+        .get(chatId, clientId)
     ),
     other: position(
       store.db
         .prepare(
           'SELECT * FROM reading_positions WHERE chat_id=? AND client_id!=? ORDER BY updated_at DESC,client_id LIMIT 1'
         )
-        .get(chatId, id)
+        .get(chatId, clientId)
     ),
   };
 }
-export function saveReadingPosition(store: Store, chatId: string, value: unknown): ReadingPosition {
-  const body = record(value);
-  fields(body, ['clientId', 'expectedRevision', 'target']);
-  const clientId = client(body.clientId);
+export function saveReadingPosition(
+  store: Store,
+  chatId: string,
+  { clientId, expectedRevision, target: requested }: Omit<SaveReadingPosition, 'chatId'>
+): ReadingPosition {
   return store.transaction(() => {
-    const target = validateReaderTarget(store, chatId, body.target);
     const old = readingPositions(store, chatId, clientId).own;
-    if (
-      !Number.isSafeInteger(body.expectedRevision) ||
-      body.expectedRevision !== (old?.revision ?? 0)
-    )
-      throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(old?.revision ?? 0, expectedRevision);
+    const target = resolveReaderTarget(store, chatId, requested);
     const now = new Date(
       Math.max(Date.now(), (old ? Date.parse(old.updatedAt) : 0) + 1)
     ).toISOString();
@@ -147,15 +122,13 @@ export function listBookmarks(store: Store, chatId: string): Bookmark[] {
     .all(chatId)
     .map(bookmark);
 }
-export function addBookmark(store: Store, chatId: string, value: unknown): Bookmark {
-  const body = record(value);
-  fields(body, ['id', 'target', 'title', 'note', 'quote']);
-  const id = client(body.id);
-  const title = bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, 'bookmark title');
-  const note = bounded(body.note ?? '', BOOKMARK_NOTE_MAX_CHARS, 'bookmark note', true);
-  const quote = bounded(body.quote ?? '', 300, 'bookmark quote', true);
+export function addBookmark(
+  store: Store,
+  chatId: string,
+  { id, target: requested, title, note, quote }: Omit<AddBookmark, 'chatId'>
+): Bookmark {
   return store.transaction(() => {
-    const target = validateReaderTarget(store, chatId, body.target);
+    const target = resolveReaderTarget(store, chatId, requested);
     const old = store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id);
     if (old) {
       if (
@@ -177,31 +150,31 @@ export function addBookmark(store: Store, chatId: string, value: unknown): Bookm
     return bookmark(store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id)!);
   });
 }
+function currentBookmark(store: Store, id: string, expectedRevision: number) {
+  const old = store.db.prepare('SELECT revision FROM bookmarks WHERE id=?').get(id);
+  if (!old) throw new AppError(404, 'BOOKMARK_NOT_FOUND');
+  assertRevision(Number(old.revision), expectedRevision);
+}
 export function updateBookmark(
   store: Store,
-  id: string,
-  value: unknown,
-  remove = false
-): Bookmark | { deleted: true } {
-  const body = record(value);
-  fields(body, remove ? ['expectedRevision'] : ['expectedRevision', 'title', 'note']);
+  { id, expectedRevision, title, note }: UpdateBookmark
+): Bookmark {
   return store.transaction(() => {
-    const old = store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id);
-    if (!old) throw new AppError(404, 'BOOKMARK_NOT_FOUND');
-    if (body.expectedRevision !== old.revision) throw new AppError(409, 'REVISION_CONFLICT');
-    if (remove) {
-      store.db.prepare('DELETE FROM bookmarks WHERE id=?').run(id);
-      return { deleted: true as const };
-    }
+    currentBookmark(store, id, expectedRevision);
     store.db
       .prepare('UPDATE bookmarks SET title=?,note=?,revision=revision+1,updated_at=? WHERE id=?')
-      .run(
-        bounded(body.title, BOOKMARK_TITLE_MAX_CHARS, 'bookmark title'),
-        bounded(body.note, BOOKMARK_NOTE_MAX_CHARS, 'bookmark note', true),
-        new Date().toISOString(),
-        id
-      );
+      .run(title, note, new Date().toISOString(), id);
     return bookmark(store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id)!);
+  });
+}
+export function deleteBookmark(
+  store: Store,
+  { id, expectedRevision }: { id: string; expectedRevision: number }
+): { deleted: true } {
+  return store.transaction(() => {
+    currentBookmark(store, id, expectedRevision);
+    store.db.prepare('DELETE FROM bookmarks WHERE id=?').run(id);
+    return { deleted: true as const };
   });
 }
 export function captureBookmarks(
@@ -281,10 +254,10 @@ export function restoreBookmarks(
       body.blockIndex !== undefined
     )
       anchor = source.blocks?.[Number(body.blockIndex)]?.anchor;
-    addBookmark(store, chatId, {
+    const parsed = personalWorkspaceOperations.addBookmark.input.safeParse({
+      chatId,
       id: randomUUID(),
       target: {
-        chatId,
         sourceId: source.id,
         representation: body.representation,
         ...(body.contentHash ? { contentHash: body.contentHash } : {}),
@@ -299,30 +272,32 @@ export function restoreBookmarks(
       note: body.note,
       quote: body.quote,
     });
+    if (!parsed.success) throw new AppError(400, 'CHAT_BACKUP_INVALID');
+    addBookmark(store, chatId, parsed.data);
   }
 }
 export function readingStateRoutes(app: FastifyInstance, store: Store) {
-  app.get<{ Params: { id: string }; Querystring: { clientId: string } }>(
-    '/api/chats/:id/reading-position',
-    (request) => {
-      fields(record(request.query), ['clientId']);
-      return readingPositions(store, request.params.id, request.query.clientId);
-    }
+  const endpoints = personalWorkspaceEndpoints;
+  const operations = personalWorkspaceOperations;
+  registerEndpoint(app, endpoints.readReadingPositions, operations.readReadingPositions, (input) =>
+    readingPositions(store, input.chatId, input.clientId)
   );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/reading-position', (request) =>
-    saveReadingPosition(store, request.params.id, request.body)
+  registerEndpoint(
+    app,
+    endpoints.saveReadingPosition,
+    operations.saveReadingPosition,
+    ({ chatId, ...input }) => saveReadingPosition(store, chatId, input)
   );
-  app.get<{ Params: { id: string } }>('/api/chats/:id/bookmarks', (request) => {
-    fields(record(request.query), []);
-    return listBookmarks(store, request.params.id);
-  });
-  app.post<{ Params: { id: string } }>('/api/chats/:id/bookmarks', (request) =>
-    addBookmark(store, request.params.id, request.body)
+  registerEndpoint(app, endpoints.listBookmarks, operations.listBookmarks, (input) =>
+    listBookmarks(store, input.chatId)
   );
-  app.patch<{ Params: { id: string } }>('/api/bookmarks/:id', (request) =>
-    updateBookmark(store, request.params.id, request.body)
+  registerEndpoint(app, endpoints.addBookmark, operations.addBookmark, ({ chatId, ...input }) =>
+    addBookmark(store, chatId, input)
   );
-  app.delete<{ Params: { id: string } }>('/api/bookmarks/:id', (request) =>
-    updateBookmark(store, request.params.id, request.body, true)
+  registerEndpoint(app, endpoints.updateBookmark, operations.updateBookmark, (input) =>
+    updateBookmark(store, input)
+  );
+  registerEndpoint(app, endpoints.deleteBookmark, operations.deleteBookmark, (input) =>
+    deleteBookmark(store, input)
   );
 }

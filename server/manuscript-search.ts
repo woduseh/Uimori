@@ -4,10 +4,11 @@ import type {
   ManuscriptSearchQuery,
   ManuscriptSearchResult,
   SearchIndexBatch,
-  SearchKind,
 } from '../core/manuscript-search.js';
-import { HttpError, fields, record, text } from './request-validation.js';
 import { AppError } from './app-errors.js';
+import { personalWorkspaceEndpoints } from '#contracts';
+import { type ManuscriptSearchInput, personalWorkspaceOperations } from '#contracts/operations';
+import { registerEndpoint } from './endpoint.js';
 import { foldSearchText } from './search-schema.js';
 import type { Store } from './store.js';
 
@@ -73,31 +74,26 @@ export class ManuscriptSearch {
       });
     });
   }
-  async search(value: unknown, signal?: AbortSignal): Promise<ManuscriptSearchResult> {
-    const body = record(value);
-    fields(body, ['query', 'scope', 'chatId', 'botId', 'kinds', 'cursor', 'limit']);
-    const query = text(body.query, 'search query', 500).trim();
-    if (!['workspace', 'chat', 'bot'].includes(String(body.scope)))
-      throw new HttpError(400, 'Invalid search scope');
-    if (
-      !Array.isArray(body.kinds) ||
-      !body.kinds.length ||
-      body.kinds.length > 3 ||
-      body.kinds.some((kind) => !['original', 'translation', 'request'].includes(kind))
-    )
-      throw new HttpError(400, 'Invalid search kinds');
-    const scope = body.scope as ManuscriptSearchQuery['scope'];
-    const chatId = scope === 'chat' ? text(body.chatId, 'chat', 120) : undefined;
-    const botId = scope === 'bot' ? text(body.botId, 'bot', 120) : undefined;
+  async search(
+    input: ManuscriptSearchInput,
+    signal?: AbortSignal
+  ): Promise<ManuscriptSearchResult> {
+    const { scope, kinds, limit = 20 } = input;
+    const chatId = scope === 'chat' ? input.chatId : undefined;
+    const botId = scope === 'bot' ? input.botId : undefined;
     if (chatId) this.store.chat(chatId);
     if (botId) this.store.organization.bot(botId);
-    const limit = body.limit === undefined ? 20 : Number(body.limit);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 50)
-      throw new HttpError(400, 'Invalid search page size');
-    const cursor = body.cursor == null ? null : text(body.cursor, 'cursor', 1500);
     return this.work(
       'search',
-      { query, scope, chatId, botId, kinds: body.kinds as SearchKind[], cursor, limit },
+      {
+        query: input.query.trim(),
+        scope,
+        chatId,
+        botId,
+        kinds,
+        cursor: input.cursor ?? null,
+        limit,
+      },
       signal
     );
   }
@@ -163,16 +159,21 @@ export class ManuscriptSearch {
   }
 }
 export function manuscriptSearchRoutes(app: FastifyInstance, service: ManuscriptSearch) {
-  app.post('/api/search', async (request, reply) => {
-    const controller = new AbortController();
-    const abort = () => {
-      if (!reply.raw.writableEnded) controller.abort();
-    };
-    reply.raw.once('close', abort);
-    try {
-      return await service.search(request.body, controller.signal);
-    } finally {
-      reply.raw.removeListener('close', abort);
+  registerEndpoint(
+    app,
+    personalWorkspaceEndpoints.searchManuscripts,
+    personalWorkspaceOperations.searchManuscripts,
+    async (input, _request, reply) => {
+      const controller = new AbortController();
+      const abort = () => {
+        if (!reply.raw.writableEnded) controller.abort();
+      };
+      reply.raw.once('close', abort);
+      try {
+        return await service.search(input, controller.signal);
+      } finally {
+        reply.raw.removeListener('close', abort);
+      }
     }
-  });
+  );
 }

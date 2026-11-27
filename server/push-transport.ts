@@ -1,7 +1,8 @@
 import { createHash, ECDH } from 'node:crypto';
 import { generateRequestDetails } from 'web-push';
 import type { PushEnvelope, PushSubscriptionData } from '../core/push.js';
-import { fields, record, HttpError } from './request-validation.js';
+import type { PushSubscriptionInput } from '#contracts/operations';
+import { HttpError } from './request-validation.js';
 import { AppError } from './app-errors.js';
 
 export type VapidKeys = { publicKey: string; privateKey: string };
@@ -41,19 +42,13 @@ export function pushEndpoint(value: unknown): URL {
     throw new AppError(400, 'PUSH_ENDPOINT_UNSUPPORTED');
   return url;
 }
-export function validatePushSubscription(value: unknown): PushSubscriptionData {
-  const body = record(value);
-  fields(body, ['endpoint', 'keys', 'expirationTime']);
-  const endpoint = pushEndpoint(body.endpoint).href;
-  const keys = record(body.keys);
-  fields(keys, ['p256dh', 'auth']);
-  const decode = (value: unknown, size: number) => {
-    if (
-      typeof value !== 'string' ||
-      value.length > 100 ||
-      !/^[a-z0-9_-]+={0,2}$/i.test(value) ||
-      Buffer.from(value, 'base64url').length !== size
-    )
+export function validatePushSubscription({
+  endpoint: requested,
+  keys,
+}: PushSubscriptionInput): PushSubscriptionData {
+  const endpoint = pushEndpoint(requested).href;
+  const decode = (value: string, size: number) => {
+    if (!/^[a-z0-9_-]+={0,2}$/i.test(value) || Buffer.from(value, 'base64url').length !== size)
       throw new HttpError(400, 'Invalid push subscription key');
     return Buffer.from(value, 'base64url');
   };

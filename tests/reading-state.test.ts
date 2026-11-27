@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import {
   addBookmark,
+  deleteBookmark,
   updateBookmark,
   listBookmarks,
   saveReadingPosition,
@@ -85,6 +86,13 @@ test('device-local last positions use CAS, accept backwards reading, and reject 
   expect(previous.updatedAt > saved.updatedAt).toBe(true);
   expect(() =>
     saveReadingPosition(store, chat.id, {
+      clientId: a,
+      expectedRevision: 1,
+      target: { ...target(other), chatId: chat.id },
+    })
+  ).toThrow('REVISION_CONFLICT');
+  expect(() =>
+    saveReadingPosition(store, chat.id, {
       clientId: b,
       expectedRevision: 0,
       target: { ...target(other), chatId: chat.id },
@@ -113,16 +121,17 @@ test('bookmarks preserve snapshots through edits, deduplicate an acknowledged cr
   store.editSource(source.id, { expectedRevision: 0, text: 'Changed scene' });
   expect(listBookmarks(store, chat.id)[0].target.contentHash).toBe(source.hash);
   expect(store.source(source.id).hash).not.toBe(source.hash);
-  const edited = updateBookmark(store, created.id, {
+  const edited = updateBookmark(store, {
+    id: created.id,
     expectedRevision: 1,
     title: 'New title',
     note: 'Revised',
   });
   expect(edited).toMatchObject({ revision: 2, title: 'New title' });
-  expect(() => updateBookmark(store, created.id, { expectedRevision: 1 }, true)).toThrow(
+  expect(() => deleteBookmark(store, { id: created.id, expectedRevision: 1 })).toThrow(
     'REVISION_CONFLICT'
   );
-  updateBookmark(store, created.id, { expectedRevision: 2 }, true);
+  deleteBookmark(store, { id: created.id, expectedRevision: 2 });
   expect(listBookmarks(store, chat.id)).toEqual([]);
   expect(store.source(source.id).text).toBe('Changed scene');
 });

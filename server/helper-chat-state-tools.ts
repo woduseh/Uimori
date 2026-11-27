@@ -24,7 +24,9 @@ import {
   BOOKMARK_TITLE_MAX_CHARS,
   type Bookmark,
 } from '../core/reading-state.js';
-import { addBookmark, listBookmarks, updateBookmark } from './reading-state.js';
+import { addBookmark, deleteBookmark, listBookmarks, updateBookmark } from './reading-state.js';
+import { personalWorkspaceOperations } from '#contracts/operations';
+import { parseInput } from './endpoint.js';
 import { readSceneContext, updateSceneContext } from './scene-context.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { sceneRequestLore } from './request-lore.js';
@@ -1032,12 +1034,17 @@ function changeBookmark(
   if (args.action === 'add') {
     fields(args, ['action', 'sourceId', 'representation', 'title', 'note']);
     const sourceId = text(args.sourceId, 'source ID', 100);
-    const saved = addBookmark(store, chatId, {
-      id: receiptUuid(receiptId),
-      target: { chatId, sourceId, representation: args.representation ?? 'original' },
-      title: args.title,
-      note: args.note ?? '',
-    });
+    const saved = addBookmark(
+      store,
+      chatId,
+      parseInput(personalWorkspaceOperations.addBookmark.input, {
+        chatId,
+        id: receiptUuid(receiptId),
+        target: { sourceId, representation: args.representation ?? 'original' },
+        title: args.title,
+        note: args.note ?? '',
+      })
+    );
     report({ kind: 'scene', id: sourceId, chatId, title: saved.title, revision: saved.revision });
     return { changed: true, bookmark: bookmarkView(saved) };
   }
@@ -1075,16 +1082,26 @@ function changeBookmark(
       },
     });
   if (args.action === 'delete') {
-    updateBookmark(store, id, { expectedRevision: args.expectedRevision }, true);
+    deleteBookmark(
+      store,
+      parseInput(personalWorkspaceOperations.deleteBookmark.input, {
+        id,
+        expectedRevision: args.expectedRevision,
+      })
+    );
     keep(null);
     report({ kind: 'chat', id: chatId, title: chat.title, revision: current.revision });
     return { changed: true, deleted: id };
   }
-  const saved = updateBookmark(store, id, {
-    expectedRevision: args.expectedRevision,
-    title: args.title ?? current.title,
-    note: args.note ?? current.note,
-  }) as Bookmark;
+  const saved = updateBookmark(
+    store,
+    parseInput(personalWorkspaceOperations.updateBookmark.input, {
+      id,
+      expectedRevision: args.expectedRevision,
+      title: args.title ?? current.title,
+      note: args.note ?? current.note,
+    })
+  );
   keep({ title: saved.title, note: saved.note });
   report({
     kind: 'scene',

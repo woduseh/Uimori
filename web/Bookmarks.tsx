@@ -18,7 +18,8 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { TransientNotice } from './TransientNotice.js';
-import { api } from './api.js';
+import { personalWorkspaceEndpoints as endpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import './bookmarks.css';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
@@ -67,11 +68,12 @@ function BookmarkEditor({
       if (!title.trim()) throw new Error(uiMessage('reader.enterABookmarkName'));
       attempted = true;
       onSaved(
-        await api<Bookmark>(
-          `/bookmarks/${item.id}`,
-          { expectedRevision: item.revision, title, note },
-          'PATCH'
-        )
+        await callEndpoint(endpoints.updateBookmark, {
+          id: item.id,
+          expectedRevision: item.revision,
+          title,
+          note,
+        })
       );
       return true;
     } catch (caught) {
@@ -195,7 +197,10 @@ export function BookmarkButton({
     setNotice('');
     try {
       setSaved(
-        await api<Bookmark>(`/chats/${pending.current.target.chatId}/bookmarks`, pending.current)
+        await callEndpoint(endpoints.addBookmark, {
+          ...pending.current,
+          chatId: pending.current.target.chatId,
+        })
       );
       pending.current = null;
       setNotice(uiMessage('reader.bookmarkAdded'));
@@ -253,7 +258,7 @@ export function BookmarkList({
     setLoaded(false);
     setError('');
     setMutationFailed(false);
-    void api<Bookmark[]>(`/chats/${chatId}/bookmarks`, undefined, 'GET', controller.signal)
+    void callEndpoint(endpoints.listBookmarks, { chatId }, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
           setItems(value);

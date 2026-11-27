@@ -2,9 +2,10 @@ import { t } from './i18n.js';
 import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { ReaderTarget } from '../core/reader-target.js';
-import type { ReadingPosition, ReadingPositions } from '../core/reading-state.js';
+import type { ReadingPosition } from '../core/reading-state.js';
 import { browserClientId } from './browser-client.js';
-import { api } from './api.js';
+import { personalWorkspaceEndpoints as endpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { readReadingPosition } from './story-storage.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
@@ -96,16 +97,13 @@ export function useReadingSync(options: {
     let pendingScroll: { target: HTMLElement; user: boolean } | undefined;
     let loading: Promise<void> | null = null;
     const controller = new AbortController();
-    const path = `/chats/${encodeURIComponent(chatId)}/reading-position`;
-    const query = new URLSearchParams({ clientId });
     const load = (): Promise<void> => {
       if (loading) return loading;
       loading = (async () => {
         try {
-          const value = await api<ReadingPositions>(
-            `${path}?${query}`,
-            undefined,
-            'GET',
+          const value = await callEndpoint(
+            endpoints.readReadingPositions,
+            { chatId, clientId },
             AbortSignal.any([controller.signal, AbortSignal.timeout(5000)])
           );
           if (!alive) return;
@@ -125,10 +123,9 @@ export function useReadingSync(options: {
       saving = true;
       let acceptedRevision: number | undefined;
       try {
-        const saved = await api<ReadingPosition>(
-          path,
-          { clientId, expectedRevision: revision, target },
-          'PUT',
+        const saved = await callEndpoint(
+          endpoints.saveReadingPosition,
+          { chatId, clientId, expectedRevision: revision, target },
           AbortSignal.timeout(5000)
         );
         revision = Math.max(revision, saved.revision);

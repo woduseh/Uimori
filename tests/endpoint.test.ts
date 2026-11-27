@@ -240,6 +240,18 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
     },
     { method: 'DELETE', url: '/api/fonts/%20%20%20' },
     {
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'x', scope: 'chat', kinds: ['original'] },
+    },
+    { method: 'POST', url: '/api/maintenance', payload: { status: 'paused' } },
+    {
+      method: 'PATCH',
+      url: '/api/bookmarks/b1',
+      payload: { expectedRevision: 1, title: '  ', note: '' },
+    },
+    { method: 'GET', url: '/api/push?clientId=%20' },
+    {
       method: 'PUT',
       url: '/api/backups/settings',
       payload: { expectedRevision: 0, enabled: true, hour: 3, minute: 0, retain: 0 },

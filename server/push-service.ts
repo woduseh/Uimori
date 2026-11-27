@@ -2,21 +2,23 @@ import { pushAllowed } from '../core/push.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { generateVAPIDKeys } from 'web-push';
 import type { FastifyInstance } from 'fastify';
+import type { PushInfo, PushPreferences, PushEnvelope, PushDeviceError } from '../core/push.js';
+import { personalWorkspaceEndpoints } from '#contracts';
 import {
-  DEFAULT_PUSH_PREFERENCES,
-  type PushInfo,
-  type PushPreferences,
-  type PushEnvelope,
-  type PushDeviceError,
-} from '../core/push.js';
+  personalWorkspaceOperations,
+  type SubscribePush,
+  type UnsubscribePush,
+  type UpdatePush,
+} from '#contracts/operations';
 import {
   sendWebPush,
   validatePushSubscription,
   type PushSender,
   type VapidKeys,
 } from './push-transport.js';
-import { HttpError, fields, record, text } from './request-validation.js';
-import { AppError } from './app-errors.js';
+import { HttpError } from './request-validation.js';
+import { AppError, assertRevision } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 
 type Options = {
@@ -27,14 +29,6 @@ type Options = {
   now?: () => number;
 };
 const KEYS = 'push-vapid-keys';
-const client = (value: unknown) => text(value, 'browser ID', 100);
-function preferences(value: unknown): PushPreferences {
-  const body = record(value);
-  fields(body, Object.keys(DEFAULT_PUSH_PREFERENCES));
-  if (Object.keys(DEFAULT_PUSH_PREFERENCES).some((key) => typeof body[key] !== 'boolean'))
-    throw new HttpError(400, 'Invalid push preferences');
-  return body as PushPreferences;
-}
 
 export class PushService {
   private closed = false;
@@ -67,8 +61,7 @@ export class PushService {
       .prepare('SELECT * FROM push_subscriptions WHERE client_id=? AND session_hash=? AND origin=?')
       .get(clientId, session, this.options.origin!);
   }
-  info(clientId: string, cookie?: string): PushInfo {
-    const id = client(clientId);
+  info(id: string, cookie?: string): PushInfo {
     const session = this.options.sessionHash(cookie);
     const available = !!this.options.origin?.startsWith('https://') && !!session;
     const device = available ? this.device(id, session!) : undefined;
@@ -86,28 +79,27 @@ export class PushService {
   }
   prepare(clientId: string, cookie?: string): PushInfo {
     this.authority(cookie);
-    client(clientId);
     if (!this.keys())
       this.store.db
         .prepare('INSERT INTO app_metadata(key,value) VALUES(?,?)')
         .run(KEYS, JSON.stringify(generateVAPIDKeys()));
     return this.info(clientId, cookie);
   }
-  subscribe(value: unknown, cookie?: string): PushInfo {
+  subscribe(
+    {
+      clientId: id,
+      expectedRevision,
+      subscription: requested,
+      preferences: choices,
+    }: SubscribePush,
+    cookie?: string
+  ): PushInfo {
     const session = this.authority(cookie);
     if (!this.keys()) throw new HttpError(409, 'Push keys are not prepared');
-    const body = record(value);
-    fields(body, ['clientId', 'expectedRevision', 'subscription', 'preferences']);
-    const id = client(body.clientId);
-    const subscription = validatePushSubscription(body.subscription);
-    const choices = preferences(body.preferences);
+    const subscription = validatePushSubscription(requested);
     this.store.transaction(() => {
       const current = this.device(id, session);
-      if (
-        !Number.isSafeInteger(body.expectedRevision) ||
-        body.expectedRevision !== (current?.revision ?? 0)
-      )
-        throw new AppError(409, 'REVISION_CONFLICT');
+      assertRevision(current ? Number(current.revision) : 0, expectedRevision);
       const now = new Date(this.now()).toISOString();
       const previous = this.store.db
         .prepare('SELECT id FROM push_subscriptions WHERE endpoint=?')
@@ -128,22 +120,21 @@ export class PushService {
           JSON.stringify(subscription.keys),
           JSON.stringify(choices),
           this.options.origin!,
-          Number(body.expectedRevision) + 1,
+          expectedRevision + 1,
           now,
           now
         );
     });
     return this.info(id, cookie);
   }
-  update(value: unknown, cookie?: string): PushInfo {
+  update(
+    { clientId: id, expectedRevision, preferences: choices }: UpdatePush,
+    cookie?: string
+  ): PushInfo {
     const session = this.authority(cookie);
-    const body = record(value);
-    fields(body, ['clientId', 'expectedRevision', 'preferences']);
-    const id = client(body.clientId),
-      choices = preferences(body.preferences);
     const current = this.device(id, session);
+    assertRevision(current ? Number(current.revision) : 0, expectedRevision);
     if (!current) throw new AppError(404, 'REVISION_CONFLICT');
-    if (body.expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
     this.store.db
       .prepare(
         'UPDATE push_subscriptions SET preferences=?,revision=revision+1,updated_at=? WHERE id=?'
@@ -151,14 +142,10 @@ export class PushService {
       .run(JSON.stringify(choices), new Date(this.now()).toISOString(), current.id);
     return this.info(id, cookie);
   }
-  unsubscribe(value: unknown, cookie?: string): PushInfo {
+  unsubscribe({ clientId: id, expectedRevision }: UnsubscribePush, cookie?: string): PushInfo {
     const session = this.authority(cookie);
-    const body = record(value);
-    fields(body, ['clientId', 'expectedRevision']);
-    const id = client(body.clientId),
-      current = this.device(id, session);
-    if (current && body.expectedRevision !== current.revision)
-      throw new AppError(409, 'REVISION_CONFLICT');
+    const current = this.device(id, session);
+    if (current) assertRevision(Number(current.revision), expectedRevision);
     if (current) {
       this.active.get(String(current.id))?.abort();
       this.store.db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(current.id);
@@ -167,7 +154,7 @@ export class PushService {
   }
   test(clientId: string, cookie?: string) {
     const session = this.authority(cookie);
-    const current = this.device(client(clientId), session);
+    const current = this.device(clientId, session);
     if (!current) throw new AppError(404, 'REVISION_CONFLICT');
     const now = new Date(this.now()).toISOString();
     if (
@@ -328,28 +315,25 @@ export class PushService {
   }
 }
 export function pushRoutes(app: FastifyInstance, service: PushService) {
-  app.get<{ Querystring: { clientId: string } }>('/api/push', (request, reply) => {
+  const endpoints = personalWorkspaceEndpoints;
+  const operations = personalWorkspaceOperations;
+  registerEndpoint(app, endpoints.readPush, operations.readPush, ({ clientId }, request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    fields(record(request.query), ['clientId']);
-    return service.info(request.query.clientId, request.headers.cookie);
+    return service.info(clientId, request.headers.cookie);
   });
-  app.post('/api/push/prepare', (request) => {
-    const body = record(request.body);
-    fields(body, ['clientId']);
-    return service.prepare(client(body.clientId), request.headers.cookie);
-  });
-  app.post('/api/push/subscription', (request) =>
-    service.subscribe(request.body, request.headers.cookie)
+  registerEndpoint(app, endpoints.preparePush, operations.preparePush, ({ clientId }, request) =>
+    service.prepare(clientId, request.headers.cookie)
   );
-  app.put('/api/push/subscription', (request) =>
-    service.update(request.body, request.headers.cookie)
+  registerEndpoint(app, endpoints.subscribePush, operations.subscribePush, (input, request) =>
+    service.subscribe(input, request.headers.cookie)
   );
-  app.delete('/api/push/subscription', (request) =>
-    service.unsubscribe(request.body, request.headers.cookie)
+  registerEndpoint(app, endpoints.updatePush, operations.updatePush, (input, request) =>
+    service.update(input, request.headers.cookie)
   );
-  app.post('/api/push/test', (request, reply) => {
-    const body = record(request.body);
-    fields(body, ['clientId']);
-    return reply.code(202).send(service.test(client(body.clientId), request.headers.cookie));
-  });
+  registerEndpoint(app, endpoints.unsubscribePush, operations.unsubscribePush, (input, request) =>
+    service.unsubscribe(input, request.headers.cookie)
+  );
+  registerEndpoint(app, endpoints.testPush, operations.testPush, ({ clientId }, request) =>
+    service.test(clientId, request.headers.cookie)
+  );
 }

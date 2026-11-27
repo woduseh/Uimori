@@ -73,6 +73,12 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
 
   const read = await app.inject({ method: 'GET', url: `/api/chats/${chat.id}` });
   expect(read.statusCode).toBe(200);
+  const search = await app.inject({
+    method: 'POST',
+    url: '/api/search',
+    payload: { query: 'fixture', scope: 'workspace', kinds: ['original'] },
+  });
+  expect(search.statusCode, search.body).toBe(200);
   const cancel = await app.inject({ method: 'POST', url: '/api/runs/missing-run/cancel' });
   expect(cancel.statusCode).not.toBe(503);
 

@@ -1,0 +1,2 @@
+export const BOOKMARK_TITLE_MAX_CHARS = 200;
+export const BOOKMARK_NOTE_MAX_CHARS = 4000;

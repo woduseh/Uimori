@@ -19,6 +19,8 @@ export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.ou
   throw error;
 }
 
+export const endpointUrl = (endpoint: Endpoint): string => `/api${endpoint.path}`;
+
 export function registerEndpoint<Op extends Operation>(
   app: FastifyInstance,
   endpoint: Endpoint<Op>,
@@ -32,7 +34,7 @@ export function registerEndpoint<Op extends Operation>(
   const checked = app.hasDecorator(checkOutputs);
   app.route({
     method: endpoint.method,
-    url: `/api${endpoint.path}`,
+    url: endpointUrl(endpoint),
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
     handler: async (request, reply) => {
       const output = await handler(

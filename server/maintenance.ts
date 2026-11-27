@@ -1,16 +1,23 @@
-import { MAINTENANCE_CLOSED, type MaintenanceStatus } from '#contracts';
+import {
+  MAINTENANCE_CLOSED,
+  type MaintenanceStatus,
+  personalWorkspaceEndpoints,
+  selfHostEndpoints,
+} from '#contracts';
+import { selfHostOperations } from '#contracts/operations';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { fields, record, text, HttpError } from './request-validation.js';
+import { endpointUrl, registerEndpoint } from './endpoint.js';
+import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
 export type MaintenanceState = Omit<MaintenanceStatus, 'forcedClosed'>;
 type Row = Record<string, unknown> & { status: MaintenanceState['status'] };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const ALWAYS_ADMITTED = new Set([
-  '/api/maintenance',
+  endpointUrl(selfHostEndpoints.setMaintenance),
+  endpointUrl(personalWorkspaceEndpoints.searchManuscripts),
   '/api/session',
   '/api/diagnostics/report',
-  '/api/search',
   '/api/test/control',
   '/api/runs/:id/cancel',
   '/api/runs/:id/skip-state-wait',
@@ -91,22 +98,29 @@ export function maintenanceRoutes(
   app.addHook('onError', async (request) => {
     writes.delete(request);
   });
-  app.get('/api/maintenance', async (_request, reply) =>
-    reply.header('Cache-Control', 'no-store').send({ ...state(), activeWork: activeWork() })
+  registerEndpoint(
+    app,
+    selfHostEndpoints.readMaintenance,
+    selfHostOperations.readMaintenance,
+    (_input, _request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      return { ...state(), activeWork: activeWork() };
+    }
   );
-  app.post('/api/maintenance', async (request) => {
-    const body = record(request.body);
-    fields(body, ['status', 'reason']);
-    const status = text(body.status, 'status', 20);
-    if (status !== 'open' && status !== 'closed') throw new HttpError(400, 'MAINTENANCE_STATUS');
-    if (status === 'open' && options.forcedClosed) throw new HttpError(409, 'MAINTENANCE_BOOT');
-    const reason = body.reason === undefined ? undefined : text(body.reason, 'reason', 200);
-    const wasClosed = state().status === 'closed';
-    const next = setMaintenance(store, {
-      closed: status === 'closed',
-      ...(reason === undefined ? {} : { reason }),
-    });
-    if (wasClosed && next.status === 'open') options.onOpen?.();
-    return { ...state(), ...next, activeWork: activeWork() };
-  });
+  registerEndpoint(
+    app,
+    selfHostEndpoints.setMaintenance,
+    selfHostOperations.setMaintenance,
+    (input) => {
+      const { status, reason } = input;
+      if (status === 'open' && options.forcedClosed) throw new HttpError(409, 'MAINTENANCE_BOOT');
+      const wasClosed = state().status === 'closed';
+      const next = setMaintenance(store, {
+        closed: status === 'closed',
+        ...(reason === undefined ? {} : { reason }),
+      });
+      if (wasClosed && next.status === 'open') options.onOpen?.();
+      return { ...state(), ...next, activeWork: activeWork() };
+    }
+  );
 }

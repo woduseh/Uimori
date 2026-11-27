@@ -1,7 +1,6 @@
 import type { ReaderTarget } from './reader-target.js';
 
-export const BOOKMARK_TITLE_MAX_CHARS = 200;
-export const BOOKMARK_NOTE_MAX_CHARS = 4000;
+export { BOOKMARK_NOTE_MAX_CHARS, BOOKMARK_TITLE_MAX_CHARS } from '#contracts';
 
 export type ReadingPosition = {
   clientId: string;

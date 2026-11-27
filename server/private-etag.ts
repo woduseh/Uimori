@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { appearanceEndpoints } from '#contracts';
+import { endpointUrl } from './endpoint.js';
 
 export const REVALIDATED_ROUTES: ReadonlySet<string> = new Set([
   '/api/activity-feed',
   '/api/library',
   '/api/prompt-workspace',
   '/api/chats',
-  '/api/fonts',
+  endpointUrl(appearanceEndpoints.listFonts),
   '/api/chats/:id/reader',
   '/api/connections/:id/catalog',
 ]);
