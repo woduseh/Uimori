@@ -110,8 +110,9 @@ class Host(m.Runner):
         if action == "open":
             self.closed = False
             if self.fault == "reopen": raise RuntimeError("open response lost")
+        if action == "status" and self.fault == "reopened-while-draining": self.closed = False
         return {"status": "closed" if self.closed else "open", "reason": self.reason, "forcedClosed": False,
-            "activeWork": 1 if self.fault == "busy" and self.closed else 0}
+            "activeWork": 1 if self.fault in ("busy", "reopened-while-draining") and self.closed else 0}
 
     def wait_healthy(self, image, volume):
         self.events.append(("healthy", image))
@@ -311,6 +312,17 @@ class OracleTransitions(unittest.TestCase):
                 self.assertFalse(host.closed)
                 self.assertNotIn(("compose", "stop"), host.events)
                 self.assertNotIn(("data", "restore"), host.events)
+        finally: m.time.sleep = original
+
+    def test_gate_reopened_while_draining_stops_before_backup(self):
+        original = m.time.sleep
+        m.time.sleep = lambda _: None
+        try:
+            with self.host(fault="reopened-while-draining") as host:
+                self.fail_and_rollback(host)
+                self.assertNotIn(("compose", "stop"), host.events)
+                self.assertNotIn(("data", "restore"), host.events)
+                self.assertNotEqual(host.summary.get("writes"), "CLOSED")
         finally: m.time.sleep = original
 
     def test_fresh_boot_is_closed_before_switch_and_preserves_old_volume(self):

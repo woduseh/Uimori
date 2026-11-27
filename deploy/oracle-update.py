@@ -262,6 +262,8 @@ class Runner:
         deadline = time.monotonic() + 30
         state = self.control("close")
         for _ in range(30):
+            if state.get("status") != "closed":
+                raise RuntimeError("Maintenance reopened while draining")
             if not state.get("activeWork"):
                 self.data("inspect", self.old_volume)
                 self.summary["writes"] = "CLOSED"
