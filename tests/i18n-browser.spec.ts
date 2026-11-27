@@ -43,7 +43,23 @@ test('I18N07 a restarted service worker reads persisted UI locale for a syntheti
       registrations.find((entry) => entry.scopeURL === new URL('/', page.url()).href)
         ?.registrationId ?? registrationId;
   });
+  const displayed: { title?: string; body?: string }[] = [];
+  protocol.on('BackgroundService.backgroundServiceEventReceived', ({ backgroundServiceEvent }) => {
+    if (
+      backgroundServiceEvent.eventName !== 'Notification displayed' ||
+      backgroundServiceEvent.instanceId !== 'i18n-restarted-worker'
+    )
+      return;
+    const field = (key: string) =>
+      backgroundServiceEvent.eventMetadata.find((entry) => entry.key === key)?.value;
+    displayed.push({ title: field('Title'), body: field('Body') });
+  });
   try {
+    await protocol.send('BackgroundService.setRecording', {
+      shouldRecord: true,
+      service: 'notifications',
+    });
+    await protocol.send('BackgroundService.startObserving', { service: 'notifications' });
     await protocol.send('ServiceWorker.enable');
     await expect.poll(() => registrationId).not.toBe('');
     await protocol.send('ServiceWorker.stopAllWorkers');
@@ -53,14 +69,7 @@ test('I18N07 a restarted service worker reads persisted UI locale for a syntheti
       data: JSON.stringify({ version: 1, kind: 'test', tag: 'i18n-restarted-worker' }),
     });
     await expect
-      .poll(() =>
-        page.evaluate(async () => {
-          const registration = await navigator.serviceWorker.ready;
-          return (await registration.getNotifications({ tag: 'i18n-restarted-worker' })).map(
-            (entry) => ({ title: entry.title, body: entry.body })
-          );
-        })
-      )
+      .poll(() => displayed)
       .toEqual([
         {
           title: 'Uimori · Test notification',
