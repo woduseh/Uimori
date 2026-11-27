@@ -18,7 +18,7 @@ import { executeJudgment, type JudgmentHooks, type JudgmentRequest } from './jud
 import { jevSettings } from './jev-settings.js';
 import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
 import { registerEndpoint } from './endpoint.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { promptWorkspace } from './prompt-workspace.js';
 
 const RECENT_CONTEXT_TOKENS = 8000;
@@ -140,8 +140,9 @@ function mainTarget(
       model: store.product.snapshot(chatId, 'main').models.main,
       context: currentContext(store, chatId),
     };
+  if (!store.db.prepare('SELECT 1 FROM runs WHERE id=? AND chat_id=?').get(retryRunId, chatId))
+    throw new AppError(404, 'LIBRARY_ITEM_DELETED');
   const run = store.run(retryRunId);
-  if (run.chatId !== chatId) throw new HttpError(404, 'Run not found');
   return {
     model: store.product.snapshot(chatId, 'main').models.main,
     context: run.parentRevision

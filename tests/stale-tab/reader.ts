@@ -18,7 +18,7 @@ function goneScene() {
     scope: 'only',
     idempotencyKey: randomUUID(),
   });
-  return { chatId: chat.id, sourceId: source.id };
+  return { chatId: chat.id, sourceId: source.id, runId: source.runId };
 }
 
 function goneJob() {
@@ -90,7 +90,10 @@ export const readerCases = domainCases('reader', {
       },
       {
         when: 'a scene another tab deleted',
-        arrange: () => ({ input: goneScene() }),
+        arrange: () => {
+          const { chatId, sourceId } = goneScene();
+          return { input: { chatId, sourceId } };
+        },
         answer: deleted,
       },
     ],
@@ -116,9 +119,18 @@ export const readerCases = domainCases('reader', {
       },
       {
         when: 'a scene another tab deleted',
-        arrange: () => ({
-          input: { ...goneScene(), scope: 'only', ...staleRequest, idempotencyKey: randomUUID() },
-        }),
+        arrange: () => {
+          const { chatId, sourceId } = goneScene();
+          return {
+            input: {
+              chatId,
+              sourceId,
+              scope: 'only',
+              ...staleRequest,
+              idempotencyKey: randomUUID(),
+            },
+          };
+        },
         answer: conflict,
         targetRevision: true,
       },
@@ -126,6 +138,24 @@ export const readerCases = domainCases('reader', {
   },
   reviseSelection: {
     cases: [
+      {
+        when: 'a scene another tab deleted and a translation draft that does not match its hash',
+        arrange: () => ({
+          input: {
+            sourceId: deletedChat().sourceId,
+            target: 'translation',
+            draft: 'A lantern.',
+            start: 0,
+            end: 2,
+            instruction: 'Make it shorter.',
+            expectedSourceHash: 'stale',
+            expectedRevision: 0,
+            expectedTextHash: 'stale',
+          },
+        }),
+        answer: conflict,
+        targetRevision: true,
+      },
       {
         when: 'a scene another tab deleted and a selection the range check refuses',
         arrange: () => ({
@@ -146,7 +176,19 @@ export const readerCases = domainCases('reader', {
     ],
   },
   translateInput: { cases: [chatGone({ text: 'Hello.', targetLanguage: 'ko' })] },
-  preflightChatContent: { cases: [chatGone({ role: 'translation', text: 'Hello.' })] },
+  preflightChatContent: {
+    cases: [
+      chatGone({ role: 'translation', text: 'Hello.' }),
+      {
+        when: 'a run another tab deleted with its scene',
+        arrange: () => {
+          const { chatId, runId } = goneScene();
+          return { input: { chatId, role: 'main', text: 'Hello.', retryRunId: runId } };
+        },
+        answer: deleted,
+      },
+    ],
+  },
   preflightSourceContent: { cases: [sourceGone({})] },
   previewPrompt: { cases: [chatGone({ role: 'main', request: 'Continue.' })] },
   previewRequest: { cases: [chatGone({ request: 'Continue.' })] },
