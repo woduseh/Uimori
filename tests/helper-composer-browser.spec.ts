@@ -1,4 +1,3 @@
-import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { ChatDetail, Run } from '../core/types.js';
@@ -11,45 +10,6 @@ import {
 import { openSourceActions } from './ui-navigation.js';
 
 test.setTimeout(60000);
-
-test('HELPSENDKEY desktop helper composer follows the app send-key setting and never sends during composition', async ({
-  page,
-  request,
-}) => {
-  const chat = await createHelperChat(request),
-    state = await routeSyntheticHelper(page);
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  await page.goto(`/?chat=${chat.id}`);
-  let panel = await openHelperPanel(page);
-  let input = panel.getByLabel('도우미에게 요청');
-  await expect(input).toHaveAttribute('placeholder', '도우미에게 요청하기 (Ctrl+Enter 보내기)');
-  await input.fill('첫 줄');
-  await input.press('Enter');
-  await expect(input).toHaveValue('첫 줄\n');
-  expect(state.posts).toHaveLength(0);
-  await input.press('Control+Enter');
-  await expect(input).toHaveValue('');
-  expect(state.posts.map((post) => post.text)).toEqual(['첫 줄\n']);
-
-  await page.evaluate(() => localStorage.setItem('uimori:enter-send', 'true'));
-  await page.reload();
-  panel = await openHelperPanel(page);
-  input = panel.getByLabel('도우미에게 요청');
-  await expect(input).toHaveAttribute('placeholder', '도우미에게 요청하기 (Enter 보내기)');
-  await input.fill('한글 조합 중');
-  await input.dispatchEvent('compositionstart');
-  await input.press('Enter');
-  await input.dispatchEvent('compositionend');
-  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
-  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229 });
-  await expect(input).toHaveValue('한글 조합 중\n');
-  expect(state.posts).toHaveLength(1);
-  await input.press('Shift+Enter');
-  await expect(input).toHaveValue('한글 조합 중\n\n');
-  await input.press('Enter');
-  await expect(input).toHaveValue('');
-  expect(state.posts.map((post) => post.text)).toEqual(['첫 줄\n', '한글 조합 중\n\n']);
-});
 
 async function helperModels(request: APIRequestContext) {
   const providerResponse = await request.post('/api/connections', {

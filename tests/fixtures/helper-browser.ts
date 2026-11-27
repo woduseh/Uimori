@@ -11,7 +11,6 @@ import type {
   HelperRollbackView,
   HelperTaskResultsView,
 } from '../../core/helper.js';
-import type { HelperActivityEvent } from '../../core/helper-activity.js';
 import type { ResponseStreamPage } from '../../core/response-stream.js';
 import type { HelperTaskView } from '../../web/useHelperConversation.js';
 import { postFixtureChat } from './chat.js';
@@ -30,7 +29,6 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
   const views = new Map<string, View>();
   const receipts = new Map<string, HelperTaskView>();
   const streams = new Map<string, ResponseStreamPage>();
-  const activities = new Map<string, HelperActivityEvent[]>();
   const results = new Map<string, Partial<HelperTaskResultsView>>();
   const rollbacks = new Map<string, HelperRollbackView>();
   const rollbackPosts: { unit?: string }[] = [];
@@ -413,11 +411,9 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
           json: {
             taskId: task.id,
             status: task.status,
-            events: activities.get(task.id) ?? [],
+            events: [],
             hasEarlier: false,
-            helperCalls: (activities.get(task.id) ?? []).filter(
-              (item) => item.kind === 'attempt.started' && item.purpose === 'helper'
-            ).length,
+            helperCalls: 0,
           },
         });
       if (taskMatch[2]) {
@@ -446,13 +442,6 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
     },
     loseRollback: () => {
       loseRollback = true;
-    },
-    activity: (task: HelperTaskView, events: HelperActivityEvent[]) => {
-      activities.set(task.id, events);
-      const view = [...views.values()].find((item) =>
-        item.tasks.some((candidate) => candidate.id === task.id)
-      );
-      if (view) event(view, task, 'tool.finished');
     },
     heldStreams,
     holdNextStream(taskId: string) {

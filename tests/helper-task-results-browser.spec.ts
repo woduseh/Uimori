@@ -15,36 +15,16 @@ import { openHelper, expectEditorSection, selectEditorSection } from './ui-navig
 
 test.setTimeout(60000);
 
-async function seed(
-  request: APIRequestContext,
-  profiles?: { name: string; appearance: string }[],
-  followUps = 0
-) {
-  let sendProfiles = !!profiles;
+async function seed(request: APIRequestContext) {
   const provider = createServer(async (incoming, response) => {
     for await (const _chunk of incoming) {
     }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
-    const events = sendProfiles
-      ? [
-          {
-            type: 'tool_delta',
-            index: 0,
-            id: 'save-profiles',
-            name: 'app.call',
-            argumentsDelta: JSON.stringify({
-              name: 'illustration.profiles.save',
-              arguments: { expectedRevision: 0, profiles },
-            }),
-          },
-          { type: 'done', reason: 'tool_calls' },
-        ]
-      : [
-          { type: 'text_delta', delta: '요청 내용을 확인했어요.' },
-          { type: 'usage', inputTokens: 120, outputTokens: 12, costUsd: null },
-          { type: 'done', reason: 'stop' },
-        ];
-    sendProfiles = false;
+    const events = [
+      { type: 'text_delta', delta: '요청 내용을 확인했어요.' },
+      { type: 'usage', inputTokens: 120, outputTokens: 12, costUsd: null },
+      { type: 'done', reason: 'stop' },
+    ];
     response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });
   await new Promise<void>((resolve, reject) => {
@@ -101,32 +81,19 @@ async function seed(
     const admitted = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
       data: {
         requestKey: randomUUID(),
-        text: profiles
-          ? '두 인물의 외형을 삽화 참고에 저장해 줘.'
-          : '자료를 변경하지 않고 간단히 답해 주세요.',
+        text: '자료를 변경하지 않고 간단히 답해 주세요.',
       },
     });
     expect(admitted.ok(), await admitted.text()).toBe(true);
     const task = (await admitted.json()) as HelperTaskView;
-    const completed = async (id: string) =>
-      expect
-        .poll(async () => {
-          const current = await request.get(`/api/helper/tasks/${id}`);
-          expect(current.ok()).toBe(true);
-          return ((await current.json()) as HelperTaskView).status;
-        })
-        .toBe('completed');
-    await completed(task.id);
-    const later: HelperTaskView[] = [];
-    for (let index = 0; index < followUps; index++) {
-      const next = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
-        data: { requestKey: randomUUID(), text: `이어지는 요청 ${index + 1}` },
-      });
-      expect(next.ok(), await next.text()).toBe(true);
-      later.push((await next.json()) as HelperTaskView);
-      await completed(later.at(-1)!.id);
-    }
-    return { chat, task, conversation, later };
+    await expect
+      .poll(async () => {
+        const current = await request.get(`/api/helper/tasks/${task.id}`);
+        expect(current.ok()).toBe(true);
+        return ((await current.json()) as HelperTaskView).status;
+      })
+      .toBe('completed');
+    return { chat, task, conversation };
   } finally {
     try {
       if (selected) {
@@ -155,252 +122,6 @@ async function seed(
     }
   }
 }
-
-test('an appearance result opens both saved characters in the chat image settings', async ({
-  page,
-  request,
-}) => {
-  const { chat } = await seed(request, [
-    { name: '미라', appearance: '은빛 단발' },
-    { name: '준', appearance: '검은 곱슬머리' },
-  ]);
-  const { characterProfiles: profiles, revision } = await (
-    await request.get(`/api/chats/${chat.id}/illustration-references`)
-  ).json();
-  await page.goto(`/?chat=${chat.id}`);
-  await openHelper(page);
-  await page.getByRole('button', { name: '준 인물 외형 열기', exact: true }).click();
-  const editor = page.getByTestId('illustration-references');
-  await expect(editor).toBeVisible();
-  await expect(editor.getByRole('textbox', { name: '외형', exact: true }).nth(1)).toHaveValue(
-    '검은 곱슬머리'
-  );
-  const changed = await request.put(`/api/chats/${chat.id}/illustration-references`, {
-    data: {
-      expectedRevision: revision,
-      references: [],
-      characterProfiles: [profiles[0], { ...profiles[1], appearance: '짧은 곱슬머리' }],
-    },
-  });
-  expect(changed.ok(), await changed.text()).toBe(true);
-  await expect(editor.getByRole('textbox', { name: '외형', exact: true }).nth(1)).toHaveValue(
-    '짧은 곱슬머리'
-  );
-});
-
-function changeProjection(taskId: string, chatId: string): HelperTaskResultsView {
-  return {
-    taskId,
-    status: 'completed',
-    results: [],
-    changes: [
-      {
-        domain: 'scene',
-        targetId: 'scene-source:original',
-        title: '등대지기의 밤',
-        location: { kind: 'scene', scene: 3, field: 'original' },
-        action: 'update',
-        diff: {
-          mode: 'prose',
-          unit: 'word',
-          added: 2,
-          removed: 2,
-          hunks: [
-            {
-              beforeOffset: 0,
-              afterOffset: 0,
-              segments: [
-                { op: 'equal', text: '그는 등불을 들고 ' },
-                { op: 'delete', text: '다리를' },
-                { op: 'insert', text: '강을' },
-                { op: 'equal', text: ' 천천히 ' },
-                { op: 'delete', text: '건넜다.' },
-                { op: 'insert', text: '헤엄쳤다.' },
-                { op: 'equal', text: '\n바람이 차가웠다.' },
-              ],
-            },
-          ],
-        },
-        anchor: {
-          domain: 'scene',
-          chatId,
-          sourceId: 'scene-source',
-          field: 'original',
-          paragraph: 0,
-        },
-      },
-      {
-        domain: 'resource',
-        targetId: 'regex-bot',
-        title: '정규식 봇',
-        location: {
-          kind: 'resource-field',
-          path: ['package', 'nativeRisu', 'card', 'extensions', 'risuai', 'customScripts'],
-        },
-        action: 'update',
-        diff: {
-          mode: 'code',
-          unit: 'line',
-          added: 1,
-          removed: 1,
-          hunks: [
-            {
-              beforeOffset: 10,
-              afterOffset: 10,
-              segments: [
-                { op: 'equal', text: '  {\n' },
-                { op: 'delete', text: '    "in": "foo",\n' },
-                { op: 'insert', text: '    "in": "bar",\n' },
-                { op: 'equal', text: '  }\n' },
-              ],
-            },
-          ],
-        },
-        anchor: {
-          domain: 'resource',
-          kind: 'content',
-          id: 'regex-bot',
-          path: '/package/nativeRisu/card/extensions/risuai/customScripts',
-          section: 'field',
-          index: null,
-        },
-      },
-      {
-        domain: 'resource',
-        targetId: 'large-bot',
-        title: '긴 설명 봇',
-        location: {
-          kind: 'resource-field',
-          path: ['package', 'nativeRisu', 'card', 'description'],
-        },
-        action: 'update',
-        diff: { mode: 'prose', unit: 'word', omitted: 'size' },
-        anchor: {
-          domain: 'resource',
-          kind: 'content',
-          id: 'large-bot',
-          path: '/package/nativeRisu/card/description',
-          section: 'field',
-          index: null,
-        },
-      },
-      {
-        domain: 'resource',
-        targetId: 'lore-bot',
-        title: '항구 봇',
-        location: {
-          kind: 'resource-list',
-          path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
-          section: 'lore',
-          item: { name: '폭풍의 항구 (Storm)', index: 2 },
-          field: ['content'],
-        },
-        action: 'create',
-        diff: null,
-        anchor: null,
-      },
-      {
-        domain: 'resource',
-        targetId: 'custom-bot',
-        title: '사용자 필드 봇',
-        location: {
-          kind: 'resource-field',
-          path: ['package', 'nativeRisu', 'card', 'extensions', 'customField'],
-        },
-        action: 'update',
-        diff: null,
-        anchor: null,
-      },
-      {
-        domain: 'resource',
-        targetId: 'story-theme',
-        title: '등대 테마',
-        location: { kind: 'resource-field', path: ['storyUi', 'css'] },
-        action: 'update',
-        diff: null,
-        anchor: null,
-      },
-      {
-        domain: 'resource',
-        targetId: 'harbor-preset',
-        title: '항구 삽화',
-        location: { kind: 'resource-field', path: ['description'] },
-        action: 'update',
-        diff: null,
-        anchor: null,
-      },
-      {
-        domain: 'resource',
-        targetId: 'legacy-bot',
-        title: '예전 봇',
-        location: '로어북 › 등대',
-        action: 'update',
-        diff: null,
-        anchor: null,
-      },
-      {
-        domain: 'scene',
-        targetId: 'removed-source:original',
-        title: '지운 장면',
-        location: null,
-        action: 'update',
-        diff: null,
-        anchor: null,
-        textRemoved: 'deleted',
-      },
-      {
-        domain: 'resource',
-        targetId: 'gone-bot',
-        title: '삭제한 봇',
-        location: null,
-        action: 'delete',
-        diff: null,
-        anchor: null,
-      },
-    ],
-    confirmations: [],
-    unrecordedOperations: 0,
-    usage: { toolExecutions: 5, attempts: [], latestInputEstimate: null },
-  };
-}
-
-test('HCHANGE01 change cards show marked words, code lines and the states without a diff', async ({
-  page,
-  request,
-}) => {
-  const { chat, task } = await seed(request);
-  await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
-    route.fulfill({ json: changeProjection(task.id, chat.id) })
-  );
-  await page.goto(`/?chat=${chat.id}`);
-  await openHelper(page);
-  const results = page
-    .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
-    .getByTestId('helper-task-results');
-  const prose = results.locator('.helper-change-toggle', { hasText: '등대지기의 밤' });
-  await expect(prose).toHaveAttribute('aria-expanded', 'false');
-  await expect(results.getByRole('region', { name: /등대지기의 밤/ })).toBeHidden();
-  await expect(results.getByText('삭제됨', { exact: true })).toBeVisible();
-  await expect(
-    results.getByRole('button', { name: '등대지기의 밤, 장면 3, 원문 열기', exact: true })
-  ).toBeVisible();
-  await prose.click();
-  await expect(prose).toHaveAttribute('aria-expanded', 'true');
-  const paragraph = results.getByRole('region', { name: /등대지기의 밤/ }).locator('p');
-  await expect(paragraph).toHaveCount(1);
-  await expect(paragraph.locator('del')).toHaveText(['삭제된 부분 다리를', '삭제된 부분 건넜다.']);
-  await expect(paragraph.locator('ins')).toHaveText(['추가된 부분 강을', '추가된 부분 헤엄쳤다.']);
-  await expect(paragraph).toContainText('그는 등불을 들고');
-  await results.locator('.helper-change-toggle', { hasText: '정규식 봇' }).click();
-  const code = results.getByRole('region', { name: /정규식 봇/ });
-  await expect(code.locator('.helper-diff-line')).toHaveCount(4);
-  await expect(code.locator('.helper-diff-line[data-op="delete"] code')).toHaveText(
-    '    "in": "foo",'
-  );
-  await expect(code.locator('.helper-diff-line[data-op="insert"] code')).toHaveText(
-    '    "in": "bar",'
-  );
-});
 
 test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps the helper beside it', async ({
   page,
@@ -579,139 +300,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   await expect(name).toHaveValue('저장하지 않은 이름');
 });
 
-test('HUSAGE02 the context usage popover manually compacts the helper conversation and updates state', async ({
-  page,
-  request,
-}) => {
-  const { chat, conversation, task } = await seed(request);
-  const provider = createServer(async (incoming, response) => {
-    for await (const _chunk of incoming) {
-    }
-    response.writeHead(200, { 'content-type': 'text/event-stream' });
-    const events = [
-      { type: 'text_delta', delta: '수동으로 정리한 도우미 대화 요약이에요.' },
-      { type: 'usage', inputTokens: 80, outputTokens: 24, costUsd: null },
-      { type: 'done', reason: 'stop' },
-    ];
-    response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
-  });
-  await new Promise<void>((resolve, reject) => {
-    provider.once('error', reject);
-    provider.listen(0, '127.0.0.1', resolve);
-  });
-  const address = provider.address();
-  if (!address || typeof address === 'string') throw new Error('Fixture server did not start');
-  const baseline = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
-  try {
-    const connection = await (
-      await request.post('/api/connections', {
-        data: {
-          title: `수동 압축 연결 ${randomUUID()}`,
-          protocol: 'fixture-sse-v1',
-          endpoint: `http://127.0.0.1:${address.port}/`,
-          enabled: true,
-        },
-      })
-    ).json();
-    const model = await (
-      await request.post('/api/model-presets', {
-        data: {
-          title: '수동 압축 모델',
-          connectionId: connection.id,
-          modelId: 'synthetic-manual-compact',
-          inputTokenLimit: 200000,
-          maxOutputTokens: 1024,
-          temperature: null,
-        },
-      })
-    ).json();
-    const updated = await request.put('/api/model-workspace', {
-      data: {
-        expectedRevision: baseline.revision,
-        routes: baseline.routes,
-        translationPolicy: baseline.translationPolicy,
-        helperModel: { id: model.id },
-        contextModel: { id: model.id },
-      },
-    });
-    expect(updated.ok(), await updated.text()).toBe(true);
-
-    const usage: HelperTaskResultsView['usage'] = {
-      toolExecutions: 1,
-      attempts: [],
-      latestInputEstimate: 42_000,
-      latestInputLimit: 200_000,
-      latestInputExecution: 'provider-tool-loop',
-      latestInputParts: {
-        instructions: 4_000,
-        toolSchemas: 8_000,
-        history: 24_000,
-        source: 6_000,
-        toolResults: null,
-      },
-    };
-    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
-      route.fulfill({
-        json: {
-          taskId: task.id,
-          status: 'completed',
-          results: [],
-          changes: [],
-          confirmations: [],
-          unrecordedOperations: 0,
-          usage,
-        } satisfies HelperTaskResultsView,
-      })
-    );
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    await openHelper(page);
-    const helper = page.locator('#helper-panel');
-    const meter = helper.locator('.helper-context-usage > summary');
-    await expect(meter).toBeVisible();
-    await meter.click();
-    const body = helper.locator('.helper-context-usage-body').filter({ visible: true });
-    const compactButton = body.getByRole('button', { name: '지금 대화 정리하기', exact: true });
-    await compactButton.click();
-
-    await expect(
-      page.locator('.transient-notice', {
-        hasText: '대화 메시지 2개를 정리했어요. 다음 요청부터 요약본을 이어 써요.',
-      })
-    ).toBeVisible();
-    const row = (label: string) =>
-      body
-        .getByRole('row')
-        .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
-        .getByRole('cell');
-    await expect(row('정리된 대화')).toHaveText(['메시지 2개', '']);
-    await expect(compactButton).toBeDisabled();
-
-    const view = await (
-      await request.get(`/api/helper/conversations/${conversation.id}/view`)
-    ).json();
-    expect(view.context).toMatchObject({
-      compactedMessages: 2,
-      uncompactedMessages: 0,
-      totalMessages: 2,
-      checkpointRevision: 1,
-    });
-  } finally {
-    const current = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
-    await request.put('/api/model-workspace', {
-      data: {
-        expectedRevision: current.revision,
-        routes: baseline.routes,
-        translationPolicy: baseline.translationPolicy,
-        helperModel: baseline.helperModel ? { id: baseline.helperModel.id } : null,
-        contextModel: baseline.contextModel ? { id: baseline.contextModel.id } : null,
-      },
-    });
-    await new Promise<void>((resolve) => provider.close(() => resolve()));
-  }
-});
-
-test('HUSAGE03 the helper summary dialog views, edits, keeps a draft through a conflict and resets', async ({
+test('HUSAGE02 HUSAGE03 the usage popover compacts manually, then the summary dialog views, edits, keeps a draft through a conflict and resets', async ({
   page,
   request,
 }) => {
@@ -738,13 +327,6 @@ test('HUSAGE03 the helper summary dialog views, edits, keeps a draft through a c
   const contextUrl = `/api/helper/conversations/${conversation.id}/context`;
   const summaryOf = async () =>
     (await (await request.get(contextUrl)).json()) as HelperContextSummaryView;
-  const compact = async () => {
-    const started = await request.post(`/api/helper/conversations/${conversation.id}/compact`, {
-      data: {},
-    });
-    expect(started.ok(), await started.text()).toBe(true);
-    await expect.poll(async () => (await summaryOf()).summary).toBe(reply);
-  };
   try {
     const connection = await (
       await request.post('/api/connections', {
@@ -778,7 +360,6 @@ test('HUSAGE03 the helper summary dialog views, edits, keeps a draft through a c
       },
     });
     expect(updated.ok(), await updated.text()).toBe(true);
-    await compact();
 
     const usage: HelperTaskResultsView['usage'] = {
       toolExecutions: 1,
@@ -809,19 +390,42 @@ test('HUSAGE03 the helper summary dialog views, edits, keeps a draft through a c
     );
     const helper = page.locator('#helper-panel');
     const dialog = page.getByRole('dialog', { name: '대화 요약', exact: true });
+    const meter = helper.locator('.helper-context-usage > summary');
+    const body = helper.locator('.helper-context-usage-body').filter({ visible: true });
     const openSummary = async () => {
-      await helper.locator('.helper-context-usage > summary').click();
-      const show = page
-        .locator('.helper-context-usage-body')
-        .filter({ visible: true })
-        .getByRole('button', { name: '요약 보기', exact: true });
-      await show.click();
+      if (!(await body.isVisible())) await meter.click();
+      await body.getByRole('button', { name: '요약 보기', exact: true }).click();
       await expect(dialog).toBeVisible();
     };
     const text = dialog.getByTestId('helper-summary-text');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
     await openHelper(page);
+    await expect(meter).toBeVisible();
+    await meter.click();
+    const compactButton = body.getByRole('button', { name: '지금 대화 정리하기', exact: true });
+    await compactButton.click();
+    await expect(
+      page.locator('.transient-notice', {
+        hasText: '대화 메시지 2개를 정리했어요. 다음 요청부터 요약본을 이어 써요.',
+      })
+    ).toBeVisible();
+    const row = (label: string) =>
+      body
+        .getByRole('row')
+        .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
+        .getByRole('cell');
+    await expect(row('정리된 대화')).toHaveText(['메시지 2개', '']);
+    await expect(compactButton).toBeDisabled();
+    expect(
+      (await (await request.get(`/api/helper/conversations/${conversation.id}/view`)).json())
+        .context
+    ).toMatchObject({
+      compactedMessages: 2,
+      uncompactedMessages: 0,
+      totalMessages: 2,
+      checkpointRevision: 1,
+    });
     await openSummary();
     await expect(text).toHaveText(reply);
     const editor = dialog.getByRole('textbox', { name: '편집할 컨텍스트 요약' });

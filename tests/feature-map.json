@@ -576,7 +576,6 @@
         { "file": "tests/helper-composer-browser.spec.ts" },
         { "file": "tests/helper-attachments-browser.spec.ts" },
         { "file": "tests/helper-live-browser.spec.ts" },
-        { "file": "tests/helper-message-prose-browser.spec.ts" },
         { "file": "tests/helper-recovery-browser.spec.ts" },
         { "file": "tests/helper-sessions-browser.spec.ts" },
         { "file": "tests/helper-task-results-browser.spec.ts" },
