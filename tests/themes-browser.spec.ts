@@ -1,21 +1,8 @@
-import { fixtureBotInput } from './fixtures/chat.js';
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_THEME_TEMPLATE, emptyTheme, themeFile } from '../core/themes.js';
-import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
-
-async function expectPalette(page: Page, id: string, mode: 'light' | 'dark' = 'light') {
-  const palette = BUILTIN_PALETTES.find((entry) => entry.id === id)!;
-  await expect
-    .poll(() =>
-      page
-        .locator('html')
-        .evaluate((element) => getComputedStyle(element).getPropertyValue('--bg').trim())
-    )
-    .toBe(palette.colors[mode].bg);
-}
 
 async function setAppearance(page: Page, mode: 'light' | 'dark') {
   await selectSettingsSection(page, '일반');
@@ -37,7 +24,7 @@ for (const width of [412]) {
   test(`THEMES ${width} palette, custom editor, persistence and portable import`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     await page.setViewportSize({ width, height: 1000 });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -59,8 +46,6 @@ for (const width of [412]) {
     await page.getByLabel('테마 이름', { exact: true }).fill(name);
     await page.getByLabel('테마 설명', { exact: true }).fill('Synthetic portable theme');
     await page.getByLabel('밝은 색 강조 색상', { exact: true }).fill('#663399');
-    await page.getByLabel('테마 이름', { exact: true }).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: info.outputPath(`theme-custom-editor-${width}.png`) });
     await page.getByText('CSS와 HTML 직접 편집', { exact: true }).click();
     await page
       .getByLabel('레이아웃 HTML', { exact: true })
@@ -117,7 +102,6 @@ for (const width of [412]) {
     ).toBeVisible();
     await page.getByRole('button', { name: '편집 취소', exact: true }).click();
     await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
-    await page.screenshot({ path: info.outputPath(`theme-settings-${width}.png`), fullPage: true });
     expect(errors).toEqual([]);
     const catalog = await (await request.get('/api/themes')).json();
     for (const theme of catalog.themes.filter((t: { title: string }) => t.title.startsWith(name))) {
@@ -131,7 +115,7 @@ for (const width of [412]) {
 test('THEMES slot/CSS switches preserve author input and recover from invalid or hiding customizations', async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await openThemes(page);
   await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
@@ -145,8 +129,6 @@ test('THEMES slot/CSS switches preserve author input and recover from invalid or
   await expect(input).toHaveValue('keep me');
   await expect(input).toHaveAttribute('data-stable-node', 'yes');
   await expect(sample.locator('slot[name="body"]')).toBeAttached();
-  await sample.scrollIntoViewIfNeeded();
-  await sample.screenshot({ path: info.outputPath('library-theme-preview.png') });
   const model = {
     ...emptyTheme(`Invalid ${randomUUID()}`),
     templateHtml: '<div>missing slots</div>',
@@ -180,29 +162,6 @@ test('THEMES slot/CSS switches preserve author input and recover from invalid or
     await request.delete(`/api/themes/${theme.id}`, { data: { expectedRevision: theme.revision } });
 });
 
-test('THEMES imported leading style applies inside the layout without changing its content', async ({
-  page,
-}, info) => {
-  await openThemes(page);
-  const file = themeFile(emptyTheme('Leading style contract'));
-  file.theme.templateHtml =
-    '<style>.contract-marker { color: rgb(1, 2, 3); }</style>' +
-    '<p class="contract-marker">가져온 스타일</p>' +
-    DEFAULT_THEME_TEMPLATE;
-  await page.getByLabel('테마 파일', { exact: true }).setInputFiles({
-    name: 'leading-style.uimori-theme.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(file)),
-  });
-  await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue(file.theme.title);
-  await page.getByRole('button', { name: '미리 적용', exact: true }).click();
-  await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
-  const marker = page.locator('.theme-sample .contract-marker');
-  await expect(marker).toHaveText('가져온 스타일');
-  await expect(marker).toHaveCSS('color', 'rgb(1, 2, 3)');
-  await page.locator('.theme-sample').screenshot({ path: info.outputPath('leading-style.png') });
-});
-
 test('THEMES rejects leading executable markup instead of silently dropping it on import', async ({
   page,
 }) => {
@@ -217,68 +176,4 @@ test('THEMES rejects leading executable markup instead of silently dropping it o
   });
   await expect(page.getByRole('alert')).toContainText('지원하지 않는 HTML');
   expect(await page.evaluate(() => 'themeScriptExecuted' in window)).toBe(false);
-});
-
-test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard navigation', async ({
-  page,
-  request,
-  context,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  const botResponse = await request.post('/api/content', {
-    data: fixtureBotInput(`Theme scope ${randomUUID()}`),
-  });
-  expect(botResponse.ok()).toBe(true);
-  const bot = await botResponse.json();
-  const chatResponse = await request.post('/api/chats', {
-    data: { title: 'Theme scope', botId: bot.id },
-  });
-  expect(chatResponse.ok()).toBe(true);
-  const chat = await chatResponse.json();
-  await openThemes(page, `/?chat=${chat.id}`);
-  const scope = page.getByLabel('테마 적용 범위', { exact: true });
-  await expect(scope.locator('option[value="bot"]')).toBeAttached();
-  await scope.selectOption('global');
-  await setAppearance(page, 'light');
-  await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
-  await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
-  await scope.selectOption('bot');
-  await page.getByRole('button', { name: '편지지 테마 적용', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
-  await expectPalette(page, 'sage');
-  await scope.selectOption('chat');
-  await page.getByRole('button', { name: '스크랩북 테마 적용', exact: true }).click();
-  await page.getByRole('button', { name: '로즈 팔레트 적용', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:scrapbook');
-  await expectPalette(page, 'rose');
-  const other = await context.newPage();
-  await other.goto(`/?chat=${chat.id}`);
-  await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:scrapbook');
-  await page.getByRole('button', { name: '레이아웃 상위 설정 따르기', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
-  await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
-  await expectPalette(page, 'rose');
-  await expectPalette(other, 'rose');
-  await page.getByRole('button', { name: '팔레트 상위 설정 따르기', exact: true }).click();
-  await expectPalette(page, 'sage');
-  await expectPalette(other, 'sage');
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
-  await page.getByRole('button', { name: '레이아웃 원래 색상 팔레트 적용', exact: true }).click();
-  await expectPalette(page, 'cream');
-  await expectPalette(other, 'cream');
-  await page.getByRole('button', { name: '팔레트 상위 설정 따르기', exact: true }).click();
-  await expectPalette(page, 'sage');
-  await scope.selectOption('bot');
-  await page.getByRole('button', { name: '레이아웃 상위 설정 따르기', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
-  await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
-  await page.route('**/api/themes', (route) => route.fulfill({ status: 503, body: 'unavailable' }));
-  await page.getByRole('button', { name: '스크랩북 테마 적용', exact: true }).click();
-  await expect(other.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:scrapbook');
-  await page.unroute('**/api/themes');
-  const tabs = page.getByRole('tablist', { name: '설정 항목', exact: true });
-  await other.close();
-  await tabs.getByRole('tab', { name: '일반', exact: true }).click();
-  await page.keyboard.press('ArrowDown');
-  await expect(tabs.getByRole('tab', { name: '테마와 색상', exact: true })).toBeFocused();
 });

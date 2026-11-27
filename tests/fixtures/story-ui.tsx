@@ -21,20 +21,6 @@ export async function mountReader(
   );
 }
 
-export async function mountStreaming(
-  element: HTMLElement,
-  text: string,
-  style?: import('../../core/story-ui-style.js').StoryUiStyle,
-  runId?: string
-) {
-  const { StreamingStoryText } = await import('../../web/StreamingResponse.js');
-  const root = createRoot(element);
-  const show = (value: string) =>
-    root.render(<StreamingStoryText text={value} style={style} runId={runId} />);
-  show(text);
-  return show;
-}
-
 export async function mountGallery(
   element: HTMLElement,
   sources: string[],

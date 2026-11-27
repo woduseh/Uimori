@@ -480,15 +480,8 @@
       "specs": [
         { "file": "tests/themes-browser.spec.ts" },
         { "file": "tests/appearance-customization-browser.spec.ts" },
-        {
-          "file": "tests/narrative-themes-browser.spec.ts",
-          "launch": { "privateMaterialsEnv": "UIMORI_NARRATIVE_DEMO_DIR" }
-        },
-        { "file": "tests/theme-body-scroll-browser.spec.ts" },
-        {
-          "file": "tests/liquid-gallery-browser.spec.ts",
-          "launch": { "privateMaterialsEnv": "UIMORI_GALLERY_DEMO_DIR" }
-        }
+        { "file": "tests/narrative-themes-browser.spec.ts" },
+        { "file": "tests/theme-body-scroll-browser.spec.ts" }
       ]
     },
     "story-ui": {

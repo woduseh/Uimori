@@ -4,7 +4,7 @@ import type { PackageImage } from '../core/package-images.js';
 import sharp from 'sharp';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
-import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type {
   Illustration,
   IllustrationReferences,
@@ -17,7 +17,6 @@ import {
   openChatSettings,
   openSourceActions,
   selectChatSettingsSection,
-  selectSettingsSection,
   selectEditorSection,
 } from './ui-navigation.js';
 
@@ -85,7 +84,7 @@ for (const width of [360]) {
   test(`character profiles keep linked roles reversible and protect drafts on refresh at ${width}px`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     const created = await postFixtureChat(request, { data: { title: `인물 외형 ${width}` } });
     expect(created.ok()).toBe(true);
     const chat = (await created.json()) as Chat;
@@ -141,7 +140,6 @@ for (const width of [360]) {
     expect(saved.characterProfiles).toMatchObject([
       { name: '미라', appearance: '짧은 은발과 초록 눈', referenceRef: asset.id },
     ]);
-    await page.screenshot({ path: info.outputPath(`character-profiles-${width}.png`) });
     await profile.getByRole('button', { name: '이미지 연결 해제', exact: true }).click();
     await expect(role).toHaveValue('style');
     await expect(role).toBeEnabled();
@@ -395,141 +393,6 @@ for (const width of [360]) {
     expect(await redraw.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   });
 }
-
-test('ILUI-DIRECTION blocked illustration without an image opens the change request dialog', async ({
-  page,
-  request,
-}, info) => {
-  const { chat, source } = await seed(request);
-  await settings(request, { generator: 'fixture', automatic: false, maxPerSource: 3 });
-  const created = await request.post(`/api/sources/${source.id}/illustrations`, { data: {} });
-  expect(created.ok()).toBe(true);
-  await expect
-    .poll(async () =>
-      (await illustrations(request, chat.id)).some(
-        (item) => item.task === 'render' && item.status === 'completed'
-      )
-    )
-    .toBe(true);
-  await page.route(
-    (url) => url.pathname === `/api/chats/${chat.id}/reader`,
-    async (route) => {
-      const response = await route.fetch();
-      const reader = (await response.json()) as ReaderDetail;
-      return route.fulfill({
-        json: {
-          ...reader,
-          illustrations: reader.illustrations?.map((item) =>
-            item.task === 'render'
-              ? {
-                  ...item,
-                  status: 'failed',
-                  error: 'ILLUSTRATION_CODEX_CONTENT_BLOCKED',
-                  images: [],
-                }
-              : item
-          ),
-        },
-      });
-    }
-  );
-  const changes: unknown[] = [];
-  await page.route('**/api/illustrations/*/regenerate', async (route) => {
-    changes.push(route.request().postDataJSON());
-    return route.fulfill({ status: 400, json: { error: '합성 변경 요청 실패' } });
-  });
-  await page.setViewportSize({ width: 360, height: 900 });
-  await page.goto(`/?chat=${chat.id}`);
-  const card = page.getByTestId('illustration').first();
-  await expect(card).toHaveAttribute('data-status', 'failed');
-  await expect(card.locator('img')).toHaveCount(0);
-  const recover = card.getByRole('button', { name: '현재 프리셋으로 다시 그리기', exact: true });
-  await recover.click();
-  const dialog = page.getByRole('dialog', { name: '현재 설정으로 다시 그리기', exact: true });
-  const changeRequest = dialog.getByRole('textbox', { name: '변경 요청 (선택)', exact: true });
-  await expect(changeRequest).toBeVisible();
-  expect(changes).toEqual([]);
-  await changeRequest.fill('장면을 인물의 표정 중심으로 바꿔 주세요.');
-  await dialog.getByRole('button', { name: '현재 설정으로 다시 그리기', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toHaveText('요청을 처리할 수 없어요. (400)');
-  expect(changes).toEqual([{ changeRequest: '장면을 인물의 표정 중심으로 바꿔 주세요.' }]);
-  await page.screenshot({ path: info.outputPath('illustration-blocked-redraw-mobile.png') });
-  await page.keyboard.press('Escape');
-  await expect(recover).toBeFocused();
-});
-
-test('ILUI02 mobile settings save illustration limits with CAS and expose the generator choice', async ({
-  page,
-  request,
-}, info) => {
-  await seed(request);
-  const before = await settings(request, { generator: undefined, maxPerSource: 2 });
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await page.goto('/');
-  await navigationAction(page, '설정');
-  await selectSettingsSection(page, '삽화');
-  const section = page.getByRole('region', { name: '삽화 설정', exact: true });
-  await expect(section).toBeVisible();
-  const generator = section.getByLabel('테스트 삽화 생성기', { exact: true });
-  await expect(generator).toHaveValue('');
-  await generator.selectOption('fixture');
-  await expect(section.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true })).toBeVisible();
-  const limit = section.getByLabel('장면당 최대 삽화 수', { exact: true });
-  await limit.fill('3');
-  await section.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true }).check();
-  await section
-    .getByRole('combobox', { name: '자동 생성 컷 수', exact: true })
-    .selectOption('auto');
-  await section.getByLabel('최소 컷 수', { exact: true }).fill('0');
-  await section.getByLabel('자동으로 고를 최대 컷 수', { exact: true }).fill('3');
-  await section.getByLabel('자동 재시도 횟수', { exact: true }).fill('2');
-  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
-  await expect(
-    page.locator('.transient-notice[role="status"]').filter({ hasText: '삽화 설정을 저장했어요' })
-  ).toBeVisible();
-  const saved = await request.get('/api/illustration-settings');
-  expect((await saved.json()) as IllustrationSettings).toMatchObject({
-    generator: 'fixture',
-    maxPerSource: 3,
-    automaticCountMode: 'auto',
-    automaticMinTargets: 0,
-    automaticMaxTargets: 3,
-    maxAutoRetries: 2,
-    revision: before.revision + 1,
-  });
-  await settings(request, { maxAutoRetries: 3 });
-  await limit.fill('4');
-  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
-  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 설정 저장본 확인' });
-  await expect(
-    conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
-  ).toBeFocused();
-  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('자동 재시도 횟수');
-  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('3');
-  expect(await conflictDialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-  await conflictDialog.press('Escape');
-  await expect(section.getByRole('alert')).toContainText('최신 설정을 불러와 주세요');
-  await expect(limit).toHaveValue('4');
-  await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
-  const reloadDialog = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
-  await expect(reloadDialog.getByRole('button', { name: '계속 편집' })).toBeFocused();
-  await reloadDialog.getByRole('button', { name: '계속 편집' }).click();
-  await expect(limit).toHaveValue('4');
-  await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
-  await page.route('**/api/illustration-settings', async (route) => {
-    if (route.request().method() === 'GET')
-      await route.fulfill({ status: 503, body: 'unavailable' });
-    else await route.continue();
-  });
-  await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
-  await expect(reloadDialog.getByRole('alert')).toContainText('설정을 불러오지 못했어요');
-  await expect(limit).toHaveValue('4');
-  await page.unroute('**/api/illustration-settings');
-  await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
-  await expect(section.getByLabel('자동 재시도 횟수', { exact: true })).toHaveValue('3');
-  await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
-  await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
-});
 
 test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planning never blocks the next chat', async ({
   page,

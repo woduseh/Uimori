@@ -116,7 +116,6 @@ Actual local Risu materials are excluded from ordinary browser discovery. Set `U
 Other opt-in local verification variables:
 
 - `UIMORI_CODEX_PREFLIGHT=1` with `npx vitest run tests/codex-installed.test.ts`: checks the installed Codex CLI version, empty auth state, and `generate-json-schema --experimental` (`dynamicTools` function shape, `item/tool/call`, text tool responses) in a fresh empty auth directory with no login or model calls, writing `output/codex-preflight/summary.json`.
-- `UIMORI_NARRATIVE_DEMO_DIR` with `npm run verify -- appearance`: points to a local directory holding `bot.webp` (2:3) and `persona.webp` (1:1) for personal visual inspection against an isolated synthetic server (output stays in git-ignored `output/`; omit it to use deterministic synthetic images).
 
 ### Risu Lua upstream changes
 
@@ -204,16 +203,6 @@ Empty databases initialize at schema 15. Existing databases must already use sch
 Manual storage measurements use `scripts/synthetic-story.mjs` and current transcript-v2 import, not obsolete package shapes or cumulative completed snapshots. After building, run `node --expose-gc scripts/measure-context-storage.mjs` or `node scripts/measure-transcript-import.mjs --counts=10,100`. These are synthetic measurements, not CI timing gates.
 
 For a long-novel workload, use `node --expose-gc scripts/measure-context-storage.mjs --long-story --label baseline`. It imports 10/30/100 Korean scenes around 7,500 `o200k_base` tokens each and 50 synthetic lore entries, recording exact UTF-16 length, UTF-8 bytes, tokens and hashes. Reuse the emitted directory with `--fixture <directory> --label improved` for identical stored inputs and full-output hash comparisons. History, checkpoint lookup, logical-message capture and native display-context construction are timed separately (three warmups, nine samples). These stages exclude native workers, transport and providers; the legacy 8,000-character mode remains available without `--long-story`.
-
-The existing Liquid Gallery runner also has opt-in long-reader timings:
-
-```powershell
-$env:UIMORI_BENCHMARK='1'
-npm run verify -- appearance --grep PERF
-Remove-Item Env:UIMORI_BENCHMARK
-```
-
-This selects synthetic 8- and 30-scene workloads with roughly 7,500-token Korean originals and English translations, authored HTML/CSS, a local image and Lua button code. It records one warmup and five repetitions of re-entry, past-page navigation and saved original/translation switches in a desktop browser. Each Playwright JSON report includes the `long-reader-performance` attachment with exact text metrics, click-to-ready times, HTTP resource timings and main-thread long tasks. It verifies unchanged saved data and no new generation requests. The ready boundary is all target text plus visible images and two animation frames, not compositor paint; resource time includes local queue/transport and is not isolated server CPU. Timing values are observations, not pass thresholds. Reading preferences, themes and mobile layouts retain their separate functional browser checks.
 
 `tests/database-schema.test.ts` checks fresh initialization, current DB reopening and refusal of unsupported files without changing their bytes. `tests/text-retention.test.ts` and `tests/execution-retention.test.ts` check retained messages and execution payloads without a live provider. Chats own their state and head directly; runtime branch identifiers and the branch table are removed.
 

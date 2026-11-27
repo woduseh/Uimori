@@ -325,8 +325,8 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ### Built-in layouts and palette sources of truth
 
-- **Sources of truth and user-theme preservation**: Built-in layouts and `BUILTIN_PALETTES` are the canonical sources of truth; cloned or imported user themes and their colors are never deleted or overwritten. `npm run verify -- appearance` verifies shared gallery compatibility through a user-theme copy fixture at [liquid-gallery.ts](../../tests/fixtures/liquid-gallery.ts).
-- **Backup boundary and scope**: Theme JSON stores layout original colors and excludes separate palettes and scope bindings (preserved in workspace SQLite backups), and theme edits/deletions never alter manuscripts or model inputs. Expression panels, BGM, TTS, and input translation are out of scope; verification commands and `UIMORI_NARRATIVE_DEMO_DIR` live in [DEVELOPMENT](DEVELOPMENT.md#builds-and-evidence) and [DEVELOPMENT](DEVELOPMENT.md#verification-runners).
+- **Sources of truth and user-theme preservation**: Built-in layouts and `BUILTIN_PALETTES` are the canonical sources of truth; cloned or imported user themes and their colors are never deleted or overwritten.
+- **Backup boundary and scope**: Theme JSON stores layout original colors and excludes separate palettes and scope bindings (preserved in workspace SQLite backups), and theme edits/deletions never alter manuscripts or model inputs. Expression panels, BGM, TTS, and input translation are out of scope; verification commands live in [DEVELOPMENT](DEVELOPMENT.md#builds-and-evidence) and [DEVELOPMENT](DEVELOPMENT.md#verification-runners).
 
 ## Usage report and backfill
 

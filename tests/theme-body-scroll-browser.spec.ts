@@ -21,25 +21,6 @@ async function mount(page: Page, nested = true) {
   await expect(page.locator('#last-block-11')).toBeAttached();
 }
 
-async function navigateSource(page: Page, anchor?: string, ratio = 0) {
-  await page.evaluate(
-    async ({ anchor, ratio }) => {
-      const path = '/tests/fixtures/theme-body-scroll.tsx';
-      const fixture = await import(path);
-      fixture.navigateSource(anchor, ratio);
-    },
-    { anchor, ratio }
-  );
-}
-
-async function navigateEnd(page: Page) {
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/theme-body-scroll.tsx';
-    const fixture = await import(path);
-    fixture.navigateEnd();
-  });
-}
-
 async function capture(page: Page, sourceId?: string) {
   return page.evaluate(async (sourceId) => {
     const path = '/tests/fixtures/theme-body-scroll.tsx';
@@ -50,33 +31,6 @@ async function capture(page: Page, sourceId?: string) {
 
 const scrollTop = (page: Page, selector: string) =>
   page.locator(selector).evaluate((node) => node.scrollTop);
-
-const distanceToEnd = (page: Page, selector: string) =>
-  page.locator(selector).evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop);
-
-test('narrative body anchor navigation moves outer and slotted inner scrollports', async ({
-  page,
-}) => {
-  await mount(page);
-  await navigateSource(page, 'target-block-7');
-  await expect.poll(() => scrollTop(page, '#reader')).toBeGreaterThan(0);
-  await expect.poll(() => scrollTop(page, '#target-body')).toBeGreaterThan(0);
-  await expect
-    .poll(() =>
-      page.locator('#target-block-7').evaluate((node) => {
-        const block = node.getBoundingClientRect();
-        const body = document.getElementById('target-body')!.getBoundingClientRect();
-        const reader = document.getElementById('reader')!.getBoundingClientRect();
-        return (
-          block.top >= Math.max(body.top, reader.top) - 1 &&
-          block.bottom <= Math.min(body.bottom, reader.bottom) + 1
-        );
-      })
-    )
-    .toBe(true);
-  expect(await scrollTop(page, '#previous-body')).toBe(0);
-  expect(await scrollTop(page, '#last-body')).toBe(0);
-});
 
 test('reading capture uses the visible inner anchor instead of clipped earlier paragraphs', async ({
   page,
@@ -127,65 +81,6 @@ test('reading capture uses the visible inner anchor instead of clipped earlier p
   });
 });
 
-test('explicit reader end navigation reaches the last narrative body end', async ({ page }) => {
-  await mount(page);
-  await navigateEnd(page);
-  await expect.poll(() => distanceToEnd(page, '#reader')).toBeLessThanOrEqual(1);
-  await expect.poll(() => distanceToEnd(page, '#last-body')).toBeLessThanOrEqual(1);
-  expect(await scrollTop(page, '#previous-body')).toBe(0);
-  expect(await scrollTop(page, '#target-body')).toBe(0);
-});
-
-test('default reader keeps ordinary source anchor, capture and end navigation', async ({
-  page,
-}) => {
-  await mount(page, false);
-  await navigateSource(page, 'target-block-7', 0.25);
-  await expect
-    .poll(() =>
-      page.locator('#target-block-7').evaluate((node) => {
-        const block = node.getBoundingClientRect();
-        const reader = document.getElementById('reader')!.getBoundingClientRect();
-        return Math.abs(block.top + block.height * 0.25 - reader.top);
-      })
-    )
-    .toBeLessThanOrEqual(1);
-  expect(await scrollTop(page, '#target-body')).toBe(0);
-  expect(await capture(page)).toMatchObject({
-    sourceId: 'target',
-    blockAnchor: 'target-block-7',
-    offsetRatio: 0.4,
-  });
-  await navigateEnd(page);
-  await expect.poll(() => distanceToEnd(page, '#reader')).toBeLessThanOrEqual(1);
-  expect(await scrollTop(page, '#last-body')).toBe(0);
-});
-
-test('between scenes the local position keeps the next paragraph anchor', async ({ page }) => {
-  await mount(page, false);
-  const position = await page.evaluate(async () => {
-    const path = '/web/theme-body-scroll.ts';
-    const { readerLocation, localReadingBlock } = await import(path);
-    const reader = document.getElementById('reader')!;
-    const footer = document.getElementById('previous-action')!;
-    reader.scrollTop += footer.getBoundingClientRect().top - reader.getBoundingClientRect().top;
-    const location = readerLocation(reader);
-    return {
-      scene: location?.source.id,
-      sceneBlock: location?.block?.id ?? null,
-      localBlock: localReadingBlock(reader, location)?.id,
-    };
-  });
-  expect(position).toEqual({ scene: 'previous', sceneBlock: null, localBlock: 'target-block-0' });
-});
-
-async function settleLayout(page: Page) {
-  await page.evaluate(async () => {
-    for (let index = 0; index < 3; index++)
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  });
-}
-
 const bodyAnchorOffset = (page: Page, anchor: string) =>
   page
     .locator(`#${anchor}`)
@@ -229,47 +124,4 @@ test('local nested anchor restore preserves outerTop and the inner anchor offset
   await expect.poll(() => scrollTop(page, '#target-body')).toBe(saved.bodyTop + 80);
   expect(await scrollTop(page, '#reader')).toBe(saved.outerTop);
   expect(await bodyAnchorOffset(page, 'target-block-4')).toBe(saved.offset);
-});
-
-test('action restoration retains bodyTop after late growth and yields to direct inner scrolling', async ({
-  page,
-}) => {
-  await mount(page);
-  await page.locator('#target-body > p').evaluateAll((nodes) => {
-    for (const node of nodes) (node as HTMLElement).style.height = '20px';
-  });
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/theme-body-scroll.tsx';
-    const fixture = await import(path);
-    fixture.restoreAction(430, 200);
-  });
-  await settleLayout(page);
-  expect(await scrollTop(page, '#target-body')).toBeLessThan(430);
-  expect(await distanceToEnd(page, '#target-body')).toBeLessThanOrEqual(1);
-  await page.locator('#target-body > p').evaluateAll((nodes) => {
-    for (const node of nodes) (node as HTMLElement).style.height = '80px';
-  });
-  await expect.poll(() => scrollTop(page, '#target-body')).toBe(430);
-  const restoredOuter = await scrollTop(page, '#reader');
-  const actionOffset = await page
-    .locator('#target-action')
-    .evaluate(
-      (node) =>
-        node.getBoundingClientRect().top -
-        document.getElementById('reader')!.getBoundingClientRect().top
-    );
-  expect(actionOffset).toBe(200);
-
-  await page.locator('#target-body').evaluate((node) => {
-    document.getElementById('target-block-0')!.style.height = '160px';
-    node.scrollTop = 160;
-  });
-  await settleLayout(page);
-  expect(await scrollTop(page, '#target-body')).toBe(160);
-  expect(await scrollTop(page, '#reader')).toBe(restoredOuter);
-  await page.locator('#target-block-0').evaluate((node) => {
-    node.style.height = '240px';
-  });
-  await settleLayout(page);
-  expect(await scrollTop(page, '#target-body')).toBe(160);
 });

@@ -59,20 +59,6 @@ export function mount(nested = true) {
   }
 }
 
-export function navigateSource(anchor?: string, ratio = 0) {
-  cancel();
-  cancel = retainReaderNavigation(
-    document.getElementById('reader')!,
-    { kind: 'source', element: document.getElementById('target')!, anchor, ratio },
-    () => true
-  );
-}
-
-export function navigateEnd() {
-  cancel();
-  cancel = retainReaderNavigation(document.getElementById('reader')!, { kind: 'end' }, () => true);
-}
-
 export function capture(sourceId?: string) {
   return captureReaderLocation(
     document.getElementById('reader')!,
@@ -90,20 +76,6 @@ export function restoreAnchor(anchor: string, outerTop: number, offset: number) 
       element: document.getElementById('target')!,
       anchor,
       outerTop,
-      offset,
-    },
-    () => true
-  );
-}
-
-export function restoreAction(bodyTop: number, offset: number) {
-  cancel();
-  cancel = retainReaderNavigation(
-    document.getElementById('reader')!,
-    {
-      kind: 'source',
-      element: document.getElementById('target-action')!,
-      bodyTop,
       offset,
     },
     () => true

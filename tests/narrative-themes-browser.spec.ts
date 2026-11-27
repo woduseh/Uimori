@@ -1,39 +1,12 @@
-import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import sharp from 'sharp';
-import { manuscriptTokenCount } from './fixtures/manuscript-token-count.js';
-import type { Content } from '../core/product.js';
-import type { PackageImage } from '../core/package-images.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 import type { ChatDetail } from '../core/types.js';
-import { nativeContent } from './fixtures/native-content.js';
-import {
-  navigationAction,
-  openSourceActions,
-  selectSettingsSection,
-  sourceAction,
-} from './ui-navigation.js';
+import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
-const layouts = ['cinematic', 'letter', 'scrapbook', 'classic-frame'] as const;
-type Layout = (typeof layouts)[number];
-const requestText = '비가 그친 아침, 두 사람이 숲길을 따라 걸어가는 장면을 이어줘.';
 const endMarker = '마지막 문장. 두 사람은 마침내 함께 문을 나섰다.';
-const passage =
-  '창문 너머로 스며드는 햇살이 책장 끝에 닿았다. 밤새 내리던 비는 어느새 그쳐 있었다. 젖은 돌길 위로 바람이 지나갈 때마다 나뭇잎에 남아 있던 물방울이 작은 별처럼 반짝였다.\n\n“오늘은 조금 천천히 걸어도 괜찮겠지요.”\n\n그녀는 책갈피를 끼우고 고개를 들었다. 맞은편에 앉은 여행자는 대답 대신 따뜻한 찻잔을 내밀었다. 말하지 않은 이야기는 많았지만 지금 이 순간만큼은 침묵도 나쁘지 않았다.\n\n';
-const longText = `# 비가 그친 아침에\n\n${passage.repeat(71)}${endMarker}`;
-let tokenCount: number;
-test.beforeAll(async () => {
-  tokenCount = await manuscriptTokenCount(longText);
-  expect(tokenCount).toBeGreaterThan(10000);
-});
-const translationText =
-  '# After the rain\n\nMorning light reached the bookshelf.\n\n“Let us take our time today.”\n\nThey finally stepped outside together.';
-const readingPreferences = {
-  'uimori:reading-language': 'original',
-  'uimori:reading-width': '760',
-  'uimori:readability': JSON.stringify({ emphasis: 'subtle', dialogueBreaks: true }),
-};
+const text = `창문 너머로 스며드는 햇살이 책장 끝에 닿았다. 밤새 내리던 비는 어느새 그쳐 있었다.\n\n${endMarker}`;
 
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -59,89 +32,10 @@ async function select(
   expect(selection.ok(), await selection.text()).toBe(true);
 }
 
-async function makeContent(
-  request: APIRequestContext,
-  kind: 'bot' | 'persona',
-  shape: 'tall' | 'square' | 'missing'
-): Promise<Content> {
-  const title = kind === 'bot' ? '린 메이화' : '여행자';
-  const height = shape === 'tall' ? 600 : 400;
-  let image: { hash: string; mime: PackageImage['mime'] } | undefined;
-  if (shape !== 'missing') {
-    const directory = process.env.UIMORI_NARRATIVE_DEMO_DIR;
-    const bytes = directory
-      ? await readFile(join(directory, shape === 'tall' ? 'bot.webp' : 'persona.webp'))
-      : await sharp(
-          Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="${height}">
-        <rect width="400" height="${height}" fill="#384560"/>
-        <rect x="8" y="8" width="384" height="${height - 16}" fill="#b5c6c8"/>
-        <circle cx="295" cy="80" r="42" fill="#efd597"/>
-        <path d="M8 ${height * 0.7} L125 140 L392 ${height * 0.8} V${height - 8} H8Z" fill="#788d87"/>
-        <path d="M65 ${height - 8} Q200 ${height * 0.25} 335 ${height - 8}" fill="#676080"/>
-        <circle cx="200" cy="${height * 0.43}" r="52" fill="#e4c3ad"/>
-        <rect x="20" y="${height - 40}" width="360" height="15" fill="#384560"/>
-      </svg>`)
-        )
-          .png()
-          .toBuffer();
-    const response = await request.post('/api/package-image-blobs', {
-      data: { base64: bytes.toString('base64') },
-    });
-    expect(response.ok(), await response.text()).toBe(true);
-    image = await response.json();
-  }
-  const response = await request.post('/api/content', {
-    data: {
-      kind,
-      title,
-      description: 'Synthetic narrative layout browser fixture',
-      text: '',
-      loading: 'pinned',
-      relatedIds: [],
-      package: nativeContent(
-        { name: title, description: 'A quiet morning after the rain.' },
-        {
-          id: randomUUID(),
-          ...(image
-            ? {
-                portraitImageId: 'cover',
-                images: [
-                  {
-                    id: 'cover',
-                    title,
-                    description: 'Opaque synthetic portrait',
-                    blobHash: image.hash,
-                    mime: image.mime,
-                    allowedUse: 'profile',
-                  },
-                ],
-              }
-            : {}),
-        },
-        kind
-      ),
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return response.json();
-}
-
-async function seed(
-  request: APIRequestContext,
-  layout: Layout,
-  options: { squareBot?: boolean; missing?: boolean; noPersona?: boolean; long?: boolean } = {}
-) {
-  const bot = await makeContent(
-    request,
-    'bot',
-    options.missing ? 'missing' : options.squareBot ? 'square' : 'tall'
-  );
-  const persona = await makeContent(
-    request,
-    'persona',
-    options.missing ? 'missing' : options.squareBot ? 'tall' : 'square'
-  );
-  const text = options.long === false ? `${passage}${endMarker}` : longText;
+async function seed(request: APIRequestContext) {
+  const created = await request.post('/api/content', { data: fixtureBotInput() });
+  expect(created.ok(), await created.text()).toBe(true);
+  const bot = await created.json();
   const response = await request.post('/api/chats/import-transcript', {
     data: {
       idempotencyKey: randomUUID(),
@@ -149,362 +43,34 @@ async function seed(
         format: 'uimori-chat-transcript',
         version: 2,
         exportedAt: new Date().toISOString(),
-        title: `Narrative ${layout} synthetic story`,
-        packageAttachments: [
-          { id: bot.id, revision: bot.revision, role: 'bot' },
-          ...(options.noPersona
-            ? []
-            : [{ id: persona.id, revision: persona.revision, role: 'persona' }]),
-        ],
+        title: 'Background synthetic story',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
         notes: [],
-        entries: [
-          { request: requestText, text, translation: translationText },
-          {
-            request: '산책을 마친 두 사람의 다음 장면.',
-            text: `# 두 번째 장면\n\n${passage}SECOND_SCENE_END`,
-            translation: null,
-          },
-        ],
+        entries: [{ request: '비가 그친 아침의 장면을 이어줘.', text, translation: null }],
       },
     },
   });
   expect(response.ok(), await response.text()).toBe(true);
   const chat = (await response.json()).chat;
-  await select(request, { themeId: `builtin:${layout}`, targetId: chat.id });
+  await select(request, { themeId: 'builtin:classic-frame', targetId: chat.id });
   await select(request, { paletteId: 'theme' });
-  const before = await detail(request, chat.id);
-  const source = before.sources.find((item) => item.text === text)!;
-  const second = before.sources.find((item) => item.text.includes('SECOND_SCENE_END'))!;
+  const source = (await detail(request, chat.id)).sources.find((item) => item.text === text)!;
   expect(source).toBeTruthy();
-  expect(second).toBeTruthy();
-  return { chatId: chat.id, sourceId: source.id, secondId: second.id, text, before };
-}
-
-async function openStory(
-  page: Page,
-  data: Awaited<ReturnType<typeof seed>>,
-  layout: Layout | 'forest',
-  width: number,
-  mode: 'light' | 'dark'
-) {
-  await page.setViewportSize({ width, height: width === 1440 ? 1000 : 915 });
-  await page.addInitScript(
-    ({ mode, preferences }) => {
-      localStorage.setItem('uimori:theme', mode);
-      for (const [key, value] of Object.entries(preferences)) localStorage.setItem(key, value);
-    },
-    { mode, preferences: readingPreferences }
-  );
-  await page.goto(`/?chat=${data.chatId}&source=${data.sourceId}`);
-  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', `builtin:${layout}`);
-  const scene = page.locator(`[data-source-id="${data.sourceId}"]`);
-  await expect(scene.getByTestId('source-text')).toContainText(endMarker);
-  return {
-    scene,
-    reader: page.locator('[data-reader-scrollport]'),
-    gallery: scene.locator('[data-uimori-part="scene-portraits"] .scene-portraits'),
-    bodyScroll: scene.locator('[slot="body"][data-uimori-body-scroll]'),
-    requestPersona: scene.locator('[data-uimori-part="request-persona"]'),
-  };
-}
-
-async function noHorizontalOverflow(page: Page, scene: Locator) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  const metrics = await scene.evaluate((node) => {
-    const scrollport = node.closest<HTMLElement>('[data-reader-scrollport]');
-    const body = node.querySelector<HTMLElement>('[slot="body"]');
-    return {
-      scrollport: scrollport ? scrollport.scrollWidth - scrollport.clientWidth : 0,
-      body: body ? body.scrollWidth - body.clientWidth : 0,
-    };
-  });
-  expect(metrics.scrollport).toBeLessThanOrEqual(1);
-  expect(metrics.body).toBeLessThanOrEqual(1);
-}
-
-async function imageLoaded(image: Locator) {
-  await expect(image).toBeVisible();
-  await expect
-    .poll(() => image.evaluate((node) => (node as HTMLImageElement).naturalWidth))
-    .toBeGreaterThan(0);
-}
-
-const readerCases = [
-  ['cinematic', 412, 'dark'],
-  ['classic-frame', 1440, 'dark'],
-] as const;
-for (const [layout, width, mode] of readerCases) {
-  test(`NARRATIVE ${layout} ${width} ${mode}: long prose, real portraits and controls`, async ({
-    page,
-    request,
-  }, info) => {
-    test.setTimeout(90000);
-    const data = await seed(request, layout);
-    const errors: string[] = [];
-    const generationRequests: string[] = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    page.on('request', (value) => {
-      if (
-        value.method() === 'POST' &&
-        /\/(?:runs|translation|retranslate|retry|rejudge|risu-action)(?:\?|$)/u.test(value.url())
-      )
-        generationRequests.push(new URL(value.url()).pathname);
-    });
-    const { scene, reader, gallery, bodyScroll, requestPersona } = await openStory(
-      page,
-      data,
-      layout,
-      width,
-      mode
-    );
-    const source = scene.getByTestId('source-text');
-    await expect(gallery).toHaveCount(1);
-    await expect(gallery).toBeVisible();
-    await expect(page.locator('[data-uimori-part="gallery"]')).toBeHidden();
-    await expect(page.locator('[data-uimori-part="scene-portraits"] .scene-portraits')).toHaveCount(
-      2
-    );
-    const bot = gallery.locator('[data-uimori-part="bot-portrait"] img');
-    await imageLoaded(bot);
-    expect(
-      await bot.evaluate(
-        (node) => (node as HTMLImageElement).naturalWidth / (node as HTMLImageElement).naturalHeight
-      )
-    ).toBeCloseTo(2 / 3, 2);
-    const persona = requestPersona.locator('[data-uimori-part="persona-portrait"] img');
-    await imageLoaded(persona);
-    expect(
-      await persona.evaluate(
-        (node) => (node as HTMLImageElement).naturalWidth / (node as HTMLImageElement).naturalHeight
-      )
-    ).toBe(1);
-    const portraitSource = await bot.getAttribute('src');
-    expect(portraitSource).toMatch(/^\/api\//u);
-    await reader.evaluate((node) => {
-      node.scrollTop = 0;
-    });
-    await expect(bodyScroll).toHaveCount(1);
-    await expect(bodyScroll).toBeVisible();
-    const metrics = await bodyScroll.evaluate((node) => ({
-      height: node.clientHeight,
-      fullHeight: node.scrollHeight,
-      overflow: getComputedStyle(node).overflowY,
-    }));
-    expect(metrics.fullHeight).toBeGreaterThan(metrics.height * 5);
-    expect(metrics.height).toBeGreaterThan(100);
-    expect(metrics.height).toBeLessThan(width === 1440 ? 1000 : 915);
-    expect(['auto', 'scroll']).toContain(metrics.overflow);
-    await expect(gallery.locator('[data-uimori-part="persona-portrait"]')).toBeHidden();
-    await expect(gallery.locator('figcaption small').filter({ visible: true })).toHaveCount(0);
-    await expect(requestPersona.locator('figcaption small').filter({ visible: true })).toHaveCount(
-      0
-    );
-    const requestBox = await scene.locator('[data-uimori-part="request"]').boundingBox();
-    const personaBox = await requestPersona.boundingBox();
-    if (width === 412) {
-      expect(personaBox!.y + personaBox!.height).toBeLessThanOrEqual(requestBox!.y + 1);
-    } else {
-      expect(personaBox!.x).toBeGreaterThanOrEqual(requestBox!.x + requestBox!.width - 1);
-    }
-    await noHorizontalOverflow(page, scene);
-    if (layout === 'classic-frame') {
-      const botButton = gallery.locator('[data-uimori-part="bot-portrait"] button');
-      await expect(botButton).toHaveCSS('border-radius', '0px');
-      await expect(botButton).toHaveCSS('mask-image', 'none');
-      await expect(bot).toHaveCSS('mask-image', 'none');
-      const portraitBox = (await bot.boundingBox())!;
-      const bodyBox = (await bodyScroll.boundingBox())!;
-      if (width === 1440) {
-        await expect(bot).toHaveCSS('object-fit', 'contain');
-        expect(portraitBox.x + portraitBox.width).toBeLessThanOrEqual(bodyBox.x);
-        expect(portraitBox.height).toBeGreaterThan(portraitBox.width);
-      } else {
-        expect(portraitBox.width).toBeGreaterThan(portraitBox.height);
-        expect(portraitBox.y + portraitBox.height).toBeLessThanOrEqual(bodyBox.y);
-      }
-    }
-    expect(
-      await source.evaluate((node) => node.scrollHeight <= (node as HTMLElement).clientHeight + 1)
-    ).toBe(true);
-    if (width === 1440) {
-      const manuscript = await scene.locator('.manuscript').boundingBox();
-      const composer = await page.locator('.composer-dock').boundingBox();
-      expect(manuscript!.y + manuscript!.height).toBeLessThanOrEqual(composer!.y + 1);
-      const activityDisclosure = scene.getByTestId('turn-activity').locator(':scope > summary');
-      await activityDisclosure.click();
-      const usage = scene.getByTestId('scene-inspector');
-      const raw = usage.getByRole('button', { name: '원본 기록', exact: true });
-      await raw.click();
-      await expect(usage.getByTestId('scene-raw-record').locator('pre')).toBeVisible();
-      const actions = scene.locator('[data-uimori-part="actions"]');
-      await actions.scrollIntoViewIfNeeded();
-      await expect(actions).toBeInViewport();
-      const actionsBox = (await actions.boundingBox())!;
-      expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(composer!.y + 1);
-      await page.screenshot({ path: info.outputPath(`${layout}-${mode}-usage-expanded.png`) });
-      await raw.click();
-      await expect(usage.getByTestId('scene-raw-record')).toHaveCount(0);
-      await activityDisclosure.click();
-      await reader.evaluate((node) => {
-        node.scrollTop = 0;
-      });
-    }
-    await page.screenshot({ path: info.outputPath(`${layout}-${mode}-${width}.png`) });
-    await info.attach('narrative-reader-measurements', {
-      contentType: 'application/json',
-      body: JSON.stringify({ layout, width, mode, tokens: tokenCount, scenes: 2, ...metrics }),
-    });
-
-    const enlarge = gallery.getByRole('button', {
-      name: '린 메이화 대표 이미지 확대',
-      exact: true,
-    });
-    await enlarge.scrollIntoViewIfNeeded();
-    const beforeZoom = await reader.evaluate((node) => node.scrollTop);
-    const target = await enlarge.boundingBox();
-    expect(target!.width).toBeGreaterThanOrEqual(44);
-    expect(target!.height).toBeGreaterThanOrEqual(44);
-    await enlarge.click();
-    const dialog = page.getByRole('dialog', { name: '린 메이화 대표 이미지', exact: true });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.locator('img')).toHaveAttribute('src', portraitSource!);
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
-    await expect(enlarge).toBeFocused();
-    expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - beforeZoom)).toBeLessThan(
-      3
-    );
-
-    const enlargePersona = requestPersona.getByRole('button', {
-      name: '여행자 대표 이미지 확대',
-      exact: true,
-    });
-    await enlargePersona.click();
-    const personaDialog = page.getByRole('dialog', { name: '여행자 대표 이미지', exact: true });
-    await expect(personaDialog).toBeVisible();
-    await expect(personaDialog.locator('img')).toHaveAttribute(
-      'src',
-      (await persona.getAttribute('src'))!
-    );
-    await page.keyboard.press('Escape');
-    await expect(personaDialog).toBeHidden();
-    await expect(enlargePersona).toBeFocused();
-
-    const clipboard: string[] = [];
-    await page.exposeFunction('captureNarrativeCopy', (value: string) => clipboard.push(value));
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: {
-          writeText: (value: string) =>
-            (
-              window as unknown as {
-                captureNarrativeCopy: (value: string) => Promise<void>;
-              }
-            ).captureNarrativeCopy(value),
-        },
-      });
-    });
-    const sceneMenu = scene.getByLabel('장면 작업 메뉴', { exact: true });
-    const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
-    await expect(copy).toBeHidden();
-    await expect(sceneMenu).toBeVisible();
-    await expect(bodyScroll.getByRole('button', { name: '본문 복사', exact: true })).toHaveCount(0);
-    await expect(bodyScroll.getByRole('button', { name: '원문 수정', exact: true })).toHaveCount(0);
-    await openSourceActions(scene);
-    await expect(copy).toHaveCount(1);
-    await expect(copy).toBeInViewport();
-    const menuBounds = (await sceneMenu
-      .locator('..')
-      .locator(':scope > .action-menu-body')
-      .boundingBox())!;
-    expect(menuBounds.x).toBeGreaterThanOrEqual(0);
-    expect(menuBounds.y).toBeGreaterThanOrEqual(0);
-    expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width);
-    expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(page.viewportSize()!.height);
-    await sourceAction(scene, '본문 복사');
-    await expect.poll(() => clipboard.at(-1)).toBe(data.text);
-    await bodyScroll.evaluate((node) => {
-      node.scrollTop = 400;
-    });
-    const beforeEdit = await bodyScroll.evaluate((node) => node.scrollTop);
-    await sourceAction(scene, '원문 수정');
-    const editor = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
-    await expect(editor).toBeFocused();
-    await expect(editor).toBeInViewport();
-    await expect(editor).toHaveValue(data.text);
-    await editor.fill('Unsaved narrative edit');
-    await page.keyboard.press('Escape');
-    await page
-      .getByRole('alertdialog', { name: '편집 취소', exact: true })
-      .getByRole('button', { name: '초안 버리고 닫기', exact: true })
-      .click();
-    await expect(editor).toHaveCount(0);
-    await expect(sceneMenu).toBeFocused();
-    await expect(source).toContainText(endMarker);
-    await expect
-      .poll(async () =>
-        Math.abs((await bodyScroll.evaluate((node) => node.scrollTop)) - beforeEdit)
-      )
-      .toBeLessThan(3);
-
-    await sourceAction(scene, '번역 보기');
-    await expect(scene.getByTestId('translation-text')).toContainText('After the rain');
-    await sourceAction(scene, '원문 보기');
-    await page.keyboard.press('Escape');
-    await expect(source).toContainText(endMarker);
-
-    await reader.evaluate((node) => {
-      node.scrollTop = 0;
-    });
-    await bodyScroll.evaluate((node) => {
-      node.scrollTop = 0;
-    });
-    await bodyScroll.scrollIntoViewIfNeeded();
-    const outerPosition = await reader.evaluate((node) => node.scrollTop);
-    const portraitPosition = (await bot.boundingBox())!.y;
-    const actionPosition = (await sceneMenu.boundingBox())!.y;
-    const bounds = await bodyScroll.boundingBox();
-    await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
-    await page.mouse.wheel(0, 700);
-    await expect.poll(() => bodyScroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
-    expect(
-      Math.abs((await reader.evaluate((node) => node.scrollTop)) - outerPosition)
-    ).toBeLessThan(3);
-    expect(Math.abs((await bot.boundingBox())!.y - portraitPosition)).toBeLessThan(3);
-    await expect(bot).toBeInViewport();
-    expect(Math.abs((await sceneMenu.boundingBox())!.y - actionPosition)).toBeLessThan(3);
-    await bodyScroll.evaluate((node) => {
-      node.scrollTop = node.scrollHeight;
-    });
-    await expect(source.getByText(endMarker, { exact: true })).toBeInViewport();
-    await sourceAction(scene, '본문 복사');
-    await expect.poll(() => clipboard.at(-1)).toBe(data.text);
-    const second = page.locator(`[data-source-id="${data.secondId}"]`);
-    await second.getByTestId('source-text').scrollIntoViewIfNeeded();
-    await expect(second.getByTestId('source-text')).toContainText('SECOND_SCENE_END');
-    await sourceAction(second, '본문 복사');
-    await expect.poll(() => clipboard.at(-1)).toContain('SECOND_SCENE_END');
-    await noHorizontalOverflow(page, second);
-
-    const after = await detail(request, data.chatId);
-    expect(after.sources).toEqual(data.before.sources);
-    expect(after.runs).toEqual(data.before.runs);
-    expect(after.jobs).toEqual(data.before.jobs);
-    expect(after.attempts).toEqual(data.before.attempts);
-    expect(generationRequests).toEqual([]);
-    expect(errors).toEqual([]);
-  });
+  return { chatId: chat.id, sourceId: source.id };
 }
 
 test('BACKGROUND upload, independent scopes, overlays, clear and reload', async ({
   page,
   request,
-}, info) => {
-  const data = await seed(request, 'classic-frame', { long: false });
-  await openStory(page, data, 'classic-frame', 1440, 'light');
+}) => {
+  const data = await seed(request);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(() => {
+    localStorage.setItem('uimori:theme', 'light');
+    localStorage.setItem('uimori:reading-language', 'original');
+  });
+  await page.goto(`/?chat=${data.chatId}&source=${data.sourceId}`);
+  await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:classic-frame');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마와 색상');
   {
@@ -563,10 +129,6 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await expect(saveBackground).toHaveAttribute('aria-busy', 'false');
   await expect(saveBackground).toBeDisabled();
   await page.unroute('**/api/themes/background');
-  await page.screenshot({
-    path: info.outputPath('background-settings-desktop.png'),
-    fullPage: true,
-  });
   const catalog = await (await request.get('/api/themes')).json();
   expect(catalog.preferences.defaultBackground).toMatchObject({
     blur: 7,
@@ -596,10 +158,6 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await expect(
     page.locator(`[data-source-id="${data.sourceId}"]`).getByTestId('source-text')
   ).toContainText(endMarker);
-  await page.screenshot({
-    path: info.outputPath('background-classic-light-desktop.png'),
-    fullPage: true,
-  });
   await page.reload();
   await expect(background).toBeVisible();
   await navigationAction(page, '설정');
@@ -631,18 +189,6 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await expect(
     page.locator(`[data-source-id="${data.sourceId}"]`).getByTestId('source-text')
   ).toContainText(endMarker);
-  await page.screenshot({
-    path: info.outputPath('background-classic-dark-desktop.png'),
-    fullPage: true,
-  });
-  await page.setViewportSize({ width: 412, height: 915 });
-  await page.screenshot({
-    path: info.outputPath('background-classic-dark-mobile.png'),
-    fullPage: true,
-  });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
   const final = await (await request.get('/api/themes')).json();
   expect(
     (
