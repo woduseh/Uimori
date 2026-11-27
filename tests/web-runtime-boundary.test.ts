@@ -55,8 +55,8 @@ test('web modules never load Node-only modules at runtime', () => {
     [
       'The browser bundle reaches Node-only code (node:* builtins, core/local-tokenizers.ts, server/):',
       ...chains.map((chain) => `  ${chain}`),
-      'Move the values web/ needs into a small browser-safe core/ module and import that instead,',
-      'as core/illustration-cuts.ts and core/novelai-settings.ts do. Use `import type` for types only.',
+      'Move the values web/ needs into packages/contracts (wire shapes shared with the server) or a',
+      'small browser-safe core/ module such as core/illustration-cuts.ts. Use `import type` for types only.',
     ].join('\n')
   ).toEqual([]);
 });

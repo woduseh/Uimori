@@ -109,7 +109,12 @@
                       "**/tests",
                       "**/tests/**",
                       "**/scripts",
-                      "**/scripts/**"
+                      "**/scripts/**",
+                      "**/runner",
+                      "**/runner/**",
+                      "**/third_party",
+                      "**/third_party/**",
+                      "**/package.json"
                     ],
                     "message": "Contracts are the lowest layer and cannot import application code, including types."
                   }
@@ -134,6 +139,10 @@
                     "message": "Product code cannot import tests or operational scripts."
                   },
                   {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
                     "group": ["**/server", "**/server/**", "**/web", "**/web/**"],
                     "message": "Core cannot import application layers, including types."
                   }
@@ -156,6 +165,10 @@
                   {
                     "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
                     "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
                   },
                   {
                     "group": ["**/web", "**/web/**"],
@@ -191,8 +204,12 @@
                     "message": "Product code cannot import tests or operational scripts."
                   },
                   {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
                     "group": ["**/server", "**/server/**"],
-                    "message": "Browser contracts belong in core; do not import server code or types."
+                    "message": "Browser contracts belong in packages/contracts or core; do not import server code or types."
                   },
                   {
                     "group": [

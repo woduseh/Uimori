@@ -10,8 +10,12 @@ registerHooks({ resolve(specifier, context, nextResolve) {
     try {
       return nextResolve(specifier, context);
     } catch (error) {
-      if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !String(error.url).endsWith('.js')) throw error;
-      return nextResolve(error.url.slice(0, -3) + '.ts', context);
+      const missing = error?.code === 'ERR_MODULE_NOT_FOUND' ? error.url : undefined;
+      if (typeof missing !== 'string' || !missing.startsWith('file:') || !missing.endsWith('.js'))
+        throw error;
+      const source = missing.slice(0, -3) + '.ts';
+      if (!existsSync(fileURLToPath(source))) throw error;
+      return nextResolve(source, context);
     }
   }
   if ((specifier.startsWith('.') || specifier.startsWith('file:')) && specifier.endsWith('.js')) {

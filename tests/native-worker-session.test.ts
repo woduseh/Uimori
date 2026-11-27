@@ -22,7 +22,7 @@ type Result = {
   };
 };
 const module = new URL('./fixtures/native-worker-session.mjs', import.meta.url);
-const sessions = new Set<ReturnType<typeof createNativeRisuWorkerSession<Input, Result>>>();
+const sessions = new Set<{ close(): Promise<unknown> }>();
 afterEach(async () => {
   for (const session of sessions) await session.close();
   sessions.clear();
@@ -32,6 +32,16 @@ function session(timeout = 3000, signal?: AbortSignal) {
   sessions.add(value);
   return value;
 }
+
+test('a worker run from source resolves #contracts to its TypeScript module', async () => {
+  const value = createNativeRisuWorkerSession<undefined, string>(
+    new URL('./fixtures/native-worker-contracts.mjs', import.meta.url),
+    'evaluate',
+    3000
+  );
+  sessions.add(value);
+  assert.equal(await value.run(undefined), 'MAINTENANCE_CLOSED');
+});
 
 test('serial calls reuse one worker, evaluate again and clone each input/result', async () => {
   const value = session();
