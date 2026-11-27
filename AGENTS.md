@@ -6,7 +6,7 @@ Uimori is a single-user, self-hosted creative-writing app. Favor simple, maintai
 
 These are not defaults, and nothing below overrides them.
 
-- Saved text, text the user is typing, credentials and access boundaries survive a change, a failure and a migration.
+- Saved text, unsaved drafts in authoring editors (lorebooks, resources and other long writing) and backup restore survive a change, a failure and a migration. Paid generation never runs or repeats without the user's request. A lost credential may simply be re-entered, but the access gate and provider keys stay closed to anyone else. A short chat input needs no safeguard of its own.
 - Commit finished, verified work locally. Branches, pushes and pull requests need no go-ahead once the checks the change needs have passed. A red `main` is acceptable in this one-person project and is fixed forward.
 - A new dependency or a schema migration is the agent's decision when it earns its place. A migration opens an existing database without losing data and comes with a test from the previous schema on real-shaped data, including backup restore.
 - A release (a version change, a tag, new release notes, the Oracle release scripts) is the user's alone: an agent never starts one, even with a go-ahead. The PreToolUse hook in `.claude/settings.json` and `.githooks/pre-push` refuse these steps unless the user set `UIMORI_ALLOW_RELEASE=1` for the session or the push. Do not bypass or weaken them.
@@ -14,7 +14,7 @@ These are not defaults, and nothing below overrides them.
 
 ## Product intent
 
-- A constraint on what the helper, a tool or a model runtime may do stays only if it protects something concrete of the user's: saved data, text being typed, paid generation, credentials. Prefer a recoverable outcome (execute, or return a correction and continue) over failing a run, and prefer changing a contract document over adding a refusal for its sake.
+- A constraint on what the helper, a tool or a model runtime may do stays only if it protects something concrete of the user's: saved text, drafts in authoring editors, paid generation, backup restore. The same test applies to engineering safeguards: this is one person's self-hosted app whose web client and runner ship in the same build, so version-skew compatibility, defenses against deployments it cannot have, and checks that the same build already guarantees are removed rather than kept. Prefer a recoverable outcome (execute, or return a correction and continue) over failing a run, and prefer changing a contract document over adding a refusal for its sake.
 - A test earns its place by what it protects; [CHECKS](docs/dev/CHECKS.md#which-tests-to-keep) lists what to keep and what to delete.
 - The app feels like one app through shared tokens and controls. How a screen looks and feels is the user's call: in a report, name the screens and states they should look at themself.
 
