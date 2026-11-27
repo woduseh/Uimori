@@ -313,7 +313,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
           if (rendered.cacheable)
             reply.header('ETag', etag).header('Cache-Control', 'private, no-cache');
           return reply.type('application/json; charset=utf-8').send(rendered.body);
-        });
+        }, 'presentation');
       } finally {
         interactive--;
         pumpPrecompute();

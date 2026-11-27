@@ -85,15 +85,15 @@ test('a core validator error thrown inside any route answers its catalogued code
     app.get('/api/test-agent-collaboration-error', () => {
       throw new AgentCollaborationError('AGENT_COLLABORATION_AGENT_ID');
     });
-    expect((await app.inject('/api/test-agent-collaboration-error')).json()).toEqual({
-      code: 'AGENT_COLLABORATION_INVALID',
-    });
-    expect((await app.inject('/api/test-risu-prompt-error')).json()).toEqual({
-      code: 'RISU_PROMPT_INVALID',
-    });
-    expect((await app.inject('/api/test-risu-content-error')).json()).toEqual({
-      code: 'RISU_CONTENT_INVALID',
-    });
+    const collaboration = await app.inject('/api/test-agent-collaboration-error');
+    expect(collaboration.statusCode).toBe(400);
+    expect(collaboration.json()).toEqual({ code: 'AGENT_COLLABORATION_INVALID' });
+    const prompt = await app.inject('/api/test-risu-prompt-error');
+    expect(prompt.statusCode).toBe(400);
+    expect(prompt.json()).toEqual({ code: 'RISU_PROMPT_INVALID' });
+    const content = await app.inject('/api/test-risu-content-error');
+    expect(content.statusCode).toBe(400);
+    expect(content.json()).toEqual({ code: 'RISU_CONTENT_INVALID' });
     const conflict = await app.inject('/api/test-validation-error');
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json()).toEqual({ code: 'LORE_PINNED_BUDGET_EXCEEDED' });

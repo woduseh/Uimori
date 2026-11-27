@@ -160,7 +160,12 @@ export function BackupFileImport({
       if (input.current) input.current.value = '';
       await onImported().catch(() => setError(uiMessage('transfer.m127')));
     } catch (caught) {
-      setUncertain(!definiteImportFailure(caught, uncertain));
+      const confirmedFailure = definiteImportFailure(caught, uncertain);
+      setUncertain(!confirmedFailure);
+      if (confirmedFailure) {
+        setSelection(null);
+        if (input.current) input.current.value = '';
+      }
       setError(toUiMessage(caught));
     } finally {
       lock.current = false;

@@ -247,7 +247,21 @@ test('PERSONAL an expired archive answered after an uncertain restore lets the f
   await expect(file).toBeDisabled();
   await recheck.click();
   await expect(recheck).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '새 자료로 가져오기', exact: true })).toHaveCount(
+    0
+  );
   await expect(file).toBeEnabled();
+  await expect(file).toHaveValue('');
   expect(submissions).toHaveLength(2);
   expect(submissions[1]).toEqual(submissions[0]);
+  const reviewed = page.waitForResponse((response) =>
+    response.url().endsWith('/api/native-transfers/prepare-archive')
+  );
+  await file.setInputFiles({
+    name: 'resource.uimori',
+    mimeType: 'application/zip',
+    buffer: await exported.body(),
+  });
+  expect((await reviewed).ok()).toBe(true);
+  await expect(page.getByRole('button', { name: '새 자료로 가져오기', exact: true })).toBeVisible();
 });

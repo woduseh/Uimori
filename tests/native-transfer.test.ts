@@ -294,16 +294,41 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(snapshot(target.store)).toEqual(applied);
   for (let index = 0; index < 260; index++)
     saveImportReceipt(target.store, `unrelated-${index}`, 'digest', { index });
-  const reviewedBeforeUpgrade = structuredClone(source.file);
-  reviewedBeforeUpgrade.contents[0].source.title += ' as re-read after an upgrade';
   const late = await target.app.inject({
     method: 'POST',
     url: '/api/native-transfers/apply',
-    payload: { ...request(source.file), file: reviewedBeforeUpgrade },
+    payload: { ...request(source.file), digest: 'digest-reviewed-before-an-upgrade' },
   });
   expect(late.json()).toEqual({ ...receipt, created: false });
   expect(snapshot(target.store).versions).toEqual(applied.versions);
   expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+
+test('a transfer retry is the same request in any binding order, and only for the same file', async () => {
+  const source = sourceFixture(),
+    target = database();
+  const collaboration = source.file.prompts[0].source.program.collaboration!;
+  collaboration.agents.push({ ...collaboration.agents[0], id: 'editor' });
+  const command = request(source.file, 'binding-order');
+  expect(command.modelBindings).toHaveLength(2);
+  const apply = (payload: Record<string, unknown>) =>
+    target.app.inject({ method: 'POST', url: '/api/native-transfers/apply', payload });
+  const first = await apply(command);
+  expect(first.statusCode, first.body).toBe(200);
+  const applied = snapshot(target.store).versions;
+  const reordered = await apply({
+    ...command,
+    modelBindings: [...command.modelBindings].reverse(),
+  });
+  expect(reordered.json()).toEqual({ ...first.json(), created: false });
+  const otherFile = structuredClone(source.file);
+  otherFile.contents[0].source.title += ' edited';
+  for (const payload of [
+    { ...command, file: otherFile },
+    { ...command, file: undefined },
+  ])
+    expect((await apply(payload)).statusCode).toBe(409);
+  expect(snapshot(target.store).versions).toEqual(applied);
 });
 
 test('NATIVE03 same installation IDs and duplicate names are copied; durable keys prevent duplicates across reopen', () => {

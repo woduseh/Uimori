@@ -92,7 +92,7 @@ export function importPreparedChatBackup(
 ): ChatBackupImport {
   const file = prepared.manifest.resources;
   const original = checkedBackup({ ...prepared.manifest.backup, resources: file }, true);
-  const key = `chat:${text(idempotencyKey, 'import request', 100)}`,
+  const key = `chat:${text(idempotencyKey, 'import request', 120)}`,
     digest = bundleDigest(prepared.manifest);
   const binary = new Map(prepared.images.map((image) => [`archive:${image.hash}`, image]));
   return store.transaction(() => {
