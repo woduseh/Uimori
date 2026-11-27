@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { docsOnly, versionChanged, windowsSensitive } from './ci-changes.mjs';
+import { browserSelection, docsOnly, versionChanged, windowsSensitive } from './ci-changes.mjs';
+import { readFeatureMap } from './feature-map.mjs';
 import { buildFingerprint } from './lib.mjs';
 
 test('a version change between the pushed revisions marks a release candidate', () => {
@@ -80,4 +81,44 @@ test('code, workflow and empty change sets run the full quality steps', () => {
     ['docs/READING.md', 'server/app.ts'],
   ])
     assert.equal(docsOnly(files), false);
+});
+
+function featureMap(specCounts) {
+  return {
+    domains: Object.fromEntries(
+      Object.entries(specCounts).map(([name, count]) => [
+        name,
+        {
+          title: name,
+          sources: [`web/${name}/**`],
+          specs: Array.from({ length: count }, (_, i) => ({ file: `tests/${name}-${i}.spec.ts` })),
+        },
+      ])
+    ),
+  };
+}
+
+test('a pull request runs the changed browser domains up to one full shard of specs', () => {
+  const map = featureMap({ reader: 4, chat: 3, helper: 2 });
+  assert.deepEqual(browserSelection(map, ['web/reader/Reader.tsx', 'web/helper/Helper.tsx']), {
+    domains: [],
+    specs: 6,
+    cap: 3,
+    full: true,
+  });
+  assert.deepEqual(browserSelection(map, ['web/chat/Composer.tsx', 'server/app.ts']), {
+    domains: ['chat'],
+    specs: 3,
+    cap: 3,
+    full: false,
+  });
+  assert.equal(browserSelection(map, ['web/style.css', 'docs/dev/CHECKS.md']).domains.length, 0);
+});
+
+test('the real feature map selects a small domain change without the full browser shards', () => {
+  const map = readFeatureMap();
+  const [name, domain] = Object.entries(map.domains).find(([, entry]) => entry.specs.length === 1);
+  const selection = browserSelection(map, [domain.specs[0].file]);
+  assert.deepEqual(selection.domains, [name]);
+  assert.equal(selection.full, false);
 });

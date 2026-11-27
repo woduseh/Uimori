@@ -1,10 +1,9 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runBrowserVerification } from './browser-verification.mjs';
-import { is } from './change-classifier.mjs';
 import { changedFiles } from './check-changed.mjs';
+import { readFeatureMap, selectChanged } from './feature-map.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const usage = [
@@ -35,10 +34,6 @@ const harnessOptions = new Set([...valueOptions, '--visual']);
 const minimumTimeout = 900_000;
 const perFileTimeout = 60_000;
 const fullTimeout = 3_600_000;
-
-export function readFeatureMap(directory = root) {
-  return JSON.parse(readFileSync(path.join(directory, 'tests/feature-map.json'), 'utf8'));
-}
 
 export function parseArguments(argv) {
   if (argv[0] === '--changed') {
@@ -201,24 +196,6 @@ export function planVerification(map, requested, { env = process.env, label } = 
     }
   }
   return { runs, skipped };
-}
-
-export function selectChanged(map, files) {
-  const owners = new Set();
-  const uncovered = [];
-  for (const file of files) {
-    const matched = Object.entries(map.domains).filter(
-      ([, domain]) =>
-        domain.sources.some((pattern) => path.posix.matchesGlob(file, pattern)) ||
-        domain.specs.some((entry) => entry.file === file)
-    );
-    for (const [name] of matched) owners.add(name);
-    if (!matched.length && is.browserInput(file)) uncovered.push(file);
-  }
-  return {
-    domains: Object.keys(map.domains).filter((name) => owners.has(name)),
-    uncovered,
-  };
 }
 
 function runScript(script, args) {

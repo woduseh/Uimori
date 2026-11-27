@@ -12,6 +12,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite, and `npm run test:tooling:fast` runs it without rebuilding when `dist/` already matches the source |
 | Cross-cutting changes beyond focused coverage | Consider `npm run quality:full` and broader browser coverage for the interactions at risk |
 | Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |
+| An approved change before its merge | The pull request's `quality` check: the static checks, the `check:changed` Vitest selection, the changed browser domains and, for a change outside `web/`, specs and documentation, the Windows tooling suite; see [DEVELOPMENT](DEVELOPMENT.md#static-checks-and-ci). No local repeat is needed |
 | Release candidate | `npm run release:check -- --area <domain>`; see [DEVELOPMENT](DEVELOPMENT.md#release-checks) |
 
 A review of a branch follows [REVIEW-RUBRIC](REVIEW-RUBRIC.md).

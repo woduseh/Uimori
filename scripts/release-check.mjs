@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { assertBuild, json, newId, root } from './lib.mjs';
-import { privateMaterialEnv, readFeatureMap, verificationNames } from './verify.mjs';
+import { readFeatureMap } from './feature-map.mjs';
+import { privateMaterialEnv, verificationNames } from './verify.mjs';
 import {
   identityKey,
   isMain,

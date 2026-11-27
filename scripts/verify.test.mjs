@@ -5,9 +5,9 @@ import {
   planVerification,
   privateMaterialEnv,
   runOptions,
-  selectChanged,
   verificationNames,
 } from './verify.mjs';
+import { selectChanged } from './feature-map.mjs';
 
 const map = {
   version: 1,
