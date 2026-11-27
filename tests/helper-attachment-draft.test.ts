@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import type { HelperAttachmentDraft } from '../web/helper-attachment-draft.js';
+import { uiMessage } from '../web/ui-message.js';
 
 const state = vi.hoisted(() => ({
   disk: new Map<string, HelperAttachmentDraft>(),
@@ -114,7 +115,8 @@ test('failed identity writes followed by reload cannot let an old receipt erase 
   const sent = await drafts.freezeHelperAttachments('first', model);
   state.writeFails = true;
   drafts.touchHelperAttachments('first');
-  await expect(drafts.freezeHelperAttachments('first', model)).rejects.toThrow('disk unavailable');
+  const failed = await drafts.freezeHelperAttachments('first', model).catch((error) => error);
+  expect(failed.uiMessage).toEqual(uiMessage('helperAttachments.saveFailed'));
   vi.resetModules();
   state.writeFails = false;
   drafts = await import('../web/helper-attachment-draft.js');

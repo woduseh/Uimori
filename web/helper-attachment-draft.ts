@@ -179,8 +179,9 @@ export async function freezeHelperAttachments(
   if (invalid) throw new UiError(invalid);
   try {
     await owner.write;
-  } catch (error) {
-    if (draft.images.length || draft.files.length) throw error;
+  } catch (cause) {
+    if (draft.images.length || draft.files.length)
+      throw new UiError(uiMessage('helperAttachments.saveFailed'), { cause });
   }
   const frozen: FrozenHelperAttachments = { draftToken: draft.token };
   for (const [kind, attachments] of [
