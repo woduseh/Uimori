@@ -1,4 +1,5 @@
-export const sourceRoots = ['core', 'server', 'web', 'runner', 'scripts', 'tests'];
+export const runtimeRoots = ['core', 'server', 'web', 'runner'];
+export const sourceRoots = [...runtimeRoots, 'scripts', 'tests'];
 
 const patterns = {
   biomeFile: /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u,
@@ -17,8 +18,10 @@ const patterns = {
   scriptFile: /^scripts\//u,
   topLevelScript: /^scripts\/[^/]+$/u,
   markdownFile: /\.md$/u,
-  browserInput:
-    /^(?:web|core|server|runner)\/|^tests\/(?:fixtures\/|[^/]+\.spec\.ts$)|^playwright\.config\.ts$/u,
+  browserInput: new RegExp(
+    `^(?:${runtimeRoots.join('|')})/|^tests/(?:fixtures/|[^/]+\\.spec\\.ts$)|^playwright\\.config\\.ts$`,
+    'u'
+  ),
   inertDocumentation:
     /^(?:docs\/(?:dev|plans|releases)\/[^\r\n]+\.md|README(?:\.ko)?\.md|AGENTS\.md|LICENSE)$/u,
   windowsInsensitive:

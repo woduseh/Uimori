@@ -116,6 +116,30 @@ test('a scripts change runs its paired tooling test, or the whole tooling suite 
   );
 });
 
+test('a script change also runs the tooling tests of scripts and hooks that import it indirectly', () => {
+  const toolingSources = {
+    'scripts/change-classifier.test.mjs': "import { is } from './change-classifier.mjs';",
+    'scripts/ci-changes.test.mjs': "import { docsOnly } from './ci-changes.mjs';",
+    'scripts/pre-push-hook.test.mjs': "import '../.githooks/pre-push.mjs';",
+    'scripts/doctor.test.mjs': "import { doctor } from './doctor.mjs';",
+  };
+  const scriptSources = {
+    'scripts/ci-changes.mjs': "import { docsOnly } from './change-classifier.mjs';",
+    '.githooks/pre-push.mjs': "import { versionChanged } from '../scripts/ci-changes.mjs';",
+    'scripts/doctor.mjs': "import { run } from './lib.mjs';",
+  };
+  const { tooling } = checkChanged.selectChecks(
+    ['scripts/change-classifier.mjs'],
+    {},
+    { toolingTests: Object.keys(toolingSources), toolingSources, scriptSources }
+  );
+  assert.deepEqual(tooling, [
+    'scripts/change-classifier.test.mjs',
+    'scripts/ci-changes.test.mjs',
+    'scripts/pre-push-hook.test.mjs',
+  ]);
+});
+
 test('global configuration changes are reported as needing the full suite', () => {
   for (const file of [
     'package.json',

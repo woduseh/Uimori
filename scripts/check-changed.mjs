@@ -21,7 +21,20 @@ function importsAny(test, source, stems) {
   );
 }
 
-function selectToolingTests(files, toolingTests, toolingSources = {}) {
+function addImporters(stems, scriptSources) {
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [script, source] of Object.entries(scriptSources)) {
+      const stem = withoutModuleExtension(script);
+      if (stems.has(stem) || !importsAny(script, source, stems)) continue;
+      stems.add(stem);
+      grew = true;
+    }
+  }
+}
+
+function selectToolingTests(files, toolingTests, toolingSources = {}, scriptSources = {}) {
   const selected = [];
   const stems = new Set();
   let unmatched = false;
@@ -39,6 +52,7 @@ function selectToolingTests(files, toolingTests, toolingSources = {}) {
     } else if (is.scriptFile(file)) unmatched = true;
   }
   if (unmatched) return 'all';
+  addImporters(stems, scriptSources);
   for (const test of toolingTests) {
     const source = toolingSources[test];
     if (source && importsAny(test, source, stems)) selected.push(test);
@@ -60,7 +74,7 @@ export function vitestRelatedFiles(files, exists) {
 export function selectChecks(
   files,
   testSources,
-  { exists = () => true, toolingTests = [], toolingSources = {} } = {}
+  { exists = () => true, toolingTests = [], toolingSources = {}, scriptSources = {} } = {}
 ) {
   const modules = files.filter(is.moduleFile);
   const markers = files
@@ -96,7 +110,7 @@ export function selectChecks(
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
     firstHopTests,
-    tooling: selectToolingTests(files, toolingTests, toolingSources),
+    tooling: selectToolingTests(files, toolingTests, toolingSources, scriptSources),
     fullRequired: files.filter(is.fullSuiteInput),
     notes: files.some(is.distEntry)
       ? [
@@ -168,16 +182,28 @@ function toolingTestFiles() {
     .filter(is.toolingTestFile);
 }
 
+function scriptFiles() {
+  return ['scripts', '.githooks', '.claude/hooks']
+    .filter((directory) => existsSync(join(root, directory)))
+    .flatMap((directory) =>
+      readdirSync(join(root, directory)).map((name) => `${directory}/${name}`)
+    )
+    .filter((file) => file.endsWith('.mjs') && !is.toolingTestFile(file));
+}
+
+function readSources(files) {
+  return Object.fromEntries(files.map((file) => [file, readFileSync(join(root, file), 'utf8')]));
+}
+
 function collectChecks(base) {
   const files = changedFiles(base);
   const toolingTests = toolingTestFiles();
-  const toolingSources = Object.fromEntries(
-    toolingTests.map((file) => [file, readFileSync(join(root, file), 'utf8')])
-  );
+  const toolingSources = readSources(toolingTests);
   const checks = selectChecks(files, testSources(), {
     exists: (file) => existsSync(join(root, file)),
     toolingTests,
     toolingSources,
+    scriptSources: readSources(scriptFiles()),
   });
   return { files, checks, toolingSources };
 }
