@@ -31,6 +31,12 @@ export function definiteRejection(error: unknown): boolean {
     error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408
   );
 }
+export function definiteImportFailure(error: unknown, uncertain: boolean): boolean {
+  return (
+    definiteRejection(error) &&
+    (!uncertain || (error as ApiError).code === 'RISU_IMPORT_DRAFT_CHANGED')
+  );
+}
 export const sessionRequiredEvent = 'uimori-session-required';
 export const maintenanceChangedEvent = 'uimori-maintenance-changed';
 let maintenance: MaintenanceStatus | null = null;

@@ -140,3 +140,27 @@ test('imported options apply through existing workspace and actual chat preview 
   expect(messages).not.toContain('QUIET');
   expect(store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
+
+test('a saved import whose response was lost answers its receipt even when the preview digest changed since', () => {
+  const { store } = fixture();
+  const source = sourceOf({
+    ...document(),
+    promptTemplate: [...document().promptTemplate, { type: 'memory' }],
+  });
+  const preview = prepareRisuPresetImport({ source });
+  const command = {
+    source,
+    digest: preview.digest,
+    allowPartial: true,
+    idempotencyKey: 'lost-response',
+  };
+  const before = store.product.all('prompt-preset').length;
+  const first = applyRisuPresetImport(store, command);
+  const retry = applyRisuPresetImport(store, { ...command, digest: 'digest-before-upgrade' });
+  expect(retry.receipt).toEqual({ ...first.receipt, created: false });
+  expect(retry.preset.id).toBe(first.preset.id);
+  expect(store.product.all('prompt-preset')).toHaveLength(before + 1);
+  expect(() =>
+    applyRisuPresetImport(store, { ...command, digest: 'stale', idempotencyKey: 'never-saved' })
+  ).toThrow(expect.objectContaining({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' }));
+});

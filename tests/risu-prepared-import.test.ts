@@ -44,6 +44,21 @@ vi.mock('node:fs', async (original) => {
   };
 });
 
+const receiptLookups = vi.hoisted(() => ({ misses: 0 }));
+vi.mock('../server/import-operations.js', async (original) => {
+  const actual = await original<typeof import('../server/import-operations.js')>();
+  return {
+    ...actual,
+    readImportReceipt: (...args: Parameters<typeof actual.readImportReceipt>) => {
+      if (receiptLookups.misses > 0) {
+        receiptLookups.misses--;
+        return undefined;
+      }
+      return actual.readImportReceipt(...args);
+    },
+  };
+});
+
 const fixtures: { store: Store; directory: string }[] = [];
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-prepared-test-'));
@@ -54,6 +69,7 @@ function fixture() {
 afterEach(() => {
   filesystemFailure.cleanup = '';
   filesystemFailure.publish = '';
+  receiptLookups.misses = 0;
   for (const { store, directory } of fixtures.splice(0)) {
     store.close();
     const path = resolve(directory),
@@ -423,6 +439,24 @@ test('a draft staged before an upgrade asks for a fresh review instead of applyi
   expect(store.db.prepare('SELECT COUNT(*) AS count FROM import_operations').get()).toEqual({
     count: 0,
   });
+});
+
+test('a retry whose first request saved and removed its staging meanwhile answers the receipt', async () => {
+  const store = fixture();
+  const input = await source();
+  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const command = {
+    source: input,
+    preparedId: preview.preparedId,
+    digest: preview.digest,
+    allowPartial: false,
+    createChat: false,
+    idempotencyKey: 'raced-retry',
+  };
+  const first = await applyRisuImport(store, command);
+  receiptLookups.misses = 1;
+  const retry = await applyRisuImport(store, command);
+  expect(retry.receipt).toEqual({ ...first.receipt, created: false });
 });
 
 test('a catalogued validation error raised in the worker keeps its code', async () => {
