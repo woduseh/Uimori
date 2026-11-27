@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Activity as TestIcon, Globe as LocationIcon } from 'lucide-react';
 import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
-import { callEndpoint } from './api.js';
+import { callEndpoint, definiteRejection } from './api.js';
 import { ProviderRejectionNotice, rejectionMessage } from './provider-rejection.js';
 import { vertexLocationOptions } from '../core/vertex-location.js';
 import { vertexLocationLabel } from './vertex-location-label.js';
@@ -19,6 +19,7 @@ type TestDisplay = {
   idempotencyKey: string;
   result?: ProviderConnectionTest;
   error?: UiMessage;
+  rejected?: boolean;
   cancelled?: boolean;
 };
 export const testKey = (model: Pick<ModelPreset, 'id' | 'revision'>, location?: string) =>
@@ -75,7 +76,8 @@ export function useProviderModelTests() {
     const previous = current.current[key],
       controller = new AbortController();
     controllers.current.set(key, controller);
-    const recovery = previous?.error !== undefined || previous?.cancelled === true;
+    const recovery =
+      (previous?.error !== undefined && !previous.rejected) || previous?.cancelled === true;
     const idempotencyKey = recovery ? previous.idempotencyKey : crypto.randomUUID();
     let result = recovery ? previous.result : undefined;
     save(key, { pending: true, idempotencyKey, ...(result ? { result } : {}) });
@@ -118,6 +120,7 @@ export function useProviderModelTests() {
           idempotencyKey,
           ...(result ? { result } : {}),
           error: toUiMessage(error, 'providers.m293'),
+          ...(!result && definiteRejection(error) ? { rejected: true } : {}),
         });
     } finally {
       if (controllers.current.get(key) === controller) controllers.current.delete(key);
@@ -185,6 +188,7 @@ function locationOutcome(record: TestDisplay | undefined): string {
   if (record?.pending) return t('providers.m294');
   if (record?.cancelled) return t('providers.vertexCompareCancelled');
   if (result?.status === 'running') return t('providers.m294');
+  if (record?.rejected && record.error) return formatUiMessage(record.error);
   if (record?.error || !result) return t('providers.m300');
   if (result.status === 'completed' && result.latencyMs !== null)
     return t('providers.vertexCompareSeconds', { value0: (result.latencyMs / 1000).toFixed(1) });
@@ -339,7 +343,7 @@ export function ProviderModelTestActions({
         <TestIcon size={18} aria-hidden="true" />
         {record?.pending
           ? t('providers.m294')
-          : record?.error
+          : record?.error && !record.rejected
             ? t('providers.m303')
             : t('providers.m304')}
       </button>
@@ -399,7 +403,11 @@ export function ProviderModelTest({
     >
       <div className="provider-model-test-content">
         {record?.pending && !result && <p role="status">{t('providers.m294')}</p>}
-        {record?.error ? (
+        {record?.error && record.rejected ? (
+          <div className="provider-test-result" role="alert">
+            <p>{formatUiMessage(record.error)}</p>
+          </div>
+        ) : record?.error ? (
           <div className="provider-test-result" role="alert">
             <p>{t('providers.m306')}</p>
             <details>

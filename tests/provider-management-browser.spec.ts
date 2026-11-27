@@ -764,6 +764,35 @@ test('PMUI14 an uncertain response test reuses its key until an explicit new tes
   expect(keys[2]).not.toBe(keys[1]);
 });
 
+test('PMUI17 a response test refused before admission says why and starts the next test with a new key', async ({
+  page,
+  request,
+}) => {
+  const title = 'PMUI17 ' + Date.now(),
+    connection = await api<Connection>(request, '/connections', connectionInput(title)),
+    model = await api<ModelPreset>(request, '/model-presets', modelInput(connection, title));
+  const keys: string[] = [];
+  await page.route(`**/api/provider-management/models/${model.id}/test`, (route) => {
+    keys.push(route.request().postDataJSON().idempotencyKey);
+    return route.fulfill({ status: 409, json: { code: 'CONNECTION_TEST_RUNNING' } });
+  });
+  await settings(page);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
+  await revealProviderDiagnostics(page, title);
+  const button = page.getByRole('button', { name: title + ' 응답 테스트', exact: true }),
+    result = page.getByRole('region', { name: title + ' 응답 테스트 결과', exact: true });
+  await button.click();
+  await expect(result.getByRole('alert')).toContainText(
+    '이 연결의 응답 테스트가 이미 진행 중이에요.'
+  );
+  await expect(result).not.toContainText('실행 결과를 확인하지 못했어요.');
+  await revealProviderDiagnostics(page, title);
+  await expect(button).toHaveText('응답 테스트');
+  await button.click();
+  await expect.poll(() => keys.length).toBe(2);
+  expect(keys[1]).not.toBe(keys[0]);
+});
+
 test('PMUI16 a busy Codex sign-in names why it was refused instead of a generic failure', async ({
   page,
 }) => {
