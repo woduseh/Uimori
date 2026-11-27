@@ -38,7 +38,7 @@ export function AutoTranslationDefaults() {
         }
       })
       .catch((cause) => {
-        if (alive) setError(toUiMessage(cause, 'settings.m100'));
+        if (alive) setError(toUiMessage(cause));
       })
       .finally(() => {
         if (alive) setLoading(false);

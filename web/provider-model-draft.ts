@@ -1,4 +1,5 @@
 import { formatNumber } from './i18n.js';
+import { ProviderContractError } from '../core/provider-errors.js';
 import { uiMessage, type UiMessage } from './ui-message.js';
 import type { GeminiSafetySettings } from '../core/gemini-safety.js';
 import type {
@@ -356,7 +357,16 @@ export function modelDraftError(
     )
       return uiMessage('providers.m327');
     return null;
-  } catch {
-    return uiMessage('providers.m577', { value0: uiMessage('providers.m328') });
+  } catch (error) {
+    const code = error instanceof ProviderContractError ? error.code : undefined;
+    return uiMessage('providers.m577', {
+      value0: uiMessage(
+        code === 'INVALID_MODEL_PRICING'
+          ? 'providers.m493'
+          : code === 'CACHE_TTL_REQUIRES_CACHE_MODE'
+            ? 'providers.m253'
+            : 'providers.m328'
+      ),
+    });
   }
 }

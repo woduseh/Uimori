@@ -39,7 +39,7 @@ export function ChatGenerationDefaults() {
         setError(null);
       })
       .catch((cause) => {
-        if (active) setError(toUiMessage(cause, 'settings.newChatDefaultsLoadFailed'));
+        if (active) setError(toUiMessage(cause));
       })
       .finally(() => {
         if (active) setLoading(false);
