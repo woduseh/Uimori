@@ -250,7 +250,7 @@ test('chat archive restores authored resources without execution and recovers re
   const command = {
     preparedId: preview.preparedId,
     digest: preview.digest,
-    idempotencyKey: 'stable-chat',
+    idempotencyKey: 'stable-chat'.padEnd(100, '-'),
   };
   const restored = importChatBackupArchiveRequest(target, command);
   expect(restored.chat.title).toBe(chat.title);

@@ -937,10 +937,12 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.setErrorHandler((error, request, reply) => {
     const appError = asAppError(error);
     const statusCode =
-      error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
+      appError && typeof appError === 'object' && 'statusCode' in appError
+        ? appError.statusCode
+        : undefined;
     const code =
-      error instanceof HttpError
-        ? error.statusCode
+      appError instanceof HttpError
+        ? appError.statusCode
         : typeof statusCode === 'number' && statusCode < 500
           ? statusCode
           : 500;
@@ -1112,27 +1114,29 @@ export async function createApp(options: AppOptions): Promise<App> {
       stopping.signal.addEventListener('abort', onStop, { once: true });
       let actionRunId: string | undefined;
       try {
-        const result = await withRisuFailureCode(() =>
-          applyNativeRisuAction(store, request.params.id, request.params.sourceId, request.body, {
-            signal: controller.signal,
-            createHost: (runId, snapshot, usage) => {
-              actionRunId = runId;
-              runs.set(runId, controller);
-              publish(request.params.id);
-              return createNativeRisuHost(
-                store,
-                runId,
-                snapshot,
-                usage,
-                {
-                  resolveCredential,
-                  executeCodex,
-                  vertexRequestTier: options.vertexRequestTier,
-                },
-                'user-action'
-              );
-            },
-          })
+        const result = await withRisuFailureCode(
+          () =>
+            applyNativeRisuAction(store, request.params.id, request.params.sourceId, request.body, {
+              signal: controller.signal,
+              createHost: (runId, snapshot, usage) => {
+                actionRunId = runId;
+                runs.set(runId, controller);
+                publish(request.params.id);
+                return createNativeRisuHost(
+                  store,
+                  runId,
+                  snapshot,
+                  usage,
+                  {
+                    resolveCredential,
+                    executeCodex,
+                    vertexRequestTier: options.vertexRequestTier,
+                  },
+                  'user-action'
+                );
+              },
+            }),
+          'action'
         );
         publish(request.params.id);
         return result;

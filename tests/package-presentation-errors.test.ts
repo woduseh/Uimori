@@ -80,8 +80,19 @@ test('a Risu stage failure reaches the reader as its code and is logged', async 
   );
 });
 
-test('a Risu script timeout in a user action reaches the reader as the timeout code', async () => {
-  const { response } = await presentation(new Error('RISU_LUA_PROGRAM_TIMEOUT'), true);
+const luaSessionFailure = (code: string) =>
+  Object.assign(new Error(code), { code, statusCode: 400 });
+
+test('a Risu worker failure while displaying a scene answers a logged 500', async () => {
+  const { response, lines } = await presentation(luaSessionFailure('RISU_NATIVE_WORKER_EXIT'));
   expect(response.statusCode).toBe(500);
+  expect(lines).toContain(
+    'REQUEST_FAILED GET /api/chats/:id/sources/:sourceId/presentation RISU_NATIVE_WORKER_EXIT\n'
+  );
+});
+
+test('a Risu script timeout in a user action stays a definite refusal with the timeout code', async () => {
+  const { response } = await presentation(luaSessionFailure('RISU_LUA_PROGRAM_TIMEOUT'), true);
+  expect(response.statusCode).toBe(400);
   expect(response.json()).toEqual({ code: 'RISU_NATIVE_TIMEOUT' });
 });

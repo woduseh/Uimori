@@ -140,7 +140,7 @@ export async function importNormalizedResourceBundle(
 ): Promise<NativeTransferReceipt> {
   const body = record(value);
   fields(body, ['file', 'digest', 'modelBindings', 'idempotencyKey']);
-  const receipt = bundleReceipt(body, text(body.digest, 'import digest', 100), 'transfer:');
+  const receipt = bundleReceipt(body, bundleDigest(body.file ?? null), 'transfer:');
   const prior = readImportReceipt<NativeTransferReceipt>(store, receipt.key, receipt.digest);
   if (prior) return { ...prior, created: false };
   const { bundle } = prepareImport(body);
@@ -153,8 +153,15 @@ type BundleReceipt = { key: string; digest: string };
 function bundleReceipt(body: Record<string, any>, fileDigest: string, prefix = ''): BundleReceipt {
   return {
     key: `${prefix}${text(body.idempotencyKey, 'import request', 200)}`,
-    digest: bundleDigest({ file: fileDigest, bindings: body.modelBindings ?? [] }),
+    digest: bundleDigest({ file: fileDigest, bindings: sortedBindings(body.modelBindings) }),
   };
+}
+
+function sortedBindings(value: unknown) {
+  if (!Array.isArray(value)) return value ?? [];
+  const key = (binding: unknown) =>
+    String((binding as { requirementKey?: unknown })?.requirementKey);
+  return [...value].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 }
 
 function bundleBindings(body: Record<string, any>, checked: ValidatedPreparedNativeTransfer) {
