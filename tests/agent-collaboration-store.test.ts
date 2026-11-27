@@ -13,7 +13,11 @@ import type { ChatProfile, Connection, ModelPreset, PromptPreset } from '../core
 import type { RunSnapshot } from '../core/types.js';
 import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
-import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
+import {
+  applyWorkspacePromptPreset,
+  promptWorkspace,
+  updatePromptWorkspace,
+} from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 
@@ -169,6 +173,35 @@ function fixture() {
   };
   return { store, product, chat, connection, main, advisor, body, preset, program, capture };
 }
+
+test('applying a preset whose advisor model was deleted since is refused', () => {
+  const f = fixture();
+  const gone = f.product.model({ ...f.body, title: 'Gone advisor' }) as ModelPreset;
+  const collaboration = f.program.collaboration!;
+  const other = f.product.promptPreset({
+    title: 'Other collaborating writer',
+    role: 'main',
+    program: {
+      ...f.program,
+      collaboration: {
+        ...collaboration,
+        agents: collaboration.agents.map((item, index) =>
+          index === 0 ? { ...item, model: { id: gone.id } } : item
+        ),
+      },
+    },
+  }) as PromptPreset;
+  deleteLibraryItem(f.store, 'model', gone.id, { expectedRevision: gone.revision });
+  const before = promptWorkspace(f.store);
+  expect(() =>
+    applyWorkspacePromptPreset(f.store, {
+      expectedRevision: promptWorkspace(f.store).revision,
+      role: 'main',
+      presetId: other.id,
+    })
+  ).toThrow('MODEL_SELECTION_UNAVAILABLE');
+  expect(promptWorkspace(f.store)).toEqual(before);
+});
 
 test('reservation freezes each advisor and prompt; later current settings apply only to the next run', () => {
   const f = fixture(),

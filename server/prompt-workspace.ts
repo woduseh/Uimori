@@ -719,8 +719,13 @@ export function updatePromptWorkspace(
         : {}),
       revision: prior.revision + 1,
     });
+    const priorAgents = prior.main.program.collaboration?.agents ?? [];
     for (const agent of result.main.program.collaboration?.agents ?? [])
-      assertModelSelection(store.product, agent.model, agent.model);
+      assertModelSelection(
+        store.product,
+        agent.model,
+        priorAgents.find((item) => item.id === agent.id)?.model
+      );
     savePromptWorkspace(store, result);
     recordPromptWorkspaceUpdate(store.db);
     return result;

@@ -9,6 +9,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { assertModelSelection } from '../server/provider-selection.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { isModelSelectable } from '../web/model-selection.js';
 import type { Connection, ModelRef, ModelPreset } from '../core/product.js';
 
@@ -190,6 +191,31 @@ test('selecting a model another tab deleted answers MODEL_SELECTION_UNAVAILABLE'
     expect.objectContaining({ code: 'MODEL_SELECTION_UNAVAILABLE', statusCode: 400 })
   );
   expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('MODEL_SELECTION_UNAVAILABLE');
+});
+
+test('a role still naming a deleted model does not block saving another role', () => {
+  const { s, c, m } = setup();
+  const other = s.product.model(modelBody(c, { title: 'Other' })) as ModelPreset;
+  const save = (changes: Record<string, ModelRef | null>) => {
+    const current = modelWorkspace(s);
+    return updateModelWorkspace(s, {
+      expectedRevision: current.revision,
+      routes: current.routes,
+      translationPolicy: current.translationPolicy,
+      helperModel: current.helperModel ?? null,
+      contextModel: current.contextModel ?? null,
+      scriptModel: current.scriptModel ?? null,
+      ...changes,
+    });
+  };
+  save({ contextModel: ref(m), scriptModel: ref(m) });
+  deleteLibraryItem(s, 'model', m.id, { expectedRevision: m.revision });
+  expect(save({ helperModel: ref(other) })).toMatchObject({
+    helperModel: ref(other),
+    contextModel: ref(m),
+    scriptModel: ref(m),
+  });
+  expect(() => save({ titleModel: ref(m) })).toThrow('MODEL_SELECTION_UNAVAILABLE');
 });
 
 test('a model added on a stale screen to a connection another tab deleted is refused', () => {

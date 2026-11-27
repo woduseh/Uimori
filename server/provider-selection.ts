@@ -8,7 +8,7 @@ export function assertModelSelection(
   next: ModelRef | null,
   previous: ModelRef | null = null
 ): void {
-  if (!next) return;
+  if (!next || previous?.id === next.id) return;
   let latest: ModelPreset;
   let connection: Connection;
   try {
@@ -19,7 +19,6 @@ export function assertModelSelection(
       throw new AppError(400, 'MODEL_SELECTION_UNAVAILABLE');
     throw error;
   }
-  if (previous?.id === next.id) return;
   if (latest.enabled === false || !connection.enabled)
     throw new AppError(400, 'MODEL_SELECTION_UNAVAILABLE');
 }
