@@ -231,7 +231,7 @@ test('invalid images are reported before consent and the prepared digest prevent
   );
 });
 
-test('kind change reprojects prepared bytes', async () => {
+test('kind change reprojects prepared bytes and a failed apply rolls back all registration', async () => {
   const store = fixture();
   const input = await source(false, true);
   const bot = await prepareStoredRisuImport(store.path, { source: input });
@@ -294,6 +294,22 @@ test('kind change reprojects prepared bytes', async () => {
   const prepared = readPreparedRisuImport(store.path, automatic.preparedId!);
   expect(prepared.images).toHaveLength(2);
   expect(readdirSync(join(resolve(store.path, '..'), 'risu-prepared'))).toEqual([bot.preparedId]);
+  const snapshot = () =>
+    ['versions', 'image_blobs', 'import_operations'].map((table) =>
+      store.db.prepare(`SELECT * FROM ${table}`).all()
+    );
+  const before = snapshot();
+  rmSync(prepared.images[1].path);
+  await expect(
+    applyRisuImport(store, {
+      source: input,
+      preparedId: automatic.preparedId,
+      digest: automatic.digest,
+      allowPartial: false,
+      idempotencyKey: 'missing-image-apply',
+    })
+  ).rejects.toThrow();
+  expect(snapshot()).toEqual(before);
   deletePreparedRisuImport(store.path, bot.preparedId!);
 });
 

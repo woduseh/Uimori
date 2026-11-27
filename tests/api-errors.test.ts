@@ -103,6 +103,8 @@ test('archive downloads show coded errors and keep their own fallback for an emp
     code: 'RESOURCE_BUNDLE_MODULE_CYCLE',
     message: '모듈 연결에 순환이 있어요.',
   });
+  const uncoded = await download(JSON.stringify({ error: 'Request failed' }), 500);
+  expect(uncoded.message).toBe((await rejectedWith(500, { error: 'Request failed' })).message);
   const empty = await download('', 500);
   expect(empty.code).toBeNull();
   expect(translateMessage(empty.message)).toBe('백업 파일을 받지 못했어요.');

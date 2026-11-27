@@ -240,7 +240,7 @@ test('current preferences apply before dispatch, titles are explicit, and stale 
       { clientId: f.clientId, expectedRevision: 1, preferences: DEFAULT_PUSH_PREFERENCES },
       f.cookie
     )
-  ).toThrow('PUSH_SETTINGS_CHANGED');
+  ).toThrow('REVISION_CONFLICT');
   const other = f.sessions.login(accessToken).cookie;
   expect(f.service.info(f.clientId, other).device).toBeNull();
   expect(() =>

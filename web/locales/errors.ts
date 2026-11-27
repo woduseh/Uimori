@@ -185,23 +185,11 @@ export const messages = {
     ja: 'エクスポートするシーンの範囲を確認してください。',
     zh: '请检查要导出的场景范围。',
   },
-  'errors.PUSH_SETTINGS_CHANGED': {
-    ko: '다른 창에서 알림 설정이 바뀌었어요. 연결을 다시 확인한 뒤 변경해 주세요.',
-    en: 'Notification settings changed in another window. Check the connection before making changes.',
-    ja: '別のウィンドウで通知設定が変更されました。接続を確認してから変更してください。',
-    zh: '其他窗口更改了通知设置。请检查连接后再修改。',
-  },
   'errors.SEARCH_CURSOR_STALE': {
     ko: '검색 조건이 바뀌었어요. 처음부터 다시 검색해 주세요.',
     en: 'Search conditions changed. Search again from the beginning.',
     ja: '検索条件が変わりました。最初から検索し直してください。',
     zh: '搜索条件已更改。请重新开始搜索。',
-  },
-  'errors.BACKUP_SETTINGS_CHANGED': {
-    ko: '다른 창에서 백업 설정이 바뀌었어요. 백업 설정을 다시 열어 주세요.',
-    en: 'Backup settings changed in another window. Reopen backup settings.',
-    ja: '別のウィンドウでバックアップ設定が変更されました。設定を開き直してください。',
-    zh: '其他窗口更改了备份设置。请重新打开备份设置。',
   },
   'errors.BACKUP_LIST_UNAVAILABLE': {
     ko: '백업 목록을 읽지 못했어요. 저장 위치와 권한을 확인해 주세요.',

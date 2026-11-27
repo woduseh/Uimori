@@ -154,7 +154,7 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
   ).toBe(true);
   await panel.getByLabel('성공본 보관 개수').fill('6');
   await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
-  await expect(panel.getByRole('alert')).toContainText('바뀌었어요');
+  await expect(panel.getByRole('alert')).toContainText('먼저 반영됐어요');
   const confirmation = page.getByRole('alertdialog', {
     name: '백업 설정 변경 버리기',
     exact: true,
@@ -188,7 +188,7 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
       expect(changed.ok(), await changed.text()).toBe(true);
       await panel.getByLabel('성공본 보관 개수').fill('6');
       await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
-      await expect(panel.getByRole('alert')).toContainText('바뀌었어요');
+      await expect(panel.getByRole('alert')).toContainText('먼저 반영됐어요');
     }
   }
   await panel.getByLabel('성공본 보관 개수').fill('2');

@@ -94,7 +94,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
         rejectNextChange = false;
         await route.fulfill({
           status: 409,
-          json: { error: 'PUSH_SETTINGS_CHANGED' },
+          json: { code: 'REVISION_CONFLICT' },
         });
         return;
       }
@@ -135,7 +135,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
     exact: true,
   });
   await title.click();
-  await expect(panel.getByRole('alert')).toContainText('바뀌었어요');
+  await expect(panel.getByRole('alert')).toContainText('먼저 반영됐어요');
   await expect(title).toBeChecked();
   await title.click();
   await expect(title).not.toBeChecked();

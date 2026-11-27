@@ -55,9 +55,19 @@ async function readApiResponse<T>(
   notifySession = true
 ): Promise<T> {
   if (response.ok) return (await response.json()) as T;
+  return throwApiError(response, method, { notifySession });
+}
+
+export async function throwApiError(
+  response: Response,
+  method: string,
+  { notifySession = true, emptyMessage }: { notifySession?: boolean; emptyMessage?: string } = {}
+): Promise<never> {
   if (response.status === 401 && notifySession && typeof window !== 'undefined')
     window.dispatchEvent(new Event(sessionRequiredEvent));
   const payload = readErrorWire(await response.json().catch(() => null));
+  if (emptyMessage !== undefined && payload.code === undefined && payload.error === undefined)
+    throw new ApiError(emptyMessage, response.status);
   if (
     response.status === 503 &&
     (payload.code ?? payload.error) === MAINTENANCE_CLOSED &&

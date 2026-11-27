@@ -139,8 +139,7 @@ export class BackupService {
     const body = record(value);
     fields(body, ['expectedRevision', 'enabled', 'hour', 'minute', 'retain']);
     const current = this.settings();
-    if (body.expectedRevision !== current.revision)
-      throw new AppError(409, 'BACKUP_SETTINGS_CHANGED');
+    if (body.expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
     if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'Invalid backup enabled flag');
     for (const [key, maximum, minimum] of [
       ['hour', 23, 0],

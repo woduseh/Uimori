@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LibraryFolder } from '../core/library-organization.js';
 import { PACKAGE_IMAGE_MIMES, packageImageThumbnailUrl } from '../core/package-images.js';
 import { Dialog } from './Dialog.js';
-import { t, useI18n } from './i18n.js';
+import { t, translateMessage, useI18n } from './i18n.js';
 import { uploadPackageImage } from './package-image-upload.js';
 import { CheckIcon, FolderIcon } from './ui-icons.js';
 import './library-folder-cover.css';
@@ -143,7 +143,7 @@ export function LibraryFolderCoverDialog({
           </div>
           {error && (
             <p className="error" role="alert">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
         </div>

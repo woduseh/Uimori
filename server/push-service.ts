@@ -109,7 +109,7 @@ export class PushService {
         !Number.isSafeInteger(body.expectedRevision) ||
         body.expectedRevision !== (current?.revision ?? 0)
       )
-        throw new AppError(409, 'PUSH_SETTINGS_CHANGED');
+        throw new AppError(409, 'REVISION_CONFLICT');
       const now = new Date(this.now()).toISOString();
       const previous = this.store.db
         .prepare('SELECT id FROM push_subscriptions WHERE endpoint=?')
@@ -144,9 +144,8 @@ export class PushService {
     const id = client(body.clientId),
       choices = preferences(body.preferences);
     const current = this.device(id, session);
-    if (!current) throw new AppError(404, 'PUSH_SETTINGS_CHANGED');
-    if (body.expectedRevision !== current.revision)
-      throw new AppError(409, 'PUSH_SETTINGS_CHANGED');
+    if (!current) throw new AppError(404, 'REVISION_CONFLICT');
+    if (body.expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
     this.store.db
       .prepare(
         'UPDATE push_subscriptions SET preferences=?,revision=revision+1,updated_at=? WHERE id=?'
@@ -161,7 +160,7 @@ export class PushService {
     const id = client(body.clientId),
       current = this.device(id, session);
     if (current && body.expectedRevision !== current.revision)
-      throw new AppError(409, 'PUSH_SETTINGS_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     if (current) {
       this.active.get(String(current.id))?.abort();
       this.store.db.prepare('DELETE FROM push_subscriptions WHERE id=?').run(current.id);
@@ -171,7 +170,7 @@ export class PushService {
   test(clientId: string, cookie?: string) {
     const session = this.authority(cookie);
     const current = this.device(client(clientId), session);
-    if (!current) throw new AppError(404, 'PUSH_SETTINGS_CHANGED');
+    if (!current) throw new AppError(404, 'REVISION_CONFLICT');
     const now = new Date(this.now()).toISOString();
     if (
       this.store.db

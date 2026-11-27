@@ -3,8 +3,7 @@ import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
 import { readErrorWire } from '#contracts';
-import { sessionRequiredEvent } from './api.js';
-import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
+import { throwApiError } from './api.js';
 
 const exportMessages = (): Record<string, string> => ({
   RISU_EXPORT_MODULE_UNSUPPORTED: retainedMessage('transfer.m087'),
@@ -67,15 +66,17 @@ export function RisuExportButton({
               { signal: request.signal }
             );
             if (!response.ok) {
-              if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
-              const wire = readErrorWire(await response.json().catch(() => null));
-              const known = wire.error === undefined ? undefined : exportMessages()[wire.error];
-              throw new Error(
-                known ??
-                  (apiErrorDiagnostic(wire, response.status, 'GET').code === null
-                    ? retainedMessage('transfer.m096')
-                    : apiErrorDisplay(wire, response.status, 'GET'))
+              const wire = readErrorWire(
+                await response
+                  .clone()
+                  .json()
+                  .catch(() => null)
               );
+              const known = wire.error === undefined ? undefined : exportMessages()[wire.error];
+              if (known !== undefined) throw new Error(known);
+              await throwApiError(response, 'GET', {
+                emptyMessage: retainedMessage('transfer.m096'),
+              });
             }
             const blob = await response.blob();
             request.signal.throwIfAborted();
