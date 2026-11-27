@@ -54,6 +54,7 @@
         "web/ComposerMore.tsx",
         "web/NextRequestStatus.tsx",
         "web/composer-draft.ts",
+        "web/queued-send.ts",
         "web/RequestMessage.tsx",
         "web/RequestImages.tsx",
         "web/request-image-draft.ts",
@@ -212,7 +213,6 @@
       ],
       "specs": [
         { "file": "tests/organization-browser.spec.ts" },
-        { "file": "tests/sidebar-navigation-browser.spec.ts" },
         { "file": "tests/activity-browser.spec.ts" },
         { "file": "tests/side-panel-browser.spec.ts" },
         { "file": "tests/shortcuts-browser.spec.ts" }

@@ -11,6 +11,14 @@ import {
 } from './request-image-draft.js';
 import { createComposerDraft } from './composer-draft.js';
 import {
+  dispatchQueuedRequest,
+  mergeReturnedText,
+  type QueuedHandoff,
+  type QueuedRequest,
+  type QueuedReturnReason,
+  type QueuedRevisions,
+} from './queued-send.js';
+import {
   localReadingBlock,
   readerLocation,
   THEME_BODY_SCROLL_SELECTOR,
@@ -175,21 +183,6 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
 function clearCommand(key: string, id: string) {
   if (readCommand(key)?.record.id === id) sessionStorage.removeItem(key);
 }
-export type QueuedRequest = {
-  id: string;
-  chatId: string;
-  text: string;
-  loreContextReset: boolean;
-  runId: string;
-  settingsRevision: number;
-  profileRevision: number;
-  optionsRevision: number;
-  workspaceRevision: number;
-};
-type QueuedRevisions = Pick<
-  QueuedRequest,
-  'profileRevision' | 'optionsRevision' | 'workspaceRevision'
->;
 async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
   const chat = `/chats/${encodeURIComponent(chatId)}`;
   const [profile, options, workspace] = await Promise.all([
@@ -203,24 +196,6 @@ async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
     workspaceRevision: workspace.revision,
   };
 }
-export type QueuedReturnReason =
-  | 'reload'
-  | 'left'
-  | 'incomplete'
-  | 'unknown'
-  | 'settings'
-  | 'options'
-  | 'workspace'
-  | 'blocked'
-  | 'confirmation'
-  | 'rejected';
-type QueuedHandoff = {
-  chatId: string;
-  text: string;
-  loreContextReset: boolean;
-  left: boolean;
-  state: 'waiting' | 'confirmation' | 'committed' | 'rejected';
-};
 type ParkedQueue = { text: string; loreContextReset: boolean; reason?: QueuedReturnReason };
 const queuedRequestKey = storageKeys.queuedRequest;
 function readParkedQueue(chatId: string): ParkedQueue | null {
@@ -1837,7 +1812,7 @@ export function useStory() {
       return;
     }
     const current = composerDraft.read();
-    editDraft(current.trim() ? `${queue.text}\n\n${current}` : queue.text);
+    editDraft(mergeReturnedText(current, queue.text));
     if (queue.loreContextReset) editLoreContextReset(true);
     removeOptionalStorage('session', queuedRequestKey(chatId));
     setQueueNotice(reason ? { chatId, message: `main.queueReturned.${reason}` } : null);
@@ -1959,48 +1934,22 @@ export function useStory() {
     blocked: boolean,
     send: (queued: QueuedHandoff) => Promise<boolean>
   ) {
-    const giveBack = (reason: QueuedReturnReason) =>
-      returnQueueToDraft(queue.chatId, queue, reason);
-    const here = () =>
-      !handoff.left &&
-      navigation.current.chat === queue.chatId &&
-      navigation.current.destination === 'story';
-    if (!here()) return giveBack('left');
-    let status: string;
-    try {
-      status = (await api<{ status: string }>(`/runs/${encodeURIComponent(queue.runId)}`)).status;
-    } catch {
-      return giveBack('unknown');
-    }
-    if (status !== 'completed') return giveBack('incomplete');
-    if (blocked) return giveBack('blocked');
-    const chat = readerCache.current?.detail.chat;
-    if (!here() || chat?.id !== queue.chatId) return giveBack('left');
-    if (chat.settingsRevision !== queue.settingsRevision) return giveBack('settings');
-    let revisions: QueuedRevisions;
-    try {
-      revisions = await readQueuedRevisions(queue.chatId);
-    } catch {
-      return giveBack('blocked');
-    }
-    if (!here()) return giveBack('left');
-    if (revisions.profileRevision !== queue.profileRevision) return giveBack('settings');
-    if (revisions.optionsRevision !== queue.optionsRevision) return giveBack('options');
-    if (revisions.workspaceRevision !== queue.workspaceRevision) return giveBack('workspace');
-    const accepted = await send(handoff);
-    if (handoff.state === 'committed') {
-      if (accepted && navigation.current.chat === queue.chatId)
-        setNotice(uiMessage('main.queueSent'));
-      return;
-    }
-    if (!here()) return giveBack('left');
-    giveBack(
-      handoff.state === 'rejected'
-        ? 'rejected'
-        : handoff.state === 'confirmation'
-          ? 'confirmation'
-          : 'blocked'
-    );
+    await dispatchQueuedRequest(queue, handoff, blocked, {
+      here: () =>
+        !handoff.left &&
+        navigation.current.chat === queue.chatId &&
+        navigation.current.destination === 'story',
+      readRunStatus: async () =>
+        (await api<{ status: string }>(`/runs/${encodeURIComponent(queue.runId)}`)).status,
+      currentChat: () => readerCache.current?.detail.chat,
+      readRevisions: () => readQueuedRevisions(queue.chatId),
+      send,
+      giveBack: (reason: QueuedReturnReason) => returnQueueToDraft(queue.chatId, queue, reason),
+      committed: (accepted) => {
+        if (accepted && navigation.current.chat === queue.chatId)
+          setNotice(uiMessage('main.queueSent'));
+      },
+    });
   }
 
   const allContents = [...(library?.contents ?? []), ...archivedContents];

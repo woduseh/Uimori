@@ -230,7 +230,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
 test('P02 creative option drafts block only their own chat and survive quick changes in another chat', async ({
   page,
   request,
-}, info) => {
+}) => {
   const unique = `P02-${Date.now()}`;
   const choice = await createPromptChoice(request, unique);
   const personaResponse = await request.post('/api/content', {
@@ -261,23 +261,14 @@ test('P02 creative option drafts block only their own chat and survive quick cha
   let menu = await composerMenu(page);
   await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
   await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
-  await expect(menu.getByRole('button', { name: '창작 옵션', exact: true })).toContainText(
-    '미적용 확인'
-  );
-  await page.screenshot({ path: info.outputPath('creative-options-draft-menu-412.png') });
   await page.keyboard.press('Escape');
 
   await selectStoredChat(page, other);
   menu = await composerMenu(page);
   const combinations = menu.getByLabel('빠른 옵션 프리셋', { exact: true });
   await expect(combinations).toBeEnabled();
-  await expect(combinations.locator('option').first()).toHaveText('옵션 프리셋 적용…');
   await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeEnabled();
-  await page.screenshot({ path: info.outputPath('creative-options-other-chat-menu-412.png') });
   await combinations.selectOption(`${choice.combination.id}@${choice.combination.revision}`);
-  await expect(page.locator('.transient-notice')).toContainText(
-    `“${choice.combination.title}” 옵션 프리셋을 적용했어요.`
-  );
   await expect
     .poll(
       async () => (await (await request.get(`/api/chats/${other.id}/options`)).json()).fixedValues

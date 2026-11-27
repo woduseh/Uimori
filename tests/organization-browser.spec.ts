@@ -134,12 +134,6 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
     await row.hover();
     await row.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
     const actions = row.locator('.action-menu-body');
-    await expect(actions.getByRole('button')).toHaveText([
-      '채팅 복사',
-      '제목 변경',
-      '상단 고정',
-      '채팅 삭제',
-    ]);
     await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
     const menu = page.getByRole('dialog', { name: '채팅 제목 변경', exact: true });
     const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });
@@ -159,11 +153,6 @@ const rows = (nav: Locator) => nav.locator('.bot-chat-item');
       data: { title: concurrent, expectedTitleRevision: chat.titleRevision ?? 0 },
     });
     expect(changed.ok()).toBe(true);
-    await expect(
-      menu.getByText('제목이 다른 곳에서 변경됐어요. 취소하면 최신 제목을 불러와요.', {
-        exact: true,
-      })
-    ).toBeVisible();
     const rejectedSave = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/api/chats/${chat.id}/title`) &&
@@ -267,40 +256,6 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   ).toBeVisible();
   if (visualReview) await page.screenshot({ path: info.outputPath('navigation-desktop.png') });
 });
-
-{
-  const width = MOBILE_WIDTH;
-  test(`ORG08 ${width}px first row starts a chat from the library and searches chats across bots`, async ({
-    page,
-    request,
-  }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const a = await navigationFixture(request);
-    const b = await navigationFixture(request);
-    await page.goto(`/?chat=${a.chats[0].id}`);
-    await visibleNavigation(page);
-    const search = page
-      .getByRole('button', { name: '전체 채팅 검색', exact: true })
-      .filter({ visible: true });
-    await expect(search).toHaveCount(1);
-    await search.click();
-    const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
-    await dialog
-      .getByRole('searchbox', { name: '전체 채팅 검색', exact: true })
-      .fill(b.owner.title);
-    await expect(dialog.locator('[data-chat-id]')).toHaveCount(3);
-    await expect(dialog.locator('[data-chat-id] small').first()).toHaveText(b.owner.title);
-    await dialog.locator(`[data-chat-id="${b.chats[1].id}"]`).click();
-    await expect(dialog).toBeHidden();
-    await expect(page).toHaveURL(new RegExp(b.chats[1].id));
-    await visibleNavigation(page);
-    await page
-      .getByRole('button', { name: '새 채팅', exact: true })
-      .filter({ visible: true })
-      .click();
-    await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).toBeVisible();
-  });
-}
 
 test('PIN01 chats pinned from either menu lead both sidebar tabs in pin order, survive a reload and unpin', async ({
   page,

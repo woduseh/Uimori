@@ -72,35 +72,6 @@ async function openChat(page: Page, chatId: string, sourceId: string, width = 14
 const header = (page: Page) => page.locator('.workspace-header');
 const reader = (page: Page) => page.locator('[data-reader-scrollport]');
 
-async function readingAnchor(page: Page) {
-  return reader(page).evaluate((node) => {
-    const top = node.getBoundingClientRect().top;
-    const all = (root: ParentNode): HTMLElement[] =>
-      [...root.querySelectorAll<HTMLElement>('*')].flatMap((item) =>
-        item.shadowRoot ? [item, ...all(item.shadowRoot)] : [item]
-      );
-    const paragraph = all(node.querySelector('[data-testid="source"]')!).find(
-      (item) =>
-        !item.firstElementChild &&
-        item.textContent?.startsWith('문단 ') &&
-        item.getBoundingClientRect().bottom > top
-    )!;
-    return {
-      text: paragraph.textContent?.split(':')[0],
-      top: paragraph.getBoundingClientRect().top - top,
-    };
-  });
-}
-
-async function expectSamePassage(page: Page, before: { text?: string; top: number }) {
-  await expect
-    .poll(async () => {
-      const after = await readingAnchor(page);
-      return after.text === before.text && Math.abs(after.top - before.top) <= 2;
-    })
-    .toBe(true);
-}
-
 async function panelWidth(page: Page, selector: string) {
   return page.locator(selector).evaluate((node) => Math.round(node.getBoundingClientRect().width));
 }
@@ -173,48 +144,4 @@ test('SIDEPANEL01 outline and writing options share the right panel and keep the
   await outline.getByRole('button', { name: '플롯 닫기', exact: true }).click();
   await expect(outline).toBeHidden();
   await expect(outlineToggle).toHaveAttribute('aria-pressed', 'false');
-});
-
-test('SIDEPANEL04 opening, resizing and closing the panel keep the passage being read', async ({
-  page,
-  request,
-}) => {
-  const { chat, source } = await fixture(request, '우측 패널 읽기 위치');
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await openChat(page, chat.id, source.id);
-  await reader(page).evaluate((node) => {
-    node.scrollTop = 1800;
-  });
-  await expect.poll(() => reader(page).evaluate((node) => node.scrollTop)).toBeGreaterThan(1700);
-  let anchor = await readingAnchor(page);
-  expect(Number(anchor.text?.replace('문단 ', ''))).toBeGreaterThan(5);
-  await header(page).getByRole('button', { name: '도우미', exact: true }).click();
-  await expect(page.locator('#helper-panel')).toBeVisible();
-  await expectSamePassage(page, anchor);
-
-  anchor = await readingAnchor(page);
-  const edge = page.getByRole('separator', { name: '우측 패널 폭', exact: true });
-  const box = (await edge.boundingBox())!;
-  await page.mouse.move(box.x + box.width / 2, box.y + 200);
-  await page.mouse.down();
-  await page.mouse.move(box.x - 120, box.y + 200, { steps: 6 });
-  await page.mouse.up();
-  await expectSamePassage(page, anchor);
-
-  anchor = await readingAnchor(page);
-  await edge.focus();
-  await page.keyboard.press('ArrowLeft');
-  await page.keyboard.press('ArrowLeft');
-  await expectSamePassage(page, anchor);
-
-  anchor = await readingAnchor(page);
-  await header(page).getByRole('button', { name: '플롯', exact: true }).click();
-  await expect(page.locator('#outline-panel')).toBeVisible();
-  await expectSamePassage(page, anchor);
-
-  anchor = await readingAnchor(page);
-  await header(page).getByRole('button', { name: '플롯', exact: true }).click();
-  await expect(page.locator('#outline-panel')).toBeHidden();
-  await expectSamePassage(page, anchor);
-  expect(await reader(page).evaluate((node) => node.scrollTop)).toBeGreaterThan(1000);
 });

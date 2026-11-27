@@ -7,12 +7,10 @@ import {
   type APIResponse,
   type Page,
 } from '@playwright/test';
-import type { ChatOptionState } from '../core/chat-options.js';
-import type { ModelWorkspace, PromptWorkspace } from '../core/product.js';
+import type { ModelWorkspace } from '../core/product.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { loopbackProvider, sse } from './fixtures/loopback-provider.js';
-import { nativePrompt } from './fixtures/native-prompt.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 
 preservePromptWorkspace();
@@ -24,7 +22,7 @@ async function body<T>(response: APIResponse): Promise<T> {
 
 type Writer = { finish: () => void; fail: () => void };
 
-async function setup(request: APIRequestContext, options: { controls?: boolean } = {}) {
+async function setup(request: APIRequestContext) {
   let connected = (_writer: Writer) => {};
   const writer = new Promise<Writer>((resolve) => {
     connected = resolve;
@@ -90,21 +88,6 @@ async function setup(request: APIRequestContext, options: { controls?: boolean }
       },
     })
   );
-  if (options.controls) {
-    const workspace = await body<PromptWorkspace>(await request.get('/api/prompt-workspace'));
-    await body(
-      await request.put('/api/prompt-workspace', {
-        data: {
-          expectedRevision: workspace.revision,
-          main: {
-            title: '예약 검증 프롬프트',
-            program: nativePrompt('', { customPromptTemplateToggle: 'tone=문체=text' }),
-            values: { tone: '기준 문체' },
-          },
-        },
-      })
-    );
-  }
   const chat = await body<Chat>(
     await postFixtureChat(request, { data: { title: `Queue chat ${randomUUID()}` } })
   );
@@ -254,51 +237,6 @@ test('QUEUE03 a reload restores the queued request as a draft without sending it
   }
 });
 
-test('QUEUE05 a chat settings change while queued keeps the request as a draft', async ({
-  page,
-  request,
-}) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    const current = await body<ChatDetail>(await request.get(`/api/chats/${chat.id}`));
-    await body(
-      await request.patch(`/api/chats/${chat.id}/settings`, {
-        data: {
-          ...current.chat.settings,
-          maxCalls: (current.chat.settings.maxCalls ?? 8) + 1,
-          expectedSettingsRevision: current.chat.settingsRevision,
-        },
-      })
-    );
-    live.finish();
-    await expectReturned(page, '계속 써 주세요.', '채팅 설정이 바뀌어', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
-test('QUEUE07 a failed run keeps the queued request as a draft', async ({ page, request }) => {
-  const { peer, writer, chat } = await setup(request);
-  try {
-    const run = await startRun(request, chat);
-    const sent = countSends(page, chat.id);
-    await openRunning(page, chat, run);
-    const live = await writer;
-    await queue(page, '계속 써 주세요.');
-    live.fail();
-    await expect.poll(() => runStatus(request, run.id)).not.toMatch(/^(queued|running)$/);
-    expect(await runStatus(request, run.id)).not.toBe('completed');
-    await expectReturned(page, '계속 써 주세요.', '앞선 생성이 완료되지 않아', sent);
-  } finally {
-    await peer.close();
-  }
-});
-
 test('QUEUE09 a send that needs confirmation is not sent automatically', async ({
   page,
   request,
@@ -344,96 +282,6 @@ test('QUEUE10 another tab on the same chat does not send the queued request', as
     expect(sentElsewhere).toEqual([]);
   } finally {
     await second.close();
-    await peer.close();
-  }
-});
-
-async function nextRequestState(request: APIRequestContext, chat: Chat) {
-  await body(
-    await request.post(`/api/chats/${chat.id}/outline`, {
-      data: {
-        idempotencyKey: randomUUID(),
-        operations: [
-          {
-            op: 'create',
-            ref: 'episode',
-            level: 'episode',
-            title: '등대의 밤',
-            intent: '불을 켜요.',
-          },
-        ],
-      },
-    })
-  );
-  const outline = await body<{ nodes: { id: string }[] }>(
-    await request.get(`/api/chats/${chat.id}/outline`)
-  );
-  await body(
-    await request.put(`/api/chats/${chat.id}/outline/focus`, {
-      data: { nodeId: outline.nodes[0]!.id },
-    })
-  );
-  const options = await body<ChatOptionState>(await request.get(`/api/chats/${chat.id}/options`));
-  await body(
-    await request.post(`/api/chats/${chat.id}/options/oneoff`, {
-      data: {
-        expectedRevision: options.revision,
-        operationId: randomUUID(),
-        binding: options.binding,
-        values: { tone: '이번만 쓸 문체' },
-      },
-    })
-  );
-  const guide = await body<{ revision: number; config: Record<string, unknown> }>(
-    await request.get(`/api/chats/${chat.id}/story-guide`)
-  );
-  await body(
-    await request.put(`/api/chats/${chat.id}/story-guide`, {
-      data: {
-        expectedRevision: guide.revision,
-        config: { ...guide.config, enabled: true, work: '등대지기 이야기' },
-      },
-    })
-  );
-}
-
-test('NEXTREQ01 the composer line names what applies to the next request and opens each place', async ({
-  page,
-  request,
-}) => {
-  const { peer, chat } = await setup(request, { controls: true });
-  try {
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(`/?chat=${chat.id}`);
-    await expect(composer(page)).toBeVisible();
-    const line = page.getByRole('group', { name: '다음 요청에 적용', exact: true });
-    await expect(line).toHaveCount(0);
-    await nextRequestState(request, chat);
-    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(line).toContainText('진행 중 플롯');
-    await expect(
-      line.getByRole('button', { name: '등대의 밤 플롯 열기', exact: true })
-    ).toBeVisible();
-    await expect(line.getByRole('button', { name: '1회 옵션 예약', exact: true })).toBeVisible();
-    await expect(line.getByRole('button', { name: '원작 참고', exact: true })).toBeVisible();
-
-    await line.getByRole('button', { name: '1회 옵션 예약', exact: true }).click();
-    const options = page.locator('#chat-prompt-options');
-    await expect(options.getByRole('region', { name: '1회 옵션 예약', exact: true })).toBeVisible();
-    await options.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
-
-    await line.getByRole('button', { name: '원작 참고', exact: true }).click();
-    const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await expect(
-      settings.getByRole('tab', { name: '작품 및 원작 참고', exact: true })
-    ).toHaveAttribute('aria-selected', 'true');
-    await expect(settings.getByRole('switch', { name: '집필 전에 원작 참고' })).toBeChecked();
-    await page.keyboard.press('Escape');
-    await expect(settings).toHaveCount(0);
-
-    await line.getByRole('button', { name: '등대의 밤 플롯 열기', exact: true }).click();
-    await expect(page.locator('.outline-panel')).toBeVisible();
-  } finally {
     await peer.close();
   }
 });

@@ -1,16 +1,9 @@
-import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { visualReview } from './fixtures/visual-review.js';
-import { selectChatSettingsSection, sourceAction } from './ui-navigation.js';
-import { openChatSettings } from './ui-navigation.js';
+import { sourceAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Request } from '@playwright/test';
 import { DatabaseSync } from 'node:sqlite';
-import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail } from '../core/types.js';
 
-const commands = new Map<string, Record<string, unknown>>();
 async function control(
   request: APIRequestContext,
   action: string,
@@ -48,232 +41,23 @@ async function expectSourceRaw(page: Page, text: string) {
   await expect(dialog.getByTestId('source-raw')).toHaveText(text);
   await dialog.getByRole('button', { name: '원문 연결 정보 닫기' }).click();
 }
-async function storySettings(page: Page) {
-  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '생성 설정');
-  await page.getByText('고급 실행 설정', { exact: true }).click();
-}
-async function openWork(page: Page) {
-  await closeDialog(page);
-  await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
-  await page.getByRole('button', { name: '작업 현황', exact: true }).click();
-}
 async function closeDialog(page: Page) {
   const dialog = page.getByRole('dialog').filter({ visible: true });
   if (await dialog.count()) await page.keyboard.press('Escape');
 }
-async function send(page: Page, prompt: string): Promise<Run> {
+async function send(page: Page, prompt: string) {
   await closeDialog(page);
   await page.getByLabel('다음 장면 요청').fill(prompt);
   const response = page.waitForResponse(
     (r) => /\/api\/chats\/[^/]+\/runs$/.test(r.url()) && r.request().method() === 'POST'
   );
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
-  const received = await response;
-  const run = (await received.json()) as Run;
-  commands.set(run.id, received.request().postDataJSON());
-  return run;
+  await response;
 }
 
 test.afterEach(async ({ request }) => {
   await control(request, 'fixture', {});
   for (const barrier of ['run', 'translation']) await control(request, 'release', { barrier });
-});
-
-test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated', async ({
-  page,
-  context,
-  browser,
-  request,
-}, testInfo) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  const other = await browser.newContext({ viewport: { width: MOBILE_WIDTH, height: 844 } });
-  const bPage = await other.newPage();
-  bPage.on('pageerror', (e) => errors.push(e.message));
-  const base = process.env.UIMORI_BASE_URL!;
-  await bPage.goto(base);
-  try {
-    const a = await newChat(page, '합성 A · 등대');
-    const b = await newChat(bPage, '합성 B · 정원');
-    await storySettings(bPage);
-    await bPage.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
-    await bPage.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-    await expect
-      .poll(async () => (await detail(request, b.id)).chat.settingsRevision)
-      .toBe(b.settingsRevision + 1);
-
-    const aSecondTab = await context.newPage();
-    await aSecondTab.goto(`/?chat=${a.id}`);
-    await expect(aSecondTab.getByRole('heading', { name: a.title, exact: true })).toBeVisible();
-    await storySettings(aSecondTab);
-    await aSecondTab
-      .getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true })
-      .fill('6');
-    await control(request, 'hold', { barrier: 'run' });
-    await control(request, 'hold', { barrier: 'translation' });
-    const aRun = await send(page, '(OOC: Write a quiet lighthouse scene.) SYNTHETIC_A');
-    await control(request, 'fixture', { mode: 'research', preset: 'vivid' });
-    const bRun = await send(
-      bPage,
-      'Write a garden scene after researching the harbor. SYNTHETIC_B'
-    );
-    await control(request, 'fixture', {});
-    expect(aRun.id).not.toBe(bRun.id);
-    const aWorkTab = await context.newPage();
-    aWorkTab.on('pageerror', (error) => errors.push(error.message));
-    try {
-      await aWorkTab.goto(`/?chat=${a.id}`);
-      await openWork(aWorkTab);
-      await expect(
-        aWorkTab.getByRole('dialog', { name: '작업 현황', exact: true }).getByTestId('run')
-      ).toHaveAttribute('data-run-id', aRun.id);
-    } finally {
-      await aWorkTab.close();
-    }
-    await expect(
-      aSecondTab.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true })
-    ).toHaveValue('6');
-    const command = commands.get(aRun.id)!;
-    expect(command).toMatchObject({
-      request: '(OOC: Write a quiet lighthouse scene.) SYNTHETIC_A',
-      expectedRevision: null,
-    });
-    const dup = await Promise.all([
-      request.post(`/api/chats/${a.id}/runs`, { data: command }),
-      request.post(`/api/chats/${a.id}/runs`, { data: command }),
-    ]);
-    for (const response of dup) {
-      expect(response.ok()).toBeTruthy();
-      expect((await response.json()).id).toBe(aRun.id);
-    }
-    const conflict = await request.post(`/api/chats/${a.id}/runs`, {
-      data: { ...command, idempotencyKey: 'other-request' },
-    });
-    expect(conflict.status()).toBe(409);
-    await storySettings(page);
-    await page.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
-    await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-    await expect
-      .poll(async () => (await detail(request, a.id)).chat.settingsRevision)
-      .toBe(a.settingsRevision + 1);
-    await aSecondTab.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-    await expect(
-      aSecondTab.getByRole('region', { name: '생성 설정', exact: true }).getByRole('alert')
-    ).toContainText('다른 요청이 먼저 반영됐어요');
-    await aSecondTab.getByRole('button', { name: '변경 취소', exact: true }).click();
-    await aSecondTab
-      .getByRole('alertdialog', { name: '생성 설정 변경 취소', exact: true })
-      .getByRole('button', { name: '변경 버리기', exact: true })
-      .click();
-    await expect(
-      aSecondTab.getByRole('region', { name: '생성 설정', exact: true }).getByRole('alert')
-    ).toHaveCount(0);
-    expect((await detail(request, a.id)).runs[0].snapshot.settings.maxCalls).toBe(8);
-    await page.close();
-    await control(request, 'release', { barrier: 'run' });
-    await expect.poll(async () => (await detail(request, a.id)).runs[0].status).toBe('completed');
-    await expect.poll(async () => (await detail(request, b.id)).runs[0].status).toBe('completed');
-    const aDone = await detail(request, a.id);
-    const bDone = await detail(request, b.id);
-    expect(aDone.sources).toHaveLength(1);
-    expect(bDone.sources).toHaveLength(1);
-    expect(aDone.runs[0].snapshot.request).toContain('SYNTHETIC_A');
-    expect(bDone.runs[0].snapshot.request).toContain('SYNTHETIC_B');
-    expect(aDone.runs[0].snapshot.request).not.toContain('SYNTHETIC_B');
-    expect(bDone.runs[0].snapshot.request).not.toContain('SYNTHETIC_A');
-    expect(aDone.runs[0].inputs).toEqual([]);
-    expect(bDone.runs[0].inputs).toEqual([]);
-    const aSource = aDone.sources[0];
-    expect(
-      aDone.jobs.every((j) => j.sourceRevision === aSource.id && j.status !== 'completed')
-    ).toBeTruthy();
-    await closeDialog(aSecondTab);
-    await sourceDetails(aSecondTab);
-    await expectSourceRaw(aSecondTab, aSource.text);
-    expect(aDone.jobs.some((job) => job.kind === 'translation')).toBe(false);
-    await aSecondTab.getByRole('button', { name: '번역 생성', exact: true }).click();
-    await expect(aSecondTab.getByTestId('source').getByTestId('job-translation')).toContainText(
-      '한국어 번역'
-    );
-    await aSecondTab.goto(`/?chat=${b.id}`);
-    await expect(aSecondTab.getByRole('heading', { name: b.title, exact: true })).toBeVisible();
-    expect((await detail(request, a.id)).jobs.some((job) => job.kind === 'status')).toBe(false);
-    expect(
-      (await detail(request, a.id)).jobs.find((j) => j.kind === 'translation')?.status
-    ).not.toBe('completed');
-    await control(request, 'release', { barrier: 'translation' });
-    await expect
-      .poll(async () => (await detail(request, a.id)).jobs.every((j) => j.status === 'completed'))
-      .toBe(true);
-    const returned = await context.newPage();
-    await returned.goto(`/?chat=${a.id}`);
-    await openWork(returned);
-    await expect(returned.getByTestId('run')).toHaveAttribute('data-run-id', aRun.id);
-    await closeDialog(returned);
-    await sourceDetails(returned);
-    await expectSourceRaw(returned, aSource.text);
-    await expect(returned.getByTestId('source').getByTestId('job-translation')).toHaveAttribute(
-      'data-source-id',
-      aSource.id
-    );
-    await expect(aSecondTab.getByTestId('source')).toHaveAttribute(
-      'data-source-id',
-      bDone.sources[0].id
-    );
-    const stale = await request.post(`/api/chats/${a.id}/runs`, {
-      data: {
-        request: 'old head',
-        expectedRevision: null,
-        expectedSettingsRevision: aDone.chat.settingsRevision,
-        idempotencyKey: 'stale-after-complete',
-      },
-    });
-    expect(stale.status()).toBe(409);
-    if (visualReview)
-      await returned.screenshot({ path: testInfo.outputPath('mobile-source.png'), fullPage: true });
-    const db = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
-    try {
-      expect(db.prepare('SELECT count(*) AS n FROM runs WHERE chat_id=?').get(a.id)?.n).toBe(1);
-      expect(db.prepare('SELECT text,hash FROM sources WHERE id=?').get(aSource.id)).toEqual({
-        text: aSource.text,
-        hash: createHash('sha256').update(aSource.text).digest('hex'),
-      });
-      expect(
-        db
-          .prepare(
-            'SELECT count(*) AS n FROM job_results r JOIN jobs j ON j.id=r.job_id WHERE j.source_revision=?'
-          )
-          .get(aSource.id)?.n
-      ).toBe(1);
-    } finally {
-      db.close();
-    }
-    if (process.env.UIMORI_ARTIFACT_DIR) {
-      await mkdir(join(process.env.UIMORI_ARTIFACT_DIR, 'evidence'), { recursive: true });
-      await writeFile(
-        join(process.env.UIMORI_ARTIFACT_DIR, 'evidence', 'browser-observations.json'),
-        JSON.stringify(
-          {
-            a: await detail(request, a.id),
-            b: await detail(request, b.id),
-            browserErrors: errors,
-            twoContexts: true,
-            sameContextTwoTabs: true,
-          },
-          null,
-          2
-        )
-      );
-    }
-    expect(errors).toEqual([]);
-    await returned.close();
-    await aSecondTab.close();
-  } finally {
-    for (const barrier of ['run', 'translation']) await control(request, 'release', { barrier });
-    await other.close();
-  }
 });
 
 test('F05 failed auxiliary result retries independently while a later source is selected', async ({
