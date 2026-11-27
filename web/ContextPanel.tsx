@@ -1,5 +1,5 @@
 import { t, translateStoredCode, useI18n } from './i18n.js';
-import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { formatUiMessage, uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -129,8 +129,8 @@ export function ContextPanel({
     onDirtyChange(draft !== null || notesDirty || busy);
   }, [draft, notesDirty, busy, onDirtyChange]);
   useUnsavedInput(notesDirty ? { domain: 'notes', chatId } : null);
-  function report(caught: unknown) {
-    const text = toUiMessage(caught, 'settings.m273');
+  function report(caught: unknown, fallback?: MessageKey) {
+    const text = toUiMessage(caught, fallback);
     setError(text);
     onError(text);
   }
@@ -155,7 +155,7 @@ export function ContextPanel({
         sequence === readSequence.current
       ) {
         setReadFailed(true);
-        report(caught);
+        report(caught, 'settings.m273');
       }
     }
   }
