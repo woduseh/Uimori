@@ -100,7 +100,6 @@ import {
   useCollapsedFolders,
   useLibraryFolderEditor,
   useLibraryItemDrag,
-  moveInput,
   useLibraryOrganization,
   type FolderFilter,
 } from './LibraryFolders.js';
@@ -328,7 +327,6 @@ export function LibraryPanel({
     covers: folderCovers,
   });
   const itemDrag = useLibraryItemDrag({
-    kind: 'content',
     category: tab,
     organizer,
     folderOf,
@@ -455,7 +453,7 @@ export function LibraryPanel({
       (await callEndpoint(libraryEndpoints.readOrganization)).revision;
     const placed = await organizer.mutate(
       libraryEndpoints.moveItems,
-      moveInput([{ kind: 'content', id: item.id }], tab, folderId),
+      { items: [{ kind: 'content', id: item.id }], category: tab, folderId },
       revision
     );
     if (!placed) throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));

@@ -223,7 +223,6 @@ export function PromptLibrary({
     onError,
   });
   const itemDrag = useLibraryItemDrag({
-    kind: 'prompt-preset',
     category: 'prompts',
     organizer,
     folderOf,

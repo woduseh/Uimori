@@ -120,12 +120,14 @@ export function useLibraryOrganization(
 }
 type LibraryOrganizer = ReturnType<typeof useLibraryOrganization>;
 
-export function moveInput(
-  items: LibraryItemKey[],
+function moveInput(
+  ids: string[],
   category: LibraryCategory,
   folderId: string | null
 ): LibraryWriteInput<typeof libraryEndpoints.moveItems> {
-  return { items, category, folderId } as LibraryWriteInput<typeof libraryEndpoints.moveItems>;
+  return category === 'prompts'
+    ? { category, folderId, items: ids.map((id) => ({ kind: 'prompt-preset', id })) }
+    : { category, folderId, items: ids.map((id) => ({ kind: 'content', id })) };
 }
 
 export function LibraryItemMenu({
@@ -342,7 +344,6 @@ export function useLibraryFolderEditor({
 type LibraryFolderEditor = ReturnType<typeof useLibraryFolderEditor>;
 
 export function useLibraryItemDrag({
-  kind,
   category,
   organizer,
   folderOf,
@@ -351,7 +352,6 @@ export function useLibraryItemDrag({
   disabled,
   onReorder,
 }: {
-  kind: LibraryItemKey['kind'];
   category: LibraryCategory;
   organizer: LibraryOrganizer;
   folderOf: (id: string) => string | null;
@@ -371,10 +371,7 @@ export function useLibraryItemDrag({
   }
   function move(id: string, folderId: string | null) {
     if (folderOf(id) === folderId) return;
-    void organizer.mutate(
-      libraryEndpoints.moveItems,
-      moveInput([{ kind, id }], category, folderId)
-    );
+    void organizer.mutate(libraryEndpoints.moveItems, moveInput([id], category, folderId));
   }
   function overFolder(folderId: string | null, event: DragEvent<HTMLElement>) {
     const source = dragged.current;
@@ -681,7 +678,11 @@ export function LibraryMoveDialog({
           if (
             await mutate(
               libraryEndpoints.moveItems,
-              moveInput(items, destination, folderId || null),
+              moveInput(
+                items.map((item) => item.id),
+                destination,
+                folderId || null
+              ),
               revision
             )
           )

@@ -809,10 +809,10 @@ export const BotNavigation = memo(function BotNavigation(
           className="bot-folder-create"
           onSubmit={(event) => {
             event.preventDefault();
-            if (title.trim())
-              void (editing === 'new' || !editing
-                ? mutate(libraryEndpoints.createFolder, { category: 'bot', title: title.trim() })
-                : mutate(libraryEndpoints.updateFolder, { id: editing.id, title: title.trim() }));
+            if (!editing || !title.trim()) return;
+            void (editing === 'new'
+              ? mutate(libraryEndpoints.createFolder, { category: 'bot', title: title.trim() })
+              : mutate(libraryEndpoints.updateFolder, { id: editing.id, title: title.trim() }));
           }}
         >
           <label>
