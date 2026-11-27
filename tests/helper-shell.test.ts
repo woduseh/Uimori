@@ -18,7 +18,11 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
-import { HelperShell, HelperShellExecutionError } from '../server/helper-shell.js';
+import {
+  HelperShell,
+  HelperShellExecutionError,
+  shellBridgeFailure,
+} from '../server/helper-shell.js';
 import { helperWritingSnapshot } from '../server/helper-runtime.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
@@ -158,6 +162,55 @@ test('portable apply retains its content-bound receipt and does not save twice',
         .prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?')
         .get(f.task.id)?.n
     ).toBe(1);
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test('a rejected apply tells the model which field to fix and how', () => {
+  const f = workspaceFixture();
+  try {
+    prepareFiles(f, 'library', f.resource.id);
+    const relative = `library/${f.resource.id}/resource.json`;
+    const filename = join(f.root, 'tasks', f.task.id, relative);
+    const model = JSON.parse(readFileSync(filename, 'utf8')) as ContentEditModel;
+    const card = model.package.nativeRisu.card as { extensions: Record<string, unknown> };
+    card.extensions = {
+      ...card.extensions,
+      uimori: { translationGuide: { instructions: '', terms: [{ source: 'Rose', target: '' }] } },
+    };
+    writeFileSync(filename, JSON.stringify(model));
+    const toolId = 'rejected-apply';
+    const internals = f.shell as unknown as {
+      active: Map<string, unknown>;
+      applied: Map<string, unknown[]>;
+      apply: (taskId: string, toolId: string, path: string) => unknown;
+    };
+    internals.active.set(`${f.task.id}:${toolId}`, {
+      controller: new AbortController(),
+      sequence: 0,
+      pending: new Set(),
+    });
+    internals.applied.set(`${f.task.id}:${toolId}`, []);
+    let thrown: unknown;
+    try {
+      internals.apply(f.task.id, toolId, relative);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(shellBridgeFailure(thrown)).toEqual({
+      status: 400,
+      body: {
+        code: 'TRANSLATION_GUIDE_TERM_INVALID',
+        params: { term: 1, limit: expect.any(Number) },
+        error: expect.stringMatching(
+          /^TRANSLATION_GUIDE_TERM_INVALID: translationGuide\.terms\[0\]: expected only source, target and note/u
+        ),
+      },
+    });
+    expect(readResource(f.store, 'content', f.resource.id).revision).toBe(f.resource.revision);
   } finally {
     f.shell.close();
     f.store.close();

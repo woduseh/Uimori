@@ -1,5 +1,5 @@
 import type { ThemeBackground } from './theme-background.js';
-import { isStoryUiStyle, type StoryUiStyle } from './story-ui-style.js';
+import { isStoryUiStyle, storyUiStyles, type StoryUiStyle } from './story-ui-style.js';
 import { ValidationError } from './validation-error.js';
 import {
   cinematicTheme,
@@ -274,7 +274,7 @@ export function validateTheme(value: unknown): ThemeDefinition {
       throw new ValidationError(
         400,
         'THEME_STORY_UI_STYLE_REQUIRED',
-        'storyUi.baseStyle: choose a supported story UI style.'
+        `storyUi.baseStyle: choose a supported story UI style: ${storyUiStyles.join(', ')}.`
       );
     const boardCss =
       definition.boardCss === undefined

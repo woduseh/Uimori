@@ -94,6 +94,17 @@ for (const width of [412]) {
     await open(page, title);
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveValue('Mira');
     await expect(page.getByLabel('표기 2 번역', { exact: true })).toHaveValue('');
+    const writesBeforeRejectedSave = writes.length;
+    await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+    await expect(
+      page
+        .getByRole('alert')
+        .filter({ hasText: /^표기 2: 원문과 사용할 표기를 각각 [\d,]+자 이내로 입력해 주세요\.$/u })
+        .first()
+    ).toBeVisible();
+    await expect(page.getByText('translationGuide.terms', { exact: false })).toHaveCount(0);
+    expect(writes.slice(writesBeforeRejectedSave)).not.toContain('/api/resources/save');
+    await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveValue('Mira');
     await discardEdits(page);
     await selectEditorSection(page, '번역 지침');
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveCount(0);

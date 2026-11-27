@@ -9,6 +9,7 @@ import {
   message as uiMessage,
   messageRef,
 } from './i18n.js';
+import { errorDescriptor } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -530,7 +531,7 @@ export function LibraryPanel({
       } else if (action === 'configure-chat') onConfigureStartStory?.(full);
       else applyRole(full, action);
     } catch (error) {
-      if (request === opening.current) onError((error as Error).message);
+      if (request === opening.current) onError(errorDescriptor(error));
     } finally {
       if (action === 'clone') cloning.current = false;
       if (request === opening.current) setLoading(false);
@@ -832,7 +833,7 @@ export function LibraryPanel({
               switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
               setPendingNavigation(null);
             } catch (error) {
-              onError((error as Error).message);
+              onError(errorDescriptor(error));
             }
           }}
           discardLabel={t('library.discardDraftAndLeave')}
@@ -1376,7 +1377,7 @@ function ContentEditor({
       return !session.snapshot().dirty;
     } catch (caught) {
       requestResourceConflictReview(session);
-      const message = (caught as Error).message;
+      const message = errorDescriptor(caught);
       setError(message);
       onError(message);
       return false;

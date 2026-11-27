@@ -32,7 +32,7 @@ import { latestTranslation } from './source-editing.js';
 import { displayTranslationJob } from '../core/translation-display.js';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from './helper-app-tools.js';
 import { fields, HttpError, record } from './request-validation.js';
-import { errorWire, HelperToolError } from './app-errors.js';
+import { AppError, asAppError, errorWire, HelperToolError } from './app-errors.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { shellRunnerRpc as rpc } from './shell-transport.js';
@@ -247,6 +247,28 @@ class ShellRevisionConflict extends HttpError {
           : { name: 'scene.read', arguments: { sourceId: target.id, target: 'original', chatId } },
     };
   }
+}
+export function shellBridgeFailure(thrown: unknown): {
+  status: number;
+  body: Record<string, unknown>;
+} {
+  const error = asAppError(thrown);
+  const message = error instanceof Error ? error.message : 'SHELL_REQUEST_FAILED';
+  return {
+    status: error instanceof HttpError ? error.statusCode : 500,
+    body: {
+      ...errorWire(error, message),
+      ...(error instanceof AppError && message !== error.code ? { error: message } : {}),
+      ...(error instanceof ShellRevisionConflict
+        ? {
+            outcome: 'unchanged',
+            nextRead: error.nextRead,
+            guidance:
+              'Local edits are preserved. Run uimori refresh on this file, reconcile into the returned latestPath, then apply latestPath. Alternatively use app.call with the returned nextRead and current guards.',
+          }
+        : {}),
+    },
+  };
 }
 function changedPaths(before: unknown, after: unknown) {
   const paths: string[] = [];
@@ -722,25 +744,9 @@ export class HelperShell {
             });
             res.end(JSON.stringify(response.result ?? null));
           } catch (error) {
-            res.writeHead(error instanceof HttpError ? error.statusCode : 500, {
-              'content-type': 'application/json',
-            });
-            res.end(
-              JSON.stringify({
-                ...errorWire(
-                  error,
-                  error instanceof Error ? error.message : 'SHELL_REQUEST_FAILED'
-                ),
-                ...(error instanceof ShellRevisionConflict
-                  ? {
-                      outcome: 'unchanged',
-                      nextRead: error.nextRead,
-                      guidance:
-                        'Local edits are preserved. Run uimori refresh on this file, reconcile into the returned latestPath, then apply latestPath. Alternatively use app.call with the returned nextRead and current guards.',
-                    }
-                  : {}),
-              })
-            );
+            const failure = shellBridgeFailure(error);
+            res.writeHead(failure.status, { 'content-type': 'application/json' });
+            res.end(JSON.stringify(failure.body));
           }
         });
       });
