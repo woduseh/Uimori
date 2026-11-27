@@ -33,7 +33,7 @@ import { AppError, appErrorFrom } from './app-errors.js';
 import { isAppErrorCode } from '#contracts';
 
 export type PreparedRisuImport = {
-  version: 1;
+  version: 2;
   id: string;
   createdAt: number;
   sourceName: string;
@@ -70,7 +70,7 @@ export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisu
   if (!existsSync(join(path, 'manifest.json')))
     throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   const value = JSON.parse(readFileSync(join(path, 'manifest.json'), 'utf8')) as PreparedRisuImport;
-  if (value.version !== 1 || value.id !== id || Date.now() - value.createdAt > UPLOAD_MAX_AGE_MS)
+  if (value.version !== 2 || value.id !== id || Date.now() - value.createdAt > UPLOAD_MAX_AGE_MS)
     throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   value.images = value.images.map((image) => ({
     ...image,
@@ -135,7 +135,7 @@ const { parentPort, workerData } = require('node:worker_threads');
 ${typeScriptSourceHooks}
 import(workerData.module).then(module => module.prepareRisuInWorker(workerData.input))
 .then(() => parentPort.postMessage({ok:true}))
-.catch(error => parentPort.postMessage({ok:false, code:String(error.message), statusCode:error.statusCode || 400, params:error.params}));
+.catch(error => parentPort.postMessage({ok:false, code:typeof error?.code === 'string' ? error.code : String(error?.message), statusCode:error.statusCode || 400, params:error.params}));
 `;
 async function worker(input: unknown, signal?: AbortSignal) {
   return new Promise<void>((accept, reject) => {

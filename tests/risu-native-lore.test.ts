@@ -64,10 +64,10 @@ async function fixture(
 test('native depth/end/reverse-depth preserve role and position once while normal lore keeps its slot', async () => {
   const { snapshot, analysis } = await fixture();
   expect(
-    analysis.preview.findings.filter((item) =>
-      ['lore-decorator:depth', 'lore-decorator:role', 'lore-decorator:reverse_depth'].includes(
-        item.code
-      )
+    analysis.preview.findings.filter(
+      (item) =>
+        item.code === 'lore-decorator-placement' &&
+        ['depth', 'role', 'reverse_depth'].includes(item.params.decorator)
     )
   ).toEqual([]);
   const input = buildMainInput(snapshot);
@@ -163,16 +163,16 @@ test('other native placement directives remain reported instead of pretending to
     entry('@@position after_desc\nCUSTOM'),
     entry('@@inject_at system\nINJECT'),
   ]);
-  expect(
-    analysis.preview.findings.some(
-      (item) => item.code === 'lore-decorator:position' && item.level === 'unsupported'
-    )
-  ).toBe(true);
-  expect(
-    analysis.preview.findings.some(
-      (item) => item.code === 'lore-decorator:inject_at' && item.level === 'unsupported'
-    )
-  ).toBe(true);
+  expect(analysis.preview.findings).toEqual(
+    expect.arrayContaining([
+      { code: 'lore-decorator-placement', level: 'unsupported', params: { decorator: 'position' } },
+      {
+        code: 'lore-decorator-placement',
+        level: 'unsupported',
+        params: { decorator: 'inject_at' },
+      },
+    ])
+  );
 });
 
 test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
@@ -186,7 +186,7 @@ test.runIf(Boolean(process.env.UIMORI_RISU_LOCAL_CARDS))(
       );
       expect(
         preview.findings.some(
-          (item) => item.code === 'lore-decorator:depth' && item.level === 'unsupported'
+          (item) => item.code === 'lore-decorator-placement' && item.params.decorator === 'depth'
         )
       ).toBe(false);
       const depths = file.contents[0].source.package!.lore.flatMap((item) =>

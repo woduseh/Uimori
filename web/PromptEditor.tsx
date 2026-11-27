@@ -3,7 +3,7 @@ import { t, useI18n } from './i18n.js';
 import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
-import { promptControls } from '../core/risu-prompt.js';
+import { promptControls, validateRisuPrompt } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -18,7 +18,7 @@ import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useShortcut } from './shortcuts.js';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
-import { NativeRisuPresetEditor, checkedPresetProgram } from './NativeRisuPresetEditor.js';
+import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import type {
@@ -228,7 +228,7 @@ export function PromptEditor({
             {
               ...model,
               title: model.title.trim(),
-              program: checkedPresetProgram(model.program),
+              program: validateRisuPrompt(model.program),
             } satisfies PromptEditModel,
             { copy: !update && !!base }
           );

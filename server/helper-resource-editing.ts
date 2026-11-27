@@ -17,7 +17,6 @@ import {
   type PromptControl,
 } from '../core/risu-prompt.js';
 import type { Content } from '../core/product.js';
-import { RisuContentError } from '../core/risu-content.js';
 import { ValidationError } from '../core/validation-error.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
@@ -966,7 +965,6 @@ export function patchHelperResource(
   } catch (error) {
     if (
       (error instanceof HttpError && error.statusCode === 400) ||
-      error instanceof RisuContentError ||
       error instanceof ValidationError
     )
       validationFailure(asAppError(error));

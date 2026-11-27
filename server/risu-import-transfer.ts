@@ -83,7 +83,7 @@ export function buildRisuTransfer({
     : prepareNativeTransfer({ file });
   const digest = createHash('sha256')
     .update(
-      JSON.stringify({ version: 8, transfer: transfer.digest, kind, findings: findings.list, lore })
+      JSON.stringify({ version: 9, transfer: transfer.digest, kind, findings: findings.list, lore })
     )
     .digest('hex');
   const preview: RisuImportPreview = {

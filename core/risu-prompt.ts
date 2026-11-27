@@ -104,6 +104,10 @@ export class RisuPromptError extends Error {
     this.name = 'RisuPromptError';
   }
 }
+export const risuPromptAppErrorCode = (error: RisuPromptError) =>
+  error.code === 'PROMPT_PROGRAM_LIMIT' || error.code === 'PROMPT_TIME_LIMIT'
+    ? ('RISU_PROMPT_TOO_LARGE' as const)
+    : ('RISU_PROMPT_INVALID' as const);
 function fail(code: string, blockId?: string): never {
   throw new RisuPromptError(code, blockId);
 }

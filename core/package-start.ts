@@ -14,15 +14,8 @@ export type PackageStartSnapshot = PackageStartRef & {
   title: string;
   text: string;
 };
-export class PackageStartError extends Error {
-  readonly statusCode = 400;
-  constructor(message: string) {
-    super(message);
-    this.name = 'PackageStartError';
-  }
-}
-const fail = (message: string): never => {
-  throw new PackageStartError(message);
+const fail = (reason: string): never => {
+  throw new ValidationError(400, 'PACKAGE_START_INVALID', reason);
 };
 function record(value: unknown, allowed: string[]): Record<string, unknown> {
   if (
@@ -82,7 +75,8 @@ export function resolvePackageStart(
   startId: string
 ): PackageStartSnapshot {
   const start = validatePackageStarts(pkg.starts ?? []).find((item) => item.id === startId);
-  if (!start) return fail('PACKAGE_START_NOT_FOUND');
+  if (!start)
+    throw new ValidationError(400, 'PACKAGE_START_NOT_FOUND', `starts: no start ${startId}.`);
   return {
     packageId: pkg.id,
     packageRevision: pkg.revision,

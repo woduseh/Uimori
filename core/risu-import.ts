@@ -20,11 +20,46 @@ export const risuImportExpandedLimit = (containerBytes: number): number =>
     Math.max(RISU_IMPORT_MAX_CONTAINER_BYTES, containerBytes * 4)
   );
 export type RisuImportKind = 'bot' | 'persona' | 'module';
-export type RisuImportFinding = {
-  code: string;
-  level: 'info' | 'warning' | 'unsupported';
-  detail: string;
+export type RisuImportFindingParams = {
+  'asset-unavailable': undefined;
+  'asset-invalid': undefined;
+  'asset-format': undefined;
+  'asset-role': undefined;
+  'creator-notes-truncated': undefined;
+  'disabled-lore': undefined;
+  'lore-not-activated': undefined;
+  'lore-inline-directive': undefined;
+  'lore-decorator-placement': { decorator: string };
+  'lore-decorator-activation': { decorator: string };
+  'lore-decorator-unknown': { names: string; more: number };
+  'native-model-calls': undefined;
+  'native-variable-projection': undefined;
 };
+export type RisuImportFindingCode = keyof RisuImportFindingParams;
+export const RISU_IMPORT_FINDING_LEVELS = {
+  'asset-unavailable': 'unsupported',
+  'asset-invalid': 'unsupported',
+  'asset-format': 'unsupported',
+  'asset-role': 'info',
+  'creator-notes-truncated': 'info',
+  'disabled-lore': 'info',
+  'lore-not-activated': 'warning',
+  'lore-inline-directive': 'unsupported',
+  'lore-decorator-placement': 'unsupported',
+  'lore-decorator-activation': 'info',
+  'lore-decorator-unknown': 'unsupported',
+  'native-model-calls': 'info',
+  'native-variable-projection': 'warning',
+} as const satisfies Record<RisuImportFindingCode, 'info' | 'warning' | 'unsupported'>;
+export type FindingParamsArgument<P> = P extends undefined ? [] : [params: P];
+export type RisuImportFinding = {
+  [C in RisuImportFindingCode]: {
+    code: C;
+    level: (typeof RISU_IMPORT_FINDING_LEVELS)[C];
+  } & (RisuImportFindingParams[C] extends undefined
+    ? { params?: never }
+    : { params: RisuImportFindingParams[C] });
+}[RisuImportFindingCode];
 export type RisuImportPreview = {
   preparedId?: string;
   kind: RisuImportKind;

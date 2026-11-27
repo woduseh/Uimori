@@ -403,11 +403,7 @@ test.each([null, []])(
     };
     const preview = prepareRisuImport({ source });
     expect(preview.summary.lore).toBe(lorebook === null || lorebook === undefined ? 2 : 0);
-    expect(
-      preview.findings.some(
-        (finding) => finding.code === 'display-regex' || finding.level === 'unsupported'
-      )
-    ).toBe(false);
+    expect(preview.findings.some((finding) => finding.level === 'unsupported')).toBe(false);
   }
 );
 
@@ -713,24 +709,33 @@ test('lore directives decide activation by exact-case name and never reach the m
   expect(lore.Migrated.text).toBe(converted.at(-1));
   expect(lore.Migrated.keys).toBe('harbor');
   expect(lore.Plain.keys).toBeUndefined();
-  const levels = Object.fromEntries(
-    preview.findings.map((finding) => [finding.code, finding.level])
+  expect(preview.findings).toEqual(
+    expect.arrayContaining([
+      { code: 'lore-not-activated', level: 'warning' },
+      { code: 'lore-inline-directive', level: 'unsupported' },
+      {
+        code: 'lore-decorator-activation',
+        level: 'info',
+        params: { decorator: 'exclude_keys_all' },
+      },
+      { code: 'lore-decorator-activation', level: 'info', params: { decorator: 'recursive' } },
+      {
+        code: 'lore-decorator-unknown',
+        level: 'unsupported',
+        params: { names: '@@ACTIVATE, @@Depth', more: 0 },
+      },
+    ])
   );
-  expect(levels['lore-not-activated']).toBe('warning');
-  expect(levels).not.toHaveProperty('lore-discovery');
-  expect(levels).not.toHaveProperty('lore-rules');
-  expect(levels['lore-decorator-position']).toBe('unsupported');
-  expect(levels).not.toHaveProperty('lore-decorators');
-  expect(levels).not.toHaveProperty('lore-decorator:depth');
-  expect(levels).not.toHaveProperty('lore-decorator:role');
-  expect(levels['lore-decorator:exclude_keys_all']).toBe('info');
-  expect(levels['lore-decorator:recursive']).toBe('info');
-  expect(levels).not.toHaveProperty('lore-decorator:activate');
-  expect(levels).not.toHaveProperty('lore-decorator:dont_activate');
-  const unknown = preview.findings.find((finding) => finding.code === 'lore-decorator-unknown');
-  expect(unknown?.level).toBe('unsupported');
-  expect(unknown?.detail).toContain('@@ACTIVATE');
-  expect(unknown?.detail).toContain('@@Depth');
+  expect(preview.findings.filter((finding) => finding.code === 'lore-decorator-placement')).toEqual(
+    []
+  );
+  expect(
+    preview.findings.filter(
+      (finding) =>
+        finding.code === 'lore-decorator-activation' &&
+        ['activate', 'dont_activate'].includes(finding.params.decorator)
+    )
+  ).toEqual([]);
 });
 
 const SURFACE_CODES = [

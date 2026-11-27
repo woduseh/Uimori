@@ -1,5 +1,5 @@
 import {
-  RisuContentError,
+  invalidRisuContent,
   assertRisuContent,
   validateContentAttachment,
   type RisuContent,
@@ -23,8 +23,8 @@ export function compileContentAttachment(
   const pkg = value,
     attachment = validateContentAttachment(ref);
   if (pkg.id !== attachment.id || pkg.revision !== attachment.revision)
-    throw new RisuContentError('PACKAGE_REVISION_MISMATCH');
-  if (!context.chatId) throw new RisuContentError('PACKAGE_CHAT_REQUIRED');
+    throw invalidRisuContent('PACKAGE_REVISION_MISMATCH');
+  if (!context.chatId) throw invalidRisuContent('PACKAGE_CHAT_REQUIRED');
   const prefix = `package:${pkg.id}:${attachment.role}`;
   const resource = (
     key: string,

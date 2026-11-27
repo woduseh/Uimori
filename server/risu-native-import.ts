@@ -31,12 +31,7 @@ export function analyzeNativeRisuImport(
   const description =
     notes ||
     (input.kind !== 'module' ? `Risu 캐릭터 카드에서 가져온 자료: ${input.source.name}` : '');
-  if (description.length > 4000)
-    findings.add(
-      'creator-notes-truncated',
-      'info',
-      '자료 설명은 앞 4000자까지 표시해요. 제작자 코멘트 전체는 Risu 카드 원문에 보존해요.'
-    );
+  if (description.length > 4000) findings.add('creator-notes-truncated');
   const assetInput = {
     card,
     kind: input.kind,
@@ -92,11 +87,7 @@ export function analyzeNativeRisuImport(
         })
     )
   )
-    findings.add(
-      'native-model-calls',
-      'info',
-      '스크립트에서 모델 호출로 보이는 코드를 찾았어요. 가져오기에서는 이 코드를 유지하며, JEV 호출로 자동 변환하지 않아요.'
-    );
+    findings.add('native-model-calls');
   const transferInput = {
     input,
     card,

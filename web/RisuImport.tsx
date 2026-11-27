@@ -1,5 +1,6 @@
 import { t, useI18n, formatNumber } from './i18n.js';
-import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { importFindingMessage } from './risu-finding-messages.js';
 import { toUiMessage } from './api-errors.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { LoadingState } from './LoadingState.js';
@@ -21,49 +22,6 @@ import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
-
-function importFindingMessage(finding: RisuImportPreview['findings'][number]): string {
-  switch (finding.code) {
-    case 'asset-unavailable':
-      return t('transfer.finding.asset-unavailable');
-    case 'asset-invalid':
-      return t('transfer.finding.asset-invalid');
-    case 'asset-format':
-      return t('transfer.finding.asset-format');
-    case 'asset-role':
-      return t('transfer.finding.asset-role');
-    case 'lore-not-activated':
-      return t('transfer.finding.lore-not-activated');
-    case 'lore-decorator-position':
-      return t('transfer.finding.lore-decorator-position');
-    case 'disabled-lore':
-      return t('transfer.finding.disabled-lore');
-    case 'creator-notes-truncated':
-      return t('transfer.finding.creator-notes-truncated');
-    case 'native-model-calls':
-      return t('transfer.finding.native-model-calls');
-    case 'native-variable-projection':
-      return t('transfer.finding.native-variable-projection');
-  }
-  if (finding.code.startsWith('lore-decorator:')) {
-    const decorator = finding.code.slice('lore-decorator:'.length);
-    return finding.level === 'unsupported'
-      ? t('transfer.finding.decoratorPosition', { decorator })
-      : t('transfer.finding.decoratorActivation', { decorator });
-  }
-  if (finding.code === 'lore-decorator-unknown') {
-    const match =
-      /^Risu가 인식하지 못하는 `@@` 지시문은 가져온 로어 본문에서 제외돼요\. Risu 원문에는 남아요: (.*?)(?: 외 (\d+)개)?$/su.exec(
-        finding.detail
-      );
-    if (match)
-      return t('transfer.finding.decoratorUnknown', {
-        names: match[1],
-        more: Number(match[2] ?? 0),
-      });
-  }
-  return finding.detail;
-}
 
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
   return entry.loading === 'pinned' ? t('transfer.m001') : t('transfer.m002');
@@ -394,7 +352,7 @@ export function RisuImport({
                               : t('transfer.m036')}
                           {': '}
                         </strong>
-                        {importFindingMessage(finding)}
+                        {formatUiMessage(importFindingMessage(finding))}
                       </li>
                     ))}
                   </ul>

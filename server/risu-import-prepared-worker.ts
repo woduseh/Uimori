@@ -137,7 +137,7 @@ export async function prepareRisuInWorker(input: {
     { flag: 'wx' }
   );
   const manifest: PreparedRisuImport = {
-    version: 1,
+    version: 2,
     requestedKind: input.kind,
     id: input.id,
     createdAt: Date.now(),

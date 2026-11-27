@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { splitSource } from '../core/auxiliary.js';
 import { parseStoryUi } from '../core/story-ui.js';
-import { RisuContentError } from '../core/risu-content.js';
+import { invalidRisuContent } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuContext } from './risu-native-context.js';
 import { executeRisuNative } from './risu-native-runtime.js';
@@ -52,13 +52,13 @@ export async function buildPackagePresentation(
     source.chatId !== snapshot.chatId ||
     createHash('sha256').update(source.text).digest('hex') !== source.hash
   )
-    throw new RisuContentError('PACKAGE_PRESENTATION_SOURCE_MISMATCH');
+    throw invalidRisuContent('PACKAGE_PRESENTATION_SOURCE_MISMATCH');
   if (
     source.translation &&
     (source.translation.sourceRevision !== source.id ||
       source.translation.sourceHash !== source.hash)
   )
-    throw new RisuContentError('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
+    throw invalidRisuContent('PACKAGE_PRESENTATION_TRANSLATION_MISMATCH');
   const native = nativeRisuContext(snapshot);
   if (native) {
     let renderer:

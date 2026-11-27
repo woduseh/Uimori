@@ -46,17 +46,9 @@ const DECORATOR_NOTICES = {
   no_recursive_search: 'activation',
 } satisfies Record<keyof LoreDecorators, DecoratorNotice | null>;
 const NOTICES = {
-  position: {
-    level: 'unsupported' as const,
-    message: (decorator: string) =>
-      `로어의 \`@@${decorator}\` 위치와 삽입 지시문은 원본에 보존하지만 현재 컨텍스트 배치에는 적용하지 않아요.`,
-  },
-  activation: {
-    level: 'info' as const,
-    message: (decorator: string) =>
-      `로어의 \`@@${decorator}\` 규칙은 원본에 보존해요. 선택적 로어는 JEV 관련성 판단과 작문 모델의 조회로 제공해요.`,
-  },
-};
+  position: { level: 'unsupported', code: 'lore-decorator-placement' },
+  activation: { level: 'info', code: 'lore-decorator-activation' },
+} as const;
 const MAX_UNKNOWN_DECORATORS = 20;
 const MAX_UNKNOWN_DECORATOR_LENGTH = 40;
 const MAX_PREVIEW_KEY_CHARS = 200;
@@ -204,21 +196,10 @@ export function importRisuLore({
       loading,
       ...(keys ? { keys: keys.slice(0, MAX_PREVIEW_KEY_CHARS) } : {}),
     });
-    if (executable)
-      findings.add(
-        'lore-not-activated',
-        'warning',
-        '@@dont_activate가 지정된 로어는 모델에 보내지 않고 Risu 원문에 보존해요.'
-      );
-    for (const { decorator, level, message } of report.notices)
-      findings.add(`lore-decorator:${decorator}`, level, message(decorator));
+    if (executable) findings.add('lore-not-activated');
+    for (const { decorator, code } of report.notices) findings.add(code, { decorator });
     for (const found of parsed.unknown) unknown.add(found.slice(0, MAX_UNKNOWN_DECORATOR_LENGTH));
-    if (report.inlineDirective)
-      findings.add(
-        'lore-decorator-position',
-        'unsupported',
-        '본문 중간의 `@@` 지시문은 해석하지 않고 그대로 남겨요. 원래 규칙과 다르게 동작할 수 있어요.'
-      );
+    if (report.inlineDirective) findings.add('lore-inline-directive');
     if (!enabled || !content.trim()) continue;
     activated = true;
     const loreText = string(content),
@@ -243,14 +224,9 @@ export function importRisuLore({
   if (unknown.size) {
     const names = [...unknown].slice(0, MAX_UNKNOWN_DECORATORS).map((item) => `@@${item}`);
     const rest = unknown.size - names.length;
-    findings.add(
-      'lore-decorator-unknown',
-      'unsupported',
-      `Risu가 인식하지 못하는 \`@@\` 지시문은 가져온 로어 본문에서 제외돼요. Risu 원문에는 남아요: ${names.join(', ')}${rest ? ` 외 ${rest}개` : ''}`
-    );
+    findings.add('lore-decorator-unknown', { names: names.join(', '), more: rest });
   }
-  if (preview.some((item) => !item.enabled))
-    findings.add('disabled-lore', 'info', '비활성 로어는 적용하지 않고 원본 파일에 보존해요.');
+  if (preview.some((item) => !item.enabled)) findings.add('disabled-lore');
   if (!activated) return { preview, lore };
   return { preview, lore, loreActivation: { mode: 'model' } };
 }

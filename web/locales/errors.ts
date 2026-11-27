@@ -2227,6 +2227,36 @@ export const messages = {
     ja: 'トグルのキーが重複しているか、120文字を超えているか、制御文字を含んでいます。',
     zh: '开关键重复、超过 120 个字符或包含控制字符。',
   },
+  'errors.RISU_CONTENT_INVALID': {
+    ko: '자료 구조가 올바르지 않아 처리할 수 없어요. 자료를 다시 불러온 뒤 시도해 주세요.',
+    en: 'The resource data has an invalid structure and cannot be processed. Reload the resource and try again.',
+    ja: '資料のデータ構造が正しくないため処理できません。資料を読み込み直してから再度お試しください。',
+    zh: '资料的数据结构不正确，无法处理。请重新加载资料后再试。',
+  },
+  'errors.PACKAGE_START_INVALID': {
+    ko: '첫 메시지 구성이 올바르지 않아요. 봇의 첫 메시지를 확인해 주세요.',
+    en: 'The opening data is invalid. Check the bot openings.',
+    ja: '開始文の構成が正しくありません。ボットの開始文を確認してください。',
+    zh: '开场白结构不正确。请检查机器人的开场白。',
+  },
+  'errors.PACKAGE_START_NOT_FOUND': {
+    ko: '선택한 첫 메시지를 봇에서 찾을 수 없어요. 봇을 다시 불러온 뒤 첫 메시지를 다시 골라 주세요.',
+    en: 'The selected opening is no longer in the bot. Reload the bot and choose an opening again.',
+    ja: '選択した開始文がボットに見つかりません。ボットを読み込み直して開始文を選び直してください。',
+    zh: '在机器人中找不到所选的开场白。请重新加载机器人并重新选择开场白。',
+  },
+  'errors.RISU_PROMPT_INVALID': {
+    ko: '프롬프트 구성이 올바르지 않아요. 블록과 토글 정의를 확인해 주세요.',
+    en: 'The prompt program is invalid. Check its blocks and toggle definitions.',
+    ja: 'プロンプト構成が正しくありません。ブロックとトグル定義を確認してください。',
+    zh: '提示词结构不正确。请检查区块和开关定义。',
+  },
+  'errors.RISU_PROMPT_TOO_LARGE': {
+    ko: '프롬프트 구성이 처리 한도를 넘었어요. 블록 수나 내용 길이를 줄여 주세요.',
+    en: 'The prompt program exceeds the processing limit. Use fewer blocks or shorter text.',
+    ja: 'プロンプト構成が処理上限を超えています。ブロック数や内容の長さを減らしてください。',
+    zh: '提示词结构超出处理上限。请减少区块数量或缩短内容。',
+  },
   'errors.LORE_PINNED_BUDGET_EXCEEDED': {
     ko: '고정 자료가 설정한 토큰 한도를 초과했어요. 자료를 줄이거나 고정 자료 한도를 조정해 주세요.',
     en: 'Pinned sources exceed the token limit you set. Reduce the sources or adjust the pinned-source limit.',

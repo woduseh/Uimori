@@ -43,19 +43,10 @@ export type RisuContent = {
   nativeRisu: RisuContentSource;
   imageHandoff?: RisuImageHandoff;
 };
-export class RisuContentError extends Error {
-  readonly statusCode = 400;
-  readonly code: string;
-  readonly itemId?: string;
-  constructor(code: string, itemId?: string) {
-    super(`${code}${itemId ? ` (${itemId})` : ''}`);
-    this.code = code;
-    this.itemId = itemId;
-    this.name = 'RisuContentError';
-  }
-}
-const fail = (code: string, id?: string): never => {
-  throw new RisuContentError(code, id);
+export const invalidRisuContent = (reason: string, itemId?: string) =>
+  new ValidationError(400, 'RISU_CONTENT_INVALID', `${reason}${itemId ? ` (${itemId})` : ''}`);
+const fail = (reason: string, id?: string): never => {
+  throw invalidRisuContent(reason, id);
 };
 function object(v: unknown, keys: string[]): Record<string, unknown> {
   if (
@@ -232,7 +223,7 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
     if (p.starts !== undefined) validatePackageStarts(p.starts);
     if (p.modules !== undefined) validatePackageModules(p.modules);
   } catch (error) {
-    if (error instanceof RisuContentError || error instanceof ValidationError) throw error;
+    if (error instanceof ValidationError) throw error;
     fail(error instanceof Error ? error.message : 'PACKAGE_FEATURE_INVALID');
   }
   if (p.loreActivation !== undefined) {

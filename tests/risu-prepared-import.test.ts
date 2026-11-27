@@ -1,6 +1,14 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import Fastify from 'fastify';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Readable } from 'node:stream';
@@ -378,6 +386,59 @@ test('malformed input rejected by the worker removes its owned staging directory
     'RISU_IMPORT_INVALID_FILE'
   );
   expect(readdirSync(join(resolve(store.path, '..'), 'risu-prepared'))).toEqual([]);
+});
+
+test('a draft staged before an upgrade asks for a fresh review instead of applying', async () => {
+  const store = fixture();
+  const input = await source();
+  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const manifest = join(
+    resolve(store.path, '..'),
+    'risu-prepared',
+    preview.preparedId!,
+    'manifest.json'
+  );
+  const staged = JSON.parse(readFileSync(manifest, 'utf8'));
+  writeFileSync(
+    manifest,
+    JSON.stringify({
+      ...staged,
+      version: 1,
+      preview: {
+        ...staged.preview,
+        findings: [{ code: 'asset-role', level: 'info', detail: 'legacy sentence' }],
+      },
+    })
+  );
+  await expect(
+    applyRisuImport(store, {
+      source: input,
+      preparedId: preview.preparedId,
+      digest: preview.digest,
+      allowPartial: false,
+      createChat: false,
+      idempotencyKey: 'pre-upgrade-draft',
+    })
+  ).rejects.toMatchObject({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' });
+  expect(store.db.prepare('SELECT COUNT(*) AS count FROM import_operations').get()).toEqual({
+    count: 0,
+  });
+});
+
+test('a catalogued validation error raised in the worker keeps its code', async () => {
+  const store = fixture();
+  let nested: Record<string, unknown> = {};
+  for (let depth = 0; depth < 101; depth++) nested = { nested };
+  const card = {
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: { name: 'Deep card', description: '', first_mes: 'Opening', extensions: { nested } },
+  };
+  const input = { name: 'deep.json', base64: Buffer.from(JSON.stringify(card)).toString('base64') };
+  await expect(prepareStoredRisuImport(store.path, { source: input })).rejects.toMatchObject({
+    statusCode: 400,
+    code: 'PACKAGE_NATIVE_RISU_LIMIT',
+  });
 });
 
 test('parallel image preparation keeps card order and validates repeated bytes once', async () => {
