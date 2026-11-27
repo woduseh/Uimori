@@ -1818,3 +1818,24 @@ test('manual compaction sends only attachments the summary model accepts', async
   expect(sent[0].prompt).toBeUndefined();
   expect(JSON.stringify(sent[0].input.source)).toContain('reference.webp');
 });
+
+test('manual compaction with a disabled helper model names the helper role', async () => {
+  const f = await fixture({ fixed: false });
+  const { helperModel } = f;
+  f.store.product.model(
+    {
+      title: helperModel.title,
+      connectionId: helperModel.connectionId,
+      modelId: helperModel.modelId,
+      temperature: null,
+      maxOutputTokens: 1024,
+      inputTokenLimit: 8192,
+      enabled: false,
+      expectedRevision: helperModel.revision,
+    },
+    helperModel.id
+  );
+  expect(() => f.runtime.compactConversation(f.conversation.id)).toThrow(
+    expect.objectContaining({ code: 'MODEL_UNAVAILABLE', params: { role: 'helper' } })
+  );
+});

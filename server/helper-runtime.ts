@@ -1199,7 +1199,7 @@ export class HelperRuntime {
     const helperModel = workspaceModelRef(workspace, 'helper');
     const contextModel = workspaceModelRef(workspace, 'context');
     if (!helperModel) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
-    const model = this.store.product.modelSnapshot(helperModel.id);
+    const model = this.store.product.modelSnapshot(helperModel.id, 'helper');
     if (model.evaluationTools) throw new AppError(409, 'HELPER_MODEL_EVALUATION_TOOLS');
     const scope = conversation.scope;
     if (selection) {
@@ -1302,7 +1302,7 @@ export class HelperRuntime {
         persona: conversation.persona,
         ...(contextModel
           ? {
-              contextModel: this.store.product.modelSnapshot(contextModel.id, undefined, false),
+              contextModel: this.store.product.modelSnapshot(contextModel.id, 'context', false),
             }
           : {}),
         ...(writing && scope.kind === 'chat'
@@ -1433,12 +1433,12 @@ export class HelperRuntime {
     const workspace = promptWorkspace(this.store);
     const helperModelRef = workspaceModelRef(workspace, 'helper');
     if (!helperModelRef) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
-    const helperModel = this.store.product.modelSnapshot(helperModelRef.id);
+    const helperModel = this.store.product.modelSnapshot(helperModelRef.id, 'helper');
     if (helperModel.connection.protocol === 'codex-app-server-v1')
       throw new AppError(409, 'HELPER_COMPACTION_CODEX_NATIVE');
     const contextModelRef = workspaceModelRef(workspace, 'context');
     if (!contextModelRef) throw new AppError(409, 'MODEL_REQUIRED', { role: 'context' });
-    const contextModel = this.store.product.modelSnapshot(contextModelRef.id, undefined, false);
+    const contextModel = this.store.product.modelSnapshot(contextModelRef.id, 'context', false);
     const history = helperHistory(this.store, conversationId);
     const base = helperContext(this.store, conversationId, history);
     const { history: uncompacted, summary: previousSummary } = helperHistoryForContext(
