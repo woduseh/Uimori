@@ -4,9 +4,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import { DatabaseSync } from 'node:sqlite';
 import Fastify from 'fastify';
 import { Store } from '../server/store.js';
 import { ManuscriptSearch } from '../server/manuscript-search.js';
+import { foldSearchText } from '../server/search-schema.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { illustrationPresetCatalog } from '../server/illustration-presets.js';
 import { illustrationSettings } from '../server/illustrations.js';
@@ -102,6 +104,37 @@ test('a v0.18.0 automatic backup, made in a worktree of tag v0.18.0, opens with 
   expect(store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(0);
   store.db.exec("INSERT INTO search_trigrams(search_trigrams) VALUES('integrity-check')");
   expect(store.db.prepare('PRAGMA integrity_check').get()!.integrity_check).toBe('ok');
+});
+
+test('a v0.18.0 backup taken before the legacy search index finished moving finds those scenes again', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-horizon-legacy-'));
+  const path = join(directory, 'app.sqlite');
+  writeFileSync(path, gunzipSync(readFileSync(join(fixtures, 'snapshot.db.gz'))));
+  const legacy = new DatabaseSync(path);
+  const row = legacy
+    .prepare("SELECT id,text FROM search_documents WHERE kind='original' AND text=?")
+    .get(firstScene)!;
+  legacy
+    .prepare('UPDATE search_documents SET search_text=? WHERE id=?')
+    .run(foldSearchText(String(row.text)), Number(row.id));
+  legacy.prepare('DELETE FROM search_trigrams WHERE rowid=?').run(Number(row.id));
+  legacy.close();
+  const store = database(readFileSync(path));
+  rmSync(directory, { recursive: true, force: true });
+
+  const search = new ManuscriptSearch(store);
+  const [first] = store.history(store.chats()[0].headRevision).map((entry) => entry.revision);
+  const found = async () =>
+    (await search.search({ query: 'golden lantern', scope: 'workspace', kinds: ['original'] }))
+      .items;
+  expect((await found()).map((item) => item.target.sourceId)).toEqual([first]);
+  await search.refreshBatch();
+  expect(store.db.prepare('SELECT count(*) AS n FROM search_dirty_sources').get()!.n).toBe(0);
+  expect(
+    store.db.prepare("SELECT count(*) AS n FROM search_documents WHERE search_text<>''").get()!.n
+  ).toBe(0);
+  expect((await found()).map((item) => item.target.sourceId)).toEqual([first]);
+  await search.close();
 });
 
 test('.uimori and .chat.uimori archives exported by v0.18.0 import as new copies', async () => {

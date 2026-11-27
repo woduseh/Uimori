@@ -316,7 +316,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ### Automatic chat title generation contract
 
-- **Scheduled language**: Automatic titles generate in the app's UI language at schedule time using an English prompt instruction; legacy tasks lacking a language field generate in Korean.
+- **Scheduled language**: Automatic titles generate in the app's UI language at schedule time using an English prompt instruction; a scheduled task whose language is not a supported UI locale fails with `TITLE_LOCALE_INVALID` before any model request.
 
 ## Themes, built-in assets and verification
 

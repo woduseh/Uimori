@@ -3,7 +3,15 @@ import type { DatabaseSync } from 'node:sqlite';
 export const foldSearchText = (text: string) => text.normalize('NFC').toLowerCase();
 
 export function initSearchTrigrams(db: DatabaseSync) {
+  const legacy = !!db.prepare("SELECT 1 FROM sqlite_master WHERE name='search_fts'").get();
   db.exec(`SAVEPOINT search_trigrams;
+    ${
+      legacy
+        ? `INSERT INTO search_dirty_sources(source_id,revision)
+      SELECT DISTINCT source_id,1 FROM search_documents WHERE search_text<>''
+      ON CONFLICT(source_id) DO UPDATE SET revision=revision+1;`
+        : ''
+    }
     CREATE VIRTUAL TABLE IF NOT EXISTS search_trigrams USING fts5(text,content='',contentless_delete=1,tokenize='trigram',detail=none);
     DROP TRIGGER IF EXISTS search_document_insert;
     DROP TRIGGER IF EXISTS search_document_update;
