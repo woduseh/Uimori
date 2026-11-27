@@ -1,6 +1,7 @@
 import { tryParseJson } from './json.js';
-import { t, translateMessage, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import {
@@ -507,7 +508,7 @@ export function ResourceEditorStatus({
         <LoadingState
           presentation="region"
           loading={!state.error}
-          error={legacyUiMessage(state.error)}
+          error={state.error}
           label={uiMessage('shared.loadingResources')}
           onRetry={() => void session.open().catch(() => {})}
         />
@@ -543,18 +544,18 @@ export function ResourceEditorStatus({
         </small>
       )}
       {state.ready && !hideSyncError && state.error && (
-        <small role="alert">{translateMessage(state.error)}</small>
+        <small role="alert">{formatUiMessage(state.error)}</small>
       )}
     </div>
   );
 }
 export function useResourceEditorCommands(value: ResourceEditorValue) {
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const run = (work: () => Promise<unknown>) => {
-    setError('');
+    setError(null);
     return work().then(
       () => {},
-      (caught) => setError((caught as Error).message)
+      (caught) => setError(toUiMessage(caught))
     );
   };
   const { session, state } = value;
@@ -575,7 +576,7 @@ export function useResourceEditorCommands(value: ResourceEditorValue) {
       !state.dirty &&
       state.document.baseRevision === restoredRevision.revision,
     restore: async () => {
-      setError('');
+      setError(null);
       setRestoredRevision(null);
       setRestoredRevision({ session, revision: await session.undo() });
     },
@@ -617,7 +618,7 @@ export function ResourceEditorActions({
           {t('shared.cancelEditing')}
         </button>
       )}
-      {error && <small role="alert">{translateMessage(error)}</small>}
+      {error && <small role="alert">{formatUiMessage(error)}</small>}
     </div>
   );
 }

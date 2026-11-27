@@ -1,15 +1,8 @@
 import { ScrollStrip } from './ScrollStrip.js';
 import { useShortcut } from './shortcuts.js';
-import {
-  t,
-  useI18n,
-  translateMessage,
-  getLocale,
-  message as descriptor,
-  messageRef,
-} from './i18n.js';
-import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
-import { errorDescriptor } from './api-errors.js';
+import { t, useI18n, getLocale } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -489,43 +482,34 @@ export function LibraryPanel({
           title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
         });
         const copy = result.saved as Content;
-        const warnings: string[] = [];
+        const warnings: UiMessage[] = [];
         try {
           await placeCreated(copy, true, result.creationOrganizationRevision ?? null);
         } catch (error) {
           warnings.push(
-            descriptor('library.theResourceWasCopiedButCouldNot', {
-              v0: messageRef((error as Error).message),
-            })
+            uiMessage('library.theResourceWasCopiedButCouldNot', { v0: toUiMessage(error) })
           );
         }
         try {
           await reload();
         } catch (error) {
           warnings.push(
-            descriptor('library.theResourceWasCopiedButTheList', {
-              v0: messageRef((error as Error).message),
-            })
+            uiMessage('library.theResourceWasCopiedButTheList', { v0: toUiMessage(error) })
           );
         }
         if (request === opening.current) {
           setEditing({ kind: copy.kind, item: copy });
           if (warnings.length)
             onError(
-              legacyUiMessage(
-                warnings.length === 1
-                  ? warnings[0]
-                  : descriptor('library.cloneWarnings', {
-                      first: messageRef(warnings[0]),
-                      second: messageRef(warnings[1]),
-                    })
-              )
+              warnings.length === 1
+                ? warnings[0]
+                : uiMessage('library.cloneWarnings', { first: warnings[0], second: warnings[1] })
             );
         }
       } else if (action === 'configure-chat') onConfigureStartStory?.(full);
       else applyRole(full, action);
     } catch (error) {
-      if (request === opening.current) onError(legacyUiMessage(errorDescriptor(error)));
+      if (request === opening.current) onError(toUiMessage(error));
     } finally {
       if (action === 'clone') cloning.current = false;
       if (request === opening.current) setLoading(false);
@@ -829,7 +813,7 @@ export function LibraryPanel({
               switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
               setPendingNavigation(null);
             } catch (error) {
-              onError(legacyUiMessage(errorDescriptor(error)));
+              onError(toUiMessage(error));
             }
           }}
           discardLabel={t('library.discardDraftAndLeave')}
@@ -1297,9 +1281,9 @@ function ContentEditor({
   const recentChat = selected ? recentChats?.[selected.id] : undefined;
   const [placing, setPlacing] = useState(false);
   const busy = state.saving || placing;
-  const [saved, setSaved] = useState('');
-  const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
-  const [error, setError] = useState('');
+  const [saved, setSaved] = useState<UiMessage | null>(null);
+  const [saveWarnings, setSaveWarnings] = useState<UiMessage[]>([]);
+  const [error, setError] = useState<UiMessage | null>(null);
   const [exportError, setExportError] = useState<UiMessage | null>(null);
   const nativeDraftDirty = state.local.unappliedFields.length > 0;
   const [portraitBusy, setPortraitBusy] = useState(false);
@@ -1327,9 +1311,9 @@ function ContentEditor({
       return false;
     const version = ++saveVersion.current;
     onError(null);
-    setSaved('');
+    setSaved(null);
     setSaveWarnings([]);
-    setError('');
+    setError(null);
     try {
       const copying = !!copyKind;
       const result = state.creationPending
@@ -1349,7 +1333,7 @@ function ContentEditor({
             { copy: copying }
           );
       const item = result.saved as Content;
-      setSaved(descriptor('library.savedResource', { title: item.title }));
+      setSaved(uiMessage('library.savedResource', { title: item.title }));
       if (result.creationIntent) {
         setPlacing(true);
         try {
@@ -1357,7 +1341,7 @@ function ContentEditor({
         } catch {
           setSaveWarnings((warnings) => [
             ...warnings,
-            descriptor('library.savedPlacementWarning', { title: item.title }),
+            uiMessage('library.savedPlacementWarning', { title: item.title }),
           ]);
         }
       }
@@ -1367,15 +1351,15 @@ function ContentEditor({
           if (saveVersion.current === version)
             setSaveWarnings((warnings) => [
               ...warnings,
-              descriptor('library.savedRefreshWarning', { title: item.title }),
+              uiMessage('library.savedRefreshWarning', { title: item.title }),
             ]);
         });
       return !session.snapshot().dirty;
     } catch (caught) {
       requestResourceConflictReview(session);
-      const message = errorDescriptor(caught);
+      const message = toUiMessage(caught);
       setError(message);
-      onError(legacyUiMessage(message));
+      onError(message);
       return false;
     } finally {
       setPlacing(false);
@@ -1476,7 +1460,7 @@ function ContentEditor({
                         },
                         label: selected ? t('library.saveChanges') : t('library.registerResource'),
                         disabled: editorUnavailable || portraitBusy || state.creationPending,
-                        error: titleMissing ? t('library.nameRequired') : error,
+                        error: titleMissing ? uiMessage('library.nameRequired') : error,
                       }}
                       onReveal={(target) => {
                         selectSection(target.section);
@@ -1700,14 +1684,14 @@ function ContentEditor({
             </fieldset>
             {error && (
               <p className="error full" role="alert">
-                {translateMessage(error)}
+                {formatUiMessage(error)}
               </p>
             )}
-            <TransientNotice content={legacyUiMessage(saved)} />
+            <TransientNotice content={saved} />
             {!!saveWarnings.length && (
               <NoticeBanner className="full" label={uiMessage('library.reviewAfterSaving')}>
-                {saveWarnings.map((warning) => (
-                  <p key={translateMessage(warning)}>{translateMessage(warning)}</p>
+                {saveWarnings.map((warning, index) => (
+                  <p key={index}>{formatUiMessage(warning)}</p>
                 ))}
               </NoticeBanner>
             )}

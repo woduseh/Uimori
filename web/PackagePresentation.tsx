@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as descriptor, messageRef } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, legacyMessageString, uiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
 import { useWindowViewport } from './window-viewport.js';
@@ -92,9 +93,11 @@ export function usePackagePresentation(
             key,
             identity,
             sourceIdentity,
-            error: descriptor('library.couldNotApplyDisplayTransformationsShowingThe', {
-              v0: error instanceof Error ? messageRef(error.message) : '',
-            }),
+            error: legacyMessageString(
+              uiMessage('library.couldNotApplyDisplayTransformationsShowingThe', {
+                v0: toUiMessage(error),
+              })
+            ),
           });
       }
     })();
@@ -129,28 +132,28 @@ export function usePackagePresentation(
 export function PackagePresentationIssues({ data }: { data?: PackagePresentation }) {
   useI18n();
   if (!data) return null;
-  const messages = [
+  const kinds = [
     ...new Set(
       data.issues.map((issue) =>
-        issue === 'native-image-guidance-evaluation'
-          ? t('library.someSelectedImagesWereOmittedBecauseImage')
-          : issue.startsWith('native-image-tag-evaluation:')
-            ? t('library.someSelectedImagesWereOmittedBecauseThe')
-            : issue.startsWith('native-image-tag-unavailable:')
-              ? t('library.selectedImagesWereOmittedBecauseTheyCould')
-              : issue
+        issue.startsWith('native-image-tag-evaluation:')
+          ? 'native-image-tag-evaluation'
+          : issue.startsWith('native-image-tag-unavailable:')
+            ? 'native-image-tag-unavailable'
+            : issue
       )
     ),
   ];
   return (
     <>
-      {messages.map((message) => (
-        <p
-          key={translateMessage(message)}
-          role="status"
-          className="muted package-presentation-issue"
-        >
-          {translateMessage(message)}
+      {kinds.map((kind) => (
+        <p key={kind} role="status" className="muted package-presentation-issue">
+          {kind === 'native-image-guidance-evaluation'
+            ? t('library.someSelectedImagesWereOmittedBecauseImage')
+            : kind === 'native-image-tag-evaluation'
+              ? t('library.someSelectedImagesWereOmittedBecauseThe')
+              : kind === 'native-image-tag-unavailable'
+                ? t('library.selectedImagesWereOmittedBecauseTheyCould')
+                : kind}
         </p>
       ))}
     </>

@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -10,7 +10,7 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { IconButton } from './IconButton.js';
 import { api, libraryChangedKey } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
 import { helperDataFrame } from './live-frames.js';
@@ -19,7 +19,7 @@ import { helperRefreshSpacing } from './poll-delays.js';
 
 const referenceKey = (ref: PackageModuleRef | null | undefined) =>
   ref ? `${ref.id}@${ref.revision}` : '';
-type ReferenceStatus = { content?: Content; error?: string };
+type ReferenceStatus = { content?: Content; error?: UiMessage };
 
 export function PackageFeaturesEditor({
   value,
@@ -35,8 +35,8 @@ export function PackageFeaturesEditor({
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
-    [listError, setListError] = useState(''),
-    [error, setError] = useState(''),
+    [listError, setListError] = useState<UiMessage | null>(null),
+    [error, setError] = useState<UiMessage | null>(null),
     [reload, setReload] = useState(0);
   const latest = useRef({ value, onChange });
   latest.current = { value, onChange };
@@ -87,10 +87,10 @@ export function PackageFeaturesEditor({
       .then((contents) => {
         if (!active) return;
         setLibrary(contents);
-        setListError('');
+        setListError(null);
       })
       .catch(() => {
-        if (active) setListError(descriptor('library.couldNotLoadResourcesTryRefreshing'));
+        if (active) setListError(uiMessage('library.couldNotLoadResourcesTryRefreshing'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -111,12 +111,12 @@ export function PackageFeaturesEditor({
             referenceKey(ref),
             content.package
               ? { content }
-              : { error: descriptor('library.theAttachedResourceIsNotACommon') },
+              : { error: uiMessage('library.theAttachedResourceIsNotACommon') },
           ] as const;
         } catch {
           return [
             referenceKey(ref),
-            { error: descriptor('library.couldNotFindOrReadTheAttached') },
+            { error: uiMessage('library.couldNotFindOrReadTheAttached') },
           ] as const;
         }
       })
@@ -137,11 +137,11 @@ export function PackageFeaturesEditor({
     const request = ++actionVersion.current,
       id = scope;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await work(request, id);
     } catch (caught) {
-      if (currentAction(request, id)) setError((caught as Error).message);
+      if (currentAction(request, id)) setError(toUiMessage(caught));
     } finally {
       if (currentAction(request, id)) setBusy(false);
     }
@@ -149,10 +149,10 @@ export function PackageFeaturesEditor({
   function update(part: Partial<RisuContent>): boolean {
     try {
       latest.current.onChange(validateRisuContent({ ...latest.current.value, ...part }));
-      setError('');
+      setError(null);
       return true;
     } catch (caught) {
-      setError(errorDescriptor(caught));
+      setError(toUiMessage(caught));
       return false;
     }
   }
@@ -210,7 +210,7 @@ export function PackageFeaturesEditor({
               </div>
               {status?.error && (
                 <NoticeBanner tone="error" actions={retryRead}>
-                  {t('library.moduleError', { error: translateMessage(status.error) })}
+                  {uiMessage('library.moduleError', { error: status.error })}
                 </NoticeBanner>
               )}
             </div>
@@ -244,10 +244,10 @@ export function PackageFeaturesEditor({
       </div>
       {listError && (
         <NoticeBanner tone="error" actions={retryRead}>
-          {translateMessage(listError)}
+          {formatUiMessage(listError)}
         </NoticeBanner>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </div>
   );
 }

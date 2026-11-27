@@ -1,4 +1,6 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n } from './i18n.js';
+import type { UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import type { CurrentPrompt, PromptRole, SavedPromptCombination } from '../core/product.js';
 import {
@@ -80,7 +82,7 @@ export function PromptCombinationManager({
   const [values, setValues] = useState<Record<string, PromptValue>>({});
   const [repaired, setRepaired] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [opened, setOpened] = useState({ title: '', values: '' });
   const [leave, setLeave] = useState<(() => void) | null>(null);
   const changed = !!editing && (title !== opened.title || JSON.stringify(values) !== opened.values);
@@ -90,7 +92,7 @@ export function PromptCombinationManager({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const closeEditor = () => {
     setEditing(null);
-    setError('');
+    setError(null);
   };
   const guard = (proceed: () => void) => {
     if (changed) setLeave(() => proceed);
@@ -155,7 +157,7 @@ export function PromptCombinationManager({
                 disabled={busy || !title.trim()}
                 onClick={async () => {
                   setBusy(true);
-                  setError('');
+                  setError(null);
                   try {
                     await callEndpoint(promptEndpoints.updateCombination, {
                       id: editing.item.id,
@@ -167,7 +169,7 @@ export function PromptCombinationManager({
                     await reload?.();
                     setEditing(null);
                   } catch (caught) {
-                    setError((caught as Error).message);
+                    setError(toUiMessage(caught));
                   } finally {
                     setBusy(false);
                   }
@@ -201,7 +203,7 @@ export function PromptCombinationManager({
                       sourceRevision: current.presetRevision ?? workspaceRevision,
                     });
                     setTitle(item.title);
-                    setError('');
+                    setError(null);
                     const repairedValues = repairPromptCombinationValues(item, current.program);
                     setRepaired(
                       Object.entries(item.values).some(
@@ -235,7 +237,7 @@ export function PromptCombinationManager({
           <p>{t('prompts.uiNoSavedCombinations')}</p>
         )}
       </div>
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <CombinationLeaveDialog proceed={leave} onContinue={() => setLeave(null)} />
     </SettingsDetail>
   );

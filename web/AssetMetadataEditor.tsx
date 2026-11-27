@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import type { UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
@@ -16,7 +18,7 @@ export function AssetMetadataEditor({
   const [draft, setDraft] = useState(asset);
   const accepted = useRef(asset);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   useEffect(() => {
     if (
       busy ||
@@ -27,7 +29,7 @@ export function AssetMetadataEditor({
       return;
     accepted.current = asset;
     setDraft(asset);
-    setError('');
+    setError(null);
   }, [asset, busy, draft.title, draft.description]);
   return (
     <details aria-busy={busy}>
@@ -61,7 +63,7 @@ export function AssetMetadataEditor({
         disabled={busy || !draft.title.trim()}
         onClick={async () => {
           setBusy(true);
-          setError('');
+          setError(null);
           try {
             const saved = await api<Asset>(
               `/chats/${asset.chatId}/assets/${asset.id}`,
@@ -76,13 +78,13 @@ export function AssetMetadataEditor({
             setDraft(saved);
             await onSaved();
           } catch (caught) {
-            setError((caught as Error).message);
+            setError(toUiMessage(caught));
           } finally {
             setBusy(false);
           }
         }}
       />
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </details>
   );
 }

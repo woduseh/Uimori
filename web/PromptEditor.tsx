@@ -1,6 +1,7 @@
 import { deletionEndpoints } from '#contracts';
-import { t, useI18n, message as descriptor, messageRef } from './i18n.js';
-import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -17,7 +18,7 @@ import { CopyIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useShortcut } from './shortcuts.js';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
-import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
+import { NativeRisuPresetEditor, checkedPresetProgram } from './NativeRisuPresetEditor.js';
 import { useResourceAnchor } from './resource-anchor.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import type {
@@ -28,7 +29,7 @@ import type {
   PromptRole,
 } from '../core/product.js';
 import { DEFAULT_MAIN_PROMPT, DEFAULT_TRANSLATION_PROMPT } from '../core/prompts.js';
-import { validateRisuPrompt, reconcilePromptValues } from '../core/risu-prompt.js';
+import { reconcilePromptValues } from '../core/risu-prompt.js';
 import { AgentCollaborationEditor, agentCollaborationIssue } from './AgentCollaborationEditor.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import {
@@ -158,9 +159,9 @@ export function PromptEditor({
   const busy = state.saving || placing;
   const pendingTemplate = state.local.unappliedFields.length > 0;
   const [collaborationExpanded, setCollaborationExpanded] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [exportError, setExportError] = useState<UiMessage | null>(null);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState<UiMessage | null>(null);
   const presets = [
     ...new Map(
       [...(library.promptPresets ?? []), ...localPresets]
@@ -182,20 +183,20 @@ export function PromptEditor({
       (item) => item.id === document.targetId && item.revision > (document.baseRevision ?? 0)
     );
     if (latest && document.baseRevision !== null)
-      void session.refresh().catch((cause) => setError((cause as Error).message));
+      void session.refresh().catch((cause) => setError(toUiMessage(cause)));
   }, [session, library.promptPresets, localPresets]);
   const collaborationIssue =
     role === 'main'
       ? agentCollaborationIssue(model.program.collaboration, promptControls(model.program))
-      : '';
+      : null;
   const edit = (
     action: Partial<PromptEditModel> | ((current: PromptEditModel) => PromptEditModel)
   ) => {
     setModel((current) =>
       typeof action === 'function' ? action(current) : { ...current, ...action }
     );
-    setError('');
-    setStatus('');
+    setError(null);
+    setStatus(null);
   };
   function choose(source: string) {
     if (pendingTemplate || busy) return;
@@ -207,8 +208,8 @@ export function PromptEditor({
       cache.current.set(next.editorKey, next);
     }
     setSelectedSessions((current) => ({ ...current, [role]: next }));
-    setError('');
-    setStatus('');
+    setError(null);
+    setStatus(null);
   }
   async function save(update: boolean) {
     if (
@@ -217,8 +218,8 @@ export function PromptEditor({
       (!state.creationPending && (collaborationIssue || !model.title.trim() || (update && !base)))
     )
       return false;
-    setError('');
-    setStatus('');
+    setError(null);
+    setStatus(null);
     try {
       const previousKey = session.editorKey;
       const result = state.creationPending
@@ -227,7 +228,7 @@ export function PromptEditor({
             {
               ...model,
               title: model.title.trim(),
-              program: validateRisuPrompt(model.program),
+              program: checkedPresetProgram(model.program),
             } satisfies PromptEditModel,
             { copy: !update && !!base }
           );
@@ -238,39 +239,36 @@ export function PromptEditor({
         ...current.filter((item) => item.id !== accepted.id),
         accepted,
       ]);
-      setStatus(descriptor('prompts.uiPromptSaved'));
+      setStatus(uiMessage('prompts.uiPromptSaved'));
       setPlacing(true);
-      const warnings: string[] = [];
+      const warnings: UiMessage[] = [];
       try {
         const placed = await onSaved?.(
           accepted,
           result.creationIntent,
           result.creationOrganizationRevision ?? null
         );
-        if (placed === false) warnings.push(descriptor('prompts.savedPlacement', { error: '' }));
+        if (placed === false) warnings.push(uiMessage('prompts.savedPlacement', { error: '' }));
       } catch (caught) {
-        warnings.push(
-          descriptor('prompts.savedPlacement', { error: messageRef((caught as Error).message) })
-        );
+        warnings.push(uiMessage('prompts.savedPlacement', { error: toUiMessage(caught) }));
       }
       try {
         await reload?.();
       } catch (caught) {
-        warnings.push(
-          descriptor('prompts.savedReload', {
-            error: messageRef((caught as Error).message),
-          })
-        );
+        warnings.push(uiMessage('prompts.savedReload', { error: toUiMessage(caught) }));
       }
       if (warnings.length) {
-        const warning = warnings.join('\n');
+        const warning =
+          warnings.length === 1
+            ? warnings[0]
+            : uiMessage('library.cloneWarnings', { first: warnings[0], second: warnings[1] });
         setError(warning);
-        onError(legacyUiMessage(warning));
+        onError(warning);
       }
       return !session.snapshot().dirty;
     } catch (caught) {
       requestResourceConflictReview(session);
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
       return false;
     } finally {
       setPlacing(false);
@@ -376,7 +374,7 @@ export function PromptEditor({
                       ) as Record<PromptRole, ResourceEditorSession>
                   );
                   await reload?.();
-                  setStatus(descriptor('prompts.uiPromptDeleted'));
+                  setStatus(uiMessage('prompts.uiPromptDeleted'));
                 }}
               />
             </div>
@@ -396,8 +394,8 @@ export function PromptEditor({
             value={role}
             onChange={(event) => {
               setRole(event.target.value as PromptRole);
-              setError('');
-              setStatus('');
+              setError(null);
+              setStatus(null);
             }}
           >
             <option value="main">{t('prompts.uiWriting')}</option>
@@ -507,7 +505,7 @@ export function PromptEditor({
                       },
                       label: t('prompts.uiSavePreset'),
                       disabled: busy || state.creationPending || !!collaborationIssue,
-                      error: titleMissing ? t('library.nameRequired') : error,
+                      error: titleMissing ? uiMessage('library.nameRequired') : error,
                     }}
                     onReveal={(target) => {
                       selectSection(target.section);
@@ -575,8 +573,8 @@ export function PromptEditor({
               </CodeFieldBaseContext>
             </fieldset>
           </fieldset>
-          <TransientNotice content={busy ? null : legacyUiMessage(status)} />
-          <DismissibleError error={legacyUiMessage(error)} onDismiss={() => setError('')} />
+          <TransientNotice content={busy ? null : status} />
+          <DismissibleError error={error} onDismiss={() => setError(null)} />
         </EditorStudio>
       </section>
     </ResourceEditorProvider>

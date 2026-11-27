@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -37,8 +38,8 @@ export function PackagePortraitEditor({
     [open, setOpen] = useState(false),
     [query, setQuery] = useState(''),
     [visibleCount, setVisibleCount] = useState(50),
-    [error, setError] = useState(''),
-    [notice, setNotice] = useState('');
+    [error, setError] = useState<UiMessage | null>(null),
+    [notice, setNotice] = useState<UiMessage | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Only a package/revision switch invalidates upload ownership and its local dialog state.
   useLayoutEffect(() => {
     generation.current++;
@@ -46,8 +47,8 @@ export function PackagePortraitEditor({
     setOpen(false);
     setQuery('');
     setVisibleCount(50);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     return () => {
       generation.current++;
       upload.current?.abort();
@@ -66,13 +67,13 @@ export function PackagePortraitEditor({
     if (!chosen) return;
     update(chosen.value);
     setOpen(false);
-    setError('');
-    setNotice(chosen.widenedUse ? descriptor('library.changedTheStoryImageToPortraitAnd') : '');
+    setError(null);
+    setNotice(chosen.widenedUse ? uiMessage('library.changedTheStoryImageToPortraitAnd') : null);
   }
   async function addFile(file: File) {
     if (disabled || upload.current) return;
     if ((latest.current.value.images?.length ?? 0) >= maxPackageImages) {
-      setError(descriptor('library.aResourceCanContainUpTo2'));
+      setError(uiMessage('library.aResourceCanContainUpTo2'));
       return;
     }
     const token = ++generation.current,
@@ -80,8 +81,8 @@ export function PackagePortraitEditor({
       controller = new AbortController();
     upload.current = controller;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     latest.current.onDirtyChange?.(true);
     const current = () =>
       generation.current === token &&
@@ -97,10 +98,9 @@ export function PackagePortraitEditor({
         images: [...(latest.current.value.images ?? []), image],
         portraitImageId: image.id,
       });
-      setNotice(descriptor('library.addedForPortraitUseOnlySaveThe'));
+      setNotice(uiMessage('library.addedForPortraitUseOnlySaveThe'));
     } catch (cause) {
-      if (current())
-        setError(cause instanceof Error ? cause.message : descriptor('library.couldNotUpload'));
+      if (current()) setError(toUiMessage(cause, 'library.couldNotUpload'));
     } finally {
       if (current()) {
         upload.current = null;
@@ -167,8 +167,8 @@ export function PackagePortraitEditor({
                   const next = { ...latest.current.value };
                   delete next.portraitImageId;
                   update(next);
-                  setError('');
-                  setNotice(descriptor('library.portraitDesignationRemovedTheImageRemainsIn'));
+                  setError(null);
+                  setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
                 }}
               >
                 <CloseIcon size={18} aria-hidden="true" />
@@ -206,15 +206,15 @@ export function PackagePortraitEditor({
                   upload.current = null;
                   setBusy(false);
                   latest.current.onDirtyChange?.(false);
-                  setNotice(descriptor('library.imageUploadCanceled'));
+                  setNotice(uiMessage('library.imageUploadCanceled'));
                 }}
               >
                 {t('library.cancelUpload')}
               </button>
             </div>
           )}
-          {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
-          {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+          {notice && <NoticeBanner>{notice}</NoticeBanner>}
+          {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         </div>
       )}
       <Dialog

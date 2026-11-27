@@ -2,8 +2,9 @@ import { useRef, useState, type ReactNode } from 'react';
 import { useCompactLayout } from './useCompactLayout.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { api } from './api.js';
-import { translateMessage, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, uiText, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { previewIssueMessage } from './risu-preview-issues.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { LoadingState } from './LoadingState.js';
@@ -77,7 +78,7 @@ export function RisuDraftStartPreview({
   const { t } = useI18n();
   const viewport = useWindowViewport();
   const [rendered, setRendered] = useState<Rendered | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [updating, setUpdating] = useState(true);
   const first = useRef(true);
   const retryPreview = useRetryableEffect(() => {
@@ -100,14 +101,14 @@ export function RisuDraftStartPreview({
         .then((value) => {
           if (controller.signal.aborted) return;
           if ('failure' in value) {
-            setError(value.failure);
+            setError(uiText(value.failure));
             return;
           }
           setRendered(value);
-          setError('');
+          setError(null);
         })
-        .catch((caught: Error) => {
-          if (!controller.signal.aborted) setError(caught.message);
+        .catch((caught: unknown) => {
+          if (!controller.signal.aborted) setError(toUiMessage(caught));
         })
         .finally(() => {
           if (!controller.signal.aborted) setUpdating(false);
@@ -120,7 +121,7 @@ export function RisuDraftStartPreview({
   }, [contentId, revision, native, text, viewport]);
   const retry = () => {
     first.current = true;
-    setError('');
+    setError(null);
     retryPreview();
   };
   if (!rendered)
@@ -129,7 +130,7 @@ export function RisuDraftStartPreview({
         <LoadingState
           presentation="placeholder"
           loading={updating}
-          error={legacyUiMessage(error)}
+          error={error}
           errorLabel={uiMessage('native.text_78102a76b6')}
           label={uiMessage('native.text_f7b0125b0b')}
           onRetry={retry}
@@ -154,7 +155,7 @@ export function RisuDraftStartPreview({
       {error && (
         <div className="risu-draft-preview-error" role="alert">
           <p>{t('native.text_78102a76b6')}</p>
-          <p className="muted">{translateMessage(error)}</p>
+          <p className="muted">{formatUiMessage(error)}</p>
         </div>
       )}
       <div className="risu-draft-preview-surface" data-stale={!!error || undefined}>

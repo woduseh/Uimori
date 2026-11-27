@@ -1,5 +1,5 @@
-import { useI18n, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
@@ -19,7 +19,7 @@ import {
   type RisuPrompt,
   type PromptValue,
 } from '../core/risu-prompt.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { StudioPanel, useStudioItem } from './EditorStudio.js';
@@ -105,7 +105,7 @@ export function NativeRisuPresetEditor({
   const source = program.nativeRisuPreset.preset;
   const [selected, setSelected] = useState(0);
   const [query, setQuery] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [dragged, setDragged] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<BlockDropTarget | null>(null);
   const [regexPending, setRegexPending] = useState(false);
@@ -211,10 +211,10 @@ export function NativeRisuPresetEditor({
         ...program,
         nativeRisuPreset: { ...program.nativeRisuPreset, preset: { ...source, ...patch } },
       });
-      setError('');
+      setError(null);
       if (part) mark(part, false);
     } catch (caught) {
-      setError(errorDescriptor(caught));
+      setError(toUiMessage(caught));
       if (part) mark(part, true);
     }
   }
@@ -293,7 +293,7 @@ export function NativeRisuPresetEditor({
       >
         {error && (
           <NoticeBanner className="native-editor-notice" tone="error">
-            {translateMessage(error)}
+            {error}
           </NoticeBanner>
         )}
         {pending && (

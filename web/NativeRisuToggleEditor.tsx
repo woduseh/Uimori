@@ -1,5 +1,6 @@
-import { useI18n, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import type { PromptValue, RisuPrompt } from '../core/risu-prompt.js';
@@ -119,7 +120,7 @@ export function NativeRisuToggleEditor({
   const [groupId, setGroupId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [query, setQuery] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [groupDialog, setGroupDialog] = useState<'add' | 'rename' | null>(null);
   const [groupName, setGroupName] = useState('');
@@ -207,10 +208,10 @@ export function NativeRisuToggleEditor({
         transaction.current = key;
         publish(next, target);
       }
-      setError('');
+      setError(null);
       return true;
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(toUiMessage(caught));
       return false;
     }
   }
@@ -251,7 +252,7 @@ export function NativeRisuToggleEditor({
     transaction.current = '';
     publish(next);
     setExpanded(null);
-    setError('');
+    setError(null);
   }
   function field(
     id: string,
@@ -995,15 +996,13 @@ export function NativeRisuToggleEditor({
       </div>
       {(error || invalidPending) && (
         <div className="nt-error">
-          <p role="alert">
-            {(error ? translateMessage(error) : '') || t('native.text_c701c87db3')}
-          </p>
+          <p role="alert">{error ? formatUiMessage(error) : t('native.text_c701c87db3')}</p>
           {invalidPending && (
             <button
               type="button"
               onClick={() => {
                 setInvalid({});
-                setError('');
+                setError(null);
               }}
             >
               {t('native.text_a69988177e')}
@@ -1038,9 +1037,9 @@ export function NativeRisuToggleEditor({
           />
         </div>
       </footer>
-      {doc.warnings.map((warning) => (
-        <p key={warning} className="nt-notice">
-          {translateMessage(warning)}
+      {doc.warnings.map((warning, index) => (
+        <p key={index} className="nt-notice">
+          {formatUiMessage(warning)}
         </p>
       ))}
       <Dialog

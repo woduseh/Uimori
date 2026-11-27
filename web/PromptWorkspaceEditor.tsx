@@ -1,5 +1,6 @@
-import { useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -55,13 +56,13 @@ export function PromptWorkspaceEditor({
   const presetId = useId();
   const [role, setRole] = useState<PromptRole>('main');
   const [applying, setApplying] = useState(false);
-  const [applyError, setApplyError] = useState('');
-  const [message, setMessage] = useState('');
+  const [applyError, setApplyError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [comboName, setComboName] = useState('');
   const [savingCombo, setSavingCombo] = useState(false);
   const [comboOpen, setComboOpen] = useState(false);
   const [manageCombinations, setManageCombinations] = useState(false);
-  const [comboError, setComboError] = useState('');
+  const [comboError, setComboError] = useState<UiMessage | null>(null);
   const [selectedCombo, setSelectedCombo] = useState('');
   const [combinationDirty, setCombinationDirty] = useState(false);
   const [leaveCombo, setLeaveCombo] = useState<(() => void) | null>(null);
@@ -99,10 +100,10 @@ export function PromptWorkspaceEditor({
   const save = useCallback(async () => {
     const current = session.snapshot();
     if (!current.ready || current.saving || current.conflict || applying) return false;
-    setApplyError('');
+    setApplyError(null);
     try {
       await session.save();
-      setMessage(legacyDescriptor('prompts.uiChangesSavedAutomatically'));
+      setNotice(uiMessage('prompts.uiChangesSavedAutomatically'));
       return !session.snapshot().dirty;
     } catch {
       return false;
@@ -128,13 +129,13 @@ export function PromptWorkspaceEditor({
 
   function edit(update: (current: WorkspaceEditModel) => WorkspaceEditModel) {
     setModel(update);
-    setMessage('');
+    setNotice(null);
   }
   async function applyPreset(presetId: string) {
     const current = session.snapshot();
     if (applying || current.saving || current.dirty || current.conflict) return;
     setApplying(true);
-    setApplyError('');
+    setApplyError(null);
     try {
       await callEndpoint(promptEndpoints.applyPreset, {
         expectedRevision: current.document.baseRevision ?? 0,
@@ -143,9 +144,9 @@ export function PromptWorkspaceEditor({
       });
       await session.reloadSaved();
       setSelectedCombo('');
-      setMessage(legacyDescriptor('prompts.uiBuiltInPromptSelected'));
+      setNotice(uiMessage('prompts.uiBuiltInPromptSelected'));
     } catch (caught) {
-      setApplyError((caught as Error).message);
+      setApplyError(toUiMessage(caught));
       await session.refresh().catch(() => {});
     } finally {
       setApplying(false);
@@ -156,7 +157,7 @@ export function PromptWorkspaceEditor({
       <LoadingState
         presentation="region"
         loading={!state.error}
-        error={legacyUiMessage(state.error)}
+        error={state.error}
         label={uiMessage('prompts.uiLoadingCurrentPrompts')}
         onRetry={() => void session.open().catch(() => {})}
       />
@@ -307,7 +308,7 @@ export function PromptWorkspaceEditor({
                       disabled={dirty || busy || conflict}
                       onClick={() => {
                         setComboName('');
-                        setComboError('');
+                        setComboError(null);
                         setComboOpen(true);
                       }}
                     >
@@ -346,7 +347,7 @@ export function PromptWorkspaceEditor({
           <NoticeBanner tone="error">
             {conflict
               ? t('prompts.uiThePromptChangedElsewhereYourSelectionIsPreservedCheck')
-              : translateMessage(saveError)}
+              : saveError && formatUiMessage(saveError)}
           </NoticeBanner>
         )}
         {(saveError || (dirty && !busy && !state.autosavePending)) && (
@@ -365,7 +366,7 @@ export function PromptWorkspaceEditor({
             {t('prompts.uiSaving')}
           </p>
         )}
-        <TransientNotice content={busy || dirty ? null : legacyUiMessage(message)} />
+        <TransientNotice content={busy || dirty ? null : notice} />
       </section>
       <PromptCombinationManager
         open={manageCombinations}
@@ -399,7 +400,7 @@ export function PromptWorkspaceEditor({
             onChange={(event) => setComboName(event.target.value)}
           />
         </label>
-        {comboError && <NoticeBanner tone="error">{translateMessage(comboError)}</NoticeBanner>}
+        {comboError && <NoticeBanner tone="error">{comboError}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -428,7 +429,7 @@ export function PromptWorkspaceEditor({
                 await reload?.();
                 setComboOpen(false);
               } catch (caught) {
-                setComboError((caught as Error).message);
+                setComboError(toUiMessage(caught));
               } finally {
                 setSavingCombo(false);
               }
