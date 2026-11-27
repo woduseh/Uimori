@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllGlobals());
 async function loadedI18n() {
   const runtime = await import('../web/i18n.js');
   await Promise.all(runtime.UI_LOCALES.map(runtime.loadLocale));
-  return runtime;
+  return { ...runtime, ...(await import('../web/ui-message.js')) };
 }
 
 describe('UI locale presentation boundary', () => {
@@ -93,13 +93,13 @@ describe('UI locale presentation boundary', () => {
     expect(runtime.getLocale()).toBe('en');
   });
 
-  test('retained app notices change language while unknown messages remain verbatim', async () => {
-    const { message, setLocale, translateMessage, formatMessage } = await loadedI18n();
-    const retained = message('common.uiLanguage');
-    expect(translateMessage(retained)).toBe('화면 언어');
+  test('retained app notices change language while raw text remains verbatim', async () => {
+    const { uiMessage, uiText, formatUiMessage, setLocale, formatMessage } = await loadedI18n();
+    const retained = uiMessage('common.uiLanguage');
+    expect(formatUiMessage(retained)).toBe('화면 언어');
     setLocale('en');
-    expect(translateMessage(retained)).toBe('Interface language');
-    expect(translateMessage('사용자 원고: 그대로 남아야 해요')).toBe(
+    expect(formatUiMessage(retained)).toBe('Interface language');
+    expect(formatUiMessage(uiText('사용자 원고: 그대로 남아야 해요'))).toBe(
       '사용자 원고: 그대로 남아야 해요'
     );
     expect(formatMessage('unknown.explicit.key', 'ja')).toBe('unknown.explicit.key');
@@ -143,27 +143,29 @@ describe('UI locale presentation boundary', () => {
     );
   });
 
-  test('retained message identity survives identical Japanese translations and leaves literal user arguments alone', async () => {
-    const { message, messageRef, setLocale, t, translateMessage } = await loadedI18n();
+  test('retained messages survive identical Japanese translations and leave literal user arguments alone', async () => {
+    const { uiMessage, uiText, formatUiMessage, setLocale, t } = await loadedI18n();
     setLocale('ja');
-    const details = message('outside.details');
-    expect(translateMessage(details)).toBe('詳細');
+    const details = uiMessage('outside.details');
+    expect(formatUiMessage(details)).toBe('詳細');
     expect(t('providers.m285')).toBe('詳細');
-    const literalTitle = message('shared.deleteQuestion', { title: '저장' });
-    const nestedError = message('helpers.modelRefreshFailed', {
-      error: messageRef(message('shared.loadFailed')),
+    const literalTitle = uiMessage('shared.deleteQuestion', { title: uiText('저장') });
+    const plainTitle = uiMessage('shared.deleteQuestion', { title: '저장' });
+    const nestedError = uiMessage('helpers.modelRefreshFailed', {
+      error: uiMessage('shared.loadFailed'),
     });
     setLocale('en');
-    expect(translateMessage(details)).toBe('Details');
-    expect(translateMessage(literalTitle)).toBe('Delete 저장?');
-    expect(translateMessage(nestedError)).toBe(
+    expect(formatUiMessage(details)).toBe('Details');
+    expect(formatUiMessage(literalTitle)).toBe('Delete 저장?');
+    expect(formatUiMessage(plainTitle)).toBe('Delete 저장?');
+    expect(formatUiMessage(nestedError)).toBe(
       'The assistant model changed, but settings could not be refreshed: Could not load.'
     );
     expect(t('providers.m285')).toBe('Advanced');
   });
 
-  test('a retained Date argument roundtrips as a Date for ICU formatting', async () => {
-    const { message, setLocale, translateMessage } = await loadedI18n();
+  test('a retained Date argument formats in the language being shown', async () => {
+    const { uiMessage, formatUiMessage, setLocale } = await loadedI18n();
     const catalogs = [
       (await import('../web/locales/ko.js')).default,
       (await import('../web/locales/en.js')).default,
@@ -171,11 +173,13 @@ describe('UI locale presentation boundary', () => {
     ];
     for (const catalog of catalogs) catalog['test.dateRoundtrip'] = '{instant, date, short}';
     try {
-      const retained = message('test.dateRoundtrip', { instant: new Date(2026, 0, 2, 12) });
+      const retained = uiMessage('test.dateRoundtrip' as never, {
+        instant: new Date(2026, 0, 2, 12),
+      });
       setLocale('en');
-      expect(translateMessage(retained)).toBe('1/2/26');
+      expect(formatUiMessage(retained)).toBe('1/2/26');
       setLocale('ja');
-      expect(translateMessage(retained)).toBe('26/1/2');
+      expect(formatUiMessage(retained)).toBe('26/1/2');
     } finally {
       for (const catalog of catalogs) Reflect.deleteProperty(catalog, 'test.dateRoundtrip');
     }
@@ -197,51 +201,36 @@ describe('UI locale presentation boundary', () => {
     expect(translateStoredCode('toString', keys)).toBe('toString');
   });
 
-  test('validation errors, the notices that nest them and joined warnings follow the locale', async () => {
-    const { message, messageRef, setLocale, translateMessage } = await loadedI18n();
+  test('thrown errors, the notices that nest them and joined warnings follow the locale', async () => {
+    const { uiMessage, uiText, formatUiMessage, UiError, setLocale } = await loadedI18n();
+    const { toUiMessage } = await import('../web/api-errors.js');
     setLocale('en');
-    const error = new Error(message('shared.loadFailed'));
-    expect(translateMessage(error.message)).toBe('Could not load.');
-    const notice = message('helpers.modelRefreshFailed', { error: messageRef(error.message) });
-    expect(translateMessage(notice)).toBe(
+    const error = toUiMessage(new UiError(uiMessage('shared.loadFailed')));
+    expect(formatUiMessage(error)).toBe('Could not load.');
+    const notice = uiMessage('helpers.modelRefreshFailed', { error });
+    expect(formatUiMessage(notice)).toBe(
       'The assistant model changed, but settings could not be refreshed: Could not load.'
     );
-    const joined = [notice, message('shared.loadFailed')].join('\n');
+    const joined = uiMessage('helpers.modelRefreshFailed', {
+      error: [error, uiText('\n'), uiMessage('shared.loadFailed')],
+    });
     setLocale('ja');
-    expect(translateMessage(notice)).toBe(
+    expect(formatUiMessage(notice)).toBe(
       'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。'
     );
-    expect(translateMessage(joined)).toBe(
+    expect(formatUiMessage(joined)).toBe(
       'アシスタントモデルは変更しましたが、設定を再読み込みできませんでした: 読み込めませんでした。\n読み込めませんでした。'
     );
-    expect(translateMessage(`사용자 원고 · ${message('shared.loadFailed')}`)).toBe(
-      '사용자 원고 · 読み込めませんでした。'
-    );
   });
 
-  test('external diagnostic bytes resembling a malformed message descriptor remain readable', async () => {
-    const { setLocale, translateMessage } = await loadedI18n();
-    setLocale('en');
-    for (const diagnostic of [
-      '\u001fui:broken-json',
-      '\u001fui:{"key":"missing.external.key"}',
-      '\u001fui:{"key":"outside.activeWork"}',
-      '\u001fui:{"key":"missing.external.key"}\u001e',
-    ])
-      expect(translateMessage(diagnostic)).toBe(diagnostic);
-  });
-
-  test('a stray descriptor prefix leaves the next descriptor readable, and formatMessage nests in its own locale', async () => {
-    const { formatMessage, message, messageRef, setLocale, translateMessage } = await loadedI18n();
-    setLocale('en');
-    expect(translateMessage(`\u001fui:broken ${message('shared.loadFailed')}`)).toBe(
-      '\u001fui:broken Could not load.'
-    );
+  test('a message formatted in another language nests in that language', async () => {
+    const { uiMessage, formatUiMessage, setLocale } = await loadedI18n();
     setLocale('ko');
     expect(
-      formatMessage('helpers.modelRefreshFailed', 'en', {
-        error: messageRef(message('shared.loadFailed')),
-      })
+      formatUiMessage(
+        uiMessage('helpers.modelRefreshFailed', { error: uiMessage('shared.loadFailed') }),
+        'en'
+      )
     ).toBe('The assistant model changed, but settings could not be refreshed: Could not load.');
   });
 
@@ -295,17 +284,16 @@ describe('UI locale presentation boundary', () => {
 
   test('retained job errors format the complete title and nested error after language changes', async () => {
     const runtime = await loadedI18n();
-    const notice = runtime.message('reader.jobFailure', {
+    const notice = runtime.uiMessage('reader.jobFailure', {
       kind: 'translation',
       mode: 'original',
-      error: runtime.messageRef(runtime.message('reader.couldNotCompleteTheRequest')),
+      error: runtime.uiMessage('reader.couldNotCompleteTheRequest'),
     });
     for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
       runtime.setLocale(locale);
-      const rendered = runtime.translateMessage(notice);
+      const rendered = runtime.formatUiMessage(notice);
       expect(rendered).toContain(runtime.t('reader.koreanTranslation'));
       expect(rendered).toContain(runtime.t('reader.couldNotCompleteTheRequest'));
-      expect(rendered).not.toContain('\u001fui:');
     }
   });
 });

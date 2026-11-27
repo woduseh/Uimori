@@ -1,5 +1,5 @@
 import { t, useI18n } from './i18n.js';
-import { UiError, legacyMessageString, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
@@ -53,7 +53,7 @@ export function usePackagePresentation(
     identity: string;
     sourceIdentity: string;
     data?: PackagePresentation;
-    error?: string;
+    error?: UiMessage;
   }>();
   useEffect(() => {
     const requestId = ++sequence.current;
@@ -93,11 +93,9 @@ export function usePackagePresentation(
             key,
             identity,
             sourceIdentity,
-            error: legacyMessageString(
-              uiMessage('library.couldNotApplyDisplayTransformationsShowingThe', {
-                v0: toUiMessage(error),
-              })
-            ),
+            error: uiMessage('library.couldNotApplyDisplayTransformationsShowingThe', {
+              v0: toUiMessage(error),
+            }),
           });
       }
     })();

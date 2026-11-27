@@ -1,5 +1,6 @@
-import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
@@ -26,7 +27,7 @@ export function SaveConflictDialog({
 }) {
   useI18n();
   const [fields, setFields] = useState<SavedReviewSource | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [loading, setLoading] = useState(false);
   const version = useRef(0);
   const keepInput = useRef<HTMLButtonElement>(null);
@@ -38,15 +39,12 @@ export function SaveConflictDialog({
     const request = ++version.current;
     setLoading(true);
     setFields(null);
-    setError('');
+    setError(null);
     try {
       const saved = await reader.current();
       if (request === version.current) setFields(() => saved);
     } catch (caught) {
-      if (request === version.current)
-        setError(
-          caught instanceof Error ? caught.message : legacyDescriptor('shared.savedFailure')
-        );
+      if (request === version.current) setError(toUiMessage(caught, 'shared.savedFailure'));
     } finally {
       if (request === version.current) setLoading(false);
     }
@@ -54,7 +52,7 @@ export function SaveConflictDialog({
   useEffect(() => {
     version.current++;
     setFields(null);
-    setError('');
+    setError(null);
     setLoading(false);
     if (!open) return;
     const focus = requestAnimationFrame(() => keepInput.current?.focus());
@@ -87,7 +85,7 @@ export function SaveConflictDialog({
       {loading && (
         <LoadingState presentation="placeholder" label={uiMessage('shared.reviewLoading')} />
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </>
   );
   return (

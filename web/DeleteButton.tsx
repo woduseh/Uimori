@@ -1,4 +1,4 @@
-import { t, useI18n, type MessageReference } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
@@ -10,7 +10,7 @@ import { toUiMessage } from './api-errors.js';
 import { formatUiMessage, isUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import './deletion.css';
 
-type Title = string | MessageReference | UiMessage;
+type Title = string | UiMessage;
 type Target<E extends Endpoint> =
   | {
       endpoint: E;
