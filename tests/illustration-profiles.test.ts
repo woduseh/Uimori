@@ -90,6 +90,29 @@ test('shared bot defaults follow native revisions, chat overrides win, CHARX rou
   expect(store.product.get<Content>('content', bot.id).revision).toBe(saved.revision);
 });
 
+test('a new character named like a renamed default keeps its own identity instead of colliding', () => {
+  const store = databases.create();
+  const input = fixtureBotInput();
+  input.package.nativeRisu.card = withIllustrationAppearanceProfiles(
+    input.package.nativeRisu.card,
+    profiles
+  );
+  const bot = store.product.content(input) as Content;
+  const chat = createFixtureChat(store, 'Rename then add', { botId: bot.id });
+  const initial = illustrationReferences(store, chat.id);
+  const renamed = { ...initial.defaultCharacterProfiles[0], name: 'Bob' };
+  const added = { id: 'draft-mira', name: 'Mira', appearance: 'Silver hair.' };
+  const saved = updateIllustrationReferences(store, chat.id, {
+    expectedRevision: initial.revision,
+    references: [],
+    chatCharacterProfiles: [renamed, added],
+  });
+  expect(saved.characterProfiles.map((item) => [item.name, item.appearance])).toEqual([
+    ['Bob', renamed.appearance],
+    ['Mira', 'Silver hair.'],
+  ]);
+});
+
 test('explicit chat copies freeze one complete identity, restore latest defaults and leave others dynamic', () => {
   const store = databases.create();
   const input = fixtureBotInput();

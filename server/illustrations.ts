@@ -370,13 +370,14 @@ export function updateIllustrationReferences(
               shared.referenceRef === profile.referenceRef
           )
       )
-      .map((profile) => {
+      .map((profile, _index, sent) => {
         if (prior.chatCharacterProfiles.some((item) => item.id === profile.id)) return profile;
         const shared =
           sharedProfiles.find((item) => item.id === profile.id) ??
           sharedProfiles.find(
             (item) =>
-              illustrationProfileNameKey(item.name) === illustrationProfileNameKey(profile.name)
+              illustrationProfileNameKey(item.name) === illustrationProfileNameKey(profile.name) &&
+              !sent.some((other) => other.id === item.id)
           );
         return shared ? { ...profile, id: shared.id } : profile;
       });
@@ -1679,7 +1680,7 @@ export function illustrationRoutes(
     fields(b, ['baseUrl', 'authorizationEnv']);
     const authorizationEnv = text(b.authorizationEnv ?? '', 'ComfyUI credential env', 128, true);
     reply.header('Cache-Control', 'no-store');
-    const baseUrl = text(b.baseUrl, 'ComfyUI address', 2000);
+    const baseUrl = typeof b.baseUrl === 'string' ? b.baseUrl.trim() : '';
     try {
       return {
         ok: true,
@@ -1694,6 +1695,8 @@ export function illustrationRoutes(
           ok: false,
           code: error.code === 'ILLUSTRATION_CANCELLED' ? 'COMFYUI_UNREACHABLE' : error.code,
         };
+      if (error instanceof Error && error.name === 'TimeoutError')
+        return { ok: false, code: 'COMFYUI_UNREACHABLE' };
       throw error;
     }
   });

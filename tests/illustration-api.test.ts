@@ -209,6 +209,11 @@ describe('illustration API in test mode with the synthetic generator', () => {
     expect(
       await api('/api/illustration-settings/comfyui/test', { baseUrl: 'ftp://comfy.invalid' })
     ).toEqual({ ok: false, code: 'COMFYUI_BASE_URL_INVALID' });
+    expect(
+      await api('/api/illustration-settings/comfyui/test', {
+        baseUrl: `http://comfy.invalid/${'a'.repeat(2100)}`,
+      })
+    ).toEqual({ ok: false, code: 'COMFYUI_BASE_URL_INVALID' });
     expect(await api('/api/illustration-settings/novelai/test', {})).toEqual({
       ok: false,
       code: 'NOVELAI_TOKEN_MISSING',

@@ -94,11 +94,11 @@ export function selectIllustrationPreset(store: Store, value: unknown) {
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   const expected = number(b.expectedRevision, 'revision', 0);
   return store.transaction(() => {
+    const p = illustrationPresetPreferences(store);
+    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (presetId) readIllustrationPreset(store, presetId);
     if (scope === 'bot') store.organization.bot(targetId);
     if (scope === 'chat') store.chat(targetId);
-    const p = illustrationPresetPreferences(store);
-    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (scope === 'global') p.defaultPresetId = presetId ?? DEFAULT_ILLUSTRATION_PRESET_ID;
     else {
       const map = scope === 'bot' ? p.botPresets : p.chatPresets;

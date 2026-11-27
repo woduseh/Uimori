@@ -137,7 +137,11 @@ test('chat, bot and global selection resolve one whole recipe; inherit and stale
   ).toThrow('REVISION_CONFLICT');
   expect(() => choose(store, 'missing')).toThrow();
   expect(() => choose(store, global.id, 'chat', 'missing')).toThrow();
+  const shown = illustrationPresetPreferences(store).revision;
   deleteIllustrationPreset(store, bot.id, bot.revision);
+  expect(() =>
+    selectIllustrationPreset(store, { scope: 'global', presetId: bot.id, expectedRevision: shown })
+  ).toThrow('REVISION_CONFLICT');
   expect(effectiveIllustrationPreset(store, chat.id)).toEqual(global);
   expect(invalidations).toEqual(Array(8).fill('illustration-presets'));
 });
