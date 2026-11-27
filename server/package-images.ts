@@ -381,8 +381,6 @@ export function requestImages(store: Store, request: RequestImagesInput) {
       (job?.revision ?? 0) !== request.expectedRevision
     )
       throw new AppError(409, 'REVISION_CONFLICT');
-    if (!store.product.profile(source.chatId).image)
-      throw new AppError(409, 'IMAGE_SELECTION_ROLE_REQUIRED');
     let target: ImageTarget = { mode: 'original', textHash: source.hash };
     if (request.target === 'translation') {
       const translation = successfulTranslation(store, source);
@@ -402,6 +400,8 @@ export function requestImages(store: Store, request: RequestImagesInput) {
           .digest('hex'),
       };
     }
+    if (!store.product.profile(source.chatId).image)
+      throw new AppError(409, 'IMAGE_SELECTION_ROLE_REQUIRED');
     if (
       job &&
       ['queued', 'running'].includes(job.status) &&

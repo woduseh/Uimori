@@ -42,12 +42,12 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
       const limit = translation ? TRANSLATION_TEXT_MAX_CHARS : SOURCE_TEXT_MAX_CHARS;
       const expectedRevision = body.expectedRevision;
       const expectedTextHash = body.target === 'translation' ? body.expectedTextHash : undefined;
+      const source = store.writableSource(body.sourceId);
       if (
         expectedTextHash !== undefined &&
         createHash('sha256').update(draft).digest('hex') !== expectedTextHash
       )
         throw new AppError(409, 'SELECTION_REVISION_TRANSLATION_STALE');
-      const source = store.writableSource(body.sourceId);
       const checkSource = () => {
         const current = store.writableSource(source.id);
         if (

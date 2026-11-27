@@ -258,6 +258,14 @@ test('an image request for a scene without the placement role answers a stale ta
     'REVISION_CONFLICT'
   );
   expect(() => requestImages(store, { ...request, sourceId: 'gone' })).toThrow('REVISION_CONFLICT');
+  expect(() =>
+    requestImages(store, {
+      ...request,
+      target: 'translation',
+      expectedTranslationJobId: 'gone',
+      expectedTranslationRevision: 1,
+    })
+  ).toThrow('REVISION_CONFLICT');
   expect(() => requestImages(store, request)).toThrow('IMAGE_SELECTION_ROLE_REQUIRED');
   expect(store.db.prepare("SELECT count(*) AS n FROM jobs WHERE kind='image'").get()!.n).toBe(0);
 });
