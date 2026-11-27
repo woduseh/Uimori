@@ -7,6 +7,8 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { SummaryEditor } from './SummaryEditor.js';
 import { useEffect, useRef, useState } from 'react';
 import {
+  CONTEXT_JOB_CANCELLED,
+  CONTEXT_JOB_INTERRUPTED,
   CONTEXT_JOB_SCENE_DELETED,
   type ContextDetail,
   type ContextJob as StoredContextJob,
@@ -23,6 +25,8 @@ type ContextJob = Omit<StoredContextJob, 'snapshot'>;
 type SummaryDraft = { text: string; revision: number; headRevision: string | null };
 const jobErrors = {
   [CONTEXT_JOB_SCENE_DELETED]: 'settings.contextJobSceneDeleted',
+  [CONTEXT_JOB_CANCELLED]: 'settings.contextJobCancelled',
+  [CONTEXT_JOB_INTERRUPTED]: 'settings.contextJobInterrupted',
 };
 const id = encodeURIComponent;
 const pending = (job: ContextJob) => job.status === 'queued' || job.status === 'running';

@@ -15,7 +15,7 @@ import {
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
 import { requestFullRunResponses } from './fixtures/full-run-response.js';

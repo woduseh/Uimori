@@ -1,6 +1,6 @@
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import type { Chat } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openHelper } from './ui-navigation.js';

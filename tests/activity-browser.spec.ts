@@ -1,7 +1,7 @@
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, ReaderDetail, ReaderActivity, Run } from '../core/types.js';
 
 test.setTimeout(60000);

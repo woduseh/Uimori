@@ -436,7 +436,7 @@ export function ChatSettingsPanel({
                 onSaveHandlerChange={saveGroup.registrations.profile}
                 onDiscardHandlerChange={discardGroup.registrations.profile}
                 onGlobalSettings={(section) => requestClose(() => onGlobalSettings(section))}
-                nextRequest={state.pendingRequest ?? draft}
+                nextRequest={state.pendingRequestText ?? draft}
                 loreContextReset={state.loreContextReset}
                 generationSettings={
                   visited.includes('prompts') && (

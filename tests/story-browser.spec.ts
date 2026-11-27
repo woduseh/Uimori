@@ -2,7 +2,13 @@ import { visualReview } from './fixtures/visual-review.js';
 import { selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
+import {
+  test,
+  expect,
+  type Page,
+  type APIRequestContext,
+  type Locator,
+} from './fixtures/browser-test.js';
 import type { Chat } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
 

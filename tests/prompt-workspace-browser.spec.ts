@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectSettingsSection, openHelper } from './ui-navigation.js';
 import { nativePrompt } from './fixtures/native-prompt.js';

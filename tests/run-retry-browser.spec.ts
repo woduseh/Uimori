@@ -1,6 +1,6 @@
 import { visualReview } from './fixtures/visual-review.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 
 test('failed request edit, draft protection and uncertain retry reuse one admission', async ({
   page,

@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
+import { expect, test, type APIRequestContext, type APIResponse } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import type { Attempt, ChatProfile, ModelWorkspace, PromptWorkspace } from '../core/product.js';
 import type { ChatDetail, Run } from '../core/types.js';

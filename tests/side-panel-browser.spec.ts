@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { PromptWorkspace } from '../core/product.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { nativePrompt } from './fixtures/native-prompt.js';

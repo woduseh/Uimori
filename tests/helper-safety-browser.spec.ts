@@ -1,6 +1,6 @@
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import type { HelperChange, HelperRollbackUnit } from '../core/helper.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import {

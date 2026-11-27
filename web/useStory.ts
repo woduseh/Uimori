@@ -1966,7 +1966,8 @@ export function useStory() {
     setError('');
     return true;
   }
-  const pendingRequest = pendingCommand ? pendingCommand.payload.request : null;
+  const hasPendingRequest = pendingCommand !== null;
+  const pendingRequestText = pendingCommand ? pendingCommand.payload.request : null;
   const pendingEditedRunId = pendingCommand?.payload.editedRequest
     ? pendingCommand.payload.retryOf
     : undefined;
@@ -2063,7 +2064,8 @@ export function useStory() {
     conversation,
     submitting,
     attachmentsReady,
-    pendingRequest,
+    hasPendingRequest,
+    pendingRequestText,
     queuedRequest: queuedRequest?.chatId === selected ? queuedRequest : null,
     queueRequest,
     cancelQueuedRequest,

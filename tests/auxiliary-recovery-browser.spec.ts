@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { nativeProse } from './fixtures/native-message.js';
 import type { ChatDetail, Job } from '../core/types.js';

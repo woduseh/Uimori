@@ -1,3 +1,4 @@
+import { translateMessage } from '../../web/i18n.js';
 import { prepareRisuMessage } from '../../web/risu-message.js';
 import { mountRisuMessageSurface } from '../../web/risu-message-surface.js';
 
@@ -33,7 +34,7 @@ export function mount() {
     app.querySelector<HTMLElement>('.risu-message-surface')!,
     prepared,
     (next) => {
-      state.textContent = next.issue;
+      state.textContent = translateMessage(next.issue);
     }
   );
   let revision = 0;

@@ -2,7 +2,7 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 
 test.setTimeout(120000);

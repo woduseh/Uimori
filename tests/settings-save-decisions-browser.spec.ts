@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import type { PromptWorkspace } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { Chat } from '../core/types.js';

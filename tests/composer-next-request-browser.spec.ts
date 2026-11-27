@@ -6,7 +6,7 @@ import {
   type APIRequestContext,
   type APIResponse,
   type Page,
-} from '@playwright/test';
+} from './fixtures/browser-test.js';
 import type { ModelWorkspace } from '../core/product.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';

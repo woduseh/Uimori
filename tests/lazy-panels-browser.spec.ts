@@ -1,5 +1,5 @@
 import { visualReview } from './fixtures/visual-review.js';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';

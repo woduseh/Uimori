@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat } from '../core/types.js';
 import {
   DEFAULT_ILLUSTRATION_PRESET_ID,

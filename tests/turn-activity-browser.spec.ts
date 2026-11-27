@@ -1,7 +1,7 @@
 import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
 import { openChatMenu } from './ui-navigation.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';

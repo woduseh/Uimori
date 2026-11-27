@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import type { AuthorNote } from '../core/notes.js';
 import type { OrphanMemoryDetail } from '../core/orphan-memory.js';
 import { postFixtureChat } from './fixtures/chat.js';

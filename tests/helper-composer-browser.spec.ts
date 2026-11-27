@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext } from './fixtures/browser-test.js';
 import type { ChatDetail, Run } from '../core/types.js';
 import type { ModelPreset } from '../core/product.js';
 import {

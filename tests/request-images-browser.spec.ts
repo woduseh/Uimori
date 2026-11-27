@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { Chat, ChatDetail } from '../core/types.js';

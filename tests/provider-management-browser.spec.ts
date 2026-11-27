@@ -8,7 +8,7 @@ import {
   selectSettingsSection,
   startProviderConnection,
 } from './ui-navigation.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import { generateKeyPairSync } from 'node:crypto';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';

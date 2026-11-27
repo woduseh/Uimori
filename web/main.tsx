@@ -471,7 +471,7 @@ function App() {
     optionsBusy ||
     !s.detail ||
     s.pendingProfile ||
-    !!s.pendingRequest ||
+    s.hasPendingRequest ||
     s.submitting.includes(s.viewKey);
   const helperHandoffEpoch = useRef(0);
   const [helperHandoff, setHelperHandoff] = useState<HelperHandoff>();
@@ -501,7 +501,7 @@ function App() {
   } | null>(null);
   const currentRequestDecision =
     requestDecision?.scope === s.viewKey &&
-    (requestDecision.kind === 'profile' ? s.pendingProfile : !!s.pendingRequest)
+    (requestDecision.kind === 'profile' ? s.pendingProfile : s.hasPendingRequest)
       ? requestDecision.kind
       : null;
   useEffect(() => {
@@ -514,9 +514,9 @@ function App() {
       s.submitting.includes(s.viewKey)
     )
       return false;
-    if (s.active && !s.pendingProfile && !s.pendingRequest && !checkingEditedRequest)
+    if (s.active && !s.pendingProfile && !s.hasPendingRequest && !checkingEditedRequest)
       return s.queueRequest();
-    if (s.pendingProfile || s.pendingRequest) {
+    if (s.pendingProfile || s.hasPendingRequest) {
       setProfileSaveError('');
       setProfileConflict(null);
       setRequestDecision({ scope: s.viewKey, kind: s.pendingProfile ? 'profile' : 'admission' });
@@ -857,7 +857,7 @@ function App() {
         optionsDirty ||
         optionsBusy ||
         s.pendingProfile ||
-        !!s.pendingRequest
+        s.hasPendingRequest
       }
       aria-label={t('main.modelAria', {
         model: mainDescription,
@@ -918,7 +918,7 @@ function App() {
     s.profileDirty ||
     s.quickBusy ||
     s.pendingProfile ||
-    !!s.pendingRequest ||
+    s.hasPendingRequest ||
     !!currentRequestDecision ||
     s.submitting.includes(s.viewKey) ||
     !!s.codexWarning.warning ||
@@ -934,7 +934,7 @@ function App() {
       );
   }, [queuedRunEnded, pageVisible, queueBlocked, sendQueuedRequest]);
   const composerStatus = [
-    s.pendingRequest && !s.submitting.includes(s.viewKey) ? t('main.m020') : '',
+    s.hasPendingRequest && !s.submitting.includes(s.viewKey) ? t('main.m020') : '',
     s.cancelling ? t('main.m021') : '',
     s.imagesDecoding ? t('main.m022') : '',
     s.draftImages.length && !testMode && imageSupport === false ? t('main.m023') : '',
@@ -1532,7 +1532,7 @@ function App() {
       s.destination === 'story' &&
       !helperWorkspaceOpen &&
       !!s.active &&
-      !s.pendingRequest &&
+      !s.hasPendingRequest &&
       !s.cancelling,
     confirmNotice: uiMessage('shortcuts.cancelGenerationAgain', {
       key: stopShortcutLabel,
@@ -2579,7 +2579,7 @@ function App() {
                     connected={s.connected}
                     onDetails={() => inspect('')}
                     recoveryRequestId={
-                      s.pendingRequest && s.requestActivity?.status === 'uncertain'
+                      s.hasPendingRequest && s.requestActivity?.status === 'uncertain'
                         ? s.requestActivity.id
                         : undefined
                     }
@@ -2587,7 +2587,7 @@ function App() {
                     recoveryError={s.error}
                     onRecoverRequest={(requestId) => {
                       if (
-                        s.pendingRequest &&
+                        s.hasPendingRequest &&
                         s.requestActivity?.status === 'uncertain' &&
                         s.requestActivity.id === requestId &&
                         !s.submitting.includes(s.viewKey)
@@ -2598,7 +2598,7 @@ function App() {
                   />
                 </div>
                 {!sourceEditing &&
-                  !s.pendingRequest &&
+                  !s.hasPendingRequest &&
                   !!s.detail &&
                   !!s.library &&
                   !s.promptWorkspace &&
@@ -2615,7 +2615,7 @@ function App() {
                     </p>
                   )}
                 {!sourceEditing &&
-                  !s.pendingRequest &&
+                  !s.hasPendingRequest &&
                   modelCheckReady &&
                   ((!testMode && !mainAvailable) || !promptAvailable) && (
                     <p className="muted" role="status">
@@ -2731,7 +2731,7 @@ function App() {
                   <LoreResetChip
                     selected={s.loreContextReset}
                     disabled={
-                      !!s.pendingRequest ||
+                      s.hasPendingRequest ||
                       s.submitting.includes(s.viewKey) ||
                       !!s.active ||
                       !s.detail ||
@@ -2773,7 +2773,7 @@ function App() {
                       key={s.viewKey}
                       selected={s.loreContextReset}
                       disabled={
-                        !!s.pendingRequest ||
+                        s.hasPendingRequest ||
                         s.submitting.includes(s.viewKey) ||
                         !!s.active ||
                         !s.detail ||
@@ -2941,7 +2941,7 @@ function App() {
                         />
                       )}
                   </div>
-                  {s.active && !s.pendingRequest ? (
+                  {s.active && !s.hasPendingRequest ? (
                     <div className="send-actions">
                       {!draftEmpty && !s.queuedRequest && (
                         <button
@@ -2976,9 +2976,9 @@ function App() {
                     <button
                       key="send"
                       className="send-button"
-                      aria-label={s.pendingRequest ? t('main.m130') : t('main.m131')}
+                      aria-label={s.hasPendingRequest ? t('main.m130') : t('main.m131')}
                       title={
-                        s.pendingRequest
+                        s.hasPendingRequest
                           ? t('main.m132')
                           : t('main.sendShortcut', { key: sendKeyLabel(enterSend) })
                       }
@@ -2990,15 +2990,15 @@ function App() {
                         (!!s.draftImages.length &&
                           !testMode &&
                           imageSupport === false &&
-                          !s.pendingRequest) ||
-                        (draftEmpty && !s.draftImages.length && !s.pendingRequest) ||
+                          !s.hasPendingRequest) ||
+                        (draftEmpty && !s.draftImages.length && !s.hasPendingRequest) ||
                         !s.detail ||
                         (((!testMode && !mainAvailable) || !promptAvailable) &&
-                          !s.pendingRequest &&
+                          !s.hasPendingRequest &&
                           !s.pendingProfile)
                       }
                     >
-                      {s.pendingRequest ? <RefreshCw size={21} /> : <ArrowUp size={21} />}
+                      {s.hasPendingRequest ? <RefreshCw size={21} /> : <ArrowUp size={21} />}
                     </button>
                   )}
                 </ChatComposer>
@@ -3040,7 +3040,7 @@ function App() {
               refreshKey={`${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.profile?.revision}:${s.detail.reader.cursor}:${s.promptWorkspace?.revision}:${s.pinnedPromptRevision}:${s.nativeInteractionRevision}`}
               unavailable={
                 !!s.active ||
-                !!s.pendingRequest ||
+                s.hasPendingRequest ||
                 s.pendingProfile ||
                 optionsBusy ||
                 optionsDirty ||
@@ -3101,7 +3101,7 @@ function App() {
           s.profileDirty ||
           s.quickBusy ||
           s.submitting.includes(s.viewKey) ||
-          !!s.pendingRequest ||
+          s.hasPendingRequest ||
           s.pendingProfile
         }
         onClose={() => {
@@ -3516,7 +3516,7 @@ function App() {
           selectedModelId={pinned?.mainModel?.id}
           defaultModelId={s.promptWorkspace?.modelRoutes.main?.id}
           disabled={
-            s.profileDirty || optionsDirty || optionsBusy || s.pendingProfile || !!s.pendingRequest
+            s.profileDirty || optionsDirty || optionsBusy || s.pendingProfile || s.hasPendingRequest
           }
           pending={s.quickBusy}
           error={translateMessage(s.error)}

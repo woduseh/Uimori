@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/browser-test.js';
 import { startFixtureVite, type FixtureVite } from './fixtures/fixture-vite.js';
 import { postFixtureChat } from './fixtures/chat.js';
 

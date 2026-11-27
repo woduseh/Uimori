@@ -76,6 +76,23 @@
   },
   "overrides": [
     {
+      "includes": ["tests/**/*browser.spec.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@playwright/test": "Import from ./fixtures/browser-test.js so the shared page checks run after the test."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["scripts/**"],
       "linter": {
         "rules": {

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_THEME_TEMPLATE, emptyTheme, themeFile } from '../core/themes.js';

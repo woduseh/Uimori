@@ -1,6 +1,6 @@
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import type { PromptPreset } from '../core/product.js';
 import { navigationAction, selectEditorSection } from './ui-navigation.js';

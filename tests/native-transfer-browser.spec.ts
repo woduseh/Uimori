@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import { readFile } from 'node:fs/promises';
 import type { Content } from '../core/product.js';
 import type { RisuImportResult } from '../core/risu-import.js';

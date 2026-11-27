@@ -2,7 +2,12 @@ import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { pruneContextHistory } from './context-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import type { ContextCheckpointRef, ContextPlan } from '../core/context-plan.js';
+import {
+  CONTEXT_JOB_CANCELLED,
+  CONTEXT_JOB_INTERRUPTED,
+  type ContextCheckpointRef,
+  type ContextPlan,
+} from '../core/context-plan.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
   contextDependencyKey,
@@ -422,9 +427,9 @@ export class ContextStore {
       if (job.chatId !== chatId) throw new HttpError(404, 'Context job not found');
       const changed = this.db
         .prepare(
-          "UPDATE context_jobs SET status='cancelled',snapshot=NULL,error='CANCELLED',updated_at=? WHERE id=? AND status IN ('queued','running')"
+          "UPDATE context_jobs SET status='cancelled',snapshot=NULL,error=?,updated_at=? WHERE id=? AND status IN ('queued','running')"
         )
-        .run(new Date().toISOString(), id);
+        .run(CONTEXT_JOB_CANCELLED, new Date().toISOString(), id);
       if (changed.changes) this.store.event(chatId, 'context.job.cancelled', id);
       return this.job(id);
     });
@@ -439,8 +444,8 @@ export class ContextStore {
   recover() {
     this.db
       .prepare(
-        "UPDATE context_jobs SET status='interrupted',snapshot=NULL,error='Server stopped; explicit retry required',updated_at=? WHERE status IN ('queued','running')"
+        "UPDATE context_jobs SET status='interrupted',snapshot=NULL,error=?,updated_at=? WHERE status IN ('queued','running')"
       )
-      .run(new Date().toISOString());
+      .run(CONTEXT_JOB_INTERRUPTED, new Date().toISOString());
   }
 }

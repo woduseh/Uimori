@@ -1,5 +1,5 @@
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Connection, Library } from '../core/product.js';
 import { selectSettingsSection } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';

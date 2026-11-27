@@ -1,7 +1,7 @@
 import { DESKTOP_HEIGHT, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { setCurrentModels, selectEditorSection, navigationAction } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { PromptPreset } from '../core/product.js';
 import { postFixtureChat } from './fixtures/chat.js';

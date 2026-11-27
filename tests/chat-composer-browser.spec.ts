@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test('shared composer preserves Korean composition and Shift+Enter without sending', async ({

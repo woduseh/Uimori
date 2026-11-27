@@ -1,6 +1,6 @@
 import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext } from './fixtures/browser-test.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { visibleNavigation } from './ui-navigation.js';
 

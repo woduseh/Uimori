@@ -33,6 +33,8 @@ export type ContextCheckpoint = ContextCheckpointRef & {
   activated: boolean;
 };
 export const CONTEXT_JOB_SCENE_DELETED = 'CONTEXT_JOB_SCENE_DELETED';
+export const CONTEXT_JOB_CANCELLED = 'CANCELLED';
+export const CONTEXT_JOB_INTERRUPTED = 'Server stopped; explicit retry required';
 export type ContextJob = {
   priorities?: string;
   id: string;

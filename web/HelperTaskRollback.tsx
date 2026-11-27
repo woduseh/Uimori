@@ -244,7 +244,7 @@ export function useHelperRollback({
       for (const body of chosen.bodies)
         results.push(...(await api<HelperRollbackView>(path, body)).units);
       const count = results.filter((unit) => unit.status === 'restored').length;
-      if (alive.current && count) notify(t('helperRollback.done', { count }));
+      if (alive.current && count) notify(uiMessage('helperRollback.done', { count }));
     } catch (cause) {
       if (!alive.current) return;
       if (definiteRejection(cause)) {

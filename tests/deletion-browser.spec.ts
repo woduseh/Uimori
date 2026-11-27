@@ -9,7 +9,7 @@ import {
   openPromptActions,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Content, Library } from '../core/product.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 
@@ -81,7 +81,7 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
   await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
   await confirm(page);
-  await expect(dialog.getByRole('alert')).toContainText('변경');
+  await expect(dialog.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요');
   await page.keyboard.press('Escape');
   await page.reload();
   await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
@@ -162,7 +162,7 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
   await confirm(page, '프롬프트 삭제');
   const selectedPrompt = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-  await expect(selectedPrompt.getByRole('alert')).toContainText('다른 프롬프트를 선택한 뒤');
+  await expect(selectedPrompt.getByRole('alert')).toContainText('다른 프리셋을 선택한 뒤');
   await selectedPrompt.getByRole('button', { name: '취소', exact: true }).click();
   await panel.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await navigationAction(page, '설정');

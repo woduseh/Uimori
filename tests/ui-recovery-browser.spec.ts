@@ -1,4 +1,10 @@
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+} from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { Content, PromptPreset } from '../core/product.js';

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { navigationAction, expectEditorSection, selectEditorSection } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';

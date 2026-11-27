@@ -1,5 +1,5 @@
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './fixtures/browser-test.js';
 import type {
   ModelPreset,
   ModelWorkspace,

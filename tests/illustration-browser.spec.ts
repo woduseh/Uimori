@@ -3,7 +3,7 @@ import type { Content } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
 import sharp from 'sharp';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type {
   Illustration,

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/browser-test.js';
 import { emptyTheme } from '../core/themes.js';
 import type { ThemeCatalog } from '../core/themes.js';
 import { restoreGlobalThemeSelection } from './fixtures/theme-selection.js';

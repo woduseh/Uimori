@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { JevProviderStatus } from '../core/jev-provider.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { MOBILE_WIDTH, MOBILE_HEIGHT } from './fixtures/browser-viewports.js';

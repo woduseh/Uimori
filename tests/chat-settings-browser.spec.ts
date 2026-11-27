@@ -1,5 +1,5 @@
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
 import type { StoryGuideDetail } from '../core/story-guide.js';

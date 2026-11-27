@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { fixtureBotInput } from './fixtures/chat.js';

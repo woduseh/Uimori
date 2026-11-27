@@ -1,5 +1,5 @@
 import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';

@@ -1801,6 +1801,18 @@ export const messages = {
     ja: '削除された場面を含むリクエストです。新しい要約をリクエストしてください。',
     zh: '此请求包含已删除的场景。请重新请求摘要。',
   },
+  'settings.contextJobCancelled': {
+    ko: '요청한 압축을 끝나기 전에 취소했어요.',
+    en: 'The compression was cancelled before it finished.',
+    ja: '圧縮は完了する前にキャンセルされました。',
+    zh: '压缩在完成前已被取消。',
+  },
+  'settings.contextJobInterrupted': {
+    ko: '서버가 멈춰서 압축이 끝나지 않았어요. 다시 요청해 주세요.',
+    en: 'The server stopped before the compression finished. Request it again.',
+    ja: 'サーバーが停止したため圧縮が完了しませんでした。もう一度リクエストしてください。',
+    zh: '服务器在压缩完成前停止了。请重新请求。',
+  },
   'settings.backupRetention': {
     ko: '보관 개수',
     en: 'Backups to retain',

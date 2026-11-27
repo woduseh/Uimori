@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator } from './fixtures/browser-test.js';
 import type { HelperConversation, HelperConversationSummary, HelperScope } from '../core/helper.js';
 import type { ChatDetail } from '../core/types.js';
 import type { Content } from '../core/product.js';

@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { ModelPreset, ModelWorkspace, PromptPreset } from '../core/product.js';
 import { postFixtureChat } from './fixtures/chat.js';

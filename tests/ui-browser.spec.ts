@@ -15,7 +15,7 @@ import {
   openMoreSourceActions,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
+import { test, expect, type Page, type APIRequestContext } from './fixtures/browser-test.js';
 import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';

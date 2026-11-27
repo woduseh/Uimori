@@ -28,11 +28,7 @@ function manuscriptScenes(store: Store, chatId: string, head: string | null) {
   let sceneNumber = 0;
   return chain.reverse().map((scene) => {
     if (!scene.opening) sceneNumber++;
-    return {
-      id: scene.id,
-      number: sceneNumber,
-      label: scene.opening ? '첫 메시지' : `장면 ${sceneNumber}`,
-    };
+    return { id: scene.id, number: sceneNumber };
   });
 }
 

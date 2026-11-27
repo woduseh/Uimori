@@ -1,5 +1,5 @@
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/browser-test.js';
 import {
   createHelperChat,
   openHelperPanel,

@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext } from './fixtures/browser-test.js';
 import type { Content } from '../core/product.js';
 import { MOBILE_HEIGHT, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { nativeContent } from './fixtures/native-content.js';

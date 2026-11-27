@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import { startFixtureVite, type FixtureVite } from './fixtures/fixture-vite.js';
 import { visualReview } from './fixtures/visual-review.js';
 

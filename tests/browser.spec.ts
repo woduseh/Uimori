@@ -1,6 +1,12 @@
 import { sourceAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type Page, type APIRequestContext, type Request } from '@playwright/test';
+import {
+  test,
+  expect,
+  type Page,
+  type APIRequestContext,
+  type Request,
+} from './fixtures/browser-test.js';
 import { DatabaseSync } from 'node:sqlite';
 import type { Chat, ChatDetail } from '../core/types.js';
 

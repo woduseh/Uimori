@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
@@ -342,6 +342,42 @@ test('READERREC confirming an uncertain request never turns into cancelling its 
   expect(confirmed).toBe(true);
   expect(cancellations).toBe(0);
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(1);
+});
+
+test('READERREC an image-only uncertain request still holds the composer in recovery', async ({
+  page,
+  request,
+}) => {
+  const chat = await (
+    await postFixtureChat(request, { data: { title: 'Image-only admission recovery' } })
+  ).json();
+  const payload = {
+    request: '',
+    requestImages: [{ uploadId: 'image-only-upload', sha256: '0'.repeat(64), name: 'ref.png' }],
+    expectedRevision: null,
+    expectedSettingsRevision: chat.settingsRevision,
+  };
+  let submissions = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && req.url().endsWith(`/chats/${chat.id}/runs`)) submissions++;
+  });
+  await page.addInitScript(
+    ({ id, payload }) =>
+      sessionStorage.setItem(
+        `command:${id}`,
+        JSON.stringify({ id: 'image-only-recovery', payload: JSON.stringify(payload) })
+      ),
+    { id: chat.id, payload }
+  );
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue('');
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+  ).toBeVisible();
+  expect(submissions).toBe(0);
 });
 
 test('READERREC failed command persistence prevents generation and preserves the draft', async ({

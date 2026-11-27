@@ -97,14 +97,14 @@ export function HelperSummaryDialog({
       );
       focus.current = 'trigger';
       onDraftChange(null);
-      await onChanged(t('helperSummary.saved'));
+      await onChanged(uiMessage('helperSummary.saved'));
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
         const latest = await load();
         if (latest?.summary === draft.text) {
           focus.current = 'trigger';
           onDraftChange(null);
-          await onChanged(t('helperSummary.saved'));
+          await onChanged(uiMessage('helperSummary.saved'));
           return;
         }
       }
@@ -127,7 +127,7 @@ export function HelperSummaryDialog({
         )
       );
       setConfirmReset(false);
-      await onChanged(t('helperSummary.resetDone'));
+      await onChanged(uiMessage('helperSummary.resetDone'));
     } catch (caught) {
       setConfirmReset(false);
       setError(failure(caught));

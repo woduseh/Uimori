@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './fixtures/browser-test.js';
 import type { ThemeCatalog } from '../core/themes.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 

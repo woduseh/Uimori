@@ -1,7 +1,7 @@
 export type ManuscriptExportMetadata = {
   title: string;
   headRevision: string | null;
-  scenes: { number: number; label: string }[];
+  scenes: { number: number }[];
 };
 
 export type ManuscriptExportMode = 'source' | 'translation';

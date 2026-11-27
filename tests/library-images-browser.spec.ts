@@ -2,7 +2,13 @@ import { nativeContent } from './fixtures/native-content.js';
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction, selectEditorSection } from './ui-navigation.js';
 import { waitForContentSave } from './fixtures/resource-save.js';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+} from './fixtures/browser-test.js';
 import type { RisuContent } from '../core/risu-content.js';
 import type { Content } from '../core/product.js';
 import { packageImageThumbnailUrl } from '../core/package-images.js';

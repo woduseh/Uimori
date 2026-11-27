@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import sharp from 'sharp';
 import type { HelperMessage } from '../core/helper.js';
 import type { ModelPreset, ModelWorkspace } from '../core/product.js';

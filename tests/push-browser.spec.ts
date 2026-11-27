@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/browser-test.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction, selectSettingsSection, sourceAction } from './ui-navigation.js';

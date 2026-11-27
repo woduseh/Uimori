@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/browser-test.js';
 import { readerRefreshDelay } from '../web/reader-sync.js';
 import { trackPageFetches } from './fixtures/page-fetches.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';

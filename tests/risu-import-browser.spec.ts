@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/browser-test.js';
 import { crc32 } from 'node:zlib';
 import sharp from 'sharp';
 import type { RisuImportApply, RisuImportResult } from '../core/risu-import.js';

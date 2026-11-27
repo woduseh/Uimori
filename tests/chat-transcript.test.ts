@@ -180,7 +180,7 @@ describe('Markdown manuscript export', () => {
     expect(exportManuscript(store, chat.id, body).markdown).toBe('고친 장면.\n\n둘째 장면.\n');
   });
 
-  test('opening labels and scene numbers agree with Reader and metadata excludes manuscript bodies', async () => {
+  test('the opening is scene 0, scene numbers agree with Reader and metadata excludes manuscript bodies', async () => {
     const store = await database();
     const { chat, first, second } = authoredChat(store);
     store.db
@@ -189,10 +189,7 @@ describe('Markdown manuscript export', () => {
       )
       .run(first.runId);
     const metadata = manuscriptExportMetadata(store, chat.id);
-    expect(metadata.scenes).toEqual([
-      { number: 0, label: '첫 메시지' },
-      { number: 1, label: '장면 1' },
-    ]);
+    expect(metadata.scenes).toEqual([{ number: 0 }, { number: 1 }]);
     expect(metadata.scenes.map((scene) => scene.number)).toEqual(
       readerDetail(store, chat.id, {}).reader.navigation.map((scene) => scene.number)
     );

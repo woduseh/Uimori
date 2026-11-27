@@ -1,6 +1,6 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator } from './fixtures/browser-test.js';
 import type { Content } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import { visibleNavigation } from './ui-navigation.js';

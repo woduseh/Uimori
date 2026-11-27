@@ -2,7 +2,7 @@ import { setCurrentModels, selectEditorSection } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, ReaderDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import { navigationAction, openMoreSourceActions, sourceAction } from './ui-navigation.js';

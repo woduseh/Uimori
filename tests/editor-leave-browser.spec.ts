@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import type { Content, PromptPreset } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';

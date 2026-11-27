@@ -1,7 +1,7 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { navigationAction, openNewStoryOptions } from './ui-navigation.js';
-import { expect, test as base, type Page } from '@playwright/test';
+import { expect, test as base, type Page } from './fixtures/browser-test.js';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Content, ModelWorkspace } from '../core/product.js';
 

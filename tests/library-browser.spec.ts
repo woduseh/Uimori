@@ -1,6 +1,12 @@
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+  type Locator,
+} from './fixtures/browser-test.js';
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import { type LibraryOrganization, type LibraryFolder } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';

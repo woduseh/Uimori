@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './fixtures/browser-test.js';
 import type { PromptPreset, PromptRole, PromptWorkspace } from '../core/product.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';

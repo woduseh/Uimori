@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createServer, type ServerResponse } from 'node:http';
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext } from './fixtures/browser-test.js';
 import type { ModelWorkspace } from '../core/product.js';
 import { sse } from './fixtures/loopback-provider.js';
 import { openHelper } from './ui-navigation.js';

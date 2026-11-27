@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { PromptWorkspace } from '../core/product.js';
 import type { Chat } from '../core/types.js';
