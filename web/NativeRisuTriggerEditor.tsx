@@ -19,6 +19,14 @@ function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 export function NativeRisuTriggerEditor({
   value,
   onChange,
@@ -69,7 +77,7 @@ export function NativeRisuTriggerEditor({
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
     if (!draft) return model;
-    const parsed: unknown = JSON.parse(draft.text);
+    const parsed = parseJson(draft.text);
     if (!record(parsed) || draft.index >= value.length)
       throw new Error(uiMessage('native.text_754e9dc1ea'));
     if (!prepareSave) throw new Error(uiMessage('native.text_2bf65e9272'));
@@ -128,7 +136,7 @@ export function NativeRisuTriggerEditor({
           onClick={() => {
             try {
               if (index >= value.length) throw new Error(uiMessage('native.text_782c2d04b2'));
-              const parsed: unknown = JSON.parse(raw);
+              const parsed = parseJson(raw);
               if (!record(parsed)) throw new Error(uiMessage('native.text_30b7bf9cb8'));
               replace(parsed);
               setDraft(null);

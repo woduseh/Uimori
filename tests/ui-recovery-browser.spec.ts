@@ -522,7 +522,9 @@ for (const viewport of viewports) {
       const pendingTriggerRaw = '{"unfinished":';
       await triggerRaw.fill(pendingTriggerRaw);
       await save.click();
-      await expect(page.getByRole('alert').filter({ hasText: /JSON/ }).first()).toBeVisible();
+      await expect(
+        page.getByRole('alert').filter({ hasText: '트리거 JSON 객체를 확인해 주세요.' }).first()
+      ).toBeVisible();
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
