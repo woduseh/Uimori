@@ -133,6 +133,42 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   const chats = (await (await request.get('/api/chats')).json()) as { id: string }[];
   expect(chats.filter((chat) => chat.id === saved?.chat?.id)).toHaveLength(1);
 });
+test('RISUKINDUI03 a changed draft answered after an uncertain save lets the file be chosen again', async ({
+  page,
+}) => {
+  const title = `RISUKINDUI03 ${Date.now()}`;
+  const submissions: RisuImportApply[] = [];
+  await page.route('**/api/risu-imports/apply', async (route) => {
+    submissions.push(route.request().postDataJSON() as RisuImportApply);
+    if (submissions.length === 1)
+      await route.fulfill({ status: 503, json: { error: 'Synthetic lost response' } });
+    else await route.fulfill({ status: 409, json: { code: 'RISU_IMPORT_DRAFT_CHANGED' } });
+  });
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
+  const file = dialog.getByLabel('Risu 파일 선택', { exact: true });
+  await file.setInputFiles({
+    name: 'synthetic.charx',
+    mimeType: 'application/zip',
+    buffer: charx(card(title)),
+  });
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+  const recheck = dialog.getByRole('button', { name: '같은 요청으로 다시 확인' });
+  await expect(recheck).toBeVisible();
+  await expect(file).toBeDisabled();
+  await recheck.click();
+  await expect(dialog.getByRole('alert')).toContainText(
+    '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.'
+  );
+  await expect(recheck).toHaveCount(0);
+  await expect(file).toBeEnabled();
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1]).toEqual(submissions[0]);
+});
+
 test('RISUFORMATUI01 imports a v3 png with a reviewed preparation', async ({ page, request }) => {
   const title = `v3 png ${crypto.randomUUID()}`;
   const png = await sharp({ create: { width: 2, height: 2, channels: 4, background: '#356789' } })

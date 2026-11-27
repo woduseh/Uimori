@@ -13,7 +13,7 @@ import type {
   RisuPresetImportPreview,
   RisuPresetImportResult,
 } from '../core/risu-preset.js';
-import { api, definiteRejection } from './api.js';
+import { api, definiteImportFailure } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -99,7 +99,7 @@ export function RisuPresetImport({
         setNotice(uiMessage('transfer.m067'));
       }
     } catch (cause) {
-      const confirmedFailure = !uncertain && definiteRejection(cause);
+      const confirmedFailure = definiteImportFailure(cause, uncertain);
       setUncertain(!confirmedFailure);
       if (confirmedFailure) submission.current = null;
       setError(toUiMessage(cause));

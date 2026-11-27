@@ -1,4 +1,4 @@
-import { readImportReceipt, saveImportReceipt } from './import-operations.js';
+import { readImportReceipt, saveImportReceipt, savedOrDraftChanged } from './import-operations.js';
 import { bundleDigest, importPreparedResourceBundle } from './resource-bundle.js';
 import {
   prepareStoredRisuImport,
@@ -6,6 +6,7 @@ import {
   deletePreparedRisuImport,
   discardPreparedRisuImport,
   findPreparedRisuImport,
+  type PreparedRisuImport,
 } from './risu-import-prepared.js';
 import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
 import type { NativeTransferFile } from '../core/native-transfer.js';
@@ -101,15 +102,22 @@ export async function applyRisuImport(
   };
   const prior = previous();
   if (prior) return prior;
-  const staged =
-    typeof body.preparedId === 'string'
-      ? readPreparedRisuImport(store.path, body.preparedId)
-      : findPreparedRisuImport(store.path, body.digest, body.source);
+  let staged: PreparedRisuImport | undefined;
+  try {
+    staged =
+      typeof body.preparedId === 'string'
+        ? readPreparedRisuImport(store.path, body.preparedId)
+        : findPreparedRisuImport(store.path, body.digest, body.source);
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'RISU_IMPORT_DRAFT_CHANGED')
+      return savedOrDraftChanged(previous);
+    throw error;
+  }
   const { file: originalFile, preview } =
     staged ?? analyze(body.source, body.kind as RisuImportKind | undefined, readStaged);
   if (staged && body.kind !== undefined && body.kind !== preview.kind)
-    throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (body.digest !== preview.digest) throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+    return savedOrDraftChanged(previous);
+  if (body.digest !== preview.digest) return savedOrDraftChanged(previous);
   if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
     throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');

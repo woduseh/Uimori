@@ -143,15 +143,11 @@ export async function importNormalizedResourceBundle(
   return applyPreparedBundle(store, body, prepareBundle(converted));
 }
 
-function applyPreparedBundle(
-  store: Store,
+function bundleCommand(
   body: Record<string, any>,
-  {
-    checked,
-    preview: prepared,
-  }: { checked: ValidatedPreparedNativeTransfer; preview: NativeTransferPrepare },
-  putImages?: () => void
-): NativeTransferReceipt {
+  checked: ValidatedPreparedNativeTransfer,
+  prepared: NativeTransferPrepare
+) {
   const supplied = body.modelBindings ?? [];
   if (!Array.isArray(supplied)) throw new HttpError(400, 'Invalid model bindings');
   const requirements = new Set(checked.modelRequirements.map((item) => item.key));
@@ -183,6 +179,29 @@ function applyPreparedBundle(
     );
   const commandDigest = bundleDigest({ file: prepared.digest, bindings });
   const key = text(body.idempotencyKey, 'import request', 200);
+  return { key, commandDigest, mapped };
+}
+
+export function readResourceBundleReceipt(
+  store: Store,
+  value: unknown
+): NativeTransferReceipt | undefined {
+  const { body, bundle } = prepareImport(value);
+  const { key, commandDigest } = bundleCommand(body, bundle.checked, bundle.preview);
+  const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
+  return prior && { ...prior, created: false };
+}
+
+function applyPreparedBundle(
+  store: Store,
+  body: Record<string, any>,
+  {
+    checked,
+    preview: prepared,
+  }: { checked: ValidatedPreparedNativeTransfer; preview: NativeTransferPrepare },
+  putImages?: () => void
+): NativeTransferReceipt {
+  const { key, commandDigest, mapped } = bundleCommand(body, checked, prepared);
   return store.transaction(() => {
     const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
     if (prior) return { ...prior, created: false };

@@ -5,6 +5,7 @@ import {
   NATIVE_TRANSFER_FORMAT,
   NATIVE_TRANSFER_VERSION,
   type NativeTransferFile,
+  type NativeTransferReceipt,
 } from '../core/native-transfer.js';
 import type { PromptPreset } from '../core/product.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
@@ -15,6 +16,8 @@ import { readRisuPresetFile } from './risu-preset-file.js';
 import { importRisuPresetProgram } from './risu-preset-program.js';
 import type { Store } from './store.js';
 import { AppError } from './app-errors.js';
+import { savedOrDraftChanged } from './import-operations.js';
+import { readResourceBundleReceipt } from './resource-bundle.js';
 
 function analyze(value: unknown) {
   const input = readRisuPresetFile(value);
@@ -65,22 +68,27 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
   fields(body, ['source', 'digest', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   const { file, transfer, preview } = analyze(body.source);
-  if (body.digest !== preview.digest) throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
-  if (!body.allowPartial && preview.findings.some((finding) => finding.level === 'unsupported'))
-    throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
-  return store.transaction(() => {
-    const receipt = applyNativeTransfer(store, {
-      file,
-      digest: transfer.digest,
-      modelBindings: [],
-      idempotencyKey: `risu-preset:${requestKey}`,
-    });
+  const command = {
+    file,
+    digest: transfer.digest,
+    modelBindings: [],
+    idempotencyKey: `risu-preset:${requestKey}`,
+  };
+  const result = (receipt: NativeTransferReceipt): RisuPresetImportResult => {
     const saved = receipt.items.find(
       (item) => item.kind === 'prompt-preset' && item.key === 'prompt'
     )!;
     return { receipt, preset: store.product.stored<PromptPreset>('prompt-preset', saved.id) };
-  });
+  };
+  if (body.digest !== preview.digest)
+    return savedOrDraftChanged(() => {
+      const receipt = readResourceBundleReceipt(store, command);
+      return receipt && result(receipt);
+    });
+  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
+  if (!body.allowPartial && preview.findings.some((finding) => finding.level === 'unsupported'))
+    throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
+  return store.transaction(() => result(applyNativeTransfer(store, command)));
 }
 
 export function risuPresetImportRoutes(app: FastifyInstance, store: Store) {
