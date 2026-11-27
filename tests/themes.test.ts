@@ -10,6 +10,8 @@ import {
   BUILTIN_THEMES,
   DEFAULT_THEME_ID,
   THEME_COLOR_KEYS,
+  THEME_TITLE_MAX_CHARS,
+  copyTitle,
   defaultThemePreferences,
   resolvePaletteId,
   emptyTheme,
@@ -35,6 +37,8 @@ import { saveResource, undoResource } from '../server/resource-service.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { invokePresentationTool } from '../server/helper-presentation-tools.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { appearanceOperations, type SelectThemeRequest } from '#contracts/operations';
+import { parseInput } from '../server/endpoint.js';
 
 const owned: { directory: string; store: Store; app?: App }[] = [];
 afterEach(async () => {
@@ -129,7 +133,7 @@ test('chat overrides bot overrides global; deleting a theme removes only its app
   const a = save(store, 'Global');
   const b = save(store, 'Bot');
   const c = save(store, 'Chat');
-  const choose = (scope: string, themeId: string | null, targetId?: string) =>
+  const choose = (scope: SelectThemeRequest['scope'], themeId: string | null, targetId?: string) =>
     selectTheme(store, {
       scope,
       themeId,
@@ -284,7 +288,7 @@ test('HTTP API revalidates the catalog, saves, exports, selects, validates and d
   expect(saved.statusCode, saved.body).toBe(200);
   expect((await app.inject({ url: '/api/themes', headers: cached })).statusCode).toBe(200);
   const theme = saved.json().saved;
-  expect((await app.inject(`/api/themes/${theme.id}/export`)).json()).toMatchObject({
+  expect(themeFile(theme)).toMatchObject({
     format: 'uimori-theme',
     version: 1,
     theme: { title: 'API theme' },
@@ -310,6 +314,111 @@ test('HTTP API revalidates the catalog, saves, exports, selects, validates and d
   expect((await app.inject('/api/themes')).json().preferences.defaultThemeId).toBe(
     DEFAULT_THEME_ID
   );
+});
+
+test('a stale tab gets a revision conflict or a catalogued code for themes and palettes changed elsewhere', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-theme-stale-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'themes-stale-test',
+    testMode: true,
+  });
+  owned.push({ directory, store: app.store, app });
+  const bot = app.store.product.content(fixtureBotInput('Stale bot'));
+  const paletteModel = { title: 'Palette', description: '', colors: { light: {}, dark: {} } };
+  const palette = (
+    await app.inject({ method: 'POST', url: '/api/palettes', payload: { model: paletteModel } })
+  ).json();
+  const removePalette = {
+    method: 'DELETE',
+    url: `/api/palettes/${palette.id}`,
+    payload: { expectedRevision: palette.revision },
+  } as const;
+  expect((await app.inject(removePalette)).statusCode).toBe(200);
+  const storyModel = { ...emptyTheme('Story'), storyUi: { baseStyle: 'period', css: '' } };
+  const theme = (
+    await app.inject({
+      method: 'POST',
+      url: '/api/resources/save',
+      payload: { kind: 'theme', model: storyModel },
+    })
+  ).json().saved;
+  const removeTheme = {
+    method: 'DELETE',
+    url: `/api/themes/${theme.id}`,
+    payload: { expectedRevision: theme.revision },
+  } as const;
+  const shown = themePreferences(app.store).revision;
+  const plain = await app.inject({
+    method: 'POST',
+    url: '/api/resources/save',
+    payload: {
+      kind: 'theme',
+      id: theme.id,
+      expectedRevision: theme.revision,
+      model: emptyTheme('Story'),
+    },
+  });
+  expect(plain.statusCode, plain.body).toBe(200);
+  const storyUi = await app.inject({
+    method: 'POST',
+    url: '/api/themes/selection',
+    payload: {
+      dimension: 'storyUi',
+      scope: 'bot',
+      targetId: bot.id,
+      themeId: theme.id,
+      expectedRevision: shown,
+    },
+  });
+  expect(storyUi.statusCode).toBe(400);
+  expect(storyUi.json()).toEqual({ code: 'THEME_STORY_UI_MISSING' });
+  expect(
+    (
+      await app.inject({
+        ...removeTheme,
+        payload: { expectedRevision: plain.json().saved.revision },
+      })
+    ).statusCode
+  ).toBe(200);
+  for (const request of [
+    {
+      method: 'PUT',
+      url: `/api/palettes/${palette.id}`,
+      payload: { model: paletteModel, expectedRevision: palette.revision },
+    },
+    removePalette,
+    removeTheme,
+    {
+      method: 'POST',
+      url: '/api/themes/selection',
+      payload: { scope: 'chat', targetId: 'deleted-chat', themeId: null, expectedRevision: shown },
+    },
+    {
+      method: 'POST',
+      url: '/api/themes/background',
+      payload: {
+        scope: 'chat',
+        targetId: 'deleted-chat',
+        background: null,
+        expectedRevision: shown,
+      },
+    },
+  ] as const) {
+    const response = await app.inject(request);
+    expect(response.statusCode, `${request.method} ${request.url}`).toBe(409);
+    expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });
+  }
+});
+
+test('a copied title keeps its suffix within the title limit', () => {
+  const long = '가'.repeat(THEME_TITLE_MAX_CHARS - 1);
+  for (const title of [long, `${'a'.repeat(THEME_TITLE_MAX_CHARS - 4)}  😀😀`, 'Short']) {
+    const copied = copyTitle(title, ' 사본');
+    expect(copied.endsWith(' 사본'), title).toBe(true);
+    expect(validateTheme({ ...emptyTheme(), title: copied }).title).toBe(copied);
+  }
+  expect(copyTitle('Short', ' copy')).toBe('Short copy');
 });
 
 test('portable story UI themes use their own bot selection and the shared revisions', async () => {
@@ -349,8 +458,7 @@ test('portable story UI themes use their own bot selection and the shared revisi
   expect(created.statusCode, created.body).toBe(200);
   const theme = created.json().saved;
   expect(theme.storyUi).toEqual(model.storyUi);
-  const exported = await app.inject(`/api/themes/${theme.id}/export`);
-  const portable = parseThemeFile(exported.json()).theme;
+  const portable = parseThemeFile(themeFile(theme)).theme;
   expect(portable).toMatchObject(model);
   const imported = (await save(portable)).json().saved;
   expect(imported.id).not.toBe(theme.id);
@@ -368,9 +476,7 @@ test('portable story UI themes use their own bot selection and the shared revisi
   };
   const withBoard = (await save(boarded)).json().saved;
   expect(withBoard.storyUi).toEqual(boarded.storyUi);
-  const boardFile = parseThemeFile(
-    (await app.inject(`/api/themes/${withBoard.id}/export`)).json()
-  ).theme;
+  const boardFile = parseThemeFile(themeFile(withBoard)).theme;
   expect(boardFile.storyUi).toEqual(boarded.storyUi);
 
   selectTheme(app.store, {
@@ -435,7 +541,7 @@ describe('Independent layout and palette choices', () => {
     store: Store,
     dimension: 'theme' | 'palette',
     id: string | null,
-    scope = 'global',
+    scope: SelectThemeRequest['scope'] = 'global',
     targetId?: string
   ) {
     return selectTheme(store, {
@@ -623,7 +729,14 @@ describe('Independent layout and palette choices', () => {
     ];
     for (const input of invalid) {
       expect(() =>
-        selectTheme(store, { scope: 'global', expectedRevision: 0, ...input })
+        selectTheme(
+          store,
+          parseInput(appearanceOperations.selectTheme.input, {
+            scope: 'global',
+            expectedRevision: 0,
+            ...input,
+          })
+        )
       ).toThrow();
       expect(themePreferences(store).revision).toBe(0);
     }

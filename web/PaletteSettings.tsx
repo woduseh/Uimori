@@ -1,7 +1,7 @@
 import { validatePalette, parsePaletteFile } from '../core/palette-files.js';
 import { useRef, useState } from 'react';
 import { t, useI18n, message, translateMessage } from './i18n.js';
-import { THEME_COLOR_KEYS, resolveTheme } from '../core/themes.js';
+import { THEME_COLOR_KEYS, copyTitle, resolveTheme } from '../core/themes.js';
 import {
   BUILTIN_PALETTES,
   type Palette,
@@ -10,7 +10,8 @@ import {
 } from '../core/theme-palettes.js';
 import { useThemes } from './ThemeContext.js';
 import { paletteText } from './builtin-labels.js';
-import { api, ApiError } from './api.js';
+import { appearanceEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { errorDescriptor } from './api-errors.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -62,7 +63,9 @@ export function usePaletteLibrary() {
     const model = structuredClone(
       palette
         ? {
-            title: paletteText(palette).title + (copy ? t('shared.copySuffix') : ''),
+            title: copy
+              ? copyTitle(paletteText(palette).title, t('shared.copySuffix'))
+              : paletteText(palette).title,
             description: paletteText(palette).description,
             colors: palette.colors,
           }
@@ -93,11 +96,13 @@ export function usePaletteLibrary() {
     await run(async () => {
       if (!draft) return;
       const model = validatePalette(draft.model);
-      const result = await api<Palette>(
-        draft.id ? `/palettes/${encodeURIComponent(draft.id)}` : '/palettes',
-        { model, expectedRevision: draft.revision },
-        draft.id ? 'PUT' : 'POST'
-      );
+      const result = draft.id
+        ? await callEndpoint(appearanceEndpoints.updatePalette, {
+            id: draft.id,
+            model,
+            expectedRevision: draft.revision ?? 0,
+          })
+        : await callEndpoint(appearanceEndpoints.createPalette, { model });
       const clean = { title: result.title, description: result.description, colors: result.colors };
       setDraft({ id: result.id, revision: result.revision, model: clean });
       setBaseline(JSON.stringify(clean));
@@ -111,11 +116,10 @@ export function usePaletteLibrary() {
   function deleteConfirmed() {
     void run(async () => {
       if (!deleting) return;
-      await api(
-        `/palettes/${encodeURIComponent(deleting.id)}`,
-        { expectedRevision: deleting.revision },
-        'DELETE'
-      );
+      await callEndpoint(appearanceEndpoints.deletePalette, {
+        id: deleting.id,
+        expectedRevision: deleting.revision,
+      });
       if (draft?.id === deleting.id) {
         setDraft(null);
         state.setPreview(null);

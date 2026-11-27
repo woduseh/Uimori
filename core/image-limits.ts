@@ -1,1 +1,1 @@
-export const IMAGE_INPUT_MAX_BYTES = 64 * 1024 * 1024;
+export { IMAGE_INPUT_MAX_BYTES } from '#contracts';

@@ -8,7 +8,8 @@ import {
   resolveThemeBackground,
   type ThemeBackground,
 } from '../core/theme-background.js';
-import { api, ApiError } from './api.js';
+import { appearanceEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { useThemes } from './ThemeContext.js';
 import { uploadPackageImage } from './package-image-upload.js';
 import { backgroundStyle } from './ThemeBackground.js';
@@ -78,7 +79,7 @@ export function ThemeBackgroundSettings({
     setError('');
     setNotice('');
     try {
-      await api('/themes/background', {
+      await callEndpoint(appearanceEndpoints.selectThemeBackground, {
         scope,
         targetId,
         background,

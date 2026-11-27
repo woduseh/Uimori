@@ -3,7 +3,16 @@ import type { z } from 'zod/v4';
 import { type Endpoint, endpointInput, type Operation } from '#contracts';
 import { AppError } from './app-errors.js';
 
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    admission?: Endpoint['admission'];
+    cache?: Endpoint['cache'];
+  }
+}
+
 const checkOutputs = 'uimoriCheckEndpointOutputs';
+
+export const NOT_MODIFIED = Symbol('notModified');
 
 export function checkEndpointOutputs(app: FastifyInstance): void {
   app.decorate(checkOutputs, true);
@@ -21,6 +30,8 @@ export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.ou
 
 export const endpointUrl = (endpoint: Endpoint): string => `/api${endpoint.path}`;
 
+type Output<Op extends Operation> = z.output<Op['output']> | typeof NOT_MODIFIED;
+
 export function registerEndpoint<Op extends Operation>(
   app: FastifyInstance,
   endpoint: Endpoint<Op>,
@@ -29,12 +40,13 @@ export function registerEndpoint<Op extends Operation>(
     input: z.output<Op['input']>,
     request: FastifyRequest,
     reply: FastifyReply
-  ) => z.output<Op['output']> | Promise<z.output<Op['output']>>
+  ) => Output<Op> | Promise<Output<Op>>
 ): void {
   const checked = app.hasDecorator(checkOutputs);
   app.route({
     method: endpoint.method,
     url: endpointUrl(endpoint),
+    config: { admission: endpoint.admission, cache: endpoint.cache },
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
     handler: async (request, reply) => {
       const output = await handler(
@@ -42,6 +54,7 @@ export function registerEndpoint<Op extends Operation>(
         request,
         reply
       );
+      if (output === NOT_MODIFIED) return reply.code(304).send();
       if (checked) operation.output.parse(output);
       if (endpoint.status !== undefined) reply.code(endpoint.status);
       return output;

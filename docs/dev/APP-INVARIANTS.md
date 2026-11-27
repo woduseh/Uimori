@@ -321,7 +321,7 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 
 ## Themes, built-in assets and verification
 
-- **Built-in assets and color keys**: Built-in asset files live in `third_party/theme-assets` with hashes pinned in `BUILTIN_THEME_ASSET_FILES` (sample theme fixtures live in `fixtures/themes/`); cloning and saving copies them into user themes for self-contained export. Custom decorative art regenerates from SVG via `scripts/theme-art/<레이아웃>.mjs` (`scripts/theme-art/<layout>.mjs`), after which its hash in `BUILTIN_THEME_ASSET_FILES` must be updated. Color names omit the leading `--`; the canonical list is `THEME_COLOR_KEYS`.
+- **Built-in assets and color keys**: Built-in asset files live in `third_party/theme-assets` with hashes pinned in `BUILTIN_THEME_ASSET_FILES` (sample theme fixtures live in `fixtures/themes/`); cloning and saving copies them into user themes for self-contained export. Custom decorative art regenerates from SVG via `scripts/theme-art/<레이아웃>.mjs` (`scripts/theme-art/<layout>.mjs`), after which its hash in `BUILTIN_THEME_ASSET_FILES` must be updated. Color names omit the leading `--`; the canonical list is `THEME_COLOR_KEYS` (`packages/contracts/src/domains/appearance/theme-vocabulary.ts`, beside `storyUiStyles`).
 
 ### Built-in layouts and palette sources of truth
 
@@ -338,5 +338,5 @@ The five outline levels use `OUTLINE_LEVELS`. Helper tool schemas and paging con
 ## HTTP compression, private ETag and maintenance mode
 
 - **Compression (`registerResponseCompression`)**: Hashed `/assets/*` serve 1-year `immutable` with prebuilt `.br`/`.gz` copies (`vite.config.ts`), while `index.html`, service worker, and manifests retain existing headers without precompressed copies. JSON and text API responses of at least `COMPRESSION_THRESHOLD_BYTES` (1 KiB) compress with Brotli (`BROTLI_QUALITY = 4`) or gzip; SSE, images, fonts, and archives stay uncompressed.
-- **Private ETag (`revalidatePrivateJson`)**: Attaches `ETag` and `Cache-Control: private, no-cache` on authenticated `GET` responses for `REVALIDATED_ROUTES` only, returning `304` when unchanged.
+- **Private ETag (`revalidatePrivateJson`)**: Attaches `ETag` and `Cache-Control: private, no-cache` on authenticated `GET` responses of endpoints marked `cache: 'revalidate'` and of the unconverted routes in `REVALIDATED_ROUTES`, returning `304` when unchanged.
 - **Maintenance boot boundary (`maintenanceRoutes`)**: `UIMORI_MAINTENANCE=1` permits DB entry and reads without task recovery or workers and cannot be opened via API (`409 MAINTENANCE_BOOT`). Because SQLite is not opened read-only, always verify against a DB copy rather than the sole production DB; operational procedures live in [SELF-HOST](../SELF-HOST.md#유지보수-모드), [UPDATES](../UPDATES.md#유지보수-모드), and [ORACLE-RELEASE](ORACLE-RELEASE.md).

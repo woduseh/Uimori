@@ -6,7 +6,8 @@ import { z } from 'zod/v4';
 import { afterEach, expect, test } from 'vitest';
 import { defineEndpoint, defineOperation, endpointRequest, type OperationInput } from '#contracts';
 import * as operations from '#contracts/operations';
-import { checkEndpointOutputs, registerEndpoint } from '../server/endpoint.js';
+import { checkEndpointOutputs, NOT_MODIFIED, registerEndpoint } from '../server/endpoint.js';
+import { matchesEntityTag, revalidatePrivateJson } from '../server/private-etag.js';
 
 const { queryBoolean, queryInt } = operations;
 
@@ -112,6 +113,52 @@ test('test mode refuses a handler result that breaks the output schema or adds a
   registerEndpoint(production, endpoints.read, echo, () => ({ id: 1 }) as never);
   cleanup.push(() => production.close());
   expect((await production.inject('/api/echo/x?note=n')).json()).toEqual({ id: 1 });
+});
+
+test('a handler answers 304 by returning NOT_MODIFIED, which test mode does not mistake for a broken output', async () => {
+  const app = Fastify();
+  checkEndpointOutputs(app);
+  registerEndpoint(app, endpoints.read, echo, (input, request, reply) => {
+    reply.header('ETag', '"v1"');
+    return matchesEntityTag(request.headers['if-none-match'], '"v1"') ? NOT_MODIFIED : input;
+  });
+  cleanup.push(() => app.close());
+  const fresh = await app.inject('/api/echo/x?note=n');
+  expect(fresh.json()).toEqual({ id: 'x', note: 'n' });
+  for (const tag of ['"v1"', 'W/"v1"', '"v0", "v1"', '*']) {
+    const cached = await app.inject({
+      url: '/api/echo/x?note=n',
+      headers: { 'if-none-match': tag },
+    });
+    expect(cached.statusCode, tag).toBe(304);
+    expect(cached.body, tag).toBe('');
+  }
+  expect(
+    (await app.inject({ url: '/api/echo/x?note=n', headers: { 'if-none-match': '"v0"' } }))
+      .statusCode
+  ).toBe(200);
+});
+
+test('an endpoint marked cache revalidate gets a private ETag without a route list entry', async () => {
+  const app = Fastify();
+  revalidatePrivateJson(app);
+  const revalidated = defineEndpoint<typeof echo>()({
+    operation: 'test.echo',
+    method: 'GET',
+    path: '/revalidated/:id',
+    cache: 'revalidate',
+  });
+  registerEndpoint(app, revalidated, echo, (input) => input);
+  registerEndpoint(app, endpoints.read, echo, (input) => input);
+  cleanup.push(() => app.close());
+  const first = await app.inject('/api/revalidated/x?note=n');
+  expect(first.headers['cache-control']).toBe('private, no-cache');
+  const again = await app.inject({
+    url: '/api/revalidated/x?note=n',
+    headers: { 'if-none-match': String(first.headers.etag) },
+  });
+  expect(again.statusCode).toBe(304);
+  expect((await app.inject('/api/echo/x?note=n')).headers.etag).toBeUndefined();
 });
 
 test('query helpers refuse the empty and wordy strings that coercion would turn into 0 and true', () => {

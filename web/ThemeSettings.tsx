@@ -25,6 +25,7 @@ import {
 import {
   THEME_COLOR_KEYS,
   DEFAULT_THEME_ID,
+  copyTitle,
   emptyTheme,
   getBuiltinTheme,
   parseThemeFile,
@@ -34,10 +35,10 @@ import {
   validateTheme,
   type Theme,
   type ThemeDefinition,
-  type ThemeCatalog,
 } from '../core/themes.js';
 import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
-import { api, ApiError, saveDownload } from './api.js';
+import { appearanceEndpoints } from '#contracts';
+import { api, ApiError, callEndpoint, saveDownload } from './api.js';
 import { errorDescriptor } from './api-errors.js';
 import { useThemes } from './ThemeContext.js';
 import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
@@ -245,7 +246,7 @@ export function ThemeSettings({
     if (storyOnly) model.storyUi = { baseStyle: 'default', css: '' };
     storyUiDraft.current = model.storyUi;
     const isCopy = copy || !!theme?.id.startsWith('builtin:');
-    if (theme && isCopy) model.title += t('shared.copySuffix');
+    if (theme && isCopy) model.title = copyTitle(model.title, t('shared.copySuffix'));
     setDraft({
       id: theme && !isCopy ? theme.id : null,
       revision: theme && !isCopy ? theme.revision : undefined,
@@ -292,7 +293,7 @@ export function ThemeSettings({
   useSettingsSaveHandler(onSaveHandlerChange, save);
   function choose(themeId: string | null, targetScope = scope) {
     void action(async () => {
-      await api('/themes/selection', {
+      await callEndpoint(appearanceEndpoints.selectTheme, {
         scope: targetScope,
         targetId:
           targetScope === 'bot'
@@ -317,7 +318,7 @@ export function ThemeSettings({
   }
   function choosePalette(paletteId: string | null) {
     void action(async () => {
-      await api('/themes/selection', {
+      await callEndpoint(appearanceEndpoints.selectTheme, {
         dimension: 'palette',
         scope,
         targetId:
@@ -339,7 +340,7 @@ export function ThemeSettings({
   }
   function chooseStoryUi(themeId: string | null) {
     void action(async () => {
-      await api('/themes/selection', {
+      await callEndpoint(appearanceEndpoints.selectTheme, {
         dimension: 'storyUi',
         scope: 'bot',
         targetId: storyUiBotId,
@@ -392,7 +393,7 @@ export function ThemeSettings({
         title={t('visualpanels.reviewSavedTheme')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
-          const value = (await api<ThemeCatalog>('/themes')).themes.find(
+          const value = (await callEndpoint(appearanceEndpoints.readThemes)).themes.find(
             (theme) => theme.id === draft?.id
           );
           if (!value)
@@ -1145,11 +1146,10 @@ export function ThemeSettings({
             onClick={() => {
               if (!deleting) return;
               void action(async () => {
-                await api(
-                  `/themes/${encodeURIComponent(deleting.id)}`,
-                  { expectedRevision: deleting.revision },
-                  'DELETE'
-                );
+                await callEndpoint(appearanceEndpoints.deleteTheme, {
+                  id: deleting.id,
+                  expectedRevision: deleting.revision,
+                });
                 if (draft?.id === deleting.id) setDraft(null);
                 setPreview(null);
                 setDeleting(null);

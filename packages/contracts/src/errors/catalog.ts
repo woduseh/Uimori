@@ -92,6 +92,7 @@ export type AppErrorParams = {
   THEME_ASSET_STORAGE_FULL: { maxBytes: number };
   THEME_ASSET_NOT_FOUND: undefined;
   THEME_ASSET_MISSING: { name: string };
+  THEME_STORY_UI_MISSING: undefined;
   OUTLINE_NODE_NOT_FOUND: undefined;
   OUTLINE_RELATED_TOO_MANY: { limit: number };
   OUTLINE_HIERARCHY_INVALID: undefined;
@@ -224,8 +225,6 @@ export type AppErrorParams = {
   THEME_FILE_UNSUPPORTED: undefined;
   THEME_FILE_ASSET_INVALID: undefined;
   THEME_FILE_ASSET_MISSING: { name: string };
-  THEME_BACKGROUND_INVALID: undefined;
-  THEME_BACKGROUND_RANGE_INVALID: undefined;
   PALETTE_FILE_INVALID: undefined;
   PALETTE_FILE_UNSUPPORTED: undefined;
   RISU_ASSET_ADD_INVALID: undefined;
@@ -340,6 +339,7 @@ const takesParams = {
   THEME_ASSET_STORAGE_FULL: true,
   THEME_ASSET_NOT_FOUND: false,
   THEME_ASSET_MISSING: true,
+  THEME_STORY_UI_MISSING: false,
   OUTLINE_NODE_NOT_FOUND: false,
   OUTLINE_RELATED_TOO_MANY: true,
   OUTLINE_HIERARCHY_INVALID: false,
@@ -472,8 +472,6 @@ const takesParams = {
   THEME_FILE_UNSUPPORTED: false,
   THEME_FILE_ASSET_INVALID: false,
   THEME_FILE_ASSET_MISSING: true,
-  THEME_BACKGROUND_INVALID: false,
-  THEME_BACKGROUND_RANGE_INVALID: false,
   PALETTE_FILE_INVALID: false,
   PALETTE_FILE_UNSUPPORTED: false,
   RISU_ASSET_ADD_INVALID: false,

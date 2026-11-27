@@ -88,5 +88,6 @@ export const personalWorkspaceEndpoints = {
     operation: 'personal-workspace.searchManuscripts',
     method: 'POST',
     path: '/search',
+    admission: 'always',
   }),
 };

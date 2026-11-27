@@ -104,8 +104,9 @@ test('HTTP palette create, update and export preserve portable colors and reject
     expect(after.json().palettes.find((p: { id: string }) => p.id === saved.id).title).toBe(
       '새 이름'
     );
-    const exported = await app.inject({ method: 'GET', url: `/api/palettes/${saved.id}/export` });
-    expect(parsePaletteFile(exported.json())).toEqual({ ...model, title: '새 이름' });
+    const listed = await app.inject({ method: 'GET', url: '/api/palettes' });
+    const stored = listed.json().palettes.find((p: { id: string }) => p.id === saved.id);
+    expect(parsePaletteFile(paletteFile(stored))).toEqual({ ...model, title: '새 이름' });
     const stale = await app.inject({
       method: 'DELETE',
       url: `/api/palettes/${saved.id}`,

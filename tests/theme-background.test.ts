@@ -7,8 +7,9 @@ import { selectTheme, selectThemeBackground, themePreferences } from '../server/
 import {
   resolveThemeBackground,
   defaultThemeBackground,
-  validateThemeBackground,
+  type ThemeBackground,
 } from '../core/theme-background.js';
+import { type SelectThemeBackground, themeBackground } from '#contracts/operations';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { pruneUnusedData } from '../server/unused-data.js';
 const owned: { directory: string; store: Store }[] = [];
@@ -40,7 +41,11 @@ test('background scopes are independent; explicit clear blocks inheritance; pref
   const bot = store.product.content(fixtureBotInput('Background bot'));
   const chat = store.createChat('Background chat', { botId: bot.id });
   const before = JSON.stringify(store.chat(chat.id));
-  const choose = (scope: string, background: unknown, targetId?: string) =>
+  const choose = (
+    scope: SelectThemeBackground['scope'],
+    background: ThemeBackground | null,
+    targetId?: string
+  ) =>
     selectThemeBackground(store, {
       scope,
       targetId,
@@ -87,7 +92,9 @@ test('background validation rejects invalid numbers, external URLs, missing blob
     { imageHash: 'https://example.com/image.jpg' },
     { url: 'x' },
   ])
-    expect(() => validateThemeBackground({ ...image, ...patch })).toThrow();
+    expect(themeBackground.safeParse({ ...image, ...patch }).success, JSON.stringify(patch)).toBe(
+      false
+    );
   expect(() =>
     selectThemeBackground(store, { scope: 'global', background: image, expectedRevision: 0 })
   ).toThrow('IMAGE_NOT_FOUND');

@@ -1,20 +1,9 @@
 import { IDENTITY_PATTERN } from './identity.js';
 import type { Theme, ThemeCatalog } from './themes.js';
+import { storyUiStyles } from '#contracts';
 
-export const storyUiStyles = [
-  'default',
-  'east-asian',
-  'fantasy',
-  'modern',
-  'period',
-  'blue-archive',
-  'idol',
-  'neon',
-  'horror',
-  'tactical',
-  'romance',
-  'pop',
-] as const;
+export { storyUiStyles };
+
 export type StoryUiStyle = (typeof storyUiStyles)[number];
 type StoryUiThemeSetting = `theme:${string}`;
 export type StoryUiStyleSetting = StoryUiStyle | 'auto' | StoryUiThemeSetting;

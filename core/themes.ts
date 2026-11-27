@@ -1,6 +1,7 @@
 import type { ThemeBackground } from './theme-background.js';
 import { isStoryUiStyle, storyUiStyles, type StoryUiStyle } from './story-ui-style.js';
 import { ValidationError } from './validation-error.js';
+import { THEME_COLOR_KEYS } from '#contracts';
 import {
   cinematicTheme,
   letterTheme,
@@ -16,46 +17,7 @@ import {
   type ThemePalette,
 } from './theme-palettes.js';
 
-export const THEME_COLOR_KEYS = [
-  'bg',
-  'nav',
-  'panel',
-  'surface',
-  'surface-raised',
-  'surface-active',
-  'hover',
-  'line',
-  'input-border',
-  'border-hover',
-  'focus-ring',
-  'text',
-  'muted',
-  'faint',
-  'accent',
-  'accent-ink',
-  'accent-hover',
-  'accent-hover-ink',
-  'accent-text',
-  'accent-line',
-  'accent-soft',
-  'user',
-  'error',
-  'error-ink',
-  'error-bg',
-  'error-line',
-  'error-solid',
-  'error-hover',
-  'success',
-  'success-bg',
-  'success-line',
-  'warning',
-  'warning-bg',
-  'warning-line',
-  'info',
-  'info-bg',
-  'info-line',
-  'shade',
-] as const;
+export { THEME_COLOR_KEYS };
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
 export type ThemeColors = Partial<Record<ThemeColorKey, string>>;
 export type ThemeDefinition = {
@@ -107,6 +69,16 @@ export const THEME_FILE_FORMAT = 'uimori-theme';
 export const DEFAULT_THEME_TEMPLATE =
   '<slot name="request"></slot><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot><slot></slot>';
 export const THEME_SLOTS = ['request', 'heading', 'body', 'actions'] as const;
+export const THEME_TITLE_MAX_CHARS = 100;
+export function copyTitle(title: string, suffix: string): string {
+  const characters = Array.from(title);
+  while (
+    characters.length &&
+    characters.join('').trimEnd().length + suffix.length > THEME_TITLE_MAX_CHARS
+  )
+    characters.pop();
+  return characters.join('').trimEnd() + suffix;
+}
 export function emptyTheme(title = '새 테마'): ThemeDefinition {
   return {
     title,
@@ -242,7 +214,7 @@ function string(value: unknown, field: string, limit: number, fallback = ''): st
 }
 export function validateTheme(value: unknown): ThemeDefinition {
   const v = object(value, 'theme');
-  const title = string(v.title, 'title', 100).trim();
+  const title = string(v.title, 'title', THEME_TITLE_MAX_CHARS).trim();
   if (!title) throw new ValidationError(400, 'THEME_TITLE_REQUIRED', 'title: enter a name.');
   const colorInput = v.colors === undefined ? {} : object(v.colors, 'colors');
   const colors: ThemeDefinition['colors'] = { light: {}, dark: {} };

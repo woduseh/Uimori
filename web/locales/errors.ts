@@ -2023,6 +2023,12 @@ export const messages = {
     ja: '{key}: #RRGGBB形式の色を入力してください。',
     zh: '{key}：请输入 #RRGGBB 格式的颜色。',
   },
+  'errors.THEME_STORY_UI_MISSING': {
+    ko: '이 테마에는 이제 이야기 UI가 없어요. 목록을 다시 불러와 이야기 UI가 있는 테마를 골라 주세요.',
+    en: 'This theme no longer has a story UI. Reload the list and choose a theme with a story UI.',
+    ja: 'このテーマにはストーリーUIがなくなりました。一覧を再読み込みして、ストーリーUIのあるテーマを選んでください。',
+    zh: '此主题已不再包含故事 UI。请重新加载列表，并选择带有故事 UI 的主题。',
+  },
   'errors.THEME_STORY_UI_STYLE_REQUIRED': {
     ko: '이야기 UI 테마의 기본 스타일을 선택해 주세요.',
     en: 'Choose a base style for the story UI theme.',
@@ -2076,18 +2082,6 @@ export const messages = {
     en: '{name}: This asset file is not included in the theme file.',
     ja: '{name}: この素材ファイルはテーマファイルに含まれていません。',
     zh: '{name}：主题文件中不包含此素材文件。',
-  },
-  'errors.THEME_BACKGROUND_INVALID': {
-    ko: '배경 설정을 확인해 주세요.',
-    en: 'Check the background settings.',
-    ja: '背景の設定を確認してください。',
-    zh: '请检查背景设置。',
-  },
-  'errors.THEME_BACKGROUND_RANGE_INVALID': {
-    ko: '배경 이미지와 흐림과 덮개 범위를 확인해 주세요.',
-    en: 'Check the background image and the blur and overlay ranges.',
-    ja: '背景画像と、ぼかしとオーバーレイの範囲を確認してください。',
-    zh: '请检查背景图片以及模糊和遮罩的范围。',
   },
   'errors.PALETTE_FILE_INVALID': {
     ko: '팔레트 파일을 확인해 주세요.',

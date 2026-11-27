@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
+import { appearanceEndpoints, type StoredThemeAsset } from '#contracts';
+import { appearanceOperations } from '#contracts/operations';
 import { BUILTIN_THEME_ASSET_FILES } from '../core/builtin-theme-assets.js';
-import { MAX_FONT_BYTES } from '../core/fonts.js';
 import type { ThemeAsset, ThemeAssetKind } from '../core/themes.js';
 import { fontFileFormat } from './fonts.js';
-import { processImage, MAX_IMAGE_INPUT_BYTES } from './image-processing.js';
-import { choice, fields, record, text } from './request-validation.js';
+import { processImage } from './image-processing.js';
 import { AppError, HelperToolError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 
 const MAX_STORED_BYTES = 200 * 1024 * 1024;
@@ -24,13 +25,6 @@ export function initThemeAssets(db: DatabaseSync) {
     created_at TEXT NOT NULL
   )`);
 }
-
-export type StoredThemeAsset = {
-  hash: string;
-  kind: ThemeAssetKind;
-  mime: string;
-  byteLength: number;
-};
 
 async function normalizedBytes(kind: ThemeAssetKind, bytes: Buffer) {
   if (kind === 'image') {
@@ -143,14 +137,12 @@ export function pruneThemeAssets(db: DatabaseSync, candidates: Iterable<string> 
 }
 
 export function themeAssetRoutes(app: FastifyInstance, store: Store) {
-  const limit = Math.ceil(Math.max(MAX_FONT_BYTES, MAX_IMAGE_INPUT_BYTES) / 3) * 4;
-  app.post('/api/theme-assets', { bodyLimit: limit + 10_000 }, async (request) => {
-    const body = record(request.body);
-    fields(body, ['kind', 'data']);
-    const kind = choice(body.kind, ['font', 'image'], 'kind');
-    const bytes = Buffer.from(text(body.data, 'data', limit), 'base64');
-    return storeThemeAsset(store.db, kind, bytes);
-  });
+  registerEndpoint(
+    app,
+    appearanceEndpoints.uploadThemeAsset,
+    appearanceOperations.uploadThemeAsset,
+    ({ kind, data }) => storeThemeAsset(store.db, kind, Buffer.from(data, 'base64'))
+  );
   app.get<{ Params: { hash: string } }>('/api/theme-assets/:hash', (request, reply) => {
     const asset = readThemeAsset(store.db, request.params.hash);
     return reply

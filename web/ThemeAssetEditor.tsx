@@ -6,6 +6,8 @@ import {
   type ThemeAsset,
   type ThemeAssetKind,
 } from '../core/themes.js';
+import { IMAGE_INPUT_MAX_BYTES, MAX_FONT_BYTES } from '#contracts';
+import { appErrorDescriptor } from './api-errors.js';
 import { IconButton } from './IconButton.js';
 import { t, useI18n, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -48,6 +50,13 @@ export function ThemeAssetEditor({
     }
     if (assets.length >= MAX_THEME_ASSETS) {
       onError(t('themeAssets.limit', { count: MAX_THEME_ASSETS }));
+      return;
+    }
+    const maxBytes = kind === 'font' ? MAX_FONT_BYTES : IMAGE_INPUT_MAX_BYTES;
+    if (file.size > maxBytes) {
+      onError(
+        appErrorDescriptor(kind === 'font' ? 'FONT_TOO_LARGE' : 'IMAGE_TOO_LARGE', { maxBytes })
+      );
       return;
     }
     setBusy(true);

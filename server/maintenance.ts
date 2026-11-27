@@ -1,12 +1,7 @@
-import {
-  MAINTENANCE_CLOSED,
-  type MaintenanceStatus,
-  personalWorkspaceEndpoints,
-  selfHostEndpoints,
-} from '#contracts';
+import { MAINTENANCE_CLOSED, type MaintenanceStatus, selfHostEndpoints } from '#contracts';
 import { selfHostOperations } from '#contracts/operations';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { endpointUrl, registerEndpoint } from './endpoint.js';
+import { registerEndpoint } from './endpoint.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -14,8 +9,6 @@ export type MaintenanceState = Omit<MaintenanceStatus, 'forcedClosed'>;
 type Row = Record<string, unknown> & { status: MaintenanceState['status'] };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const ALWAYS_ADMITTED = new Set([
-  endpointUrl(selfHostEndpoints.setMaintenance),
-  endpointUrl(personalWorkspaceEndpoints.searchManuscripts),
   '/api/session',
   '/api/diagnostics/report',
   '/api/test/control',
@@ -87,7 +80,11 @@ export function maintenanceRoutes(
   const writes = new Set<FastifyRequest>();
   const activeWork = () => options.activeWork() + writes.size;
   app.addHook('onRequest', async (request) => {
-    if (!MUTATING.has(request.method) || ALWAYS_ADMITTED.has(request.routeOptions.url ?? ''))
+    if (
+      !MUTATING.has(request.method) ||
+      request.routeOptions.config.admission === 'always' ||
+      ALWAYS_ADMITTED.has(request.routeOptions.url ?? '')
+    )
       return;
     if (!admissionOpen(store, options.forcedClosed)) throw new HttpError(503, MAINTENANCE_CLOSED);
     writes.add(request);

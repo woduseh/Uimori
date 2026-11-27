@@ -11,5 +11,6 @@ export const selfHostEndpoints = {
     operation: 'self-host.setMaintenance',
     method: 'POST',
     path: '/maintenance',
+    admission: 'always',
   }),
 };

@@ -1,4 +1,5 @@
-import { api, throwApiError } from './api.js';
+import { appearanceEndpoints, type StoredThemeAsset } from '#contracts';
+import { callEndpoint, throwApiError } from './api.js';
 import {
   themeAssetVariable,
   themeFile,
@@ -8,19 +9,12 @@ import {
   type ThemeDefinition,
 } from '../core/themes.js';
 
-export type StoredThemeAsset = {
-  hash: string;
-  kind: ThemeAssetKind;
-  mime: string;
-  byteLength: number;
-};
-
 export function themeAssetUrl(hash: string): string {
   return `/api/theme-assets/${hash}`;
 }
 
 export function uploadThemeAsset(kind: ThemeAssetKind, data: string): Promise<StoredThemeAsset> {
-  return api<StoredThemeAsset>('/theme-assets', { kind, data });
+  return callEndpoint(appearanceEndpoints.uploadThemeAsset, { kind, data });
 }
 
 function blobBase64(blob: Blob): Promise<string> {

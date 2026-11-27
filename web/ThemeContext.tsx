@@ -19,7 +19,8 @@ import {
   type ThemeCatalog,
   type ThemeScope,
 } from '../core/themes.js';
-import { api } from './api.js';
+import { appearanceEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { updateMessageTheme } from './theme-message-style.js';
 import { applyThemeAssets } from './theme-assets.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
@@ -66,7 +67,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const current = ++epoch.current;
     try {
-      const next = await api<ThemeCatalog>('/themes');
+      const next = await callEndpoint(appearanceEndpoints.readThemes);
       if (alive.current && current === epoch.current) {
         setCatalog((previous) => {
           const known = new Map(previous.themes.map((theme) => [theme.id, theme]));

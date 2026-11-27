@@ -1,5 +1,4 @@
 import type { ThemePreferences, ThemeScope } from './themes.js';
-import { ValidationError } from './validation-error.js';
 
 export type ThemeBackground = {
   imageHash: string | null;
@@ -13,38 +12,6 @@ export const defaultThemeBackground: ThemeBackground = {
   lightOverlay: 35,
   darkOverlay: 45,
 };
-export function validateThemeBackground(value: unknown): ThemeBackground {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new ValidationError(400, 'THEME_BACKGROUND_INVALID', 'Expected a background object.');
-  const b = value as Record<string, unknown>;
-  if (
-    Object.keys(b).some(
-      (key) => !['imageHash', 'blur', 'lightOverlay', 'darkOverlay'].includes(key)
-    ) ||
-    (b.imageHash !== null &&
-      (typeof b.imageHash !== 'string' || !/^[a-f0-9]{64}$/u.test(b.imageHash))) ||
-    !Number.isInteger(b.blur) ||
-    Number(b.blur) < 0 ||
-    Number(b.blur) > 30 ||
-    !Number.isInteger(b.lightOverlay) ||
-    Number(b.lightOverlay) < 0 ||
-    Number(b.lightOverlay) > 100 ||
-    !Number.isInteger(b.darkOverlay) ||
-    Number(b.darkOverlay) < 0 ||
-    Number(b.darkOverlay) > 100
-  )
-    throw new ValidationError(
-      400,
-      'THEME_BACKGROUND_RANGE_INVALID',
-      'Expected only imageHash (null or a SHA-256 hex digest), blur (integer 0-30), lightOverlay and darkOverlay (integers 0-100).'
-    );
-  return {
-    imageHash: b.imageHash as string | null,
-    blur: Number(b.blur),
-    lightOverlay: Number(b.lightOverlay),
-    darkOverlay: Number(b.darkOverlay),
-  };
-}
 export function resolveThemeBackground(p: ThemePreferences, scope: ThemeScope): ThemeBackground {
   return (
     (scope.chatId && p.chatBackgrounds?.[scope.chatId]) ||

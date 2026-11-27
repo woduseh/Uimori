@@ -23,6 +23,8 @@ export type Endpoint<Op extends Operation = Operation> = {
   readonly path: `/${string}`;
   readonly status?: number;
   readonly bodyLimit?: number;
+  readonly admission?: 'always';
+  readonly cache?: 'revalidate';
   readonly '~operation'?: Op;
 };
 

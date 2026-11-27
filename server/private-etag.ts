@@ -1,21 +1,18 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { appearanceEndpoints } from '#contracts';
-import { endpointUrl } from './endpoint.js';
 
 export const REVALIDATED_ROUTES: ReadonlySet<string> = new Set([
   '/api/activity-feed',
   '/api/library',
   '/api/prompt-workspace',
   '/api/chats',
-  endpointUrl(appearanceEndpoints.listFonts),
   '/api/chats/:id/reader',
   '/api/connections/:id/catalog',
 ]);
 
-function matchesEntityTag(header: string | string[] | undefined, etag: string) {
+export function matchesEntityTag(header: string | string[] | undefined, etag: string) {
   if (header === undefined) return false;
-  const opaque = etag.slice(2);
+  const opaque = etag.replace(/^W\//u, '');
   return String(header)
     .split(',')
     .some((candidate) => {
@@ -29,7 +26,8 @@ export function revalidatePrivateJson(app: FastifyInstance) {
     if (
       request.method !== 'GET' ||
       reply.statusCode !== 200 ||
-      !REVALIDATED_ROUTES.has(request.routeOptions.url ?? '') ||
+      (request.routeOptions.config.cache !== 'revalidate' &&
+        !REVALIDATED_ROUTES.has(request.routeOptions.url ?? '')) ||
       (typeof payload !== 'string' && !Buffer.isBuffer(payload))
     )
       return done(null, payload);

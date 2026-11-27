@@ -152,9 +152,10 @@ export function applyHelperPresentationMutation(
   if (name !== 'theme.select' || args.dimension !== 'storyUi')
     return invokePresentationTool(store, name, args, bytes);
 
-  const botId = text(args.targetId, 'bot ID', 100);
+  const input = parseInput(appearanceOperations.selectTheme.input, args);
+  const botId = input.targetId ?? '';
   const before = themePreferences(store).botStoryUiThemes?.[botId] ?? null;
-  const result = selectTheme(store, args);
+  const result = selectTheme(store, input);
   const after = result.botStoryUiThemes?.[botId] ?? null;
   let beforeLabel: string | null = null;
   if (before) {
@@ -263,6 +264,7 @@ export function invokePresentationTool(
       number(args.expectedRevision, 'revision', 1)
     );
   }
-  if (name === 'theme.select') return selectTheme(store, args);
+  if (name === 'theme.select')
+    return selectTheme(store, parseInput(appearanceOperations.selectTheme.input, args));
   throw new HelperToolError(400, 'UNKNOWN_PRESENTATION_TOOL');
 }

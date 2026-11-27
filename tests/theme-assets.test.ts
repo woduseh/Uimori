@@ -5,7 +5,15 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { createApp, type App } from '../server/app.js';
 import { Store } from '../server/store.js';
-import { emptyTheme, parseThemeFile, validateTheme, type ThemeAsset } from '../core/themes.js';
+import {
+  emptyTheme,
+  parseThemeFile,
+  themeFile,
+  validateTheme,
+  type ThemeAsset,
+  type ThemeAssetFile,
+  type ThemeDefinition,
+} from '../core/themes.js';
 
 const owned: { directory: string; app?: App; store?: Store }[] = [];
 afterEach(async () => {
@@ -45,6 +53,21 @@ async function upload(app: App, kind: 'font' | 'image', bytes: Buffer) {
   });
   expect(response.statusCode, response.body).toBe(200);
   return response.json() as { hash: string; mime: string };
+}
+
+async function portableThemeFile(app: App, theme: ThemeDefinition) {
+  const files: ThemeAssetFile[] = [];
+  for (const asset of theme.assets ?? []) {
+    const served = await app.inject(`/api/theme-assets/${asset.hash}`);
+    expect(served.statusCode, asset.name).toBe(200);
+    files.push({
+      hash: asset.hash,
+      kind: asset.kind,
+      mime: String(served.headers['content-type']),
+      data: served.rawPayload.toString('base64'),
+    });
+  }
+  return themeFile(theme, files);
 }
 
 async function saveTheme(app: App, assets: ThemeAsset[], id?: string, expectedRevision?: number) {
@@ -120,7 +143,7 @@ test('uploaded assets are served, saved, exported with their bytes and re-import
   ];
   const saved = await saveTheme(app, assets);
   expect(saved.statusCode, saved.body).toBe(200);
-  const exported = (await app.inject(`/api/themes/${saved.json().saved.id}/export`)).json();
+  const exported = await portableThemeFile(app, saved.json().saved);
   expect(exported).toMatchObject({ version: 2, theme: { assets } });
   const parsed = parseThemeFile(exported);
   expect(parsed.theme.assets).toEqual(assets);
@@ -210,7 +233,7 @@ test('built-in assets ship as hashed files and saved copies carry their own byte
   const { app } = await server();
   const letter = BUILTIN_THEMES.find((theme) => theme.id === 'builtin:letter')!;
   expect(letter.assets?.length).toBeGreaterThan(0);
-  const exported = (await app.inject('/api/themes/builtin:letter/export')).json();
+  const exported = await portableThemeFile(app, letter);
   expect(parseThemeFile(exported).files).toHaveLength(letter.assets!.length);
   const copy = await app.inject({
     method: 'POST',

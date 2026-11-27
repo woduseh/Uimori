@@ -1,11 +1,19 @@
-import { validatePalette, paletteFile } from '../core/palette-files.js';
+import { validatePalette } from '../core/palette-files.js';
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { isStoryUiThemeSetting } from '../core/story-ui-style.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
-import { HttpError, choice, fields, number, record, text } from './request-validation.js';
-import { AppError, asAppError, HelperToolError } from './app-errors.js';
+import {
+  appearanceEndpoints as endpoints,
+  type SelectThemeBackground,
+  type SelectThemeRequest,
+} from '#contracts';
+import { appearanceOperations as operations } from '#contracts/operations';
+import { HttpError } from './request-validation.js';
+import { AppError, asAppError, assertRevision, HelperToolError } from './app-errors.js';
+import { NOT_MODIFIED, registerEndpoint } from './endpoint.js';
+import { matchesEntityTag } from './private-etag.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
@@ -15,7 +23,6 @@ import {
   DEFAULT_THEME_ID,
   defaultThemePreferences,
   validateTheme,
-  themeFile,
   type Theme,
   type ThemeCatalog,
   type ThemePreferences,
@@ -28,13 +35,8 @@ import {
   type Palette,
 } from '../core/theme-palettes.js';
 
-import { defaultThemeBackground, validateThemeBackground } from '../core/theme-background.js';
-import {
-  assertThemeAssetsStored,
-  pruneThemeAssets,
-  readThemeAsset,
-  themeAssetHashes,
-} from './theme-assets.js';
+import { defaultThemeBackground } from '../core/theme-background.js';
+import { assertThemeAssetsStored, pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 const preferenceKey = 'theme-preferences';
 export function readTheme(store: Store, id: string): Theme {
   return getBuiltinTheme(id) ?? store.product.get<Theme>('theme', id);
@@ -43,7 +45,9 @@ export function themePreferences(store: Store): ThemePreferences {
   const row = store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(preferenceKey);
   return row ? normalizeThemePreferences(JSON.parse(String(row.value))) : defaultThemePreferences();
 }
-export function themeCatalog(store: Store): ThemeCatalog {
+export function themeCatalog(
+  store: Store
+): ThemeCatalog & { palettes: NonNullable<ThemeCatalog['palettes']> } {
   return {
     themes: [...BUILTIN_THEMES, ...store.product.all('theme')],
     palettes: paletteCatalog(store),
@@ -97,38 +101,29 @@ function writePreferences(store: Store, p: ThemePreferences): ThemePreferences {
   store.invalidated('themes');
   return next;
 }
-export function selectTheme(store: Store, input: unknown): ThemePreferences {
-  const b = record(input);
-  fields(b, ['scope', 'targetId', 'dimension', 'themeId', 'paletteId', 'expectedRevision']);
-  const dimension = choice(
-    b.dimension === undefined ? 'theme' : b.dimension,
-    ['theme', 'palette', 'storyUi'],
-    'dimension'
-  );
-  if (dimension === 'palette' ? 'themeId' in b : 'paletteId' in b)
-    throw new HttpError(400, 'Invalid selection: send themeId or paletteId, not both');
-  const scope = choice(b.scope, ['global', 'bot', 'chat'], 'scope');
-  if (dimension === 'storyUi' && scope !== 'bot')
-    throw new HttpError(400, 'Invalid scope: story UI themes are set per bot');
-  const rawId = dimension === 'palette' ? b.paletteId : b.themeId;
-  const selectedId = rawId === null ? null : text(rawId, dimension + ' ID', 100);
-  const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
+function assertSelectionTarget(store: Store, scope: SelectThemeRequest['scope'], targetId: string) {
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
     if (content.kind !== 'bot') throw new HttpError(400, 'Invalid target ID: expected a bot');
   }
   if (scope === 'chat') store.chat(targetId);
-  const expected = number(b.expectedRevision, 'revision', 0);
+}
+export function selectTheme(store: Store, input: SelectThemeRequest): ThemePreferences {
+  const { scope, expectedRevision } = input;
+  const dimension = input.dimension ?? 'theme';
+  const selectedId = (dimension === 'palette' ? input.paletteId : input.themeId) ?? null;
+  const targetId = input.targetId ?? '';
   return store.transaction(() => {
     const p = themePreferences(store);
-    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(p.revision, expectedRevision);
+    assertSelectionTarget(store, scope, targetId);
     if (selectedId !== null) {
       if (dimension === 'theme') readTheme(store, selectedId);
       else if (dimension === 'palette' && !isPaletteId(selectedId)) readPalette(store, selectedId);
     }
     if (dimension === 'storyUi') {
       if (selectedId !== null && !readTheme(store, selectedId).storyUi)
-        throw new HelperToolError(400, 'THEME_STORY_UI_MISSING', 'Choose a theme with storyUi.');
+        throw new AppError(400, 'THEME_STORY_UI_MISSING');
       const map = (p.botStoryUiThemes ??= {});
       if (selectedId !== null) map[targetId] = selectedId;
       else delete map[targetId];
@@ -148,26 +143,14 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     return writePreferences(store, p);
   });
 }
-export function selectThemeBackground(store: Store, input: unknown): ThemePreferences {
-  const b = record(input);
-  fields(b, ['scope', 'targetId', 'background', 'expectedRevision']);
-  const scope = choice(b.scope, ['global', 'bot', 'chat'], 'scope');
-  const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
-  if (scope === 'bot') {
-    const content = store.product.get<{ kind: string }>('content', targetId);
-    if (content.kind !== 'bot') throw new HttpError(400, 'Invalid target ID: expected a bot');
-  }
-  if (scope === 'chat') store.chat(targetId);
-  let background: ReturnType<typeof validateThemeBackground> | null;
-  try {
-    background = b.background === null ? null : validateThemeBackground(b.background);
-  } catch (error) {
-    throw asAppError(error);
-  }
-  const expected = number(b.expectedRevision, 'revision', 0);
+export function selectThemeBackground(
+  store: Store,
+  { scope, targetId = '', background, expectedRevision }: SelectThemeBackground
+): ThemePreferences {
   return store.transaction(() => {
     const p = themePreferences(store);
-    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(p.revision, expectedRevision);
+    assertSelectionTarget(store, scope, targetId);
     if (
       background?.imageHash &&
       !store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(background.imageHash)
@@ -182,11 +165,21 @@ export function selectThemeBackground(store: Store, input: unknown): ThemePrefer
     return writePreferences(store, p);
   });
 }
+function assertStoredRevision(
+  store: Store,
+  kind: 'theme' | 'palette',
+  id: string,
+  expected: number
+) {
+  const row = store.db.prepare('SELECT revision FROM versions WHERE kind=? AND id=?').get(kind, id);
+  if (!row) throw new AppError(409, 'REVISION_CONFLICT');
+  assertRevision(Number(row.revision), expected);
+}
 export function deleteTheme(store: Store, id: string, expectedRevision: number) {
   if (id.startsWith('builtin:')) throw new HelperToolError(400, 'THEME_BUILTIN_READONLY');
   return store.transaction(() => {
+    assertStoredRevision(store, 'theme', id, expectedRevision);
     const theme = readTheme(store, id);
-    if (theme.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const undo = store.db
       .prepare("SELECT model FROM resource_undo WHERE kind='theme' AND id=?")
       .get(id)?.model;
@@ -233,15 +226,17 @@ export function savePalette(
   } catch (error) {
     throw asAppError(error);
   }
-  const saved = store.product.save('palette', model, id, expectedRevision) as Palette;
+  const saved = store.transaction(() => {
+    if (id !== undefined) assertStoredRevision(store, 'palette', id, expectedRevision ?? 0);
+    return store.product.save('palette', model, id, expectedRevision) as Palette;
+  });
   store.invalidated('themes');
   return saved;
 }
 export function deletePalette(store: Store, id: string, expectedRevision: number) {
   if (isPaletteId(id)) throw new HelperToolError(400, 'PALETTE_BUILTIN_READONLY');
   return store.transaction(() => {
-    const palette = readPalette(store, id) as Palette;
-    if (palette.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+    assertStoredRevision(store, 'palette', id, expectedRevision);
     const p = themePreferences(store);
     if (p.defaultPaletteId === id) p.defaultPaletteId = THEME_PALETTE_ID;
     for (const map of [p.botPalettes, p.chatPalettes])
@@ -253,73 +248,60 @@ export function deletePalette(store: Store, id: string, expectedRevision: number
   });
 }
 
+function themeCatalogTag(store: Store, builtinVersion: string) {
+  const versions = (kind: string) =>
+    store.db.prepare('SELECT id,revision FROM versions WHERE kind=? ORDER BY id').all(kind);
+  const version = createHash('sha256')
+    .update(
+      JSON.stringify([
+        builtinVersion,
+        versions('theme'),
+        versions('palette'),
+        themePreferences(store).revision,
+      ])
+    )
+    .digest('hex');
+  return `"${version}"`;
+}
+
 export function themeRoutes(app: FastifyInstance, store: Store) {
-  app.get('/api/palettes', () => ({ palettes: paletteCatalog(store) }));
-  app.post('/api/palettes', (request) => {
-    const b = record(request.body);
-    fields(b, ['model']);
-    return savePalette(store, b.model);
-  });
-  app.put<{ Params: { id: string } }>('/api/palettes/:id', (request) => {
-    const b = record(request.body);
-    fields(b, ['model', 'expectedRevision']);
-    return savePalette(
-      store,
-      b.model,
-      request.params.id,
-      number(b.expectedRevision, 'revision', 1)
-    );
-  });
-  app.get<{ Params: { id: string } }>('/api/palettes/:id/export', (request) =>
-    paletteFile(readPalette(store, request.params.id))
-  );
-  app.delete<{ Params: { id: string } }>('/api/palettes/:id', (request) => {
-    const b = record(request.body);
-    fields(b, ['expectedRevision']);
-    return deletePalette(store, request.params.id, number(b.expectedRevision, 'revision', 1));
-  });
   const builtinVersion = createHash('sha256')
     .update(JSON.stringify([BUILTIN_THEMES, BUILTIN_PALETTES]))
     .digest('hex');
-  app.get('/api/themes', (request, reply) => {
-    const versions = store.db
-      .prepare("SELECT id,revision FROM versions WHERE kind='theme' ORDER BY id")
-      .all();
-    const version = createHash('sha256')
-      .update(
-        JSON.stringify([
-          builtinVersion,
-          versions,
-          store.db
-            .prepare("SELECT id,revision FROM versions WHERE kind='palette' ORDER BY id")
-            .all(),
-          themePreferences(store).revision,
-        ])
-      )
-      .digest('hex');
-    const etag = `"${version}"`;
+  registerEndpoint(app, endpoints.readThemes, operations.readThemes, (_input, request, reply) => {
+    const etag = themeCatalogTag(store, builtinVersion);
     reply.header('ETag', etag).header('Cache-Control', 'private, no-cache');
-    if (request.headers['if-none-match'] === etag) return reply.code(304).send();
+    if (matchesEntityTag(request.headers['if-none-match'], etag)) return NOT_MODIFIED;
     return themeCatalog(store);
   });
-  app.post('/api/themes/selection', (request) => selectTheme(store, request.body));
-  app.post('/api/themes/background', (request) => selectThemeBackground(store, request.body));
-  app.get<{ Params: { id: string } }>('/api/themes/:id/export', (request) => {
-    const theme = readTheme(store, request.params.id);
-    const files = (theme.assets ?? []).map((asset) => {
-      const stored = readThemeAsset(store.db, asset.hash);
-      return {
-        hash: asset.hash,
-        kind: stored.kind,
-        mime: stored.mime,
-        data: stored.bytes.toString('base64'),
-      };
-    });
-    return themeFile(theme, files);
-  });
-  app.delete<{ Params: { id: string } }>('/api/themes/:id', (request) => {
-    const b = record(request.body);
-    fields(b, ['expectedRevision']);
-    return deleteTheme(store, request.params.id, number(b.expectedRevision, 'revision'));
-  });
+  registerEndpoint(app, endpoints.selectTheme, operations.selectTheme, (input) =>
+    selectTheme(store, input)
+  );
+  registerEndpoint(
+    app,
+    endpoints.selectThemeBackground,
+    operations.selectThemeBackground,
+    (input) => selectThemeBackground(store, input)
+  );
+  registerEndpoint(app, endpoints.deleteTheme, operations.deleteTheme, ({ id, expectedRevision }) =>
+    deleteTheme(store, id, expectedRevision)
+  );
+  registerEndpoint(app, endpoints.listPalettes, operations.listPalettes, () => ({
+    palettes: paletteCatalog(store),
+  }));
+  registerEndpoint(app, endpoints.createPalette, operations.createPalette, ({ model }) =>
+    savePalette(store, model)
+  );
+  registerEndpoint(
+    app,
+    endpoints.updatePalette,
+    operations.updatePalette,
+    ({ id, model, expectedRevision }) => savePalette(store, model, id, expectedRevision)
+  );
+  registerEndpoint(
+    app,
+    endpoints.deletePalette,
+    operations.deletePalette,
+    ({ id, expectedRevision }) => deletePalette(store, id, expectedRevision)
+  );
 }
