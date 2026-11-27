@@ -241,6 +241,11 @@ test('SCENEDIAG a completed provider call retains token and lore receipts the re
       .locator(`[data-testid="run"][data-run-id="${run.id}"]`);
     await task.getByRole('button', { name: '자세히 보기', exact: true }).click();
     await expect(task.getByLabel('실행 요약', { exact: true })).toContainText('모델 1회');
+    const chatUsage = page
+      .getByRole('dialog', { name: '작업 현황', exact: true })
+      .getByTestId('usage-inspector');
+    await chatUsage.getByText('이 채팅 전체 누적 사용량', { exact: true }).click();
+    await expect(chatUsage.getByRole('table', { name: '역할별 합계', exact: true })).toBeVisible();
   } finally {
     await peer.close();
     const current = await read<PromptWorkspace>(request, '/prompt-workspace');
