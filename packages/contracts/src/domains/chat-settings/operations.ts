@@ -104,6 +104,36 @@ const orphanMemoryDetail = z.looseObject({
   ),
 });
 
+const variableName = nonBlank(1000);
+export const updateVariablesToolInput = z
+  .strictObject({
+    expectedRevision: revision,
+    expectedSourceHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/u, 'pass sourceHash from chat.variables.read')
+      .nullable(),
+    set: z.record(variableName, z.string()).optional(),
+    unset: z.array(variableName).optional(),
+  })
+  .refine(
+    (input) => Object.keys(input.set ?? {}).length > 0 || (input.unset?.length ?? 0) > 0,
+    'Pass set or unset with at least one variable'
+  );
+
+export const updateStoryGuideToolInput = z.strictObject({
+  expectedRevision: revision,
+  changes: z
+    .strictObject({
+      enabled: z.unknown().optional(),
+      work: z.unknown().optional(),
+      position: z.unknown().optional(),
+      reference: z.unknown().optional(),
+      followCanon: z.unknown().optional(),
+      webSearch: z.unknown().optional(),
+    })
+    .refine((changes) => Object.keys(changes).length > 0, 'Pass at least one change'),
+});
+
 export const chatSettingsOperations = {
   readOptions: defineOperation('chat-settings.readOptions', chatTarget, chatOptionState),
   fixOptions: defineOperation('chat-settings.fixOptions', fixOptionsInput, chatOptionState),

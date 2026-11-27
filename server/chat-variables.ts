@@ -34,11 +34,10 @@ export function chatVariablesPending(store: Store, chatId: string): boolean {
 function applyChatVariablesInTransaction(
   store: Store,
   chatId: string,
-  value: ChatVariableCommand,
+  command: ChatVariableCommand,
   checkActivity: boolean
 ): ChatVariableState {
   if (!store.db.isTransaction) throw new Error('CHAT_VARIABLE_TRANSACTION_REQUIRED');
-  const command = { ...value, values: validateChatVariableValues(value.values) };
   const chat = store.writableChat(chatId);
   const payloadHash = jsonPayloadHash(command);
   const receipt = store.db
@@ -57,7 +56,10 @@ function applyChatVariablesInTransaction(
   if (source && source.chatId !== chatId) throw new HttpError(400, 'CHAT_VARIABLE_SOURCE_OWNER');
   if ((source?.hash ?? null) !== command.expectedSourceHash)
     throw new AppError(409, 'REVISION_CONFLICT');
-  const result = { revision: current.revision + 1, values: command.values };
+  const result = {
+    revision: current.revision + 1,
+    values: validateChatVariableValues(command.values),
+  };
   store.db
     .prepare(
       'INSERT INTO chat_variable_states(chat_id,revision,values_json) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json'

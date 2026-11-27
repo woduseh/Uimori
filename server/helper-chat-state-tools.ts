@@ -25,7 +25,11 @@ import {
   type Bookmark,
 } from '../core/reading-state.js';
 import { addBookmark, deleteBookmark, listBookmarks, updateBookmark } from './reading-state.js';
-import { personalWorkspaceOperations } from '#contracts/operations';
+import {
+  personalWorkspaceOperations,
+  updateStoryGuideToolInput,
+  updateVariablesToolInput,
+} from '#contracts/operations';
 import { parseInput } from './endpoint.js';
 import { readSceneContext, updateSceneContext } from './scene-context.js';
 import type { HelperWorkspace } from './helper-workspace.js';
@@ -700,11 +704,7 @@ function updateStoryGuide(
   chatId: string,
   args: Record<string, unknown>
 ) {
-  fields(args, ['expectedRevision', 'changes']);
-  const expectedRevision = number(args.expectedRevision, 'story guide revision', 0);
-  const changes = record(args.changes);
-  fields(changes, ['enabled', 'work', 'position', 'reference', 'followCanon', 'webSearch']);
-  if (!Object.keys(changes).length) throw new HttpError(400, 'Pass at least one change');
+  const { expectedRevision, changes } = parseInput(updateStoryGuideToolInput, args);
   const current = store.storyGuide.get(chatId);
   let config: StoryGuideConfig;
   try {
@@ -745,33 +745,14 @@ function updateChatVariables(
   chatId: string,
   args: Record<string, unknown>
 ) {
-  fields(args, ['expectedRevision', 'expectedSourceHash', 'set', 'unset']);
-  const expectedRevision = number(
-    args.expectedRevision,
-    'variables revision',
-    0,
-    Number.MAX_SAFE_INTEGER - 1
-  );
-  if (args.expectedSourceHash !== null && !isSha256Hex(args.expectedSourceHash))
-    throw new HttpError(
-      400,
-      'Invalid expectedSourceHash: pass sourceHash from chat.variables.read'
-    );
-  const set = args.set === undefined ? {} : record(args.set);
-  if (args.unset !== undefined && !Array.isArray(args.unset))
-    throw new HttpError(400, 'Invalid unset: expected an array of variable names');
-  const unset = (args.unset ?? []).map((name: unknown) => text(name, 'variable name', 1000));
-  for (const [name, item] of Object.entries(set)) {
-    text(name, 'variable name', 1000);
-    if (typeof item !== 'string')
-      throw new HttpError(400, `Invalid value of ${name}: Risu variables are text`);
-  }
-  if (!Object.keys(set).length && !unset.length)
-    throw new HttpError(400, 'Pass set or unset with at least one variable');
-  const both = unset.filter((name: string) => Object.hasOwn(set, name));
+  const input = parseInput(updateVariablesToolInput, args);
+  const { expectedRevision, expectedSourceHash } = input;
+  const set = input.set ?? {};
+  const unset = input.unset ?? [];
+  const both = unset.filter((name) => Object.hasOwn(set, name));
   if (both.length) throw new HttpError(400, `Both set and unset name: ${both.join(', ')}`);
   const current = readChatVariables(store, chatId);
-  const next: Record<string, string> = { ...current.values, ...(set as Record<string, string>) };
+  const next: Record<string, string> = { ...current.values, ...set };
   for (const name of unset) delete next[name];
   try {
     validateChatVariableValues(next);
@@ -789,14 +770,12 @@ function updateChatVariables(
   if (changed)
     revision = writeChatVariables(store, chatId, {
       expectedRevision,
-      expectedSourceHash: args.expectedSourceHash as string | null,
+      expectedSourceHash,
       idempotencyKey: `helper:${createHash('sha256').update(receiptId).digest('hex')}`,
       values: next,
     }).revision;
-  else if (current.revision !== expectedRevision)
-    throw new HelperToolError(409, 'CHAT_VARIABLE_REVISION_CONFLICT');
-  else if (sourceHash !== args.expectedSourceHash)
-    throw new HelperToolError(409, 'CHAT_VARIABLE_SOURCE_CONFLICT');
+  else if (current.revision !== expectedRevision || sourceHash !== expectedSourceHash)
+    throw new AppError(409, 'REVISION_CONFLICT');
   recordHelperTaskResult(workspace, task, {
     receiptId,
     operation: 'chat.variables.update',

@@ -152,6 +152,45 @@ test('chat.preview lists, searches and pages the assembled next request without 
   expect(changes(store)).toBe(before);
 });
 
+test('chat.variables.update answers REVISION_CONFLICT for an unchanged write on a stale revision or source', async () => {
+  const { store, chat } = fixture();
+  const sourceHash = store.source(chat.headRevision!).hash;
+  writeChatVariables(store, chat.id, {
+    expectedRevision: 0,
+    expectedSourceHash: sourceHash,
+    idempotencyKey: randomUUID(),
+    values: { mood: 'tense' },
+  });
+  const { finished } = await runScriptedChatHelper(store, chat.id, [
+    helperCall('stale-revision', 'chat.variables.update', {
+      expectedRevision: 0,
+      expectedSourceHash: sourceHash,
+      set: { mood: 'tense' },
+    }),
+    helperCall('stale-source', 'chat.variables.update', {
+      expectedRevision: 1,
+      expectedSourceHash: 'a'.repeat(64),
+      set: { mood: 'tense' },
+    }),
+    helperCall('empty', 'chat.variables.update', {
+      expectedRevision: 1,
+      expectedSourceHash: sourceHash,
+    }),
+    helperCall('extra', 'chat.variables.update', {
+      expectedRevision: 1,
+      expectedSourceHash: sourceHash,
+      set: { mood: 'calm' },
+      note: 'x',
+    }),
+    helperDone,
+  ]);
+  for (const call of ['stale-revision', 'stale-source'])
+    expect(finished(call), call).toMatchObject({ denied: true, errorCode: 'REVISION_CONFLICT' });
+  for (const call of ['empty', 'extra'])
+    expect(finished(call), call).toMatchObject({ denied: true });
+  expect(readChatVariables(store, chat.id).values).toEqual({ mood: 'tense' });
+});
+
 test('chat.variables.update merges changes with a receipt and rejects a stale read', async () => {
   const { store, chat } = fixture();
   const sourceHash = store.source(chat.headRevision!).hash;

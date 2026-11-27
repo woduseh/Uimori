@@ -5,7 +5,10 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content, ModelPreset } from '../core/product.js';
 import type { Json } from '../core/transport.js';
-import { ChatOptionsStore } from '../server/chat-options.js';
+import type { HelperTask } from '../core/helper.js';
+import { deleteChat } from '../server/chat-deletion.js';
+import { ChatOptionsStore, invokeHelperOptions } from '../server/chat-options.js';
+import { HelperWorkspace } from '../server/helper-workspace.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { sceneTitle } from '../server/scene-titles.js';
 import { Store } from '../server/store.js';
@@ -253,6 +256,86 @@ test('scene.title names a scene and refuses a stale expected name', async () => 
       targets: [{ kind: 'scene', id: sourceId, chatId: chat.id, title: '종소리', revision: 1 }],
     }),
   ]);
+});
+
+test('option tools refuse what their schema does not name and write nothing', async () => {
+  const { store, chat } = fixture();
+  const options = new ChatOptionsStore(store);
+  const state = options.get(chat.id);
+  const control = state.controls!.find(
+    (item) => item.type === 'boolean' || (item.options?.length ?? 0) > 1
+  )!;
+  const base = {
+    expectedRevision: state.revision,
+    binding: state.binding as unknown as Json,
+  };
+  const value =
+    control.type === 'boolean'
+      ? !control.default
+      : control.options!.find((option) => option.value !== control.default)!.value;
+  const values = { [control.id]: value } as Json;
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('chat-id', 'options.fix', { ...base, values, chatId: 'another-chat' }),
+    helperCall('operation-id', 'options.fix', { ...base, values, operationId: 'forced' }),
+    helperCall('set-null', 'options.fix', { ...base, set: null }),
+    helperCall('unset-null', 'options.fix', { ...base, unset: null }),
+    helperCall('oneoff-chat-id', 'options.oneoff', { ...base, values, chatId: 'another-chat' }),
+    helperDone,
+  ]);
+  for (const call of ['chat-id', 'operation-id', 'set-null', 'unset-null', 'oneoff-chat-id'])
+    expect(run.finished(call), call).toMatchObject({ denied: true });
+  expect(options.get(chat.id)).toMatchObject({ revision: state.revision, pending: [] });
+  expect(run.results).toEqual([]);
+});
+
+test('options.read refuses input that is not an empty object', () => {
+  const { store, chat } = fixture();
+  const task = { id: 'task', snapshot: { scope: { kind: 'chat', chatId: chat.id } } } as HelperTask;
+  for (const input of [null, [], 123, '', { chatId: 'another-chat' }])
+    expect(() => invokeHelperOptions(store, task, 'options.read', input, 'read')).toThrow(
+      'INVALID_REQUEST'
+    );
+  expect(invokeHelperOptions(store, task, 'options.read', {}, 'read')).toMatchObject({
+    chatId: chat.id,
+  });
+});
+
+test('options.fix on a chat deleted underneath the task answers REVISION_CONFLICT', () => {
+  const { store, chat } = fixture();
+  const state = new ChatOptionsStore(store).get(chat.id);
+  const task = { id: 'task', snapshot: { scope: { kind: 'chat', chatId: chat.id } } } as HelperTask;
+  vi.spyOn(HelperWorkspace.prototype, 'assertRunning').mockReturnValue(undefined as never);
+  deleteChat(store, chat.id, {});
+  expect(() =>
+    invokeHelperOptions(
+      store,
+      task,
+      'options.fix',
+      { expectedRevision: state.revision, binding: state.binding, values: {} },
+      'fix'
+    )
+  ).toThrow('REVISION_CONFLICT');
+});
+
+test('chat.guide.update refuses an empty change, an unknown setting and an unknown field', async () => {
+  const { store, chat } = fixture();
+  const before = store.storyGuide.get(chat.id);
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('empty', 'chat.guide.update', { expectedRevision: before.revision, changes: {} }),
+    helperCall('unknown-setting', 'chat.guide.update', {
+      expectedRevision: before.revision,
+      changes: { unknown: true },
+    }),
+    helperCall('unknown-field', 'chat.guide.update', {
+      expectedRevision: before.revision,
+      changes: { enabled: true },
+      note: 'x',
+    }),
+    helperDone,
+  ]);
+  for (const call of ['empty', 'unknown-setting', 'unknown-field'])
+    expect(run.finished(call), call).toMatchObject({ denied: true });
+  expect(store.storyGuide.get(chat.id).revision).toBe(before.revision);
 });
 
 test('chat.guide.update changes only the named settings and rejects invalid text', async () => {
