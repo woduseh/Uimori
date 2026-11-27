@@ -111,14 +111,18 @@ function announceChanges(invalidates: readonly Invalidation[]) {
     announceLocalChange(promptWorkspaceChange, { echoed: !providerSettings });
 }
 
+const legacyLibraryWrites = new Set([
+  '/native-transfers/apply',
+  '/native-transfers/apply-archive',
+  '/risu-imports/apply',
+  '/prompt-presets',
+  '/prompt-combinations',
+]);
+
 function legacyInvalidation(path: string): Invalidation[] {
-  if (/^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path)) return ['provider-settings'];
-  return path === '/native-transfers/apply' ||
-    path === '/native-transfers/apply-archive' ||
-    path === '/risu-imports/apply' ||
-    /^(?:\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/prompt-combinations(?:$|\/))/.test(path)
-    ? ['library']
-    : [];
+  if (/^\/(?:model-presets|connections)(?:\/[^/]+(?:\/move)?)?$/u.test(path))
+    return ['provider-settings'];
+  return legacyLibraryWrites.has(path) ? ['library'] : [];
 }
 
 export async function api<T>(

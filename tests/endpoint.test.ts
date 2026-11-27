@@ -7,7 +7,12 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { defineEndpoint, defineOperation, endpointRequest, type OperationInput } from '#contracts';
 import * as operations from '#contracts/operations';
 import { AppError } from '../server/app-errors.js';
-import { checkEndpointOutputs, NOT_MODIFIED, registerEndpoint } from '../server/endpoint.js';
+import {
+  checkEndpointOutputs,
+  NOT_MODIFIED,
+  prefersMinimal,
+  registerEndpoint,
+} from '../server/endpoint.js';
 import { matchesEntityTag, revalidatePrivateJson } from '../server/private-etag.js';
 
 const { queryBoolean, queryInt } = operations;
@@ -166,28 +171,36 @@ test('a preferMinimal endpoint checks its output only when the request asks for 
   const app = Fastify();
   checkEndpointOutputs(app);
   const full = (input: z.output<typeof echo.input>) => ({ ...input, snapshot: 'full' });
-  registerEndpoint(
-    app,
+  const admission = (path: `/${string}/:id`) =>
     defineEndpoint<typeof echo>()({
       operation: 'test.echo',
       method: 'POST',
-      path: '/admit/:id',
+      path,
       preferMinimal: true,
-    }),
+    });
+  registerEndpoint(
+    app,
+    admission('/admit/:id'),
     echo,
-    (input, request) => (request.headers.prefer === 'return=minimal' ? input : full(input)) as never
+    (input, request) => (prefersMinimal(request.headers.prefer) ? input : full(input)) as never
   );
+  registerEndpoint(app, admission('/leak/:id'), echo, (input) => full(input) as never);
   registerEndpoint(app, endpoints.write, echo, (input) => full(input) as never);
   cleanup.push(() => app.close());
-  const admit = (prefer?: string) =>
+  const post = (route: string, prefer?: string) =>
     app.inject({
       method: 'POST',
-      url: '/api/admit/x',
+      url: `/api/${route}/x`,
       payload: { note: 'n' },
       ...(prefer ? { headers: { prefer } } : {}),
     });
-  expect((await admit('return=minimal')).json()).toEqual({ id: 'x', note: 'n' });
-  expect((await admit()).json()).toEqual({ id: 'x', note: 'n', snapshot: 'full' });
+  const composite = 'respond-async, return=minimal';
+  for (const prefer of ['return=minimal', composite])
+    expect((await post('admit', prefer)).json(), prefer).toEqual({ id: 'x', note: 'n' });
+  expect((await post('admit')).json()).toEqual({ id: 'x', note: 'n', snapshot: 'full' });
+  for (const prefer of ['return=minimal', composite])
+    expect((await post('leak', prefer)).statusCode, prefer).toBe(500);
+  expect((await post('leak')).statusCode).toBe(200);
   const unflagged = await app.inject({
     method: 'PUT',
     url: '/api/echo/x',

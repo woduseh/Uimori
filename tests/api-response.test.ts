@@ -137,3 +137,22 @@ test('a typed endpoint flagged preferMinimal asks for the minimal answer, and ot
   const sent = fetch.mock.calls.map(([, init]) => new Headers(init?.headers).get('prefer'));
   expect(sent).toEqual(['return=minimal', null]);
 });
+
+test('a legacy write tells other tabs only for the library and provider writes still on api()', async () => {
+  const b = browser();
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}'));
+  await api('/content/c1/risu-preview', { revision: 1 });
+  expect(b.setItem).not.toHaveBeenCalled();
+  for (const path of ['/prompt-presets', '/prompt-combinations', '/risu-imports/apply']) {
+    b.setItem.mockClear();
+    await api(path, {});
+    expect(b.setItem, path).toHaveBeenCalledWith(libraryChangedKey, expect.any(String));
+  }
+  for (const path of ['/connections/c1/move', '/model-presets/m1/move', '/connections/c1']) {
+    b.setItem.mockClear();
+    b.workspace.mockClear();
+    await api(path, {});
+    expect(b.setItem, path).toHaveBeenCalledTimes(1);
+    expect(b.workspace, path).toHaveBeenLastCalledWith(expect.anything(), { echoed: false });
+  }
+});
