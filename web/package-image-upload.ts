@@ -1,4 +1,5 @@
-import { message, t } from './i18n.js';
+import { t } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { RISU_ASSET_MAX } from '../core/risu-limits.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
 import { api } from './api.js';
@@ -15,7 +16,7 @@ export async function uploadPackageImage(
     file.size > 64 * 1024 * 1024 ||
     file.size === 0
   )
-    throw new Error(message('library.aPngJpegWebpAvifOrGif'));
+    throw new UiError(uiMessage('library.aPngJpegWebpAvifOrGif'));
   signal.throwIfAborted();
   const bytes = new Uint8Array(await file.arrayBuffer());
   signal.throwIfAborted();
@@ -30,7 +31,7 @@ export async function uploadPackageImage(
   );
   signal.throwIfAborted();
   if (!/^[a-f0-9]{64}$/u.test(result.hash) || result.mime !== 'image/webp')
-    throw new Error(message('library.couldNotValidateTheImageResponse'));
+    throw new UiError(uiMessage('library.couldNotValidateTheImageResponse'));
   return {
     id: crypto.randomUUID(),
     title:

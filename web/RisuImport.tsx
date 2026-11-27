@@ -3,9 +3,10 @@ import {
   useI18n,
   translateMessage,
   formatNumber,
-  message as retainedMessage,
+  message as descriptor,
   messageRef,
 } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -124,17 +125,17 @@ export function RisuImport({
     setNotice('');
     try {
       if (!/\.(charx|jpe?g|png|risum|json|zip)$/i.test(file.name))
-        throw new Error(retainedMessage('transfer.m007'));
-      if (file.size === 0) throw new Error(retainedMessage('transfer.m008'));
+        throw new UiError(uiMessage('transfer.m007'));
+      if (file.size === 0) throw new UiError(uiMessage('transfer.m008'));
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
-        throw new Error(
-          retainedMessage('transfer.d001', {
+        throw new UiError(
+          uiMessage('transfer.d001', {
             v0: Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024),
           })
         );
       if (file.size > RISU_IMPORT_MAX_BYTES)
         setNotice(
-          retainedMessage('transfer.d002', { v0: Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024) })
+          descriptor('transfer.d002', { v0: Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024) })
         );
       const nextSource = await readSource(file, controller.signal);
       const nextPreview = await api<RisuImportPreview>(
@@ -158,10 +159,10 @@ export function RisuImport({
       submission.current = null;
       requestKey.current = null;
     } catch (cause) {
-      if (controller.signal.aborted) setNotice(retainedMessage('transfer.m009'));
+      if (controller.signal.aborted) setNotice(descriptor('transfer.m009'));
       else
         setError(
-          retainedMessage('transfer.reviewError', {
+          descriptor('transfer.reviewError', {
             error: messageRef((cause as Error).message),
             retained: !!preview,
           })
@@ -201,7 +202,7 @@ export function RisuImport({
       setAllowPartial(false);
       selectionChanged();
     } catch (cause) {
-      setError(retainedMessage('transfer.d003', { v0: messageRef((cause as Error).message) }));
+      setError(descriptor('transfer.d003', { v0: messageRef((cause as Error).message) }));
     } finally {
       active.current = false;
       setBusy(false);
@@ -216,17 +217,17 @@ export function RisuImport({
         setOpen(false);
         onContinueChat(imported.chat.id);
       } else if (imported.chat) {
-        setNotice(retainedMessage('transfer.m011'));
+        setNotice(descriptor('transfer.m011'));
       }
     } catch {
       setNotice(
         preview?.kind === 'module'
-          ? retainedMessage('transfer.m012')
+          ? descriptor('transfer.m012')
           : preview?.kind === 'persona'
-            ? retainedMessage('transfer.m013')
+            ? descriptor('transfer.m013')
             : imported.chat
-              ? retainedMessage('transfer.m014')
-              : retainedMessage('transfer.m015')
+              ? descriptor('transfer.m014')
+              : descriptor('transfer.m015')
       );
     }
   }

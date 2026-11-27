@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { t, useI18n, translateMessage } from './i18n.js';
+import { uiMessage, UiError } from './ui-message.js';
 import { BackupSettings } from './BackupSettings.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackupFileImport } from './BackupFileImport.js';
@@ -37,7 +37,7 @@ export function ArchivePanel({
     onDirtyChange?.(busy || importDirty || backupDirty);
   }, [busy, importDirty, backupDirty, onDirtyChange]);
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
-    if (importDirty) throw new Error(retainedMessage('transfer.m177'));
+    if (importDirty) throw new UiError(uiMessage('transfer.m177'));
     if (busy) return false;
     return !backupDirty || !!(await backupSave.current?.());
   });

@@ -1,4 +1,5 @@
-import { getLocale, t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { getLocale, t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
@@ -144,7 +145,7 @@ export function NewStory({
         const selected = newChatPersona(defaults.persona, initialFolder?.defaultPersona);
         const current = selected && library.contents.find((item) => item.id === selected.id);
         if (selected && !current) {
-          setDefaultsError(retainedMessage('transfer.m312'));
+          setDefaultsError(descriptor('transfer.m312'));
           setPersona('');
         } else {
           setPersona(current ? refValue(current) : '');
@@ -234,8 +235,8 @@ export function NewStory({
     packageSelection,
   ]);
   function captureSelection(): StorySelection {
-    if (!defaultsReady) throw new Error(retainedMessage('transfer.m313'));
-    if (!packagesReady) throw new Error(retainedMessage('transfer.m314'));
+    if (!defaultsReady) throw new UiError(uiMessage('transfer.m313'));
+    if (!packagesReady) throw new UiError(uiMessage('transfer.m314'));
     const selectedBot = bot
       ? (loadedContents[bot] ??
         [initialBot, ...library.contents].find((item) => item && refValue(item) === bot))
@@ -250,15 +251,15 @@ export function NewStory({
         ))
       : null;
     const selectedModules = modules.map((key) => loadedContents[key]);
-    if (selectedModules.some((item) => !item)) throw new Error(retainedMessage('transfer.m315'));
+    if (selectedModules.some((item) => !item)) throw new UiError(uiMessage('transfer.m315'));
     if (!selectedBot || (persona && !selectedPersona))
-      throw new Error(retainedMessage('transfer.m316'));
+      throw new UiError(uiMessage('transfer.m316'));
     if (
       [selectedBot, selectedPersona, ...selectedModules].some(
         (item) => item?.hasPackage && !item.package
       )
     )
-      throw new Error(retainedMessage('transfer.m317'));
+      throw new UiError(uiMessage('transfer.m317'));
     const roleContents: [ContentRole, Content | null | undefined][] = [
       ['bot', selectedBot],
       ['persona', selectedPersona],
@@ -266,7 +267,7 @@ export function NewStory({
     ];
     const opening =
       start && selectedBot.package ? resolvePackageStart(selectedBot.package, start) : null;
-    if (start && !opening) throw new Error(retainedMessage('transfer.m318'));
+    if (start && !opening) throw new UiError(uiMessage('transfer.m318'));
     return structuredClone({
       title: title.trim() || t('transfer.defaultChatTitle', { bot: selectedBot.title }),
       autoTitle: !title.trim(),
@@ -304,7 +305,7 @@ export function NewStory({
     try {
       const selection = (submitted.current ??= captureSelection());
       if (!created.current) {
-        if (uncertain.current) throw new Error(retainedMessage('transfer.m320'));
+        if (uncertain.current) throw new UiError(uiMessage('transfer.m320'));
         uncertain.current = true;
         created.current = await api<Chat>('/chats', {
           title: selection.title,
@@ -342,9 +343,7 @@ export function NewStory({
       setConfigure(true);
       setProfileConflict(err instanceof PendingStoryProfileConflict);
       setError(
-        uncertain.current && !created.current
-          ? retainedMessage('transfer.m320')
-          : (err as Error).message
+        uncertain.current && !created.current ? descriptor('transfer.m320') : (err as Error).message
       );
     } finally {
       creating.current = false;

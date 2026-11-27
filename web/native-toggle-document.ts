@@ -1,4 +1,4 @@
-import { message as uiMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import {
   type NativeToggleDefinition,
   type NativeToggleLine,
@@ -74,7 +74,7 @@ export function parseToggleDocument(source: string) {
 
 function structural(source: string) {
   const doc = parseToggleDocument(source);
-  if (doc.warnings.length) throw new Error(uiMessage('native.toggleBoundary'));
+  if (doc.warnings.length) throw new UiError(uiMessage('native.toggleBoundary'));
   return doc;
 }
 function eol(lines: NativeToggleLine[]) {
@@ -92,16 +92,16 @@ function fresh(raw: string, lines: NativeToggleLine[]): NativeToggleLine {
 }
 function groupOf(doc: ReturnType<typeof parseToggleDocument>, id: number) {
   const group = doc.groups.find((entry) => entry.id === id);
-  if (!group) throw new Error(uiMessage('native.groupNotFound'));
+  if (!group) throw new UiError(uiMessage('native.groupNotFound'));
   return group;
 }
 function itemOf(doc: ReturnType<typeof parseToggleDocument>, index: number) {
   const item = doc.groups.flatMap((group) => group.items).find((entry) => entry.index === index);
-  if (!item) throw new Error(uiMessage('native.itemNotFound'));
+  if (!item) throw new UiError(uiMessage('native.itemNotFound'));
   return item;
 }
 function namedGroup(doc: ReturnType<typeof parseToggleDocument>, id: number) {
-  if (id === -1) throw new Error(uiMessage('native.rootGroupOperation'));
+  if (id === -1) throw new UiError(uiMessage('native.rootGroupOperation'));
   return groupOf(doc, id);
 }
 function swap(
@@ -175,7 +175,7 @@ export function deleteToggleGroup(source: string, id: number) {
   return finish(source, doc.lines);
 }
 export function addToggleItem(source: string, groupId: number, type: NativeToggleType) {
-  if (type === 'group' || type === 'groupEnd') throw new Error(uiMessage('native.useAddGroup'));
+  if (type === 'group' || type === 'groupEnd') throw new UiError(uiMessage('native.useAddGroup'));
   const doc = structural(source);
   const group = groupOf(doc, groupId);
   const raw = serializeNativeToggleDefinition({
@@ -234,7 +234,7 @@ export function editToggleItem(
   if (!item.definition) return source;
   const next = { ...item.definition, ...patch };
   if (next.type === 'group' || next.type === 'groupEnd')
-    throw new Error(uiMessage('native.useAddGroup'));
+    throw new UiError(uiMessage('native.useAddGroup'));
   const line = doc.lines[index];
   if (!line) return source;
   if (
@@ -244,7 +244,7 @@ export function editToggleItem(
   )
     line.raw = serializeNativeToggleDefinition(next);
   if (caption !== undefined && caption !== item.caption) {
-    if (!controls.has(next.type)) throw new Error(uiMessage('native.captionControlOnly'));
+    if (!controls.has(next.type)) throw new UiError(uiMessage('native.captionControlOnly'));
     const texts = caption ? caption.split(/\r\n|\r|\n/) : [];
     const captions = texts.map((label, offset) => {
       const previous = index + 1 + offset < item.end ? doc.lines[index + 1 + offset] : undefined;
@@ -289,9 +289,9 @@ export function editDefaultVariable(
   if (!entry || entry.key === null || entry.value === null) return source;
   const key = patch.key ?? entry.key;
   const value = patch.value ?? entry.value;
-  if (!key.trim()) throw new Error(uiMessage('native.variableKeyRequired'));
-  if (/[=\r\n]/.test(key)) throw new Error(uiMessage('native.variableKeyInvalid'));
-  if (/[\r\n]/.test(value)) throw new Error(uiMessage('native.variableValueInvalid'));
+  if (!key.trim()) throw new UiError(uiMessage('native.variableKeyRequired'));
+  if (/[=\r\n]/.test(key)) throw new UiError(uiMessage('native.variableKeyInvalid'));
+  if (/[\r\n]/.test(value)) throw new UiError(uiMessage('native.variableValueInvalid'));
   const lines = parseNativeToggleLines(source);
   const line = lines[index];
   if (line) line.raw = `${key}=${value}`;

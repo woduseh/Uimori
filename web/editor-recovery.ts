@@ -1,4 +1,4 @@
-import { message as uiMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 export type RecoveryBuffer<T> = {
   token?: string;
   revision: number | null;
@@ -18,7 +18,7 @@ export function openRecoveryDatabase(): Promise<IDBDatabase> {
     };
     request.onblocked = () => {
       database = undefined;
-      reject(new Error(uiMessage('shared.recoveryOpenFailure')));
+      reject(new UiError(uiMessage('shared.recoveryOpenFailure')));
     };
   });
   return database;
@@ -43,7 +43,7 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () =>
-      reject(transaction.error ?? new Error(uiMessage('shared.recoveryAborted')));
+      reject(transaction.error ?? new UiError(uiMessage('shared.recoveryAborted')));
   });
 }
 
@@ -62,7 +62,7 @@ export async function copyRecoveryPrefix(fromPrefix: string, toPrefix: string): 
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () =>
-      reject(transaction.error ?? new Error(uiMessage('shared.clonedDraftAborted')));
+      reject(transaction.error ?? new UiError(uiMessage('shared.clonedDraftAborted')));
   });
 }
 
@@ -84,7 +84,7 @@ async function deleteRecoveryIf<T>(
     transaction.oncomplete = () => resolve(remaining);
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () =>
-      reject(transaction.error ?? new Error(uiMessage('shared.recoveryCleanupAborted')));
+      reject(transaction.error ?? new UiError(uiMessage('shared.recoveryCleanupAborted')));
   });
 }
 

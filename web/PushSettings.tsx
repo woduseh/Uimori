@@ -1,4 +1,5 @@
-import { useI18n, translateMessage, translateStoredCode, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, translateStoredCode, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
@@ -83,11 +84,11 @@ export function PushSettings() {
           : Notification.permission;
       setPermission(granted);
       if (granted !== 'granted') {
-        setWarning(uiMessage('outside.permissionDeclined'));
+        setWarning(descriptor('outside.permissionDeclined'));
         return;
       }
       const prepared = await callEndpoint(endpoints.preparePush, { clientId });
-      if (!prepared.publicKey) throw new Error(uiMessage('outside.pushKeyFailure'));
+      if (!prepared.publicKey) throw new UiError(uiMessage('outside.pushKeyFailure'));
       await pwaRegistration();
       const registration = await navigator.serviceWorker.ready;
       const key = applicationKey(prepared.publicKey);
@@ -120,9 +121,9 @@ export function PushSettings() {
         preferences: prepared.device?.preferences ?? DEFAULT_PUSH_PREFERENCES,
       });
       setInfo(saved);
-      setNotice(uiMessage('outside.pushOn'));
+      setNotice(descriptor('outside.pushOn'));
     } catch (caught) {
-      setError((caught as Error).message || uiMessage('outside.pushFailure'));
+      setError((caught as Error).message || descriptor('outside.pushFailure'));
     } finally {
       setBusy(false);
     }
@@ -139,14 +140,14 @@ export function PushSettings() {
         expectedRevision: info.device.revision,
       });
       setInfo(saved);
-      setNotice(uiMessage('outside.pushOff'));
+      setNotice(descriptor('outside.pushOff'));
       try {
         const registration = await navigator.serviceWorker.getRegistration('/');
         const subscription = await registration?.pushManager.getSubscription();
         await subscription?.unsubscribe();
       } catch {
         setNotice('');
-        setWarning(uiMessage('outside.unsubscribeFailure'));
+        setWarning(descriptor('outside.unsubscribeFailure'));
       }
     } catch (caught) {
       setError((caught as Error).message);
@@ -182,7 +183,7 @@ export function PushSettings() {
     setWarning('');
     try {
       await callEndpoint(endpoints.testPush, { clientId });
-      setNotice(uiMessage('outside.testQueued'));
+      setNotice(descriptor('outside.testQueued'));
     } catch (caught) {
       setError((caught as Error).message);
     } finally {

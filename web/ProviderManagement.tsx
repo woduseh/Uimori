@@ -4,8 +4,9 @@ import {
   translateMessage,
   formatNumber,
   messageRef,
-  message as uiMessage,
+  message as descriptor,
 } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ProviderConnectionForm } from './ProviderConnectionForm.js';
@@ -307,7 +308,7 @@ export function ConnectionEditor({
     dispatchDraft({ type: 'connection.deleted', id: item.id });
     setError('');
     onError('');
-    setMessage(uiMessage('providers.m532', { value0: item.title }));
+    setMessage(descriptor('providers.m532', { value0: item.title }));
     await reload();
   }
   async function deletedModel(item: ModelPreset) {
@@ -316,7 +317,7 @@ export function ConnectionEditor({
     setConflict(null);
     setError('');
     onError('');
-    setMessage(uiMessage('providers.m533', { value0: item.title }));
+    setMessage(descriptor('providers.m533', { value0: item.title }));
     await reload();
   }
   const deleteConnection = (item: LibraryConnection) => (
@@ -364,15 +365,15 @@ export function ConnectionEditor({
       try {
         await reload();
       } catch (caught) {
-        const detail = caught instanceof Error ? caught.message : uiMessage('providers.m7');
-        const warning = uiMessage('providers.m534', { value0: messageRef(detail) });
+        const detail = caught instanceof Error ? caught.message : descriptor('providers.m7');
+        const warning = descriptor('providers.m534', { value0: messageRef(detail) });
         setMessage('');
         setRefreshWarning(warning);
         onError(warning);
       }
       return true;
     } catch (caught) {
-      const detail = caught instanceof Error ? caught.message : uiMessage('providers.m8');
+      const detail = caught instanceof Error ? caught.message : descriptor('providers.m8');
       setError(detail);
       onError(detail);
       if (caught instanceof ApiError && caught.status === 409 && scope !== 'status') {
@@ -444,7 +445,7 @@ export function ConnectionEditor({
       }
     }
     setMessage(
-      uiMessage('providers.m600', { name: saved.title, action: id ? 'updated' : 'created' })
+      descriptor('providers.m600', { name: saved.title, action: id ? 'updated' : 'created' })
     );
   }
   async function saveModel(
@@ -464,13 +465,13 @@ export function ConnectionEditor({
       if (!leave) navigate('models');
     }
     setMessage(
-      uiMessage('providers.m601', { name: saved.title, action: id ? 'updated' : 'created' })
+      descriptor('providers.m601', { name: saved.title, action: id ? 'updated' : 'created' })
     );
   }
   async function catalog(item: LibraryConnection) {
     const result = await api<Connection>(`/connections/${item.id}/catalog`, {});
-    if (result.catalogError) throw new Error(uiMessage('providers.m14'));
-    setMessage(uiMessage('providers.m15'));
+    if (result.catalogError) throw new UiError(uiMessage('providers.m14'));
+    setMessage(descriptor('providers.m15'));
   }
   function statusConnection(item: LibraryConnection) {
     const body = {
@@ -546,7 +547,7 @@ export function ConnectionEditor({
           expectedOrder: group.map((item) => item.id),
         });
       }
-      setMessage(uiMessage('providers.m16'));
+      setMessage(descriptor('providers.m16'));
     });
   }
   function dragAttributes(kind: 'connection' | 'model', id: string) {
@@ -645,15 +646,15 @@ export function ConnectionEditor({
   async function latest(kind: 'connection' | 'model') {
     if (kind === 'connection' && editingConnection) {
       const value = await api<Connection>(`/connections/${editingConnection.id}`);
-      if (!value) throw new Error(uiMessage('providers.m18'));
+      if (!value) throw new UiError(uiMessage('providers.m18'));
       showConnection(value, false, true);
     }
     if (kind === 'model' && editingModel) {
       const value = await api<ModelPreset>(`/model-presets/${editingModel.id}`);
-      if (!value) throw new Error(uiMessage('providers.m19'));
+      if (!value) throw new UiError(uiMessage('providers.m19'));
       await showModel(value, false, true);
     }
-    setMessage(uiMessage('providers.m20'));
+    setMessage(descriptor('providers.m20'));
   }
   function newConnection() {
     navigate('providers');
@@ -774,7 +775,7 @@ export function ConnectionEditor({
     }
     const target = library.models.find((item) => item.id === detailRequest.id);
     if (!target) {
-      setError(uiMessage('providers.m21'));
+      setError(descriptor('providers.m21'));
       return;
     }
     if (editingModel?.id === target.id) navigate('model');
@@ -928,7 +929,7 @@ export function ConnectionEditor({
               },
             ];
           }
-          throw new Error(uiMessage('providers.m54'));
+          throw new UiError(uiMessage('providers.m54'));
         }}
       />
       <Dialog

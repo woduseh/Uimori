@@ -5,6 +5,7 @@ import { ApiError, callEndpoint } from './api.js';
 import { useFonts, type FontAsset } from './FontContext.js';
 import { useThemes } from './ThemeContext.js';
 import { t, useI18n, message, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
@@ -80,7 +81,8 @@ export function FontSettings({
       const data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(',')[1]!);
-        reader.onerror = () => reject(reader.error);
+        reader.onerror = () =>
+          reject(new UiError(uiMessage('transfer.m190'), { cause: reader.error }));
         reader.readAsDataURL(file);
       });
       await callEndpoint(appearanceEndpoints.uploadFont, { title: title.trim(), data });

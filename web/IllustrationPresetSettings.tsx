@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -194,8 +195,8 @@ export function IllustrationPresetSettings({
       setBaseline(JSON.stringify(accepted));
       setNotice(
         draft.id && !asCopy
-          ? uiMessage('visualpanels.savedAppliesFromTheNextGeneration')
-          : uiMessage('visualpanels.savedApplyItToTheScopeYou')
+          ? descriptor('visualpanels.savedAppliesFromTheNextGeneration')
+          : descriptor('visualpanels.savedApplyItToTheScopeYou')
       );
       await refresh();
     }, !asCopy);
@@ -203,7 +204,7 @@ export function IllustrationPresetSettings({
   useSettingsSaveHandler(onSaveHandlerChange, () => save());
   function edit(preset?: IllustrationPreset, copy = false) {
     if (dirty) {
-      setError(uiMessage('visualpanels.saveOrCloseYourCurrentEditsBefore'));
+      setError(descriptor('visualpanels.saveOrCloseYourCurrentEditsBefore'));
       return;
     }
     resetEditorDetails();
@@ -231,19 +232,19 @@ export function IllustrationPresetSettings({
   }
   async function importFile(file: File) {
     if (dirty) {
-      setError(uiMessage('visualpanels.saveOrCloseYourCurrentEditsBefore2'));
+      setError(descriptor('visualpanels.saveOrCloseYourCurrentEditsBefore2'));
       return;
     }
     await action(async () => {
       if (file.size > ILLUSTRATION_PRESET_FILE_MAX_BYTES)
-        throw new Error(uiMessage('visualpanels.importAnIllustrationPresetFileNoLarger'));
+        throw new UiError(uiMessage('visualpanels.importAnIllustrationPresetFileNoLarger'));
       const model = parseIllustrationPresetFile(
         parseJsonInput(await file.text(), 'errors.ILLUSTRATION_PRESET_FILE_UNSUPPORTED')
       );
       resetEditorDetails();
       setDraft({ id: null, model });
       setBaseline('');
-      setImportNotice(uiMessage('visualpanels.importedReviewTheContentAndSaveIt'));
+      setImportNotice(descriptor('visualpanels.importedReviewTheContentAndSaveIt'));
     });
   }
   useEffect(() => {
@@ -317,7 +318,7 @@ export function IllustrationPresetSettings({
         expectedRevision: p.revision,
       });
       await refresh();
-      setNotice(uiMessage('visualpanels.presetChangedAppliesFromTheNextGeneration'));
+      setNotice(descriptor('visualpanels.presetChangedAppliesFromTheNextGeneration'));
     });
   return (
     <section
@@ -721,7 +722,7 @@ export function IllustrationPresetSettings({
             await api<IllustrationPresetCatalog>('/illustration-presets')
           ).presets.find((preset) => preset.id === draft?.id);
           if (!value)
-            throw new Error(uiMessage('visualpanels.savedVersionUnavailableYourCurrentInputIs'));
+            throw new UiError(uiMessage('visualpanels.savedVersionUnavailableYourCurrentInputIs'));
           return () => [
             { label: t('visualpanels.name'), value: value.title },
             {
@@ -781,7 +782,7 @@ export function IllustrationPresetSettings({
                   if (draft?.id === deleting.id) setDraft(null);
                   setDeleting(null);
                   await refresh();
-                  setNotice(uiMessage('visualpanels.presetDeleted'));
+                  setNotice(descriptor('visualpanels.presetDeleted'));
                 });
             }}
           >

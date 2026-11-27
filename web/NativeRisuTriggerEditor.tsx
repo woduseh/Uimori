@@ -1,4 +1,5 @@
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -72,8 +73,8 @@ export function NativeRisuTriggerEditor({
     if (!draft) return model;
     const parsed = parseJsonInput(draft.text, 'native.text_754e9dc1ea');
     if (!record(parsed) || draft.index >= value.length)
-      throw new Error(uiMessage('native.text_754e9dc1ea'));
-    if (!prepareSave) throw new Error(uiMessage('native.text_2bf65e9272'));
+      throw new UiError(uiMessage('native.text_754e9dc1ea'));
+    if (!prepareSave) throw new UiError(uiMessage('native.text_2bf65e9272'));
     return prepareSave(
       model,
       value.map((item, i) => (i === draft.index ? parsed : item))
@@ -128,15 +129,15 @@ export function NativeRisuTriggerEditor({
           disabled={disabled || !pending}
           onClick={() => {
             try {
-              if (index >= value.length) throw new Error(uiMessage('native.text_782c2d04b2'));
+              if (index >= value.length) throw new UiError(uiMessage('native.text_782c2d04b2'));
               const parsed = parseJsonInput(raw, 'native.text_30b7bf9cb8');
-              if (!record(parsed)) throw new Error(uiMessage('native.text_30b7bf9cb8'));
+              if (!record(parsed)) throw new UiError(uiMessage('native.text_30b7bf9cb8'));
               replace(parsed);
               setDraft(null);
               setError('');
             } catch (caught) {
               setError(
-                caught instanceof Error ? caught.message : uiMessage('native.text_b0acf3aee7')
+                caught instanceof Error ? caught.message : descriptor('native.text_b0acf3aee7')
               );
             }
           }}

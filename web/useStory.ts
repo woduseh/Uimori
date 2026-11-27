@@ -1,4 +1,5 @@
-import { message as uiMessage, useI18n } from './i18n.js';
+import { message as descriptor, useI18n } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
 import {
@@ -468,7 +469,7 @@ export function useStory() {
                 )
             )
           )
-            setNotice(uiMessage('shared.replacementCancelled'));
+            setNotice(descriptor('shared.replacementCancelled'));
           setReaderLoad({
             key: cacheKey,
             epoch: navigation.current.epoch,
@@ -873,15 +874,15 @@ export function useStory() {
     )
       return;
     if (files.some((file) => file.size > IMAGE_INPUT_MAX_BYTES)) {
-      setError(uiMessage('main.story2'));
+      setError(descriptor('main.story2'));
       return;
     }
     if (files.some((file) => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
-      setError(uiMessage('main.story3'));
+      setError(descriptor('main.story3'));
       return;
     }
     if (requestDraft.current.images.length + files.length > REQUEST_IMAGE_MAX_COUNT) {
-      setError(uiMessage('main.story4'));
+      setError(descriptor('main.story4'));
       return;
     }
     const scope = { key: draftKey, epoch: navigation.current.epoch };
@@ -917,7 +918,7 @@ export function useStory() {
         currentDraftKey.current === scope.key &&
         navigation.current.epoch === scope.epoch
       )
-        setError(uiMessage('main.story5'));
+        setError(descriptor('main.story5'));
     } finally {
       if (decoding.current === operation) {
         decoding.current = null;
@@ -1025,7 +1026,7 @@ export function useStory() {
               : { anchor, ratio: changed?.ratio, share: changed?.share, fallbackToSource: true }
             : {}),
         });
-        if (!validHash) setNotice(uiMessage('main.story6'));
+        if (!validHash) setNotice(descriptor('main.story6'));
         if (readerTarget.changedParagraph !== undefined) {
           arrival.current?.abort();
           arrival.current = new AbortController();
@@ -1381,7 +1382,7 @@ export function useStory() {
       if (!previous && sessionStorage.getItem(commandKey)) {
         submitLocks.current.delete(sentView);
         setSubmitting([...submitLocks.current]);
-        setError(uiMessage('main.story7'));
+        setError(descriptor('main.story7'));
         return false;
       }
       if (!preserveDraft) rememberRequestDraft(sentKey, requestDraft.current);
@@ -1407,8 +1408,8 @@ export function useStory() {
           uploadingImages
             ? cause instanceof Error
               ? cause.message
-              : uiMessage('main.story8')
-            : uiMessage('main.story9')
+              : descriptor('main.story8')
+            : descriptor('main.story9')
         );
       return false;
     }
@@ -1441,7 +1442,7 @@ export function useStory() {
       }
       if (!preserveDraft) {
         await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
-          if (currentView.current === sentView) setError(uiMessage('main.story10'));
+          if (currentView.current === sentView) setError(descriptor('main.story10'));
         });
         if (currentDraftKey.current === sentKey && requestDraft.current.token === sentDraftToken) {
           sessionStorage.removeItem(sentKey);
@@ -1455,8 +1456,8 @@ export function useStory() {
         setNotice(
           previous
             ? sessionStorage.getItem(sentKey)
-              ? uiMessage('main.story11')
-              : uiMessage('main.story12')
+              ? descriptor('main.story11')
+              : descriptor('main.story12')
             : ''
         );
       if (
@@ -1478,12 +1479,12 @@ export function useStory() {
       if (!unresolved) clearCommand(commandKey, idempotencyKey);
       if (!unresolved && queued) queued.state = 'rejected';
       if (currentView.current === sentView)
-        setError(error instanceof Error ? error : uiMessage('main.story13'));
+        setError(error instanceof Error ? error : descriptor('main.story13'));
     }
     try {
       await refresh(chat.id);
     } catch {
-      if (accepted && currentView.current === sentView) setError(uiMessage('main.story14'));
+      if (accepted && currentView.current === sentView) setError(descriptor('main.story14'));
     } finally {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);
@@ -1518,7 +1519,7 @@ export function useStory() {
       }
     } catch (error) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(error instanceof Error ? error.message : uiMessage('main.story15'));
+        setError(error instanceof Error ? error.message : descriptor('main.story15'));
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);
@@ -1541,7 +1542,7 @@ export function useStory() {
       }
     } catch (error) {
       if (navigation.current.epoch === epoch)
-        setError(error instanceof Error ? error.message : uiMessage('recent.copyFailed'));
+        setError(error instanceof Error ? error.message : descriptor('recent.copyFailed'));
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);
@@ -1606,12 +1607,12 @@ export function useStory() {
     setError('');
     setNotice('');
     let modelWriteAttempted = false;
-    let completion = uiMessage('main.story22');
+    let completion = descriptor('main.story22');
     try {
       if (kind === 'model') {
         const model = library.models.find((item) => item.id === value);
         if (value && (!model || !isModelSelectable(model, library.models, library.connections)))
-          throw new Error(uiMessage('main.modelPickerInvalid'));
+          throw new UiError(uiMessage('main.modelPickerInvalid'));
         if ((profile.pinned?.mainModel?.id ?? '') === value) return true;
         modelWriteAttempted = true;
         await api(
@@ -1630,10 +1631,10 @@ export function useStory() {
         try {
           const refreshed = await refresh(chatId);
           if (refreshed && navigation.current.chat === chatId && navigation.current.epoch === epoch)
-            setNotice(uiMessage('main.story22'));
+            setNotice(descriptor('main.story22'));
         } catch {
           if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-            setError(uiMessage('main.modelPickerRefreshFailed'));
+            setError(descriptor('main.modelPickerRefreshFailed'));
         }
         return navigation.current.chat === chatId && navigation.current.epoch === epoch;
       }
@@ -1650,7 +1651,7 @@ export function useStory() {
             currentPrompt.program
           )
         )
-          throw new Error(uiMessage('main.story16'));
+          throw new UiError(uiMessage('main.story16'));
         {
           const state = await api<ChatOptionState>(`/chats/${chatId}/options`);
           if (
@@ -1661,7 +1662,7 @@ export function useStory() {
               state.program
             )
           )
-            throw new Error(uiMessage('main.story17'));
+            throw new UiError(uiMessage('main.story17'));
           await api(`/chats/${chatId}/options/fixed`, {
             expectedRevision: state.revision,
             operationId: crypto.randomUUID(),
@@ -1669,7 +1670,7 @@ export function useStory() {
             values: preset.values,
           });
           dispatchEvent(new Event('chat-options-changed'));
-          completion = uiMessage('main.combinationApplied', { title: preset.title });
+          completion = descriptor('main.combinationApplied', { title: preset.title });
         }
       } else if (kind === 'module') {
         const epoch = navigation.current.epoch;
@@ -1679,14 +1680,14 @@ export function useStory() {
           const id = value.slice(0, separator);
           const revision = Number(value.slice(separator + 1));
           if (separator <= 0 || !Number.isSafeInteger(revision) || revision < 1)
-            throw new Error(uiMessage('main.story18'));
+            throw new UiError(uiMessage('main.story18'));
           module = await api<Content>(`/content/${encodeURIComponent(id)}`);
         }
         if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
-        if (!module.package && !module.hasPackage) throw new Error(uiMessage('main.story19'));
+        if (!module.package && !module.hasPackage) throw new UiError(uiMessage('main.story19'));
         const existing = profile.packageAttachments ?? [];
         if (existing.some((item) => item.id === module.id && item.role === 'module'))
-          throw new Error(uiMessage('main.story20'));
+          throw new UiError(uiMessage('main.story20'));
         await api(
           `/chats/${chatId}/profile`,
           {
@@ -1705,7 +1706,7 @@ export function useStory() {
           (item) =>
             (item.kind === 'persona' || item.package || item.hasPackage) && refValue(item) === value
         );
-        if (kind === 'persona' && value && !persona) throw new Error(uiMessage('main.story21'));
+        if (kind === 'persona' && value && !persona) throw new UiError(uiMessage('main.story21'));
         const packageAttachments =
           kind === 'persona'
             ? [...(profile.packageAttachments ?? [])]
@@ -1734,10 +1735,10 @@ export function useStory() {
       )
         setError(
           kind === 'model' && modelWriteAttempted && !definiteRejection(error)
-            ? uiMessage('main.modelPickerUnknown')
+            ? descriptor('main.modelPickerUnknown')
             : error instanceof Error
               ? error
-              : uiMessage('main.story23')
+              : descriptor('main.story23')
         );
       await refresh(chatId).catch(() => undefined);
       return false;
@@ -1771,7 +1772,7 @@ export function useStory() {
       readerCache.current = { ...cached, detail: next };
       setDetail(next);
     }
-    setNotice(uiMessage('shared.dismissedFromReader'));
+    setNotice(descriptor('shared.dismissedFromReader'));
     void refresh(chatId).catch(() => undefined);
   }
   async function cancelActive() {
@@ -1786,7 +1787,7 @@ export function useStory() {
       await refresh(chatId);
     } catch (caught) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(caught instanceof Error ? caught : uiMessage('main.story24'));
+        setError(caught instanceof Error ? caught : descriptor('main.story24'));
     } finally {
       cancelLocks.current.delete(runId);
       setCancelling([...cancelLocks.current]);
@@ -1943,7 +1944,7 @@ export function useStory() {
       giveBack: (reason: QueuedReturnReason) => returnQueueToDraft(queue.chatId, queue, reason),
       committed: (accepted) => {
         if (accepted && navigation.current.chat === queue.chatId)
-          setNotice(uiMessage('main.queueSent'));
+          setNotice(descriptor('main.queueSent'));
       },
     });
   }
@@ -1962,7 +1963,7 @@ export function useStory() {
       if (readCommand(key)?.record.id !== expectedId) return false;
       clearCommand(key, expectedId);
     } catch {
-      setError(uiMessage('main.pendingRequestForgetFailed'));
+      setError(descriptor('main.pendingRequestForgetFailed'));
       return false;
     }
     setRequestActivities((old) => {

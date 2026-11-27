@@ -2,7 +2,7 @@ import type { ChatProfile } from '../core/product.js';
 import { api } from './api.js';
 import { validateContentAttachment } from '../core/risu-content.js';
 import { validatePackageStartRef, type PackageStartRef } from '../core/package-start.js';
-import { message as uiMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { storageKeys } from './storage-keys.js';
 export type NewStoryProfileIntent = {
   packageAttachments?: ChatProfile['packageAttachments'];
@@ -17,7 +17,7 @@ type PendingStoryProfile = NewStoryProfileIntent & { version: 2; kind: 'new-stor
 const pendingKey = storageKeys.pendingProfile;
 const saving = new Map<string, Promise<void>>();
 
-export class PendingStoryProfileConflict extends Error {
+export class PendingStoryProfileConflict extends UiError {
   readonly savedIntent: string;
   constructor(savedIntent: string) {
     super(uiMessage('main.pendingProfileConflict'));
@@ -28,7 +28,7 @@ export class PendingStoryProfileConflict extends Error {
 export function acceptSavedStoryProfile(chatId: string, savedIntent: string) {
   const key = pendingKey(chatId);
   if (sessionStorage.getItem(key) !== savedIntent)
-    throw new Error(uiMessage('main.pendingProfileChanged'));
+    throw new UiError(uiMessage('main.pendingProfileChanged'));
   sessionStorage.removeItem(key);
 }
 
@@ -40,7 +40,7 @@ export function savePendingStoryProfile(chatId: string, intent: NewStoryProfileI
 function readIntent(raw: string): NewStoryProfileIntent {
   const value: unknown = JSON.parse(raw);
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error(uiMessage('transfer.m356'));
+    throw new UiError(uiMessage('transfer.m356'));
   const pending = value as Record<string, unknown>;
   const versioned = pending.version === 2 && pending.kind === 'new-story-profile';
   if (
@@ -52,7 +52,7 @@ function readIntent(raw: string): NewStoryProfileIntent {
         )
     )
   ) {
-    throw new Error(uiMessage('transfer.m356'));
+    throw new UiError(uiMessage('transfer.m356'));
   }
   const packageAttachments =
     pending.packageAttachments === undefined
@@ -60,13 +60,13 @@ function readIntent(raw: string): NewStoryProfileIntent {
       : Array.isArray(pending.packageAttachments)
         ? pending.packageAttachments.map(validateContentAttachment)
         : null;
-  if (packageAttachments === null) throw new Error(uiMessage('transfer.m357'));
+  if (packageAttachments === null) throw new UiError(uiMessage('transfer.m357'));
   const profileBaseRevision = pending.profileBaseRevision;
   if (
     profileBaseRevision !== undefined &&
     (!Number.isSafeInteger(profileBaseRevision) || Number(profileBaseRevision) < 1)
   )
-    throw new Error(uiMessage('transfer.m356'));
+    throw new UiError(uiMessage('transfer.m356'));
   let packageStart: NewStoryProfileIntent['packageStart'];
   if (pending.packageStart !== undefined) {
     const opening = pending.packageStart as Record<string, unknown>;
@@ -83,7 +83,7 @@ function readIntent(raw: string): NewStoryProfileIntent {
         (!Number.isSafeInteger(opening.expectedProfileRevision) ||
           Number(opening.expectedProfileRevision) < 1))
     )
-      throw new Error(uiMessage('transfer.m358'));
+      throw new UiError(uiMessage('transfer.m358'));
     packageStart = {
       ...validatePackageStartRef({
         packageId: opening.packageId,
@@ -129,7 +129,8 @@ async function applyPendingStoryProfile(chatId: string) {
   const base = intent.profileBaseRevision;
   if (base === undefined) throw new PendingStoryProfileConflict(raw);
   const current = await api<ChatProfile>(`/chats/${chatId}/profile`);
-  if (sessionStorage.getItem(key) !== raw) throw new Error(uiMessage('main.pendingProfileChanged'));
+  if (sessionStorage.getItem(key) !== raw)
+    throw new UiError(uiMessage('main.pendingProfileChanged'));
   const sameAttachments =
     intent.packageAttachments === undefined ||
     JSON.stringify((current.packageAttachments ?? []).map(({ id, role }) => [id, role])) ===
@@ -149,7 +150,7 @@ async function applyPendingStoryProfile(chatId: string) {
       'PUT'
     );
     if (sessionStorage.getItem(key) !== raw)
-      throw new Error(uiMessage('main.pendingProfileChanged'));
+      throw new UiError(uiMessage('main.pendingProfileChanged'));
   }
   if (intent.packageStart) {
     intent.packageStart.expectedProfileRevision = saved.revision;

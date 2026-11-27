@@ -1,4 +1,5 @@
-import { t, useI18n, message as uiMessage, messageRef } from './i18n.js';
+import { t, useI18n, message as descriptor, messageRef } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { AssetMetadataEditor } from './AssetMetadataEditor.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -68,7 +69,7 @@ export function AssetEditor({
   async function save() {
     if (uploadLock.current) return false;
     if (!file || !value.title.trim()) {
-      onError(uiMessage('library.checkTheImageFileAndName'));
+      onError(descriptor('library.checkTheImageFileAndName'));
       return false;
     }
     uploadLock.current = true;
@@ -80,23 +81,23 @@ export function AssetEditor({
         !PACKAGE_IMAGE_MIMES.includes(file.type as (typeof PACKAGE_IMAGE_MIMES)[number]) ||
         file.size > 64 * 1024 * 1024
       )
-        throw new Error(uiMessage('library.chooseAnImageUpTo64Mib'));
+        throw new UiError(uiMessage('library.chooseAnImageUpTo64Mib'));
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(',')[1]);
-        reader.onerror = () => reject(new Error(uiMessage('library.couldNotReadTheImageFile')));
+        reader.onerror = () => reject(new UiError(uiMessage('library.couldNotReadTheImageFile')));
         reader.readAsDataURL(file);
       });
       await api(`/chats/${chatId}/assets`, { ...value, mime: file.type, base64 });
       setFile(null);
       setValue({ ...emptyFields });
       if (fileInput.current) fileInput.current.value = '';
-      setMessage(uiMessage('library.imageRegistered'));
+      setMessage(descriptor('library.imageRegistered'));
       try {
         await refresh();
       } catch (error) {
         onError(
-          uiMessage('library.theImageWasRegisteredButTheList', {
+          descriptor('library.theImageWasRegisteredButTheList', {
             v0: messageRef((error as Error).message),
           })
         );
@@ -146,7 +147,7 @@ export function AssetEditor({
                     description={t('library.removeFromTheUploadedImageListFiles')}
                     disabled={busy}
                     onDeleted={async () => {
-                      setMessage(uiMessage('library.imageDeleted', { title: asset.title }));
+                      setMessage(descriptor('library.imageDeleted', { title: asset.title }));
                       await refresh();
                     }}
                     onError={onError}

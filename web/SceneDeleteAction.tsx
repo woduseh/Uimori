@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { api, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-deletion.js';
 import { storageKeys } from './storage-keys.js';
 
@@ -69,7 +70,7 @@ export function SceneDeleteDialog({
             typeof previous.idempotencyKey !== 'string' ||
             !previous.idempotencyKey
           )
-            throw new Error(t('chatmanage.unknown'));
+            throw new UiError(uiMessage('chatmanage.unknown'));
           if (!active) return;
           setPending({ command: previous, raw });
           setImpact(previous.impact);
@@ -107,7 +108,7 @@ export function SceneDeleteDialog({
     try {
       const stored = sessionStorage.getItem(storageKey);
       if (stored !== null && stored !== raw) {
-        setError(t('chatmanage.unknown'));
+        setError(descriptor('chatmanage.unknown'));
         callbacks.current.onPendingChange();
         return;
       }
@@ -131,7 +132,7 @@ export function SceneDeleteDialog({
           callbacks.current.onError((cause as Error).message);
           callbacks.current.onClose();
         }
-      } else if (mounted.current) setError(t('chatmanage.unknown'));
+      } else if (mounted.current) setError(descriptor('chatmanage.unknown'));
     } finally {
       locked.current = false;
       if (mounted.current) setBusy(false);

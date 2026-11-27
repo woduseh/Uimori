@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Activity as TestIcon, Globe as LocationIcon } from 'lucide-react';
 import type { ModelPreset } from '../core/product.js';
@@ -102,7 +103,7 @@ export function useProviderModelTests() {
           result.location !== location
         ) {
           result = undefined;
-          throw new Error(uiMessage('providers.m292'));
+          throw new UiError(uiMessage('providers.m292'));
         }
         save(key, { pending: result.status === 'running', idempotencyKey, result });
         if (result.status !== 'running') return;
@@ -121,7 +122,7 @@ export function useProviderModelTests() {
           pending: false,
           idempotencyKey,
           ...(result ? { result } : {}),
-          error: error instanceof Error ? error.message : uiMessage('providers.m293'),
+          error: error instanceof Error ? error.message : descriptor('providers.m293'),
         });
     } finally {
       if (controllers.current.get(key) === controller) controllers.current.delete(key);

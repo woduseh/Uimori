@@ -1,11 +1,11 @@
+import { t, translateMessage, useI18n, messageRef, message as descriptor } from './i18n.js';
 import {
-  t,
-  translateMessage,
-  useI18n,
-  type MessageValues,
-  messageRef,
-  message as uiMessage,
-} from './i18n.js';
+  UiError,
+  uiMessage,
+  type MessageKey,
+  type UiMessage,
+  type UiMessageValues,
+} from './ui-message.js';
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RotateCcw, RefreshCw } from 'lucide-react';
@@ -70,14 +70,14 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   ),
   maxInputTokens: String(policy.judgment?.maxInputTokens ?? DEFAULT_JEV_JUDGMENT.maxInputTokens),
 });
-class PolicyDraftError extends Error {
+class PolicyDraftError extends UiError {
   readonly field?: string;
-  constructor(message: string, field?: string) {
+  constructor(message: UiMessage, field?: string) {
     super(message);
     this.field = field;
   }
 }
-function policyError(key: string, values?: MessageValues, field?: string): Error {
+function policyError(key: MessageKey, values?: UiMessageValues, field?: string): Error {
   return new PolicyDraftError(uiMessage(key, values), field);
 }
 
@@ -88,7 +88,7 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
     if (!raw.trim() || !Number.isSafeInteger(number) || number < field.min || number > field.max)
       throw policyError(
         'settings.m209',
-        { v0: messageRef(uiMessage(field.labelKey)), v1: field.min, v2: field.max },
+        { v0: uiMessage(field.labelKey), v1: field.min, v2: field.max },
         field.key
       );
   }
@@ -105,7 +105,7 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
       const value = Number(draft[key]);
       if (!Number.isSafeInteger(value) || value < min || value > max)
         throw policyError('settings.m209', {
-          v0: messageRef(uiMessage(label)),
+          v0: uiMessage(label),
           v1: min,
           v2: max,
         });
@@ -234,7 +234,7 @@ export function LoreContextPolicyEditor({
         setPreview({ value: result, fingerprint: source });
     } catch (caught) {
       if (sequence.current === version && latest.current === source)
-        setError(uiMessage('settings.m216', { v0: messageRef((caught as Error).message) }));
+        setError(descriptor('settings.m216', { v0: messageRef((caught as Error).message) }));
     } finally {
       if (sequence.current === version) setBusy(false);
     }

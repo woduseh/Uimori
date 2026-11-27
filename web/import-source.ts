@@ -1,4 +1,4 @@
-import { message } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { apiBinary } from './api.js';
 
@@ -18,18 +18,18 @@ export function readImportSource(
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     if (signal?.aborted) {
-      reject(new DOMException(message('transfer.m189'), 'AbortError'));
+      reject(new UiError(uiMessage('transfer.m189')));
       return;
     }
     const abort = () => reader.abort();
     signal?.addEventListener('abort', abort, { once: true });
     reader.onloadend = () => signal?.removeEventListener('abort', abort);
-    reader.onerror = () => reject(new Error(message('transfer.m190')));
-    reader.onabort = () => reject(new Error(message('transfer.m189')));
+    reader.onerror = () => reject(new UiError(uiMessage('transfer.m190')));
+    reader.onabort = () => reject(new UiError(uiMessage('transfer.m189')));
     reader.onload = () => {
       const data = reader.result;
       if (typeof data !== 'string' || !data.includes(',')) {
-        reject(new Error(message('transfer.m191')));
+        reject(new UiError(uiMessage('transfer.m191')));
         return;
       }
       resolve({ name: file.name, base64: data.slice(data.indexOf(',') + 1) });

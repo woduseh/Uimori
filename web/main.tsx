@@ -1,4 +1,5 @@
-import { t, message as uiMessage, useI18n, translateMessage, loadInitialLocale } from './i18n.js';
+import { t, message as descriptor, useI18n, translateMessage, loadInitialLocale } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
 import { downloadArchive } from './archive-download.js';
@@ -192,21 +193,21 @@ function workspaceFallback(title: string, navigation: ReactNode, content: ReactN
 }
 const noSources: import('../core/types.js').Source[] = [];
 const LibraryPanel = deferredPanel(
-  uiMessage('main.m001'),
+  descriptor('main.m001'),
   async () => ({
     default: (await import('./LibraryPanel.js')).LibraryPanel,
   }),
-  (content, props) => workspaceFallback(uiMessage('main.m001'), props.headerLeading, content)
+  (content, props) => workspaceFallback(descriptor('main.m001'), props.headerLeading, content)
 );
 const PromptLibrary = deferredPanel(
-  uiMessage('transfer.m286'),
+  descriptor('transfer.m286'),
   async () => ({
     default: (await import('./PromptLibrary.js')).PromptLibrary,
   }),
-  (content, props) => workspaceFallback(uiMessage('transfer.m286'), props.headerLeading, content)
+  (content, props) => workspaceFallback(descriptor('transfer.m286'), props.headerLeading, content)
 );
 const ChatSettingsPanel = deferredPanel(
-  uiMessage('main.m003'),
+  descriptor('main.m003'),
   async () => ({
     default: (await import('./ChatSettingsPanel.js')).ChatSettingsPanel,
   }),
@@ -216,11 +217,11 @@ const ChatSettingsPanel = deferredPanel(
     </Dialog>
   )
 );
-const NewStory = deferredPanel(uiMessage('transfer.m246'), async () => ({
+const NewStory = deferredPanel(descriptor('transfer.m246'), async () => ({
   default: (await import('./NewStory.js')).NewStory,
 }));
 const AppSettingsPanel = deferredPanel(
-  uiMessage('main.m005'),
+  descriptor('main.m005'),
   async () => ({
     default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
   }),
@@ -232,20 +233,20 @@ const AppSettingsPanel = deferredPanel(
 );
 
 const HelperPanel = deferredPanel(
-  uiMessage('visualpanels.helper'),
+  descriptor('visualpanels.helper'),
   async () => ({
     default: (await import('./HelperPanel.js')).HelperPanel,
   }),
   (content, props) => (props.open ? <aside className="helper-panel">{content}</aside> : null)
 );
-const TasksPanel = deferredPanel(uiMessage('main.m006'), async () => ({
+const TasksPanel = deferredPanel(descriptor('main.m006'), async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
-const OutlinePanel = deferredPanel(uiMessage('prompts.uiStoryOutline'), async () => ({
+const OutlinePanel = deferredPanel(descriptor('prompts.uiStoryOutline'), async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 const BotChatImportDialog = deferredPanel<ComponentProps<typeof BotChatImportDialogPanel>>(
-  uiMessage('transfer.m106'),
+  descriptor('transfer.m106'),
   async () => ({ default: (await import('./BotChatImportDialog.js')).BotChatImportDialog }),
   (content, props) => (
     <Dialog open title={t('transfer.m106')} onClose={props.onClose}>
@@ -254,7 +255,7 @@ const BotChatImportDialog = deferredPanel<ComponentProps<typeof BotChatImportDia
   )
 );
 const RequestPreviewDialog = deferredPanel<ComponentProps<typeof RequestPreviewDialogPanel>>(
-  uiMessage('reader.nextRequestPreview'),
+  descriptor('reader.nextRequestPreview'),
   async () => ({ default: (await import('./RequestPreviewDialog.js')).RequestPreviewDialog }),
   (content, props) => (
     <Dialog open={props.open} title={t('reader.nextRequestPreview')} onClose={props.onClose}>
@@ -263,7 +264,7 @@ const RequestPreviewDialog = deferredPanel<ComponentProps<typeof RequestPreviewD
   )
 );
 const ManuscriptExportDialog = deferredPanel<ComponentProps<typeof ManuscriptExportDialogPanel>>(
-  uiMessage('transfer.m192'),
+  descriptor('transfer.m192'),
   async () => ({ default: (await import('./ManuscriptExportDialog.js')).ManuscriptExportDialog }),
   (content, props) => (
     <Dialog open={props.open} title={t('transfer.m192')} onClose={props.onClose}>
@@ -272,7 +273,7 @@ const ManuscriptExportDialog = deferredPanel<ComponentProps<typeof ManuscriptExp
   )
 );
 const ChatContextDialog = deferredPanel<ComponentProps<typeof ChatContextDialogPanel>>(
-  uiMessage('settings.m104'),
+  descriptor('settings.m104'),
   async () => ({ default: (await import('./ChatContextDialog.js')).ChatContextDialog }),
   (content, props) => (
     <Dialog
@@ -587,7 +588,7 @@ function App() {
     }
   }, [errorScope, s.setError]);
   useEffect(
-    () => watchPresentationWriteFailure(() => s.setError(uiMessage('main.settingNotStored'))),
+    () => watchPresentationWriteFailure(() => s.setError(descriptor('main.settingNotStored'))),
     [s.setError]
   );
   const [newKey, setNewKey] = useState(0);
@@ -1074,7 +1075,7 @@ function App() {
     } else if (target.kind === 'illustration' || target.kind === 'scene') {
       const chatId =
         target.chatId ?? s.detail?.sources.find((source) => source.id === target.id)?.chatId;
-      if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
+      if (!chatId) throw new UiError(uiMessage('helperResults.openFailed'));
       s.openTarget({ chatId, sourceId: target.id, representation: 'original' });
       setPanel('');
     } else if (target.kind === 'translation' && target.chatId) {
@@ -1309,7 +1310,7 @@ function App() {
     try {
       snapshot = captureActiveEditorContext();
     } catch (cause) {
-      s.setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
+      s.setError(cause instanceof Error ? cause.message : descriptor('helpers.m015'));
       return;
     }
     if (!snapshot) return;
@@ -1534,7 +1535,7 @@ function App() {
       !!s.active &&
       !s.hasPendingRequest &&
       !s.cancelling,
-    confirmNotice: uiMessage('shortcuts.cancelGenerationAgain', {
+    confirmNotice: descriptor('shortcuts.cancelGenerationAgain', {
       key: stopShortcutLabel,
     }),
   });
@@ -2255,7 +2256,7 @@ function App() {
                                     }
                                   : undefined
                               }
-                              onStartChanged={() => s.setNotice(uiMessage('main.m093'))}
+                              onStartChanged={() => s.setNotice(descriptor('main.m093'))}
                               hasPackages={
                                 !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
                               }

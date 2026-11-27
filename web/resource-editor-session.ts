@@ -1,4 +1,4 @@
-import { message } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { resourceEditorEndpoints as endpoints } from '#contracts';
 import { ApiError, callEndpoint, definiteRejection, libraryChangedKey } from './api.js';
 import { errorDescriptor } from './api-errors.js';
@@ -285,7 +285,7 @@ export class ResourceEditorSession {
   private prepared(model: ResourceModel): ResourceModel {
     for (const prepare of this.preparations.values()) model = prepare(model);
     if (this.state.local.unappliedFields.some((path) => !this.preparations.has(path)))
-      throw new Error(message('shared.syntaxError'));
+      throw new UiError(uiMessage('shared.syntaxError'));
     return model;
   }
   captureForHelper() {
@@ -332,7 +332,7 @@ export class ResourceEditorSession {
   }
   async reloadSaved() {
     await this.open();
-    if (this.pendingCreation) throw new Error(message('shared.resourceCreationUncertain'));
+    if (this.pendingCreation) throw new UiError(uiMessage('shared.resourceCreationUncertain'));
     if (this.state.saving) return;
     const load = ++this.loadVersion;
     const generation = this.generation;
@@ -367,10 +367,10 @@ export class ResourceEditorSession {
     options?: { copy?: boolean }
   ): Promise<ResourceSaveResult & { creationIntent: boolean }> {
     await this.open();
-    if (this.state.saving) throw new Error(message('shared.alreadySaving'));
-    if (this.creationReadFailed) throw new Error(message('shared.resourceCreationReadFailed'));
+    if (this.state.saving) throw new UiError(uiMessage('shared.alreadySaving'));
+    if (this.creationReadFailed) throw new UiError(uiMessage('shared.resourceCreationReadFailed'));
     if (this.state.conflict && !options?.copy && !this.pendingCreation)
-      throw new Error(message('shared.resourceChangedHelp'));
+      throw new UiError(uiMessage('shared.resourceChangedHelp'));
     if (model) this.setModel(model);
     const creating = !!options?.copy || !this.state.document.targetId || !!this.pendingCreation;
     const previousCreation = this.pendingCreation;
@@ -471,7 +471,7 @@ export class ResourceEditorSession {
   }
   async undo() {
     if (!this.state.document.targetId || this.state.dirty || this.state.saving)
-      throw new Error(message('shared.unsavedRequired'));
+      throw new UiError(uiMessage('shared.unsavedRequired'));
     const generation = this.generation;
     const load = ++this.loadVersion;
     const result = (await callEndpoint(endpoints.undoResource, {

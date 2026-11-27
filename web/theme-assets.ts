@@ -1,5 +1,6 @@
 import { appearanceEndpoints, type StoredThemeAsset } from '#contracts';
 import { callEndpoint, throwApiError } from './api.js';
+import { UiError, uiMessage } from './ui-message.js';
 import {
   themeAssetVariable,
   themeFile,
@@ -20,7 +21,8 @@ export function uploadThemeAsset(kind: ThemeAssetKind, data: string): Promise<St
 function blobBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
+    reader.onerror = () =>
+      reject(new UiError(uiMessage('errors.unexpected'), { cause: reader.error }));
     reader.onload = () => {
       const data = String(reader.result);
       resolve(data.slice(data.indexOf(',') + 1));

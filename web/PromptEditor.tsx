@@ -1,5 +1,6 @@
 import { deletionEndpoints } from '#contracts';
-import { t, useI18n, message as uiMessage, messageRef } from './i18n.js';
+import { t, useI18n, message as descriptor, messageRef } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -237,7 +238,7 @@ export function PromptEditor({
         ...current.filter((item) => item.id !== accepted.id),
         accepted,
       ]);
-      setStatus(uiMessage('prompts.uiPromptSaved'));
+      setStatus(descriptor('prompts.uiPromptSaved'));
       setPlacing(true);
       const warnings: string[] = [];
       try {
@@ -248,9 +249,9 @@ export function PromptEditor({
         );
       } catch (caught) {
         warnings.push(
-          uiMessage('prompts.savedPlacement', {
+          descriptor('prompts.savedPlacement', {
             error:
-              (caught as Error).message === uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder')
+              (caught as Error).message === descriptor('prompts.uiUnableToPlaceTheItemInTheFolder')
                 ? ''
                 : messageRef((caught as Error).message),
           })
@@ -260,7 +261,7 @@ export function PromptEditor({
         await reload?.();
       } catch (caught) {
         warnings.push(
-          uiMessage('prompts.savedReload', {
+          descriptor('prompts.savedReload', {
             error: messageRef((caught as Error).message),
           })
         );
@@ -301,7 +302,7 @@ export function PromptEditor({
         (other) => other !== session && (other.snapshot().dirty || other.snapshot().creationPending)
       )
     )
-      throw new Error(uiMessage('prompts.uiOtherRolesOrPresetsHaveUnsavedDraftsContinueEditing'));
+      throw new UiError(uiMessage('prompts.uiOtherRolesOrPresetsHaveUnsavedDraftsContinueEditing'));
     return save(!!base);
   });
   if (!state.ready) return <ResourceEditorStatus value={shared} />;
@@ -379,7 +380,7 @@ export function PromptEditor({
                       ) as Record<PromptRole, ResourceEditorSession>
                   );
                   await reload?.();
-                  setStatus(uiMessage('prompts.uiPromptDeleted'));
+                  setStatus(descriptor('prompts.uiPromptDeleted'));
                 }}
               />
             </div>

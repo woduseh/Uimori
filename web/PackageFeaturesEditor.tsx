@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -89,7 +90,7 @@ export function PackageFeaturesEditor({
         setListError('');
       })
       .catch(() => {
-        if (active) setListError(uiMessage('library.couldNotLoadResourcesTryRefreshing'));
+        if (active) setListError(descriptor('library.couldNotLoadResourcesTryRefreshing'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -110,12 +111,12 @@ export function PackageFeaturesEditor({
             referenceKey(ref),
             content.package
               ? { content }
-              : { error: uiMessage('library.theAttachedResourceIsNotACommon') },
+              : { error: descriptor('library.theAttachedResourceIsNotACommon') },
           ] as const;
         } catch {
           return [
             referenceKey(ref),
-            { error: uiMessage('library.couldNotFindOrReadTheAttached') },
+            { error: descriptor('library.couldNotFindOrReadTheAttached') },
           ] as const;
         }
       })
@@ -162,10 +163,10 @@ export function PackageFeaturesEditor({
       const content = await api<Content>(`/content/${encodeURIComponent(item.id)}`);
       if (!currentAction(request, id)) return;
       if (!content.package)
-        throw new Error(uiMessage('library.onlyResourcesWithACommonPackageCan'));
+        throw new UiError(uiMessage('library.onlyResourcesWithACommonPackageCan'));
       const current = latest.current.value;
       if (content.id === current.id || current.modules?.some((ref) => ref.id === content.id))
-        throw new Error(uiMessage('library.youCannotAddTheResourceItselfOr'));
+        throw new UiError(uiMessage('library.youCannotAddTheResourceItselfOr'));
       update({
         modules: [...(current.modules ?? []), { id: content.id, revision: content.revision }],
       });

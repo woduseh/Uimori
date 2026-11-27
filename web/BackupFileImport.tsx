@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   CHAT_BACKUP_VERSION,
@@ -97,23 +98,20 @@ export function BackupFileImport({
           setSelection({ kind: 'resources', file: contents.file, preview, key });
       } else {
         const backup = contents.backup;
-        if (backup.version !== CHAT_BACKUP_VERSION)
-          throw new Error(retainedMessage('transfer.m123'));
+        if (backup.version !== CHAT_BACKUP_VERSION) throw new UiError(uiMessage('transfer.m123'));
         if (!Array.isArray(backup.chats) || !backup.chats.length || !backup.resources)
-          throw new Error(retainedMessage('transfer.m124'));
+          throw new UiError(uiMessage('transfer.m124'));
         if (
           typeof backup.title !== 'string' ||
           !backup.chats.every((chat) => Array.isArray(chat?.transcript?.entries))
         )
-          throw new Error(retainedMessage('transfer.m125'));
+          throw new UiError(uiMessage('transfer.m125'));
         setSelection({ kind: 'chat', backup, key });
       }
     } catch (caught) {
       if (current === version.current)
         setError(
-          caught instanceof SyntaxError
-            ? retainedMessage('transfer.m126')
-            : (caught as Error).message
+          caught instanceof SyntaxError ? descriptor('transfer.m126') : (caught as Error).message
         );
     } finally {
       lock.current = false;
@@ -140,7 +138,7 @@ export function BackupFileImport({
             modelBindings: [],
           }
         );
-        setMessage(retainedMessage('transfer.d006', { v0: result.items.length }));
+        setMessage(descriptor('transfer.d006', { v0: result.items.length }));
       } else {
         const result = await api<ChatBackupImport>(
           selection.archive ? '/chats/import-backup-archive' : '/chats/import-backup',
@@ -152,7 +150,7 @@ export function BackupFileImport({
           }
         );
         setMessage(
-          retainedMessage('transfer.d007', {
+          descriptor('transfer.d007', {
             v0: result.chat.title,
             v1: result.chats.length,
             v2: result.sources,
@@ -162,7 +160,7 @@ export function BackupFileImport({
       setSelection(null);
       setUncertain(false);
       if (input.current) input.current.value = '';
-      await onImported().catch(() => setError(retainedMessage('transfer.m127')));
+      await onImported().catch(() => setError(descriptor('transfer.m127')));
     } catch (caught) {
       setUncertain(uncertain || !definiteRejection(caught));
       setError((caught as Error).message);

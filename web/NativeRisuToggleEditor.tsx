@@ -1,4 +1,5 @@
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import type { PromptValue, RisuPrompt } from '../core/risu-prompt.js';
@@ -132,9 +133,9 @@ export function NativeRisuToggleEditor({
   const pending = sourcePending || invalidPending;
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
-    if (invalidPending) throw new Error(uiMessage('native.text_1ad2d6a690'));
+    if (invalidPending) throw new UiError(uiMessage('native.text_1ad2d6a690'));
     if (!sourcePending) return model;
-    if (!prepareSave) throw new Error(uiMessage('native.text_5d82dab127'));
+    if (!prepareSave) throw new UiError(uiMessage('native.text_5d82dab127'));
     return prepareSave(model, { toggles: raw, variables: rawVariables });
   });
   useEffect(() => {
@@ -364,7 +365,7 @@ export function NativeRisuToggleEditor({
                       option,
                       (next) => {
                         if (next.includes(','))
-                          throw new Error(uiMessage('native.text_b349ed5327'));
+                          throw new UiError(uiMessage('native.text_b349ed5327'));
                         return setOptions(options.map((entry, i) => (i === index ? next : entry)));
                       }
                     )}

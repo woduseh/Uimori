@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -236,7 +237,7 @@ export function ThemeSettings({
   }
   function edit(theme?: Theme, copy = false, storyOnly = false) {
     if (dirty) {
-      setError(uiMessage('visualpanels.saveOrCancelYourCurrentEditsBefore'));
+      setError(descriptor('visualpanels.saveOrCancelYourCurrentEditsBefore'));
       return false;
     }
     if (management.current) management.current.open = true;
@@ -286,7 +287,7 @@ export function ThemeSettings({
       setBaseline(JSON.stringify(themeDefinition(result.saved)));
       setPreview(null);
       await state.refresh();
-      setNotice(uiMessage('visualpanels.themeSavedUseApplyToActivateIt'));
+      setNotice(descriptor('visualpanels.themeSavedUseApplyToActivateIt'));
       saved = true;
     }, true);
     return saved;
@@ -307,8 +308,8 @@ export function ThemeSettings({
         target.scope === 'global' &&
           ((state.scope.chatId && p.chatThemes[state.scope.chatId]) ||
             (state.scope.botId && p.botThemes[state.scope.botId]))
-          ? uiMessage('visualpanels.defaultLayoutChangedThisChatUsesIts')
-          : uiMessage('visualpanels.layoutSelectionSaved')
+          ? descriptor('visualpanels.defaultLayoutChangedThisChatUsesIts')
+          : descriptor('visualpanels.layoutSelectionSaved')
       );
     });
   }
@@ -327,8 +328,8 @@ export function ThemeSettings({
         target.scope === 'global' &&
           ((state.scope.chatId && p.chatPalettes?.[state.scope.chatId]) ||
             (state.scope.botId && p.botPalettes?.[state.scope.botId]))
-          ? uiMessage('visualpanels.defaultPaletteChangedThisChatUsesIts')
-          : uiMessage('visualpanels.paletteSelectionSaved')
+          ? descriptor('visualpanels.defaultPaletteChangedThisChatUsesIts')
+          : descriptor('visualpanels.paletteSelectionSaved')
       );
     });
   }
@@ -342,16 +343,16 @@ export function ThemeSettings({
         expectedRevision: p.revision,
       });
       await state.refresh();
-      setNotice(uiMessage('storyUi.botDefaultSaved'));
+      setNotice(descriptor('storyUi.botDefaultSaved'));
     });
   }
   async function importFile(file: File) {
     if (dirty) {
-      setError(uiMessage('visualpanels.saveOrCancelTheThemeYouAre'));
+      setError(descriptor('visualpanels.saveOrCancelTheThemeYouAre'));
       return;
     }
     await action(async () => {
-      if (file.size > 96 * 1024 * 1024) throw new Error(uiMessage('themeAssets.importTooLarge'));
+      if (file.size > 96 * 1024 * 1024) throw new UiError(uiMessage('themeAssets.importTooLarge'));
       const parsed = parseThemeFile(
         parseJsonInput(await file.text(), 'errors.THEME_FILE_UNSUPPORTED')
       );
@@ -360,7 +361,7 @@ export function ThemeSettings({
       storyUiDraft.current = model.storyUi;
       setDraft({ id: null, model });
       setBaseline('');
-      setImportNotice(uiMessage('visualpanels.importedAsANewThemeReviewAnd'));
+      setImportNotice(descriptor('visualpanels.importedAsANewThemeReviewAnd'));
     });
   }
   const themeSample = (
@@ -393,7 +394,7 @@ export function ThemeSettings({
             (theme) => theme.id === draft?.id
           );
           if (!value)
-            throw new Error(uiMessage('visualpanels.savedVersionUnavailableYourCurrentInputIs'));
+            throw new UiError(uiMessage('visualpanels.savedVersionUnavailableYourCurrentInputIs'));
           return () => [
             { label: t('visualpanels.name'), value: value.title },
             { label: t('visualpanels.description'), value: value.description },

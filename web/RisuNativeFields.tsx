@@ -3,7 +3,8 @@ import {
   readIllustrationAppearanceProfiles,
   withIllustrationAppearanceProfiles,
 } from '../core/illustration-profiles.js';
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
@@ -326,14 +327,14 @@ export function RisuNativeFields({
   }[selectedPart];
   useEditorSavePreparation('package.native.source', (model) => {
     if (!draft) return model;
-    if (!('package' in model)) throw new Error(uiMessage('native.text_139e9c1c9b'));
+    if (!('package' in model)) throw new UiError(uiMessage('native.text_139e9c1c9b'));
     return resourceWithNativeSource(
       model,
       editNativeSource(model.package.nativeRisu!, draft.part, draft.text)
     );
   });
   const prepareEntries = (model: ResourceModel, part: 'regex' | 'triggers', entries: unknown[]) => {
-    if (!('package' in model)) throw new Error(uiMessage('native.text_139e9c1c9b'));
+    if (!('package' in model)) throw new UiError(uiMessage('native.text_139e9c1c9b'));
     return resourceWithNativeSource(
       model,
       editNativeSource(model.package.nativeRisu!, part, JSON.stringify(entries))

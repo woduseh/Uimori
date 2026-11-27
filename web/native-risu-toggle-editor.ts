@@ -1,4 +1,5 @@
-import { message as uiMessage } from './i18n.js';
+import { message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 export const nativeToggleTypes = [
   'toggle',
   'select',
@@ -52,10 +53,10 @@ export function serializeNativeToggleLines(lines: NativeToggleLine[]): string {
 
 export function serializeNativeToggleDefinition(item: NativeToggleDefinition): string {
   if ([item.key, item.label, item.options].some((part) => /[=\r\n]/.test(part))) {
-    throw new Error(uiMessage('native.toggleFieldInvalid'));
+    throw new UiError(uiMessage('native.toggleFieldInvalid'));
   }
   if (['toggle', 'select', 'text', 'textarea'].includes(item.type) && !item.key) {
-    throw new Error(uiMessage('native.variableKeyRequired'));
+    throw new UiError(uiMessage('native.variableKeyRequired'));
   }
   if (item.type === 'toggle') return `${item.key}=${item.label}`;
   if (item.type === 'select') return `${item.key}=${item.label}=select=${item.options}`;
@@ -67,13 +68,13 @@ export function nativeToggleGroupWarnings(lines: NativeToggleLine[]): string[] {
   let open = false;
   for (const [index, line] of lines.entries()) {
     if (line.definition?.type === 'group') {
-      if (open) warnings.push(uiMessage('native.nestedGroup', { line: index + 1 }));
+      if (open) warnings.push(descriptor('native.nestedGroup', { line: index + 1 }));
       open = true;
     } else if (line.definition?.type === 'groupEnd') {
-      if (!open) warnings.push(uiMessage('native.unmatchedGroup', { line: index + 1 }));
+      if (!open) warnings.push(descriptor('native.unmatchedGroup', { line: index + 1 }));
       open = false;
     }
   }
-  if (open) warnings.push(uiMessage('native.unclosedGroup'));
+  if (open) warnings.push(descriptor('native.unclosedGroup'));
   return warnings;
 }

@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -40,15 +41,15 @@ export function BotChatImportDialog({
     setError('');
     setMessage('');
     try {
-      if (file.size > 60 * 1024 * 1024) throw new Error(retainedMessage('transfer.m101'));
+      if (file.size > 60 * 1024 * 1024) throw new UiError(uiMessage('transfer.m101'));
       let transcript: ChatTranscript;
       try {
         transcript = validateChatTranscript(JSON.parse(await file.text()));
       } catch {
-        throw new Error(retainedMessage('transfer.m102'));
+        throw new UiError(uiMessage('transfer.m102'));
       }
       if (transcript.packageAttachments.some((item) => item.role !== 'bot' && item.id === bot.id))
-        throw new Error(retainedMessage('transfer.m103'));
+        throw new UiError(uiMessage('transfer.m103'));
       transcript = validateChatTranscript({
         ...transcript,
         packageAttachments: [
@@ -81,16 +82,16 @@ export function BotChatImportDialog({
       setUncertain(false);
       if (fileInput.current) fileInput.current.value = '';
       setMessage(
-        retainedMessage('transfer.transcriptImported', {
+        descriptor('transfer.transcriptImported', {
           title: result.chat.title,
           skipped: result.skippedAttachments.length,
         })
       );
-      await onImported().catch(() => setError(retainedMessage('transfer.m104')));
+      await onImported().catch(() => setError(descriptor('transfer.m104')));
     } catch (caught) {
       const unresolved = uncertain || !definiteRejection(caught);
       setUncertain(unresolved);
-      setError(unresolved ? retainedMessage('transfer.m105') : (caught as Error).message);
+      setError(unresolved ? descriptor('transfer.m105') : (caught as Error).message);
     } finally {
       lock.current = false;
       setBusy(false);

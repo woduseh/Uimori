@@ -1,4 +1,4 @@
-import { message as uiMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-recovery.js';
 import { deleteHelperAttachmentRecovery } from './helper-attachment-draft.js';
 
@@ -37,7 +37,7 @@ export async function loadHelperRecovery(key: string): Promise<string | null> {
   try {
     stored = await readRecovery<string>(diskKey(key));
   } catch {
-    throw new Error(uiMessage('helpers.m206'));
+    throw new UiError(uiMessage('helpers.m206'));
   }
   if (values.has(key)) return values.get(key) ?? null;
   values.set(key, stored?.model ?? null);
@@ -79,7 +79,7 @@ export function writeHelperRecovery(key: string, value: string | null): Promise<
 }
 
 export function retryHelperRecoveryWrite(key: string): Promise<void> {
-  if (!values.has(key)) return Promise.reject(new Error(uiMessage('helpers.m206')));
+  if (!values.has(key)) return Promise.reject(new UiError(uiMessage('helpers.m206')));
   return writeHelperRecovery(key, values.get(key) ?? null);
 }
 

@@ -3,9 +3,10 @@ import {
   useI18n,
   translateMessage,
   formatNumber,
-  message as uiMessage,
+  message as descriptor,
   messageRef,
 } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import type { RequestImage } from '../core/request-images.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createImageOwnerDisplayText } from '../core/image-placement.js';
@@ -574,7 +575,9 @@ function SourceReaderContent({
       await refresh();
       return true;
     } catch (error) {
-      onError(error instanceof Error ? error.message : uiMessage('reader.couldNotUpdateTheRecord'));
+      onError(
+        error instanceof Error ? error.message : descriptor('reader.couldNotUpdateTheRecord')
+      );
       return false;
     }
   };
@@ -873,7 +876,7 @@ function SourceReaderContent({
       await operation();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : uiMessage('reader.couldNotCompleteTheRequest');
+        error instanceof Error ? error.message : descriptor('reader.couldNotCompleteTheRequest');
       if (mounted.current) {
         setActionErrorSource(name);
         setActionError(message);
@@ -1066,10 +1069,10 @@ function SourceReaderContent({
     void action('copy', async () => {
       const text = mode === 'translation' ? (validTranslation?.text ?? '') : source.text;
       if (!navigator.clipboard)
-        throw new Error(uiMessage('reader.copyingIsUnavailableInThisBrowser'));
+        throw new UiError(uiMessage('reader.copyingIsUnavailableInThisBrowser'));
       await navigator.clipboard.writeText(text);
       if (!mounted.current) return;
-      if (from === 'menu') showNotice(uiMessage('reader.textCopiedNotice'));
+      if (from === 'menu') showNotice(descriptor('reader.textCopiedNotice'));
       else setCopied(true);
     });
   return (
@@ -2056,7 +2059,7 @@ function TextEditor({
           setError(
             cause instanceof Error
               ? cause.message
-              : uiMessage('reader.couldNotSaveYourEditsArePreserved')
+              : descriptor('reader.couldNotSaveYourEditsArePreserved')
           );
         } finally {
           busy.current = false;
@@ -2161,7 +2164,7 @@ function TextEditor({
           const detail = await api<ChatDetail>(`/chats/${source.chatId}`);
           const current = detail.sources.find((item) => item.id === source.id);
           if (!current)
-            throw new Error(uiMessage('reader.couldNotFindTheCurrentSceneYourEditsAre'));
+            throw new UiError(uiMessage('reader.couldNotFindTheCurrentSceneYourEditsAre'));
           const currentTranslation = displayTranslationJob(
             current,
             latestTranslation(current, detail.jobs)
@@ -2220,10 +2223,10 @@ export function JobActions({
       await refresh();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : uiMessage('reader.couldNotCompleteTheRequest');
+        error instanceof Error ? error.message : descriptor('reader.couldNotCompleteTheRequest');
       setError(message);
       onError(
-        uiMessage('reader.jobFailure', {
+        descriptor('reader.jobFailure', {
           kind: job.kind,
           mode: job.imageTarget?.mode ?? 'original',
           error: messageRef(message),

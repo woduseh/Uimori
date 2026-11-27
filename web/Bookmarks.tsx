@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import {
   createContext,
@@ -65,7 +66,7 @@ function BookmarkEditor({
     setError('');
     let attempted = false;
     try {
-      if (!title.trim()) throw new Error(uiMessage('reader.enterABookmarkName'));
+      if (!title.trim()) throw new UiError(uiMessage('reader.enterABookmarkName'));
       attempted = true;
       onSaved(
         await callEndpoint(endpoints.updateBookmark, {
@@ -203,7 +204,7 @@ export function BookmarkButton({
         })
       );
       pending.current = null;
-      setNotice(uiMessage('reader.bookmarkAdded'));
+      setNotice(descriptor('reader.bookmarkAdded'));
     } catch (caught) {
       setError((caught as Error).message);
     } finally {

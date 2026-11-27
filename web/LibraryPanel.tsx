@@ -5,9 +5,10 @@ import {
   useI18n,
   translateMessage,
   getLocale,
-  message as uiMessage,
+  message as descriptor,
   messageRef,
 } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { errorDescriptor } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -447,7 +448,7 @@ export function LibraryPanel({
     const folderId = folder === 'all' ? null : folder;
     if ((!cloned && item.kind !== tab) || (folderId === null && item.kind === tab)) return;
     if (creationOrganizationRevision === null)
-      throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
+      throw new UiError(uiMessage('library.couldNotCompleteFolderPlacement'));
     const revision =
       creationOrganizationRevision ??
       (await callEndpoint(libraryEndpoints.readOrganization)).revision;
@@ -456,7 +457,7 @@ export function LibraryPanel({
       { items: [{ kind: 'content', id: item.id }], category: tab, folderId },
       revision
     );
-    if (!placed) throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
+    if (!placed) throw new UiError(uiMessage('library.couldNotCompleteFolderPlacement'));
   }
   async function openContent(
     item: Content,
@@ -493,7 +494,7 @@ export function LibraryPanel({
           await placeCreated(copy, true, result.creationOrganizationRevision ?? null);
         } catch (error) {
           warnings.push(
-            uiMessage('library.theResourceWasCopiedButCouldNot', {
+            descriptor('library.theResourceWasCopiedButCouldNot', {
               v0: messageRef((error as Error).message),
             })
           );
@@ -502,7 +503,7 @@ export function LibraryPanel({
           await reload();
         } catch (error) {
           warnings.push(
-            uiMessage('library.theResourceWasCopiedButTheList', {
+            descriptor('library.theResourceWasCopiedButTheList', {
               v0: messageRef((error as Error).message),
             })
           );
@@ -513,7 +514,7 @@ export function LibraryPanel({
             onError(
               warnings.length === 1
                 ? warnings[0]
-                : uiMessage('library.cloneWarnings', {
+                : descriptor('library.cloneWarnings', {
                     first: messageRef(warnings[0]),
                     second: messageRef(warnings[1]),
                   })
@@ -1346,7 +1347,7 @@ function ContentEditor({
             { copy: copying }
           );
       const item = result.saved as Content;
-      setSaved(uiMessage('library.savedResource', { title: item.title }));
+      setSaved(descriptor('library.savedResource', { title: item.title }));
       if (result.creationIntent) {
         setPlacing(true);
         try {
@@ -1354,7 +1355,7 @@ function ContentEditor({
         } catch {
           setSaveWarnings((warnings) => [
             ...warnings,
-            uiMessage('library.savedPlacementWarning', { title: item.title }),
+            descriptor('library.savedPlacementWarning', { title: item.title }),
           ]);
         }
       }
@@ -1364,7 +1365,7 @@ function ContentEditor({
           if (saveVersion.current === version)
             setSaveWarnings((warnings) => [
               ...warnings,
-              uiMessage('library.savedRefreshWarning', { title: item.title }),
+              descriptor('library.savedRefreshWarning', { title: item.title }),
             ]);
         });
       return !session.snapshot().dirty;

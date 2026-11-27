@@ -1,4 +1,4 @@
-import { message as uiMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 
 export type PendingHelperRequest<T> = {
   request: T;
@@ -25,7 +25,7 @@ export function pendingHelperRequest<T>(
   }
   const request = create();
   const raw = JSON.stringify(request);
-  if (typeof raw !== 'string') throw new Error(uiMessage('helpers.m209'));
+  if (typeof raw !== 'string') throw new UiError(uiMessage('helpers.m209'));
   for (const getStorage of [local, session]) {
     try {
       const storage = getStorage();
@@ -33,7 +33,7 @@ export function pendingHelperRequest<T>(
       return { request, storage, raw, recovered: false };
     } catch {}
   }
-  throw new Error(uiMessage('helpers.m209'));
+  throw new UiError(uiMessage('helpers.m209'));
 }
 
 export function clearPendingHelperRequest(

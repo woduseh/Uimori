@@ -21,6 +21,7 @@ import {
   writeAttachmentDraft,
 } from './attachment-draft-storage.js';
 import { message } from './i18n.js';
+import { legacyMessageString, UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { requestDraftKey, type DraftImage } from './request-image-draft.js';
 import { writeOptionalStorage } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
@@ -140,28 +141,29 @@ export function helperAttachmentDraftMatches(id: string, token: string): boolean
 export function helperAttachmentError(
   draft: HelperAttachmentDraft,
   model: AttachmentModel | null
-): string {
+): UiMessage | null {
   const count = draft.images.length + draft.files.length;
-  if (!count) return '';
-  if (!model) return message('helperAttachments.modelRequired');
+  if (!count) return null;
+  if (!model) return uiMessage('helperAttachments.modelRequired');
   if (draft.images.length && imageInputSupported(model.protocol, model.modelId) === false)
-    return message('helperAttachments.imagesUnsupported');
+    return uiMessage('helperAttachments.imagesUnsupported');
   const unsupported = draft.files.find(
     (file) => !fileInputSupported(model.protocol, model.modelId, file)
   );
-  if (unsupported) return message('helperAttachments.unsupportedModel', { name: unsupported.name });
+  if (unsupported)
+    return uiMessage('helperAttachments.unsupportedModel', { name: unsupported.name });
   const limits = providerFileLimits(model.protocol);
   const fileLimit = Math.min(limits.maxFileBytes, REQUEST_FILE_MAX_BYTES);
   const large = draft.files.find((file) => file.blob.size > fileLimit);
   if (large)
-    return message('helperAttachments.tooLarge', {
+    return uiMessage('helperAttachments.tooLarge', {
       name: large.name,
       mb: Math.floor(fileLimit / 1_000_000),
     });
   const totalLimit = Math.min(limits.maxTotalBytes, REQUEST_FILES_MAX_BYTES);
   if (draft.files.reduce((sum, file) => sum + file.blob.size, 0) > totalLimit)
-    return message('helperAttachments.totalTooLarge', { mb: Math.floor(totalLimit / 1_000_000) });
-  return '';
+    return uiMessage('helperAttachments.totalTooLarge', { mb: Math.floor(totalLimit / 1_000_000) });
+  return null;
 }
 
 export async function freezeHelperAttachments(
@@ -171,10 +173,10 @@ export async function freezeHelperAttachments(
   await loadHelperAttachments(id);
   const owner = entry(id);
   if (!owner.snapshot.ready || owner.snapshot.busy)
-    throw new Error(message('helperAttachments.notReady'));
+    throw new UiError(uiMessage('helperAttachments.notReady'));
   const draft = owner.snapshot.draft;
   const invalid = helperAttachmentError(draft, model);
-  if (invalid) throw new Error(invalid);
+  if (invalid) throw new UiError(invalid);
   try {
     await owner.write;
   } catch (error) {
@@ -256,10 +258,11 @@ async function appendHelperAttachmentFiles(
       additions: DraftFile[] = [];
     for (const file of files) {
       const name = file.name || 'attachment';
-      if (!file.size || name.length > 300) throw new Error(message('helperAttachments.openFailed'));
+      if (!file.size || name.length > 300)
+        throw new UiError(uiMessage('helperAttachments.openFailed'));
       if (['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
         if (file.size > IMAGE_INPUT_MAX_BYTES)
-          throw new Error(message('helperAttachments.imageTooLarge'));
+          throw new UiError(uiMessage('helperAttachments.imageTooLarge'));
         const bitmap = await createImageBitmap(file);
         images.push({
           id: crypto.randomUUID(),
@@ -271,7 +274,7 @@ async function appendHelperAttachmentFiles(
         bitmap.close();
       } else {
         const kind = classifyRequestFile(name, file.type);
-        if (!kind) throw new Error(message('helperAttachments.unsupportedType', { name }));
+        if (!kind) throw new UiError(uiMessage('helperAttachments.unsupportedType', { name }));
         additions.push({ id: crypto.randomUUID(), name, blob: file, ...kind });
       }
     }
@@ -286,16 +289,16 @@ async function appendHelperAttachmentFiles(
       draft.images.length > REQUEST_IMAGE_MAX_COUNT ||
       draft.files.length > REQUEST_FILE_MAX_COUNT
     )
-      throw new Error(
-        message('helperAttachments.tooMany', {
+      throw new UiError(
+        uiMessage('helperAttachments.tooMany', {
           images: REQUEST_IMAGE_MAX_COUNT,
           files: REQUEST_FILE_MAX_COUNT,
         })
       );
     const invalid = helperAttachmentError(draft, model);
-    if (invalid) throw new Error(invalid);
+    if (invalid) throw new UiError(invalid);
     await persist(id, draft).catch(() => {
-      throw new Error(message('helperAttachments.saveFailed'));
+      throw new UiError(uiMessage('helperAttachments.saveFailed'));
     });
   } catch (cause) {
     publish(owner, {
@@ -341,10 +344,11 @@ export function useHelperAttachmentDraft(id: string, model: AttachmentModel | nu
       files: draft.files.filter((item) => item.id !== fileId),
     });
   };
+  const invalid = helperAttachmentError(snapshot.draft, model);
   return {
     ...snapshot,
     accept,
-    error: snapshot.error || helperAttachmentError(snapshot.draft, model),
+    error: snapshot.error || (invalid ? legacyMessageString(invalid) : ''),
     hasAttachments: !!(snapshot.draft.images.length || snapshot.draft.files.length),
     addFiles: (files: File[]) => addHelperAttachmentFiles(id, files, model),
     remove,

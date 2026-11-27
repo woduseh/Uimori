@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
@@ -54,7 +55,7 @@ export function VertexCredentialUpload({
             if (!file) return;
             setError('');
             if (file.size > 64 * 1024) {
-              setError(uiMessage('providers.m400'));
+              setError(descriptor('providers.m400'));
               return;
             }
             const current = ++epoch.current;
@@ -65,7 +66,7 @@ export function VertexCredentialUpload({
               try {
                 serviceAccount = JSON.parse(await file.text());
               } catch {
-                throw new Error(uiMessage('providers.m401'));
+                throw new UiError(uiMessage('providers.m401'));
               }
               if (
                 !serviceAccount ||
@@ -73,7 +74,7 @@ export function VertexCredentialUpload({
                 Array.isArray(serviceAccount) ||
                 (serviceAccount as Record<string, unknown>).type !== 'service_account'
               )
-                throw new Error(uiMessage('providers.m402'));
+                throw new UiError(uiMessage('providers.m402'));
               const value = await api<{ projectId: string; clientEmail: string }>(
                 '/provider-management/vertex-credentials/validate',
                 { serviceAccount }
@@ -84,10 +85,10 @@ export function VertexCredentialUpload({
               if (current === epoch.current)
                 setError(
                   caught instanceof ApiError && caught.status === 400
-                    ? uiMessage('providers.m403')
+                    ? descriptor('providers.m403')
                     : caught instanceof Error
                       ? caught.message
-                      : uiMessage('providers.m404')
+                      : descriptor('providers.m404')
                 );
             } finally {
               if (current === epoch.current) {

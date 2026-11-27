@@ -4,8 +4,9 @@ import {
   translateMessage,
   formatNumber,
   messageRef,
-  message as uiMessage,
+  message as descriptor,
 } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { usageCompact } from './usage-display.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
@@ -513,12 +514,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         requestedCompactions.current.set(owner, result.startedAt);
       await data.refresh(target);
       if ('noopReason' in result && result.noopReason === 'already-compacted')
-        notify(uiMessage('helperUsage.alreadyCompacted'));
+        notify(descriptor('helperUsage.alreadyCompacted'));
     } catch (cause) {
       setCompactErrors((old) => ({
         ...old,
         [owner]:
-          cause instanceof Error ? cause.message : uiMessage('errors.HELPER_COMPACTION_FAILED'),
+          cause instanceof Error ? cause.message : descriptor('errors.HELPER_COMPACTION_FAILED'),
       }));
     } finally {
       setCompactStarting((old) => ({ ...old, [owner]: false }));
@@ -541,7 +542,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   useShortcut('run.stop', () => running && void cancel(running), {
     scope: panel,
     ready: () => !!running,
-    confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: stopShortcutLabel }),
+    confirmNotice: descriptor('shortcuts.cancelHelperAgain', { key: stopShortcutLabel }),
   });
   const [modes, setModes] = useState<Record<string, HelperMode>>({});
   const [chosenMode, setChosenMode] = useState<HelperMode>(() =>
@@ -744,7 +745,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (!startedAt || compaction?.running || !last || last.finishedAt < startedAt) return;
     requestedCompactions.current.delete(compactionOwner);
     if (last.status === 'completed')
-      notify(uiMessage('helperUsage.compactedNotice', { count: last.compactedMessages }));
+      notify(descriptor('helperUsage.compactedNotice', { count: last.compactedMessages }));
   }, [compactionOwner, compaction, notify]);
   const [compactErrors, setCompactErrors] = useState<Record<string, string>>({});
   const [summaryDialog, setSummaryDialog] = useState<string | null>(null);
@@ -802,7 +803,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     } catch (cause) {
       setErrors((old) => ({
         ...old,
-        [scopeKey]: cause instanceof Error ? cause.message : uiMessage('helpers.m015'),
+        [scopeKey]: cause instanceof Error ? cause.message : descriptor('helpers.m015'),
       }));
     }
   }, [props.open, props.expanded, props.resource, props.scope, scopeKey, conversation]);
@@ -826,7 +827,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       } catch (cause) {
         setErrors((old) => ({
           ...old,
-          [scopeKey]: cause instanceof Error ? cause.message : uiMessage('helpers.m015'),
+          [scopeKey]: cause instanceof Error ? cause.message : descriptor('helpers.m015'),
         }));
       }
     }
@@ -1000,7 +1001,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }
       if (!current()) return;
       if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
-        throw new Error(uiMessage(selected.kind === 'selection' ? 'helpers.m014' : 'helpers.m013'));
+        throw new UiError(
+          uiMessage(selected.kind === 'selection' ? 'helpers.m014' : 'helpers.m013')
+        );
       try {
         await loadHelperSessionRecovery(owner.id);
       } catch {
@@ -1055,7 +1058,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         setErrors((old) => ({
           ...old,
           [currentScope.current]:
-            cause instanceof Error ? cause.message : uiMessage('helpers.m207'),
+            cause instanceof Error ? cause.message : descriptor('helpers.m207'),
         }));
     });
     return () => {
@@ -1170,7 +1173,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       try {
         captured = contextualEditor ? captureActiveEditorContext() : (frozenEditors[owner] ?? null);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
+        setError(cause instanceof Error ? cause.message : descriptor('helpers.m015'));
         return false;
       }
       if (captured?.focus && detachedFocus[owner] === editorFocusKey(captured.focus)) {
@@ -1185,9 +1188,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     let pendingRequest: Outbox | undefined;
     try {
       if (text.length > REQUEST_TEXT_MAX_CHARS)
-        throw new Error(uiMessage('helpers.m016', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
+        throw new UiError(uiMessage('helpers.m016', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
       if (((saved?.selection ?? selection)?.text.length ?? 0) > REQUEST_TEXT_MAX_CHARS)
-        throw new Error(uiMessage('helpers.m017', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
+        throw new UiError(uiMessage('helpers.m017', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
       let request = saved;
       if (!request) {
         request = {
@@ -1240,7 +1243,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           setUnpersisted((old) => ({ ...old, [owner]: false }));
         } catch {
           setUnpersisted((old) => ({ ...old, [owner]: true }));
-          throw new Error(uiMessage('helpers.m018'));
+          throw new UiError(uiMessage('helpers.m018'));
         }
       }
       const task = await api<HelperTaskView>(
@@ -1290,7 +1293,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         void acceptHelperAttachments(owner, request.draftToken).catch(() => {
           setErrors((old) => ({
             ...old,
-            [owner]: uiMessage('helperAttachments.acceptCleanupFailed'),
+            [owner]: descriptor('helperAttachments.acceptCleanupFailed'),
           }));
         });
       if (!request.retryOf && sameDraft)
@@ -1326,7 +1329,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         void data.refresh(conversation).catch((cause) => {
           setErrors((old) => ({
             ...old,
-            [owner]: uiMessage('helpers.m019', { v0: messageRef(cause.message) }),
+            [owner]: descriptor('helpers.m019', { v0: messageRef(cause.message) }),
           }));
         });
       return true;
@@ -1345,7 +1348,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }));
       setErrors((old) => ({
         ...old,
-        [owner]: cause instanceof Error ? cause.message : uiMessage('helpers.m020'),
+        [owner]: cause instanceof Error ? cause.message : descriptor('helpers.m020'),
       }));
       return false;
     } finally {
@@ -1387,7 +1390,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }
       setErrors((old) => ({
         ...old,
-        [owner]: cause instanceof Error ? cause.message : uiMessage('helpers.m207'),
+        [owner]: cause instanceof Error ? cause.message : descriptor('helpers.m207'),
       }));
       return false;
     } finally {
@@ -1402,7 +1405,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       );
       if (conversation) await data.refresh(conversation);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : uiMessage('helpers.m021'));
+      setError(cause instanceof Error ? cause.message : descriptor('helpers.m021'));
     }
   }
   async function retry(
@@ -1414,7 +1417,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (props.ready === false || !conversation || outbox || busy || locks.current.has(scopeKey))
       return false;
     if (!resume && task.completedEffects?.count) {
-      setError(uiMessage('helpers.m022'));
+      setError(descriptor('helpers.m022'));
       return false;
     }
     const request: Outbox = {
@@ -1888,7 +1891,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     'PATCH'
                   )
                     .then((value) => {
-                      setSaveNotice(uiMessage('helpers.toneSaved'));
+                      setSaveNotice(descriptor('helpers.toneSaved'));
                       data.updateConversation(value);
                       setPersonas((old) => ({
                         ...old,
@@ -2177,11 +2180,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         title={t('helpers.messageConflict')}
         onClose={() => setEditConflict(null)}
         readSaved={async () => {
-          if (!editConflict) throw new Error(t('shared.savedFailure'));
+          if (!editConflict) throw new UiError(uiMessage('shared.savedFailure'));
           await data.refresh({ id: editConflict.conversationId });
           const view = data.readCurrent(editConflict.conversationId);
           const saved = view?.messages.find((message) => message.id === editConflict.messageId);
-          if (!view) throw new Error(t('shared.savedFailure'));
+          if (!view) throw new UiError(uiMessage('shared.savedFailure'));
           if (!saved)
             return () => ({
               content: (
@@ -2583,7 +2586,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                             await saveActiveEditor();
                           } catch (cause) {
                             setError(
-                              cause instanceof Error ? cause.message : uiMessage('helpers.m015')
+                              cause instanceof Error ? cause.message : descriptor('helpers.m015')
                             );
                           }
                         }}

@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import DOMPurify from 'dompurify';
 import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_THEME_TEMPLATE, THEME_SLOTS } from '../core/themes.js';
@@ -16,11 +17,11 @@ export function themeTemplate(html: string): DocumentFragment {
     ALLOW_DATA_ATTR: true,
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'link', 'base', 'meta', 'form'],
   });
-  if (DOMPurify.removed.length) throw new Error(uiMessage('visuals.m021'));
+  if (DOMPurify.removed.length) throw new UiError(uiMessage('visuals.m021'));
   const slots = [...fragment.querySelectorAll('slot')];
   for (const name of THEME_SLOTS) {
     if (slots.filter((slot) => slot.name === name).length !== 1)
-      throw new Error(uiMessage('visuals.m022', { slot: `<slot name="${name}"></slot>` }));
+      throw new UiError(uiMessage('visuals.m022', { slot: `<slot name="${name}"></slot>` }));
   }
   if (
     slots.some(
@@ -31,14 +32,14 @@ export function themeTemplate(html: string): DocumentFragment {
         !THEME_SLOTS.includes(slot.name as (typeof THEME_SLOTS)[number])
     )
   )
-    throw new Error(uiMessage('visuals.m023'));
+    throw new UiError(uiMessage('visuals.m023'));
   if (
     ['portrait', 'request-persona'].some(
       (name) => slots.filter((slot) => slot.name === name).length > 1
     )
   )
-    throw new Error(uiMessage('visuals.m024'));
-  if (slots.filter((slot) => !slot.name).length > 1) throw new Error(uiMessage('visuals.m025'));
+    throw new UiError(uiMessage('visuals.m024'));
+  if (slots.filter((slot) => !slot.name).length > 1) throw new UiError(uiMessage('visuals.m025'));
   if (!slots.some((slot) => !slot.name)) fragment.append(document.createElement('slot'));
   return fragment;
 }

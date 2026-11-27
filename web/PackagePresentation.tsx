@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor, messageRef } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
 import { useWindowViewport } from './window-viewport.js';
@@ -74,15 +75,15 @@ export function usePackagePresentation(
         if (!response.ok) await throwApiError(response);
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)
-          throw new Error(uiMessage('library.theOriginalSnapshotDiffersFromThePresentation'));
+          throw new UiError(uiMessage('library.theOriginalSnapshotDiffersFromThePresentation'));
         if (!['plain-text', 'risu-html'].includes(data.format))
-          throw new Error(uiMessage('library.unsupportedPresentationFormat'));
+          throw new UiError(uiMessage('library.unsupportedPresentationFormat'));
         if (
           data.translation &&
           (data.translationId !== translation?.id ||
             data.translationRevision !== (translation?.revision ?? 0))
         )
-          throw new Error(uiMessage('library.theTranslationSnapshotDiffersFromThePresentation'));
+          throw new UiError(uiMessage('library.theTranslationSnapshotDiffersFromThePresentation'));
         if (!controller.signal.aborted && sequence.current === requestId)
           setResult({ key, identity, sourceIdentity, data });
       } catch (error) {
@@ -91,7 +92,7 @@ export function usePackagePresentation(
             key,
             identity,
             sourceIdentity,
-            error: uiMessage('library.couldNotApplyDisplayTransformationsShowingThe', {
+            error: descriptor('library.couldNotApplyDisplayTransformationsShowingThe', {
               v0: error instanceof Error ? messageRef(error.message) : '',
             }),
           });

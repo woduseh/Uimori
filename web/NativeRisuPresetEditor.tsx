@@ -1,4 +1,5 @@
-import { message as uiMessage, useI18n, translateMessage } from './i18n.js';
+import { useI18n, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
@@ -70,7 +71,7 @@ export function checkedPresetProgram(program: unknown): RisuPrompt {
     return validateRisuPrompt(program);
   } catch (cause) {
     if (cause instanceof RisuPromptError)
-      throw new Error(uiMessage('native.presetProgramInvalid', { code: cause.code }), { cause });
+      throw new UiError(uiMessage('native.presetProgramInvalid', { code: cause.code }), { cause });
     throw cause;
   }
 }
@@ -156,11 +157,11 @@ export function NativeRisuPresetEditor({
   useUnappliedEditorField('prompt.native.source', pending);
   useEditorSavePreparation('prompt.native.source', (model) => {
     if (pendingParts.some((part) => part !== 'regex' && part !== 'toggles'))
-      throw new Error(uiMessage('native.text_f70715474c'));
+      throw new UiError(uiMessage('native.text_f70715474c'));
     return model;
   });
   const prepareProgram = (model: ResourceModel, patch: Record<string, unknown>): ResourceModel => {
-    if (!('program' in model)) throw new Error(uiMessage('native.text_a52034ad77'));
+    if (!('program' in model)) throw new UiError(uiMessage('native.text_a52034ad77'));
     const input = { ...model.program.nativeRisuPreset.preset, ...patch };
     return {
       ...model,

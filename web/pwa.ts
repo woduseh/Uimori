@@ -1,4 +1,5 @@
-import { getLocale, localeChangedEvent, message as uiMessage } from './i18n.js';
+import { getLocale, localeChangedEvent, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { notificationIntent, type NotificationIntent } from '../core/push.js';
 type InstallPrompt = Event & {
   prompt: () => Promise<void>;
@@ -23,13 +24,13 @@ export const installServerSnapshot = () => serverSnapshot;
 
 export function pwaRegistration(): Promise<ServiceWorkerRegistration> {
   if (!isSecureContext || !('serviceWorker' in navigator))
-    return Promise.reject(new Error(uiMessage('outside.securePwa')));
+    return Promise.reject(new UiError(uiMessage('outside.securePwa')));
   if (!registration)
     registration = navigator.serviceWorker
       .register('/sw.js', { scope: '/', updateViaCache: 'none' })
       .catch(() => {
         registration = null;
-        throw new Error(uiMessage('outside.pwaFailure'));
+        throw new UiError(uiMessage('outside.pwaFailure'));
       });
   return registration;
 }
@@ -42,7 +43,7 @@ export async function promptInstall() {
     await current.prompt();
     await current.userChoice;
   } catch {
-    publish({ error: uiMessage('outside.installRetry') });
+    publish({ error: descriptor('outside.installRetry') });
   }
 }
 

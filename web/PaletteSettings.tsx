@@ -1,6 +1,7 @@
 import { validatePalette, parsePaletteFile } from '../core/palette-files.js';
 import { useRef, useState } from 'react';
 import { t, useI18n, message, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { THEME_COLOR_KEYS, copyTitle, resolveTheme } from '../core/themes.js';
 import {
   BUILTIN_PALETTES,
@@ -84,7 +85,7 @@ export function usePaletteLibrary() {
   }
   function importFile(file: File) {
     void run(async () => {
-      if (file.size > 1024 * 1024) throw new Error(message('palettes.fileTooLarge'));
+      if (file.size > 1024 * 1024) throw new UiError(uiMessage('palettes.fileTooLarge'));
       const model = parsePaletteFile(
         parseJsonInput(await file.text(), 'errors.PALETTE_FILE_INVALID')
       );

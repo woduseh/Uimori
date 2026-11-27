@@ -3,9 +3,10 @@ import {
   useI18n,
   translateMessage,
   formatNumber,
-  message as retainedMessage,
+  message as descriptor,
   messageRef,
 } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { readImportSource as readSource } from './import-source.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -82,9 +83,9 @@ export function RisuPresetImport({
     setNotice('');
     try {
       if (!/\.(risup|risupreset|json|zip)$/i.test(file.name))
-        throw new Error(retainedMessage('transfer.m065'));
-      if (!file.size) throw new Error(retainedMessage('transfer.m008'));
-      if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error(retainedMessage('transfer.m066'));
+        throw new UiError(uiMessage('transfer.m065'));
+      if (!file.size) throw new UiError(uiMessage('transfer.m008'));
+      if (file.size > RISU_IMPORT_MAX_BYTES) throw new UiError(uiMessage('transfer.m066'));
       const nextSource = await readSource(file);
       const nextPreview = await api<RisuPresetImportPreview>('/risu-preset-imports/prepare', {
         source: nextSource,
@@ -97,7 +98,7 @@ export function RisuPresetImport({
       requestKey.current = null;
     } catch (cause) {
       setError(
-        retainedMessage('transfer.reviewError', {
+        descriptor('transfer.reviewError', {
           error: messageRef((cause as Error).message),
           retained: !!preview,
         })
@@ -128,7 +129,7 @@ export function RisuPresetImport({
       try {
         await reload();
       } catch {
-        setNotice(retainedMessage('transfer.m067'));
+        setNotice(descriptor('transfer.m067'));
       }
     } catch (cause) {
       const confirmedFailure = !uncertain && definiteRejection(cause);

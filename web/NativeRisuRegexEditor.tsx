@@ -1,5 +1,6 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { useI18n, translateMessage } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { CodeField } from './CodeField.js';
 import { errorDescriptor } from './api-errors.js';
 import { codeFieldName } from './code-field-reveal.js';
@@ -71,7 +72,7 @@ export function NativeRisuRegexEditor({
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
     if (!pending) return model;
-    if (!prepareSave) throw new Error(uiMessage('native.text_28d932caad'));
+    if (!prepareSave) throw new UiError(uiMessage('native.text_28d932caad'));
     return prepareSave(model, parseNativeRegexJson(raw));
   });
   useEffect(() => {

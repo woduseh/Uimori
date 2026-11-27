@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
@@ -102,7 +103,7 @@ export function AuthorNotesEditor({
       await onRefresh();
     } catch {
       if (!alive.current) return;
-      const text = uiMessage('library.couldNotRefreshNotesYourInputAnd');
+      const text = descriptor('library.couldNotRefreshNotesYourInputAnd');
       setError(text);
       onError(text);
     }
@@ -138,15 +139,15 @@ export function AuthorNotesEditor({
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
       setMessage(
         retired
-          ? uiMessage('library.thisNoteWillNoLongerBeUsed')
-          : uiMessage('library.noteSavedItAppliesToFutureRequests')
+          ? descriptor('library.thisNoteWillNoLongerBeUsed')
+          : descriptor('library.noteSavedItAppliesToFutureRequests')
       );
       await refresh();
       return true;
     } catch (caught) {
       if (!alive.current) return false;
       const text =
-        caught instanceof Error ? caught.message : uiMessage('library.couldNotSaveTheNote');
+        caught instanceof Error ? caught.message : descriptor('library.couldNotSaveTheNote');
       setError(text);
       onError(text);
       if (caught instanceof ApiError && caught.status === 409) {
@@ -160,7 +161,7 @@ export function AuthorNotesEditor({
     }
   }
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
-    if (retiring) throw new Error(uiMessage('library.confirmRetiringThisNoteInContinueEditing'));
+    if (retiring) throw new UiError(uiMessage('library.confirmRetiringThisNoteInContinueEditing'));
     if (locked.current || busy) return false;
     return draft ? save(draft) : true;
   });

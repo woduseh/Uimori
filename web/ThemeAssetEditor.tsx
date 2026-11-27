@@ -46,11 +46,11 @@ export function ThemeAssetEditor({
   async function add() {
     if (!file || !validName) return;
     if (assets.some((asset) => asset.kind === kind && asset.name === name)) {
-      onError(t('themeAssets.duplicateName'));
+      onError(uiMessage('themeAssets.duplicateName'));
       return;
     }
     if (assets.length >= MAX_THEME_ASSETS) {
-      onError(t('themeAssets.limit', { count: MAX_THEME_ASSETS }));
+      onError(uiMessage('themeAssets.limit', { count: MAX_THEME_ASSETS }));
       return;
     }
     const maxBytes = kind === 'font' ? MAX_FONT_BYTES : IMAGE_INPUT_MAX_BYTES;

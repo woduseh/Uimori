@@ -1,4 +1,5 @@
-import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { UiError, uiMessage } from './ui-message.js';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -66,12 +67,12 @@ export function PackagePortraitEditor({
     update(chosen.value);
     setOpen(false);
     setError('');
-    setNotice(chosen.widenedUse ? uiMessage('library.changedTheStoryImageToPortraitAnd') : '');
+    setNotice(chosen.widenedUse ? descriptor('library.changedTheStoryImageToPortraitAnd') : '');
   }
   async function addFile(file: File) {
     if (disabled || upload.current) return;
     if ((latest.current.value.images?.length ?? 0) >= maxPackageImages) {
-      setError(uiMessage('library.aResourceCanContainUpTo2'));
+      setError(descriptor('library.aResourceCanContainUpTo2'));
       return;
     }
     const token = ++generation.current,
@@ -90,16 +91,16 @@ export function PackagePortraitEditor({
       const image = await uploadPackageImage(file, controller.signal, 'profile');
       if (!current()) return;
       if ((latest.current.value.images?.length ?? 0) >= maxPackageImages)
-        throw new Error(uiMessage('library.aResourceCanContainUpTo2'));
+        throw new UiError(uiMessage('library.aResourceCanContainUpTo2'));
       update({
         ...latest.current.value,
         images: [...(latest.current.value.images ?? []), image],
         portraitImageId: image.id,
       });
-      setNotice(uiMessage('library.addedForPortraitUseOnlySaveThe'));
+      setNotice(descriptor('library.addedForPortraitUseOnlySaveThe'));
     } catch (cause) {
       if (current())
-        setError(cause instanceof Error ? cause.message : uiMessage('library.couldNotUpload'));
+        setError(cause instanceof Error ? cause.message : descriptor('library.couldNotUpload'));
     } finally {
       if (current()) {
         upload.current = null;
@@ -167,7 +168,7 @@ export function PackagePortraitEditor({
                   delete next.portraitImageId;
                   update(next);
                   setError('');
-                  setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
+                  setNotice(descriptor('library.portraitDesignationRemovedTheImageRemainsIn'));
                 }}
               >
                 <CloseIcon size={18} aria-hidden="true" />
@@ -205,7 +206,7 @@ export function PackagePortraitEditor({
                   upload.current = null;
                   setBusy(false);
                   latest.current.onDirtyChange?.(false);
-                  setNotice(uiMessage('library.imageUploadCanceled'));
+                  setNotice(descriptor('library.imageUploadCanceled'));
                 }}
               >
                 {t('library.cancelUpload')}
