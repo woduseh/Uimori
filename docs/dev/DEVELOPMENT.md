@@ -60,6 +60,12 @@ npm run verify -- all --workers 4
 npm run verify -- all --grep READERREC --workers 1
 ```
 
+`--repeat-each <n>` passes through to Playwright, and the worker limit counts every repetition as a file, so a suspected flake can be repeated under parallel load:
+
+```powershell
+npm run verify -- all --grep I18N07 --repeat-each 40 --workers 8
+```
+
 One runner of the shared harness executes at a time on a machine, across checkouts and worktrees: `waitForBrowserTurn` holds a loopback port, and a second run waits for it instead of starting. Two runs sharing the CPUs fail with "App ready timeout" or in unrelated specs that pass alone. The operating system frees the port when the holder exits, so an interrupted run leaves nothing to clean up.
 
 `summary.json` records the worker count and each server's URL and DB under `servers`; each server's log is under `servers/<n>/server.log`. A direct `npx playwright test` without the harness still uses one worker and `UIMORI_BASE_URL`/`UIMORI_DB`.
