@@ -1,7 +1,7 @@
 import { pricingDraft, pricingPayload } from '../web/provider-model-draft.js';
 import { effectiveModelFamily } from '../core/model-family.js';
 import { describe, expect, test } from 'vitest';
-import { formatUiMessage } from '../web/ui-message.js';
+import { formatUiMessage, uiMessage } from '../web/ui-message.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import {
   initialModel,
@@ -106,6 +106,18 @@ describe('model numeric drafts', () => {
         revision: 1,
       } as ModelPreset).executionMode
     ).toBe('batch');
+  });
+
+  test('an invalid manual price is reported as a price problem, not an unsupported option', () => {
+    const draft = {
+      ...initialModel(),
+      pricing: {
+        ...pricingDraft({ mode: 'manual', rates: { input: 1, output: 2 } } as never),
+        sourceUrl: 'http://example.com',
+      },
+    };
+    const error = modelDraftError(draft, connection);
+    expect(formatUiMessage(error!)).toContain(formatUiMessage(uiMessage('providers.m493')));
   });
 
   test('a rejected generation option never shows its contract code', () => {
