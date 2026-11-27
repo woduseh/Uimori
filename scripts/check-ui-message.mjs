@@ -18,10 +18,12 @@ const ignored = new Set([
 ]);
 
 export const remedy = [
-  'Text read from `.message` can be English model or validator text or a raw descriptor, and it does not follow a language switch.',
+  "An error's own text (its `.message`, `String(caught)`, a template literal holding it or `caught.toString()`) can be English model or validator text",
+  'or a raw descriptor, and it does not follow a language switch.',
   'Turn a caught error into a UiMessage with toUiMessage(cause) from web/api-errors.ts, keep the UiMessage in state, and render it',
   'through a component that accepts one (or formatUiMessage at render time). Throw UiError(uiMessage(key)) for your own failures.',
-  'If the field is our own data rather than an error, rename it.',
+  'If the field is our own data rather than an error, rename it. A field a library or stored data names `message` goes under',
+  '"permanent" in scripts/ui-message-allowlist.json with its reason.',
 ].join('\n');
 
 function walk(node, visit, parent) {
@@ -37,8 +39,30 @@ function walk(node, visit, parent) {
 const named = (node) =>
   (node?.type === 'Identifier' && node.name === 'message') ||
   (node?.type === 'StringLiteral' && node.value === 'message');
+const called = (node, parent) =>
+  (parent?.type === 'CallExpression' || parent?.type === 'OptionalCallExpression') &&
+  parent.callee === node;
+const caughtName = (node, names) => node?.type === 'Identifier' && names.has(node.name);
 
-export function messageReads(source, file = 'web/input.tsx') {
+function caughtText(node, names) {
+  if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
+    const { callee } = node;
+    if (callee.type === 'Identifier' && callee.name === 'String')
+      return caughtName(node.arguments[0], names);
+    return (
+      (callee.type === 'MemberExpression' || callee.type === 'OptionalMemberExpression') &&
+      !callee.computed &&
+      callee.property.name === 'toString' &&
+      caughtName(callee.object, names)
+    );
+  }
+  return (
+    node.type === 'TemplateLiteral' &&
+    node.expressions.some((expression) => caughtName(expression, names))
+  );
+}
+
+export function errorTextReads(source, file = 'web/input.tsx') {
   const tree = parse(source, {
     sourceType: 'module',
     plugins: /\.[cm]?tsx?$/u.test(file)
@@ -52,12 +76,19 @@ export function messageReads(source, file = 'web/input.tsx') {
     const member =
       (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
       (node.computed ? node.property.type === 'StringLiteral' : true) &&
-      named(node.property);
+      named(node.property) &&
+      !called(node, parent);
     const destructured =
       node.type === 'ObjectProperty' && parent?.type === 'ObjectPattern' && named(node.key);
     if (member || destructured) lines.push(node.loc.start.line);
+    if (node.type === 'CatchClause' && node.param?.type === 'Identifier') {
+      const names = new Set([node.param.name]);
+      walk(node.body, (inner) => {
+        if (caughtText(inner, names)) lines.push(inner.loc.start.line);
+      });
+    }
   });
-  return lines;
+  return lines.sort((left, right) => left - right);
 }
 
 function sourceFiles(directory) {
@@ -73,12 +104,17 @@ function sourceFiles(directory) {
 
 export function readAllowlist(directory = root) {
   const path = resolve(directory, allowlistPath);
-  if (!existsSync(path)) return {};
-  const entries = JSON.parse(readFileSync(path, 'utf8'));
-  for (const [file, count] of Object.entries(entries))
+  if (!existsSync(path)) return { permanent: {}, debt: {} };
+  const { permanent = {}, debt = {}, ...rest } = JSON.parse(readFileSync(path, 'utf8'));
+  if (Object.keys(rest).length)
+    throw new Error(`${allowlistPath}: only "permanent" and "debt" sections are allowed`);
+  for (const [file, entry] of Object.entries(permanent))
+    if (!Number.isInteger(entry?.count) || entry.count < 1 || !entry.reason?.trim())
+      throw new Error(`${allowlistPath}: permanent "${file}" needs a positive count and a reason`);
+  for (const [file, count] of Object.entries(debt))
     if (!Number.isInteger(count) || count < 1)
-      throw new Error(`${allowlistPath}: "${file}" needs a positive whole count`);
-  return entries;
+      throw new Error(`${allowlistPath}: debt "${file}" needs a positive whole count`);
+  return { permanent, debt };
 }
 
 export function scanUiMessages(directory = root) {
@@ -86,42 +122,59 @@ export function scanUiMessages(directory = root) {
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
     if (exemptFiles.has(file)) continue;
-    const lines = messageReads(readFileSync(path, 'utf8'), file);
+    const lines = errorTextReads(readFileSync(path, 'utf8'), file);
     if (lines.length) counts.set(file, lines);
   }
   return counts;
 }
 
 export function uiMessageErrors(directory = root, allowlist = readAllowlist(directory)) {
+  const { permanent, debt } = allowlist;
   const counts = scanUiMessages(directory);
   const errors = [];
   for (const [file, lines] of counts) {
-    const allowed = allowlist[file] ?? 0;
+    const allowed = (permanent[file]?.count ?? 0) + (debt[file] ?? 0);
     if (lines.length > allowed)
       errors.push(
-        `${file}: ${lines.length} \`.message\` reads (lines ${lines.join(', ')}), ${allowed ? `${allowlistPath} allows ${allowed}` : 'none allowed'}`
+        `${file}: ${lines.length} error-text reads (lines ${lines.join(', ')}), ${allowed ? `${allowlistPath} allows ${allowed}` : 'none allowed'}`
       );
   }
-  for (const [file, allowed] of Object.entries(allowlist)) {
+  for (const file of new Set([...Object.keys(permanent), ...Object.keys(debt)])) {
     const found = counts.get(file)?.length ?? 0;
-    if (found < allowed)
+    const kept = permanent[file]?.count ?? 0;
+    const owed = debt[file] ?? 0;
+    if (found < kept)
       errors.push(
-        found
-          ? `${allowlistPath}: ${file} now has ${found} \`.message\` reads; lower its entry from ${allowed} to ${found} (node scripts/check-ui-message.mjs --shrink)`
-          : `${allowlistPath}: ${file} has no \`.message\` reads left; remove its entry (node scripts/check-ui-message.mjs --shrink)`
+        `${allowlistPath}: ${file} has ${found} error-text reads but its permanent entry keeps ${kept}; correct the entry and its reason by hand`
+      );
+    else if (found < kept + owed)
+      errors.push(
+        found > kept
+          ? `${allowlistPath}: ${file} now owes ${found - kept} error-text reads; lower its debt from ${owed} to ${found - kept} (node scripts/check-ui-message.mjs --shrink)`
+          : `${allowlistPath}: ${file} owes no error-text reads; remove its debt entry (node scripts/check-ui-message.mjs --shrink)`
       );
   }
   return errors;
 }
 
 export function shrinkAllowlist(directory = root, allowlist = readAllowlist(directory)) {
+  const { permanent, debt } = allowlist;
   const counts = scanUiMessages(directory);
-  const next = Object.fromEntries(
-    Object.entries(allowlist)
-      .map(([file, allowed]) => [file, Math.min(allowed, counts.get(file)?.length ?? 0)])
-      .filter(([, count]) => count > 0)
-      .sort(([left], [right]) => (left < right ? -1 : 1))
-  );
+  const next = {
+    permanent,
+    debt: Object.fromEntries(
+      Object.entries(debt)
+        .map(([file, owed]) => [
+          file,
+          Math.min(
+            owed,
+            Math.max(0, (counts.get(file)?.length ?? 0) - (permanent[file]?.count ?? 0))
+          ),
+        ])
+        .filter(([, count]) => count > 0)
+        .sort(([left], [right]) => (left < right ? -1 : 1))
+    ),
+  };
   writeFileSync(resolve(directory, allowlistPath), `${JSON.stringify(next, null, 2)}\n`);
   return next;
 }
@@ -133,10 +186,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(`${errors.join('\n')}\n\n${remedy}`);
     process.exitCode = 1;
   } else {
-    const allowlist = readAllowlist();
-    const total = Object.values(allowlist).reduce((sum, count) => sum + count, 0);
+    const { permanent, debt } = readAllowlist();
+    const owed = Object.values(debt).reduce((sum, count) => sum + count, 0);
     console.log(
-      `UI messages PASS (${total} unconverted \`.message\` reads in ${Object.keys(allowlist).length} files)`
+      `UI messages PASS (${owed} unconverted error-text reads in ${Object.keys(debt).length} files; ${Object.keys(permanent).length} permanent exceptions)`
     );
   }
 }

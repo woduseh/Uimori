@@ -81,6 +81,7 @@ import {
   writeOptionalStorage,
 } from './optional-storage.js';
 import { forgetMissingBots, forgetMissingChats, storageKeys } from './storage-keys.js';
+import { errorDescriptor } from './api-errors.js';
 
 const lastWorkspaceKey = storageKeys.lastWorkspace;
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -264,7 +265,7 @@ export function useStory() {
         return { message, code: message ? old.code : null };
       }
       return {
-        message: value instanceof Error ? value.message : value,
+        message: value instanceof Error ? errorDescriptor(value) : value,
         code: value instanceof ApiError ? value.code : null,
       };
     });
@@ -476,7 +477,7 @@ export function useStory() {
             key: query.key,
             epoch,
             pending: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorDescriptor(error),
           });
         throw error;
       }
@@ -1160,7 +1161,7 @@ export function useStory() {
         }
         await loadChats();
       } catch (cause) {
-        if (current()) setError(cause instanceof Error ? cause : String(cause));
+        if (current()) setError(cause instanceof Error ? cause : errorDescriptor(cause));
       }
     };
   };

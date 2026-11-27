@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import {
   allowlistPath,
-  messageReads,
+  readAllowlist,
+  errorTextReads,
   shrinkAllowlist,
   uiMessageErrors,
 } from './check-ui-message.mjs';
@@ -40,7 +41,26 @@ test('every way of reading message off a value counts, while writing or declarin
     '  return <Notice message={created.other} />;',
     '}',
   ].join('\n');
-  assert.deepEqual(messageReads(source, 'web/View.tsx'), [6, 7, 8, 9]);
+  assert.deepEqual(errorTextReads(source, 'web/View.tsx'), [6, 7, 8, 9]);
+});
+
+test('calling a method named message is not a read, while stringifying a caught error is', () => {
+  const source = [
+    'export function View() {',
+    '  handler.message(event.data);',
+    '  handler?.message?.(event.data);',
+    '  try {',
+    '    run();',
+    '  } catch (caught) {',
+    '    show(String(caught));',
+    '    show(`failed: $' + '{caught}`);',
+    '    show(caught.toString());',
+    '    show(String(other));',
+    '  }',
+    '  return String(event);',
+    '}',
+  ].join('\n');
+  assert.deepEqual(errorTextReads(source, 'web/View.tsx'), [7, 8, 9]);
 });
 
 test('an unlisted read fails with its lines, and the core module is exempt', () => {
@@ -51,14 +71,14 @@ test('an unlisted read fails with its lines, and the core module is exempt', () 
       'web/locales/en.ts': 'export const entry = { message: 1 }.message;\n',
     },
     (directory) => {
-      const errors = uiMessageErrors(directory, {});
+      const errors = uiMessageErrors(directory, { permanent: {}, debt: {} });
       assert.equal(errors.length, 1);
-      assert.match(errors[0], /^web\/Leak\.tsx: 1 `\.message` reads \(lines 1\), none allowed$/u);
+      assert.match(errors[0], /^web\/Leak\.tsx: 1 error-text reads \(lines 1\), none allowed$/u);
     }
   );
 });
 
-test('the allowlist only shrinks: growth fails, and a stale or generous entry names its new count', () => {
+test('the debt only shrinks: growth fails, and a stale or generous entry names its new count', () => {
   withRepository(
     {
       'web/Grown.ts': 'export const a = (e: Error) => [e.message, e.message];\n',
@@ -67,20 +87,41 @@ test('the allowlist only shrinks: growth fails, and a stale or generous entry na
     },
     (directory) => {
       const errors = uiMessageErrors(directory, {
-        'web/Grown.ts': 1,
-        'web/Shrunk.ts': 3,
-        'web/Clean.ts': 2,
+        permanent: {},
+        debt: { 'web/Grown.ts': 1, 'web/Shrunk.ts': 3, 'web/Clean.ts': 2 },
       });
       assert.deepEqual(errors, [
-        'web/Grown.ts: 2 `.message` reads (lines 1, 1), scripts/ui-message-allowlist.json allows 1',
-        `${allowlistPath}: web/Shrunk.ts now has 1 \`.message\` reads; lower its entry from 3 to 1 (node scripts/check-ui-message.mjs --shrink)`,
-        `${allowlistPath}: web/Clean.ts has no \`.message\` reads left; remove its entry (node scripts/check-ui-message.mjs --shrink)`,
+        'web/Grown.ts: 2 error-text reads (lines 1, 1), scripts/ui-message-allowlist.json allows 1',
+        `${allowlistPath}: web/Shrunk.ts now owes 1 error-text reads; lower its debt from 3 to 1 (node scripts/check-ui-message.mjs --shrink)`,
+        `${allowlistPath}: web/Clean.ts owes no error-text reads; remove its debt entry (node scripts/check-ui-message.mjs --shrink)`,
       ]);
     }
   );
 });
 
-test('shrinking lowers and removes entries but never raises or adds one', () => {
+test('a permanent exception needs a reason, covers its reads first and is never shrunk', () => {
+  withRepository(
+    {
+      'web/Library.ts': 'export const a = (d: { message: string }) => [d.message, d.message];\n',
+      'web/Gone.ts': 'export const a = 1;\n',
+      [allowlistPath]: `${JSON.stringify({ permanent: { 'web/Library.ts': { count: 1 } } })}\n`,
+    },
+    (directory) => {
+      assert.throws(() => readAllowlist(directory), /permanent "web\/Library\.ts" needs/u);
+      const permanent = {
+        'web/Library.ts': { count: 1, reason: 'The library names it.' },
+        'web/Gone.ts': { count: 1, reason: 'Stored data names it.' },
+      };
+      const allowlist = { permanent, debt: { 'web/Library.ts': 1 } };
+      assert.deepEqual(uiMessageErrors(directory, allowlist), [
+        `${allowlistPath}: web/Gone.ts has 0 error-text reads but its permanent entry keeps 1; correct the entry and its reason by hand`,
+      ]);
+      assert.deepEqual(shrinkAllowlist(directory, allowlist), allowlist);
+    }
+  );
+});
+
+test('shrinking lowers and removes debt but never raises or adds one', () => {
   withRepository(
     {
       'web/Grown.ts': 'export const a = (e: Error) => [e.message, e.message];\n',
@@ -91,11 +132,10 @@ test('shrinking lowers and removes entries but never raises or adds one', () => 
     },
     (directory) => {
       const next = shrinkAllowlist(directory, {
-        'web/Shrunk.ts': 3,
-        'web/Grown.ts': 1,
-        'web/Clean.ts': 2,
+        permanent: {},
+        debt: { 'web/Shrunk.ts': 3, 'web/Grown.ts': 1, 'web/Clean.ts': 2 },
       });
-      assert.deepEqual(next, { 'web/Grown.ts': 1, 'web/Shrunk.ts': 1 });
+      assert.deepEqual(next, { permanent: {}, debt: { 'web/Grown.ts': 1, 'web/Shrunk.ts': 1 } });
       assert.deepEqual(JSON.parse(readFileSync(join(directory, allowlistPath), 'utf8')), next);
       assert.equal(uiMessageErrors(directory).length, 2);
     }

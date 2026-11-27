@@ -35,6 +35,7 @@ export function rejectionMessage(rejection: ProviderRejection): string {
 export function ProviderRejectionNotice({ rejection }: { rejection: ProviderRejection }) {
   useI18n();
   const optionNamed = rejection.options.some((option) => option !== 'input');
+  const detail = rejection.message;
   return (
     <div className="provider-rejection" role="status">
       <p>
@@ -44,12 +45,10 @@ export function ProviderRejectionNotice({ rejection }: { rejection: ProviderReje
           <small> {t('errors.providerCode', { code: rejection.providerCode })}</small>
         )}
       </p>
-      {rejection.message && (
+      {detail && (
         <details>
           <summary>{t('errors.providerDetails')}</summary>
-          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-            {rejection.message}
-          </pre>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{detail}</pre>
         </details>
       )}
     </div>

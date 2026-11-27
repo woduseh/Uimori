@@ -1,6 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import type { PromptWorkspace } from '../core/product.js';
 import { createPromptWorkspaceStore } from '../web/prompt-workspace-store.js';
+import { legacyMessageString, UiError, uiMessage } from '../web/ui-message.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -89,9 +90,10 @@ test('latest failure keeps the last value and recovery clears its error', async 
   await done;
   done = f.store.refresh();
   await Promise.resolve();
-  f.reads[1].reject(new Error('Synthetic read failure'));
+  const failure = uiMessage('shared.loadFailed');
+  f.reads[1].reject(new UiError(failure));
   await done;
-  expect(f.store.getSnapshot()).toEqual({ workspace: value, error: 'Synthetic read failure' });
+  expect(f.store.getSnapshot()).toEqual({ workspace: value, error: legacyMessageString(failure) });
   done = f.store.refresh();
   await Promise.resolve();
   f.reads[2].resolve(workspace(3));

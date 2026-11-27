@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Connection, LibraryConnection } from '../core/product.js';
 import { api } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 
 type Catalog = Connection['catalog'];
 
@@ -21,7 +22,7 @@ export function useConnectionCatalog(
     : '';
   const needed = active && !!connection && !listed;
   const [loaded, setLoaded] = useState<{ id: string; key: string; catalog: Catalog } | null>(null);
-  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<{ key: string; error: string } | null>(null);
   useEffect(() => {
     if (!needed) return;
     let current = true;
@@ -33,7 +34,7 @@ export function useConnectionCatalog(
         if (current)
           setFailure({
             key: requestKey,
-            message: caught instanceof Error ? caught.message : String(caught),
+            error: errorDescriptor(caught),
           });
       }
     );
@@ -45,7 +46,7 @@ export function useConnectionCatalog(
   if (!connection) return { connection: undefined, loading: false, error: '', retry };
   if (listed)
     return { connection: { ...connection, catalog: listed }, loading: false, error: '', retry };
-  const error = failure?.key === requestKey ? failure.message : '';
+  const error = failure?.key === requestKey ? failure.error : '';
   return {
     connection: { ...connection, catalog: loaded?.id === id ? loaded.catalog : [] },
     loading: needed && !error && loaded?.key !== requestKey,

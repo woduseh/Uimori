@@ -1,4 +1,5 @@
 import type { PromptWorkspace } from '../core/product.js';
+import { errorDescriptor } from './api-errors.js';
 
 type Snapshot = Readonly<{ workspace: PromptWorkspace | null; error: string }>;
 type Session = { requested: number; controller: AbortController; flight?: Promise<void> };
@@ -26,7 +27,7 @@ export function createPromptWorkspaceStore(options: {
         } catch (caught) {
           next = {
             workspace: snapshot.workspace,
-            error: caught instanceof Error ? caught.message : String(caught),
+            error: errorDescriptor(caught),
           };
         }
         if (session !== owner) return;

@@ -7,6 +7,7 @@ import { TransientNotice } from './TransientNotice.js';
 import { message, t, translateMessage, useI18n } from './i18n.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
+import { errorDescriptor } from './api-errors.js';
 
 export function HelperModelPicker({
   open,
@@ -110,7 +111,7 @@ export function HelperModelPicker({
       }
     } catch (cause) {
       if (epoch.current === owner) {
-        setWriteError(cause instanceof Error ? cause.message : String(cause));
+        setWriteError(errorDescriptor(cause));
         setNeedsRead(true);
       }
     } finally {

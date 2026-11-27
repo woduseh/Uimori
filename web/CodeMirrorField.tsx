@@ -372,13 +372,13 @@ const cursorDiagnostic = StateField.define<readonly Tooltip[]>({
     const { state } = transaction;
     const selection = state.selection.main;
     if (!selection.empty || completionStatus(state)) return [];
-    let found: { message: string; from: number; to: number } | null = null;
+    let found: { text: string; from: number; to: number } | null = null;
     forEachDiagnostic(state, (diagnostic, from, to) => {
       if (found === null && from < to && from <= selection.head && selection.head <= to)
-        found = { message: diagnostic.message, from, to };
+        found = { text: diagnostic.message, from, to };
     });
     if (found === null) return [];
-    const { message, from, to }: { message: string; from: number; to: number } = found;
+    const { text: shown, from, to }: { text: string; from: number; to: number } = found;
     return [
       {
         pos: selection.head,
@@ -387,7 +387,7 @@ const cursorDiagnostic = StateField.define<readonly Tooltip[]>({
           const dom = document.createElement('div');
           dom.className = 'cm-cbs-cursor-diagnostic';
           const text = document.createElement('span');
-          text.textContent = message;
+          text.textContent = shown;
           dom.append(text);
           if (view.dom.closest('[data-editor-helper]')) {
             const ask = document.createElement('button');

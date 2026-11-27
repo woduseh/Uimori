@@ -40,7 +40,7 @@ No notice reports these gaps in the selection:
 
 - It finds Vitest files through the import graph of changed modules and, for other files, by a test naming the file or its extension. A test that reaches its sources another way is missed: `tests/background-work.test.ts` runs `dist` and `tests/helper-runner.test.ts` spawns `runner/runner.mjs`, and neither imports what it exercises. CI always runs the first in `linux-browser-core`; only a full run, such as the shards on `main`, checks the second against a source change.
 - `check:i18n` runs only for changes under `web/` or `server/` (where it rejects Korean text in thrown errors) or to the checker, but it also reads `core/`, `packages/`, `scripts/` and `tests/` for unused keys, so removing the last use of a key there is caught by `quality`, not by `check:changed`.
-- The UI message check (`scripts/check-ui-message.mjs`) runs for changes under `web/` or to the checker and its allowlist. It scans all of `web/`, so it also reports an allowlist entry left too high by an earlier change.
+- The UI message check (`scripts/check-ui-message.mjs`) runs for changes under `web/` or to the checker and its allowlist. It scans all of `web/`, so it also reports a debt entry left too high by an earlier change; a permanent entry that no longer matches is corrected by hand, never by `--shrink`.
 - It does not build. Tests that start the compiled server fail with "Run npm run build" until the build matches the source.
 
 `quality:full` builds before Vitest because some tests restart the compiled server. Vitest's 30-second per-test cap is an emergency limit for hosted runner variance; operation-specific polls and network deadlines remain explicit and shorter.

@@ -4,6 +4,7 @@ import { t, translateMessage, useI18n } from './i18n.js';
 import { RequestMessage } from './RequestMessage.js';
 import { HistoryIcon, StopIcon } from './ui-icons.js';
 import './cancelled-run.css';
+import { errorDescriptor } from './api-errors.js';
 
 export function CancelledRun({
   run,
@@ -35,7 +36,7 @@ export function CancelledRun({
     try {
       await onDismiss();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      setError(errorDescriptor(caught));
     } finally {
       lock.current = false;
       setDismissing(false);
