@@ -1,6 +1,7 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useI18n, formatNumber, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { useI18n, formatNumber } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -149,8 +150,8 @@ export function OutlinePanel({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(() => stored(pendingKey, null));
-  const [error, setError] = useState('');
-  const [loadError, setLoadError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [loadError, setLoadError] = useState<UiMessage | null>(null);
   const [loading, setLoading] = useState(false);
   const [brief, setBrief] = useState<Brief | null>(null);
   const [writing, setWriting] = useState(false);
@@ -184,11 +185,11 @@ export function OutlinePanel({
       const value = await api<OutlineDetail>(`/chats/${chatId}/outline`);
       if (mounted.current && generation === loadGeneration.current) {
         setOutline(value);
-        setLoadError('');
+        setLoadError(null);
       }
     } catch (cause) {
       if (mounted.current && generation === loadGeneration.current)
-        setLoadError((cause as Error).message);
+        setLoadError(toUiMessage(cause));
     } finally {
       if (mounted.current && generation === loadGeneration.current) setLoading(false);
     }
@@ -253,7 +254,7 @@ export function OutlinePanel({
     setWriting(false);
     setPreviewing(false);
     setBrief(null);
-    setError('');
+    setError(null);
     detailScroll.current?.scrollTo({ top: 0 });
   }
   function changeDraft(next: Draft) {
@@ -261,7 +262,7 @@ export function OutlinePanel({
     try {
       retain(draftKey, next);
     } catch {
-      setError(legacyDescriptor('prompts.uiYourDraftStaysOnThisScreenCheckBrowserStorage'));
+      setError(uiMessage('prompts.uiYourDraftStaysOnThisScreenCheckBrowserStorage'));
     }
   }
   function edit() {
@@ -289,7 +290,7 @@ export function OutlinePanel({
     setAdding(true);
     setEditing(false);
     setWriting(false);
-    setError('');
+    setError(null);
   }
   function remember(value: Pending | null, key: string, initial = false) {
     const existing = stored<Pending | null>(pendingKey, null);
@@ -302,7 +303,7 @@ export function OutlinePanel({
     if (sending.current) return;
     sending.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     let recovered = false;
     try {
       const saved = stored<Pending | null>(pendingKey, null);
@@ -374,7 +375,7 @@ export function OutlinePanel({
         remember(null, operation.body.idempotencyKey);
         if (mounted.current) await load();
       }
-      if (mounted.current) setError((cause as Error).message);
+      if (mounted.current) setError(toUiMessage(cause));
     } finally {
       sending.current = false;
       if (mounted.current) setBusy(false);
@@ -389,7 +390,7 @@ export function OutlinePanel({
   };
   async function prepareWriting(previewOnly = false) {
     if (!selected) return;
-    setError('');
+    setError(null);
     const generation = ++briefGeneration.current;
     try {
       const next = await api<Brief>(`/outline-nodes/${selected.id}/brief`);
@@ -407,7 +408,7 @@ export function OutlinePanel({
       setRequestText(stored(`${prefix}:additional-instruction:${selected.id}`, ''));
       setPreviousRequest(stored(`${prefix}:request:${selected.id}`, ''));
     } catch (cause) {
-      if (mounted.current) setError((cause as Error).message);
+      if (mounted.current) setError(toUiMessage(cause));
     }
   }
   function writeUnit() {
@@ -447,12 +448,12 @@ export function OutlinePanel({
   async function changeFocus(nodeId: string | null) {
     if (disabled) return;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await api(`/chats/${chatId}/outline/focus`, { nodeId }, 'PUT');
       dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
     } catch (cause) {
-      if (mounted.current) setError((cause as Error).message);
+      if (mounted.current) setError(toUiMessage(cause));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -667,14 +668,12 @@ export function OutlinePanel({
           )}
         </div>
       </header>
-      {outline && (
-        <DismissibleError error={legacyUiMessage(error)} onDismiss={() => setError('')} />
-      )}
+      {outline && <DismissibleError error={error} onDismiss={() => setError(null)} />}
       {outline && loadError && (
         <LoadingState
           presentation="inline"
           loading={loading}
-          error={legacyUiMessage(loadError)}
+          error={loadError}
           label={uiMessage('prompts.uiLoadingOutline')}
           onRetry={() => void load()}
         />
@@ -691,7 +690,7 @@ export function OutlinePanel({
         <LoadingState
           presentation="region"
           loading={loading || !loadError}
-          error={legacyUiMessage(loadError)}
+          error={loadError}
           label={uiMessage('prompts.uiLoadingOutline')}
           onRetry={() => void load()}
         />
@@ -1191,9 +1190,7 @@ export function OutlinePanel({
                                 await navigator.clipboard.writeText(previousRequest);
                               } catch {
                                 setError(
-                                  legacyDescriptor(
-                                    'prompts.uiUnableToCopyTheDraftSelectTheDraftText'
-                                  )
+                                  uiMessage('prompts.uiUnableToCopyTheDraftSelectTheDraftText')
                                 );
                               }
                             }}

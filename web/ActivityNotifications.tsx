@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatDate } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -22,7 +22,7 @@ export function ActivityNotifications({
   recoveryError,
   onRecoverRequest,
   onLater,
-  message,
+  label,
   onAcknowledge,
   onHistory,
   onClose,
@@ -38,7 +38,7 @@ export function ActivityNotifications({
   recoveryError: UiMessage | null;
   onRecoverRequest: (requestId: string) => void;
   onLater: (item: ActivityNoticeItem) => void;
-  message: (item: ActivityNoticeItem) => string;
+  label: (item: ActivityNoticeItem) => string;
   onAcknowledge: (items: ActivityNoticeItem[]) => void;
   onHistory: (items: ReaderActivity[]) => void;
   onClose: () => void;
@@ -47,7 +47,7 @@ export function ActivityNotifications({
   useI18n();
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [inspected, setInspected] = useState<string | null>(null);
   const sequence = useRef(0);
   const history = useRef(onHistory);
@@ -55,7 +55,7 @@ export function ActivityNotifications({
   async function load(before?: string) {
     const version = ++sequence.current;
     setLoading(true);
-    setError('');
+    setError(null);
     try {
       const page = await api<ActivityPage>(
         `/chats/${encodeURIComponent(chatId)}/activities?limit=100${before ? `&before=${encodeURIComponent(before)}` : ''}`
@@ -64,7 +64,7 @@ export function ActivityNotifications({
       history.current(page.items);
       setCursor(page.nextCursor);
     } catch {
-      if (version === sequence.current) setError(legacyDescriptor('helpers.m283'));
+      if (version === sequence.current) setError(uiMessage('helpers.m283'));
     } finally {
       if (version === sequence.current) setLoading(false);
     }
@@ -123,7 +123,7 @@ export function ActivityNotifications({
             >
               <div className="activity-notification-heading">
                 <div>
-                  <strong>{message(item)}</strong>
+                  <strong>{label(item)}</strong>
                   <small className="ui-meta-row">
                     <time dateTime={item.startedAt}>
                       {formatDate(new Date(item.startedAt), {
@@ -218,7 +218,7 @@ export function ActivityNotifications({
             </button>
           }
         >
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
       {cursor && !error && (
@@ -241,7 +241,7 @@ export function ActivityNotifications({
 function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead: () => void }) {
   useI18n();
   const [result, setResult] = useState<{ status: string; error?: string | null } | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const read = useRef(onRead);
   read.current = onRead;
   const { kind, runId, generation } = item;
@@ -259,7 +259,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
           actualGeneration !== undefined &&
           generation !== actualGeneration
         ) {
-          setError(legacyDescriptor('helpers.m300'));
+          setError(uiMessage('helpers.m300'));
           return;
         }
         setResult(value);
@@ -268,7 +268,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       .catch((cause) => {
         if (current)
           setError(
-            legacyDescriptor('helpers.m301', {
+            uiMessage('helpers.m301', {
               v0: cause instanceof ApiError ? ` (${cause.status})` : '',
             })
           );
@@ -282,7 +282,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       <LoadingState
         presentation="inline"
         loading={!error}
-        error={legacyUiMessage(error)}
+        error={error}
         label={uiMessage('helpers.m302')}
       />
     );
@@ -292,8 +292,8 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       <p>{t('helpers.m333', { status: labels[result.status] ?? t('helpers.m115') })}</p>
       {diagnostic && (
         <>
-          <p>{translateMessage(diagnostic.message)}</p>
-          <p>{translateMessage(diagnostic.action)}</p>
+          <p>{formatUiMessage(diagnostic.summary)}</p>
+          <p>{formatUiMessage(diagnostic.action)}</p>
           {diagnostic.code && <small>{t('helpers.m334', { code: diagnostic.code })}</small>}
         </>
       )}

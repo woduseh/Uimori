@@ -1,5 +1,6 @@
-import { useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { useI18n, formatDate } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   defaultStoryGuideConfig,
@@ -56,8 +57,8 @@ function StoryGuideEditor({
   const dirtyRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [conflictOpen, setConflictOpen] = useState(false);
   const reviewed = useRef<StoryGuideDetail | null>(null);
   const alive = useRef(true);
@@ -78,12 +79,9 @@ function StoryGuideEditor({
   }, [dirty, saving, onDirtyChange]);
 
   function report(caught: unknown) {
-    const text =
-      caught instanceof Error
-        ? caught.message
-        : legacyDescriptor('prompts.uiUnableToLoadCanonAndCharacterReferences');
-    setError(text);
-    onError(legacyUiMessage(text));
+    const failure = toUiMessage(caught, 'prompts.uiUnableToLoadCanonAndCharacterReferences');
+    setError(failure);
+    onError(failure);
   }
   function acceptSaved(value: StoryGuideDetail) {
     baseline.current = value.config;
@@ -122,7 +120,7 @@ function StoryGuideEditor({
     dirtyRef.current = JSON.stringify(next) !== JSON.stringify(baseline.current);
     setDraft(next);
     setDirty(dirtyRef.current);
-    setMessage('');
+    setNotice(null);
   }
   async function save() {
     if (savingRef.current || !loaded) return false;
@@ -133,8 +131,8 @@ function StoryGuideEditor({
     }
     savingRef.current = true;
     setSaving(true);
-    setError('');
-    setMessage('');
+    setError(null);
+    setNotice(null);
     try {
       const value = await api<StoryGuideDetail>(
         `${base}/story-guide`,
@@ -145,7 +143,7 @@ function StoryGuideEditor({
       loadSequence.current++;
       setLoaded(value);
       acceptSaved(value);
-      setMessage(legacyDescriptor('prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe'));
+      setNotice(uiMessage('prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe'));
       onError(null);
       onChanged();
       return true;
@@ -166,11 +164,11 @@ function StoryGuideEditor({
       <LoadingState
         presentation="region"
         loading={!error}
-        error={legacyUiMessage(error)}
+        error={error}
         label={uiMessage('prompts.uiLoadingCanonAndCharacterReferences')}
         errorLabel={uiMessage('prompts.uiUnableToLoadCanonAndCharacterReferences')}
         onRetry={() => {
-          setError('');
+          setError(null);
           void load();
         }}
       />
@@ -268,10 +266,10 @@ function StoryGuideEditor({
       </form>
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
-      <TransientNotice content={legacyUiMessage(message)} />
+      <TransientNotice content={notice} />
       <section className="story-guide-section" aria-label={t('prompts.uiLastWritingBrief')}>
         {loaded.brief ? (
           <details className="story-guide-last-brief">
@@ -371,7 +369,7 @@ function StoryGuideEditor({
           if (!reviewed.current) return;
           setLoaded(reviewed.current);
           setDraftRevision(reviewed.current.revision);
-          setError('');
+          setError(null);
         }}
       />
     </section>

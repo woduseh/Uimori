@@ -1,5 +1,5 @@
 import { t, useI18n, formatNumber } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useId, useState, type CSSProperties, type ReactNode } from 'react';
 import {
@@ -329,7 +329,7 @@ export function SceneReceipt({
           <LoadingState
             presentation="inline"
             loading={!detail.error}
-            error={legacyUiMessage(detail.error)}
+            error={detail.error}
             errorLabel={uiMessage('reader.couldNotLoadCacheAndLoreRecords')}
             label={uiMessage('reader.loadingCacheAndLoreRecords')}
             onRetry={detail.retry}

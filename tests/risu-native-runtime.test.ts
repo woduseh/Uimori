@@ -956,7 +956,7 @@ describe('native Risu execution', () => {
       },
     });
     expect(result.variables).toEqual({ input: '55', random: '3' });
-    expect(result.effects.notifications).toEqual([{ kind: 'normal', message: 'Done' }]);
+    expect(result.effects.notifications).toEqual([{ kind: 'normal', text: 'Done' }]);
     await expect(executeRisuNative(input(content))).rejects.toThrow('RISU_NATIVE_HOST_UNAVAILABLE');
   });
   it.each([

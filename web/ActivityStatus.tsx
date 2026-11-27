@@ -392,7 +392,7 @@ export function ActivityStatus({
           setHidden((old) => [...new Set([...old, notice.key])]);
           setNotificationsOpen(false);
         }}
-        message={activityStatusLabel}
+        label={activityStatusLabel}
         onAcknowledge={acknowledge}
         onHistory={(page) =>
           setHistory((old) => {

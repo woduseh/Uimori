@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useRef, useState } from 'react';
 import type {
@@ -27,7 +28,7 @@ export function ManuscriptExportDialog({
   const [from, setFrom] = useState(0);
   const [to, setTo] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const active = useRef(0);
   const retryRead = useRetryableEffect(() => {
     const generation = ++active.current;
@@ -37,7 +38,7 @@ export function ManuscriptExportDialog({
     setMode('source');
     setRange(false);
     setBusy(false);
-    setError('');
+    setError(null);
     void api<ManuscriptExportMetadata>(
       `/chats/${chatId}/manuscript`,
       undefined,
@@ -52,7 +53,7 @@ export function ManuscriptExportDialog({
       })
       .catch((cause) => {
         if (!controller.signal.aborted && active.current === generation)
-          setError((cause as Error).message);
+          setError(toUiMessage(cause));
       });
     return () => {
       controller.abort();
@@ -63,7 +64,7 @@ export function ManuscriptExportDialog({
     if (!metadata || busy) return;
     const generation = active.current;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       const result = await api<ManuscriptExportResult>(`/chats/${chatId}/manuscript`, {
         mode,
@@ -83,7 +84,7 @@ export function ManuscriptExportDialog({
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       onClose();
     } catch (cause) {
-      if (active.current === generation) setError((cause as Error).message);
+      if (active.current === generation) setError(toUiMessage(cause));
     } finally {
       if (active.current === generation) setBusy(false);
     }
@@ -103,7 +104,7 @@ export function ManuscriptExportDialog({
             value={mode}
             onChange={(event) => {
               setMode(event.target.value as ManuscriptExportMode);
-              setError('');
+              setError(null);
             }}
           >
             <option value="source">{t('transfer.m195')}</option>
@@ -116,7 +117,7 @@ export function ManuscriptExportDialog({
             value={range ? 'range' : 'all'}
             onChange={(event) => {
               setRange(event.target.value === 'range');
-              setError('');
+              setError(null);
             }}
           >
             <option value="all">{t('transfer.m198')}</option>
@@ -133,7 +134,7 @@ export function ManuscriptExportDialog({
                   const next = Number(event.target.value);
                   setFrom(next);
                   if (next > to) setTo(next);
-                  setError('');
+                  setError(null);
                 }}
               >
                 {metadata?.scenes.map((scene) => (
@@ -153,7 +154,7 @@ export function ManuscriptExportDialog({
                   const next = Number(event.target.value);
                   setTo(next);
                   if (next < from) setFrom(next);
-                  setError('');
+                  setError(null);
                 }}
               >
                 {metadata?.scenes.map((scene) => (
@@ -174,7 +175,7 @@ export function ManuscriptExportDialog({
         <LoadingState
           presentation="inline"
           loading={!error}
-          error={legacyUiMessage(error)}
+          error={error}
           label={uiMessage('transfer.m204')}
           onRetry={retryRead}
         />
@@ -182,7 +183,7 @@ export function ManuscriptExportDialog({
       {metadata && !metadata.scenes.length && <p role="status">{t('transfer.m205')}</p>}
       {metadata && error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
       <div className="form-actions">

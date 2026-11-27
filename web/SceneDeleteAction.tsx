@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-deletion.js';
@@ -49,7 +49,7 @@ export function SceneDeleteDialog({
   const [scope, setScope] = useState<'only' | 'following'>('only');
   const [pending, setPending] = useState<{ command: Pending; raw: string } | null>(null);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState<UiMessage | null>(null);
   const locked = useRef(false);
   const mounted = useRef(true);
   const callbacks = useRef({ onClose, onError, onPendingChange });
@@ -98,7 +98,7 @@ export function SceneDeleteDialog({
     if (!impact || locked.current) return;
     locked.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     const command = pending?.command ?? { impact, scope, idempotencyKey: crypto.randomUUID() };
     const raw = pending?.raw ?? JSON.stringify(command);
     let sent = false;
@@ -110,7 +110,7 @@ export function SceneDeleteDialog({
     try {
       const stored = sessionStorage.getItem(storageKey);
       if (stored !== null && stored !== raw) {
-        setError(descriptor('chatmanage.unknown'));
+        setError(uiMessage('chatmanage.unknown'));
         callbacks.current.onPendingChange();
         return;
       }
@@ -125,7 +125,7 @@ export function SceneDeleteDialog({
       );
     } catch (cause) {
       if (!sent) {
-        if (mounted.current) setError((cause as Error).message);
+        if (mounted.current) setError(toUiMessage(cause));
       } else if (!pending && definiteRejection(cause)) {
         try {
           clearOwnRecord();
@@ -134,7 +134,7 @@ export function SceneDeleteDialog({
           callbacks.current.onError(toUiMessage(cause));
           callbacks.current.onClose();
         }
-      } else if (mounted.current) setError(descriptor('chatmanage.unknown'));
+      } else if (mounted.current) setError(uiMessage('chatmanage.unknown'));
     } finally {
       locked.current = false;
       if (mounted.current) setBusy(false);
@@ -187,7 +187,7 @@ export function SceneDeleteDialog({
       {scope === 'only' && (impact?.followingCount ?? 0) > 1 && (
         <p className="muted">{t('chatmanage.variablesHelp')}</p>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <div className="form-actions">
         <button type="button" className="secondary" disabled={busy} onClick={onClose}>
           {t('shared.cancel')}

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { OrphanMemoryDetail, OrphanMemoryEntry } from '../core/orphan-memory.js';
 import { api, ApiError } from './api.js';
-import { t, message, translateMessage, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -43,8 +44,8 @@ export function OrphanMemoryPanel({
   const [review, setReview] = useState<Review | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const alive = useRef(true);
   const sequence = useRef(0);
   const lock = useRef(false);
@@ -68,10 +69,10 @@ export function OrphanMemoryPanel({
       if (!alive.current || generation !== scope.current.generation || read !== sequence.current)
         return;
       setDetail(result);
-      setError('');
+      setError(null);
     } catch (caught) {
       if (alive.current && generation === scope.current.generation && read === sequence.current)
-        setError(caught instanceof Error ? caught.message : message('orphanmemory.failed'));
+        setError(toUiMessage(caught, 'orphanmemory.failed'));
     } finally {
       if (alive.current && generation === scope.current.generation && read === sequence.current)
         setLoading(false);
@@ -86,7 +87,7 @@ export function OrphanMemoryPanel({
     const generation = scope.current.generation;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await api(base, {
         kind: review.entry.kind,
@@ -101,17 +102,17 @@ export function OrphanMemoryPanel({
       if (!alive.current || generation !== scope.current.generation) return;
       setReview(null);
       setNotice(
-        message(review.action === 'retire' ? 'orphanmemory.retired' : 'orphanmemory.reanchored')
+        uiMessage(review.action === 'retire' ? 'orphanmemory.retired' : 'orphanmemory.reanchored')
       );
       await Promise.all([load(), onRefreshStory()]);
       onChanged();
     } catch (caught) {
       if (!alive.current || generation !== scope.current.generation) return;
-      setError(caught instanceof Error ? caught.message : message('orphanmemory.failed'));
+      setError(toUiMessage(caught, 'orphanmemory.failed'));
       if (caught instanceof ApiError && caught.status === 409) {
         setReview(null);
         await load();
-        setError(message('orphanmemory.conflict'));
+        setError(uiMessage('orphanmemory.conflict'));
       }
     } finally {
       lock.current = false;
@@ -120,14 +121,14 @@ export function OrphanMemoryPanel({
   }
   const current = detail?.headRevision === headRevision;
   if (current && !detail.entries.length && !loading && !error)
-    return <TransientNotice content={legacyUiMessage(notice)} />;
+    return <TransientNotice content={notice} />;
   return (
     <section
       className="orphan-memory"
       aria-label={t('orphanmemory.title')}
       data-testid="orphan-memory"
     >
-      <TransientNotice content={legacyUiMessage(notice)} />
+      <TransientNotice content={notice} />
       {error && (
         <NoticeBanner
           tone="error"
@@ -142,7 +143,7 @@ export function OrphanMemoryPanel({
             </button>
           }
         >
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
       {loading && <LoadingState presentation="inline" label={uiMessage('orphanmemory.loading')} />}

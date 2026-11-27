@@ -1,5 +1,5 @@
-import { useI18n, translateMessage } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage } from './ui-message.js';
 import { Check, Languages, Square, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { INPUT_TRANSLATION_LANGUAGES } from '../core/input-translation.js';
@@ -215,7 +215,7 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
       )}
       {translation.error && (
         <p className="error" role="alert">
-          {translateMessage(translation.error)}
+          {formatUiMessage(translation.error)}
         </p>
       )}
     </section>

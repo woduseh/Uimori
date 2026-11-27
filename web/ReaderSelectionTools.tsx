@@ -14,8 +14,9 @@ import { diffText, TEXT_DIFF_LIMITS } from '../core/text-diff.js';
 import { ApiError } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
-import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { useFocusFallback } from './useFocusFallback.js';
 import { LoadingState } from './LoadingState.js';
@@ -491,7 +492,7 @@ function RevisionPopover({
   const [instruction, setInstruction] = useState('');
   const [saving, setSaving] = useState(false);
   const [conflicted, setConflicted] = useState(false);
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useState<UiMessage | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const cancelButton = useRef<HTMLButtonElement>(null);
   const applyButton = useRef<HTMLButtonElement>(null);
@@ -529,7 +530,7 @@ function RevisionPopover({
   async function apply() {
     if (proposal === null || saving || !revision.isCurrent()) return;
     setSaving(true);
-    setSaveError('');
+    setSaveError(null);
     setConflicted(false);
     try {
       await onApply(
@@ -537,12 +538,7 @@ function RevisionPopover({
       );
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) setConflicted(true);
-      else
-        setSaveError(
-          cause instanceof Error
-            ? cause.message
-            : legacyDescriptor('reader.couldNotSaveYourEditsArePreserved')
-        );
+      else setSaveError(toUiMessage(cause, 'reader.couldNotSaveYourEditsArePreserved'));
     } finally {
       setSaving(false);
     }
@@ -605,7 +601,7 @@ function RevisionPopover({
       )}
       {staleNotice && <NoticeBanner>{staleNotice}</NoticeBanner>}
       {(revision.error || saveError) && (
-        <NoticeBanner tone="error">{translateMessage(revision.error || saveError)}</NoticeBanner>
+        <NoticeBanner tone="error">{revision.error ?? saveError}</NoticeBanner>
       )}
       {busy && (
         <LoadingState
