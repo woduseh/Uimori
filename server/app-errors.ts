@@ -26,7 +26,7 @@ export type PlainAppErrorCode = {
 export const isPlainAppErrorCode = (value: unknown): value is PlainAppErrorCode =>
   isAppErrorCode(value) && !appErrorTakesParams(value);
 
-export function storedModelRequired(error: unknown): string | undefined {
+export function storedModelRequired(error: unknown): `MODEL_REQUIRED:${string}` | undefined {
   return error instanceof AppError && error.code === 'MODEL_REQUIRED'
     ? `MODEL_REQUIRED:${(error.params as AppErrorParams['MODEL_REQUIRED']).role}`
     : undefined;

@@ -608,6 +608,40 @@ describe('host read compaction and provider continuation inside one main run', (
     expect(fixed).toEqual(original);
   });
 
+  test('a tool-result compaction failure outside the stored codes returns the generic code, not its text', async () => {
+    const fixed = await fixedHeavySnapshot(),
+      log = hooks();
+    const record = log.value.onToolEvent;
+    log.value.onToolEvent = (event, timing) => {
+      if (event.name === 'context.compact') throw new Error('database is locked at /private/path');
+      return record(event, timing);
+    };
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    script([
+      (_body, n) =>
+        toolTurn(
+          Array.from({ length: 4 }, (_, index) => ({
+            id: `failing-read-${index}`,
+            name: 'story.read',
+            args: { sceneNumber: index + 1, limit: 16000 },
+          })),
+          n
+        ),
+      () =>
+        sse(
+          { type: 'text_delta', delta: 'Summary of the reads. '.repeat(40) },
+          { type: 'usage', inputTokens: 11, outputTokens: 7, costUsd: null },
+          { type: 'done', reason: 'stop' }
+        ),
+    ]);
+    const result = await runMain(fixed, log.value);
+    expect(result).toMatchObject({ status: 'error', error: 'CONTEXT_TOOL_COMPACTION_FAILED' });
+    expect(stderr).toHaveBeenCalledWith(
+      expect.stringMatching(/^CONTEXT_FAILURE_FOLDED CONTEXT_TOOL_COMPACTION_FAILED Error/u)
+    );
+    expect(String(stderr.mock.calls)).not.toContain('database is locked');
+  });
+
   test.each(['completed', 'call-limit', 'authorization-revoked'] as const)(
     'accumulated reads are admitted before the next send; compaction %s preserves originals',
     async (outcome) => {

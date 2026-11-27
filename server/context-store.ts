@@ -6,6 +6,7 @@ import {
   CONTEXT_JOB_CANCELLED,
   CONTEXT_JOB_INTERRUPTED,
   type ContextCheckpointRef,
+  type ContextFailureCode,
   type ContextPlan,
 } from '../core/context-plan.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -406,7 +407,7 @@ export class ContextStore {
       return this.job(id);
     });
   }
-  fail(id: string, error: string) {
+  fail(id: string, error: ContextFailureCode) {
     return this.store.transaction(() => {
       const job = this.job(id);
       const changed = this.db

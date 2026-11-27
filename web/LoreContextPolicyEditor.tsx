@@ -22,7 +22,7 @@ import {
 import type { PromptCompilation } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
-import { requestImageError } from './request-image-errors.js';
+import { knownContextError } from './context-error.js';
 import './lore-context.css';
 import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
@@ -131,9 +131,26 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
 type Preview = {
   loreContext?: LoreContextSnapshot;
   compilation: PromptCompilation;
-  error?: string;
+  error?: { code: string; detail?: string };
   scope: string;
 };
+
+function PreviewFailure({ code, detail }: { code: string; detail?: string }) {
+  const known = knownContextError(code);
+  return (
+    <div className="error" role="alert">
+      <p>{known ? formatUiMessage(known) : t('settings.promptPreviewProviderFailed')}</p>
+      {code !== 'PROMPT_PREVIEW_FAILED' && (
+        <details>
+          <summary>{t('settings.m303')}</summary>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            {detail ? `${code}:${detail}` : code}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
 
 export function LoreContextPolicyEditor({
   value,
@@ -399,12 +416,7 @@ export function LoreContextPolicyEditor({
                   ))}
                 </ol>
               </details>
-              {preview.value.error && (
-                <p className="error" role="alert">
-                  {requestImageError(preview.value.error) ??
-                    t('settings.promptPreviewProviderFailed', { code: preview.value.error })}
-                </p>
-              )}
+              {preview.value.error && <PreviewFailure {...preview.value.error} />}
             </div>
           )}
           {error && (

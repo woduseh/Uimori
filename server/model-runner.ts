@@ -36,6 +36,7 @@ import type { MainContextParts } from '../core/scene-usage.js';
 import { continuedContextParts, mainContextParts } from './context-parts.js';
 import { requestReceipt } from './request-receipt.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
+import { contextFailureCode } from './context-failure.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -532,7 +533,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           )
             return fail('CONNECTION_NOT_AUTHORIZED');
         } catch (error) {
-          return fail(error instanceof Error ? error.message : 'CONTEXT_TOOL_COMPACTION_FAILED');
+          return fail(contextFailureCode(error, 'CONTEXT_TOOL_COMPACTION_FAILED'));
         }
       }
     }

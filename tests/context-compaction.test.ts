@@ -11,7 +11,6 @@ import { validateProviderPrompt, type PromptHistoryMessage } from '../core/risu-
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import {
   ContextCompactionError,
-  contextFailureCode,
   prepareInputContext,
   type ContextCompactionHooks,
 } from '../server/context-compaction.js';
@@ -25,6 +24,7 @@ import { buildMainProviderRequest } from '../server/main-request.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { ProviderContractError } from '../core/provider-errors.js';
 import { AppError } from '../server/app-errors.js';
+import { contextFailureCode } from '../server/context-failure.js';
 import { HttpError } from '../server/request-validation.js';
 
 const emptyUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
@@ -605,11 +605,11 @@ describe('input context projection and durable summary calls', () => {
     });
     const invalid = observed({
       measureInput: () => {
-        throw new Error('PROMPT_UNSUPPORTED_MODEL');
+        throw new Error('PROMPT_PREFILL_UNSUPPORTED:block=main:index=0:protocol=p:model=m');
       },
     });
     expect(await failure(prepareInputContext(await snapshot([]), invalid.hooks))).toMatchObject({
-      code: 'PROMPT_UNSUPPORTED_MODEL',
+      code: 'PROMPT_PREFILL_UNSUPPORTED',
       usage: { modelCalls: 0 },
     });
   });
@@ -684,24 +684,30 @@ describe('input context projection and durable summary calls', () => {
 
   test.each([
     [new Error('SQLITE_BUSY: database is locked at /private/path'), 'CONTEXT_COMPACTION_FAILED'],
-    [new ProviderContractError('INVALID_CONTEXT_INPUT'), 'INVALID_CONTEXT_INPUT'],
-  ])(
-    'a failure outside the known codes is stored as a code, never its text',
-    async (cause, code) => {
-      const log = observed({
-        measureInput: () => {
-          throw cause;
-        },
-      });
-      const error = await failure(prepareInputContext(await snapshot(oldScenes()), log.hooks));
-      expect(error.code).toBe(code);
-      expect(error.plan.error).toBe(code);
-      expect(log.progress.at(-1)?.error).toBe(code);
-    }
-  );
+    [new ProviderContractError('INVALID_CONTEXT_INPUT'), 'CONTEXT_COMPACTION_FAILED'],
+    [new ProviderContractError('IMAGE_INPUT_UNSUPPORTED_MODEL'), 'IMAGE_INPUT_UNSUPPORTED_MODEL'],
+    [
+      new ProviderContractError(
+        'PROMPT_MID_SYSTEM_UNSUPPORTED:block=main:index=3:protocol=vertex-gemini-v1:model=m'
+      ),
+      'PROMPT_MID_SYSTEM_UNSUPPORTED',
+    ],
+  ])('a failure is stored as a code the web words, never its text', async (cause, code) => {
+    vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const log = observed({
+      measureInput: () => {
+        throw cause;
+      },
+    });
+    const error = await failure(prepareInputContext(await snapshot(oldScenes()), log.hooks));
+    expect(error.code).toBe(code);
+    expect(error.plan.error).toBe(code);
+    expect(log.progress.at(-1)?.error).toBe(code);
+  });
 });
 
-test('a context job failure is stored as a context code, a model requirement or the generic code', () => {
+test('a context job failure folds to the generic code unless the web has a message for it', () => {
+  const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
   const plan = { error: 'CONTEXT_COMPACTION_TIMEOUT' } as ContextPlan;
   expect(
     contextFailureCode(new ContextCompactionError('CONTEXT_COMPACTION_TIMEOUT', emptyUsage, plan))
@@ -713,12 +719,17 @@ test('a context job failure is stored as a context code, a model requirement or 
     'CONTEXT_INPUT_MISSING'
   );
   expect(contextFailureCode(new Error('MODEL_REQUIRED:context'))).toBe('MODEL_REQUIRED:context');
+  expect(stderr).not.toHaveBeenCalled();
   expect(
     contextFailureCode(Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' }))
-  ).toBe('SQLITE_BUSY');
-  expect(
-    contextFailureCode(new TypeError("Cannot read properties of undefined (reading 'x')"))
   ).toBe('CONTEXT_COMPACTION_FAILED');
+  expect(stderr).toHaveBeenLastCalledWith(
+    expect.stringMatching(/^CONTEXT_FAILURE_FOLDED CONTEXT_COMPACTION_FAILED Error\(SQLITE_BUSY\)/u)
+  );
+  expect(new HttpError(409, 'CONTEXT_CHECKPOINT_MISSING')).toSatisfy(
+    (cause) => contextFailureCode(cause) === 'CONTEXT_COMPACTION_FAILED'
+  );
+  expect(String(stderr.mock.calls)).not.toContain('database is locked');
 });
 
 test('manual compaction fits one source prefix without rebuilding the writer input for every scene', async () => {

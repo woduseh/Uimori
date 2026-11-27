@@ -1814,10 +1814,22 @@ export const messages = {
     zh: '服务器在压缩完成前停止了。请重新请求。',
   },
   'settings.promptPreviewProviderFailed': {
-    ko: '이 프롬프트로 프로바이더 요청을 만들지 못했어요.{code, select, PROMPT_PREVIEW_FAILED {} other { ({code})}}',
-    en: 'Could not build a provider request from this prompt.{code, select, PROMPT_PREVIEW_FAILED {} other { ({code})}}',
-    ja: 'このプロンプトからプロバイダーへのリクエストを作れませんでした。{code, select, PROMPT_PREVIEW_FAILED {} other { ({code})}}',
-    zh: '无法根据此提示词生成提供商请求。{code, select, PROMPT_PREVIEW_FAILED {} other { ({code})}}',
+    ko: '이 프롬프트로 프로바이더 요청을 만들지 못했어요.',
+    en: 'Could not build a provider request from this prompt.',
+    ja: 'このプロンプトからプロバイダーへのリクエストを作れませんでした。',
+    zh: '无法根据此提示词生成提供商请求。',
+  },
+  'settings.contextErrorPromptUnsupported': {
+    ko: '선택한 모델이 이 프롬프트의 구성(중간 시스템 메시지, 응답 시작 문구, 캐시 지점)을 받지 못해요. 프롬프트를 확인하거나 다른 모델을 선택해 주세요.',
+    en: 'The selected model cannot take this prompt’s structure (a mid-conversation system message, a response prefill or a cache point). Check the prompt or select another model.',
+    ja: '選択したモデルはこのプロンプトの構成（途中のシステムメッセージ、応答の書き出し、キャッシュ位置）を受け付けません。プロンプトを確認するか、別のモデルを選んでください。',
+    zh: '所选模型不支持此提示词的结构（对话中的系统消息、回复开头或缓存点）。请检查提示词或选择其他模型。',
+  },
+  'settings.contextErrorWindowExceeded': {
+    ko: '모델의 컨텍스트 창이 가득 차서 응답이 중간에 멈췄어요. 입력을 줄이거나 컨텍스트 창이 더 큰 모델을 선택해 주세요.',
+    en: 'The model’s context window filled up, so the response stopped partway. Shorten the input or select a model with a larger context window.',
+    ja: 'モデルのコンテキストウィンドウがいっぱいになり、応答が途中で止まりました。入力を減らすか、コンテキストウィンドウが大きいモデルを選んでください。',
+    zh: '模型的上下文窗口已满，回复中途停止。请缩短输入或选择上下文窗口更大的模型。',
   },
   'settings.contextErrorConnection': {
     ko: '모델 연결을 쓸 수 없어요. 설정 > 프로바이더에서 연결을 확인해 주세요.',

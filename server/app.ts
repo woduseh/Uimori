@@ -67,7 +67,9 @@ import { activityFeed, acknowledgedActivities, acknowledgeActivities } from './a
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { type MainHooks } from './model-runner.js';
-import { contextFailureCode, prepareInputContext } from './context-compaction.js';
+import { prepareInputContext } from './context-compaction.js';
+import { contextFailureCode } from './context-failure.js';
+import { failureLabel } from './failure-label.js';
 import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
 import { createNativeRisuHost } from './risu-native-host.js';
 import { nativeInteractionRoutes } from './risu-native-interactions.js';
@@ -177,13 +179,6 @@ function transcriptErrorCode(
 ): (typeof transcriptErrorCodes)[number] | 'CHAT_TRANSCRIPT_INVALID' {
   return transcriptErrorCodes.find((code) => code === message) ?? 'CHAT_TRANSCRIPT_INVALID';
 }
-function requestFailureLabel(error: unknown): string {
-  if (!(error instanceof Error)) return 'NON_ERROR';
-  if (/^[A-Z][A-Z0-9_]{2,100}$/u.test(error.message)) return error.message;
-  const frame = /\(([^()]+):(\d+):\d+\)/u.exec(error.stack ?? '');
-  return frame ? `${error.name} at ${basename(frame[1])}:${frame[2]}` : error.name;
-}
-
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
@@ -977,7 +972,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           : 500;
     if (code >= 500)
       process.stderr.write(
-        `REQUEST_FAILED ${request.method} ${request.routeOptions.url ?? 'unknown'} ${requestFailureLabel(error)}\n`
+        `REQUEST_FAILED ${request.method} ${request.routeOptions.url ?? 'unknown'} ${failureLabel(error)}\n`
       );
     void reply
       .code(code)

@@ -442,8 +442,15 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
   }
 
   test.each([
-    [new Error('PRIVATE_ENCODER_DETAIL at line 3'), 'PROMPT_PREVIEW_FAILED'],
-    [new ProviderContractError('IMAGE_INPUT_UNSUPPORTED_MODEL'), 'IMAGE_INPUT_UNSUPPORTED_MODEL'],
+    [new Error('PRIVATE_ENCODER_DETAIL at line 3'), { code: 'PROMPT_PREVIEW_FAILED' }],
+    [
+      new ProviderContractError('IMAGE_INPUT_UNSUPPORTED_MODEL'),
+      { code: 'IMAGE_INPUT_UNSUPPORTED_MODEL' },
+    ],
+    [
+      new ProviderContractError('PROMPT_CACHE_UNSUPPORTED:block=system:index=0:model=m'),
+      { code: 'PROMPT_CACHE_UNSUPPORTED', detail: 'block=system:index=0:model=m' },
+    ],
   ])(
     'a preview whose provider mapping fails answers a code, not the exception text',
     async (cause, code) => {
@@ -453,7 +460,8 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       });
       const { response } = await previewMainPrompt(work);
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({ provider: null, error: code });
+      expect(response.json()).toMatchObject({ provider: null });
+      expect(response.json().error).toEqual(code);
     }
   );
 
