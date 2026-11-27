@@ -167,14 +167,26 @@ test('HELPUI07 the panel keeps its drafts, reading position, tone edits and Back
     state = await routeSyntheticHelper(page, 20);
   await page.goto(`/?chat=${chat.id}`);
   await page.getByLabel('다음 장면 요청').fill('본문 입력 초안');
+  const scrolledUpWithFirstPlacement = page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const observer = new MutationObserver(() => {
+          const node = document.querySelector<HTMLElement>('#helper-panel .helper-messages');
+          if (!node || node.scrollTop === 0) return;
+          observer.disconnect();
+          node.scrollTop = 400;
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve(node.scrollTop)));
+        });
+        observer.observe(document.body, { subtree: true, childList: true, attributes: true });
+      })
+  );
   const panel = await openHelperPanel(page),
     input = panel.getByLabel('도우미에게 요청');
+  expect(await scrolledUpWithFirstPlacement).toBe(400);
   await input.fill('도우미 입력 초안');
   const list = panel.locator('.helper-messages');
-  await list.evaluate((node) => {
-    node.scrollTop = 400;
-  });
   const before = await list.evaluate((node) => node.scrollTop);
+  expect(before).toBeLessThan(500);
   await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
   await expect(panel).toBeHidden();
   await expect(page.getByLabel('다음 장면 요청')).toHaveValue('본문 입력 초안');

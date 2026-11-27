@@ -1133,14 +1133,16 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (displayedScope.current !== scopeKey) {
       displayedScope.current = scopeKey;
       const saved = positions.current.get(scopeKey);
-      following.current = saved?.following ?? true;
-      node.scrollTop = following.current ? node.scrollHeight : (saved?.top ?? 0);
+      if (saved && !saved.following) {
+        following.current = false;
+        bottom.place(saved.top);
+      } else bottom.follow();
     } else if (prepend.current?.scope === scopeKey) {
-      node.scrollTop = prepend.current.top + node.scrollHeight - prepend.current.height;
+      bottom.place(prepend.current.top + node.scrollHeight - prepend.current.height);
       prepend.current = null;
-    } else if (following.current) node.scrollTop = node.scrollHeight;
-    else node.scrollTop = positions.current.get(scopeKey)?.top ?? node.scrollTop;
-  }, [props.open, scopeKey, data.current, following]);
+    } else if (following.current) bottom.follow();
+    else bottom.place(positions.current.get(scopeKey)?.top ?? node.scrollTop);
+  }, [props.open, scopeKey, data.current, following, bottom.follow, bottom.place]);
   async function send(
     saved?: Outbox,
     withoutStorage = false,
@@ -1943,10 +1945,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         className="helper-messages"
         onScroll={() => {
           const node = scroll.current;
-          if (node) {
-            bottom.onScroll();
+          if (node && bottom.onScroll())
             positions.current.set(scopeKey, { top: node.scrollTop, following: following.current });
-          }
         }}
       >
         <div
