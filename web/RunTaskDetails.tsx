@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { type UiMessage, uiMessage } from './ui-message.js';
 import { useState } from 'react';
@@ -143,7 +143,7 @@ function RunJobs({
               image: t('visuals.image'),
               status: t('visuals.legacyJob'),
             }[job.kind],
-            v1: translateMessage(labels[job.status]),
+            v1: labels[job.status],
           })}
         >
           {(full) => <JobCard job={full} refresh={refresh} onError={onError} hideText />}

@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, formatDate, formatNumber } from './i18n.js';
-import { type UiMessage } from './ui-message.js';
+import { t, useI18n, formatDate, formatNumber } from './i18n.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 import { activityStatusLabel } from './ActivityStatus.js';
 import { Check } from 'lucide-react';
 import { DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
@@ -23,7 +23,7 @@ type Props = {
   library: Library | null;
   selected: string;
   feed: ActivityFeed;
-  error: string;
+  error: UiMessage | null;
   onSelect: (id: string, target?: ReaderTarget) => void;
   onCopyChat?: (chatId: string) => void;
   copyingChats?: string[];
@@ -269,7 +269,7 @@ export function ActivityNavigation({
       </ActivitySection>
       {error && (
         <p className="activity-nav-error" role="alert">
-          {translateMessage(error)}{' '}
+          {formatUiMessage(error)}{' '}
           <button type="button" onClick={onRetry}>
             {t('helpers.m282')}
           </button>

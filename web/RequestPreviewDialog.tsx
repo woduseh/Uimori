@@ -1,6 +1,7 @@
 import { parseOwnJson } from './json.js';
-import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { RequestImagePreview } from '../core/request-images.js';
@@ -41,7 +42,7 @@ export function RequestPreviewDialog({
   useI18n();
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<{ key: string; value: RequestPreview } | null>(null);
-  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<{ key: string; error: UiMessage } | null>(null);
   const sequence = useRef(0);
   const imageKey = JSON.stringify(requestImages);
   const key = JSON.stringify([
@@ -55,7 +56,7 @@ export function RequestPreviewDialog({
     unavailable,
   ]);
   const preview = result?.key === key ? result.value : null;
-  const error = failure?.key === key ? failure.message : '';
+  const error = failure?.key === key ? failure.error : null;
   const hasInput = !!request.trim() || requestImages.length > 0;
   const ready = open && hasInput && !unavailable;
 
@@ -104,13 +105,7 @@ export function RequestPreviewDialog({
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted && sequence.current === version)
-          setFailure({
-            key,
-            message:
-              cause instanceof Error
-                ? cause.message
-                : legacyDescriptor('reader.couldNotLoadThePreview'),
-          });
+          setFailure({ key, error: toUiMessage(cause, 'reader.couldNotLoadThePreview') });
       });
     return () => {
       controller.abort();
@@ -153,7 +148,7 @@ export function RequestPreviewDialog({
             </div>
           )}
           {error ? (
-            <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>
+            <NoticeBanner tone="error">{error}</NoticeBanner>
           ) : !preview ? (
             <LoadingState
               presentation="placeholder"

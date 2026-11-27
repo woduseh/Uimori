@@ -1,5 +1,5 @@
-import { getLocale, t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage, formatUiMessage } from './ui-message.js';
+import { getLocale, t, useI18n } from './i18n.js';
+import { UiError, uiMessage, formatUiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
 import { defaultProfile, type Content, type Library } from '../core/product.js';
 import { api } from './api.js';
+import { toUiMessage } from './api-errors.js';
 import { refValue } from './content-ref.js';
 import {
   completePendingStoryProfile,
@@ -103,11 +104,11 @@ export function NewStory({
   const [personaChosen, setPersonaChosen] = useState(initialPersona !== undefined);
   const [defaultsBotId, setDefaultsBotId] = useState('');
   const [defaultsLibrary, setDefaultsLibrary] = useState<Library | null>(null);
-  const [defaultsError, setDefaultsError] = useState('');
+  const [defaultsError, setDefaultsError] = useState<UiMessage | null>(null);
   const [title, setTitle] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
   const [packageLoading, setPackageLoading] = useState(true);
-  const [packageError, setPackageError] = useState('');
+  const [packageError, setPackageError] = useState<UiMessage | null>(null);
   const [resolvedPackages, setResolvedPackages] = useState<{
     selection: string;
     library: Library;
@@ -123,7 +124,7 @@ export function NewStory({
   );
   const initializedStart = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [profileConflict, setProfileConflict] = useState(false);
   const created = useRef<Chat | null>(null);
   const uncertain = useRef(false);
@@ -138,14 +139,14 @@ export function NewStory({
     if (!botId || personaChosen || submitted.current) return;
     let alive = true;
     setDefaultsBotId('');
-    setDefaultsError('');
+    setDefaultsError(null);
     void api<BotDefaults>(`/bots/${encodeURIComponent(botId)}/defaults`)
       .then((defaults) => {
         if (!alive || submitted.current) return;
         const selected = newChatPersona(defaults.persona, initialFolder?.defaultPersona);
         const current = selected && library.contents.find((item) => item.id === selected.id);
         if (selected && !current) {
-          setDefaultsError(descriptor('transfer.m312'));
+          setDefaultsError(uiMessage('transfer.m312'));
           setPersona('');
         } else {
           setPersona(current ? refValue(current) : '');
@@ -154,7 +155,7 @@ export function NewStory({
         }
       })
       .catch((cause) => {
-        if (alive) setDefaultsError((cause as Error).message);
+        if (alive) setDefaultsError(toUiMessage(cause));
       });
     return () => {
       alive = false;
@@ -175,7 +176,7 @@ export function NewStory({
     let current = true;
     const selected = [...new Set([bot, persona, ...modules].filter(Boolean))];
     setPackageLoading(true);
-    setPackageError('');
+    setPackageError(null);
     void Promise.all(
       selected.map(async (key) => {
         const item = [initialBot, initialPersona, ...(initialModules ?? []), ...library.contents]
@@ -216,7 +217,7 @@ export function NewStory({
         }
       })
       .catch((caught) => {
-        if (current) setPackageError((caught as Error).message);
+        if (current) setPackageError(toUiMessage(caught));
       })
       .finally(() => {
         if (current) setPackageLoading(false);
@@ -300,7 +301,7 @@ export function NewStory({
     if (creating.current) return;
     creating.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     setProfileConflict(false);
     try {
       const selection = (submitted.current ??= captureSelection());
@@ -343,7 +344,7 @@ export function NewStory({
       setConfigure(true);
       setProfileConflict(err instanceof PendingStoryProfileConflict);
       setError(
-        uncertain.current && !created.current ? descriptor('transfer.m320') : (err as Error).message
+        uncertain.current && !created.current ? uiMessage('transfer.m320') : toUiMessage(err)
       );
     } finally {
       creating.current = false;
@@ -390,12 +391,12 @@ export function NewStory({
   const activeModules =
     frozen?.modules ?? modules.map((key) => loadedContents[key]).filter(Boolean);
   let opening: PackageStartSnapshot | null = null,
-    openingError = '';
+    openingError: UiMessage | null = null;
   if (start && activeBot?.package) {
     try {
       opening = resolvePackageStart(activeBot.package, start);
     } catch (caught) {
-      openingError = (caught as Error).message;
+      openingError = toUiMessage(caught);
     }
   }
   const additionalSummary = [
@@ -496,7 +497,7 @@ export function NewStory({
           selectedContent={activePersona}
           onChange={(value) => {
             setPersonaChosen(true);
-            setDefaultsError('');
+            setDefaultsError(null);
             setPersona(value);
           }}
           allowNone
@@ -515,7 +516,7 @@ export function NewStory({
               </button>
             }
           >
-            {translateMessage(defaultsError)}
+            {defaultsError}
           </NoticeBanner>
         )}
         <div className="new-story-main-model" aria-label={t('transfer.m329')}>
@@ -595,7 +596,7 @@ export function NewStory({
               </button>
             }
           >
-            {translateMessage(packageError)}
+            {packageError}
           </NoticeBanner>
         )}
         {!!activeBot?.package?.starts?.length && (
@@ -630,7 +631,7 @@ export function NewStory({
             )}
             {openingError && (
               <p className="error" role="alert">
-                {translateMessage(openingError)}
+                {formatUiMessage(openingError)}
               </p>
             )}
           </section>
@@ -693,7 +694,7 @@ export function NewStory({
         </details>
         {error && (
           <p className="error" role="alert">
-            {translateMessage(error)}
+            {formatUiMessage(error)}
             {created.current && ` ${t('transfer.m352')}`}
           </p>
         )}
@@ -706,9 +707,7 @@ export function NewStory({
             disabled={busy}
             onClick={() => {
               if (created.current)
-                void onCreated(created.current).catch((cause) =>
-                  setError((cause as Error).message)
-                );
+                void onCreated(created.current).catch((cause) => setError(toUiMessage(cause)));
             }}
           >
             {t('main.pendingProfileOpen')}

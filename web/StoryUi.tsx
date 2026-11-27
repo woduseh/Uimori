@@ -8,7 +8,8 @@ import type { StoryUiSegment } from '../core/story-ui.js';
 import type { RunReceipt } from '../core/types.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { api, ApiError, definiteRejection } from './api.js';
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage } from './ui-message.js';
 import { StoryUiImageUrls, storyUiRenderCatalog } from './story-ui-catalog.js';
 import './story-ui.css';
 import { readStoryUiDraft, storyUiDraftChanges, writeStoryUiDraft } from './story-ui-draft.js';
@@ -222,7 +223,7 @@ export function StoryUi({
             </label>
             {failed && (
               <p role="alert">
-                {failure ? translateMessage(failure.message) : t('storyUi.failed')}
+                {failure ? formatUiMessage(failure.uiMessage) : t('storyUi.failed')}
               </p>
             )}
             <button

@@ -1,19 +1,6 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  message as descriptor,
-  messageRef,
-} from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import {
-  UiError,
-  uiMessage,
-  type UiMessage,
-  legacyUiMessage,
-  formatUiMessage,
-} from './ui-message.js';
+import { UiError, uiMessage, type UiMessage, formatUiMessage } from './ui-message.js';
 import type { RequestImage } from '../core/request-images.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createImageOwnerDisplayText } from '../core/image-placement.js';
@@ -102,7 +89,7 @@ import { storageKeys } from './storage-keys.js';
 
 type NativeActionReceipt = {
   created: boolean;
-  notifications?: { kind: string; message: string }[];
+  notifications?: { kind: string; text: string }[];
 };
 type NativeActionCommand = {
   path: string;
@@ -365,7 +352,7 @@ function SourceReaderContent({
           command.acknowledged = true;
           command.unchanged = result.created === false;
           if (result.notifications?.length)
-            onNativeNotice?.(result.notifications.map((notice) => notice.message));
+            onNativeNotice?.(result.notifications.map((notice) => notice.text));
         }
         await refresh();
         return command.unchanged || confirmationOnly;
@@ -1981,7 +1968,7 @@ function TextEditor({
   );
   const draftVersion = useRef(0);
   const [selection, setSelection] = useState({ start: 0, end: 0, version: 0 });
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [draftNotKept, setDraftNotKept] = useState(false);
   const busy = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -2049,7 +2036,7 @@ function TextEditor({
         }
         busy.current = true;
         setSaving(true);
-        setError('');
+        setError(null);
         try {
           await api(
             `/sources/${source.id}/${role === 'original' ? 'text' : 'translation'}`,
@@ -2062,11 +2049,7 @@ function TextEditor({
           clear();
         } catch (cause) {
           if (cause instanceof ApiError && cause.status === 409) setConflictOpen(true);
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : descriptor('reader.couldNotSaveYourEditsArePreserved')
-          );
+          setError(toUiMessage(cause, 'reader.couldNotSaveYourEditsArePreserved'));
         } finally {
           busy.current = false;
           setSaving(false);
@@ -2199,7 +2182,7 @@ function TextEditor({
       )}
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
     </form>
@@ -2219,26 +2202,23 @@ export function JobActions({
 }) {
   useI18n();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const perform = async (operation: 'retry' | 'cancel' | 'rejudge') => {
     setPending(true);
-    setError('');
+    setError(null);
     onError(null);
     try {
       await api(`/jobs/${job.id}/${operation}`, {});
       await refresh();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : descriptor('reader.couldNotCompleteTheRequest');
+      const message = toUiMessage(error, 'reader.couldNotCompleteTheRequest');
       setError(message);
       onError(
-        legacyUiMessage(
-          descriptor('reader.jobFailure', {
-            kind: job.kind,
-            mode: job.imageTarget?.mode ?? 'original',
-            error: messageRef(message),
-          })
-        )
+        uiMessage('reader.jobFailure', {
+          kind: job.kind,
+          mode: job.imageTarget?.mode ?? 'original',
+          error: message,
+        })
       );
     } finally {
       setPending(false);
@@ -2286,7 +2266,7 @@ export function JobActions({
       )}
       {error && (
         <small className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </small>
       )}
     </>
@@ -2358,8 +2338,8 @@ export function AuxiliaryError({ error }: { error: string }) {
   const diagnostic = auxiliaryErrorDiagnostic(error);
   return (
     <div className="error" role="alert">
-      <p>{translateMessage(diagnostic.message)}</p>
-      <p>{translateMessage(diagnostic.action)}</p>
+      <p>{formatUiMessage(diagnostic.summary)}</p>
+      <p>{formatUiMessage(diagnostic.action)}</p>
       {diagnostic.code && <small>{t('reader.diagnosticCode', { code: diagnostic.code })}</small>}
     </div>
   );

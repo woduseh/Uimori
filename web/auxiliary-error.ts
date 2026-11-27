@@ -1,14 +1,15 @@
 import { t } from './i18n.js';
+import { uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 
 type AuxiliaryErrorDiagnostic = {
   code: string | null;
-  message: string;
-  action: string;
+  summary: UiMessage;
+  action: UiMessage;
 };
 
-const diagnostics = new Map<string, Omit<AuxiliaryErrorDiagnostic, 'code'>>();
-const define = (codes: string[], message: string, action: string) => {
-  for (const code of codes) diagnostics.set(code, { message, action });
+const diagnostics = new Map<string, { summaryKey: MessageKey; actionKey: MessageKey }>();
+const define = (codes: string[], summaryKey: MessageKey, actionKey: MessageKey) => {
+  for (const code of codes) diagnostics.set(code, { summaryKey, actionKey });
 };
 
 define(
@@ -207,16 +208,20 @@ export function auxiliaryErrorDiagnostic(error: unknown): AuxiliaryErrorDiagnost
   if (role)
     return {
       code: error as string,
-      message: t('errors.auxiliaryModelRequired', { role }),
-      action: t('errors.auxiliaryModelAction', { role }),
+      summary: uiMessage('errors.auxiliaryModelRequired', { role }),
+      action: uiMessage('errors.auxiliaryModelAction', { role }),
     };
   const diagnostic = typeof error === 'string' ? diagnostics.get(error) : undefined;
   if (diagnostic)
-    return { code: error as string, message: t(diagnostic.message), action: t(diagnostic.action) };
+    return {
+      code: error as string,
+      summary: uiMessage(diagnostic.summaryKey),
+      action: uiMessage(diagnostic.actionKey),
+    };
   return {
     code: null,
-    message: t('errors.auxiliary.AUXILIARY_INCOMPLETE.message'),
-    action: t('errors.auxiliary.AUXILIARY_INCOMPLETE.action'),
+    summary: uiMessage('errors.auxiliary.AUXILIARY_INCOMPLETE.message'),
+    action: uiMessage('errors.auxiliary.AUXILIARY_INCOMPLETE.action'),
   };
 }
 
@@ -227,7 +232,7 @@ export function auxiliaryErrorMessage(error: unknown): string {
   const diagnostic = typeof error === 'string' ? diagnostics.get(error) : undefined;
   return t(
     diagnostic
-      ? diagnostic.message.replace(/\.message$/u, '.details')
+      ? diagnostic.summaryKey.replace(/\.message$/u, '.details')
       : 'errors.auxiliary.AUXILIARY_INCOMPLETE.details'
   );
 }

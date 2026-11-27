@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RevisionContext, SelectionRevisionResult } from '../core/selection-revision.js';
 import { api } from './api.js';
-import { message as legacyDescriptor } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { storageKeys } from './storage-keys.js';
@@ -35,7 +36,7 @@ export function useSelectionRevision({
   const [captured, setCaptured] = useState<Captured | null>(null);
   const [proposal, setProposal] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [context, setContext] = useState(storedContext);
   const pending = useRef<AbortController | null>(null);
   const codexWarning = useCodexContentWarning();
@@ -57,14 +58,14 @@ export function useSelectionRevision({
     cancel();
     setCaptured(null);
     setProposal(null);
-    setError('');
+    setError(null);
   }
   function open(request: SelectionRevisionTarget) {
     if (identity === null) return;
     cancel();
     setCaptured({ request, identity });
     setProposal(null);
-    setError('');
+    setError(null);
     setContext(storedContext());
   }
   function chooseContext(value: RevisionContext) {
@@ -77,7 +78,7 @@ export function useSelectionRevision({
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
-    setError('');
+    setError(null);
     setProposal(null);
     try {
       const proceed = await codexWarning.check(
@@ -106,11 +107,7 @@ export function useSelectionRevision({
       if (pending.current === controller && !controller.signal.aborted) setProposal(result.text);
     } catch (cause) {
       if (pending.current === controller && !controller.signal.aborted)
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : legacyDescriptor('reader.couldNotGetARevisionSuggestion')
-        );
+        setError(toUiMessage(cause, 'reader.couldNotGetARevisionSuggestion'));
     } finally {
       if (pending.current === controller) {
         pending.current = null;

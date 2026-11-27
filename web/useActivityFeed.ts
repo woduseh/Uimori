@@ -1,7 +1,9 @@
-import { useI18n, message as legacyDescriptor } from './i18n.js';
+import { useI18n } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
 import { api } from './api.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 import { readAcknowledgements, saveAcknowledgements } from './activity-acknowledgements.js';
 import { activityFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
@@ -19,7 +21,7 @@ type Viewed = { chatId: string; sourceId: string; representation: 'original' | '
 export function useActivityFeed() {
   useI18n();
   const [feed, setFeed] = useState<ActivityFeed>({ items: [], running: [], helpers: [] });
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const latest = useRef(feed);
   latest.current = feed;
   const seq = useRef(0);
@@ -44,7 +46,7 @@ export function useActivityFeed() {
       setFeed((current) =>
         JSON.stringify(current) === JSON.stringify(visible) ? current : visible
       );
-      setError('');
+      setError(null);
       if (local.length) {
         const grouped = groupByChat(local);
         for (const [chatId, entries] of grouped)
@@ -54,8 +56,7 @@ export function useActivityFeed() {
             }).catch(() => {});
       }
     } catch (reason) {
-      if (order === seq.current)
-        setError(reason instanceof Error ? reason.message : legacyDescriptor('helpers.m308'));
+      if (order === seq.current) setError(toUiMessage(reason, 'helpers.m308'));
     }
   }, []);
   const acknowledge = useCallback(async (items: ActivityFeedItem[]) => {
@@ -84,9 +85,9 @@ export function useActivityFeed() {
             )
         ),
       }));
-      setError('');
+      setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : legacyDescriptor('helpers.m309'));
+      setError(toUiMessage(reason, 'helpers.m309'));
     } finally {
       for (const item of eligible) inFlight.current.delete(item.acknowledgementKey);
     }

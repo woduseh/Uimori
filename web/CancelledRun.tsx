@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import type { ReaderRun } from '../core/types.js';
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { RequestMessage } from './RequestMessage.js';
 import { HistoryIcon, StopIcon } from './ui-icons.js';
 import './cancelled-run.css';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 
 export function CancelledRun({
   run,
@@ -26,17 +27,17 @@ export function CancelledRun({
   useI18n();
   const [editing, setEditing] = useState(false);
   const [dismissing, setDismissing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const lock = useRef(false);
   async function dismiss() {
     if (lock.current || editing || disabled) return;
     lock.current = true;
     setDismissing(true);
-    setError('');
+    setError(null);
     try {
       await onDismiss();
     } catch (caught) {
-      setError(errorDescriptor(caught));
+      setError(toUiMessage(caught));
     } finally {
       lock.current = false;
       setDismissing(false);
@@ -86,7 +87,7 @@ export function CancelledRun({
         </div>
         {error && (
           <p className="error" role="alert">
-            {translateMessage(error)}
+            {formatUiMessage(error)}
           </p>
         )}
       </div>

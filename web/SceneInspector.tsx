@@ -1,5 +1,5 @@
 import { t, useI18n, formatNumber } from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useState, type ReactNode } from 'react';
 import type { Job, ReaderRun, Run, Source } from '../core/types.js';
 import type { Illustration, IllustrationUsageReport } from '../core/illustration.js';
@@ -216,7 +216,7 @@ function RawRecords({
         <LoadingState
           presentation="inline"
           loading={!record.error}
-          error={legacyUiMessage(record.error)}
+          error={record.error}
           label={uiMessage('shared.loadingDetails')}
           onRetry={record.retry}
         />
@@ -313,7 +313,7 @@ export function SceneInspector({
     <LoadingState
       presentation="inline"
       loading={!record.error}
-      error={legacyUiMessage(record.error)}
+      error={record.error}
       label={uiMessage('shared.loadingDetails')}
       onRetry={record.retry}
     />

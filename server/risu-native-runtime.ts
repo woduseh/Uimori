@@ -74,7 +74,7 @@ export interface NativeRisuExecutionResult {
   effects: {
     reloadDisplay: boolean;
     stopChat: boolean;
-    notifications?: { kind: 'normal' | 'error'; message: string }[];
+    notifications?: { kind: 'normal' | 'error'; text: string }[];
   };
   warnings: string[];
 }
@@ -503,12 +503,12 @@ async function executeNativeRisuInvocation(
       const notification = record(item);
       if (
         !['normal', 'error'].includes(text(notification.kind)) ||
-        typeof notification.message !== 'string'
+        typeof notification.text !== 'string'
       )
         fail('RISU_NATIVE_EFFECTS');
       return {
         kind: notification.kind as 'normal' | 'error',
-        message: notification.message as string,
+        text: notification.text as string,
       };
     });
   }

@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SourceVersions as Versions } from '../core/source-versions.js';
@@ -23,13 +24,13 @@ export function SourceVersions({
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<Versions | null>(null);
   const [selected, setSelected] = useState(0);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [priorDraft, setPriorDraft] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     setVersions(null);
-    setError('');
+    setError(null);
     void api<Versions>(`/sources/${sourceId}/versions`, undefined, 'GET', controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
@@ -37,7 +38,7 @@ export function SourceVersions({
         setSelected(result.versions[1]?.revision ?? 0);
       })
       .catch((cause) => {
-        if (!controller.signal.aborted) setError((cause as Error).message);
+        if (!controller.signal.aborted) setError(toUiMessage(cause));
       });
     return () => controller.abort();
   }, [open, sourceId]);
@@ -56,7 +57,7 @@ export function SourceVersions({
         <>
           {error && (
             <p role="alert" className="error">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
           {!versions && !error && (

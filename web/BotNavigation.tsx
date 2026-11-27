@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
@@ -104,7 +105,7 @@ export function BotBranch(
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -170,7 +171,7 @@ export function BotBranch(
     if (expandTimer.current) clearTimeout(expandTimer.current);
     expandKey.current = null;
     setNewTitle('');
-    setError('');
+    setError(null);
     if (!botId) return;
     let alive = true;
     setLoading(true);
@@ -179,7 +180,7 @@ export function BotBranch(
         if (alive && epoch.current === version) setFolders(value);
       })
       .catch((reason) => {
-        if (alive && epoch.current === version) setError(reason.message);
+        if (alive && epoch.current === version) setError(toUiMessage(reason));
       })
       .finally(() => {
         if (alive && epoch.current === version) setLoading(false);
@@ -192,7 +193,7 @@ export function BotBranch(
     if (operation.current) return;
     operation.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     const owner = botId;
     const version = epoch.current;
     try {
@@ -203,8 +204,8 @@ export function BotBranch(
         if (owner === currentBot.current && version === epoch.current) setFolders(value);
       }
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m237');
-      onError(legacyUiMessage(message));
+      const message = toUiMessage(reason, 'transfer.m237');
+      onError(message);
       if (owner === currentBot.current) setError(message);
       try {
         const value = await api<ChatFolder[]>(`/bots/${encodeURIComponent(owner)}/folders`);
@@ -229,9 +230,9 @@ export function BotBranch(
         else onNew(full, folder);
       }
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m238');
+      const message = toUiMessage(reason, 'transfer.m238');
       setError(message);
-      onError(legacyUiMessage(message));
+      onError(message);
     } finally {
       operation.current = false;
       setBusy(false);
@@ -618,7 +619,7 @@ export function BotBranch(
       )}
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
       {editingDefaults && bot && library && (

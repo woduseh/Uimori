@@ -13,7 +13,8 @@ import {
   writeOptionalStorage,
 } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
-import { message as legacyDescriptor } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 
 type DraftIdentity = { key: string; epoch: number; revision: number; text: string };
 type Original = { id: string; text: string };
@@ -52,7 +53,7 @@ export function useInputTranslation(options: Options) {
   const [original, setOriginal] = useState<Original | null>(() => readOriginal(options.draftKey));
   const originalRef = useRef({ key: options.draftKey, value: original });
   const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef<AbortController | null>(null);
   const codexWarning = useCodexContentWarning();
@@ -68,7 +69,7 @@ export function useInputTranslation(options: Options) {
     originalRef.current = { key: options.draftKey, value };
     setOriginal(value);
     setCandidate(null);
-    setError('');
+    setError(null);
     setBusy(false);
     return () => {
       pending.current?.abort();
@@ -82,7 +83,7 @@ export function useInputTranslation(options: Options) {
       originalRef.current.key === key ? originalRef.current.value : readOriginal(key);
     const value = previous ?? { id: crypto.randomUUID(), text };
     originalRef.current = { key, value };
-    if (!saveOriginal(key, value)) setError(legacyDescriptor('chatsettings.m159'));
+    if (!saveOriginal(key, value)) setError(uiMessage('chatsettings.m159'));
     setOriginal(value);
   }
   async function translate() {
@@ -94,7 +95,7 @@ export function useInputTranslation(options: Options) {
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
-    setError('');
+    setError(null);
     setCandidate(null);
     try {
       const proceed = await codexWarning.check(
@@ -144,11 +145,7 @@ export function useInputTranslation(options: Options) {
         latest.key === captured.key &&
         latest.epoch === captured.epoch
       )
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : legacyDescriptor('prompts.uiUnableToTranslateInput')
-        );
+        setError(toUiMessage(cause, 'prompts.uiUnableToTranslateInput'));
     } finally {
       if (pending.current === controller) {
         pending.current = null;
@@ -161,7 +158,7 @@ export function useInputTranslation(options: Options) {
     if (!next) return;
     cancel();
     setCandidate(null);
-    setError('');
+    setError(null);
     setLanguage(next.code);
     writeOptionalStorage('local', languageKey, next.code);
   }
@@ -174,7 +171,7 @@ export function useInputTranslation(options: Options) {
     originalRef.current = { key: current.current.draftKey, value: null };
     setOriginal(null);
     setCandidate(null);
-    setError('');
+    setError(null);
   }
   function applyCandidate() {
     if (!candidate || !current.current.available()) return;
@@ -185,7 +182,7 @@ export function useInputTranslation(options: Options) {
   function beginSend() {
     cancel();
     setCandidate(null);
-    setError('');
+    setError(null);
     return originalRef.current.value?.id;
   }
   function accepted(key: string, id: string | undefined) {
