@@ -7,6 +7,7 @@ import {
   toggleNativeRegexAction,
   toggleNativeRegexFlag,
 } from '../web/native-risu-regex.js';
+import { shownThrow } from './shown-error.js';
 
 describe('native regex editor source preservation', () => {
   it('edits native fields and existing aliases without changing unknown source metadata', () => {
@@ -58,8 +59,8 @@ describe('native regex editor source preservation', () => {
   it('requires a rule array but preserves unknown fields and unsupported stages', () => {
     const value = [{ type: 'future-mode', in: 'x', out: '', mystery: { keep: true } }];
     expect(parseNativeRegexJson(JSON.stringify(value))).toEqual(value);
-    expect(() => parseNativeRegexJson('{"in":"x"}')).toThrow('배열');
-    expect(() => parseNativeRegexJson('[null]')).toThrow('배열');
+    expect(shownThrow(() => parseNativeRegexJson('{"in":"x"}'))).toContain('배열');
+    expect(shownThrow(() => parseNativeRegexJson('[null]'))).toContain('배열');
     expect(() => parseNativeRegexJson('[unfinished')).toThrow();
   });
 });
