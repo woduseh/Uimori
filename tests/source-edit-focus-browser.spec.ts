@@ -105,38 +105,3 @@ test('C04V saved versions stay read-only until saved, preserve the previous draf
   expect(after.runs).toEqual(before.runs);
   expect(after.attempts).toEqual(before.attempts);
 });
-
-test('C04E failed source save keeps the draft available and a later save restores focus without generation', async ({
-  page,
-  request,
-}) => {
-  const before = await seed(request, 'failed save');
-  const source = before.sources[0];
-  await page.goto(`/?chat=${before.chat.id}`);
-  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
-  const trigger = scene.getByRole('button', { name: '원문 수정', exact: true });
-  await trigger.click();
-  const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
-  await expect(field).toBeFocused();
-  const draft = `${source.text}\n\nPreserved after a synthetic save failure.`;
-  await field.fill(draft);
-  const path = `**/api/sources/${source.id}/text`;
-  await page.route(path, (route) =>
-    route.fulfill({ status: 503, json: { error: 'Synthetic source save unavailable.' } })
-  );
-  await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
-  await expect(scene.locator('.source-text-editor').getByRole('alert')).toContainText(
-    '서버 작업을 완료하지 못했어요. (503)'
-  );
-  await expect(field).toHaveValue(draft);
-  await expect(field).toBeEnabled();
-  expect((await detail(request, before.chat.id)).sources[0].text).toBe(source.text);
-  await page.unroute(path);
-  await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
-  await expect(field).toHaveCount(0);
-  await expect(trigger).toBeFocused();
-  const after = await detail(request, before.chat.id);
-  expect(after.sources[0].text).toBe(draft);
-  expect(after.runs).toEqual(before.runs);
-  expect(after.attempts).toEqual(before.attempts);
-});

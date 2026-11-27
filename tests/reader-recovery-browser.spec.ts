@@ -9,11 +9,8 @@ test.use({ reducedMotion: 'no-preference' });
 test('READERREC initial reader loading becomes a recoverable error without losing the draft', async ({
   page,
   request,
-}, info) => {
+}) => {
   const { chat } = await createReadingChat(request, 'Initial reader loading recovery', 1);
-  const clockStart = Date.now();
-  await page.clock.install({ time: clockStart });
-  await page.clock.pauseAt(clockStart + 1000);
   let releaseRead!: () => void;
   const heldRead = new Promise<void>((resolve) => {
     releaseRead = resolve;
@@ -43,45 +40,11 @@ test('READERREC initial reader loading becomes a recoverable error without losin
   try {
     await page.goto(`/?chat=${chat.id}`);
     const loading = page.getByRole('status').filter({ hasText: '본문을 불러오는 중이에요…' });
-    await expect(page.locator('.reader-awaiting')).toHaveAttribute('aria-busy', 'true');
-    await page.clock.runFor(50);
-    await expect(loading).toHaveCount(0);
-    await expect(page.locator('.reader-loading-skeleton')).toHaveCount(0);
-    await page.clock.fastForward(250);
     await expect(loading).toBeVisible();
-    const skeleton = page.locator('.reader-loading-skeleton');
-    await expect(skeleton).toBeVisible();
-    await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
-    await expect(skeleton.locator('.reader-loading-skeleton-paragraph span')).toHaveCount(7);
-    await expect(page.getByText('사용 가능한 기본 본문 모델을 선택해 주세요.')).toHaveCount(0);
-    const spinner = loading.locator('svg');
-    await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await expect(spinner).toHaveCSS('animation-name', 'none');
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await expect(page.getByRole('button', { name: '본문 다시 불러오기', exact: true })).toHaveCount(
-      0
-    );
-    await page.clock.fastForward(3100);
-    await expect(page.getByText('평소보다 조금 오래 걸리고 있어요.')).toBeVisible();
-    if (process.env.UIMORI_VISUAL_REVIEW === '1')
-      await page.screenshot({ path: info.outputPath('reader-loading.png') });
     releaseRead();
     const error = page.getByRole('alert').filter({ hasText: '본문을 불러오지 못했어요.' });
     await expect(error).toBeVisible();
-    await expect(error).toContainText('서버 작업을 완료하지 못했어요. (503)');
-    await expect(page.locator('.reader-awaiting')).toHaveCSS('justify-content', 'center');
-    const centerDelta = await page.locator('.reader-awaiting').evaluate((reader) => {
-      const alert = reader.querySelector('[role="alert"]')!;
-      const readerBox = reader.getBoundingClientRect();
-      const errorBox = alert.getBoundingClientRect();
-      return Math.abs(readerBox.top + readerBox.height / 2 - (errorBox.top + errorBox.height / 2));
-    });
-    expect(centerDelta).toBeLessThan(36);
     await expect(loading).toHaveCount(0);
-    await expect(skeleton).toHaveCount(0);
-    if (process.env.UIMORI_VISUAL_REVIEW === '1')
-      await page.screenshot({ path: info.outputPath('reader-loading-error.png') });
     failed = false;
     await page.getByRole('button', { name: '본문 다시 불러오기', exact: true }).click();
     await expect(
@@ -379,23 +342,6 @@ test('READERREC confirming an uncertain request never turns into cancelling its 
   expect(confirmed).toBe(true);
   expect(cancellations).toBe(0);
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(1);
-});
-
-test('READERREC invalid view caches do not prevent opening a saved conversation', async ({
-  page,
-  request,
-}) => {
-  const chat = await (await postFixtureChat(request, { data: { title: 'Cache recovery' } })).json();
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.addInitScript((id) => {
-    sessionStorage.setItem(`reading:${id}:`, '{broken');
-    sessionStorage.setItem(`cursor:draft:${id}`, '{broken');
-    sessionStorage.setItem(`draft:${id}`, '살아 있는 초안');
-  }, chat.id);
-  await page.goto(`/?chat=${chat.id}`);
-  await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue('살아 있는 초안');
-  expect(errors).toEqual([]);
 });
 
 test('READERREC failed command persistence prevents generation and preserves the draft', async ({

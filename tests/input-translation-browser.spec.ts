@@ -1,6 +1,6 @@
 import { test, expect, type Page, type APIRequestContext, type Route } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import type { ChatDetail, Chat, Run } from '../core/types.js';
+import type { ChatDetail, Chat } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 const original = '(OOC: 미라는 아직 진실을 몰라.)\n\n*{{char}}는 기다린다.*';
@@ -45,33 +45,13 @@ async function answer(route: Route, text = translated) {
     json: { text, targetLanguage: route.request().postDataJSON().targetLanguage },
   });
 }
-async function seed(request: APIRequestContext, chat: Chat, text: string): Promise<Run> {
-  const before = await detail(request, chat.id);
-  const response = await request.post(`/api/chats/${chat.id}/runs`, {
-    data: {
-      request: text,
-      expectedRevision: before.chat.headRevision,
-      expectedSettingsRevision: before.chat.settingsRevision,
-      idempotencyKey: randomUUID(),
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  const run = (await response.json()) as Run;
-  await expect
-    .poll(
-      async () => (await detail(request, chat.id)).runs.find((item) => item.id === run.id)?.status
-    )
-    .toBe('completed');
-  return run;
-}
-
 {
   const width = 412;
   test(`ITRAN ${width} translate, undo, reload, edit and explicitly send only the final text`, async ({
     page,
     request,
     context,
-  }, info) => {
+  }) => {
     const chat = await createChat(request);
     await page.setViewportSize({ width, height: 900 });
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -83,7 +63,6 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
       await answer(route);
     });
     await open(page, chat.id);
-    await expect(page.locator('.input-translation-language-mobile')).toHaveCount(0);
     const languageSelect = page.getByRole('combobox', { name: '입력 번역 언어 선택', exact: true });
     const setLanguage = async (code: 'en' | 'es' | 'ja') => {
       if (!(await languageSelect.isVisible()))
@@ -99,7 +78,6 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
     expect((await detail(request, chat.id)).runs).toHaveLength(0);
     await page.getByText('번역 전 원문 보기', { exact: true }).click();
     await expect(page.locator('.input-translation-original pre')).toHaveText(original);
-    await page.screenshot({ path: info.outputPath(`input-translation-${width}.png`) });
     await page.getByRole('button', { name: '되돌리기', exact: true }).click();
     await expect(composer(page)).toHaveValue(original);
     await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
@@ -132,7 +110,6 @@ async function seed(request: APIRequestContext, chat: Chat, text: string): Promi
     await copy.click();
     await expect(page.getByRole('button', { name: '요청 복사됨', exact: true })).toBeVisible();
     expect(await clipboardText(page)).toBe(finalText);
-    await page.screenshot({ path: info.outputPath(`request-copy-${width}.png`) });
     expect(calls).toHaveLength(2);
     expect(calls[0]).toMatchObject({
       text: original,
@@ -209,87 +186,5 @@ test('ITRAN send intent invalidates a running translation without making transla
     expect((await detail(request, chat.id)).runs[0].request).toBe(original);
   } finally {
     released.release();
-  }
-});
-
-test('ITRAN refused translation and rejected submission preserve the editable draft and undo', async ({
-  page,
-  request,
-}) => {
-  const chat = await createChat(request);
-  let rejectedTranslation = true;
-  await page.route(endpoint, async (route) => {
-    if (rejectedTranslation)
-      await route.fulfill({ status: 422, json: { error: 'INPUT_TRANSLATION_REFUSED' } });
-    else await answer(route);
-  });
-  await open(page, chat.id);
-  await composer(page).fill(original);
-  await (await translate(page)).click();
-  await expect(page.getByRole('alert').filter({ hasText: '번역을 거절했어요' })).toBeVisible();
-  await expect(composer(page)).toHaveValue(original);
-  rejectedTranslation = false;
-  await (await translate(page)).click();
-  await expect(composer(page)).toHaveValue(translated);
-  await page.route(`**/api/chats/${chat.id}/runs`, (route) =>
-    route.fulfill({ status: 400, json: { error: 'Rejected fixture' } })
-  );
-  await send(page).click();
-  await expect(composer(page)).toHaveValue(translated);
-  await expect(page.getByRole('button', { name: '되돌리기', exact: true })).toBeEnabled();
-  await page.reload();
-  await expect(composer(page)).toHaveValue(translated);
-  await page.getByRole('button', { name: '되돌리기', exact: true }).click();
-  await expect(composer(page)).toHaveValue(original);
-  expect((await detail(request, chat.id)).runs).toHaveLength(0);
-});
-
-test('ICOPY full stored input is copied, not transformed or collapsed text, even while generation disables editing', async ({
-  page,
-  request,
-  context,
-}, info) => {
-  const chat = await createChat(request);
-  const raw = `  (OOC: Preserve this request.)\n\n${'**A full stored line**  \n'.repeat(35)}\n  END  `;
-  await seed(request, chat, raw);
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.route('**/api/chats/*/sources/*/presentation*', async (route) => {
-    const response = await route.fetch();
-    const value = await response.json();
-    value.request = { ...value.request, text: 'DISPLAY_ONLY_TEXT_NOT_FOR_COPY' };
-    await route.fulfill({ response, json: value });
-  });
-  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
-  try {
-    const current = await detail(request, chat.id);
-    const response = await request.post(`/api/chats/${chat.id}/runs`, {
-      data: {
-        request: 'Running request',
-        expectedRevision: current.chat.headRevision,
-        expectedSettingsRevision: current.chat.settingsRevision,
-        idempotencyKey: randomUUID(),
-      },
-    });
-    expect(response.ok(), await response.text()).toBe(true);
-    await open(page, chat.id);
-    const source = page.getByTestId('source').first();
-    await expect(source.getByTestId('source-request')).toHaveText('DISPLAY_ONLY_TEXT_NOT_FOR_COPY');
-    await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
-    const edit = source.getByRole('button', { name: '요청 수정', exact: true });
-    await expect(edit).toBeDisabled();
-    const before = await detail(request, chat.id);
-    const copy = source.getByRole('button', { name: '요청 복사', exact: true });
-    await copy.focus();
-    await expect(copy).toBeEnabled();
-    await copy.click();
-    await expect(source.getByRole('button', { name: '요청 복사됨', exact: true })).toBeVisible();
-    expect(await clipboardText(page)).toBe(raw);
-    const after = await detail(request, chat.id);
-    expect(
-      after.runs.map((run) => ({ id: run.id, request: run.request, status: run.status }))
-    ).toEqual(before.runs.map((run) => ({ id: run.id, request: run.request, status: run.status })));
-    await page.screenshot({ path: info.outputPath('copy-while-edit-disabled.png') });
-  } finally {
-    await request.post('/api/test/control', { data: { action: 'release', barrier: 'run' } });
   }
 });

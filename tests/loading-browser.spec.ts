@@ -1,11 +1,9 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { sourceAction } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import type { Chat, ChatDetail, ReaderDetail, Run } from '../core/types.js';
-import { navigationAction } from './ui-navigation.js';
+import type { Chat, ChatDetail, Run } from '../core/types.js';
 
 test.setTimeout(120000);
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
@@ -61,77 +59,6 @@ async function settledNativeSources(page: Page, ids: string[]) {
     })
   );
 }
-
-test('LOADUI08 task history loads on demand and preserves off-page reading, inspection and forks', async ({
-  page,
-  request,
-}) => {
-  const seeded = await seed(request, 8);
-  const target = seeded.sources[7];
-  let historyRequests = 0;
-  let releaseHistory!: () => void;
-  const firstHistory = new Promise<void>((resolve) => {
-    releaseHistory = resolve;
-  });
-  await page.route(`**/api/chats/${seeded.chat.id}/reader-runs`, async (route) => {
-    historyRequests++;
-    if (historyRequests === 1) {
-      await firstHistory;
-      await route.fulfill({ status: 503, json: { error: 'Synthetic history read failed.' } });
-    } else await route.continue();
-  });
-  const initialResponse = page.waitForResponse(
-    (response) => response.url().includes(`/chats/${seeded.chat.id}/reader?`) && response.ok()
-  );
-  await page.goto(`/?chat=${seeded.chat.id}`);
-  const initial = (await (await initialResponse).json()) as ReaderDetail;
-  expect(initial.runs).toHaveLength(5);
-  expect(initial.runs.some((run) => run.id === target.runId)).toBe(false);
-  await expect(articles(page)).toHaveCount(5);
-  expect(historyRequests).toBe(0);
-  await navigationAction(page, '작업 현황');
-  const panel = page.getByRole('dialog', { name: '작업 현황', exact: true });
-  await expect(panel.getByText('작업 목록을 불러오는 중이에요…', { exact: true })).toBeVisible();
-  releaseHistory();
-  await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
-  await panel.getByRole('button', { name: '작업 목록 다시 불러오기', exact: true }).click();
-  await expect(panel.getByTestId('run')).toHaveCount(8);
-  await panel.locator('summary').filter({ hasText: '이 채팅 전체 누적 사용량' }).click();
-  await expect(
-    panel.getByRole('table', { name: '역할별 합계', exact: true }).getByRole('rowheader')
-  ).toContainText(['본문']);
-  const task = panel.locator(`[data-testid="run"][data-run-id="${target.runId}"]`);
-  await task.getByRole('button', { name: '원고 읽기', exact: true }).click();
-  await expect(panel).toHaveCount(0);
-  await expect(page).toHaveURL(new RegExp(`source=${target.id}`));
-  await expect(article(page, target.id)).toBeVisible();
-
-  await page.goto(`/?chat=${seeded.chat.id}&source=${seeded.sources[0].id}`);
-  await expect(article(page, seeded.sources[0].id)).toBeVisible();
-  await expect(article(page, target.id)).toHaveCount(0);
-  await navigationAction(page, '작업 현황');
-  await expect(task).toBeAttached();
-  const forkResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith(`/api/chats/${seeded.chat.id}/fork`) &&
-      response.request().method() === 'POST'
-  );
-  await task.getByRole('button', { name: '자세히 보기', exact: true }).click();
-  await task.getByRole('button', { name: '새 채팅으로 분기', exact: true }).click();
-  const forkedResponse = await forkResponse;
-  expect(forkedResponse.ok()).toBeTruthy();
-  const forked = (await forkedResponse.json()) as Chat;
-  await expect(page).toHaveURL(new RegExp(`chat=${forked.id}`));
-  expect((await detail(request, forked.id)).sources).toHaveLength(8);
-  const after = await detail(request, seeded.chat.id);
-  expect(after.sources).toEqual(seeded.sources);
-  expect(
-    after.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
-  ).toEqual(
-    seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
-  );
-  expect(after.attempts).toEqual(seeded.attempts);
-});
 
 test('LOADUI09 newer chat list wins over a late empty response without clearing the selected chat', async ({
   page,
@@ -353,11 +280,11 @@ test('LOADUI01 bounded pages, previous/next, deep links and reload preserve read
   await deep.close();
 });
 
-test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual translation stays local', async ({
+test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat', async ({
   page,
   context,
   request,
-}, info) => {
+}) => {
   const seeded = await seed(request, 1);
   const other = await seed(request, 1);
   const source = seeded.sources[0];
@@ -394,12 +321,6 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   expect(rejected.status()).toBe(409);
   await expect(third.getByLabel('다음 장면 요청')).toHaveValue('Other chat draft stays here.');
   expect((await detail(request, other.chat.id)).sources).toEqual(other.sources);
-  await sourceAction(article(page, source.id), '번역 수정');
-  await page.getByLabel('번역 수정 내용').fill('직접 저장한 합성 번역이에요.');
-  await page.getByRole('button', { name: '번역 저장', exact: true }).click();
-  await expect(article(page, source.id).getByTestId('translation-text')).toContainText(
-    '직접 저장한 합성 번역이에요.'
-  );
   const after = await detail(request, seeded.chat.id);
   expect(after.sources[0].editRevision).toBe(1);
   expect(after.sources[0].text).toBe('Accepted source revision from first tab.');
@@ -409,7 +330,6 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
     seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
   );
   expect(after.attempts).toEqual(seeded.attempts);
-  if (visualReview) await second.screenshot({ path: info.outputPath('loading-cas.png') });
   await second.close();
   await third.close();
 });

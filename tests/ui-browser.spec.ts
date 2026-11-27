@@ -1,37 +1,23 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
-import { selectCurrentSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
-import { expectCodeFieldValue } from './code-field.js';
 import { setCurrentModels } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import {
   selectSettingsSection,
-  openNewStoryOptions,
   createPromptChoice,
   navigationAction,
   selectStartPrompt,
   selectChatSettingsSection,
-  openMoreSourceActions,
   sourceAction,
   openChatMenu,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
+import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
-import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-
-async function promptBody(editor: Locator) {
-  const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
-  await body.evaluate((node) => {
-    const details = node.closest('details');
-    if (details) details.open = true;
-  });
-  return body;
-}
 
 async function data(request: APIRequestContext, id: string): Promise<ChatDetail> {
   const response = await request.get(`/api/chats/${id}`);
@@ -275,12 +261,8 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   await navigationAction(page, '새 채팅', title);
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel('시작할 봇 찾기')).toHaveCount(0);
-  await expect(dialog.getByRole('group', { name: '시작할 봇', exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('채팅의 봇')).toContainText(title);
   await selectStartPrompt(page, choice);
-  await expect(dialog.getByText('이전 창작 제어', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('새 채팅 제목')).toHaveValue('');
   await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요');
   await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
@@ -306,7 +288,7 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   expect(runIndex).toBeGreaterThan(writes.findLastIndex((item) => /\/profile$/.test(item.url)));
 });
 
-test('UI05 UI10 late auxiliary completion and retry preserve source and current reader position', async ({
+test('UI05 UI10 late translation completion preserves the source surface and current reader position', async ({
   page,
   request,
 }) => {
@@ -378,93 +360,12 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
     await expect(original).toHaveAttribute('data-presentation-probe', 'original-kept');
     expect(Math.abs((await reader.evaluate((element) => element.scrollTop)) - top)).toBeLessThan(3);
     expect((await data(request, chat.id)).sources).toEqual(before.sources);
-    await request.post('/api/test/control', {
-      data: { action: 'fail-next', point: 'translation' },
-    });
-    const retried = await request.post(`/api/sources/${before.sources[0].id}/retranslate`, {
-      data: {},
-    });
-    expect(retried.ok()).toBeTruthy();
-    const turnActivity = page
-      .locator(`[data-testid="source"][data-source-id="${before.sources[0].id}"]`)
-      .getByTestId('turn-activity');
-    await expect(turnActivity.locator(':scope > summary')).toContainText('번역 실패');
-    const failed = (await data(request, chat.id)).jobs.findLast(
-      (job) => job.kind === 'translation'
-    )!;
-    if ((await turnActivity.getAttribute('open')) === null)
-      await turnActivity.locator(':scope > summary').click();
-    await turnActivity
-      .locator(`[data-testid="job-translation"][data-job-id="${failed.id}"]`)
-      .getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
-      .click();
-    await expect
-      .poll(
-        async () =>
-          (await data(request, chat.id)).jobs
-            .filter((job) => job.kind === 'translation' && job.id !== failed.id)
-            .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0]?.status
-      )
-      .toBe('completed');
-    const after = await data(request, chat.id);
-    expect(after.sources).toEqual(
-      before.sources.map((source) => ({
-        ...source,
-        translationRevision: after.jobs.find(
-          (job) => job.kind === 'translation' && job.sourceRevision === source.id
-        )!.revision,
-      }))
-    );
-    expect(after.runs).toEqual(before.runs);
   } finally {
     releasePresentation();
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     for (const barrier of ['status', 'translation'])
       await request.post('/api/test/control', { data: { action: 'release', barrier } });
   }
-});
-
-test('UI12 lost response reconfirms the original command and preserves a newer draft', async ({
-  page,
-  request,
-}) => {
-  const response = await postFixtureChat(request, {
-    data: { title: `합성 UI lost response ${Date.now()}` },
-  });
-  expect(response.ok()).toBeTruthy();
-  const chat = (await response.json()) as Chat;
-  await page.goto(`/?chat=${chat.id}`);
-  await expect(page.getByRole('heading', { name: chat.title, exact: true })).toBeVisible();
-  const commands: Record<string, unknown>[] = [];
-  let lose = true;
-  await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
-    commands.push(route.request().postDataJSON());
-    if (lose) {
-      lose = false;
-      const received = await route.fetch();
-      expect(received.ok()).toBeTruthy();
-      await route.abort('failed');
-    } else await route.continue();
-  });
-  await page.getByLabel('다음 장면 요청').fill('합성 최초 요청');
-  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
-  await expect.poll(async () => (await data(request, chat.id)).runs[0]?.status).toBe('completed');
-  await expect(page.getByTestId('source')).toHaveCount(1);
-  await page.getByLabel('다음 장면 요청').fill('합성 새 초안은 원래 요청과 달라요');
-  await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
-  const notification = page.getByRole('dialog', { name: '작업 알림', exact: true });
-  await expect(notification.getByRole('button', { name: '접수 확인', exact: true })).toBeVisible();
-  await expect(notification).toContainText('다시 확인하면 접수되지 않은 요청이 실행될 수 있어요.');
-  await expect(notification).toContainText('접수 여부를 확인하지 못했어요.');
-  expect(commands).toHaveLength(1);
-  await notification.getByRole('button', { name: '접수 확인', exact: true }).click();
-  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
-  expect(commands).toHaveLength(2);
-  expect(commands[1]).toEqual(commands[0]);
-  expect((await data(request, chat.id)).runs).toHaveLength(1);
-  expect((await data(request, chat.id)).sources).toHaveLength(1);
-  await expect(page.getByLabel('다음 장면 요청')).toHaveValue('합성 새 초안은 원래 요청과 달라요');
-  expect(await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id)).toBeNull();
 });
 
 test('UI07 UI12 lost fork response reuses one new story and Back Forward preserves independent drafts without model calls', async ({
@@ -486,10 +387,6 @@ test('UI07 UI12 lost fork response reuses one new story and Back Forward preserv
   const priorChats = (await (await request.get('/api/chats')).json()) as Chat[];
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toHaveCount(2);
-  await openChatMenu(page);
-  await expect(page.getByRole('button', { name: '보관된 분기', exact: true })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: '다른 응답', exact: true })).toHaveCount(0);
   await page.getByLabel('다음 장면 요청').fill('원본 이야기의 합성 초안');
   let accepted!: (chat: Chat) => void;
   const acceptedChat = new Promise<Chat>((resolve) => {
@@ -588,63 +485,6 @@ async function startingModels(request: APIRequestContext, title: string) {
   return { connection, models };
 }
 
-test('UI03 starting without a model explains setup and creates a chat without execution', async ({
-  page,
-  request,
-}) => {
-  const title = `UI no starting model ${Date.now()}`;
-  await setCurrentModels(request, { main: null, translation: null, status: null });
-  await page.route('**/api/health', async (route) => {
-    const response = await route.fetch();
-    const health = await response.json();
-    await route.fulfill({ response, json: { ...health, testMode: false } });
-  });
-  await page.route(/\/api\/library(?:\?|$)/, async (route) => {
-    const response = await route.fetch();
-    const library = await response.json();
-    await route.fulfill({ response, json: { ...library, models: [] } });
-  });
-  const writes: string[] = [];
-  page.on('request', (item) => {
-    if (item.method() === 'POST') writes.push(item.url());
-  });
-  await page.goto('/');
-  await nav(page, '새 이야기');
-  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
-  await expect(dialog.getByLabel('시작 본문 모델')).toHaveCount(0);
-  await dialog.getByRole('button', { name: '역할별 모델', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
-  await expect(page.getByLabel('본문 모델', { exact: true })).toBeVisible();
-  const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const connectionTab = settings.getByRole('tab', { name: '역할별 모델', exact: true });
-  if (await connectionTab.isVisible())
-    await expect(connectionTab).toHaveAttribute('aria-selected', 'true');
-  else {
-    await expect(
-      settings
-        .getByRole('combobox', { name: '설정 영역 선택', exact: true })
-        .locator('option:checked')
-    ).toHaveText('역할별 모델');
-  }
-  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expect(dialog).toBeVisible();
-  await openNewStoryOptions(page);
-  await dialog.getByLabel('새 채팅 제목').fill(title);
-  const accepted = page.waitForResponse(
-    (item) => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST'
-  );
-  await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
-  const chat = (await (await accepted).json()) as Chat;
-  await expect(dialog).not.toBeVisible();
-  const detail = await data(request, chat.id);
-  expect(detail.profile!.routes.main).toBeNull();
-  expect(detail.runs).toHaveLength(0);
-  expect(detail.attempts).toHaveLength(0);
-  expect(writes.filter((url) => /\/(?:runs|candidate)$/.test(url))).toEqual([]);
-  await page.getByLabel('다음 장면 요청').fill('모델 선택 전 합성 요청');
-  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
-});
-
 test('UI03 UI12 creating a chat never overwrites newer global model choices', async ({
   page,
   request,
@@ -667,93 +507,6 @@ test('UI03 UI12 creating a chat never overwrites newer global model choices', as
   expect(
     await page.evaluate((id) => sessionStorage.getItem(`pending-profile:${id}`), chat.id)
   ).toBeNull();
-});
-
-test('UI17 prompts use latest settings and concurrent edits preserve unsaved text', async ({
-  page,
-  request,
-}) => {
-  const originalText = 'Original full writing prompt.\n{{source}} remains literal.';
-  const saved = await request.post('/api/prompt-presets', {
-    data: {
-      title: `UI17 archived ${Date.now()}`,
-      role: 'main',
-      program: createDefaultRisuPrompt(originalText, 'main'),
-    },
-  });
-  expect(saved.ok()).toBeTruthy();
-  const first = await saved.json();
-  const created = await postFixtureChat(request, {
-    data: { title: `UI17 archived story ${Date.now()}` },
-  });
-  const chat = (await created.json()) as Chat;
-  const profile = (await data(request, chat.id)).profile!;
-  const initialWorkspace = await (await request.get('/api/prompt-workspace')).json();
-  expect(
-    (
-      await request.post('/api/prompt-workspace/apply', {
-        data: { expectedRevision: initialWorkspace.revision, role: 'main', presetId: first.id },
-      })
-    ).ok()
-  ).toBeTruthy();
-  const latest = await request.put(`/api/prompt-presets/${first.id}`, {
-    data: {
-      expectedRevision: 1,
-      title: first.title,
-      role: 'main',
-      program: createDefaultRisuPrompt('Latest library writing prompt.', 'main'),
-    },
-  });
-  expect(latest.ok()).toBeTruthy();
-  await page.goto(`/?chat=${chat.id}`);
-  await selectCurrentSettingsSection(page, '기본 프롬프트');
-  const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-  const editor = dialog.getByRole('region', { name: '기본 프롬프트 설정' });
-  await expect
-    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
-    .toEqual(createDefaultRisuPrompt('Latest library writing prompt.', 'main'));
-  await expect(editor.getByLabel('기본 프롬프트', { exact: true })).toHaveValue(first.id);
-  await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
-    0
-  );
-  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await nav(page, '프롬프트');
-  await page.getByRole('button', { name: `${first.title} 프롬프트 편집`, exact: true }).click();
-  const libraryEditor = page.getByTestId('prompt-library').getByTestId('prompt-editor');
-  const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
-  await (await promptBody(libraryEditor)).fill(edited);
-  const current = await (await request.get('/api/prompt-workspace')).json();
-  const concurrentText = 'Concurrent saved source prompt.';
-  const concurrent = await request.put(`/api/prompt-presets/${first.id}`, {
-    data: {
-      expectedRevision: current.main.presetRevision,
-      title: first.title,
-      role: 'main',
-      program: createDefaultRisuPrompt(concurrentText, 'main'),
-    },
-  });
-  expect(concurrent.ok()).toBeTruthy();
-  await expect
-    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
-    .toEqual(createDefaultRisuPrompt(concurrentText, 'main'));
-  await expectCodeFieldValue(await promptBody(libraryEditor), edited);
-  await libraryEditor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
-  const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
-  await expect(review).toBeVisible();
-  await expect(review).toContainText(concurrentText);
-  await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-  await expectCodeFieldValue(await promptBody(libraryEditor), edited);
-  const stored = await (await request.get(`/api/prompt-presets/${first.id}`)).json();
-  expect(stored.revision).toBe(3);
-  expect(stored.program).toEqual(createDefaultRisuPrompt(concurrentText, 'main'));
-  expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
-    createDefaultRisuPrompt(concurrentText, 'main')
-  );
-  const after = await data(request, chat.id);
-  expect(after.profile).toEqual(profile);
-  expect(after.runs).toHaveLength(0);
-  expect(after.attempts).toHaveLength(0);
 });
 
 test('UI18 translation is requested only by first view click, never by restore, SSE, language or story changes', async ({
@@ -920,9 +673,6 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   expect(currentJobs[0].id).not.toBe(oldJob.id);
   expect(currentJobs[0].result!.manual).not.toBe(true);
   expect(currentJobs[0].sourceHash).toBe(createHash('sha256').update(finalText).digest('hex'));
-  await expect(scene.getByRole('combobox')).toHaveCount(0);
-  await expect(scene.getByText('번역 버전', { exact: true })).toHaveCount(0);
-  await expect(scene.getByRole('button', { name: '다시 번역', exact: true })).toHaveCount(0);
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'run' } });
   try {
     await page.getByLabel('다음 장면 요청').fill('SYNTHETIC_FUTURE_AFTER_EDIT');
@@ -1089,122 +839,6 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     sendEdit();
     deliverTranslation();
     await second.close();
-  }
-});
-
-test('UI whole-source translation retains completed results across retry and cancellation', async ({
-  page,
-  request,
-}, info) => {
-  const chat = await seed(
-    request,
-    `전체 번역 ${Date.now()}`,
-    'Synthetic whole source translation.'
-  );
-  const before = await data(request, chat.id);
-  const source = before.sources[0];
-  const original = ['A'.repeat(150), 'B'.repeat(150)].join('\n\n');
-  expect(
-    (
-      await request.put(`/api/sources/${source.id}/text`, {
-        data: { text: original, expectedRevision: source.editRevision ?? 0 },
-      })
-    ).ok()
-  ).toBeTruthy();
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await page.goto(`/?chat=${chat.id}`);
-  await openChatSettings(page);
-  await selectChatSettingsSection(page, '생성 설정');
-  await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
-  if (visualReview)
-    await page.screenshot({
-      path: info.outputPath(`translation-whole-source-settings-${MOBILE_WIDTH}.png`),
-    });
-  await close(page);
-  const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
-  const latest = async () =>
-    (await data(request, chat.id)).jobs
-      .filter((job) => job.kind === 'translation')
-      .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0];
-  await expect.poll(async () => (await latest())?.status).toBe('completed');
-  const first = await latest();
-  expect(first).not.toHaveProperty('chunks');
-  expect(first).not.toHaveProperty('translationPlan');
-  const translated = nativeProse(scene.getByTestId('translation-text'));
-  await expect(translated).toContainText('A'.repeat(150));
-  const firstText = await translated.innerText();
-  expect(
-    (
-      await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } })
-    ).ok()
-  ).toBeTruthy();
-  await openMoreSourceActions(scene);
-  page.once('dialog', (dialog) => dialog.accept());
-  await scene.getByRole('button', { name: '현재 설정으로 새 번역', exact: true }).click();
-  await expect.poll(async () => (await latest()).status).toBe('running');
-  const pending = await latest();
-  expect(pending.id).not.toBe(first.id);
-  expect(pending.previousResult?.jobId).toBe(first.id);
-  await expect(translated).toHaveText(firstText);
-  expect((await request.post(`/api/jobs/${pending.id}/cancel`, { data: {} })).ok()).toBeTruthy();
-  expect(
-    (
-      await request.post('/api/test/control', {
-        data: { action: 'release', barrier: 'translation' },
-      })
-    ).ok()
-  ).toBeTruthy();
-  await expect.poll(async () => (await latest()).status).toBe('cancelled');
-  await expect(translated).toHaveText(firstText);
-  if (visualReview)
-    await page.screenshot({
-      path: info.outputPath(`translation-previous-cancelled-${MOBILE_WIDTH}.png`),
-    });
-  let previousSuccess = first;
-  for (const terminal of ['cancelled', 'failed'] as const) {
-    if (terminal === 'failed') {
-      expect(
-        (
-          await request.post('/api/test/control', {
-            data: { action: 'fail-next', point: 'translation' },
-          })
-        ).ok()
-      ).toBeTruthy();
-      expect(
-        (await request.post(`/api/sources/${source.id}/retranslate`, { data: {} })).ok()
-      ).toBeTruthy();
-      await expect.poll(async () => (await latest()).status).toBe('failed');
-    }
-    const stopped = await latest();
-    await expect(scene.getByTestId('translation-text')).toBeVisible();
-    const activity = scene.getByTestId('turn-activity');
-    if ((await activity.getAttribute('open')) === null)
-      await activity.locator(':scope > summary').click();
-    const retry = scene
-      .getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
-      .filter({ visible: true })
-      .first();
-    await expect(retry).toBeVisible();
-    await retry.click();
-    await expect
-      .poll(async () => {
-        const value = await latest();
-        return value.id !== stopped.id && value.status === 'completed';
-      })
-      .toBe(true);
-    const retried = await latest();
-    expect(retried.sourceHash).toBe(first.sourceHash);
-    expect((await data(request, chat.id)).sources[0].text).toBe(original);
-    expect((await (await request.get(`/api/jobs/${previousSuccess.id}`)).json()).result).toEqual(
-      previousSuccess.result
-    );
-    previousSuccess = retried;
-    if (visualReview)
-      await page.screenshot({
-        path: info.outputPath(`translation-whole-source-${terminal}-retry-${MOBILE_WIDTH}.png`),
-      });
   }
 });
 

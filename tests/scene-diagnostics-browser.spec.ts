@@ -8,6 +8,7 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
+import { navigationAction } from './ui-navigation.js';
 
 preservePromptWorkspace();
 
@@ -234,6 +235,12 @@ test('SCENEDIAG a completed provider call retains token and lore receipts the re
     const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });
     await expect(lore.getByText(loreTitle, { exact: true })).toBeVisible();
     await expect(lore).toContainText('고정 자료');
+    await navigationAction(page, '작업 현황');
+    const task = page
+      .getByRole('dialog', { name: '작업 현황', exact: true })
+      .locator(`[data-testid="run"][data-run-id="${run.id}"]`);
+    await task.getByRole('button', { name: '자세히 보기', exact: true }).click();
+    await expect(task.getByLabel('실행 요약', { exact: true })).toContainText('모델 1회');
   } finally {
     await peer.close();
     const current = await read<PromptWorkspace>(request, '/prompt-workspace');

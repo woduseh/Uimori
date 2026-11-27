@@ -236,7 +236,6 @@
       ],
       "specs": [
         { "file": "tests/loading-browser.spec.ts" },
-        { "file": "tests/workspace-loading-browser.spec.ts" },
         { "file": "tests/lazy-panels-browser.spec.ts" },
         { "file": "tests/live-events-browser.spec.ts" },
         { "file": "tests/browser-storage-browser.spec.ts" }

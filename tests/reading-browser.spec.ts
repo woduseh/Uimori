@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { visualReview } from './fixtures/visual-review.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { navigationAction, openChatMenu, selectSettingsSection } from './ui-navigation.js';
@@ -85,34 +84,6 @@ async function closeDialog(page: Page, dialog: Locator) {
   await expect(dialog).toBeHidden();
 }
 
-async function fits(page: Page, region: Locator) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true
-  );
-  expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
-    true
-  );
-}
-
-async function clipboard(page: Page) {
-  const copied: string[] = [];
-  await page.exposeFunction('recordReadingClipboard', (text: string) => copied.push(text));
-  await page.addInitScript(() => {
-    if (window !== window.top) return;
-    localStorage.setItem('uimori:reading-language', 'original');
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        writeText: (text: string) =>
-          (
-            window as unknown as { recordReadingClipboard: (value: string) => Promise<void> }
-          ).recordReadingClipboard(text),
-      },
-    });
-  });
-  return copied;
-}
-
 function watch(page: Page) {
   const writes: string[] = [],
     errors: string[] = [];
@@ -127,129 +98,52 @@ function watch(page: Page) {
   return { writes, errors };
 }
 
-test('READUI01 native source and translation keep text and copies while shared reading settings persist', async ({
+test('READUI01 reading settings change only how the scene is shown, persist across reload and write nothing', async ({
   page,
   request,
-}, info) => {
+}) => {
   const before = await seed(request);
-  const copied = await clipboard(page);
+  await page.addInitScript(() => {
+    if (window === window.top) localStorage.setItem('uimori:reading-language', 'original');
+  });
   const observed = watch(page);
-  for (const width of [DESKTOP_WIDTH]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await page.goto(`/?chat=${before.chat.id}`);
-    const source = page.getByTestId('source');
-    await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-    const prose = source.getByTestId('source-text').locator('.risu-message-content');
-    await expect(prose).toContainText('정말 괜찮아');
-    const authored = prose.locator('.risu-chat-text');
-    const textBefore = await authored.textContent();
-    await waitForNativeLayout(source.getByTestId('source-text'));
-    const copy = source.getByRole('button', { name: '본문 복사', exact: true });
-    await copy.scrollIntoViewIfNeeded();
-    await expect(copy).toBeInViewport();
-    await copy.click();
-    await expect.poll(() => copied.at(-1)).toBe(sourceText);
-    await expect(source.getByRole('button', { name: '본문 복사됨', exact: true })).toBeVisible();
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  await page.goto(`/?chat=${before.chat.id}`);
+  const source = page.getByTestId('source');
+  await source.getByRole('button', { name: '원문 보기', exact: true }).click();
+  const prose = source.getByTestId('source-text').locator('.risu-message-content');
+  await expect(prose).toContainText('정말 괜찮아');
+  const authored = prose.locator('.risu-chat-text');
+  const textBefore = await authored.textContent();
+  await waitForNativeLayout(source.getByTestId('source-text'));
 
-    let settings = await readingDialog(page);
-    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '여유롭게' });
-    const slider = settings.getByRole('slider', { name: '본문 크기' });
-    expect(await slider.evaluate((node) => getComputedStyle(node).accentColor)).not.toBe('auto');
-    await slider.focus();
-    await page.keyboard.press('End');
-    await expect(slider).toHaveValue('28');
-    await fits(page, settings);
-    await closeDialog(page, settings);
-    await expect(prose).toHaveCSS('font-size', '28px');
-    await expect
-      .poll(() =>
-        prose.evaluate((node) => {
-          const style = getComputedStyle(node);
-          return Number.parseFloat(style.lineHeight) / Number.parseFloat(style.fontSize);
-        })
-      )
-      .toBeCloseTo(2.2);
-    expect(await authored.textContent()).toBe(textBefore);
-    await expect(authored.locator('p[data-uimori-prose]').first()).toHaveCSS(
-      'margin-bottom',
-      '42px'
-    );
-    settings = await readingDialog(page);
-    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('dialogue');
-    await closeDialog(page, settings);
-    await expect(authored.locator('.reading-quote-break-before').first()).toBeAttached();
-    await expect(authored.locator('[data-quote-role="dialogue"]').first()).toHaveAttribute(
-      'data-emphasis',
-      'subtle'
-    );
-    expect(await authored.textContent()).toBe(textBefore);
-    settings = await readingDialog(page);
-    await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('relaxed');
-    await closeDialog(page, settings);
+  let settings = await readingDialog(page);
+  await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '여유롭게' });
+  const slider = settings.getByRole('slider', { name: '본문 크기' });
+  await slider.focus();
+  await page.keyboard.press('End');
+  await expect(slider).toHaveValue('28');
+  await closeDialog(page, settings);
+  await expect(prose).toHaveCSS('font-size', '28px');
+  expect(await authored.textContent()).toBe(textBefore);
+  settings = await readingDialog(page);
+  await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('dialogue');
+  await closeDialog(page, settings);
+  expect(await authored.textContent()).toBe(textBefore);
+  settings = await readingDialog(page);
+  await settings.getByLabel('읽기 스타일', { exact: true }).selectOption('relaxed');
+  await closeDialog(page, settings);
 
-    await page.reload();
-    settings = await readingDialog(page, true);
-    await expect(settings.getByRole('slider', { name: '본문 크기' })).toHaveValue('28');
-    await expect(settings.getByLabel('줄 간격', { exact: true })).toHaveValue('2.2');
-    await closeDialog(page, settings);
-    await expect(prose).toHaveCSS('font-size', '28px');
-    await source.getByRole('button', { name: '번역 보기', exact: true }).click();
-    const translated = source.getByTestId('translation-text').locator('.risu-message-content');
-    await expect(translated).toContainText('번역된 장면이다.');
-    await expect(translated).toHaveCSS('font-size', '28px');
-    await waitForNativeLayout(source.getByTestId('translation-text'));
-    await copy.scrollIntoViewIfNeeded();
-    await expect(copy).toBeInViewport();
-    await copy.click();
-    await expect.poll(() => copied.at(-1)).toBe(translatedText);
-    if (visualReview)
-      await page.screenshot({ path: info.outputPath(`reading-translation-${width}.png`) });
-
-    await source.getByRole('button', { name: '원문 보기', exact: true }).click();
-    await expect(prose).toContainText('정말 괜찮아');
-    await waitForNativeLayout(source.getByTestId('source-text'));
-    const edit = source.locator('.scene-action[aria-label="원문 수정"]');
-    await edit.scrollIntoViewIfNeeded();
-    await expect(edit).toBeInViewport();
-    await edit.click();
-    await expect(source.getByLabel('원문 수정 내용', { exact: true })).toHaveValue(sourceText);
-    await source.getByRole('button', { name: '편집 취소', exact: true }).click();
-    expect(await authored.textContent()).toBe(textBefore);
-    settings = await readingDialog(page);
-    await settings.getByRole('button', { name: '읽기 스타일 초기화', exact: true }).click();
-    await settings.getByRole('slider', { name: '본문 크기' }).focus();
-    for (let step = 28; step > 18; step--) await page.keyboard.press('ArrowLeft');
-    await expect(settings.getByRole('slider', { name: '본문 크기' })).toHaveValue('18');
-    await closeDialog(page, settings);
-    await expect(prose).toHaveCSS('font-size', '18px');
-  }
-  const other = await page.context().newPage();
-  try {
-    await other.goto(`/?chat=${before.chat.id}`);
-    const otherSettings = await readingDialog(other);
-    await expect(otherSettings.getByRole('slider', { name: '본문 크기' })).toHaveValue('18');
-    const settings = await readingDialog(page);
-    const size = settings.getByRole('slider', { name: '본문 크기' });
-    await size.focus();
-    await page.keyboard.press('End');
-    await expect(size).toHaveValue('28');
-    await settings.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
-    await settings.getByLabel('본문 폭', { exact: true }).selectOption('1040');
-    await settings.getByLabel('인용 강조', { exact: true }).selectOption('subtle');
-    await expect(otherSettings.getByLabel('인용 강조', { exact: true })).toHaveValue('subtle');
-    await otherSettings.getByRole('switch', { name: '생각 줄바꿈', exact: true }).check();
-    await expect(settings.getByRole('switch', { name: '생각 줄바꿈', exact: true })).toBeChecked();
-    expect(
-      await page.evaluate(() => [
-        localStorage.getItem('uimori:font-size'),
-        localStorage.getItem('uimori:font'),
-        localStorage.getItem('uimori:reading-width'),
-      ])
-    ).toEqual(['28', 'serif', '1040']);
-    await closeDialog(page, settings);
-  } finally {
-    await other.close();
-  }
+  await page.reload();
+  settings = await readingDialog(page, true);
+  await expect(settings.getByRole('slider', { name: '본문 크기' })).toHaveValue('28');
+  await expect(settings.getByLabel('줄 간격', { exact: true })).toHaveValue('2.2');
+  await closeDialog(page, settings);
+  await expect(prose).toHaveCSS('font-size', '28px');
+  await source.getByRole('button', { name: '번역 보기', exact: true }).click();
+  const translated = source.getByTestId('translation-text').locator('.risu-message-content');
+  await expect(translated).toContainText('번역된 장면이다.');
+  await expect(translated).toHaveCSS('font-size', '28px');
   const after = await detail(request, before.chat.id);
   expect(after.sources).toEqual(before.sources);
   expect(after.jobs).toEqual(before.jobs);

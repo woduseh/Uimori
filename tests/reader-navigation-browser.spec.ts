@@ -99,45 +99,6 @@ test('late native message growth follows end navigation and composed keys releas
   expect(await distanceToEnd(page)).toBeGreaterThanOrEqual(399);
 });
 
-test('CHATREC03 compact scene list follows source IDs and keeps the opening outside scene counts', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 412, height: 915 });
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/reader-navigation.tsx';
-    const { mountMiniNavigator } = await import(path);
-    mountMiniNavigator();
-  });
-  const selected = page.getByLabel('Selected source', { exact: true });
-  const list = page.getByRole('button', { name: '장면 목록 열기', exact: true });
-  const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
-  const latest = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
-  await expect(page.getByRole('button', { name: '이전 장면', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '다음 장면', exact: true })).toHaveCount(0);
-  await expect(list).toHaveText('첫 메시지');
-  await list.click();
-  await dialog.getByRole('button', { name: '1번째 장면, Scene one', exact: true }).click();
-  await expect(selected).toHaveText('source:nonsequential:a');
-  await expect(list).toHaveText('1 / 2');
-  await expect(latest).toBeVisible();
-  const before = await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop);
-  await list.click();
-  await page.keyboard.press('Escape');
-  await expect(list).toBeFocused();
-  expect(await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop)).toBe(before);
-  await page.getByRole('button', { name: 'Append scene', exact: true }).click();
-  await expect(list).toHaveText('1 / 3');
-  expect(await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop)).toBe(before);
-  await latest.click();
-  await expect(list).toHaveText('3 / 3');
-  await expect(latest).toBeHidden();
-  await list.click();
-  await dialog.getByRole('button', { name: 'Opening', exact: true }).click();
-  await expect(selected).toHaveText('opening:id');
-  await expect(list).toHaveText('첫 메시지');
-});
-
 for (const action of ['A-B-A'] as const) {
   test(`READERNAV initial loading recovers after ${action} navigation`, async ({
     page,

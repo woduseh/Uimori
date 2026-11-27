@@ -1,15 +1,11 @@
-import { createElement, type ComponentProps } from 'react';
+import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { Prose } from '../../web/Prose.js';
-import { SourceReader } from '../../web/SourceReader.js';
-import { ReadingPreferencesContext } from '../../web/ReadingPreferencesContext.js';
 import { DEFAULT_READABILITY, type ReadabilitySettings } from '../../web/reading-preferences.js';
 import { createReadingMarkdown } from '../../core/reading-markdown.js';
-import type { Source } from '../../core/types.js';
 import { prepareRisuMessage } from '../../web/risu-message.js';
 import { mountRisuMessageSurface } from '../../web/risu-message-surface.js';
-import { captureReaderLocation } from '../../web/useReadingSync.js';
 import '../../web/reading-prose.css';
 
 const tick = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -207,58 +203,4 @@ export async function runReadingRegressions(mount: HTMLElement) {
   }
   await tick();
   return passed;
-}
-
-export async function mountSource(
-  mount: HTMLElement,
-  source: Source,
-  options: Partial<
-    Pick<ComponentProps<typeof SourceReader>, 'jobs' | 'assets' | 'imageOwner' | 'hasPackages'>
-  > = {}
-) {
-  const root = createRoot(mount);
-  const reader = document.createElement('div');
-  reader.id = 'reader';
-  reader.dataset.readerScrollport = '';
-  Object.assign(reader.style, {
-    height: '280px',
-    overflow: 'auto',
-    width: '360px',
-    lineHeight: '1.8',
-    fontSize: '18px',
-  });
-  const container = document.createElement('div');
-  reader.append(container);
-  mount.append(reader);
-  const sourceRoot = createRoot(container);
-  const show = (settings: ReadabilitySettings) =>
-    flushSync(() =>
-      sourceRoot.render(
-        createElement(
-          ReadingPreferencesContext.Provider,
-          { value: settings },
-          createElement(SourceReader, {
-            source,
-            index: 0,
-            jobs: [],
-            assets: [],
-            refresh: async () => {},
-            onError: () => {},
-            onFork: async () => {},
-            ...options,
-          })
-        )
-      )
-    );
-  show(DEFAULT_READABILITY);
-  await tick();
-  await tick();
-  return {
-    setReading: () => show(enabled),
-    capture: () => captureReaderLocation(reader, source.chatId),
-    destroy: () => {
-      sourceRoot.unmount();
-      root.unmount();
-    },
-  };
 }

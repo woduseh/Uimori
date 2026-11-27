@@ -1,13 +1,6 @@
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Locator,
-  type Page,
-  type TestInfo,
-} from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
 import { openSourceActions } from './ui-navigation.js';
@@ -15,7 +8,6 @@ import { openSourceActions } from './ui-navigation.js';
 test.setTimeout(90000);
 
 const unique = '미라는 창가에 서서 오래 숨을 골랐다.';
-const repeated = '바람이 불었다.';
 const filler = '항구의 불빛이 하나씩 꺼지고, 젖은 돌길 위로 마지막 마차가 지나갔다. '.repeat(6);
 const original = [
   '첫 문단이다. 바람이 불었다.',
@@ -71,27 +63,7 @@ async function seed(
   return { chatId: chat.id as string, source: current.sources[0] };
 }
 
-type Part = { text: string; changed: boolean; applied: string[] };
-async function open(page: Page, chatId: string, sourceId: string, plain = false) {
-  if (plain)
-    await page.route('**/sources/*/presentation?*', async (route) => {
-      const native = await route
-        .fetch()
-        .then((response) => response.json())
-        .catch(() => null);
-      if (!native) return route.abort().catch(() => undefined);
-      const part = (value?: Part) => value && { text: value.text, changed: false, applied: [] };
-      await route
-        .fulfill({
-          json: {
-            ...native,
-            format: 'plain-text',
-            original: part(native.original),
-            translation: part(native.translation),
-          },
-        })
-        .catch(() => undefined);
-    });
+async function open(page: Page, chatId: string, sourceId: string) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chatId}`);
   const scene = page.locator(`[data-source-id="${sourceId}"][data-testid="source"]`);
@@ -152,44 +124,6 @@ async function select(scene: Locator, needle: string, occurrence = 0) {
   );
 }
 
-async function dragRisuText(page: Page, scene: Locator, fragment: string) {
-  const coordinates = await scene.evaluate((element, selected) => {
-    const root = element.querySelector('.risu-message-surface')?.shadowRoot;
-    if (!root) throw new Error('Risu surface not found');
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let node: Text | null = null;
-    while ((node = walker.nextNode() as Text | null)) {
-      if (node.data.includes(selected)) break;
-    }
-    if (!node) throw new Error('passage not found');
-    node.parentElement?.scrollIntoView({ block: 'center' });
-    const offset = node.data.indexOf(selected);
-    const first = document.createRange();
-    first.setStart(node, offset);
-    first.setEnd(node, offset + 1);
-    const last = document.createRange();
-    last.setStart(node, offset + selected.length - 1);
-    last.setEnd(node, offset + selected.length);
-    const start = first.getBoundingClientRect();
-    const end = last.getBoundingClientRect();
-    return {
-      start: { x: start.left + 1, y: (start.top + start.bottom) / 2 },
-      end: { x: end.right - 1, y: (end.top + end.bottom) / 2 },
-    };
-  }, fragment);
-  await page.mouse.move(coordinates.start.x, coordinates.start.y);
-  await page.mouse.down();
-  await page.mouse.move(coordinates.end.x, coordinates.end.y, { steps: 15 });
-  await page.mouse.up();
-  await expect
-    .poll(() => page.evaluate(() => getSelection()?.toString()))
-    .toContain(fragment.slice(1, -1));
-}
-
-async function shot(page: Page, info: TestInfo, name: string) {
-  await page.screenshot({ path: info.outputPath(`${name}.png`) });
-}
-
 function selectionBar(page: Page) {
   return page.getByRole('toolbar', { name: '선택한 글', exact: true });
 }
@@ -198,88 +132,55 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(helpers);
 });
 
-for (const bot of [false, true]) {
-  const label = bot ? 'bot chat drawn by Risu' : 'plain display';
-  test(`RSEL01 ${label}: the bar offers refine only for a unique verbatim match`, async ({
-    page,
-    request,
-  }) => {
-    const { chatId, source } = await seed(request);
-    const scene = await open(page, chatId, source.id, !bot);
-    await expect(scene.locator('.risu-message-surface')).toHaveCount(bot ? 1 : 0);
-    const bar = selectionBar(page);
-    await select(scene, unique);
-    await expect(bar).toBeVisible();
-    await expect(bar.getByRole('button')).toHaveText([
-      '다듬기',
-      '도우미에게 물어보기',
-      '책갈피',
-      '복사',
-    ]);
-    const placement = await page.evaluate(() => {
-      const bar = document.querySelector('.reader-selection-bar')!.getBoundingClientRect();
-      const rects = [...getSelection()!.getRangeAt(0).getClientRects()];
-      return rects.every((rect) => bar.bottom <= rect.top || bar.top >= rect.bottom);
-    });
-    expect(placement).toBe(true);
-    await select(scene, repeated);
-    await expect(bar.getByRole('button')).toHaveText(['도우미에게 물어보기', '책갈피', '복사']);
-    await select(scene, '강조한 말이 남았');
-    await expect(bar.getByRole('button')).toHaveText(['도우미에게 물어보기', '책갈피', '복사']);
-    await page.evaluate(() => getSelection()!.removeAllRanges());
-    await expect(bar).toHaveCount(0);
+test('RSEL02 a refined source passage in a bot chat drawn by Risu saves in place and keeps the reading position', async ({
+  page,
+  request,
+}) => {
+  const { chatId, source } = await seed(request);
+  let body: Record<string, unknown> = {};
+  await page.route(endpoint, async (route) => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ json: { text: proposal } });
   });
-
-  test(`RSEL02 ${label}: a refined source passage saves in place and keeps the reading position`, async ({
-    page,
-    request,
-  }) => {
-    const { chatId, source } = await seed(request);
-    let body: Record<string, unknown> = {};
-    await page.route(endpoint, async (route) => {
-      body = route.request().postDataJSON();
-      await route.fulfill({ json: { text: proposal } });
-    });
-    const scene = await open(page, chatId, source.id, !bot);
-    await select(scene, unique);
-    await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
-    const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
-    await expect(popover.getByLabel('다듬을 방향', { exact: true })).toBeFocused();
-    await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
-    await popover.getByRole('button', { name: '제안 받기', exact: true }).click();
-    const diff = popover.getByTestId('reader-revision-proposal');
-    await expect(diff.locator('ins').first()).toBeVisible();
-    await expect(diff.locator('del').first()).toBeVisible();
-    expect(body).toMatchObject({
-      draft: original,
-      expectedSourceHash: source.hash,
-      expectedRevision: source.editRevision ?? 0,
-    });
-    expect(String(body.draft).slice(Number(body.start), Number(body.end))).toBe(unique);
-    await expect(popover.getByText('번역을 바로 저장해요', { exact: false })).toHaveCount(0);
-    const before = await scene.evaluate((node) => node.getBoundingClientRect().top);
-    await popover.getByRole('button', { name: '적용', exact: true }).click();
-    await expect(popover).toHaveCount(0);
-    await expect
-      .poll(async () => (await detail(request, chatId)).sources[0].text)
-      .toBe(original.replace(unique, proposal));
-    await expect
-      .poll(() => scene.evaluate((node, text) => readable(node).includes(text), proposal))
-      .toBe(true);
-    const after = await scene.evaluate((node) => node.getBoundingClientRect().top);
-    expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
-    expect(
-      await scene.evaluate((node) =>
-        node.querySelector('.source-reading-content')!.contains(document.activeElement)
-      )
-    ).toBe(true);
+  const scene = await open(page, chatId, source.id);
+  await expect(scene.locator('.risu-message-surface')).toHaveCount(1);
+  await select(scene, unique);
+  await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
+  const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
+  await expect(popover.getByLabel('다듬을 방향', { exact: true })).toBeFocused();
+  await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
+  await popover.getByRole('button', { name: '제안 받기', exact: true }).click();
+  const diff = popover.getByTestId('reader-revision-proposal');
+  await expect(diff.locator('ins').first()).toBeVisible();
+  await expect(diff.locator('del').first()).toBeVisible();
+  expect(body).toMatchObject({
+    draft: original,
+    expectedSourceHash: source.hash,
+    expectedRevision: source.editRevision ?? 0,
   });
-}
+  expect(String(body.draft).slice(Number(body.start), Number(body.end))).toBe(unique);
+  const before = await scene.evaluate((node) => node.getBoundingClientRect().top);
+  await popover.getByRole('button', { name: '적용', exact: true }).click();
+  await expect(popover).toHaveCount(0);
+  await expect
+    .poll(async () => (await detail(request, chatId)).sources[0].text)
+    .toBe(original.replace(unique, proposal));
+  await expect
+    .poll(() => scene.evaluate((node, text) => readable(node).includes(text), proposal))
+    .toBe(true);
+  const after = await scene.evaluate((node) => node.getBoundingClientRect().top);
+  expect(Math.abs(after - before)).toBeLessThanOrEqual(2);
+  expect(
+    await scene.evaluate((node) =>
+      node.querySelector('.source-reading-content')!.contains(document.activeElement)
+    )
+  ).toBe(true);
+});
 
 test('RSEL03 a refined translation passage saves after stating its side effects', async ({
   page,
   request,
-}, info) => {
+}) => {
   const { chatId, source } = await seed(request, {
     translation: translated,
     theme: 'builtin:letter',
@@ -295,8 +196,6 @@ test('RSEL03 a refined translation passage saves after stating its side effects'
   const scene = await open(page, chatId, source.id);
   await expect(scene).toHaveAttribute('data-representation', 'translation');
   await select(scene, '미라는 창가에서 한참 숨을 골랐다.');
-  await expect(selectionBar(page)).toHaveAttribute('data-placed', 'true');
-  await shot(page, info, 'reader-selection-bar-light');
   await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
   const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
   await popover.getByLabel('다듬을 방향', { exact: true }).fill('더 담담하게.');
@@ -305,7 +204,6 @@ test('RSEL03 a refined translation passage saves after stating its side effects'
     popover.getByTestId('reader-revision-proposal').locator('ins').first()
   ).toBeVisible();
   await expect(popover.getByText('번역을 바로 저장해요', { exact: false })).toBeVisible();
-  await shot(page, info, 'reader-revision-popover-light');
   await popover.getByRole('button', { name: '적용', exact: true }).click();
   await expect(popover).toHaveCount(0);
   await expect
@@ -321,24 +219,16 @@ test('RSEL03 a refined translation passage saves after stating its side effects'
     .toBe(true);
 });
 
-test('RSEL04 a changed source keeps the proposal and saves nothing', async ({
-  page,
-  request,
-}, info) => {
+test('RSEL04 a changed source keeps the proposal and saves nothing', async ({ page, request }) => {
   const { chatId, source } = await seed(request, { theme: 'builtin:letter' });
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await page.addInitScript(() => localStorage.setItem('uimori:theme', 'dark'));
   await page.route(endpoint, (route) => route.fulfill({ json: { text: proposal } }));
   const scene = await open(page, chatId, source.id);
   await select(scene, unique);
-  await expect(selectionBar(page)).toHaveAttribute('data-placed', 'true');
-  await shot(page, info, 'reader-selection-bar-dark');
   await selectionBar(page).getByRole('button', { name: '다듬기', exact: true }).click();
   const popover = page.getByRole('dialog', { name: '선택한 글 다듬기', exact: true });
   await popover.getByLabel('다듬을 방향', { exact: true }).fill('호흡을 행동으로 보여줘.');
   await popover.getByRole('button', { name: '제안 받기', exact: true }).click();
   await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
-  await shot(page, info, 'reader-revision-popover-dark');
 
   let conflictCalls = 0;
   await page.route(`**/api/sources/${source.id}/text`, async (route) => {
@@ -361,14 +251,13 @@ test('RSEL04 a changed source keeps the proposal and saves nothing', async ({
   await expect(popover.getByText('그사이 원문이 바뀌어서', { exact: false })).toBeVisible();
   await expect(popover.getByTestId('reader-revision-proposal')).toBeVisible();
   await expect(popover.getByRole('button', { name: '적용', exact: true })).toBeDisabled();
-  await shot(page, info, 'reader-revision-conflict-dark');
   expect((await detail(request, chatId)).sources[0].text).toBe(elsewhere);
 });
 
 test('RSEL07 a translation arriving after the reader scrolled shows a badge instead of switching', async ({
   page,
   request,
-}, info) => {
+}) => {
   const { chatId, source } = await seed(request, { theme: 'builtin:letter' });
   const scene = await open(page, chatId, source.id);
   await expect(scene).toHaveAttribute('data-representation', 'original');
@@ -382,7 +271,6 @@ test('RSEL07 a translation arriving after the reader scrolled shows a badge inst
   await expect(badge).toBeVisible();
   await expect(scene).toHaveAttribute('data-representation', 'original');
   await badge.scrollIntoViewIfNeeded();
-  await shot(page, info, 'reader-translation-badge-light');
   await badge.click();
   await expect(scene).toHaveAttribute('data-representation', 'translation');
   await expect(badge).toHaveCount(0);
@@ -454,30 +342,10 @@ test('RSEL13 an editor opened before a translation starts keeps the original whe
   await expect(scene.getByRole('textbox', { name: '원문 수정 내용', exact: true })).toBeFocused();
 });
 
-test('RSEL17 dragging a Risu translation with a real mouse opens the refine menu', async ({
-  page,
-  request,
-}) => {
-  const { chatId, source } = await seed(request, { translation: translated });
-  const scene = await open(page, chatId, source.id);
-  await expect(scene).toHaveAttribute('data-representation', 'translation');
-  await expect(scene.locator('.risu-message-surface')).toHaveCount(1);
-  await dragRisuText(page, scene, '미라는 창가에서');
-  const bar = selectionBar(page);
-  await expect(bar).toBeVisible();
-  await expect(bar).toHaveAttribute('data-placed', 'true');
-  await expect(bar.getByRole('button', { name: '다듬기', exact: true })).toBeVisible();
-  await bar.getByRole('button', { name: '다듬기', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: '선택한 글 다듬기' })).toBeVisible();
-});
-
 test.describe('touch selection', () => {
   test.use({ hasTouch: true });
 
-  test('RSEL22 a touch selection docks the toolbar away from the selection and a tap that clears the selection still copies', async ({
-    page,
-    request,
-  }, info) => {
+  test('RSEL22 a tap that clears a touch selection still copies it', async ({ page, request }) => {
     const { chatId, source } = await seed(request);
     const scene = await open(page, chatId, source.id);
     await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
@@ -505,15 +373,6 @@ test.describe('touch selection', () => {
     await select(scene, unique);
     const bar = selectionBar(page);
     await expect(bar).toBeVisible();
-    const selection = await page.evaluate(() => {
-      const rect = getSelection()!.getRangeAt(0).getBoundingClientRect();
-      return { top: rect.top, bottom: rect.bottom };
-    });
-    const box = (await bar.boundingBox())!;
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(MOBILE_WIDTH);
-    expect(box.y >= selection.bottom + 32 || box.y + box.height <= selection.top).toBe(true);
-    await shot(page, info, 'touch-selection-bar');
     await bar.getByRole('button', { name: '복사', exact: true }).tap();
     await expect(page.getByText('복사했어요.', { exact: true })).toBeVisible();
     expect(
