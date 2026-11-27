@@ -88,8 +88,8 @@ export function formatMessage(key: string, locale: UiLocale, values?: MessageVal
     Object.fromEntries(
       Object.entries(values).map(([name, value]) => [
         name,
-        typeof value === 'object' && !(value instanceof Date)
-          ? decodeMessages(value.uiMessage)
+        typeof value === 'object' && value !== null && !(value instanceof Date)
+          ? decodeMessages(value.uiMessage, locale)
           : value,
       ])
     );
@@ -120,7 +120,7 @@ export function message(key: string, values?: MessageValues): string {
 export function messageRef(value: string): MessageReference {
   return { uiMessage: value };
 }
-function decodeDescriptor(json: string): string | null {
+function decodeDescriptor(json: string, locale: UiLocale): string | null {
   try {
     const descriptor = JSON.parse(json) as {
       key: string;
@@ -133,25 +133,35 @@ function decodeDescriptor(json: string): string | null {
       Object.fromEntries(
         Object.entries(descriptor.values).map(([name, item]) => [
           name,
-          typeof item === 'object' && 'uiDate' in item ? new Date(item.uiDate) : item,
+          typeof item === 'object' && item !== null && 'uiDate' in item
+            ? new Date(item.uiDate)
+            : item,
         ])
       );
-    return t(descriptor.key, values);
+    return formatMessage(descriptor.key, locale, values);
   } catch {
     return null;
   }
 }
-function decodeMessages(value: string): string {
+function decodeMessages(value: string, locale: UiLocale = current): string {
   let decoded = '';
   let index = 0;
   for (;;) {
     const start = value.indexOf(messagePrefix, index);
-    const end = start < 0 ? -1 : value.indexOf(messageEnd, start);
-    if (end < 0) return decoded + value.slice(index);
-    decoded +=
-      value.slice(index, start) +
-      (decodeDescriptor(value.slice(start + messagePrefix.length, end)) ??
-        value.slice(start, end + 1));
+    if (start < 0) return decoded + value.slice(index);
+    const next = value.indexOf(messagePrefix, start + messagePrefix.length);
+    const end = value.indexOf(messageEnd, start);
+    const text =
+      end < 0 || (next >= 0 && next < end)
+        ? null
+        : decodeDescriptor(value.slice(start + messagePrefix.length, end), locale);
+    if (text === null) {
+      const resume = next < 0 ? value.length : next;
+      decoded += value.slice(index, resume);
+      index = resume;
+      continue;
+    }
+    decoded += value.slice(index, start) + text;
     index = end + 1;
   }
 }

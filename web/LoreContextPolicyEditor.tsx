@@ -70,8 +70,15 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   ),
   maxInputTokens: String(policy.judgment?.maxInputTokens ?? DEFAULT_JEV_JUDGMENT.maxInputTokens),
 });
-function policyError(key: string, values?: MessageValues): Error {
-  return new Error(uiMessage(key, values));
+class PolicyDraftError extends Error {
+  readonly field?: string;
+  constructor(message: string, field?: string) {
+    super(message);
+    this.field = field;
+  }
+}
+function policyError(key: string, values?: MessageValues, field?: string): Error {
+  return new PolicyDraftError(uiMessage(key, values), field);
 }
 
 export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
@@ -79,11 +86,11 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
     const raw = draft[field.key];
     const number = Number(raw);
     if (!raw.trim() || !Number.isSafeInteger(number) || number < field.min || number > field.max)
-      throw policyError('settings.m209', {
-        v0: messageRef(uiMessage(field.labelKey)),
-        v1: field.min,
-        v2: field.max,
-      });
+      throw policyError(
+        'settings.m209',
+        { v0: messageRef(uiMessage(field.labelKey)), v1: field.min, v2: field.max },
+        field.key
+      );
   }
   if (!draft.threshold?.trim() || !draft.maxSelectedTokens?.trim() || !draft.maxInputTokens?.trim())
     throw policyError('settings.m210');
@@ -176,11 +183,13 @@ export function LoreContextPolicyEditor({
     }
   }, [serialized]);
   let policy: LoreContextPolicy | undefined,
-    validation = '';
+    validation = '',
+    invalidField: string | undefined;
   try {
     policy = parseLorePolicyDraft(draft);
   } catch (caught) {
     validation = (caught as Error).message;
+    invalidField = caught instanceof PolicyDraftError ? caught.field : undefined;
   }
   useEffect(() => {
     onPendingChange?.(!!validation);
@@ -260,7 +269,7 @@ export function LoreContextPolicyEditor({
                   inputMode="numeric"
                   value={draft[field.key]}
                   onChange={(event) => change({ ...draft, [field.key]: event.target.value })}
-                  aria-invalid={validation.startsWith(field.label)}
+                  aria-invalid={invalidField === field.key}
                 />
               </label>
             ))}

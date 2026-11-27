@@ -30,6 +30,7 @@ describe('lore context UI boundaries', () => {
       const draft = { ...valid, [key]: text },
         before = structuredClone(draft);
       expect(shownThrow(() => parseLorePolicyDraft(draft))).toContain('정수');
+      expect(() => parseLorePolicyDraft(draft)).toThrow(expect.objectContaining({ field: key }));
       expect(draft).toEqual(before);
     }
   });

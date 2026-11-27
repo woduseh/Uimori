@@ -194,6 +194,20 @@ describe('UI locale presentation boundary', () => {
       expect(translateMessage(diagnostic)).toBe(diagnostic);
   });
 
+  test('a stray descriptor prefix leaves the next descriptor readable, and formatMessage nests in its own locale', async () => {
+    const { formatMessage, message, messageRef, setLocale, translateMessage } = await loadedI18n();
+    setLocale('en');
+    expect(translateMessage(`\u001fui:broken ${message('shared.loadFailed')}`)).toBe(
+      '\u001fui:broken Could not load.'
+    );
+    setLocale('ko');
+    expect(
+      formatMessage('helpers.modelRefreshFailed', 'en', {
+        error: messageRef(message('shared.loadFailed')),
+      })
+    ).toBe('The assistant model changed, but settings could not be refreshed: Could not load.');
+  });
+
   test('ICU interpolates full sentences, plural branches and missing locale fallback', async () => {
     const { formatMessage } = await loadedI18n();
     expect(formatMessage('outside.activeWork', 'en', { count: 1 })).toBe(

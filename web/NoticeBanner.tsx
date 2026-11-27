@@ -25,7 +25,9 @@ export function NoticeBanner({
       aria-label={label ? translateMessage(label) : label}
     >
       <Icon size={18} className="notice-banner-icon" aria-hidden="true" />
-      <div className="notice-banner-message">{children}</div>
+      <div className="notice-banner-message">
+        {typeof children === 'string' ? translateMessage(children) : children}
+      </div>
       {actions && <div className="notice-banner-actions">{actions}</div>}
     </aside>
   );

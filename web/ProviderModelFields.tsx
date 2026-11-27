@@ -171,9 +171,10 @@ function ModelOptionSelect({
     (unsendable
       ? (invalidMessage ?? t('providers.m552', { value0: label, value1: defaultLabel }))
       : '');
+  const shownError = translateMessage(error);
   useEffect(() => {
-    ref.current?.setCustomValidity(translateMessage(error));
-  }, [error]);
+    ref.current?.setCustomValidity(shownError);
+  }, [shownError]);
   if (!all?.length && !value) return null;
   const documented = choices ? (all ?? []).filter((item) => choices.includes(item)) : (all ?? []);
   const rest = choices ? (all ?? []).filter((item) => !choices.includes(item)) : [];
@@ -275,9 +276,10 @@ function OptionalNumber({
   const ref = useRef<HTMLInputElement>(null),
     invalid = value !== '' && !sendable;
   const error = invalid ? t('providers.m554', { value0: label }) : '';
+  const shownError = translateMessage(error);
   useEffect(() => {
-    ref.current?.setCustomValidity(translateMessage(error));
-  }, [error]);
+    ref.current?.setCustomValidity(shownError);
+  }, [shownError]);
   if (!optionalNumberOffered(sendable, documented) && value === '') return null;
   return (
     <label>
@@ -318,9 +320,10 @@ function StopSequence({
   useI18n();
   const ref = useRef<HTMLTextAreaElement>(null),
     error = sendable ? '' : t('providers.m188');
+  const shownError = translateMessage(error);
   useEffect(() => {
-    ref.current?.setCustomValidity(translateMessage(error));
-  }, [error]);
+    ref.current?.setCustomValidity(shownError);
+  }, [shownError]);
   return (
     <div className="provider-stop-row full">
       <label>
@@ -424,9 +427,10 @@ export function ProviderModelFields({
   const providerOptionsError =
     connection && protocol === 'vercel-chat-v1' ? providerOptionsDraftError(value, connection) : '';
   const providerOptionsRef = useRef<HTMLTextAreaElement>(null);
+  const shownOptionsError = translateMessage(providerOptionsError);
   useEffect(() => {
-    providerOptionsRef.current?.setCustomValidity(translateMessage(providerOptionsError));
-  }, [providerOptionsError]);
+    providerOptionsRef.current?.setCustomValidity(shownOptionsError);
+  }, [shownOptionsError]);
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
   const specified: { key: string; label: string; text: string; reset: () => void }[] = (
     [
