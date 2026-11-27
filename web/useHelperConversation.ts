@@ -1,4 +1,4 @@
-import { useI18n, message as legacyDescriptor } from './i18n.js';
+import { useI18n } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   HelperContextCompactionSummary,
@@ -13,6 +13,8 @@ import { evictHelperViews } from './helper-conversation-cache.js';
 import { diagnosticHelperEvent } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperPollDelay } from './poll-delays.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 
 export type HelperTaskView = Omit<HelperTask, 'snapshot'> & { modelTitle: string };
 type View = {
@@ -120,7 +122,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
   const requestVersion = useRef(0);
   const [views, setViews] = useState<Record<string, View>>({});
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const alive = useRef(true);
   const earlierLock = useRef(false);
@@ -204,7 +206,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       needsRefresh = false;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
-        setError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m207'));
+        setError(toUiMessage(cause, 'helpers.m207'));
     };
     const queuedTask = (taskId: string | null) =>
       taskId !== null &&
@@ -255,7 +257,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
             needsRefresh = false;
           }
         }
-        if (!disposed && selectedScope.current === scopeKey) setError('');
+        if (!disposed && selectedScope.current === scopeKey) setError(null);
       } catch (cause) {
         report(cause);
         throw cause;
@@ -278,7 +280,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
       cache.current.set(scopeKey, cached);
     }
     setLoading(!cached);
-    setError('');
+    setError(null);
     live.request();
     return () => {
       disposed = true;
@@ -321,8 +323,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
         });
       }
     } catch (cause) {
-      if (selectedScope.current === scopeKey)
-        setError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m208'));
+      if (selectedScope.current === scopeKey) setError(toUiMessage(cause, 'helpers.m208'));
     } finally {
       earlierLock.current = false;
       if (alive.current) setLoadingEarlier(false);

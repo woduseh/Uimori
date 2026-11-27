@@ -1,5 +1,7 @@
 import { parseOwnJson } from './json.js';
-import { useI18n, message as legacyDescriptor } from './i18n.js';
+import { useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
 import { api, ApiError } from './api.js';
@@ -72,7 +74,7 @@ export function useHelperSessions(
   const lastScope = useRef(JSON.stringify(scope));
   const [lists, setLists] = useState<Record<string, HelperSession[]>>({});
   const [selected, setSelected] = useState<Record<string, string | null>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, UiMessage | null>>({});
   const [creating, setCreating] = useState(false);
   const [seen, setSeen] = useState<Record<string, number>>({});
   const versions = useRef(new Map<string, number>());
@@ -251,7 +253,7 @@ export function useHelperSessions(
           if (!disposed)
             setErrors((old) => ({
               ...old,
-              [group]: cause instanceof Error ? cause.message : legacyDescriptor('helpers.m210'),
+              [group]: toUiMessage(cause, 'helpers.m210'),
             }));
           throw cause;
         }
@@ -277,7 +279,7 @@ export function useHelperSessions(
     if (createLock.current) return;
     createLock.current = true;
     setCreating(true);
-    setErrors((old) => ({ ...old, [group]: '' }));
+    setErrors((old) => ({ ...old, [group]: null }));
     const creationScope: HelperScope = expanded ? { kind: 'library', workId: 'workspace' } : scope;
     const key = storageKeys.helperCreate(
       `${JSON.stringify(creationScope)}${projectId ? `:project:${projectId}` : ''}`
@@ -337,7 +339,7 @@ export function useHelperSessions(
       if (alive.current)
         setErrors((old) => ({
           ...old,
-          [group]: cause instanceof Error ? cause.message : legacyDescriptor('helpers.m211'),
+          [group]: toUiMessage(cause, 'helpers.m211'),
         }));
     } finally {
       createLock.current = false;
@@ -379,12 +381,12 @@ export function useHelperSessions(
       );
       setSelected(selectedRef.current);
     },
-    error: errors[group] ?? '',
+    error: errors[group] ?? null,
     clearSelection: () => {
       setCarried(null);
       selectedRef.current = { ...selectedRef.current, [group]: null };
       setSelected(selectedRef.current);
     },
-    clearError: () => setErrors((old) => ({ ...old, [group]: '' })),
+    clearError: () => setErrors((old) => ({ ...old, [group]: null })),
   };
 }

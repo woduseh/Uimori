@@ -21,8 +21,8 @@ import {
   readAttachmentDraft,
   writeAttachmentDraft,
 } from './attachment-draft-storage.js';
-import { message } from './i18n.js';
-import { legacyMessageString, UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { requestDraftKey, type DraftImage } from './request-image-draft.js';
 import { writeOptionalStorage } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
@@ -41,7 +41,12 @@ export type FrozenHelperAttachments = {
   images?: RequestImageUpload[];
   files?: RequestFileUpload[];
 };
-type Snapshot = { draft: HelperAttachmentDraft; ready: boolean; busy: boolean; error: string };
+type Snapshot = {
+  draft: HelperAttachmentDraft;
+  ready: boolean;
+  busy: boolean;
+  error: UiMessage | null;
+};
 type Entry = {
   generation: number;
   snapshot: Snapshot;
@@ -64,7 +69,7 @@ function entry(id: string): Entry {
   if (!found) {
     found = {
       generation: 0,
-      snapshot: { draft: emptyDraft(), ready: false, busy: false, error: '' },
+      snapshot: { draft: emptyDraft(), ready: false, busy: false, error: null },
       listeners: new Set(),
     };
     entries.set(id, found);
@@ -97,21 +102,21 @@ export async function loadHelperAttachments(id: string): Promise<void> {
           draft:
             latestToken && latestToken !== draft.token ? { ...empty, token: latestToken } : empty,
           ready: true,
-          error: '',
+          error: null,
         });
       } else if (draft && latestToken && latestToken !== draft.token) {
         await persist(id, { ...draft, token: latestToken });
-        publish(owner, { ready: true, error: message('helperAttachments.recoveredOlder') });
+        publish(owner, { ready: true, error: uiMessage('helperAttachments.recoveredOlder') });
       } else
         publish(owner, {
           draft:
             draft ??
             (latestToken ? { ...owner.snapshot.draft, token: latestToken } : owner.snapshot.draft),
           ready: true,
-          error: '',
+          error: null,
         });
     } catch {
-      publish(owner, { error: message('helperAttachments.restoreFailed') });
+      publish(owner, { error: uiMessage('helperAttachments.restoreFailed') });
     } finally {
       owner.loading = undefined;
     }
@@ -121,14 +126,14 @@ export async function loadHelperAttachments(id: string): Promise<void> {
 function persist(id: string, draft: HelperAttachmentDraft): Promise<void> {
   const owner = entry(id);
   const remembered = writeOptionalStorage('session', tokenKey(id), draft.token);
-  publish(owner, { draft, error: remembered ? '' : message('helperAttachments.saveFailed') });
+  publish(owner, { draft, error: remembered ? null : uiMessage('helperAttachments.saveFailed') });
   const write = (owner.write ?? Promise.resolve())
     .catch(() => {})
     .then(async () => {
       await writeAttachmentDraft(await requestDraftKey(logicalKey(id)), draft);
     });
   owner.write = write;
-  void write.catch(() => publish(owner, { error: message('helperAttachments.saveFailed') }));
+  void write.catch(() => publish(owner, { error: uiMessage('helperAttachments.saveFailed') }));
   return write;
 }
 
@@ -210,7 +215,7 @@ export async function acceptHelperAttachments(id: string, token: string): Promis
   if (matched) {
     const draft = emptyDraft();
     sessionStorage.setItem(tokenKey(id), draft.token);
-    publish(owner, { draft, error: '' });
+    publish(owner, { draft, error: null });
   }
   await deleteAttachmentDraft(await requestDraftKey(logicalKey(id)), token);
   sessionStorage.setItem(
@@ -225,7 +230,7 @@ export async function deleteHelperAttachmentRecovery(id: string): Promise<void> 
   owner.generation++;
   await owner.write?.catch(() => {});
   await deleteAttachmentDraft(await requestDraftKey(logicalKey(id)), null);
-  publish(owner, { draft: emptyDraft(), ready: true, error: '' });
+  publish(owner, { draft: emptyDraft(), ready: true, error: null });
   sessionStorage.removeItem(acceptedKey(id));
   sessionStorage.removeItem(tokenKey(id));
 }
@@ -255,7 +260,7 @@ async function appendHelperAttachmentFiles(
   generation: number
 ): Promise<void> {
   if (!owner.snapshot.ready || owner.generation !== generation) return;
-  publish(owner, { busy: true, error: '' });
+  publish(owner, { busy: true, error: null });
   try {
     const images: DraftImage[] = [],
       additions: DraftFile[] = [];
@@ -305,7 +310,7 @@ async function appendHelperAttachmentFiles(
     });
   } catch (cause) {
     publish(owner, {
-      error: cause instanceof Error ? cause.message : message('helperAttachments.openFailed'),
+      error: toUiMessage(cause, 'helperAttachments.openFailed'),
     });
   } finally {
     publish(owner, { busy: false });
@@ -351,13 +356,13 @@ export function useHelperAttachmentDraft(id: string, model: AttachmentModel | nu
   return {
     ...snapshot,
     accept,
-    error: snapshot.error || (invalid ? legacyMessageString(invalid) : ''),
+    error: snapshot.error ?? invalid,
     hasAttachments: !!(snapshot.draft.images.length || snapshot.draft.files.length),
     addFiles: (files: File[]) => addHelperAttachmentFiles(id, files, model),
     remove,
     retry: () => loadHelperAttachments(id),
     touch,
-    clearError: () => publish(owner, { error: '' }),
+    clearError: () => publish(owner, { error: null }),
     freeze: () => freezeHelperAttachments(id, model),
   };
 }

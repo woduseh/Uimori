@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, uiText, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -25,7 +26,7 @@ import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
 export type HelperActivityView = {
   taskId?: string;
   data: Activity | null;
-  error: string;
+  error: UiMessage | null;
   reading?: boolean;
   retry?: () => void;
 };
@@ -36,7 +37,7 @@ export function useHelperActivity(
   visible: boolean
 ): HelperActivityView {
   useI18n();
-  const [view, setView] = useState<HelperActivityView>({ data: null, error: '' });
+  const [view, setView] = useState<HelperActivityView>({ data: null, error: null });
   const retry = useRetryableEffect(() => {
     if (!taskId || !visible) return;
     let disposed = false;
@@ -44,18 +45,18 @@ export function useHelperActivity(
       setView((old) => ({
         taskId,
         data: old.taskId === taskId ? old.data : null,
-        error: old.taskId === taskId ? old.error : '',
+        error: old.taskId === taskId ? old.error : null,
         reading: true,
       }));
       try {
         const data = await api<Activity>(`/helper/tasks/${encodeURIComponent(taskId)}/activity`);
-        if (!disposed) setView({ taskId, data, error: '' });
+        if (!disposed) setView({ taskId, data, error: null });
       } catch (cause) {
         if (!disposed)
           setView((old) => ({
             taskId,
             data: old.data?.taskId === taskId ? old.data : null,
-            error: cause instanceof Error ? cause.message : legacyDescriptor('helpers.m112'),
+            error: toUiMessage(cause, 'helpers.m112'),
           }));
       } finally {
         if (!disposed) setView((old) => ({ ...old, reading: false }));
@@ -73,7 +74,7 @@ export function useHelperActivity(
       live.dispose();
     };
   }, [taskId, status, visible]);
-  return { ...(view.taskId === taskId ? view : { data: null, error: '' }), retry };
+  return { ...(view.taskId === taskId ? view : { data: null, error: null }), retry };
 }
 
 const stateLabels = {
@@ -83,6 +84,9 @@ const stateLabels = {
   stopped: 'helpers.m116',
   recorded: 'helpers.m117',
 };
+
+const eventError = (error: string | undefined): UiMessage =>
+  requestFileError(error) ?? (error ? uiText(error) : uiMessage('helpers.m126'));
 
 function StageGlyph({ state }: { state: HelperActivityState }) {
   const Glyph =
@@ -167,8 +171,7 @@ function StageRow({ stage }: { stage: HelperActivityStage }) {
         event.error || event.denied ? (
           <NoticeBanner tone="error" key={event.seq}>
             {event.name ? `${event.name}: ` : ''}
-            {requestFileError(event.error) ??
-              (event.error ? translateMessage(event.error) : t('helpers.m126'))}
+            {formatUiMessage(eventError(event.error))}
           </NoticeBanner>
         ) : event.text ? (
           <p key={event.seq}>
@@ -223,7 +226,7 @@ export function HelperActivityDetails({
         <LoadingState
           presentation="inline"
           loading={reading || (!data && !error)}
-          error={legacyUiMessage(error)}
+          error={error}
           errorLabel={uiMessage('helpers.m119')}
           label={uiMessage('helpers.m120')}
           onRetry={retry}
@@ -352,8 +355,7 @@ function stageStep(stage: HelperActivityStage): TaskHistoryStep {
     children: stage.events.map((event) =>
       event.error || event.denied ? (
         <NoticeBanner tone="error" key={event.seq}>
-          {requestFileError(event.error) ??
-            (event.error ? translateMessage(event.error) : t('helpers.m126'))}
+          {eventError(event.error)}
         </NoticeBanner>
       ) : event.text ? (
         <p key={event.seq} className="task-history-step-text">
@@ -419,7 +421,7 @@ export function HelperActivityTimeline({
         <LoadingState
           presentation="inline"
           loading={reading || (!data && !error)}
-          error={legacyUiMessage(error)}
+          error={error}
           errorLabel={uiMessage('helpers.m119')}
           label={uiMessage('helpers.m120')}
           onRetry={retry}

@@ -14,7 +14,7 @@ import {
   useHelperTaskResults,
 } from './HelperTaskResults.js';
 import { formatNumber, t, useI18n } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { formatUiMessage, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import {
   matchesTaskHistoryFilter,
@@ -292,7 +292,9 @@ export function HelperTaskHistory({
                 ]}
                 notice={
                   <>
-                    {task.error && <p className="error">{helperTaskError(task.error)}</p>}
+                    {task.error && (
+                      <p className="error">{formatUiMessage(helperTaskError(task.error))}</p>
+                    )}
                     {task.completedEffects && (
                       <p>
                         {t('helpers.m315', {

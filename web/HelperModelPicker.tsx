@@ -5,11 +5,11 @@ import { callEndpoint } from './api.js';
 import { ChatModelPicker } from './ChatModelPicker.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
-import { message, t, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 
 export function HelperModelPicker({
   open,
@@ -27,13 +27,13 @@ export function HelperModelPicker({
   useI18n();
   const shared = usePromptWorkspace();
   const [workspace, setWorkspace] = useState<ModelWorkspace | null>(null);
-  const [readError, setReadError] = useState('');
-  const [writeError, setWriteError] = useState('');
+  const [readError, setReadError] = useState<UiMessage | null>(null);
+  const [writeError, setWriteError] = useState<UiMessage | null>(null);
   const [reading, setReading] = useState(false);
   const [needsRead, setNeedsRead] = useState(true);
   const [pending, setPending] = useState(false);
   const [accepted, setAccepted] = useState<ModelWorkspace | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const epoch = useRef(0);
   const locked = useRef(false);
   const updateLabel = useRef(onSaved);
@@ -54,8 +54,8 @@ export function HelperModelPicker({
     const owner = ++epoch.current;
     const controller = new AbortController();
     setNeedsRead(true);
-    setReadError('');
-    setWriteError('');
+    setReadError(null);
+    setWriteError(null);
     setReading(true);
     void callEndpoint(promptEndpoints.readModelWorkspace, {}, controller.signal)
       .then((read) => {
@@ -69,8 +69,8 @@ export function HelperModelPicker({
           }
         }
       })
-      .catch((cause: Error) => {
-        if (epoch.current === owner && !controller.signal.aborted) setReadError(cause.message);
+      .catch((cause: unknown) => {
+        if (epoch.current === owner && !controller.signal.aborted) setReadError(toUiMessage(cause));
       })
       .finally(() => {
         if (epoch.current === owner) setReading(false);
@@ -89,8 +89,8 @@ export function HelperModelPicker({
     const owner = epoch.current;
     locked.current = true;
     setPending(true);
-    setWriteError('');
-    setNotice('');
+    setWriteError(null);
+    setNotice(null);
     try {
       const value = (await callEndpoint(promptEndpoints.updateModelWorkspace, {
         expectedRevision: current.revision,
@@ -103,14 +103,14 @@ export function HelperModelPicker({
         latestRevision.current = value.revision;
         updateLabel.current(value);
       }
-      setNotice(message('helpers.modelSaved'));
+      setNotice(uiMessage('helpers.modelSaved'));
       if (epoch.current === owner) {
         setWorkspace((old) => (old && old.revision > value.revision ? old : value));
         onClose();
       }
     } catch (cause) {
       if (epoch.current === owner) {
-        setWriteError(errorDescriptor(cause));
+        setWriteError(toUiMessage(cause));
         setNeedsRead(true);
       }
     } finally {
@@ -131,7 +131,7 @@ export function HelperModelPicker({
         disabled={!current || needsRead}
         loading={reading}
         pending={pending}
-        error={legacyUiMessage(writeError || readError)}
+        error={writeError ?? readError}
         errorLabel={writeError ? uiMessage('helpers.modelCheckAgain') : undefined}
         onRetry={() => {
           retryRead();
@@ -153,7 +153,7 @@ export function HelperModelPicker({
           {shared.error && uiMessage('helpers.modelRefreshFailed', { error: shared.error })}
         </NoticeBanner>
       )}
-      <TransientNotice content={legacyUiMessage(notice)} />
+      <TransientNotice content={notice} />
     </>
   );
 }

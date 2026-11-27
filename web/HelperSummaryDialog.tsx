@@ -3,8 +3,9 @@ import type { HelperContextSummaryView } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { Dialog } from './Dialog.js';
-import { formatNumber, t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { formatNumber, t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { SummaryEditor } from './SummaryEditor.js';
@@ -12,8 +13,7 @@ import './helper-summary.css';
 
 export type HelperSummaryDraft = { text: string; revision: number };
 
-const failure = (caught: unknown) =>
-  caught instanceof Error ? caught.message : legacyDescriptor('helperSummary.loadFailed');
+const failure = (caught: unknown) => toUiMessage(caught, 'helperSummary.loadFailed');
 
 export function HelperSummaryDialog({
   open,
@@ -31,12 +31,12 @@ export function HelperSummaryDialog({
   busy: boolean;
   draft: HelperSummaryDraft | null;
   onDraftChange: (draft: HelperSummaryDraft | null) => void;
-  onChanged: (message: string) => Promise<void>;
+  onChanged: (notice: UiMessage) => Promise<void>;
   onClose: () => void;
 }) {
   useI18n();
   const [current, setCurrent] = useState<HelperContextSummaryView | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [readFailed, setReadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -87,7 +87,7 @@ export function HelperSummaryDialog({
   async function save() {
     if (!draft || saving || conflict || blocked || !draft.text.trim()) return;
     setSaving(true);
-    setError('');
+    setError(null);
     try {
       show(
         await api<HelperContextSummaryView>(
@@ -98,14 +98,14 @@ export function HelperSummaryDialog({
       );
       focus.current = 'trigger';
       onDraftChange(null);
-      await onChanged(legacyDescriptor('helperSummary.saved'));
+      await onChanged(uiMessage('helperSummary.saved'));
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
         const latest = await load();
         if (latest?.summary === draft.text) {
           focus.current = 'trigger';
           onDraftChange(null);
-          await onChanged(legacyDescriptor('helperSummary.saved'));
+          await onChanged(uiMessage('helperSummary.saved'));
           return;
         }
       }
@@ -118,7 +118,7 @@ export function HelperSummaryDialog({
   async function reset() {
     if (!current || saving) return;
     setSaving(true);
-    setError('');
+    setError(null);
     try {
       show(
         await api<HelperContextSummaryView>(
@@ -128,7 +128,7 @@ export function HelperSummaryDialog({
         )
       );
       setConfirmReset(false);
-      await onChanged(legacyDescriptor('helperSummary.resetDone'));
+      await onChanged(uiMessage('helperSummary.resetDone'));
     } catch (caught) {
       setConfirmReset(false);
       setError(failure(caught));
@@ -182,7 +182,7 @@ export function HelperSummaryDialog({
                   type="button"
                   className="secondary"
                   onClick={() => {
-                    setError('');
+                    setError(null);
                     void load();
                   }}
                 >
@@ -191,17 +191,17 @@ export function HelperSummaryDialog({
               ) : undefined
             }
           >
-            {translateMessage(error)}
+            {error}
           </NoticeBanner>
         )}
         {!current ? (
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={legacyUiMessage(error)}
+            error={error}
             label={uiMessage('helperSummary.loading')}
             onRetry={() => {
-              setError('');
+              setError(null);
               void load();
             }}
           />
@@ -223,12 +223,12 @@ export function HelperSummaryDialog({
                 onChange={(text) => onDraftChange({ ...draft, text })}
                 onRebase={() => {
                   onDraftChange({ ...draft, revision: current.checkpointRevision });
-                  setError('');
+                  setError(null);
                 }}
                 onCancel={() => {
                   focus.current = 'trigger';
                   onDraftChange(null);
-                  setError('');
+                  setError(null);
                 }}
                 onSave={() => void save()}
               />
@@ -242,7 +242,7 @@ export function HelperSummaryDialog({
                   disabled={blocked}
                   onClick={() => {
                     focus.current = 'editor';
-                    setError('');
+                    setError(null);
                     onDraftChange({
                       text: current.summary ?? '',
                       revision: current.checkpointRevision,

@@ -3,11 +3,11 @@ import { Check, Undo2 } from 'lucide-react';
 import type { HelperChange, HelperRollbackUnit, HelperRollbackView } from '../core/helper.js';
 import { isAppErrorCode } from '#contracts';
 import { api, definiteRejection } from './api.js';
-import { apiErrorDisplay } from './api-errors.js';
+import { apiErrorDisplay, toUiMessage } from './api-errors.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
-import { getIntlLocale, t, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { getIntlLocale, t } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -60,7 +60,7 @@ function reasonText(unit: HelperRollbackUnit) {
   if (unit.status === 'failed') {
     if (unit.error && isAppErrorCode(unit.error))
       return apiErrorDisplay({ code: unit.error, params: unit.errorParams }, 409);
-    return unit.error ? translateMessage(unit.error) : t('helperRollback.failed');
+    return unit.error || t('helperRollback.failed');
   }
   if (unit.reason === 'changed-after-task') return t('helperRollback.changedAfter');
   if (unit.reason === 'changed-during-task') return t('helperRollback.changedDuring');
@@ -153,7 +153,7 @@ export function useHelperRollback({
   const [running, setRunning] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [failures, setFailures] = useState<Record<string, string>>({});
   const notify = useTransientNotice();
   const alive = useRef(true);
@@ -226,7 +226,7 @@ export function useHelperRollback({
     setPlan({ unit });
     setPreview(null);
     setPreviewFailed(false);
-    setError('');
+    setError(null);
     read(setPreview).catch(() => {
       if (alive.current) setPreviewFailed(true);
     });
@@ -237,7 +237,7 @@ export function useHelperRollback({
     if (!chosen.restore.length) return;
     lock.current = true;
     setRunning(true);
-    setError('');
+    setError(null);
     setUnknown(false);
     setFailures((old) => clearRollbackFailures(old, chosen.restore));
     const results: HelperRollbackUnit[] = [];
@@ -249,9 +249,7 @@ export function useHelperRollback({
     } catch (cause) {
       if (!alive.current) return;
       if (definiteRejection(cause)) {
-        setError(
-          cause instanceof Error ? cause.message : legacyDescriptor('helperRollback.failed')
-        );
+        setError(toUiMessage(cause, 'helperRollback.failed'));
         retry();
       } else setUnknown(true);
     } finally {
@@ -376,7 +374,7 @@ export function useHelperRollback({
           {t('helperRollback.unknown')}
         </NoticeBanner>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </>
   );
   const strip = reviewing ? (

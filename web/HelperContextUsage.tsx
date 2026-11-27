@@ -13,7 +13,8 @@ import {
   type ContextSegment,
   type ContextTone,
 } from './ContextBreakdown.js';
-import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
+import { formatNumber, t, useI18n } from './i18n.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 import { RunningIcon } from './ui-icons.js';
 import { usageCompact } from './usage-display.js';
 import './activity-status.css';
@@ -68,7 +69,7 @@ export function HelperContextUsage({
   context,
   busy = false,
   starting = false,
-  compactError = '',
+  compactError = null,
   onCompact,
   onCancel,
   onShowSummary,
@@ -77,7 +78,7 @@ export function HelperContextUsage({
   context?: HelperContextCompactionSummary;
   busy?: boolean;
   starting?: boolean;
-  compactError?: string;
+  compactError?: UiMessage | null;
   onCompact?: () => void;
   onCancel?: () => void;
   onShowSummary?: () => void;
@@ -142,7 +143,7 @@ export function HelperContextUsage({
   const compactable = !native && Boolean(onCompact);
   const showSummary = Boolean(onShowSummary) && (context?.summaryChars ?? 0) > 0;
   const failureText = compactError
-    ? translateMessage(compactError)
+    ? formatUiMessage(compactError)
     : failure
       ? t(`errors.${failure}`)
       : '';

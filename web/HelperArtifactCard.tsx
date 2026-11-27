@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -42,22 +43,22 @@ export function HelperArtifactCard({
   const [latestRevision, setLatestRevision] = useState(revision);
   const [artifact, setArtifact] = useState<HelperArtifactView>();
   const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [readError, setReadError] = useState('');
-  const [historyError, setHistoryError] = useState('');
-  const [draftError, setDraftError] = useState('');
-  const [copyError, setCopyError] = useState('');
-  const [message, setMessage] = useState('');
+  const [readError, setReadError] = useState<UiMessage | null>(null);
+  const [historyError, setHistoryError] = useState<UiMessage | null>(null);
+  const [draftError, setDraftError] = useState<UiMessage | null>(null);
+  const [copyError, setCopyError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const path = `/helper/artifacts/${encodeURIComponent(id)}`;
 
   const retryLatestRevision = useRetryableEffect(() => {
     let current = true;
-    setHistoryError('');
+    setHistoryError(null);
     void api<HelperArtifactView>(path)
       .then((value) => {
         if (current) setLatestRevision(value.revision);
       })
       .catch((cause) => {
-        if (current) setHistoryError(cause.message);
+        if (current) setHistoryError(toUiMessage(cause));
       });
     return () => {
       current = false;
@@ -67,13 +68,13 @@ export function HelperArtifactCard({
   const retryArtifact = useRetryableEffect(() => {
     let current = true;
     setArtifact(undefined);
-    setReadError('');
+    setReadError(null);
     void api<HelperArtifactView>(`${path}?revision=${selectedRevision}`)
       .then((value) => {
         if (current) setArtifact(value);
       })
       .catch((cause) => {
-        if (current) setReadError(cause.message);
+        if (current) setReadError(toUiMessage(cause));
       });
     return () => {
       current = false;
@@ -111,8 +112,8 @@ export function HelperArtifactCard({
       );
       setDraftError(
         failed || stored.some((result) => result.status === 'rejected')
-          ? legacyDescriptor('helpers.m128')
-          : ''
+          ? uiMessage('helpers.m128')
+          : null
       );
     }
     void readDrafts();
@@ -122,13 +123,13 @@ export function HelperArtifactCard({
   }, [id, revision, conversationId]);
 
   async function copy(text: string) {
-    setCopyError('');
-    setMessage('');
+    setCopyError(null);
+    setNotice(null);
     try {
       await navigator.clipboard.writeText(text);
-      setMessage(legacyDescriptor('helpers.m129'));
+      setNotice(uiMessage('helpers.m129'));
     } catch {
-      setCopyError(legacyDescriptor('helpers.m130'));
+      setCopyError(uiMessage('helpers.m130'));
     }
   }
   const selected =
@@ -172,7 +173,7 @@ export function HelperArtifactCard({
             </button>
           }
         >
-          {t('helpers.m319', { error: translateMessage(historyError) })}
+          {uiMessage('helpers.m319', { error: historyError })}
         </NoticeBanner>
       )}
       {selected ? (
@@ -201,7 +202,7 @@ export function HelperArtifactCard({
         <LoadingState
           presentation="placeholder"
           loading={!readError}
-          error={legacyUiMessage(readError)}
+          error={readError}
           label={uiMessage('helpers.m142')}
           onRetry={retry}
         />
@@ -236,11 +237,11 @@ export function HelperArtifactCard({
             </button>
           }
         >
-          {translateMessage(draftError)}
+          {draftError}
         </NoticeBanner>
       )}
-      {copyError && <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>}
-      <TransientNotice content={legacyUiMessage(message)} />
+      {copyError && <NoticeBanner tone="error">{copyError}</NoticeBanner>}
+      <TransientNotice content={notice} />
     </section>
   );
 }
