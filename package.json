@@ -32,6 +32,7 @@
     "build": "node scripts/build.mjs",
     "test": "vitest run",
     "test:tooling": "npm run build && node scripts/test-tooling.mjs",
+    "test:tooling:fast": "node scripts/test-tooling.mjs",
     "test:windows": "vitest run tests/server.test.ts tests/backup-service.test.ts tests/backup-file.test.ts tests/maintenance.test.ts tests/database-schema.test.ts tests/personal-workspace-flow.test.ts tests/helper-cli.test.ts tests/helper-shell.test.ts tests/codex-process.test.ts tests/codex-runtime.test.ts tests/request-files-storage.test.ts tests/native-transfer-archive.test.ts tests/import-envelope.test.ts",
     "benchmark:story": "node scripts/benchmark-story.mjs",
     "eval:helper": "node scripts/helper-eval.mjs",

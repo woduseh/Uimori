@@ -15,6 +15,7 @@ const classTable = {
     'typeScriptInput',
     'moduleFile',
     'commentSource',
+    'i18nInput',
     'browserInput',
   ],
   'packages/contracts/src/index.ts': [
@@ -22,6 +23,7 @@ const classTable = {
     'typeScriptInput',
     'moduleFile',
     'commentSource',
+    'i18nInput',
     'browserInput',
   ],
   'server/app.ts': [

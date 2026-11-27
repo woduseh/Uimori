@@ -31,6 +31,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | --- | --- |
 | `npm run quality:full` | Formatting, lint, types, tooling tests, fresh build and complete Vitest suite. |
 | `npm run test:tooling` | Fresh build plus build, verification and release-tooling tests, including failure detection. |
+| `npm run test:tooling:fast` | The same tooling tests without the build, for a `dist/` that already matches the source; the tests that read `dist/` fail on a stale build. |
 | `npm run verify -- <name>...` | Browser verification by name: a [feature map](#feature-map) domain, a preset such as `browser-smoke` (basic chat and global prompt settings), an engine, or `all`. An unknown name prints every name with its title. Several domains run together in one harness run. |
 | `npm run verify -- --changed [<base>]` | The domains whose sources or specs changed since `<base>` (default `HEAD`, plus untracked files); see [Feature map](#feature-map) for the fallback. |
 | `npm run verify -- all` | Full local synthetic browser regression; `--visual` adds extra viewport and layout checks. |

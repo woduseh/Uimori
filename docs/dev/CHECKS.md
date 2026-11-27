@@ -9,7 +9,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Code behavior | Focused tests, such as `npm test -- tests/<file>.test.ts`; use `npm run quality` for lint and type checks when relevant |
 | UI behavior | `npm run verify -- <domain>` for the [feature map](../../tests/feature-map.json) domain that owns the change, or `npm run verify -- --changed`, against a matching build; `browser-smoke` covers basic chat and global prompt settings. The [verify skill](../../.agents/skills/uimori-verify/SKILL.md) is the standard loop |
 | Stylesheets under `web/` | `npm test -- tests/style-spacing.test.ts tests/themes.test.ts`; the spacing scale and the startup palette are Vitest checks that the browser runs do not cover |
-| Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite |
+| Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite, and `npm run test:tooling:fast` runs it without rebuilding when `dist/` already matches the source |
 | Cross-cutting changes beyond focused coverage | Consider `npm run quality:full` and broader browser coverage for the interactions at risk |
 | Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |
 | Release candidate | `npm run release:check -- --area <domain>`; see [DEVELOPMENT](DEVELOPMENT.md#release-checks) |
@@ -41,7 +41,7 @@ Before deleting a browser case, name the component and action it exercises and f
 No notice reports these gaps in the selection:
 
 - It finds Vitest files through the import graph of changed modules and, for other files, by a test naming the file or its extension. A test that reaches its sources another way is missed: `tests/background-work.test.ts` runs `dist` and `tests/helper-runner.test.ts` spawns `runner/runner.mjs`, and neither imports what it exercises. CI always runs the first in `linux-browser-core`; only a full run, such as the shards on `main`, checks the second against a source change.
-- `check:i18n` runs only for changes under `web/` or `server/` (where it rejects Korean text in thrown errors) or to the checker, but it also reads `core/`, `packages/`, `scripts/` and `tests/` for unused keys, so removing the last use of a key there is caught by `quality`, not by `check:changed`.
+- `check:i18n` runs for changes under `web/`, `server/`, `core/` and `packages/` or to the checker, but it also reads `scripts/` and `tests/` for unused keys, so removing the last use of a key there is caught by `quality`, not by `check:changed`.
 - The UI message check (`scripts/check-ui-message.mjs`) runs for changes under `web/` or to the checker and its allowlist. It scans all of `web/`, so it also reports a debt entry left too high by an earlier change; a permanent entry that no longer matches is corrected by hand, never by `--shrink`.
 - It does not build. Tests that start the compiled server fail with "Run npm run build" until the build matches the source.
 

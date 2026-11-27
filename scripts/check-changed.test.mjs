@@ -200,11 +200,13 @@ test('a hub change runs direct matches and 1-hop importers first, up to a stated
   assert.equal(checkChanged.parseArguments([], { CI: 'true' }).limit, Infinity);
 });
 
-test('comments check only the changed files, and i18n runs only for web, server or checker changes', () => {
+test('comments check only the changed files, and i18n runs for the runtime sources it scans', () => {
   const checks = checkChanged.selectChecks(['core/a.ts', 'web/b.tsx'], {});
   assert.deepEqual(checks.comments, ['core/a.ts', 'web/b.tsx']);
   assert.equal(checks.i18n, true);
-  assert.equal(checkChanged.selectChecks(['core/a.ts'], {}).i18n, false);
+  assert.equal(checkChanged.selectChecks(['core/a.ts'], {}).i18n, true);
+  assert.equal(checkChanged.selectChecks(['packages/contracts/src/a.ts'], {}).i18n, true);
+  assert.equal(checkChanged.selectChecks(['tests/a.test.ts'], {}).i18n, false);
   assert.equal(checkChanged.selectChecks(['web/locales/settings.ts'], {}).i18n, true);
   assert.equal(checkChanged.selectChecks(['scripts/check-i18n.mjs'], {}).i18n, true);
   assert.equal(checkChanged.selectChecks(['server/app.ts'], {}).i18n, true);
