@@ -1,4 +1,6 @@
 import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { type UiMessage } from './ui-message.js';
 import { useState } from 'react';
 import { downloadArchive } from './archive-download.js';
 import { DownloadIcon } from './ui-icons.js';
@@ -12,7 +14,7 @@ export function ResourceExportButton({
   kind: 'content' | 'prompt-preset';
   id: string;
   disabled?: boolean;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,7 @@ export function ResourceExportButton({
               }
             );
           } catch (caught) {
-            onError((caught as Error).message);
+            onError(toUiMessage(caught));
           } finally {
             setBusy(false);
           }

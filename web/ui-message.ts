@@ -14,8 +14,8 @@ export type UiMessageValue = string | number | boolean | Date | UiMessage | read
 export type UiMessageValues = Readonly<Record<string, UiMessageValue>>;
 export type UiMessage =
   | { readonly kind: 'key'; readonly key: MessageKey; readonly values?: UiMessageValues }
-  | { readonly kind: 'text'; readonly text: string };
-export type DisplayMessage = UiMessage | string;
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'legacy'; readonly value: string };
 
 export function uiMessage(key: MessageKey, values?: UiMessageValues): UiMessage {
   return values ? { kind: 'key', key, values } : { kind: 'key', key };
@@ -28,7 +28,7 @@ export function uiText(text: string): UiMessage {
 export function isUiMessage(value: unknown): value is UiMessage {
   if (typeof value !== 'object' || value === null) return false;
   const { kind } = value as { kind?: unknown };
-  return kind === 'key' || kind === 'text';
+  return kind === 'key' || kind === 'text' || kind === 'legacy';
 }
 
 function mapValues<T>(
@@ -45,8 +45,17 @@ function mapValues<T>(
   );
 }
 
+export function sameUiMessage(left: UiMessage | null, right: UiMessage | null): boolean {
+  return left === right || (!!left && !!right && JSON.stringify(left) === JSON.stringify(right));
+}
+
+export function legacyUiMessage(value: string | null | undefined): UiMessage | null {
+  return value ? { kind: 'legacy', value } : null;
+}
+
 export function formatUiMessage(value: UiMessage, locale: UiLocale = getLocale()): string {
   if (value.kind === 'text') return value.text;
+  if (value.kind === 'legacy') return translateMessage(value.value, locale);
   const nested = (item: UiMessage | readonly UiMessage[]): string =>
     isUiMessage(item)
       ? formatUiMessage(item, locale)
@@ -54,12 +63,9 @@ export function formatUiMessage(value: UiMessage, locale: UiLocale = getLocale()
   return formatMessage(value.key, locale, value.values && mapValues(value.values, nested));
 }
 
-export function displayMessage(value: DisplayMessage): string {
-  return typeof value === 'string' ? translateMessage(value) : formatUiMessage(value);
-}
-
 export function legacyMessageString(value: UiMessage): string {
   if (value.kind === 'text') return value.text;
+  if (value.kind === 'legacy') return value.value;
   const nested = (item: UiMessage | readonly UiMessage[]) =>
     messageRef(
       isUiMessage(item) ? legacyMessageString(item) : item.map(legacyMessageString).join('')

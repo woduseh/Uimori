@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -121,8 +122,8 @@ function IllustrationEnvironmentEditor({
       <LoadingState
         presentation="region"
         loading={!loadError}
-        error={translateMessage(loadError)}
-        label={t('visuals.m041')}
+        error={legacyUiMessage(loadError)}
+        label={uiMessage('visuals.m041')}
         onRetry={() => void load()}
       />
     );
@@ -849,7 +850,7 @@ function IllustrationEnvironmentEditor({
       ) : saveError ? (
         <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>
       ) : null}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
       {loadError && !confirmReload && (
         <NoticeBanner
           tone="error"

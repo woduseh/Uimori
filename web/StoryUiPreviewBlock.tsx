@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { StoryUiStyleSetting } from '../core/story-ui-style.js';
 import { api } from './api.js';
-import { t } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { StoryUi } from './LazyStoryUi.js';
 import { LoadingState } from './LoadingState.js';
 import { useStoryUiSegments } from './story-ui-parser.js';
@@ -41,7 +41,7 @@ export function StoryUiPreviewBlock({
   }, [key, text, runId]);
   const part = useStoryUiSegments(preview ?? '')?.find((entry) => entry.kind === 'ui');
   if (preview === undefined)
-    return <LoadingState presentation="placeholder" label={t('storyUi.composing')} />;
+    return <LoadingState presentation="placeholder" label={uiMessage('storyUi.composing')} />;
   return part?.kind === 'ui' ? (
     <StoryUi segment={part} style={style} actionNote={actionNote} />
   ) : (

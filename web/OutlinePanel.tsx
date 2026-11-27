@@ -1,5 +1,6 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { useI18n, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -666,13 +667,15 @@ export function OutlinePanel({
           )}
         </div>
       </header>
-      {outline && <DismissibleError error={error} onDismiss={() => setError('')} />}
+      {outline && (
+        <DismissibleError error={legacyUiMessage(error)} onDismiss={() => setError('')} />
+      )}
       {outline && loadError && (
         <LoadingState
           presentation="inline"
           loading={loading}
-          error={translateMessage(loadError)}
-          label={t('prompts.uiLoadingOutline')}
+          error={legacyUiMessage(loadError)}
+          label={uiMessage('prompts.uiLoadingOutline')}
           onRetry={() => void load()}
         />
       )}
@@ -688,8 +691,8 @@ export function OutlinePanel({
         <LoadingState
           presentation="region"
           loading={loading || !loadError}
-          error={translateMessage(loadError)}
-          label={t('prompts.uiLoadingOutline')}
+          error={legacyUiMessage(loadError)}
+          label={uiMessage('prompts.uiLoadingOutline')}
           onRetry={() => void load()}
         />
       )}

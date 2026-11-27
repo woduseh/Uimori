@@ -1,4 +1,5 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useState } from 'react';
 import type { Content } from '../core/product.js';
@@ -68,9 +69,9 @@ export function RisuStartPreview({
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={translateMessage(error)}
-        errorLabel={t('native.text_78102a76b6')}
-        label={t('native.text_f7b0125b0b')}
+        error={legacyUiMessage(error)}
+        errorLabel={uiMessage('native.text_78102a76b6')}
+        label={uiMessage('native.text_f7b0125b0b')}
         onRetry={() => {
           setLoading(true);
           retryPreview();

@@ -4,6 +4,7 @@ import { api, ApiError } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { Dialog } from './Dialog.js';
 import { formatNumber, t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { SummaryEditor } from './SummaryEditor.js';
@@ -197,8 +198,8 @@ export function HelperSummaryDialog({
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={translateMessage(error)}
-            label={t('helperSummary.loading')}
+            error={legacyUiMessage(error)}
+            label={uiMessage('helperSummary.loading')}
             onRetry={() => {
               setError('');
               void load();
@@ -272,7 +273,7 @@ export function HelperSummaryDialog({
       <ConfirmDialog
         open={confirmReset}
         title={t('helperSummary.resetTitle')}
-        message={t('helperSummary.resetMessage')}
+        body={t('helperSummary.resetMessage')}
         action={t('helperSummary.resetAction')}
         busy={saving}
         disabled={resetBlocked}

@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
@@ -55,7 +56,7 @@ export type Props = {
   onChatsChanged: () => Promise<void>;
   onCopyChat?: (chatId: string) => void;
   copyingChats?: string[];
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onSettings: () => void;
   onTasks: () => void;
   onOpenHelperTask?: (target: import('../core/activity-feed.js').HelperRecentTask) => void;
@@ -203,7 +204,7 @@ export function BotBranch(
       }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m237');
-      onError(message);
+      onError(legacyUiMessage(message));
       if (owner === currentBot.current) setError(message);
       try {
         const value = await api<ChatFolder[]>(`/bots/${encodeURIComponent(owner)}/folders`);
@@ -230,7 +231,7 @@ export function BotBranch(
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m238');
       setError(message);
-      onError(message);
+      onError(legacyUiMessage(message));
     } finally {
       operation.current = false;
       setBusy(false);
@@ -606,7 +607,7 @@ export function BotBranch(
       {expanded && (
         <div className="bot-branch-chats">
           {loading ? (
-            <LoadingState presentation="inline" label={t('transfer.m252')} />
+            <LoadingState presentation="inline" label={uiMessage('transfer.m252')} />
           ) : (
             <nav aria-label={t('transfer.d021', { v0: bot?.title ?? t('transfer.m005') })}>
               {folderSection(null)}
@@ -912,7 +913,7 @@ function FolderSettings({
       <ConfirmDialog
         open={removing}
         title={t('transfer.deleteFolderTitle', { name: folder.title })}
-        message={t('transfer.deleteChatFolderMessage')}
+        body={t('transfer.deleteChatFolderMessage')}
         action={t('transfer.m272')}
         busy={busy}
         onCancel={() => setRemoving(false)}

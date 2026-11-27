@@ -11,6 +11,7 @@ import { NoticeBanner } from '../web/NoticeBanner.js';
 import {
   formatUiMessage,
   legacyMessageString,
+  legacyUiMessage,
   UiError,
   uiMessage,
   uiText,
@@ -118,7 +119,10 @@ test('shared components render a UiMessage and a legacy descriptor in the langua
         'div',
         null,
         createElement(NoticeBanner, banner),
-        createElement(LoadingState, { error: failed, errorLabel: message('shared.loadFailed') }),
+        createElement(LoadingState, {
+          error: failed,
+          errorLabel: legacyUiMessage(message('shared.loadFailed'))!,
+        }),
         createElement(DismissibleError, { error: failed, onDismiss: () => {} })
       )
     );
@@ -129,4 +133,29 @@ test('shared components render a UiMessage and a legacy descriptor in the langua
   expect(english.split('Could not load.').length - 1).toBe(5);
   expect(english).not.toContain('불러오지 못했어요');
   expect(english).not.toContain('\u001f');
+});
+
+test('a legacy string keeps one identity across a language switch and renders in the language shown', () => {
+  const descriptor = message('shared.deleteQuestion', { title: 'Alice' });
+  const korean = legacyUiMessage(descriptor)!;
+  expect(formatUiMessage(korean)).toBe(t('shared.deleteQuestion', { title: 'Alice' }));
+  setLocale('en');
+  const english = legacyUiMessage(descriptor)!;
+  expect(JSON.stringify(english)).toBe(JSON.stringify(korean));
+  expect(formatUiMessage(korean)).toBe(t('shared.deleteQuestion', { title: 'Alice' }));
+  expect(formatUiMessage(korean)).not.toContain('\u001f');
+});
+
+test('an empty legacy string shows no error or notice', () => {
+  expect(legacyUiMessage('')).toBeNull();
+  expect(legacyUiMessage(undefined)).toBeNull();
+  const markup = renderToStaticMarkup(
+    createElement(
+      'div',
+      null,
+      createElement(LoadingState, { loading: false, error: legacyUiMessage('') }),
+      createElement(DismissibleError, { error: legacyUiMessage(''), onDismiss: () => {} })
+    )
+  );
+  expect(markup).toBe('<div></div>');
 });

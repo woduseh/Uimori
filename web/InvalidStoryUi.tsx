@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { t, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 
 export function InvalidStoryUi({ text }: { text: string }) {
@@ -32,8 +33,8 @@ export function InvalidStoryUi({ text }: { text: string }) {
           <LoadingState
             presentation="inline"
             loading={reason === null}
-            error={error}
-            label={t('storyUi.checkingFailure')}
+            error={legacyUiMessage(error)}
+            label={uiMessage('storyUi.checkingFailure')}
           />
         ))}
       <pre>{text}</pre>

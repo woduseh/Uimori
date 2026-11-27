@@ -144,7 +144,7 @@ export function BotChatImportDialog({
         {busy && (
           <LoadingState
             presentation="inline"
-            label={selection ? t('transfer.m118') : t('transfer.m119')}
+            label={selection ? uiMessage('transfer.m118') : uiMessage('transfer.m119')}
           />
         )}
         {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}

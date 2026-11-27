@@ -4,7 +4,8 @@ import { api, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import type { SceneDeletionImpact, SceneDeletionResult } from '../core/scene-deletion.js';
 import { storageKeys } from './storage-keys.js';
 
@@ -39,7 +40,7 @@ export function SceneDeleteDialog({
   sourceId: string;
   visible: boolean;
   onClose: () => void;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   onPendingChange: () => void;
   onDeleted: (result: SceneDeletionResult) => Promise<void>;
 }) {
@@ -82,7 +83,7 @@ export function SceneDeleteDialog({
         }
       } catch (cause) {
         if (!active) return;
-        callbacks.current.onError((cause as Error).message);
+        callbacks.current.onError(toUiMessage(cause));
         callbacks.current.onClose();
       }
     };
@@ -130,7 +131,7 @@ export function SceneDeleteDialog({
           clearOwnRecord();
         } catch {}
         if (mounted.current) {
-          callbacks.current.onError((cause as Error).message);
+          callbacks.current.onError(toUiMessage(cause));
           callbacks.current.onClose();
         }
       } else if (mounted.current) setError(descriptor('chatmanage.unknown'));
@@ -142,7 +143,7 @@ export function SceneDeleteDialog({
     try {
       clearOwnRecord();
     } catch (cause) {
-      if (mounted.current) callbacks.current.onError((cause as Error).message);
+      if (mounted.current) callbacks.current.onError(toUiMessage(cause));
     }
     if (mounted.current) callbacks.current.onClose();
     await onDeleted(accepted);

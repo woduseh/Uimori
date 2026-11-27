@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -222,9 +223,9 @@ export function HelperActivityDetails({
         <LoadingState
           presentation="inline"
           loading={reading || (!data && !error)}
-          error={translateMessage(error)}
-          errorLabel={t('helpers.m119')}
-          label={t('helpers.m120')}
+          error={legacyUiMessage(error)}
+          errorLabel={uiMessage('helpers.m119')}
+          label={uiMessage('helpers.m120')}
           onRetry={retry}
         />
       )}
@@ -418,9 +419,9 @@ export function HelperActivityTimeline({
         <LoadingState
           presentation="inline"
           loading={reading || (!data && !error)}
-          error={translateMessage(error)}
-          errorLabel={t('helpers.m119')}
-          label={t('helpers.m120')}
+          error={legacyUiMessage(error)}
+          errorLabel={uiMessage('helpers.m119')}
+          label={uiMessage('helpers.m120')}
           onRetry={retry}
         />
       )}

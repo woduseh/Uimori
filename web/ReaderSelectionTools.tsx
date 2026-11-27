@@ -15,6 +15,7 @@ import { ApiError } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { useFocusFallback } from './useFocusFallback.js';
 import { LoadingState } from './LoadingState.js';
@@ -350,7 +351,7 @@ export function ReaderSelectionTools({
   };
   return (
     <>
-      {copied > 0 && <TransientNotice key={copied} content={legacyDescriptor('helpers.m129')} />}
+      {copied > 0 && <TransientNotice key={copied} content={uiMessage('helpers.m129')} />}
       {barVisible &&
         selected &&
         createPortal(
@@ -607,7 +608,10 @@ function RevisionPopover({
         <NoticeBanner tone="error">{translateMessage(revision.error || saveError)}</NoticeBanner>
       )}
       {busy && (
-        <LoadingState presentation="inline" label={t('reader.refiningTheSelectedPassage')} />
+        <LoadingState
+          presentation="inline"
+          label={uiMessage('reader.refiningTheSelectedPassage')}
+        />
       )}
       <div className="reader-revision-actions">
         <button

@@ -1,4 +1,5 @@
-import { t, useI18n } from './i18n.js';
+import { useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -35,8 +36,8 @@ export function LazyDiagnostics<T>({
         <LoadingState
           presentation="inline"
           loading={!error}
-          error={error}
-          label={t('shared.loadingDetails')}
+          error={legacyUiMessage(error)}
+          label={uiMessage('shared.loadingDetails')}
           onRetry={retry}
         />
       )}

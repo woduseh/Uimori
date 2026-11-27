@@ -1,4 +1,6 @@
 import { useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { api } from './api.js';
@@ -17,7 +19,7 @@ export function RisuInteractionDialog({
 }: {
   chatId: string;
   refreshKey?: number;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   const { t } = useI18n();
 
@@ -107,7 +109,7 @@ export function RisuInteractionDialog({
       setItem((current) => (current?.id === answeredId ? undefined : current));
       reload.current();
     } catch (error) {
-      onError((error as Error).message);
+      onError(toUiMessage(error));
     } finally {
       setBusy(false);
     }

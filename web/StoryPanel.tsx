@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { type UiMessage, legacyUiMessage } from './ui-message.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
@@ -12,7 +13,7 @@ type PanelProps = {
   settingsRevision: number;
   profileRevision?: number;
   onChanged: () => void;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
@@ -80,7 +81,7 @@ function StoryPanelEditor({
     const text =
       caught instanceof Error ? caught.message : legacyDescriptor('reader.couldNotCompleteTheTask');
     setError(text);
-    onError(text);
+    onError(legacyUiMessage(text));
   }
   async function load() {
     const valid = capture(),

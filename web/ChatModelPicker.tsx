@@ -4,7 +4,8 @@ import type { Library } from '../core/product.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { type UiMessage } from './ui-message.js';
 import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
 import { CheckIcon, SearchIcon, SettingsIcon } from './ui-icons.js';
@@ -18,7 +19,7 @@ export function ChatModelPicker({
   defaultModelId,
   disabled = false,
   pending = false,
-  error = '',
+  error = null,
   onSelect,
   onClose,
   onManage,
@@ -34,14 +35,14 @@ export function ChatModelPicker({
   defaultModelId?: string;
   disabled?: boolean;
   pending?: boolean;
-  error?: string;
+  error?: UiMessage | null;
   onSelect: (modelId: string | undefined) => void;
   onClose: () => void;
   onManage: () => void;
   purpose?: 'chat' | 'helper';
   loading?: boolean;
   onRetry?: () => void;
-  errorLabel?: string;
+  errorLabel?: UiMessage;
 }) {
   useI18n();
   const [query, setQuery] = useState('');
@@ -102,12 +103,12 @@ export function ChatModelPicker({
         <LoadingState
           presentation="inline"
           loading={loading}
-          error={translateMessage(error)}
+          error={error}
           errorLabel={errorLabel}
           onRetry={onRetry}
         />
       ) : error ? (
-        <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>
+        <NoticeBanner tone="error">{error}</NoticeBanner>
       ) : null}
       {unavailable && (
         <NoticeBanner>

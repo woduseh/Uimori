@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, message as legacyDescriptor, messageRef } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import { ListRestart } from 'lucide-react';
 import type { Content } from '../core/product.js';
@@ -41,7 +42,7 @@ export function PackageStartPicker({
   selection: PackageStartSelection;
   disabled?: boolean;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onChanged?: () => void;
 }) {
   useI18n();
@@ -132,9 +133,11 @@ export function PackageStartPicker({
         });
       } catch (cause) {
         onError(
-          legacyDescriptor('library.openingRefreshError', {
-            error: messageRef((cause as Error).message),
-          })
+          legacyUiMessage(
+            legacyDescriptor('library.openingRefreshError', {
+              error: messageRef((cause as Error).message),
+            })
+          )
         );
       }
     } catch (cause) {
@@ -162,9 +165,9 @@ export function PackageStartPicker({
     >
       {!content || readError ? (
         <LoadingState
-          label={t('library.loadingOpenings')}
-          error={readError}
-          errorLabel={t('library.couldNotLoadOpenings')}
+          label={uiMessage('library.loadingOpenings')}
+          error={legacyUiMessage(readError)}
+          errorLabel={uiMessage('library.couldNotLoadOpenings')}
           onRetry={retryRead}
         />
       ) : (

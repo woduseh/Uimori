@@ -14,6 +14,7 @@ import {
   useHelperTaskResults,
 } from './HelperTaskResults.js';
 import { formatNumber, t, useI18n } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import {
   matchesTaskHistoryFilter,
@@ -146,11 +147,11 @@ function HelperTaskHistoryDetail({
           loading={results.reading}
           error={
             results.failed
-              ? t(data ? 'helperResults.refreshFailed' : 'helperResults.loadFailed')
-              : ''
+              ? uiMessage(data ? 'helperResults.refreshFailed' : 'helperResults.loadFailed')
+              : null
           }
-          errorLabel={t('helperResults.title')}
-          label={t('helperResults.loading')}
+          errorLabel={uiMessage('helperResults.title')}
+          label={uiMessage('helperResults.loading')}
           onRetry={results.retry}
         />
       </TaskHistorySection>

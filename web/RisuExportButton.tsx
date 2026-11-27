@@ -1,5 +1,6 @@
 import { t, useI18n } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
@@ -21,7 +22,7 @@ export function RisuExportButton({
   title: string;
   disabled?: boolean;
   linkedModules?: boolean;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const [busy, setBusy] = useState(false);
@@ -71,7 +72,7 @@ export function RisuExportButton({
             link.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
           } catch (caught) {
-            if (!request.signal.aborted) onError((caught as Error).message);
+            if (!request.signal.aborted) onError(toUiMessage(caught));
           } finally {
             if (!request.signal.aborted) setBusy(false);
             controller.current = null;

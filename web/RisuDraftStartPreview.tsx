@@ -3,6 +3,7 @@ import { useCompactLayout } from './useCompactLayout.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { api } from './api.js';
 import { translateMessage, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { previewIssueMessage } from './risu-preview-issues.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { LoadingState } from './LoadingState.js';
@@ -128,9 +129,9 @@ export function RisuDraftStartPreview({
         <LoadingState
           presentation="placeholder"
           loading={updating}
-          error={translateMessage(error)}
-          errorLabel={t('native.text_78102a76b6')}
-          label={t('native.text_f7b0125b0b')}
+          error={legacyUiMessage(error)}
+          errorLabel={uiMessage('native.text_78102a76b6')}
+          label={uiMessage('native.text_f7b0125b0b')}
           onRetry={retry}
         />
       </section>

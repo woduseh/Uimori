@@ -1,5 +1,6 @@
 import { tryParseJson } from './json.js';
 import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -288,7 +289,7 @@ export function JevProviderSettings({
       {loading && (
         <LoadingState
           presentation={status ? 'inline' : 'placeholder'}
-          label={t('providers.m351')}
+          label={uiMessage('providers.m351')}
         />
       )}
       {status && (
@@ -394,7 +395,10 @@ export function JevProviderSettings({
                   />
                 </div>
                 {operation === 'settings' && (
-                  <LoadingState presentation="inline" label={t('providers.jevSettingsSaving')} />
+                  <LoadingState
+                    presentation="inline"
+                    label={uiMessage('providers.jevSettingsSaving')}
+                  />
                 )}
                 {settingsError && (
                   <NoticeBanner tone="error">
@@ -535,7 +539,7 @@ export function JevProviderSettings({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
     </section>
   );
 }

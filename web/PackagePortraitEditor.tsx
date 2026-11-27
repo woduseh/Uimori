@@ -196,7 +196,7 @@ export function PackagePortraitEditor({
         <div className="package-portrait-status">
           {busy && (
             <div className="package-portrait-actions">
-              <LoadingState presentation="inline" label={t('library.uploadingPortrait')} />
+              <LoadingState presentation="inline" label={uiMessage('library.uploadingPortrait')} />
               <button
                 type="button"
                 className="ghost"

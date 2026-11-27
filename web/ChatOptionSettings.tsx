@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, messageRef, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -225,10 +226,10 @@ export function ChatOptionSettings(props: Props) {
         <LoadingState
           presentation="placeholder"
           loading={loading}
-          error={translateMessage(readError)}
-          label={t('chatsettings.m110')}
+          error={legacyUiMessage(readError)}
+          label={uiMessage('chatsettings.m110')}
           onRetry={() => void refresh()}
-          retryLabel={t('chatsettings.m111')}
+          retryLabel={uiMessage('chatsettings.m111')}
         />
       </div>
     );
@@ -361,7 +362,7 @@ export function ChatOptionSettings(props: Props) {
         <ConfirmDialog
           open={clearingFixed}
           title={t('chatsettings.clearFixedOptionsTitle')}
-          message={t('chatsettings.clearFixedOptionsMessage')}
+          body={t('chatsettings.clearFixedOptionsMessage')}
           action={t('chatsettings.m126')}
           onCancel={() => setClearingFixed(false)}
           onConfirm={() => {
@@ -411,7 +412,7 @@ export function ChatOptionSettings(props: Props) {
         )}
         {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
-        <TransientNotice content={completion} />
+        <TransientNotice content={legacyUiMessage(completion)} />
         {uncertain && (
           <button
             type="button"

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { OrphanMemoryDetail, OrphanMemoryEntry } from '../core/orphan-memory.js';
 import { api, ApiError } from './api.js';
 import { t, message, translateMessage, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -119,14 +120,14 @@ export function OrphanMemoryPanel({
   }
   const current = detail?.headRevision === headRevision;
   if (current && !detail.entries.length && !loading && !error)
-    return <TransientNotice content={notice} />;
+    return <TransientNotice content={legacyUiMessage(notice)} />;
   return (
     <section
       className="orphan-memory"
       aria-label={t('orphanmemory.title')}
       data-testid="orphan-memory"
     >
-      <TransientNotice content={notice} />
+      <TransientNotice content={legacyUiMessage(notice)} />
       {error && (
         <NoticeBanner
           tone="error"
@@ -144,7 +145,7 @@ export function OrphanMemoryPanel({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      {loading && <LoadingState presentation="inline" label={t('orphanmemory.loading')} />}
+      {loading && <LoadingState presentation="inline" label={uiMessage('orphanmemory.loading')} />}
       {current && detail.entries.length > 0 && (
         <details className="orphan-memory-disclosure">
           <summary>{t('orphanmemory.count', { count: detail.entries.length })}</summary>

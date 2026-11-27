@@ -276,7 +276,7 @@ export function BookmarkList({
   return (
     <section className="bookmark-list" aria-label={t('reader.bookmarksInThisChat')}>
       {!loaded && !error && (
-        <LoadingState presentation="inline" label={t('reader.loadingBookmarks')} />
+        <LoadingState presentation="inline" label={uiMessage('reader.loadingBookmarks')} />
       )}
       {loaded && !items.length && <p>{t('reader.noBookmarksYetAddOneBelowAScene')}</p>}
       {error && (
@@ -312,7 +312,7 @@ export function BookmarkList({
               params={{ id: item.id }}
               revision={item.revision}
               title={uiMessage('reader.valueBookmark', { v0: item.title })}
-              description=""
+              description={null}
               iconOnly
               onDeleted={() => setItems((old) => old.filter((value) => value.id !== item.id))}
               onError={() => setMutationFailed(true)}

@@ -1,5 +1,6 @@
 import { tryParseJson } from './json.js';
 import { t, translateMessage, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import {
@@ -506,8 +507,8 @@ export function ResourceEditorStatus({
         <LoadingState
           presentation="region"
           loading={!state.error}
-          error={state.error}
-          label={t('shared.loadingResources')}
+          error={legacyUiMessage(state.error)}
+          label={uiMessage('shared.loadingResources')}
           onRetry={() => void session.open().catch(() => {})}
         />
       ) : (

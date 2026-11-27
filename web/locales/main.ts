@@ -41,6 +41,12 @@ export const messages = {
     ja: '入力の下書きを復元できませんでした。ブラウザーの保存領域を確認してください。',
     zh: '无法恢复输入草稿，请检查浏览器存储空间。',
   },
+  'main.requestDraftStoreFailed': {
+    ko: '입력 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 전송하거나 파일을 보관해 주세요.',
+    en: 'Could not save the input draft on this device. Send it or keep the files before closing the screen.',
+    ja: '入力の下書きをこの端末に保存できませんでした。画面を閉じる前に送信するか、ファイルを保管してください。',
+    zh: '无法在此设备上保存输入草稿。请在关闭页面前发送或保留文件。',
+  },
   'main.pendingRequestForgetFailed': {
     ko: '이전 요청 기록을 지우지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
     en: 'Could not clear the previous request record. Check browser storage.',

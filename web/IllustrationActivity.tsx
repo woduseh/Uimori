@@ -1,4 +1,6 @@
 import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { type UiMessage } from './ui-message.js';
 import { useRef, useState } from 'react';
 import type { Usage } from '../core/types.js';
 import type { Illustration, IllustrationUsageReport } from '../core/illustration.js';
@@ -30,7 +32,7 @@ export function IllustrationPlacementButton({
   sourceHash: string;
   pending: boolean;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const locked = useRef(false);
@@ -51,7 +53,7 @@ export function IllustrationPlacementButton({
           });
           await refresh();
         } catch (cause) {
-          onError((cause as Error).message);
+          onError(toUiMessage(cause));
         } finally {
           locked.current = false;
           setBusy(false);
@@ -74,7 +76,7 @@ export function IllustrationPhases({
   sourceId: string;
   sourceHash: string;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const progress = illustrationProgress(items);

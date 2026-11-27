@@ -1,5 +1,5 @@
 import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -259,10 +259,10 @@ export function IllustrationPresetSettings({
         <LoadingState
           presentation="region"
           loading={!loadError}
-          error={translateMessage(loadError)}
-          label={t('visualpanels.loadingIllustrationPresets')}
+          error={legacyUiMessage(loadError)}
+          label={uiMessage('visualpanels.loadingIllustrationPresets')}
           onRetry={() => void refresh()}
-          retryLabel={t('visualpanels.reloadPresets')}
+          retryLabel={uiMessage('visualpanels.reloadPresets')}
         />
       </section>
     );
@@ -393,7 +393,7 @@ export function IllustrationPresetSettings({
           {translateMessage(error || loadError)}
         </NoticeBanner>
       )}
-      <TransientNotice content={notice} />
+      <TransientNotice content={legacyUiMessage(notice)} />
       {importNotice && <NoticeBanner>{translateMessage(importNotice)}</NoticeBanner>}
       <div
         className="illustration-preset-grid"

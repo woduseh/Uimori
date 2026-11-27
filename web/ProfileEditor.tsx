@@ -1,5 +1,7 @@
 import { ScrollStrip } from './ScrollStrip.js';
 import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -69,7 +71,7 @@ export function ProfileEditor({
   profile: ChatProfile;
   library: Library;
   onSaved: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   onDiscardHandlerChange?: SettingsSaveRegistration;
@@ -152,7 +154,7 @@ export function ProfileEditor({
     setLoreResetVersion((version) => version + 1);
     setError('');
     setStatus(legacyDescriptor('library.latestSettingsLoaded'));
-    onError('');
+    onError(null);
   }
   async function save(work: () => Promise<ChatProfile>, message = t('library.chatSettingsSaved')) {
     if (lorePending) {
@@ -160,7 +162,7 @@ export function ProfileEditor({
       return false;
     }
     setSaving(true);
-    onError('');
+    onError(null);
     setError('');
     setStatus('');
     try {
@@ -169,12 +171,12 @@ export function ProfileEditor({
       setDirty(false);
       setStatus(message);
       setSaving(false);
-      void onSaved().catch((caught) => onError((caught as Error).message));
+      void onSaved().catch((caught) => onError(toUiMessage(caught)));
       return true;
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
-      onError(message);
+      onError(legacyUiMessage(message));
       return false;
     } finally {
       setSaving(false);
@@ -311,7 +313,7 @@ export function ProfileEditor({
                 ) : (
                   <LoadingState
                     presentation="inline"
-                    label={t('library.loadingGlobalLoreDefaults')}
+                    label={uiMessage('library.loadingGlobalLoreDefaults')}
                   />
                 ))}
               <LoreContextPolicyEditor
@@ -460,7 +462,7 @@ export function ProfileEditor({
             aria-busy={saving}
           />
         </div>
-        <TransientNotice content={hideSaveActions ? '' : status} />
+        <TransientNotice content={hideSaveActions ? null : legacyUiMessage(status)} />
       </form>
       {generationSettings}
       <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">

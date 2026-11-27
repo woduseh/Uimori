@@ -189,7 +189,7 @@ export function BackupFileImport({
             />
           </label>
         </div>
-        {reading && <LoadingState presentation="inline" label={t('transfer.m131')} />}
+        {reading && <LoadingState presentation="inline" label={uiMessage('transfer.m131')} />}
         {database && <NoticeBanner>{t('transfer.m132')}</NoticeBanner>}
         {selection && (
           <div className="archive-file-summary">
@@ -244,7 +244,7 @@ export function BackupFileImport({
             </div>
           </div>
         )}
-        {busy && <LoadingState presentation="inline" label={t('transfer.m145')} />}
+        {busy && <LoadingState presentation="inline" label={uiMessage('transfer.m145')} />}
         {uncertain && <NoticeBanner>{t('transfer.m146')}</NoticeBanner>}
         {notice && <NoticeBanner>{notice}</NoticeBanner>}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}

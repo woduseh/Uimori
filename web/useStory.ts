@@ -1,6 +1,13 @@
 import { parseOwnJson, tryParseJson } from './json.js';
-import { message as descriptor, useI18n } from './i18n.js';
-import { UiError, uiMessage, type MessageKey } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import {
+  isUiMessage,
+  sameUiMessage,
+  UiError,
+  uiMessage,
+  type MessageKey,
+  type UiMessage,
+} from './ui-message.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
 import {
@@ -90,8 +97,7 @@ import {
   writeOptionalStorage,
 } from './optional-storage.js';
 import { forgetMissingBots, forgetMissingChats, storageKeys } from './storage-keys.js';
-import { errorDescriptor } from './api-errors.js';
-import { caughtErrorState } from './caught-error.js';
+import { toUiMessage } from './api-errors.js';
 
 const lastWorkspaceKey = storageKeys.lastWorkspace;
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -234,6 +240,13 @@ function changedParagraphPosition(detail: ReaderDetail, target: ReaderTarget, pa
     : null;
 }
 
+type ErrorState = { error: UiMessage | null; code: string | null };
+const noError: ErrorState = { error: null, code: null };
+const caughtError = (cause: unknown, fallback?: MessageKey): ErrorState => ({
+  error: toUiMessage(cause, fallback),
+  code: cause instanceof ApiError ? cause.code : null,
+});
+
 export function useStory() {
   useI18n();
   const {
@@ -247,10 +260,15 @@ export function useStory() {
   const navigation = useRef(view);
   const { chat: selected, source: readSource, destination } = view;
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
-  const [readerLoad, setReaderLoad] = useState({ key: '', epoch: -1, pending: false, error: '' });
+  const [readerLoad, setReaderLoad] = useState<{
+    key: string;
+    epoch: number;
+    pending: boolean;
+    error: UiMessage | null;
+  }>({ key: '', epoch: -1, pending: false, error: null });
   const [readingSourceId, setReadingSourceId] = useState('');
   const [library, setLibrary] = useState<Library | null>(null);
-  const [libraryError, setLibraryError] = useState('');
+  const [libraryError, setLibraryError] = useState<UiMessage | null>(null);
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
   const [archivedContents, setArchivedContents] = useState<Content[]>([]);
   const [composerDraft] = useState(createComposerDraft);
@@ -262,25 +280,26 @@ export function useStory() {
   const [draftReady, setDraftReady] = useState(false);
   const [imagesDecoding, setImagesDecoding] = useState(false);
   const decoding = useRef<symbol | null>(null);
-  const [errorState, updateError] = useState<{ message: string; code: string | null }>({
-    message: '',
-    code: null,
-  });
-  const error = errorState.message;
+  const [errorState, updateError] = useState<ErrorState>(noError);
+  const error = errorState.error;
   const errorCode = errorState.code;
-  const setError = useCallback((value: string | Error | ((current: string) => string)) => {
-    updateError((old) => {
-      if (typeof value === 'function') {
-        const message = value(old.message);
-        return { message, code: message ? old.code : null };
-      }
-      return value instanceof Error ? caughtErrorState(value) : { message: value, code: null };
-    });
-  }, []);
+  const setError = useCallback(
+    (value: UiMessage | Error | null | ((current: UiMessage | null) => UiMessage | null)) => {
+      updateError((old) => {
+        if (typeof value === 'function') {
+          const next = value(old.error);
+          return next === old.error ? old : { error: next, code: next ? old.code : null };
+        }
+        if (value === null) return noError;
+        return isUiMessage(value) ? { error: value, code: null } : caughtError(value);
+      });
+    },
+    []
+  );
   const setCaughtError = useCallback((cause: unknown, fallback?: MessageKey) => {
-    updateError(caughtErrorState(cause, fallback));
+    updateError(caughtError(cause, fallback));
   }, []);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
     semanticReaderTarget(location.search)
   );
@@ -294,7 +313,7 @@ export function useStory() {
   const [requestActivities, setRequestActivities] = useState<Record<string, RequestActivity>>({});
   const [queuedRequest, setQueuedRequest] = useState<QueuedRequest | null>(null);
   const queuedRef = useRef<QueuedRequest | null>(null);
-  const [queueNotice, setQueueNotice] = useState<{ chatId: string; message: string } | null>(null);
+  const [queueNotice, setQueueNotice] = useState<{ chatId: string; key: MessageKey } | null>(null);
   const queueActions = useRef({
     restoreParked: (_chatId: string) => {},
     leave: (_chatId: string, _destination: string) => {},
@@ -386,7 +405,7 @@ export function useStory() {
         key: query.key,
         epoch,
         pending: true,
-        error: old.key === query.key && old.epoch === epoch ? old.error : '',
+        error: old.key === query.key && old.epoch === epoch ? old.error : null,
       }));
       try {
         const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
@@ -471,12 +490,12 @@ export function useStory() {
                 )
             )
           )
-            setNotice(descriptor('shared.replacementCancelled'));
+            setNotice(uiMessage('shared.replacementCancelled'));
           setReaderLoad({
             key: cacheKey,
             epoch: navigation.current.epoch,
             pending: false,
-            error: '',
+            error: null,
           });
           setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
           return true;
@@ -487,7 +506,7 @@ export function useStory() {
             key: query.key,
             epoch,
             pending: false,
-            error: errorDescriptor(error),
+            error: toUiMessage(error),
           });
         throw error;
       }
@@ -530,7 +549,7 @@ export function useStory() {
   const loadLibrary = useCallback((): Promise<void> => {
     libraryDirty.current = true;
     if (libraryFlight.current) return libraryFlight.current;
-    setLibraryError('');
+    setLibraryError(null);
     const request = ++libraryRequest.current;
     const work = async () => {
       do {
@@ -539,11 +558,11 @@ export function useStory() {
           const value = await api<Library>('/library?view=summary');
           if (libraryRequest.current === request) {
             setLibrary(value);
-            setLibraryError('');
+            setLibraryError(null);
             forgetMissingBots(new Set(value.contents.map((item) => item.id)));
           }
         } catch (caught) {
-          if (libraryRequest.current === request) setLibraryError((caught as Error).message);
+          if (libraryRequest.current === request) setLibraryError(toUiMessage(caught));
           throw caught;
         }
       } while (libraryDirty.current && libraryRequest.current === request);
@@ -554,7 +573,7 @@ export function useStory() {
     return libraryFlight.current;
   }, []);
   const retryLibrary = useCallback(() => {
-    setError((current) => (current === libraryError ? '' : current));
+    setError((current) => (sameUiMessage(current, libraryError) ? null : current));
     return loadLibrary();
   }, [libraryError, loadLibrary, setError]);
   useEffect(() => {
@@ -584,8 +603,8 @@ export function useStory() {
   useEffect(() => {
     readerCache.current = null;
     setDetail(null);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     setConnected(false);
     setProfileDirty(false);
     setArchivedContents([]);
@@ -816,7 +835,7 @@ export function useStory() {
         }
       })
       .catch(() => {
-        if (alive) setError(descriptor('main.requestDraftRestoreFailed'));
+        if (alive) setError(uiMessage('main.requestDraftRestoreFailed'));
       })
       .finally(() => {
         if (!alive) return;
@@ -850,10 +869,7 @@ export function useStory() {
       return;
     }
     void writeRequestDraft(key, value).catch(() => {
-      if (currentDraftKey.current === key)
-        setError(
-          '입력 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 전송하거나 파일을 보관해 주세요.'
-        );
+      if (currentDraftKey.current === key) setError(uiMessage('main.requestDraftStoreFailed'));
     });
   }
   function resolveDraftRecovery(restore: boolean) {
@@ -875,15 +891,15 @@ export function useStory() {
     )
       return;
     if (files.some((file) => file.size > IMAGE_INPUT_MAX_BYTES)) {
-      setError(descriptor('main.story2'));
+      setError(uiMessage('main.story2'));
       return;
     }
     if (files.some((file) => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
-      setError(descriptor('main.story3'));
+      setError(uiMessage('main.story3'));
       return;
     }
     if (requestDraft.current.images.length + files.length > REQUEST_IMAGE_MAX_COUNT) {
-      setError(descriptor('main.story4'));
+      setError(uiMessage('main.story4'));
       return;
     }
     const scope = { key: draftKey, epoch: navigation.current.epoch };
@@ -919,7 +935,7 @@ export function useStory() {
         currentDraftKey.current === scope.key &&
         navigation.current.epoch === scope.epoch
       )
-        setError(descriptor('main.story5'));
+        setError(uiMessage('main.story5'));
     } finally {
       if (decoding.current === operation) {
         decoding.current = null;
@@ -1027,7 +1043,7 @@ export function useStory() {
               : { anchor, ratio: changed?.ratio, share: changed?.share, fallbackToSource: true }
             : {}),
         });
-        if (!validHash) setNotice(descriptor('main.story6'));
+        if (!validHash) setNotice(uiMessage('main.story6'));
         if (readerTarget.changedParagraph !== undefined) {
           arrival.current?.abort();
           arrival.current = new AbortController();
@@ -1383,7 +1399,7 @@ export function useStory() {
       if (!previous && sessionStorage.getItem(commandKey)) {
         submitLocks.current.delete(sentView);
         setSubmitting([...submitLocks.current]);
-        setError(descriptor('main.story7'));
+        setError(uiMessage('main.story7'));
         return false;
       }
       if (!preserveDraft) rememberRequestDraft(sentKey, requestDraft.current);
@@ -1405,20 +1421,14 @@ export function useStory() {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);
       if (currentView.current === sentView && navigation.current.epoch === sentEpoch)
-        setError(
-          uploadingImages
-            ? cause instanceof Error
-              ? cause.message
-              : descriptor('main.story8')
-            : descriptor('main.story9')
-        );
+        setError(uploadingImages ? toUiMessage(cause, 'main.story8') : uiMessage('main.story9'));
       return false;
     }
     track('sending');
     submitLocks.current.add(sentView);
     setSubmitting([...submitLocks.current]);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     let accepted = false;
     try {
       const admitted = payload.retryOf
@@ -1443,7 +1453,7 @@ export function useStory() {
       }
       if (!preserveDraft) {
         await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
-          if (currentView.current === sentView) setError(descriptor('main.story10'));
+          if (currentView.current === sentView) setError(uiMessage('main.story10'));
         });
         if (currentDraftKey.current === sentKey && requestDraft.current.token === sentDraftToken) {
           sessionStorage.removeItem(sentKey);
@@ -1457,9 +1467,9 @@ export function useStory() {
         setNotice(
           previous
             ? sessionStorage.getItem(sentKey)
-              ? descriptor('main.story11')
-              : descriptor('main.story12')
-            : ''
+              ? uiMessage('main.story11')
+              : uiMessage('main.story12')
+            : null
         );
       if (
         payload.retryOf &&
@@ -1484,7 +1494,7 @@ export function useStory() {
     try {
       await refresh(chat.id);
     } catch {
-      if (accepted && currentView.current === sentView) setError(descriptor('main.story14'));
+      if (accepted && currentView.current === sentView) setError(uiMessage('main.story14'));
     } finally {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);
@@ -1505,7 +1515,7 @@ export function useStory() {
     if (!detail || detail.chat.id !== chatId || !sourceId || forkLocks.current.has(lock)) return;
     forkLocks.current.add(lock);
     setForking([...forkLocks.current]);
-    setError('');
+    setError(null);
     try {
       const next = await requestChatFork(chatId, sourceId);
       setChats((current) => [next, ...current.filter((chat) => chat.id !== next.id)]);
@@ -1532,7 +1542,7 @@ export function useStory() {
     const lock = `${chatId}:${original.headRevision ?? 'empty'}`;
     forkLocks.current.add(lock);
     setForking([...forkLocks.current]);
-    setError('');
+    setError(null);
     try {
       const next = await requestChatFork(chatId, original.headRevision);
       setChats((current) => [next, ...current.filter((chat) => chat.id !== next.id)]);
@@ -1603,10 +1613,10 @@ export function useStory() {
     const epoch = navigation.current.epoch;
     quickLock.current = true;
     setQuickBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     let modelWriteAttempted = false;
-    let completion = descriptor('main.story22');
+    let completion = uiMessage('main.story22');
     try {
       if (kind === 'model') {
         const model = library.models.find((item) => item.id === value);
@@ -1630,10 +1640,10 @@ export function useStory() {
         try {
           const refreshed = await refresh(chatId);
           if (refreshed && navigation.current.chat === chatId && navigation.current.epoch === epoch)
-            setNotice(descriptor('main.story22'));
+            setNotice(uiMessage('main.story22'));
         } catch {
           if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-            setError(descriptor('main.modelPickerRefreshFailed'));
+            setError(uiMessage('main.modelPickerRefreshFailed'));
         }
         return navigation.current.chat === chatId && navigation.current.epoch === epoch;
       }
@@ -1669,7 +1679,7 @@ export function useStory() {
             values: preset.values,
           });
           dispatchEvent(new Event('chat-options-changed'));
-          completion = descriptor('main.combinationApplied', { title: preset.title });
+          completion = uiMessage('main.combinationApplied', { title: preset.title });
         }
       } else if (kind === 'module') {
         const epoch = navigation.current.epoch;
@@ -1733,7 +1743,7 @@ export function useStory() {
         (kind !== 'model' || navigation.current.epoch === epoch)
       )
         if (kind === 'model' && modelWriteAttempted && !definiteRejection(error))
-          setError(descriptor('main.modelPickerUnknown'));
+          setError(uiMessage('main.modelPickerUnknown'));
         else setCaughtError(error, 'main.story23');
       await refresh(chatId).catch(() => undefined);
       return false;
@@ -1767,7 +1777,7 @@ export function useStory() {
       readerCache.current = { ...cached, detail: next };
       setDetail(next);
     }
-    setNotice(descriptor('shared.dismissedFromReader'));
+    setNotice(uiMessage('shared.dismissedFromReader'));
     void refresh(chatId).catch(() => undefined);
   }
   async function cancelActive() {
@@ -1800,14 +1810,14 @@ export function useStory() {
         loreContextReset: queue.loreContextReset,
         ...(reason ? { reason } : {}),
       });
-      if (!parked) setQueueNotice({ chatId, message: 'chatsettings.m159' });
+      if (!parked) setQueueNotice({ chatId, key: 'chatsettings.m159' });
       return;
     }
     const current = composerDraft.read();
     editDraft(mergeReturnedText(current, queue.text));
     if (queue.loreContextReset) editLoreContextReset(true);
     removeOptionalStorage('session', queuedRequestKey(chatId));
-    setQueueNotice(reason ? { chatId, message: `main.queueReturned.${reason}` } : null);
+    setQueueNotice(reason ? { chatId, key: `main.queueReturned.${reason}` } : null);
   }
   function takeQueue() {
     const queue = queuedRef.current;
@@ -1849,11 +1859,11 @@ export function useStory() {
     )
       return false;
     if (queuedRef.current) {
-      setQueueNotice({ chatId: selected, message: 'main.queueExists' });
+      setQueueNotice({ chatId: selected, key: 'main.queueExists' });
       return false;
     }
     if (requestDraft.current.images.length) {
-      setQueueNotice({ chatId: selected, message: 'main.queueImages' });
+      setQueueNotice({ chatId: selected, key: 'main.queueImages' });
       return false;
     }
     const text = composerDraft.read();
@@ -1866,7 +1876,7 @@ export function useStory() {
     try {
       revisions = await readQueuedRevisions(chatId);
     } catch {
-      setQueueNotice({ chatId, message: 'main.queueUnchecked' });
+      setQueueNotice({ chatId, key: 'main.queueUnchecked' });
       return false;
     } finally {
       queueing.current = false;
@@ -1893,7 +1903,7 @@ export function useStory() {
     if (loreContextReset) editLoreContextReset(false);
     queuedRef.current = queue;
     setQueuedRequest(queue);
-    setQueueNotice(parked ? null : { chatId, message: 'chatsettings.m159' });
+    setQueueNotice(parked ? null : { chatId, key: 'chatsettings.m159' });
     return true;
   }
   function cancelQueuedRequest() {
@@ -1939,7 +1949,7 @@ export function useStory() {
       giveBack: (reason: QueuedReturnReason) => returnQueueToDraft(queue.chatId, queue, reason),
       committed: (accepted) => {
         if (accepted && navigation.current.chat === queue.chatId)
-          setNotice(descriptor('main.queueSent'));
+          setNotice(uiMessage('main.queueSent'));
       },
     });
   }
@@ -1958,7 +1968,7 @@ export function useStory() {
       if (readCommand(key)?.record.id !== expectedId) return false;
       clearCommand(key, expectedId);
     } catch {
-      setError(descriptor('main.pendingRequestForgetFailed'));
+      setError(uiMessage('main.pendingRequestForgetFailed'));
       return false;
     }
     setRequestActivities((old) => {
@@ -1967,7 +1977,7 @@ export function useStory() {
       delete next[viewKey];
       return next;
     });
-    setError('');
+    setError(null);
     return true;
   }
   const hasPendingRequest = pendingCommand !== null;
@@ -2029,7 +2039,7 @@ export function useStory() {
     readerLoadError:
       readerLoad.key === readerQuery.current.key && readerLoad.epoch === view.epoch
         ? readerLoad.error
-        : '',
+        : null,
     library,
     libraryError,
     composerDraft,
@@ -2074,7 +2084,7 @@ export function useStory() {
     queueRequest,
     cancelQueuedRequest,
     sendQueuedRequest,
-    queueNotice: queueNotice?.chatId === selected ? queueNotice.message : null,
+    queueNotice: queueNotice?.chatId === selected ? queueNotice.key : null,
     dismissQueueNotice: () => setQueueNotice(null),
     pendingEditedRunId,
     forgetPendingRequest,

@@ -6,7 +6,7 @@ import {
   messageRef,
   message as descriptor,
 } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { usageCompact } from './usage-display.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
@@ -501,7 +501,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         requestedCompactions.current.set(owner, result.startedAt);
       await data.refresh(target);
       if ('noopReason' in result && result.noopReason === 'already-compacted')
-        notify(descriptor('helperUsage.alreadyCompacted'));
+        notify(uiMessage('helperUsage.alreadyCompacted'));
     } catch (cause) {
       setCompactErrors((old) => ({
         ...old,
@@ -529,7 +529,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   useShortcut('run.stop', () => running && void cancel(running), {
     scope: panel,
     ready: () => !!running,
-    confirmNotice: descriptor('shortcuts.cancelHelperAgain', { key: stopShortcutLabel }),
+    confirmNotice: uiMessage('shortcuts.cancelHelperAgain', { key: stopShortcutLabel }),
   });
   const [modes, setModes] = useState<Record<string, HelperMode>>({});
   const [chosenMode, setChosenMode] = useState<HelperMode>(() =>
@@ -732,7 +732,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (!startedAt || compaction?.running || !last || last.finishedAt < startedAt) return;
     requestedCompactions.current.delete(compactionOwner);
     if (last.status === 'completed')
-      notify(descriptor('helperUsage.compactedNotice', { count: last.compactedMessages }));
+      notify(uiMessage('helperUsage.compactedNotice', { count: last.compactedMessages }));
   }, [compactionOwner, compaction, notify]);
   const [compactErrors, setCompactErrors] = useState<Record<string, string>>({});
   const [summaryDialog, setSummaryDialog] = useState<string | null>(null);
@@ -1776,7 +1776,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           }
         />
       )}
-      <TransientNotice content={saveNotice} />
+      <TransientNotice content={legacyUiMessage(saveNotice)} />
       {props.outlineWorkspace && (
         <div className="outline-helper-return">
           <button
@@ -1968,8 +1968,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             <LoadingState
               presentation={messages.length ? 'inline' : 'region'}
               loading={!data.error}
-              error={data.error}
-              label={t('helpers.m061')}
+              error={legacyUiMessage(data.error)}
+              label={uiMessage('helpers.m061')}
             />
           ) : null}
           {conversation && !data.loading && messages.length === 0 && (
@@ -2229,7 +2229,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             });
           }}
           onChanged={async (message) => {
-            notify(message);
+            const shown = legacyUiMessage(message);
+            if (shown) notify(shown);
             await data.refresh(conversation);
           }}
           onClose={() => setSummaryDialog(null)}

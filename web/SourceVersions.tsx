@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SourceVersions as Versions } from '../core/source-versions.js';
@@ -59,7 +60,7 @@ export function SourceVersions({
             </p>
           )}
           {!versions && !error && (
-            <LoadingState presentation="inline" label={t('reader.loadingSavedVersions')} />
+            <LoadingState presentation="inline" label={uiMessage('reader.loadingSavedVersions')} />
           )}
           {versions && version && (
             <>

@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -34,7 +35,7 @@ export function ActivityNotifications({
   persistenceError: boolean;
   recoveryRequestId?: string;
   recoveryBusy: boolean;
-  recoveryError: string;
+  recoveryError: UiMessage | null;
   onRecoverRequest: (requestId: string) => void;
   onLater: (item: ActivityNoticeItem) => void;
   message: (item: ActivityNoticeItem) => string;
@@ -187,7 +188,7 @@ export function ActivityNotifications({
                 <small>{t('helpers.m295')}</small>
               ) : null}
               {recoverable && recoveryError && (
-                <NoticeBanner tone="error">{translateMessage(recoveryError)}</NoticeBanner>
+                <NoticeBanner tone="error">{recoveryError}</NoticeBanner>
               )}
               {inspected === item.acknowledgementKey && (
                 <NotificationDetail
@@ -201,7 +202,9 @@ export function ActivityNotifications({
         })}
       </ul>
       {!visible.length && !loading && !error && <p role="status">{t('helpers.m297')}</p>}
-      {loading && !error && <LoadingState presentation="inline" label={t('helpers.m298')} />}
+      {loading && !error && (
+        <LoadingState presentation="inline" label={uiMessage('helpers.m298')} />
+      )}
       {error && (
         <NoticeBanner
           tone="error"
@@ -279,8 +282,8 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       <LoadingState
         presentation="inline"
         loading={!error}
-        error={translateMessage(error)}
-        label={t('helpers.m302')}
+        error={legacyUiMessage(error)}
+        label={uiMessage('helpers.m302')}
       />
     );
   const diagnostic = result.error ? auxiliaryErrorDiagnostic(result.error) : null;

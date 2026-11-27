@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { type UiMessage, uiMessage } from './ui-message.js';
 import { useState } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
@@ -86,7 +88,7 @@ export function RunCancelButton({
 }: {
   run: Pick<ReaderRun, 'id' | 'status'>;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const [cancelling, setCancelling] = useState(false);
@@ -99,12 +101,12 @@ export function RunCancelButton({
       onClick={async () => {
         if (cancelling) return;
         setCancelling(true);
-        onError('');
+        onError(null);
         try {
           await api(`/runs/${run.id}/cancel`, {});
           await refresh();
         } catch (error) {
-          onError((error as Error).message);
+          onError(toUiMessage(error));
         } finally {
           setCancelling(false);
         }
@@ -124,7 +126,7 @@ function RunJobs({
   jobs: RunJob[];
   revision: number;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   return (
@@ -169,7 +171,7 @@ export function RunTaskDetails({
   jobs: RunJob[];
   revision: number;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const authored = run.packageStart?.mode === 'authored';
@@ -198,7 +200,7 @@ export function RunTaskDetails({
                 text={() => run.partialText!}
                 label={t('visuals.m282')}
                 copiedLabel={t('visuals.m281')}
-                onFailure={() => onError(legacyDescriptor('visuals.m280'))}
+                onFailure={() => onError(uiMessage('visuals.m280'))}
               />
             )
           }
@@ -254,7 +256,7 @@ export function RunTaskDetails({
         <TraceFooter
           id={run.id}
           raw={record.value ? () => rawRunRecord(record.value!) : undefined}
-          onCopyFailed={() => onError(legacyDescriptor('visuals.historyCopyFailed'))}
+          onCopyFailed={() => onError(uiMessage('visuals.historyCopyFailed'))}
         />
       )}
     </div>

@@ -514,7 +514,7 @@ export function RisuImport({
               )}
             </>
           )}
-          {busy && <LoadingState presentation="inline" label={t('transfer.m063')} />}
+          {busy && <LoadingState presentation="inline" label={uiMessage('transfer.m063')} />}
           {preparing && (
             <button type="button" onClick={() => preparation.current?.abort()}>
               {t('transfer.m064')}

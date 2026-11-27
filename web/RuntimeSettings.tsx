@@ -35,7 +35,7 @@ export function SettingsEditor({
 }: {
   chat: Chat;
   onSaved: () => Promise<void>;
-  onError: (e: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   onDiscardHandlerChange?: SettingsSaveRegistration;
@@ -97,7 +97,7 @@ export function SettingsEditor({
     setDirty(false);
     setLocalError(null);
     setNotice(null);
-    onError('');
+    onError(null);
   }
   async function save() {
     if (saving) return false;
@@ -130,7 +130,7 @@ export function SettingsEditor({
       setRevision(saved.settingsRevision);
       setDirty(false);
       setNotice(uiMessage('settings.m79'));
-      onError('');
+      onError(null);
       setSaving(false);
       void onSaved().catch((error) => {
         setLocalError(uiMessage('settings.m80', { v0: toUiMessage(error) }));

@@ -74,7 +74,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       </a>
       {session?.required && <h1>{t('outside.connectTitle')}</h1>}
       {!session && !error && (
-        <LoadingState presentation="placeholder" label={t('outside.checkingWorkspace')} />
+        <LoadingState presentation="placeholder" label={uiMessage('outside.checkingWorkspace')} />
       )}
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {session?.required && (

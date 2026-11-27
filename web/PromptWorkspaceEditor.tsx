@@ -1,4 +1,5 @@
 import { useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -155,8 +156,8 @@ export function PromptWorkspaceEditor({
       <LoadingState
         presentation="region"
         loading={!state.error}
-        error={translateMessage(state.error)}
-        label={t('prompts.uiLoadingCurrentPrompts')}
+        error={legacyUiMessage(state.error)}
+        label={uiMessage('prompts.uiLoadingCurrentPrompts')}
         onRetry={() => void session.open().catch(() => {})}
       />
     );
@@ -364,7 +365,7 @@ export function PromptWorkspaceEditor({
             {t('prompts.uiSaving')}
           </p>
         )}
-        <TransientNotice content={busy || dirty ? '' : message} />
+        <TransientNotice content={busy || dirty ? null : legacyUiMessage(message)} />
       </section>
       <PromptCombinationManager
         open={manageCombinations}

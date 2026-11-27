@@ -1,4 +1,5 @@
 import { t, useI18n } from './i18n.js';
+import { type UiMessage } from './ui-message.js';
 import { ContextPanel } from './ContextPanel.js';
 import { Dialog } from './Dialog.js';
 import { LastSceneLore } from './LastSceneLore.js';
@@ -20,7 +21,7 @@ export function ChatContextDialog({
   refreshKey: unknown;
   onClose: () => void;
   onRefresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   return (

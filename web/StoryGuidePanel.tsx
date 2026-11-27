@@ -1,4 +1,5 @@
 import { useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   defaultStoryGuideConfig,
@@ -24,7 +25,7 @@ type Props = {
   active: boolean;
   onChanged: () => void;
   onOpenHelper?: () => void;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 };
@@ -82,7 +83,7 @@ function StoryGuideEditor({
         ? caught.message
         : legacyDescriptor('prompts.uiUnableToLoadCanonAndCharacterReferences');
     setError(text);
-    onError(text);
+    onError(legacyUiMessage(text));
   }
   function acceptSaved(value: StoryGuideDetail) {
     baseline.current = value.config;
@@ -145,7 +146,7 @@ function StoryGuideEditor({
       setLoaded(value);
       acceptSaved(value);
       setMessage(legacyDescriptor('prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe'));
-      onError('');
+      onError(null);
       onChanged();
       return true;
     } catch (caught) {
@@ -165,9 +166,9 @@ function StoryGuideEditor({
       <LoadingState
         presentation="region"
         loading={!error}
-        error={translateMessage(error)}
-        label={t('prompts.uiLoadingCanonAndCharacterReferences')}
-        errorLabel={t('prompts.uiUnableToLoadCanonAndCharacterReferences')}
+        error={legacyUiMessage(error)}
+        label={uiMessage('prompts.uiLoadingCanonAndCharacterReferences')}
+        errorLabel={uiMessage('prompts.uiUnableToLoadCanonAndCharacterReferences')}
         onRetry={() => {
           setError('');
           void load();
@@ -270,7 +271,7 @@ function StoryGuideEditor({
           {translateMessage(error)}
         </p>
       )}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
       <section className="story-guide-section" aria-label={t('prompts.uiLastWritingBrief')}>
         {loaded.brief ? (
           <details className="story-guide-last-brief">

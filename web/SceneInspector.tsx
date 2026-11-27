@@ -1,4 +1,5 @@
-import { t, useI18n, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { useState, type ReactNode } from 'react';
 import type { Job, ReaderRun, Run, Source } from '../core/types.js';
 import type { Illustration, IllustrationUsageReport } from '../core/illustration.js';
@@ -57,7 +58,7 @@ function LinkedJob({
 }: {
   job: Job;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const tone = taskStatusTone(job.status);
@@ -105,7 +106,7 @@ function LinkedIllustrations({
   items: Illustration[];
   source: Source;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const progress = illustrationProgress(items);
@@ -170,7 +171,7 @@ function RawRecords({
   onSelect: (key: string) => void;
   record: ApiRecord<unknown>;
   illustrations: Illustration[];
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const json = (value: unknown) =>
@@ -206,7 +207,7 @@ function RawRecords({
               text={() => json(record.value)}
               label={t('reader.copyJson')}
               copiedLabel={t('visuals.historyCopied')}
-              onFailure={() => onError(legacyDescriptor('visuals.historyCopyFailed'))}
+              onFailure={() => onError(uiMessage('visuals.historyCopyFailed'))}
             />
           )}
         </div>
@@ -215,8 +216,8 @@ function RawRecords({
         <LoadingState
           presentation="inline"
           loading={!record.error}
-          error={record.error}
-          label={t('shared.loadingDetails')}
+          error={legacyUiMessage(record.error)}
+          label={uiMessage('shared.loadingDetails')}
           onRetry={record.retry}
         />
       ) : selected.key === 'illustration' ? (
@@ -251,7 +252,7 @@ export function SceneInspector({
   connected: boolean;
   revision: number;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onInspect?: (runId: string) => void;
 }) {
   useI18n();
@@ -312,8 +313,8 @@ export function SceneInspector({
     <LoadingState
       presentation="inline"
       loading={!record.error}
-      error={record.error}
-      label={t('shared.loadingDetails')}
+      error={legacyUiMessage(record.error)}
+      label={uiMessage('shared.loadingDetails')}
       onRetry={record.retry}
     />
   );
@@ -348,7 +349,7 @@ export function SceneInspector({
                   text={() => run.partialText!}
                   label={t('visuals.m282')}
                   copiedLabel={t('visuals.m281')}
-                  onFailure={() => onError(legacyDescriptor('visuals.m280'))}
+                  onFailure={() => onError(uiMessage('visuals.m280'))}
                 />
               </div>
               <pre>{run.partialText}</pre>

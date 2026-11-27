@@ -7,6 +7,7 @@ import { apiErrorDisplay } from './api-errors.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperChangeLocationParts } from './helper-change-location.js';
 import { getIntlLocale, t, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -244,7 +245,7 @@ export function useHelperRollback({
       for (const body of chosen.bodies)
         results.push(...(await api<HelperRollbackView>(path, body)).units);
       const count = results.filter((unit) => unit.status === 'restored').length;
-      if (alive.current && count) notify(legacyDescriptor('helperRollback.done', { count }));
+      if (alive.current && count) notify(uiMessage('helperRollback.done', { count }));
     } catch (cause) {
       if (!alive.current) return;
       if (definiteRejection(cause)) {
@@ -413,7 +414,7 @@ export function useHelperRollback({
       <ConfirmDialog
         open={!!plan}
         title={t('helperRollback.title')}
-        message={t(plan?.unit ? 'helperRollback.unitMessage' : 'helperRollback.taskMessage')}
+        body={t(plan?.unit ? 'helperRollback.unitMessage' : 'helperRollback.taskMessage')}
         action={
           plan?.unit || !chosen
             ? t('helperRollback.confirmUnit')
@@ -428,8 +429,8 @@ export function useHelperRollback({
           <LoadingState
             presentation="inline"
             loading={!preview && !previewFailed}
-            error={previewFailed ? t('helperRollback.readFailed') : ''}
-            label={t('helperRollback.reading')}
+            error={previewFailed ? uiMessage('helperRollback.readFailed') : null}
+            label={uiMessage('helperRollback.reading')}
             onRetry={() => open(plan?.unit ?? null)}
           />
           {chosen && (

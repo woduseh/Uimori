@@ -8,7 +8,7 @@ import {
   message as descriptor,
   messageRef,
 } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { errorDescriptor } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -140,7 +140,7 @@ const freshContent = (kind: ContentKind): Omit<Content, 'id' | 'revision'> => ({
 type EditorProps = {
   library: Library;
   reload: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
 };
 type PrimaryLibraryTab = 'bot' | 'persona' | 'module';
 const libraryTabs: { id: PrimaryLibraryTab; titleKey: string; icon: typeof BotIcon }[] = [
@@ -212,7 +212,7 @@ function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
 export function LibraryPanel({
   library,
   reload,
-  libraryError = '',
+  libraryError = null,
   onError,
   onStartStory,
   onConfigureStartStory,
@@ -231,8 +231,8 @@ export function LibraryPanel({
 }: {
   library: Library | null;
   reload: () => Promise<void>;
-  libraryError?: string;
-  onError: (error: string) => void;
+  libraryError?: UiMessage | null;
+  onError: (error: UiMessage | null) => void;
   onStartStory?: (bot: Content) => void;
   onConfigureStartStory?: (bot: Content) => void;
   onUseContent?: (content: Content, role: PrimaryLibraryTab) => void;
@@ -512,18 +512,20 @@ export function LibraryPanel({
           setEditing({ kind: copy.kind, item: copy });
           if (warnings.length)
             onError(
-              warnings.length === 1
-                ? warnings[0]
-                : descriptor('library.cloneWarnings', {
-                    first: messageRef(warnings[0]),
-                    second: messageRef(warnings[1]),
-                  })
+              legacyUiMessage(
+                warnings.length === 1
+                  ? warnings[0]
+                  : descriptor('library.cloneWarnings', {
+                      first: messageRef(warnings[0]),
+                      second: messageRef(warnings[1]),
+                    })
+              )
             );
         }
       } else if (action === 'configure-chat') onConfigureStartStory?.(full);
       else applyRole(full, action);
     } catch (error) {
-      if (request === opening.current) onError(errorDescriptor(error));
+      if (request === opening.current) onError(legacyUiMessage(errorDescriptor(error)));
     } finally {
       if (action === 'clone') cloning.current = false;
       if (request === opening.current) setLoading(false);
@@ -827,7 +829,7 @@ export function LibraryPanel({
               switchTab(pendingNavigation.tab, pendingNavigation.closeOnly);
               setPendingNavigation(null);
             } catch (error) {
-              onError(errorDescriptor(error));
+              onError(legacyUiMessage(errorDescriptor(error)));
             }
           }}
           discardLabel={t('library.discardDraftAndLeave')}
@@ -846,15 +848,15 @@ export function LibraryPanel({
       />
       {folderEditor.dialogs}
       {loading && (
-        <LoadingState presentation="inline" label={t('library.loadingResourceContent')} />
+        <LoadingState presentation="inline" label={uiMessage('library.loadingResourceContent')} />
       )}
       {!library ? (
         <LoadingState
           presentation="region"
           loading={!libraryError}
           error={libraryError}
-          label={t('library.loadingLibrary')}
-          errorLabel={t('library.couldNotLoadTheLibrary')}
+          label={uiMessage('library.loadingLibrary')}
+          errorLabel={uiMessage('library.couldNotLoadTheLibrary')}
           onRetry={() => void reload().catch(() => {})}
         />
       ) : editing ? (
@@ -1298,7 +1300,7 @@ function ContentEditor({
   const [saved, setSaved] = useState('');
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [error, setError] = useState('');
-  const [exportError, setExportError] = useState('');
+  const [exportError, setExportError] = useState<UiMessage | null>(null);
   const nativeDraftDirty = state.local.unappliedFields.length > 0;
   const [portraitBusy, setPortraitBusy] = useState(false);
   const saveVersion = useRef(0);
@@ -1324,7 +1326,7 @@ function ContentEditor({
     if (editorUnavailable || portraitBusy || (!state.creationPending && !value.title.trim()))
       return false;
     const version = ++saveVersion.current;
-    onError('');
+    onError(null);
     setSaved('');
     setSaveWarnings([]);
     setError('');
@@ -1373,7 +1375,7 @@ function ContentEditor({
       requestResourceConflictReview(session);
       const message = errorDescriptor(caught);
       setError(message);
-      onError(message);
+      onError(legacyUiMessage(message));
       return false;
     } finally {
       setPlacing(false);
@@ -1640,9 +1642,9 @@ function ContentEditor({
                         params={{ id: selected.id }}
                         revision={selected.revision}
                         title={selected.title}
-                        label={t('library.deleteResource')}
+                        label={uiMessage('library.deleteResource')}
                         disabled={editorUnavailable}
-                        description={t('library.removeThisResourceFromTheListAnd')}
+                        description={uiMessage('library.removeThisResourceFromTheListAnd')}
                         onError={onError}
                         onDeleted={async () => {
                           forgetBotStorage(selected.id);
@@ -1660,7 +1662,7 @@ function ContentEditor({
           notice={
             <>
               <RestoredVersionNotice commands={commands} />
-              <DismissibleError error={exportError} onDismiss={() => setExportError('')} />
+              <DismissibleError error={exportError} onDismiss={() => setExportError(null)} />
             </>
           }
         >
@@ -1701,9 +1703,9 @@ function ContentEditor({
                 {translateMessage(error)}
               </p>
             )}
-            <TransientNotice content={saved} />
+            <TransientNotice content={legacyUiMessage(saved)} />
             {!!saveWarnings.length && (
-              <NoticeBanner className="full" label={t('library.reviewAfterSaving')}>
+              <NoticeBanner className="full" label={uiMessage('library.reviewAfterSaving')}>
                 {saveWarnings.map((warning) => (
                   <p key={translateMessage(warning)}>{translateMessage(warning)}</p>
                 ))}

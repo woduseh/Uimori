@@ -273,7 +273,7 @@ export function RisuPresetImport({
               )}
             </>
           )}
-          {busy && <LoadingState presentation="inline" label={t('transfer.m063')} />}
+          {busy && <LoadingState presentation="inline" label={uiMessage('transfer.m063')} />}
           {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
           {error && (
             <NoticeBanner className="error" tone="error">

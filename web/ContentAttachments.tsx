@@ -6,6 +6,7 @@ import {
   message as legacyDescriptor,
   messageRef,
 } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Content, Library } from '../core/product.js';
@@ -37,7 +38,7 @@ export function ContentAttachments({
   profile: ChatProfile;
   library: Library;
   onChange: (profile: ChatProfile) => void;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
   useI18n();
@@ -78,7 +79,7 @@ export function ContentAttachments({
             v0: messageRef((caught as Error).message),
           });
           setLoadError(message);
-          latest.current.onError(message);
+          latest.current.onError(legacyUiMessage(message));
         }
       })
       .finally(() => {
@@ -119,7 +120,7 @@ export function ContentAttachments({
           v0: messageRef((caught as Error).message),
         });
         setLoadError(message);
-        latest.current.onError(message);
+        latest.current.onError(legacyUiMessage(message));
       }
     } finally {
       if (changeVersion.current === request) setChanging(false);
@@ -262,7 +263,7 @@ export function ContentAttachments({
       {busy && !loadError && (
         <LoadingState
           presentation="inline"
-          label={t('library.loadingPackagesAndRequiredModules')}
+          label={uiMessage('library.loadingPackagesAndRequiredModules')}
         />
       )}
       {loadError && (

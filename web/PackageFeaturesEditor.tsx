@@ -230,10 +230,16 @@ export function PackageFeaturesEditor({
       </section>
       <div className="package-module-status" aria-live="polite">
         {loading && (
-          <LoadingState presentation="inline" label={t('library.loadingResourcesAndFeatures')} />
+          <LoadingState
+            presentation="inline"
+            label={uiMessage('library.loadingResourcesAndFeatures')}
+          />
         )}
         {busy && (
-          <LoadingState presentation="inline" label={t('library.loadingSelectedResource')} />
+          <LoadingState
+            presentation="inline"
+            label={uiMessage('library.loadingSelectedResource')}
+          />
         )}
       </div>
       {listError && (

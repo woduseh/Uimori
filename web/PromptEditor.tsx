@@ -1,6 +1,6 @@
 import { deletionEndpoints } from '#contracts';
 import { t, useI18n, message as descriptor, messageRef } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -63,7 +63,7 @@ type Props = {
   ) => Promise<boolean>;
   library: Library;
   reload?: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
 };
 function createSession(role: PromptRole, preset?: PromptPreset | PromptPresetSummary | null) {
@@ -159,7 +159,7 @@ export function PromptEditor({
   const pendingTemplate = state.local.unappliedFields.length > 0;
   const [collaborationExpanded, setCollaborationExpanded] = useState(true);
   const [error, setError] = useState('');
-  const [exportError, setExportError] = useState('');
+  const [exportError, setExportError] = useState<UiMessage | null>(null);
   const [status, setStatus] = useState('');
   const presets = [
     ...new Map(
@@ -265,7 +265,7 @@ export function PromptEditor({
       if (warnings.length) {
         const warning = warnings.join('\n');
         setError(warning);
-        onError(warning);
+        onError(legacyUiMessage(warning));
       }
       return !session.snapshot().dirty;
     } catch (caught) {
@@ -354,7 +354,7 @@ export function PromptEditor({
                 params={{ id: draft.base.id }}
                 revision={draft.base.revision}
                 title={draft.base.title}
-                label={t('prompts.uiDeletePrompt')}
+                label={uiMessage('prompts.uiDeletePrompt')}
                 disabled={busy}
                 onError={onError}
                 onDeleted={async () => {
@@ -529,7 +529,7 @@ export function PromptEditor({
           notice={
             <>
               <RestoredVersionNotice commands={commands} />
-              <DismissibleError error={exportError} onDismiss={() => setExportError('')} />
+              <DismissibleError error={exportError} onDismiss={() => setExportError(null)} />
             </>
           }
         >
@@ -575,8 +575,8 @@ export function PromptEditor({
               </CodeFieldBaseContext>
             </fieldset>
           </fieldset>
-          <TransientNotice content={busy ? '' : status} />
-          <DismissibleError error={error} onDismiss={() => setError('')} />
+          <TransientNotice content={busy ? null : legacyUiMessage(status)} />
+          <DismissibleError error={legacyUiMessage(error)} onDismiss={() => setError('')} />
         </EditorStudio>
       </section>
     </ResourceEditorProvider>

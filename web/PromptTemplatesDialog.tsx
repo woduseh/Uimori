@@ -1,4 +1,5 @@
 import { useI18n, translateMessage } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -36,7 +37,7 @@ export function PromptTemplatesDialog({
   onClose: () => void;
   onAdd: (id: string) => Promise<PromptPreset | null>;
   onAdded: (preset: PromptPreset) => void;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   const { t } = useI18n();
   const [templates, setTemplates] = useState<PromptTemplateSummary[] | null>(null);
@@ -77,7 +78,7 @@ export function PromptTemplatesDialog({
     } catch (error) {
       const message = (error as Error).message;
       if (current.current.open) setFailure({ template, message });
-      else current.current.onError(message);
+      else current.current.onError(legacyUiMessage(message));
     } finally {
       lock.current = false;
       setAdding(null);
@@ -95,9 +96,9 @@ export function PromptTemplatesDialog({
         <LoadingState
           presentation="placeholder"
           loading={!loadError}
-          error={translateMessage(loadError)}
-          errorLabel={t('prompts.uiUnableToLoadBuiltInPrompts')}
-          label={t('prompts.uiLoadingBuiltInPrompts')}
+          error={legacyUiMessage(loadError)}
+          errorLabel={uiMessage('prompts.uiUnableToLoadBuiltInPrompts')}
+          label={uiMessage('prompts.uiLoadingBuiltInPrompts')}
           onRetry={retryLoad}
         />
       ) : (
@@ -128,7 +129,7 @@ export function PromptTemplatesDialog({
       {adding && (
         <LoadingState
           presentation="inline"
-          label={t('prompts.addingNamed', { name: adding.title })}
+          label={uiMessage('prompts.addingNamed', { name: adding.title })}
         />
       )}
       {failure && (

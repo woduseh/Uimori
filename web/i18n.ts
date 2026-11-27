@@ -164,8 +164,8 @@ export function translateStoredCode<Code extends string>(
 ): string {
   return Object.hasOwn(keys, value) ? t(keys[value as Code]) : value;
 }
-export function translateMessage(value: string): string {
-  return value.includes(messagePrefix) ? decodeMessages(value) : value;
+export function translateMessage(value: string, locale: UiLocale = current): string {
+  return value.includes(messagePrefix) ? decodeMessages(value, locale) : value;
 }
 const numberFormats = new Map<string, Intl.NumberFormat>();
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
