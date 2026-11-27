@@ -218,3 +218,27 @@ test('a returned request goes in front of what the user typed meanwhile', () => 
   expect(mergeReturnedText('  \n', '계속 써 주세요.')).toBe('계속 써 주세요.');
   expect(mergeReturnedText('덧붙일 말', '계속 써 주세요.')).toBe('계속 써 주세요.\n\n덧붙일 말');
 });
+
+test('leaving while the run status is read returns the request instead of sending it', async () => {
+  const flow = setup();
+  flow.env.readRunStatus.mockImplementation(async () => {
+    flow.handoff.left = true;
+    return 'completed';
+  });
+  await flow.run();
+  expectReturnedWithoutSending(flow, 'left');
+  expect(flow.env.readRevisions).not.toHaveBeenCalled();
+});
+
+test('a committed handoff whose intake is uncertain reports it without returning the text', async () => {
+  const flow = setup({
+    send: vi.fn(async (item: QueuedHandoff) => {
+      item.state = 'committed';
+      return false;
+    }),
+  });
+  await flow.run();
+  expect(flow.env.send).toHaveBeenCalledTimes(1);
+  expect(flow.env.giveBack).not.toHaveBeenCalled();
+  expect(flow.env.committed.mock.calls).toEqual([[false]]);
+});
