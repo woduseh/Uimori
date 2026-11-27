@@ -37,8 +37,11 @@ export function selectTests(allFiles, { dist = 'include', impact } = {}) {
       (!affected || affected.has(file)) &&
       (dist === 'include' || distTests.includes(file) === (dist === 'only'))
   );
-  if (!impact && !selected.length)
+  if (!affected && !selected.length)
     throw new Error(`ci-vitest: a full run (dist ${dist}) selected no test files`);
+  const missingDist = distTests.filter((file) => !selected.includes(file));
+  if (!affected && dist === 'only' && missingDist.length)
+    throw new Error(`ci-vitest: distTests not collected: ${missingDist.join(', ')}`);
   return selected;
 }
 

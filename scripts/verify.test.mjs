@@ -25,11 +25,7 @@ const map = {
         { file: 'tests/risu-import-browser.spec.ts' },
         {
           file: 'tests/risu-native-samples-browser.spec.ts',
-          launch: {
-            privateMaterials: true,
-            requiredEnv: ['SAMPLE_ROOT'],
-            diagnosticEnv: 'SAMPLE_DIAGNOSTIC',
-          },
+          launch: { privateMaterials: true, requiredEnv: ['SAMPLE_ROOT'] },
         },
         {
           file: 'tests/narrative-browser.spec.ts',
@@ -91,27 +87,6 @@ test('domains merge into one run per launch and skip specs whose required enviro
   );
 });
 
-test('a diagnostic environment labels the run so it cannot pass as an acceptance receipt', () => {
-  const env = { SAMPLE_ROOT: '/cards', SAMPLE_DIAGNOSTIC: '1' };
-  const runs = planVerification(map, ['risu'], { env }).runs;
-  assert.deepEqual(
-    runs.map(({ name, files, limitations }) => ({ name, files, diagnostic: Boolean(limitations) })),
-    [
-      {
-        name: 'risu',
-        files: ['tests/risu-import-browser.spec.ts', 'tests/narrative-browser.spec.ts'],
-        diagnostic: false,
-      },
-      {
-        name: 'risu-private-diagnostic',
-        files: ['tests/risu-native-samples-browser.spec.ts'],
-        diagnostic: true,
-      },
-    ]
-  );
-  assert.match(runs[1].limitations[0], /SAMPLE_DIAGNOSTIC=1.*not an acceptance receipt/);
-});
-
 test('a runner drops only harness options it does not accept and passes the rest on to reject', () => {
   const [, selfHost] = planVerification(map, ['reader', 'self-host'], { env: {} }).runs;
   assert.deepEqual(
@@ -122,10 +97,8 @@ test('a runner drops only harness options it does not accept and passes the rest
     kept: ['--grepp', 'SH01'],
     dropped: [],
   });
-  assert.deepEqual(runOptions(selfHost, ['--workers', '--grep', 'SH01']), {
-    kept: ['--grep', 'SH01'],
-    dropped: ['--workers'],
-  });
+  for (const missingValue of [['--workers', '--grep', 'SH01'], ['--workers'], ['--shard', '']])
+    assert.deepEqual(runOptions(selfHost, missingValue), { kept: missingValue, dropped: [] });
   const [gallery] = planVerification(map, ['gallery'], { env: {} }).runs;
   assert.deepEqual(runOptions(gallery, ['--visual']), { kept: ['--visual'], dropped: [] });
   assert.deepEqual(privateMaterialEnv(map), ['SAMPLE_ROOT', 'DEMO_DIR']);

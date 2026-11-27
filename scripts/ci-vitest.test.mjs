@@ -47,6 +47,13 @@ test('a full run that selects nothing fails instead of passing empty', () => {
   const withoutDist = collected.filter((file) => !distTests.includes(file));
   assert.throws(() => selectTests(withoutDist, { dist: 'only' }), /selected no test files/);
   assert.throws(() => selectTests([]), /selected no test files/);
+  const fullRequired = { fullRequired: ['package.json'], affectedTests: [] };
+  assert.throws(
+    () => selectTests(withoutDist, { dist: 'only', impact: fullRequired }),
+    /selected no test files/
+  );
+  const oneDistMissing = collected.filter((file) => file !== distTests[0]);
+  assert.throws(() => selectTests(oneDistMissing, { dist: 'only' }), /distTests not collected/);
 });
 
 test('an impact run keeps only affected tests, and full-required changes escalate to everything', () => {

@@ -24,7 +24,6 @@ import {
 } from './fixtures/browser-viewports.js';
 
 const sampleRoot = process.env.UIMORI_RISU_SAMPLE_ROOT;
-const diagnostic = process.env.UIMORI_RISU_SAMPLE_DIAGNOSTIC === '1';
 const presetPath = process.env.UIMORI_RISU_SAMPLE_PRESET;
 const visualReview = process.env.UIMORI_VISUAL_REVIEW === '1';
 test.use({ trace: 'off', screenshot: 'off' });
@@ -274,20 +273,16 @@ test.describe('actual local native Risu cards', () => {
         .filter((finding) => finding.level === 'unsupported')
         .map((finding) => finding.code);
       await info.attach('import-findings', {
-        body: JSON.stringify({ diagnostic, unsupported }),
+        body: JSON.stringify({ unsupported }),
         contentType: 'application/json',
       });
       const partial = dialog.getByLabel('위의 미지원 항목을 적용하지 않고 가져오는 데 동의해요.');
-      if (diagnostic && unsupported.length) await partial.check();
-      else
-        expect(unsupported, 'Final acceptance requires no unsupported imported features').toEqual(
-          []
-        );
+      expect(unsupported, 'Final acceptance requires no unsupported imported features').toEqual([]);
       await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
       await expect(
         dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true })
       ).toBeEnabled();
-      if (!diagnostic) await expect(partial).toHaveCount(0);
+      await expect(partial).toHaveCount(0);
       const applying = page.waitForResponse(
         (response) => response.url().endsWith('/api/risu-imports/apply'),
         { timeout: 90_000 }
