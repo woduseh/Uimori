@@ -7,7 +7,7 @@ import { readFeatureMap, selectChanged } from './feature-map.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const usage = [
-  'Usage: npm run verify -- <name>... [--grep <pattern>] [--visual] [--workers <n>] [--shard <i/n>]',
+  'Usage: npm run verify -- <name>... [--grep <pattern>] [--visual] [--workers <n>] [--shard <i/n>] [--repeat-each <n>]',
   '       npm run verify -- --changed [<base>] [options]',
 ].join('\n');
 const fullRegression = 'all';
@@ -29,7 +29,7 @@ const engines = {
 const runnerScripts = {
   'self-host': { script: 'scripts/verify-self-host.mjs', options: ['--grep'] },
 };
-const valueOptions = new Set(['--grep', '--workers', '--shard']);
+const valueOptions = new Set(['--grep', '--workers', '--shard', '--repeat-each']);
 const harnessOptions = new Set([...valueOptions, '--visual']);
 const minimumTimeout = 900_000;
 const perFileTimeout = 60_000;

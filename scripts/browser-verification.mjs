@@ -41,6 +41,11 @@ export function parseBrowserWorkers(value) {
   return Number(value);
 }
 
+function parseRepeatEach(value) {
+  if (!/^[1-9]\d{0,2}$/u.test(value ?? '')) throw new Error('Use a repeat count from 1 to 999');
+  return Number(value);
+}
+
 const browserTurnPort = 47613;
 
 export async function waitForBrowserTurn({
@@ -81,16 +86,18 @@ export async function runBrowserVerification({
   limitations = [],
 }) {
   const options = parseOptions(process.argv.slice(2), {
-    values: ['grep', 'shard', 'workers'],
+    values: ['grep', 'shard', 'workers', 'repeat-each'],
     flags: ['visual'],
   });
   if (options.shard) parseShard(options.shard);
+  const repeatEach =
+    options['repeat-each'] === undefined ? 1 : parseRepeatEach(options['repeat-each']);
   const requestedWorkers = options.workers ?? process.env.UIMORI_BROWSER_WORKERS;
   const workers = Math.min(
     requestedWorkers === undefined
       ? defaultBrowserWorkers()
       : parseBrowserWorkers(requestedWorkers),
-    files.length || Number.POSITIVE_INFINITY
+    files.length * repeatEach || Number.POSITIVE_INFINITY
   );
   const focused = options.grep !== undefined;
   if (focused) {
@@ -238,6 +245,7 @@ export async function runBrowserVerification({
         ...files,
         ...(grep ? ['--grep', grep] : []),
         ...(options.shard ? [`--shard=${options.shard}`] : []),
+        ...(repeatEach > 1 ? [`--repeat-each=${repeatEach}`] : []),
         '--reporter=list,json',
       ],
       {
