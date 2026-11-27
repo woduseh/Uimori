@@ -61,6 +61,7 @@ import type {
   VertexRequestTier,
 } from '../core/product.js';
 import { PROVIDER_CHOICES, providerDefinition } from '../core/provider-definitions.js';
+import { providerLabel } from './builtin-labels.js';
 import { api, ApiError } from './api.js';
 import {
   initialModel,
@@ -268,7 +269,7 @@ export function ConnectionEditor({
       t('providers.m0')
     );
   const connections = library.connections.filter((item) =>
-    matches(filter, item.title, item.endpoint, providerDefinition(item.protocol).label)
+    matches(filter, item.title, item.endpoint, providerLabel(item.protocol))
   );
   const providerIds = library.connections.map((item) => item.id);
   if (
@@ -663,7 +664,7 @@ export function ConnectionEditor({
     const next = {
       ...initialConnection(),
       protocol,
-      title: protocol === 'fixture-sse-v1' ? '' : template.label,
+      title: protocol === 'fixture-sse-v1' ? '' : providerLabel(protocol),
       endpoint: template.endpointDefault,
       credentialRef: '',
       enabled: protocol !== 'fixture-sse-v1',
@@ -900,7 +901,7 @@ export function ConnectionEditor({
               { label: t('providers.m43'), value: value.title },
               {
                 label: t('providers.m44'),
-                value: translateMessage(providerDefinition(value.protocol).label),
+                value: providerLabel(value.protocol),
               },
               { label: t('providers.m45'), value: value.endpoint },
               {
@@ -1141,11 +1142,11 @@ export function ConnectionEditor({
                     onClick={() => showConnection(item)}
                   >
                     <strong>{item.title}</strong>
-                    {(item.title !== providerDefinition(item.protocol).label || !item.enabled) && (
+                    {(item.title !== providerLabel(item.protocol) || !item.enabled) && (
                       <span className="provider-item-subtitle ui-meta-row">
                         {[
-                          item.title !== providerDefinition(item.protocol).label
-                            ? translateMessage(providerDefinition(item.protocol).label)
+                          item.title !== providerLabel(item.protocol)
+                            ? providerLabel(item.protocol)
                             : '',
                           !item.enabled ? t('providers.m101') : '',
                         ]
@@ -1401,7 +1402,7 @@ export function ConnectionEditor({
                   <span className="provider-template-icon">
                     <ConnectionIcon size={20} />
                   </span>
-                  <strong>{translateMessage(item.label)}</strong>
+                  <strong>{item.kind === 'judgment' ? item.label : providerLabel(item.id)}</strong>
                   <small>
                     {item.kind === 'judgment'
                       ? t('providers.m90')

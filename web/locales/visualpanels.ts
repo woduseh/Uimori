@@ -623,6 +623,18 @@ export const messages = {
     ja: '新しい挿絵プリセット',
     zh: '新建插图预设',
   },
+  'visualpanels.defaultIllustrationPresetDescription': {
+    ko: '추가 화풍 지침 없이 Codex로 장면과 캐릭터를 따라 그려요.',
+    en: 'Codex draws the scene and characters without extra style guidance.',
+    ja: '追加の画風指示なしで、Codexが場面とキャラクターに沿って描きます。',
+    zh: '不添加额外画风指引，由 Codex 依照场景和角色绘制。',
+  },
+  'visualpanels.newTheme': {
+    ko: '새 테마',
+    en: 'New theme',
+    ja: '新しいテーマ',
+    zh: '新主题',
+  },
   'visualpanels.newPreset': {
     ko: '새 프리셋',
     en: 'New preset',
@@ -1018,12 +1030,6 @@ export const messages = {
     en: 'Assistant',
     ja: 'アシスタント',
     zh: '助手',
-  },
-  'visualpanels.illustration': {
-    ko: '삽화',
-    en: 'Illustration',
-    ja: '挿絵',
-    zh: '插图',
   },
   'visualpanels.unknown': {
     ko: '미확인',

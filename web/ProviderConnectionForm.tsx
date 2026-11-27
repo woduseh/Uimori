@@ -1,8 +1,9 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import type { LibraryConnection, ProviderProtocol } from '../core/product.js';
 import { PROVIDER_DEFINITIONS, providerDefinition } from '../core/provider-definitions.js';
+import { providerLabel, providerLimitations } from './builtin-labels.js';
 import { ToggleRow } from './ToggleRow.js';
 import { SaveButton } from './SaveButton.js';
 import { IconButton } from './IconButton.js';
@@ -68,7 +69,6 @@ export function ProviderConnectionForm({
   const codex = connection.protocol === 'codex-app-server-v1';
   const vertex = connection.protocol === 'vertex-gemini-v1';
   const { projectId: vertexProjectId, location: vertexLocation } = vertexParts(connection.endpoint);
-  const definition = providerDefinition(connection.protocol);
   const endpointLabel = codex
     ? t('providers.m126')
     : vertex
@@ -146,7 +146,7 @@ export function ProviderConnectionForm({
               (item) => testMode || item.id !== 'fixture-sse-v1' || connection.protocol === item.id
             ).map((item) => (
               <option key={item.id} value={item.id}>
-                {translateMessage(item.label)}
+                {providerLabel(item.id)}
               </option>
             ))}
           </select>
@@ -275,8 +275,8 @@ export function ProviderConnectionForm({
         <details className="provider-definition full">
           <summary>{t('providers.m153')}</summary>
           <ul>
-            {definition.limitations.map((item) => (
-              <li key={item}>{translateMessage(item)}</li>
+            {providerLimitations(connection.protocol).map((item) => (
+              <li key={item}>{item}</li>
             ))}
           </ul>
         </details>

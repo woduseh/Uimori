@@ -7,6 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Illustration, IllustrationImage, IllustrationDetail } from '../core/illustration.js';
 import { RefreshIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import { api } from './api.js';
+import { illustrationPresetTitle } from './builtin-labels.js';
 import { ActionMenu } from './ActionMenu.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
@@ -656,7 +657,7 @@ function IllustrationCard({
             {detail.preset && (
               <p>
                 {t('visuals.presetRevision', {
-                  title: detail.preset.title,
+                  title: illustrationPresetTitle(detail.preset),
                   revision: detail.preset.revision,
                 })}
               </p>

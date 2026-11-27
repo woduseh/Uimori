@@ -263,12 +263,6 @@ export const messages = {
     ja: 'アシスタントパネル',
     zh: '助手面板',
   },
-  'helpers.m041': {
-    ko: '도우미',
-    en: 'Assistant',
-    ja: 'アシスタント',
-    zh: '助手',
-  },
   'helpers.m044': {
     ko: '도우미 말투 설정',
     en: 'Assistant tone settings',

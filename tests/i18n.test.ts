@@ -105,18 +105,36 @@ describe('UI locale presentation boundary', () => {
     expect(formatMessage('unknown.explicit.key', 'ja')).toBe('unknown.explicit.key');
   });
 
-  test('all built-in layout and palette labels have translations without changing their definitions', async () => {
+  test('built-in labels follow the interface language while the helper-facing definitions stay unchanged', async () => {
     const { BUILTIN_THEMES } = await import('../core/themes.js');
     const { BUILTIN_PALETTES } = await import('../core/theme-palettes.js');
-    const { setLocale, translateMessage } = await loadedI18n();
+    const { BUILTIN_ILLUSTRATION_PRESET } = await import('../core/illustration-presets.js');
+    const { PROVIDER_PROTOCOLS } = await import('../core/product.js');
+    const { TOKENIZER_PROFILES } = await import('../core/tokenizer-profiles.js');
+    const { USAGE_KINDS } = await import('../core/usage-report.js');
+    const { setLocale } = await loadedI18n();
+    const labels = await import('../web/builtin-labels.js');
     const definitions = JSON.stringify({ themes: BUILTIN_THEMES, palettes: BUILTIN_PALETTES });
+    const shown = () => [
+      ...BUILTIN_THEMES.flatMap((item) => Object.values(labels.themeText(item))),
+      ...BUILTIN_PALETTES.flatMap((item) => Object.values(labels.paletteText(item))),
+      labels.illustrationPresetTitle(BUILTIN_ILLUSTRATION_PRESET),
+      ...PROVIDER_PROTOCOLS.flatMap((id) => [
+        labels.providerLabel(id),
+        ...labels.providerLimitations(id),
+      ]),
+      ...TOKENIZER_PROFILES.map((profile) => labels.tokenizerLabel(profile.id)),
+      ...USAGE_KINDS.map(labels.usageKindLabel),
+    ];
+    expect(shown().join('\n')).toContain('시네마틱');
     for (const locale of ['en', 'ja', 'zh'] as const) {
       setLocale(locale);
-      for (const item of [...BUILTIN_THEMES, ...BUILTIN_PALETTES]) {
-        expect(translateMessage(item.title)).not.toMatch(/[가-힣]/u);
-        expect(translateMessage(item.description)).not.toMatch(/[가-힣]/u);
-      }
+      for (const text of shown()) expect(text).not.toMatch(/[가-힣]/u);
     }
+    expect(labels.usageKindLabel('retired-kind')).toBe(labels.usageKindLabel('unclassified'));
+    expect(
+      labels.paletteText({ id: 'forest', title: '내 숲', description: '', revision: 1 }).title
+    ).toBe('내 숲');
     expect(JSON.stringify({ themes: BUILTIN_THEMES, palettes: BUILTIN_PALETTES })).toBe(
       definitions
     );
@@ -402,7 +420,11 @@ test('catalog checker reports only messages that no source can reach', () => {
       join(directory, 'server/route.ts'),
       "throw new HttpError(409, '서버가 남긴 문구예요.');"
     );
-    expect(checkI18n(directory).unused).toEqual(['view.dead', 'view.deadWithPlaceholder']);
+    expect(checkI18n(directory).unused).toEqual([
+      'view.wire',
+      'view.dead',
+      'view.deadWithPlaceholder',
+    ]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

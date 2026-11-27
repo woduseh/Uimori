@@ -138,27 +138,20 @@ export function findKoreanServerErrors(source, file = 'server/input.ts') {
 
 const keyLikeStart = /^[A-Za-z][\w-]*\./u;
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-const normalizedText = (text) => text.replace(/\s+/gu, ' ').trim();
 
 export function scanMessageReferences(source, file = 'input.ts') {
   const literals = new Set(),
-    patterns = new Set(),
-    texts = new Set();
+    patterns = new Set();
   const tree = parse(source, {
     sourceType: 'unambiguous',
     errorRecovery: true,
     plugins: /\.[jt]sx$|\.m?js$/u.test(file) ? ['typescript', 'jsx'] : ['typescript'],
   });
-  const keep = (text) => {
-    literals.add(text);
-    if (/[가-힣]/u.test(text)) texts.add(normalizedText(text));
-  };
   walk(tree, (node) => {
-    if (node.type === 'StringLiteral') keep(node.value);
-    else if (node.type === 'JSXText') keep(node.value);
+    if (node.type === 'StringLiteral' || node.type === 'JSXText') literals.add(node.value);
     else if (node.type === 'TemplateLiteral') {
       const parts = node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw);
-      if (parts.length === 1) keep(parts[0]);
+      if (parts.length === 1) literals.add(parts[0]);
       else if (keyLikeStart.test(parts[0])) patterns.add(`^${parts.map(escapeRegExp).join('.+')}$`);
     } else if (
       node.type === 'BinaryExpression' &&
@@ -168,7 +161,7 @@ export function scanMessageReferences(source, file = 'input.ts') {
     )
       patterns.add(`^${escapeRegExp(node.left.value)}.+$`);
   });
-  return { literals, patterns, texts };
+  return { literals, patterns };
 }
 
 export const retainedMessagePrefixes = [
@@ -180,29 +173,19 @@ export const retainedMessagePrefixes = [
 
 export function findUnusedMessages(catalog, sources) {
   const literals = new Set(),
-    patterns = new Set(),
-    texts = new Set();
+    patterns = new Set();
   for (const { file, source } of sources) {
     const scanned = scanMessageReferences(source, file);
     for (const item of scanned.literals) literals.add(item);
     for (const item of scanned.patterns) patterns.add(item);
-    if (/^(web|core|packages|server)\//u.test(file.replaceAll('\\', '/')))
-      for (const item of scanned.texts) texts.add(item);
   }
   const expressions = [...patterns].map((pattern) => new RegExp(pattern, 'u'));
-  return [...catalog.entries()]
-    .filter(
-      ([key, values]) =>
-        !literals.has(key) &&
-        !retainedMessagePrefixes.some(({ prefix }) => key.startsWith(prefix)) &&
-        !expressions.some((expression) => expression.test(key)) &&
-        !(
-          typeof values.ko === 'string' &&
-          !values.ko.includes('{') &&
-          texts.has(normalizedText(values.ko))
-        )
-    )
-    .map(([key]) => key);
+  return [...catalog.keys()].filter(
+    (key) =>
+      !literals.has(key) &&
+      !retainedMessagePrefixes.some(({ prefix }) => key.startsWith(prefix)) &&
+      !expressions.some((expression) => expression.test(key))
+  );
 }
 
 function files(directory) {
@@ -292,8 +275,6 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
     errors.push(
       `${key}: unused message (${catalogFiles.get(key)}); remove it from all four languages, or register its dynamic prefix in scripts/check-i18n.mjs`
     );
-  const koreanMessages = new Set([...catalog.values()].map((entry) => entry.ko));
-  const unregisteredCandidates = candidates.filter((entry) => !koreanMessages.has(entry.text));
   return {
     messages: catalog.size,
     unused,
@@ -301,7 +282,6 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
     errors,
     candidates,
     dynamicCalls,
-    unregisteredCandidates,
   };
 }
 
@@ -316,9 +296,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   );
   console.log(
     `REVIEW: ${report.dynamicCalls.length} dynamic message calls require branch/runtime review.`
-  );
-  console.log(
-    `REVIEW: ${report.unregisteredCandidates.length} candidates have no exact Korean catalog entry (authored content/contracts may be intentional).`
   );
   if (process.argv.includes('--candidates'))
     for (const item of report.candidates)

@@ -96,6 +96,12 @@ export type ThemeCatalog = {
 };
 export type ThemeScope = { botId?: string; chatId?: string };
 export const DEFAULT_THEME_ID = 'builtin:forest';
+export type BuiltinThemeId =
+  | typeof DEFAULT_THEME_ID
+  | 'builtin:cinematic'
+  | 'builtin:letter'
+  | 'builtin:scrapbook'
+  | 'builtin:classic-frame';
 export const THEME_FILE_FORMAT = 'uimori-theme';
 export const DEFAULT_THEME_TEMPLATE =
   '<slot name="request"></slot><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot><slot></slot>';
@@ -122,7 +128,7 @@ export function defaultThemePreferences(): ThemePreferences {
     chatPalettes: {},
   };
 }
-export const BUILTIN_THEMES: Theme[] = [
+export const BUILTIN_THEMES: (Theme & { id: BuiltinThemeId })[] = [
   {
     ...emptyTheme('기본'),
     id: DEFAULT_THEME_ID,
@@ -192,7 +198,7 @@ export function resolvePaletteId(catalog: ThemeCatalog, scope: ThemeScope): stri
 
 export function resolveTheme(catalog: ThemeCatalog, scope: ThemeScope): Theme {
   const p = normalizeThemePreferences(catalog.preferences);
-  let selected = BUILTIN_THEMES[0];
+  let selected: Theme = BUILTIN_THEMES[0];
   for (const id of [
     scope.chatId && p.chatThemes[scope.chatId],
     scope.botId && p.botThemes[scope.botId],

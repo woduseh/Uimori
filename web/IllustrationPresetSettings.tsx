@@ -31,6 +31,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { illustrationErrorDescriptor, illustrationGeneratorLabels } from './illustration-labels.js';
+import { illustrationPresetText, illustrationPresetTitle } from './builtin-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
 import './settings-layout.css';
@@ -42,6 +43,10 @@ type Draft = {
   revision?: number;
   model: IllustrationPresetDefinition;
 };
+const localizedDefinition = (preset: IllustrationPreset): IllustrationPresetDefinition => ({
+  ...illustrationPresetDefinition(preset),
+  ...illustrationPresetText(preset),
+});
 const messageOf = (error: unknown) => {
   const message = (error as Error).message;
   return /^COMFYUI_/u.test(message) ? illustrationErrorDescriptor(message) : message;
@@ -192,8 +197,8 @@ export function IllustrationPresetSettings({
     resetEditorDetails();
     const isCopy = copy || !!preset?.id.startsWith('builtin:');
     const model = preset
-      ? structuredClone(illustrationPresetDefinition(preset))
-      : emptyIllustrationPreset();
+      ? structuredClone(localizedDefinition(preset))
+      : emptyIllustrationPreset(t('visualpanels.newIllustrationPreset'));
     if (preset && isCopy) model.title = `${model.title.slice(0, 97)}${t('shared.copySuffix')}`;
     setDraft({
       id: preset && !isCopy ? preset.id : null,
@@ -332,9 +337,7 @@ export function IllustrationPresetSettings({
             {effective.id !== selectedId && (
               <small className="illustration-preset-effective">
                 {t('visualpanels.effectivePreset', {
-                  v0: effective.id.startsWith('builtin:')
-                    ? translateMessage(effective.title)
-                    : effective.title,
+                  v0: illustrationPresetTitle(effective),
                 })}
               </small>
             )}
@@ -389,18 +392,14 @@ export function IllustrationPresetSettings({
             <button
               className="illustration-preset-apply"
               aria-label={t('visualpanels.applyIllustrationPreset', {
-                v0: preset.id.startsWith('builtin:')
-                  ? translateMessage(preset.title)
-                  : preset.title,
+                v0: illustrationPresetTitle(preset),
               })}
               aria-pressed={selectedId === preset.id}
               disabled={busy || dirty}
               onClick={() => void choose(preset.id)}
             >
               <div className="illustration-preset-title">
-                <strong>
-                  {preset.id.startsWith('builtin:') ? translateMessage(preset.title) : preset.title}
-                </strong>
+                <strong>{illustrationPresetTitle(preset)}</strong>
                 {selectedId === preset.id && (
                   <span className="illustration-preset-selected">
                     <Check size={14} aria-hidden="true" /> {t('visualpanels.selected')}{' '}
@@ -426,14 +425,12 @@ export function IllustrationPresetSettings({
                 disabled={busy || dirty}
                 size={18}
                 label={t('visualpanels.editIllustrationPreset', {
-                  v0: preset.id.startsWith('builtin:')
-                    ? translateMessage(preset.title)
-                    : preset.title,
+                  v0: illustrationPresetTitle(preset),
                 })}
                 title={
                   preset.id.startsWith('builtin:')
                     ? t('visualpanels.duplicateAndEditIllustrationPreset', {
-                        v0: translateMessage(preset.title),
+                        v0: illustrationPresetTitle(preset),
                       })
                     : undefined
                 }
@@ -442,9 +439,7 @@ export function IllustrationPresetSettings({
               />
               <ActionMenu
                 label={t('visualpanels.presetMenu', {
-                  v0: preset.id.startsWith('builtin:')
-                    ? translateMessage(preset.title)
-                    : preset.title,
+                  v0: illustrationPresetTitle(preset),
                 })}
                 viewport
               >
@@ -453,9 +448,7 @@ export function IllustrationPresetSettings({
                     <button
                       disabled={busy || dirty}
                       aria-label={t('visualpanels.duplicateIllustrationPreset', {
-                        v0: preset.id.startsWith('builtin:')
-                          ? translateMessage(preset.title)
-                          : preset.title,
+                        v0: illustrationPresetTitle(preset),
                       })}
                       onClick={() => edit(preset, true)}
                     >
@@ -465,15 +458,13 @@ export function IllustrationPresetSettings({
                   <button
                     disabled={busy}
                     aria-label={t('visualpanels.exportIllustrationPreset', {
-                      v0: preset.id.startsWith('builtin:')
-                        ? translateMessage(preset.title)
-                        : preset.title,
+                      v0: illustrationPresetTitle(preset),
                     })}
                     onClick={() => {
                       void action(async () =>
                         saveDownload(
-                          `${preset.title}.uimori-illustration.json`,
-                          illustrationPresetFile(preset)
+                          `${illustrationPresetTitle(preset)}.uimori-illustration.json`,
+                          illustrationPresetFile(localizedDefinition(preset))
                         )
                       );
                     }}
@@ -487,9 +478,7 @@ export function IllustrationPresetSettings({
                       disabled={busy || dirty}
                       className="danger"
                       aria-label={t('visualpanels.deleteIllustrationPreset', {
-                        v0: preset.id.startsWith('builtin:')
-                          ? translateMessage(preset.title)
-                          : preset.title,
+                        v0: illustrationPresetTitle(preset),
                       })}
                       onClick={() => {
                         setError('');

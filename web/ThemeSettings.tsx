@@ -54,15 +54,16 @@ import { Switch } from './BooleanControls.js';
 import { storyUiStyles, type StoryUiStyle } from '../core/story-ui-style.js';
 import { ThemeAssetEditor } from './ThemeAssetEditor.js';
 import { adoptThemeFile, exportThemeFile } from './theme-assets.js';
+import { paletteText, themeText } from './builtin-labels.js';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
 const previewBesideMinWidth = 860;
-function paletteTitle(palette?: { title: string; revision?: number }) {
-  return palette
-    ? palette.revision === undefined
-      ? translateMessage(palette.title)
-      : palette.title
-    : '';
+const localizedDefinition = (theme: Theme): ThemeDefinition => ({
+  ...themeDefinition(theme),
+  ...themeText(theme),
+});
+function paletteTitle(palette?: Parameters<typeof paletteText>[0]) {
+  return palette ? paletteText(palette).title : '';
 }
 const sample = () =>
   `<div class="risu-chat-text">${readingSample
@@ -237,7 +238,9 @@ export function ThemeSettings({
       return false;
     }
     if (management.current) management.current.open = true;
-    const model = theme ? structuredClone(themeDefinition(theme)) : emptyTheme();
+    const model = theme
+      ? structuredClone(localizedDefinition(theme))
+      : emptyTheme(t('visualpanels.newTheme'));
     if (storyOnly) model.storyUi = { baseStyle: 'default', css: '' };
     storyUiDraft.current = model.storyUi;
     const isCopy = copy || !!theme?.id.startsWith('builtin:');
@@ -451,9 +454,7 @@ export function ThemeSettings({
           </label>
           <span className="theme-current">
             {t('visualpanels.currentDisplay', {
-              v0: state.active.id.startsWith('builtin:')
-                ? translateMessage(state.active.title)
-                : state.active.title,
+              v0: themeText(state.active).title,
               v1: state.preview ? t('visualpanels.previewColors') : activePaletteTitle,
             })}
           </span>
@@ -465,9 +466,7 @@ export function ThemeSettings({
               {layoutSource && (
                 <small>
                   {t('settings.inheritedThemeSelection', {
-                    title: activeLayout?.id.startsWith('builtin:')
-                      ? translateMessage(activeLayout.title)
-                      : (activeLayout?.title ?? ''),
+                    title: activeLayout ? themeText(activeLayout).title : '',
                     source: layoutSource,
                   })}
                 </small>
@@ -491,9 +490,7 @@ export function ThemeSettings({
                 <button
                   className="theme-card-apply"
                   aria-label={t('visualpanels.applyTheme', {
-                    v0: theme.id.startsWith('builtin:')
-                      ? translateMessage(theme.title)
-                      : theme.title,
+                    v0: themeText(theme).title,
                   })}
                   aria-pressed={selectedId === theme.id}
                   disabled={busy || backgroundDirty || paletteDirty || state.loading}
@@ -526,19 +523,11 @@ export function ThemeSettings({
                     </span>
                   </span>
                   <strong className="theme-choice-title">
-                    <span>
-                      {theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.title)
-                        : theme.title}
-                    </span>
+                    <span>{themeText(theme).title}</span>
                     {selectedId === theme.id && <Check size={18} aria-hidden="true" />}
                   </strong>
                   {theme.description && theme.id !== DEFAULT_THEME_ID && (
-                    <small>
-                      {theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.description)
-                        : theme.description}
-                    </small>
+                    <small>{themeText(theme).description}</small>
                   )}
                 </button>
                 <div className="theme-card-actions">
@@ -562,16 +551,14 @@ export function ThemeSettings({
                   </button>
                   <IconButton
                     label={t('visualpanels.export', {
-                      v0: theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.title)
-                        : theme.title,
+                      v0: themeText(theme).title,
                     })}
                     icon={DownloadIcon}
                     onClick={() =>
                       void action(async () =>
                         saveDownload(
-                          `${theme.title}.uimori-theme.json`,
-                          await exportThemeFile(themeDefinition(theme))
+                          `${themeText(theme).title}.uimori-theme.json`,
+                          await exportThemeFile(localizedDefinition(theme))
                         )
                       )
                     }
@@ -580,9 +567,7 @@ export function ThemeSettings({
                 {!theme.id.startsWith('builtin:') && (
                   <ActionMenu
                     label={t('visualpanels.manage', {
-                      v0: theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.title)
-                        : theme.title,
+                      v0: themeText(theme).title,
                     })}
                     className="theme-card-menu"
                     viewport
@@ -590,9 +575,7 @@ export function ThemeSettings({
                     <div className="action-menu-group">
                       <button
                         aria-label={t('visualpanels.duplicate', {
-                          v0: theme.id.startsWith('builtin:')
-                            ? translateMessage(theme.title)
-                            : theme.title,
+                          v0: themeText(theme).title,
                         })}
                         disabled={busy || backgroundDirty || paletteDirty}
                         onClick={() => edit(theme, true)}
@@ -605,9 +588,7 @@ export function ThemeSettings({
                       <button
                         className="danger"
                         aria-label={t('visualpanels.delete', {
-                          v0: theme.id.startsWith('builtin:')
-                            ? translateMessage(theme.title)
-                            : theme.title,
+                          v0: themeText(theme).title,
                         })}
                         disabled={busy || dirty}
                         onClick={(event) => {
@@ -707,9 +688,7 @@ export function ThemeSettings({
                     </strong>
                     {palette.description && (
                       <span id={`${id}-palette-${palette.id}`} className="sr-only">
-                        {'revision' in palette
-                          ? palette.description
-                          : translateMessage(palette.description)}
+                        {paletteText(palette).description}
                       </span>
                     )}
                   </button>
@@ -747,8 +726,8 @@ export function ThemeSettings({
                           disabled={paletteLibrary.busy}
                           onClick={() =>
                             saveDownload(
-                              `${libraryPalette.title}.palette.json`,
-                              paletteFile(libraryPalette)
+                              `${paletteTitle(libraryPalette)}.palette.json`,
+                              paletteFile({ ...libraryPalette, ...paletteText(libraryPalette) })
                             )
                           }
                         >

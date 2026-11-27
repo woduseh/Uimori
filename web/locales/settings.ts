@@ -1403,12 +1403,6 @@ export const messages = {
     ja: 'コンテキスト管理',
     zh: '上下文管理',
   },
-  'settings.m276': {
-    ko: '컨텍스트 요약',
-    en: 'Context summary',
-    ja: 'コンテキスト要約',
-    zh: '上下文摘要',
-  },
   'settings.m278': {
     ko: '컨텍스트를 불러오는 중이에요…',
     en: 'Loading context…',

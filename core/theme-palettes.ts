@@ -92,8 +92,9 @@ function colors(
   };
 }
 
+export type BuiltinPaletteId = 'forest' | 'cream' | 'charcoal' | 'midnight' | 'rose' | 'sage';
 function palette(
-  id: string,
+  id: BuiltinPaletteId,
   title: string,
   description: string,
   neutral: NeutralScale,

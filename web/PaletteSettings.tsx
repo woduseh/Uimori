@@ -9,6 +9,7 @@ import {
   type ThemePalette,
 } from '../core/theme-palettes.js';
 import { useThemes } from './ThemeContext.js';
+import { paletteText } from './builtin-labels.js';
 import { api, ApiError } from './api.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -60,10 +61,8 @@ export function usePaletteLibrary() {
     const model = structuredClone(
       palette
         ? {
-            title:
-              ('revision' in palette ? palette.title : translateMessage(palette.title)) +
-              (copy ? t('shared.copySuffix') : ''),
-            description: palette.description,
+            title: paletteText(palette).title + (copy ? t('shared.copySuffix') : ''),
+            description: paletteText(palette).description,
             colors: palette.colors,
           }
         : { title: t('palettes.defaultName'), description: '', colors: BUILTIN_PALETTES[0].colors }

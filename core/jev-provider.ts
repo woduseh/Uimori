@@ -25,7 +25,6 @@ export const JEV_PROVIDER_DEFINITION = Object.freeze({
   label: 'TypeSafe AI',
   modelId: 'jev-latest',
   modelLabel: 'JEV',
-  description: '로어 선별, 생성 거절 판정, 이미지 배치',
 });
 export function jevRegistered(status: JevProviderStatus | null): boolean {
   return status?.configured === true;

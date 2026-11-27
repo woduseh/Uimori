@@ -84,6 +84,36 @@ async function switchFromAnotherTab(page: Page, locale: string) {
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
 
+test('I18N09 duplicating built-in layouts and palettes copies the shown language, not Korean', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마와 색상');
+  const advanced = page.locator('.theme-advanced:not([open]) > summary');
+  if (await advanced.isVisible()) await advanced.click();
+  await switchFromAnotherTab(page, 'en');
+  const layout = page
+    .locator('.theme-card')
+    .filter({ has: page.getByRole('button', { name: 'Apply Cinematic theme', exact: true }) });
+  await layout.getByRole('button', { name: 'Duplicate and customize', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Custom theme editor', exact: true });
+  await expect(editor.getByLabel('Theme name', { exact: true })).toHaveValue('Cinematic copy');
+  await expect(editor.getByLabel('Theme description', { exact: true })).toHaveValue(
+    /^A scene for long stories/u
+  );
+  await editor.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes and close', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await page.getByLabel('Manage Forest', { exact: true }).click();
+  await page.getByRole('button', { name: 'Clone Forest', exact: true }).click();
+  const palette = page.locator('.palette-editor');
+  await expect(palette.getByLabel('Name', { exact: true })).toHaveValue('Forest copy');
+  await expect(palette.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue(
+    'The familiar calm green of Uimori'
+  );
+});
+
 test('I18N08 source and saved translation editors preserve unsaved text, selection and DOM identity', async ({
   page,
   request,

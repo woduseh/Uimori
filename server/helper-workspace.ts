@@ -159,7 +159,7 @@ export class HelperWorkspace {
           creationHash,
           scope.kind === 'chat' ? scope.chatId : null,
           key,
-          title ?? '새 도우미 대화',
+          title ?? '',
           Number(title === undefined),
           UI_HELPER_PERSONA,
           time,

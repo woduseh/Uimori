@@ -26,14 +26,6 @@ export async function loadLocale(locale: UiLocale): Promise<void> {
 let current = readLocale();
 let requested = current;
 const listeners = new Set<() => void>();
-const sources = new Map<string, string>();
-const normalized = (value: string) => value.replace(/\s+/gu, ' ').trim();
-for (const [key, value] of Object.entries(ko)) {
-  if (!value.includes('{')) {
-    sources.set(value, key);
-    sources.set(normalized(value), key);
-  }
-}
 const cache = new Map<string, IntlMessageFormat>();
 export const getLocale = (): UiLocale => current;
 export const getIntlLocale = (): string => intlLocales[current];
@@ -172,9 +164,7 @@ export function translateStoredCode<Code extends string>(
   return Object.hasOwn(keys, value) ? t(keys[value as Code]) : value;
 }
 export function translateMessage(value: string): string {
-  if (value.includes(messagePrefix)) return decodeMessages(value);
-  const key = sources.get(value) ?? sources.get(normalized(value));
-  return key ? t(key) : value;
+  return value.includes(messagePrefix) ? decodeMessages(value) : value;
 }
 const numberFormats = new Map<string, Intl.NumberFormat>();
 const dateFormats = new Map<string, Intl.DateTimeFormat>();

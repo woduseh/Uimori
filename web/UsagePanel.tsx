@@ -2,7 +2,8 @@ import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.j
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import { CalendarDays, Download } from 'lucide-react';
-import { USAGE_KIND_LABELS, type UsageReport, type UsageTotals } from '../core/usage-report.js';
+import type { UsageReport, UsageTotals } from '../core/usage-report.js';
+import { usageKindLabel } from './builtin-labels.js';
 import { personalWorkspaceEndpoints } from '#contracts';
 import { callEndpoint } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -430,9 +431,7 @@ export function UsagePanel({
                   rows={current.kinds.map((item) => ({
                     ...item,
                     id: item.kind,
-                    label:
-                      translateMessage(USAGE_KIND_LABELS[item.kind] ?? '') ||
-                      t('visualpanels.uncategorizedPurpose'),
+                    label: usageKindLabel(item.kind),
                   }))}
                 />
               </details>

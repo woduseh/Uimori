@@ -28,7 +28,12 @@ import {
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
 import { PROVIDER_OPTIONS_MAX_CHARS } from '../core/provider-options.js';
-import { TOKENIZER_PROFILES, resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
+import {
+  TOKENIZER_PROFILES,
+  isTokenizerProfileId,
+  resolveTokenizerProfile,
+} from '../core/tokenizer-profiles.js';
+import { tokenizerLabel } from './builtin-labels.js';
 import {
   forcedServiceTierError,
   modelDraftError,
@@ -454,8 +459,9 @@ export function ProviderModelFields({
       label,
       text:
         field === 'tokenizer'
-          ? (TOKENIZER_PROFILES.find((profile) => profile.id === value.tokenizer)?.label ??
-            value.tokenizer)
+          ? isTokenizerProfileId(value.tokenizer)
+            ? tokenizerLabel(value.tokenizer)
+            : value.tokenizer
           : field === 'providerOptions'
             ? t('providers.m198')
             : field === 'thinkingMode'
@@ -616,9 +622,7 @@ export function ProviderModelFields({
                 <li key={item.key}>
                   <span className="ui-meta-row">
                     <span>{translateMessage(item.label)}</span>
-                    <strong>
-                      {item.key === 'tokenizer' ? translateMessage(item.text) : item.text}
-                    </strong>
+                    <strong>{item.text}</strong>
                   </span>
                   <button
                     type="button"
@@ -645,15 +649,12 @@ export function ProviderModelFields({
           >
             <option value="">
               {t('providers.m561', {
-                value0: translateMessage(
-                  TOKENIZER_PROFILES.find((profile) => profile.id === automaticTokenizer)?.label ??
-                    ''
-                ),
+                value0: tokenizerLabel(automaticTokenizer),
               })}
             </option>
             {TOKENIZER_PROFILES.map((profile) => (
               <option key={profile.id} value={profile.id}>
-                {translateMessage(profile.label)}
+                {tokenizerLabel(profile.id)}
               </option>
             ))}
           </select>
