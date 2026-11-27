@@ -18,7 +18,10 @@ function walk(node, visit, parent) {
 }
 const ast = (source, file) => {
   try {
-    return parse(source, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
+    return parse(source, {
+      sourceType: 'module',
+      plugins: /\.[cm]?ts$/u.test(file ?? '') ? ['typescript'] : ['typescript', 'jsx'],
+    });
   } catch (error) {
     throw new Error(`${file ?? 'source'}: ${error.message}`, { cause: error });
   }
