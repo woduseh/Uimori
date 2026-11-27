@@ -1,4 +1,8 @@
-import { resourceEditorOperations } from '#contracts/operations';
+import {
+  appearanceOperations,
+  deletionOperations,
+  resourceEditorOperations,
+} from '#contracts/operations';
 import { parseInput } from './endpoint.js';
 import { illustrationPresetCatalog, deleteIllustrationPreset } from './illustration-presets.js';
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
@@ -590,16 +594,19 @@ export function invokeResourceTool(
       args.changes
     );
   }
-  const expectedRevision =
-    args.expectedRevision === undefined ? undefined : number(args.expectedRevision, 'revision');
-  if (!id || expectedRevision === undefined)
-    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id and expectedRevision are required');
-  if (name === 'resource.delete' && kind === 'illustration-preset')
-    return deleteIllustrationPreset(store, id, expectedRevision);
-  if (name === 'resource.delete' && kind === 'theme')
-    return deleteTheme(store, id, expectedRevision);
-  if (name === 'resource.delete' && (kind === 'content' || kind === 'prompt-preset'))
+  if (name === 'resource.delete' && kind !== 'prompt-workspace') {
+    const { kind: _kind, ...target } = args;
+    const { id, expectedRevision } = parseInput(
+      kind === 'theme'
+        ? appearanceOperations.deleteTheme.input
+        : deletionOperations.deleteLibraryItem.input,
+      target
+    );
+    if (kind === 'illustration-preset')
+      return deleteIllustrationPreset(store, id, expectedRevision);
+    if (kind === 'theme') return deleteTheme(store, id, expectedRevision);
     return deleteLibraryItem(store, kind, id, { expectedRevision });
+  }
   throw new HelperToolError(
     400,
     'INVALID_ARGUMENTS',

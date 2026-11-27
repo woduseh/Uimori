@@ -7,7 +7,7 @@ import type { HelperTask } from '../core/helper.js';
 import type { PromptPreset } from '../core/product.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HelperResourceBatchError } from '../server/helper-resource-batch.js';
-import { helperResourceOperation } from '../server/helper-resource-tools.js';
+import { helperResourceOperation, invokeResourceTool } from '../server/helper-resource-tools.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
 import { helperRoutes } from '../server/helper-routes.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
@@ -355,4 +355,21 @@ test('mixed batch reports every member and keeps bodies out of its result', () =
   ]);
   expect(mutate(f, task, 'resource.patchMany', args, 'batch')).toEqual(result);
   expect(JSON.stringify(result)).not.toContain('본문은 기록에 남기지 않음');
+});
+
+test('resource.delete refuses an argument outside its contract instead of deleting', () => {
+  const f = fixture();
+  const bot = f.store.product.content(fixtureBotInput('Kept bot')) as {
+    id: string;
+    revision: number;
+  };
+  expect(() =>
+    invokeResourceTool(f.store, 'resource.delete', {
+      kind: 'content',
+      id: bot.id,
+      expectedRevision: bot.revision,
+      force: true,
+    })
+  ).toThrow(expect.objectContaining({ code: 'INVALID_REQUEST', statusCode: 400 }));
+  expect(f.store.product.isLive('content', bot.id)).toBe(true);
 });
