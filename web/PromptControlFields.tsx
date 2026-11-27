@@ -178,7 +178,7 @@ export function PromptControlFields({
     );
   }
   for (const item of items) {
-    const name = (item.type === 'control' ? item.control.group : item.group)?.trim() || '기본 설정';
+    const name = (item.type === 'control' ? item.control.group : item.group)?.trim() ?? '';
     const previous = groups.at(-1);
     if (previous?.name === name) previous.items.push(item);
     else groups.push({ name, items: [item] });

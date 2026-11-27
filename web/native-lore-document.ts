@@ -1,7 +1,9 @@
+import { t } from './i18n.js';
+
 export type LoreEntry = Record<string, unknown>;
 export const loreText = (value: unknown): string => (typeof value === 'string' ? value : '');
 export const loreTitle = (entry: LoreEntry) =>
-  loreText(entry.comment ?? entry.name) || '이름 없는 로어';
+  loreText(entry.comment ?? entry.name) || t('native.unnamedLore');
 export const isLoreFolder = (entry: LoreEntry) => entry.mode === 'folder';
 export const loreFolderKey = (entry: LoreEntry) =>
   typeof entry.key === 'string'

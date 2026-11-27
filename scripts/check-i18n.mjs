@@ -1,10 +1,11 @@
 import { parse } from '@babel/parser';
 import { IntlMessageFormat } from 'intl-messageformat';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const locales = ['ko', 'en', 'ja', 'zh'];
+const hangul = /[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\uac00-\ud7ff]/u;
 const ignored = new Set(['loc', 'extra', 'comments', 'tokens']);
 function walk(node, visit, parent) {
   if (!node || typeof node !== 'object') return;
@@ -69,7 +70,7 @@ export function scanI18nSource(source, file = 'input.tsx') {
         : node.type === 'TemplateElement'
           ? node.value.cooked
           : null;
-    if (typeof text === 'string' && /[\uac00-\ud7a3]/u.test(text)) {
+    if (typeof text === 'string' && hangul.test(text)) {
       candidates.push({ file, line: node.loc.start.line, kind: node.type, text: text.trim() });
     }
     if (
@@ -108,7 +109,6 @@ export function scanI18nSource(source, file = 'input.tsx') {
   return { candidates, calls, dynamicCalls };
 }
 
-const hangul = /[가-힣]/u;
 const calleeName = (callee) =>
   propertyName(callee?.type === 'MemberExpression' ? callee.property : callee) ?? '';
 const errorSite = (node) =>
@@ -197,6 +197,109 @@ function files(directory) {
     entry.isDirectory() ? files(resolve(directory, entry.name)) : [resolve(directory, entry.name)]
   );
 }
+
+export const koreanLiteralAllowlistPath = 'scripts/korean-literal-allowlist.json';
+const koreanShrink = '(node scripts/check-i18n.mjs --shrink)';
+export const koreanLiteralRemedy = [
+  'put UI text in web/locales in all four languages and render it with t(key), or keep it in state as uiMessage(key);',
+  'an internal key or sentinel takes a non-Korean value;',
+  `text that must stay Korean (a language's own name, a stored legacy value compared against saved rows, or a model input, stored default name or preview fixture that docs/I18N.md keeps as written) goes under "permanent" in ${koreanLiteralAllowlistPath} with its count and reason`,
+].join(' ');
+
+export function koreanLiterals(source, file) {
+  if (file.endsWith('.css'))
+    return source
+      .replace(/\/\*[\s\S]*?\*\//gu, (comment) => comment.replace(/[^\n]/gu, ' '))
+      .split('\n')
+      .flatMap((text, index) =>
+        hangul.test(text) ? [{ line: index + 1, text: text.trim() }] : []
+      );
+  return scanI18nSource(source, file).candidates.map(({ line, text }) => ({ line, text }));
+}
+
+export function readKoreanLiteralAllowlist(root) {
+  const path = resolve(root, koreanLiteralAllowlistPath);
+  if (!existsSync(path)) return { permanent: {}, debt: {} };
+  const { permanent = {}, debt = {}, ...rest } = JSON.parse(readFileSync(path, 'utf8'));
+  if (Object.keys(rest).length)
+    throw new Error(
+      `${koreanLiteralAllowlistPath}: only "permanent" and "debt" sections are allowed`
+    );
+  for (const [file, entry] of Object.entries(permanent))
+    if (!Number.isInteger(entry?.count) || entry.count < 1 || !entry.reason?.trim())
+      throw new Error(
+        `${koreanLiteralAllowlistPath}: permanent "${file}" needs a positive count and a reason`
+      );
+  for (const [file, count] of Object.entries(debt))
+    if (!Number.isInteger(count) || count < 1)
+      throw new Error(`${koreanLiteralAllowlistPath}: debt "${file}" needs a positive whole count`);
+  return { permanent, debt };
+}
+
+export function scanKoreanLiterals(root) {
+  const web = resolve(root, 'web');
+  const localeDirectory = resolve(web, 'locales');
+  const found = new Map();
+  if (!existsSync(web)) return found;
+  for (const path of files(web).sort()) {
+    if (path.startsWith(localeDirectory) || !/\.(?:[cm]?[jt]sx?|css)$/u.test(path)) continue;
+    const file = relative(root, path).replaceAll('\\', '/');
+    const literals = koreanLiterals(readFileSync(path, 'utf8'), file);
+    if (literals.length) found.set(file, literals);
+  }
+  return found;
+}
+
+export function koreanLiteralErrors(root, allowlist = readKoreanLiteralAllowlist(root)) {
+  const { permanent, debt } = allowlist;
+  const found = scanKoreanLiterals(root);
+  const errors = [];
+  for (const [file, literals] of found) {
+    const allowed = (permanent[file]?.count ?? 0) + (debt[file] ?? 0);
+    if (literals.length > allowed)
+      errors.push(
+        `${file}: ${literals.length} Korean literals (lines ${literals.map(({ line }) => line).join(', ')}), ${allowed ? `${koreanLiteralAllowlistPath} allows ${allowed}` : 'none allowed'}; ${koreanLiteralRemedy}`
+      );
+  }
+  for (const file of new Set([...Object.keys(permanent), ...Object.keys(debt)])) {
+    const count = found.get(file)?.length ?? 0;
+    const kept = permanent[file]?.count ?? 0;
+    const owed = debt[file] ?? 0;
+    if (count < kept)
+      errors.push(
+        `${koreanLiteralAllowlistPath}: ${file} has ${count} Korean literals but its permanent entry keeps ${kept}; correct the entry and its reason by hand`
+      );
+    else if (count < kept + owed)
+      errors.push(
+        count > kept
+          ? `${koreanLiteralAllowlistPath}: ${file} now owes ${count - kept} Korean literals; lower its debt from ${owed} to ${count - kept} ${koreanShrink}`
+          : `${koreanLiteralAllowlistPath}: ${file} owes no Korean literals; remove its debt entry ${koreanShrink}`
+      );
+  }
+  return errors;
+}
+
+export function shrinkKoreanLiterals(root, allowlist = readKoreanLiteralAllowlist(root)) {
+  const { permanent, debt } = allowlist;
+  const found = scanKoreanLiterals(root);
+  const next = {
+    permanent,
+    debt: Object.fromEntries(
+      Object.entries(debt)
+        .map(([file, owed]) => [
+          file,
+          Math.min(
+            owed,
+            Math.max(0, (found.get(file)?.length ?? 0) - (permanent[file]?.count ?? 0))
+          ),
+        ])
+        .filter(([, owed]) => owed > 0)
+        .sort(([left], [right]) => (left < right ? -1 : 1))
+    ),
+  };
+  writeFileSync(resolve(root, koreanLiteralAllowlistPath), `${JSON.stringify(next, null, 2)}\n`);
+  return next;
+}
 export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta.url)))) {
   const catalog = new Map(),
     catalogFiles = new Map(),
@@ -274,6 +377,7 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
     }));
   for (const { file, source } of sources)
     if (/^(?:server|core)\//u.test(file)) errors.push(...findKoreanServerErrors(source, file));
+  errors.push(...koreanLiteralErrors(root));
   const unused = findUnusedMessages(catalog, sources);
   for (const key of unused)
     errors.push(
@@ -290,13 +394,18 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--shrink'))
+    shrinkKoreanLiterals(resolve(fileURLToPath(new URL('..', import.meta.url))));
   const report = checkI18n();
   for (const error of report.errors) console.error(error);
   console.log(
     `i18n: ${report.messages} messages, ${report.calls} literal calls, ${report.errors.length} errors.`
   );
+  const { permanent, debt } = readKoreanLiteralAllowlist(
+    resolve(fileURLToPath(new URL('..', import.meta.url)))
+  );
   console.log(
-    `REVIEW: ${report.candidates.length} Korean static candidates (includes authored defaults/contracts; candidate count is not a completeness assertion).`
+    `Korean literals: ${Object.values(debt).reduce((sum, count) => sum + count, 0)} unconverted in ${Object.keys(debt).length} files; ${Object.values(permanent).reduce((sum, entry) => sum + entry.count, 0)} permanent in ${Object.keys(permanent).length} files.`
   );
   console.log(
     `REVIEW: ${report.dynamicCalls.length} dynamic message calls require branch/runtime review.`

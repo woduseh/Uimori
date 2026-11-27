@@ -30,7 +30,7 @@ export function parseToggleDocument(source: string) {
   const lines = parseNativeToggleLines(source);
   const root: ToggleDocumentGroup = {
     id: -1,
-    name: '그룹 없음',
+    name: '',
     start: 0,
     end: lines.length,
     close: -1,
@@ -125,7 +125,7 @@ function uniqueKey(lines: NativeToggleLine[], base = 'new_toggle') {
   return key;
 }
 
-export function addToggleGroup(source: string, name = '새 그룹') {
+export function addToggleGroup(source: string, name: string) {
   const { lines } = structural(source);
   lines.push(
     fresh(

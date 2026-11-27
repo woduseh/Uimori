@@ -218,7 +218,7 @@ export function NativeRisuToggleEditor({
   function structural(action: () => string, destinationId = current.id) {
     const destination = groups.find((group) => group.id === destinationId) ?? current;
     const ordinal = groups
-      .filter((group) => group.name === destination.name)
+      .filter((group) => group.id !== -1 && group.name === destination.name)
       .findIndex((group) => group.id === destination.id);
     let next = value;
     if (
@@ -232,9 +232,9 @@ export function NativeRisuToggleEditor({
       setGroupId(
         destinationId === -1
           ? -1
-          : (parseToggleDocument(next).groups.filter((group) => group.name === destination.name)[
-              ordinal
-            ]?.id ?? null)
+          : (parseToggleDocument(next).groups.filter(
+              (group) => group.id !== -1 && group.name === destination.name
+            )[ordinal]?.id ?? null)
       );
     }
   }
