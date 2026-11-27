@@ -11,7 +11,7 @@ import {
 } from '#contracts';
 import { libraryOperations } from '#contracts/operations';
 import { HttpError } from './request-validation.js';
-import { assertRevision } from './app-errors.js';
+import { AppError, assertRevision } from './app-errors.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
@@ -110,7 +110,7 @@ export class LibraryOrganizationStore {
     this.clearCover(id);
     if (hash === null) return;
     if (!this.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash))
-      throw new HttpError(400, 'Folder cover image not found');
+      throw new AppError(400, 'IMAGE_NOT_FOUND');
     this.store.db.prepare('INSERT INTO library_folder_covers VALUES(?,?)').run(id, hash);
   }
   updateFolder(input: UpdateLibraryFolder, expectedCategory?: LibraryCategory) {

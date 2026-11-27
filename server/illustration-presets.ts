@@ -120,8 +120,7 @@ export function deleteIllustrationPreset(store: Store, id: string, expectedRevis
       'Built-in presets stay.'
     );
   return store.transaction(() => {
-    const preset = readIllustrationPreset(store, id);
-    if (preset.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+    store.product.editable('illustration-preset', id, expectedRevision);
     const p = illustrationPresetPreferences(store);
     if (p.defaultPresetId === id) p.defaultPresetId = DEFAULT_ILLUSTRATION_PRESET_ID;
     for (const map of [p.botPresets, p.chatPresets])

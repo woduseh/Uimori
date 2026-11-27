@@ -564,6 +564,20 @@ export function invokeResourceTool(
     );
     return { ...summary(result), source: result.source };
   }
+  if (name === 'resource.save') {
+    const input = parseInput(resourceEditorOperations.saveResource.input, args);
+    return summary(
+      saveResource(store, {
+        ...input,
+        id: input.id ?? null,
+        model: input.model as ResourceModel,
+      })
+    );
+  }
+  if (name === 'resource.undo') {
+    const input = parseInput(resourceEditorOperations.undoResource.input, args);
+    return summary(undoResource(store, input.kind, input.id, input.expectedRevision));
+  }
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
   if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
   if (name === 'resource.patch') {
@@ -578,19 +592,8 @@ export function invokeResourceTool(
   }
   const expectedRevision =
     args.expectedRevision === undefined ? undefined : number(args.expectedRevision, 'revision');
-  if (name === 'resource.save') {
-    const input = parseInput(resourceEditorOperations.saveResource.input, args);
-    return summary(
-      saveResource(store, {
-        ...input,
-        id: input.id ?? null,
-        model: input.model as ResourceModel,
-      })
-    );
-  }
   if (!id || expectedRevision === undefined)
     throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id and expectedRevision are required');
-  if (name === 'resource.undo') return summary(undoResource(store, kind, id, expectedRevision));
   if (name === 'resource.delete' && kind === 'illustration-preset')
     return deleteIllustrationPreset(store, id, expectedRevision);
   if (name === 'resource.delete' && kind === 'theme')

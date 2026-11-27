@@ -24,6 +24,7 @@ export const resourceEditorEndpoints = {
     operation: 'resourceEditors.cloneResource',
     method: 'POST',
     path: '/resources/clone',
+    invalidates: ['library'],
   }),
   undoResource: defineEndpoint<typeof operations.undoResource>()({
     operation: 'resourceEditors.undoResource',

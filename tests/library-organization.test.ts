@@ -170,7 +170,7 @@ test('a chosen folder cover is validated, kept as a retention root and released 
       expectedRevision: revision(store),
       coverImageHash: hash,
     })
-  ).toThrow('Folder cover image not found');
+  ).toThrow('IMAGE_NOT_FOUND');
   store.db
     .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
     .run(hash, 'image/webp', new Uint8Array([1]));
