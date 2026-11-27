@@ -104,21 +104,71 @@ test('a pull request runs the changed browser domains up to one full shard of sp
     domains: [],
     specs: 6,
     cap: 3,
+    uncovered: [],
     full: true,
   });
-  assert.deepEqual(browserSelection(map, ['web/chat/Composer.tsx', 'server/app.ts']), {
-    domains: ['chat'],
-    specs: 3,
-    cap: 3,
-    full: false,
-  });
-  assert.equal(browserSelection(map, ['web/style.css', 'docs/dev/CHECKS.md']).domains.length, 0);
+  assert.deepEqual(
+    browserSelection(map, ['web/chat/Composer.tsx', 'docs/dev/CHECKS.md', 'scripts/verify.mjs']),
+    { domains: ['chat'], specs: 3, cap: 3, uncovered: [], full: false }
+  );
 });
 
-test('the real feature map selects a small domain change without the full browser shards', () => {
+test('a browser input that no domain covers runs the full browser shards, even beside a covered one', () => {
+  const map = featureMap({ reader: 4, chat: 3, helper: 2 });
+  for (const files of [
+    ['web/style.css'],
+    ['web/chat/Composer.tsx', 'server/app.ts'],
+    ['tests/fixtures/app.ts'],
+    ['playwright.config.ts'],
+  ]) {
+    const selection = browserSelection(map, files);
+    assert.equal(selection.full, true, files.join(', '));
+    assert.deepEqual(selection.domains, [], files.join(', '));
+    assert.ok(selection.uncovered.length, files.join(', '));
+  }
+  assert.equal(browserSelection(map, ['runner/runner.mjs']).full, false);
+});
+
+test('specs the changed-browser job cannot run neither count toward the cap nor select their domain', () => {
+  const map = featureMap({ reader: 2, risu: 2, host: 0 });
+  map.domains.risu.specs.push(
+    { file: 'tests/private-0.spec.ts', launch: { requiredEnv: ['UIMORI_RISU_SAMPLE_ROOT'] } },
+    { file: 'tests/private-1.spec.ts', launch: { requiredEnv: ['UIMORI_RISU_SAMPLE_ROOT'] } }
+  );
+  map.domains.host.specs.push({ file: 'tests/host-0.spec.ts', launch: { runner: 'self-host' } });
+  assert.deepEqual(browserSelection(map, ['web/risu/Import.tsx']), {
+    domains: ['risu'],
+    specs: 2,
+    cap: 3,
+    uncovered: [],
+    full: false,
+  });
+  assert.deepEqual(browserSelection(map, ['web/host/Gate.tsx', 'web/reader/Reader.tsx']), {
+    domains: ['reader'],
+    specs: 2,
+    cap: 3,
+    uncovered: [],
+    full: false,
+  });
+});
+
+test('the real feature map routes each kind of change to the browser run that covers it', () => {
   const map = readFeatureMap();
-  const [name, domain] = Object.entries(map.domains).find(([, entry]) => entry.specs.length === 1);
-  const selection = browserSelection(map, [domain.specs[0].file]);
-  assert.deepEqual(selection.domains, [name]);
-  assert.equal(selection.full, false);
+  const domainRuns = {
+    'packages/contracts/src/domains/resource-editors/endpoints.ts': ['resource-editors'],
+    'packages/contracts/src/domains/library/operations.ts': ['library'],
+    'server/builtin-prompts/pheme.json': ['prompts'],
+    'server/appearance-scope.ts': ['appearance'],
+    'web/ArchivePanel.tsx': ['personal-workspace'],
+    'runner/uimori.mjs': ['helper'],
+    'runner/runner.mjs': [],
+    'packages/contracts/src/domains/self-host/endpoints.ts': [],
+  };
+  for (const [file, domains] of Object.entries(domainRuns)) {
+    const selection = browserSelection(map, [file]);
+    assert.deepEqual(selection.domains, domains, file);
+    assert.equal(selection.full, false, file);
+  }
+  for (const file of ['web/style.css', 'server/maintenance.ts', 'packages/contracts/src/index.ts'])
+    assert.equal(browserSelection(map, [file]).full, true, file);
 });

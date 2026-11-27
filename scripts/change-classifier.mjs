@@ -1,5 +1,6 @@
 export const runtimeRoots = ['core', 'packages', 'server', 'web', 'runner'];
 export const sourceRoots = [...runtimeRoots, 'scripts', 'tests'];
+const browserRoots = runtimeRoots.filter((root) => root !== 'runner');
 
 const patterns = {
   biomeFile: /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u,
@@ -22,7 +23,7 @@ const patterns = {
   topLevelScript: /^scripts\/[^/]+$/u,
   markdownFile: /\.md$/u,
   browserInput: new RegExp(
-    `^(?:${runtimeRoots.join('|')})/|^tests/(?:fixtures/|[^/]+\\.spec\\.ts$)|^playwright\\.config\\.ts$`,
+    `^(?:${browserRoots.join('|')})/|^tests/(?:fixtures/|[^/]+\\.spec\\.ts$)|^playwright\\.config\\.ts$`,
     'u'
   ),
   inertDocumentation:

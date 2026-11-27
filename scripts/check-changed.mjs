@@ -77,12 +77,11 @@ export function selectChecks(
   { exists = () => true, toolingTests = [], toolingSources = {}, scriptSources = {} } = {}
 ) {
   const modules = files.filter(is.moduleFile);
-  const markers = files
-    .filter((file) => !is.moduleFile(file))
-    .flatMap((file) => {
-      const extension = extname(file);
-      return [basename(file), ...(extension ? [`'${extension}'`, `"${extension}"`] : [])];
-    });
+  const markers = files.flatMap((file) => {
+    if (is.moduleFile(file)) return [file];
+    const extension = extname(file);
+    return [basename(file), ...(extension ? [`'${extension}'`, `"${extension}"`] : [])];
+  });
   const tests = Object.keys(testSources).sort();
   const namedTests = tests.filter(
     (test) =>

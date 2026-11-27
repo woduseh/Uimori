@@ -41,7 +41,7 @@ Before deleting a browser case, name the component and action it exercises and f
 
 No notice reports these gaps in the selection:
 
-- It finds Vitest files through the import graph of changed modules and, for other files, by a test naming the file or its extension. A test that reaches its sources another way is missed: `tests/background-work.test.ts` runs `dist` and `tests/helper-runner.test.ts` spawns `runner/runner.mjs`, and neither imports what it exercises. CI always runs the first in `linux-browser-core`; only a full run, such as the shards on `main`, checks the second against a source change.
+- It finds Vitest files through the import graph of changed modules, a test naming a changed module by its repository path (as `tests/helper-runner.test.ts` spawns `runner/runner.mjs`), and, for other files, a test naming the file or its extension. A test that reaches its sources another way is missed: `tests/background-work.test.ts` runs `dist` and imports none of the server modules it exercises, so CI always runs it in `linux-browser-core`.
 - `check:i18n` runs for changes under `web/`, `server/`, `core/` and `packages/` or to the checker and its Korean literal allowlist, but it also reads `scripts/` and `tests/` for unused keys, so removing the last use of a key there is caught by `quality`, not by `check:changed`.
 - The UI message check (`scripts/check-ui-message.mjs`) runs for changes under `web/` or to the checker and its allowlist. It scans all of `web/`; a permanent entry that no longer matches is corrected by hand.
 - It does not build. Tests that start the compiled server fail with "Run npm run build" until the build matches the source.

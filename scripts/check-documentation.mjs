@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const sourcePath =
-  /^(?:\.agents|\.claude|\.githooks|\.github|core|deploy|docs|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
+  /^(?:\.agents|\.claude|\.githooks|\.github|core|deploy|docs|fixtures|packages|runner|scripts|server|tests|third_party|web)\/\S*$/u;
 const internalGuidePath =
-  /^(?:\.agents|\.claude|\.githooks|\.github|core|fixtures|runner|scripts|server|tests|third_party|web)\/\S*$/u;
+  /^(?:\.agents|\.claude|\.githooks|\.github|core|fixtures|packages|runner|scripts|server|tests|third_party|web)\/\S*$/u;
 const localOnlyPaths = ['.claude/settings.local.json', '.claude/worktrees'];
 const caseIdShape = /\b[A-Z][A-Z0-9]*[A-Z]\d{2}(?![\dA-Za-z_])/gu;
 const caseIdMention = /\b([A-Z][A-Z0-9]*[A-Z])(\d{2})(?:[-–]\1?(\d{2}))?(?![\dA-Za-z_])/gu;
@@ -53,6 +53,7 @@ function testCaseIds(directory) {
 }
 
 const featureMapPath = 'tests/feature-map.json';
+const contractDomainsPath = 'packages/contracts/src/domains';
 const registeredSpecPath = /^tests\/[^/]+\.spec\.ts$/u;
 const domainName = /^[a-z][a-z0-9-]*$/u;
 const environmentName = /^[A-Z][A-Z0-9_]*$/u;
@@ -145,6 +146,7 @@ function featureMapErrors(directory) {
     }
   }
   const registered = new Map();
+  const mapped = new Set();
   for (const [name, domain] of Object.entries(map.domains)) {
     domains.add(name);
     const where = `domain ${name}`;
@@ -161,12 +163,13 @@ function featureMapErrors(directory) {
       issues.push(`${featureMapPath}: ${where} needs a list of source patterns`);
     else
       for (const pattern of domain.sources) {
-        if (
-          typeof pattern !== 'string' ||
-          !sourcePath.test(pattern) ||
-          !globSync(pattern, { cwd: directory }).length
-        )
+        const matches =
+          typeof pattern === 'string' && sourcePath.test(pattern)
+            ? globSync(pattern, { cwd: directory })
+            : [];
+        if (!matches.length)
           issues.push(`${featureMapPath}: ${where} source ${pattern} matches no file`);
+        for (const match of matches) mapped.add(match.split(sep).join('/'));
       }
     if (!Array.isArray(domain.specs) || !domain.specs.length) {
       issues.push(`${featureMapPath}: ${where} needs a list of specs`);
@@ -212,6 +215,19 @@ function featureMapErrors(directory) {
     .sort())
     if (!registered.has(spec))
       issues.push(`${featureMapPath}: ${spec} is not registered in any domain`);
+  const contractDomains = resolve(directory, contractDomainsPath);
+  if (existsSync(contractDomains))
+    for (const entry of readdirSync(contractDomains, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const folder = `${contractDomainsPath}/${entry.name}`;
+      const unmapped = globSync(`${folder}/**/*.*`, { cwd: directory })
+        .map((path) => path.split(sep).join('/'))
+        .filter((path) => !mapped.has(path));
+      if (unmapped.length)
+        issues.push(
+          `${featureMapPath}: ${unmapped.sort().join(', ')} map to no domain; add "${folder}/**" to the sources of the domain whose specs cover it, usually the domain named ${entry.name}`
+        );
+    }
   return { domains, issues };
 }
 
