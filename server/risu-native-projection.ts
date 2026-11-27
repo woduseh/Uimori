@@ -32,12 +32,7 @@ export function projectNativeRisuPackage(
   const notes = string(card.creator_notes);
   const description =
     typeof card.creator_notes === 'string' ? notes : standalone ? '' : base.description;
-  if (description.length > 4000)
-    findings.add(
-      'creator-notes-truncated',
-      'info',
-      '자료 설명은 앞 4000자까지 표시해요. 제작자 코멘트 전체는 Risu 카드 원문에 보존해요.'
-    );
+  if (description.length > 4000) findings.add('creator-notes-truncated');
   const loreFindings = createRisuImportFindings();
   const lore = importRisuLore({
     card,
@@ -90,11 +85,7 @@ export function projectNativeRisuPackage(
     if (values)
       pkg.variableDefaults = { values, attachmentRoles: [kind === 'persona' ? 'persona' : 'bot'] };
   } catch {
-    findings.add(
-      'native-variable-projection',
-      'warning',
-      '기본 변수 설정을 읽지 못했어요. 원문은 보존했지만 Uimori의 기본 변수 설정에는 반영하지 못했어요.'
-    );
+    findings.add('native-variable-projection');
   }
   return { pkg, lore: lore.preview };
 }

@@ -249,6 +249,11 @@ export type AppErrorParams = {
   ILLUSTRATION_PROFILES_INVALID: undefined;
   RISU_NATIVE_PRESET_INVALID: undefined;
   RISU_NATIVE_PRESET_TOGGLE_KEY: undefined;
+  RISU_CONTENT_INVALID: undefined;
+  PACKAGE_START_INVALID: undefined;
+  PACKAGE_START_NOT_FOUND: undefined;
+  RISU_PROMPT_INVALID: undefined;
+  RISU_PROMPT_TOO_LARGE: undefined;
 };
 
 export type AppErrorCode = keyof AppErrorParams;
@@ -508,6 +513,11 @@ const takesParams = {
   ILLUSTRATION_PROFILES_INVALID: false,
   RISU_NATIVE_PRESET_INVALID: false,
   RISU_NATIVE_PRESET_TOGGLE_KEY: false,
+  RISU_CONTENT_INVALID: false,
+  PACKAGE_START_INVALID: false,
+  PACKAGE_START_NOT_FOUND: false,
+  RISU_PROMPT_INVALID: false,
+  RISU_PROMPT_TOO_LARGE: false,
 } satisfies { [C in AppErrorCode]: AppErrorParams[C] extends undefined ? false : true };
 
 export const APP_ERROR_CODES = Object.keys(takesParams) as AppErrorCode[];

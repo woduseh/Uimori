@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
-  RisuContentError,
+  invalidRisuContent,
   validateRisuContent,
   validateContentAttachment,
   type RisuContent,
@@ -70,7 +70,7 @@ export const chatLoreKey = (selector: ChatLoreSelector) =>
 const leafKey = (ref: ContentAttachment) => `${ref.id}:${ref.role}`;
 export const chatOverrideHash = (value: string) => createHash('sha256').update(value).digest('hex');
 const invalid = (message: string): never => {
-  throw new RisuContentError(`CHAT_OVERRIDE_${message}`);
+  throw invalidRisuContent(`CHAT_OVERRIDE_${message}`);
 };
 const id = (value: unknown) => {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/.test(value))

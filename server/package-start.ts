@@ -190,7 +190,7 @@ export function createPackageStart(
       const start = validatePackageStarts(content.package.starts ?? []).find(
         (item) => item.id === command.startId
       );
-      if (!start) throw new HttpError(400, 'PACKAGE_START_NOT_FOUND');
+      if (!start) throw new AppError(400, 'PACKAGE_START_NOT_FOUND');
       const chat = store.chat(chatId);
       const profile = chatVariableProfile(store, chatId);
       const attachment = profile?.packageAttachments?.find(

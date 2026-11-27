@@ -1,13 +1,14 @@
 import { expect, test } from 'vitest';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { validatePackageStarts } from '../core/package-start.js';
+import { resolvePackageStart, validatePackageStarts } from '../core/package-start.js';
+import { validateRisuContent } from '../core/risu-content.js';
+import { validateRisuPrompt } from '../core/risu-prompt.js';
 import { validateRisuContentSource, type RisuContentSource } from '../core/risu-native.js';
 import { nativeRisuToggleItems } from '../core/risu-native-preset.js';
 import { appErrorUiMessage, toUiMessage } from '../web/api-errors.js';
 import { parseJsonInput } from '../web/json-input.js';
 import { parseNativeRegexJson } from '../web/native-risu-regex.js';
 import { editNativeSource } from '../web/native-source-edit.js';
-import { checkedPresetProgram } from '../web/NativeRisuPresetEditor.js';
 import { uiMessage, type UiMessage } from '../web/ui-message.js';
 
 const native: RisuContentSource = {
@@ -69,8 +70,13 @@ test('validators the editors call directly answer with their own catalog message
       () => validatePackageStarts([tooLong]),
       appErrorUiMessage('PACKAGE_START_TEXT_TOO_LONG', { limit: SOURCE_TEXT_MAX_CHARS }),
     ],
+    [
+      () => resolvePackageStart({ id: 'bot', revision: 1, starts: [] }, 'removed-start'),
+      appErrorUiMessage('PACKAGE_START_NOT_FOUND'),
+    ],
+    [() => validatePackageStarts([{ id: 'bad id' }]), appErrorUiMessage('PACKAGE_START_INVALID')],
+    [() => validateRisuContent({ version: 1 }), appErrorUiMessage('RISU_CONTENT_INVALID')],
+    [() => validateRisuPrompt({}), appErrorUiMessage('RISU_PROMPT_INVALID')],
   ] as const)
     expect(shown(run)).toEqual(expected);
-  const program = shown(() => checkedPresetProgram({}));
-  expect(program).toMatchObject({ kind: 'key', key: 'native.presetProgramInvalid' });
 });

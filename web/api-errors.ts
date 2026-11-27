@@ -5,6 +5,7 @@ import {
   type ReceivedErrorWire,
 } from '#contracts';
 import { ValidationError } from '../core/validation-error.js';
+import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js';
 import {
   formatUiMessage,
   UiError,
@@ -270,6 +271,11 @@ export const appErrorMessages = {
   ILLUSTRATION_PROFILES_INVALID: 'errors.ILLUSTRATION_PROFILES_INVALID',
   RISU_NATIVE_PRESET_INVALID: 'errors.RISU_NATIVE_PRESET_INVALID',
   RISU_NATIVE_PRESET_TOGGLE_KEY: 'errors.RISU_NATIVE_PRESET_TOGGLE_KEY',
+  RISU_CONTENT_INVALID: 'errors.RISU_CONTENT_INVALID',
+  PACKAGE_START_INVALID: 'errors.PACKAGE_START_INVALID',
+  PACKAGE_START_NOT_FOUND: 'errors.PACKAGE_START_NOT_FOUND',
+  RISU_PROMPT_INVALID: 'errors.RISU_PROMPT_INVALID',
+  RISU_PROMPT_TOO_LARGE: 'errors.RISU_PROMPT_TOO_LARGE',
 } satisfies Record<AppErrorCode, MessageKey>;
 
 const themeFields: Record<string, MessageKey> = {
@@ -347,6 +353,7 @@ export function toUiMessage(
   if (cause instanceof UiError) return cause.uiMessage;
   if (cause instanceof ValidationError)
     return appErrorUiMessage(cause.code, cause.params as ReceivedErrorWire['params']);
+  if (cause instanceof RisuPromptError) return appErrorUiMessage(risuPromptAppErrorCode(cause));
   return typeof fallback === 'string' ? uiMessage(fallback) : fallback;
 }
 

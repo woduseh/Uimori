@@ -33,6 +33,7 @@ import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
 import { AppError, errorWire, storedModelRequired, validationAppError } from './app-errors.js';
 import { ValidationError } from '../core/validation-error.js';
+import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js';
 import { checkEndpointOutputs } from './endpoint.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
@@ -961,7 +962,9 @@ export async function createApp(options: AppOptions): Promise<App> {
             )
           : error instanceof ChatTranscriptError
             ? new AppError(400, transcriptErrorCode(error.message))
-            : undefined;
+            : error instanceof RisuPromptError
+              ? new AppError(400, risuPromptAppErrorCode(error))
+              : undefined;
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =

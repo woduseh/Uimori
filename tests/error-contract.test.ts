@@ -8,6 +8,11 @@ import { createApp } from '../server/app.js';
 import { UI_LOCALES } from '../core/ui-locale.js';
 import { messages } from '../web/locales/index.js';
 import { appErrorMessages } from '../web/api-errors.js';
+import { RisuPromptError } from '../core/risu-prompt.js';
+import { validateRisuContent } from '../core/risu-content.js';
+import type { RisuImportFindingCode, RisuImportFindingParams } from '../core/risu-import.js';
+import type { RisuPresetFindingCode, RisuPresetFindingParams } from '../core/risu-preset.js';
+import { IMPORT_FINDING_MESSAGES, PRESET_FINDING_MESSAGES } from '../web/risu-finding-messages.js';
 
 const { messageArguments } = await import(
   new URL('../scripts/check-i18n.mjs', import.meta.url).href
@@ -69,6 +74,16 @@ test('a core validator error thrown inside any route answers its catalogued code
         key: 'accent',
       });
     });
+    app.get('/api/test-risu-prompt-error', () => {
+      throw new RisuPromptError('PROMPT_INVALID_FIELDS');
+    });
+    app.get('/api/test-risu-content-error', () => validateRisuContent({ version: 1 }));
+    expect((await app.inject('/api/test-risu-prompt-error')).json()).toEqual({
+      code: 'RISU_PROMPT_INVALID',
+    });
+    expect((await app.inject('/api/test-risu-content-error')).json()).toEqual({
+      code: 'RISU_CONTENT_INVALID',
+    });
     const conflict = await app.inject('/api/test-validation-error');
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json()).toEqual({ code: 'LORE_PINNED_BUDGET_EXCEEDED' });
@@ -95,4 +110,38 @@ test('every catalogued code has a message in every locale whose arguments are it
       expect(messageArguments(pattern, locale), `${key}.${locale}`).toEqual(expected);
     }
   }
+});
+
+const findingParameterNames = {
+  import: {
+    'lore-decorator-placement': { decorator: true },
+    'lore-decorator-activation': { decorator: true },
+    'lore-decorator-unknown': { names: true, more: true },
+  } satisfies {
+    [C in RisuImportFindingCode as RisuImportFindingParams[C] extends undefined
+      ? never
+      : C]: Record<keyof RisuImportFindingParams[C], true>;
+  },
+  preset: {
+    RISU_PRESET_UNSUPPORTED_BLOCK: { position: true, type: true },
+    RISU_PRESET_HOST_SETTING: { setting: true },
+  } satisfies {
+    [C in RisuPresetFindingCode as RisuPresetFindingParams[C] extends undefined
+      ? never
+      : C]: Record<keyof RisuPresetFindingParams[C], true>;
+  },
+};
+
+test('every Risu import finding has a message in every locale whose arguments are its params', () => {
+  for (const [table, names] of [
+    [IMPORT_FINDING_MESSAGES, findingParameterNames.import],
+    [PRESET_FINDING_MESSAGES, findingParameterNames.preset],
+  ] as const)
+    for (const [code, key] of Object.entries(table)) {
+      const expected = Object.keys((names as Record<string, object>)[code] ?? {}).sort();
+      for (const locale of UI_LOCALES)
+        expect(messageArguments(messages[key]![locale], locale), `${key}.${locale}`).toEqual(
+          expected
+        );
+    }
 });

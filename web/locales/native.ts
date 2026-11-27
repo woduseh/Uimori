@@ -659,12 +659,6 @@ export const messages = {
     ja: 'プロンプトに誤って入力された内容を確認してください。',
     zh: '请检查提示词中输入有误的内容。',
   },
-  'native.presetProgramInvalid': {
-    ko: '프리셋을 프롬프트 구성으로 바꿀 수 없어요. 블록과 토글 정의를 확인해 주세요. ({code})',
-    en: 'The preset cannot become a prompt program. Check its blocks and toggle definitions. ({code})',
-    ja: 'プリセットをプロンプト構成に変換できません。ブロックとトグル定義を確認してください。({code})',
-    zh: '无法将预设转换为提示词结构。请检查区块和开关定义。({code})',
-  },
   'native.text_a52034ad77': {
     ko: '프리셋 편집기에서 저장해 주세요.',
     en: 'Save from the preset editor.',

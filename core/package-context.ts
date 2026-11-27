@@ -1,5 +1,5 @@
 import {
-  RisuContentError,
+  invalidRisuContent,
   type RisuContent,
   type ContentAttachment,
   type ContentTarget,
@@ -27,7 +27,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): 
       stored && projectRisuImageHandoff(stored, target !== 'image' && profile?.image === true);
     const pkg =
       authored && projectNativeRisuFields(authored, attachment, snapshot.nativeRisuExecution);
-    if (!pkg) throw new RisuContentError('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);
+    if (!pkg) throw invalidRisuContent('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);
     const chosen = selection
       ? projectLoreSelectionReceipt(selection, loreSelectionKey(attachment))
       : undefined;

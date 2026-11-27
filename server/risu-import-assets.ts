@@ -65,22 +65,14 @@ export function importRisuAssets({
     const path = uri.replace(/^(?:embeded|embedded):\/\//iu, '');
     const read = /^(?:embeded|embedded):\/\//iu.test(uri) ? members.get(path) : undefined;
     if (!read) {
-      findings.add(
-        'asset-unavailable',
-        'unsupported',
-        '파일 밖의 이미지나 찾을 수 없는 첨부 자료는 가져오지 않아요. 원본 파일에는 보존해요.'
-      );
+      findings.add('asset-unavailable');
       continue;
     }
     let image: { hash: string; mime: NativeTransferFile['images'][number]['mime']; bytes?: Buffer };
     if (preparedAssets) {
       const prepared = preparedAssets.get(uri);
       if (!prepared) {
-        findings.add(
-          'asset-invalid',
-          'unsupported',
-          '읽을 수 없거나 처리 범위를 넘는 이미지는 제외해요.'
-        );
+        findings.add('asset-invalid');
         continue;
       }
       image = prepared;
@@ -99,22 +91,14 @@ export function importRisuAssets({
                 ? 'image/gif'
                 : null;
       if (!mime) {
-        findings.add(
-          'asset-format',
-          'unsupported',
-          'PNG, JPEG, WebP, AVIF, GIF 이외의 첨부 자료는 아직 사용할 수 없어요.'
-        );
+        findings.add('asset-format');
         continue;
       }
       try {
         image = decodeImage(mime, bytes.toString('base64'));
       } catch (error) {
         if (!(error instanceof HttpError)) throw error;
-        findings.add(
-          'asset-invalid',
-          'unsupported',
-          '읽을 수 없거나 처리 범위를 넘는 이미지는 제외해요.'
-        );
+        findings.add('asset-invalid');
         continue;
       }
     }
@@ -155,11 +139,6 @@ export function importRisuAssets({
     assetUrls.set(`{{image::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
     assetUrls.set(`{{img::${name}}}`, `![${name.replace(/[\[\]]/gu, '')}](${url})`);
   }
-  if (typedAsset && !native)
-    findings.add(
-      'asset-role',
-      'info',
-      '감정이나 배경으로 표시된 첨부는 역할 없이 일반 이미지로 가져와요. 이름은 그대로 두지만 어떤 감정이나 배경인지는 자료에 남기지 않아요.'
-    );
+  if (typedAsset && !native) findings.add('asset-role');
   return { images, packageImages, assetUrls, ...(portraitImageId ? { portraitImageId } : {}) };
 }

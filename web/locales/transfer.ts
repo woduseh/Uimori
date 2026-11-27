@@ -2082,10 +2082,10 @@ export const messages = {
     zh: '无法识别的 `@@` 指令将从导入的设定正文中排除，但会保留在 Risu 源码中：{names}{more, plural, =0 {} other {，以及另外 # 项}}',
   },
   'transfer.finding.unsupportedBlock': {
-    ko: '{index, number}번 블록({type})은 저장되지만 실행되지 않아요. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요.',
-    en: 'Block {index, number} ({type}) is saved but does not run. To run it, change it to a supported prompt block type.',
-    ja: '{index, number}番のブロック（{type}）は保存されますが実行されません。実行するには対応するプロンプトブロックの種類に変更してください。',
-    zh: '第 {index, number} 个区块（{type}）会保存，但不会执行。如需执行，请改为支持的提示词区块类型。',
+    ko: '{position, number}번 블록({type})은 저장되지만 실행되지 않아요. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요.',
+    en: 'Block {position, number} ({type}) is saved but does not run. To run it, change it to a supported prompt block type.',
+    ja: '{position, number}番のブロック（{type}）は保存されますが実行されません。実行するには対応するプロンプトブロックの種類に変更してください。',
+    zh: '第 {position, number} 个区块（{type}）会保存，但不会执行。如需执行，请改为支持的提示词区块类型。',
   },
   'transfer.finding.hostSetting': {
     ko: 'Risu 내장 프롬프트 설정({setting})을 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요.',

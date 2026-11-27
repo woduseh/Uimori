@@ -1,5 +1,6 @@
 import { t, useI18n, formatNumber } from './i18n.js';
-import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { presetFindingMessage } from './risu-finding-messages.js';
 import { toUiMessage } from './api-errors.js';
 import { readImportSource as readSource } from './import-source.js';
 import { LoadingState } from './LoadingState.js';
@@ -18,31 +19,6 @@ import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
-
-function presetFindingMessage(finding: RisuPresetImportPreview['findings'][number]): string {
-  switch (finding.code) {
-    case 'RISU_PRESET_HOST_MEMORY':
-      return t('transfer.finding.RISU_PRESET_HOST_MEMORY');
-    case 'RISU_PRESET_UNSUPPORTED_BLOCK': {
-      const match =
-        /^(\d+)번 블록\((.*)\)은 저장되지만 실행되지 않아요\. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요\.$/su.exec(
-          finding.detail
-        );
-      if (match)
-        return t('transfer.finding.unsupportedBlock', { index: Number(match[1]), type: match[2] });
-      break;
-    }
-    case 'RISU_PRESET_HOST_SETTING': {
-      const match =
-        /^(utilOverride|customChainOfThought)로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요\. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요\.$/u.exec(
-          finding.detail
-        );
-      if (match) return t('transfer.finding.hostSetting', { setting: match[1] });
-      break;
-    }
-  }
-  return finding.detail;
-}
 
 export function RisuPresetImport({
   showTrigger = true,
@@ -218,7 +194,7 @@ export function RisuPresetImport({
                             : t('transfer.m035')}
                           {': '}
                         </strong>
-                        {presetFindingMessage(finding)}
+                        {formatUiMessage(presetFindingMessage(finding))}
                       </li>
                     ))}
                   </ul>
