@@ -130,6 +130,6 @@ export function scene(title: string) {
 }
 export function deletedChat() {
   const { chat, source } = scene('Stale tab chat');
-  deleteChat(store(), chat.id, {});
+  deleteChat(store(), chat.id);
   return { chatId: chat.id, sourceId: source.id };
 }

@@ -103,7 +103,6 @@ for (const width of [360]) {
         outfit: '',
         location: '',
         allowedUse: 'both',
-        mime: 'image/png',
         base64: image.toString('base64'),
       },
     });

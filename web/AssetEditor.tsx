@@ -10,7 +10,8 @@ import { ImageAddIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 import type { Asset } from '../core/product.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { DeleteButton } from './DeleteButton.js';
 
 const emptyFields = {
@@ -89,7 +90,7 @@ export function AssetEditor({
         reader.onerror = () => reject(new UiError(uiMessage('library.couldNotReadTheImageFile')));
         reader.readAsDataURL(file);
       });
-      await api(`/chats/${chatId}/assets`, { ...value, mime: file.type, base64 });
+      await callEndpoint(chatEndpoints.uploadAsset, { chatId, ...value, base64 });
       setFile(null);
       setValue({ ...emptyFields });
       if (fileInput.current) fileInput.current.value = '';
@@ -138,7 +139,8 @@ export function AssetEditor({
                 </small>
                 {!asset.packageOwner && asset.url === `/api/assets/${asset.id}` && (
                   <DeleteButton
-                    path={`/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(asset.id)}`}
+                    endpoint={chatEndpoints.deleteAsset}
+                    params={{ chatId, assetId: asset.id }}
                     title={asset.title}
                     label={uiMessage('library.deleteImage')}
                     description={uiMessage('library.removeFromTheUploadedImageListFiles')}

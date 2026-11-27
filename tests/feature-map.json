@@ -115,6 +115,7 @@
         "core/evaluation-tool*.ts",
         "server/chat-options.ts",
         "server/chat-overrides.ts",
+        "server/chat-profile-routes.ts",
         "server/chat-variable*.ts",
         "packages/contracts/src/domains/chat-settings/**",
         "server/agent-collaboration.ts",
@@ -204,6 +205,7 @@
         "core/activity-feed.ts",
         "server/activity-feed.ts",
         "server/chat-organization.ts",
+        "packages/contracts/src/domains/chat/**",
         "web/activity-navigation.css",
         "web/bot-navigation.css",
         "web/bot-tree-navigation.css",
@@ -259,6 +261,7 @@
         "packages/contracts/src/domains/library/**",
         "server/image-*.ts",
         "server/asset-metadata.ts",
+        "server/chat-asset-routes.ts",
         "web/bot-chat-import.css",
         "web/library-*.css",
         "web/new-story.css"

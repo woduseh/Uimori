@@ -238,7 +238,7 @@ test('deleting a chat removes only its selection and keeps the shared recipe', (
   const chat = createFixtureChat(store, 'Remove selection');
   const preset = save(store, 'Shared');
   choose(store, preset.id, 'chat', chat.id);
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(illustrationPresetPreferences(store).chatPresets).toEqual({});
   expect(readIllustrationPreset(store, preset.id)).toEqual(preset);
 });
@@ -252,7 +252,7 @@ test('a stale tab cannot select a recipe for a deleted bot or chat', () => {
   });
   expect(() => choose(store, preset.id, 'bot', chat.botId)).toThrow('REVISION_CONFLICT');
   expect(illustrationPresetPreferences(store).botPresets).toEqual({});
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(() => choose(store, preset.id, 'chat', chat.id)).toThrow('REVISION_CONFLICT');
   expect(() => choose(store, preset.id, 'bot', chat.botId)).toThrow('REVISION_CONFLICT');
 });

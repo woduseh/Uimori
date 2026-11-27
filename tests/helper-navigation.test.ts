@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 import { afterEach, expect, test } from 'vitest';
 import type { HelperScope, HelperTaskSnapshot } from '../core/helper.js';
 import type { Content } from '../core/product.js';
-import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
+import { deleteChat } from '../server/chat-deletion.js';
 import { markHelperConversationRead } from '../server/helper-read-state.js';
 import { helperRoutes } from '../server/helper-routes.js';
 import type { HelperRuntime } from '../server/helper-runtime.js';
@@ -265,7 +265,7 @@ test('read state only moves forward, survives reopening and is removed with its 
     });
     const chatKey = `helper-read:v1:${chatConversation.id}`;
     expect(reopened.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(chatKey)).toBeTruthy();
-    deleteChat(reopened, chat.id, chatDeletionImpact(reopened, chat.id).request);
+    deleteChat(reopened, chat.id);
     expect(
       reopened.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(chatKey)
     ).toBeUndefined();

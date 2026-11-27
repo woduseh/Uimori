@@ -1,11 +1,10 @@
-import { updateAssetMetadata } from './asset-metadata.js';
 import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
-import { processImageUpload } from './image-processing.js';
 import { nativeRisuDraftPreview, nativeRisuPreview } from './risu-native-preview.js';
 import { nativeRisuCbsFunctionCatalog } from './risu-native-cbs.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
-import { assetDeletionRoutes } from './asset-deletion.js';
+import { chatAssetRoutes } from './chat-asset-routes.js';
+import { chatProfileRoutes } from './chat-profile-routes.js';
 import {
   catalogEntryMetadata,
   googleGeminiModelEntry,
@@ -18,7 +17,7 @@ import { registerEndpoint } from './endpoint.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
-import { forkChat } from './chat-fork.js';
+import { chatForkRoutes } from './chat-fork.js';
 import { transferRoutes } from './transfer-routes.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
@@ -49,15 +48,12 @@ export function productRoutes(
   libraryDeletionRoutes(app, store);
   promptRoutes(app, store);
   chatDeletionRoutes(app, store, options.onChatDeleted);
-  assetDeletionRoutes(app, store, options.publish);
+  chatAssetRoutes(app, store, options.publish);
+  chatProfileRoutes(app, store, options.publish);
+  chatForkRoutes(app, store, options.publish);
   chatOrganizationRoutes(app, store, options.publish);
   libraryOrganizationRoutes(app, store);
   packagePresentationRoutes(app, store);
-  app.post<{ Params: { id: string } }>('/api/chats/:id/fork', async (request) => {
-    const chat = forkChat(store, request.params.id, request.body);
-    options.publish(chat.id);
-    return chat;
-  });
   transferRoutes(app, store, options.publish);
   const sessions = new AccessSessions(store.db, options);
   const authenticated = (cookie?: string) => sessions.authenticated(cookie);
@@ -373,48 +369,6 @@ export function productRoutes(
       previous.id,
       previous.revision
     );
-  });
-  app.get<{ Params: { id: string } }>('/api/chats/:id/profile', async (request) =>
-    product.profile(request.params.id)
-  );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/profile', async (request) => {
-    const p = product.updateProfile(request.params.id, request.body);
-    options.publish(p.chatId);
-    return p;
-  });
-
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/assets',
-    { bodyLimit: 90 * 1024 * 1024 },
-    async (request) => {
-      const body = record(request.body);
-      const image = await processImageUpload({ base64: body.base64 });
-      const asset = product.createAsset(request.params.id, { ...body, ...image });
-      store.event(asset.chatId, 'asset.created', asset.id);
-      options.publish(asset.chatId);
-      return asset;
-    }
-  );
-  app.patch<{ Params: { id: string; assetId: string } }>(
-    '/api/chats/:id/assets/:assetId',
-    (request) => {
-      const asset = updateAssetMetadata(
-        store,
-        request.params.id,
-        request.params.assetId,
-        request.body
-      );
-      options.publish?.(request.params.id);
-      return asset;
-    }
-  );
-  app.get<{ Params: { id: string } }>('/api/assets/:id', async (request, reply) => {
-    const a = product.asset(request.params.id);
-    return reply
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=86400')
-      .type(a.asset.mime)
-      .send(a.bytes);
   });
   return { authenticated, sessionHash: (cookie?: string) => sessions.sessionHash(cookie) };
 }

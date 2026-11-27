@@ -31,7 +31,7 @@ function goneJob() {
       VALUES(?,?,?,?,'translation','completed',?,?,?)`
     )
     .run(id, chat.id, source.id, source.hash, '{}', now, now);
-  deleteChat(store(), chat.id, {});
+  deleteChat(store(), chat.id);
   return id;
 }
 
@@ -45,7 +45,7 @@ function goneStream() {
       VALUES('translation',?,?,'stale-tab','running',?,?)`
     )
     .run(id, chat.id, now, now);
-  deleteChat(store(), chat.id, {});
+  deleteChat(store(), chat.id);
   return id;
 }
 

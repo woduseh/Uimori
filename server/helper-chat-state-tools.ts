@@ -26,6 +26,7 @@ import {
 } from '../core/reading-state.js';
 import { addBookmark, deleteBookmark, listBookmarks, updateBookmark } from './reading-state.js';
 import {
+  chatOperations,
   personalWorkspaceOperations,
   updateStoryGuideToolInput,
   updateVariablesToolInput,
@@ -822,7 +823,14 @@ function attachable(
   held: readonly ContentAttachment[]
 ): ContentAttachment {
   const id = text(value, `${role} ID`, 100);
-  const content = attachableContent(store.product, { id, role }, held);
+  let content: Content;
+  try {
+    content = attachableContent(store.product, { id, role }, held);
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'LIBRARY_ITEM_DELETED')
+      throw new HelperToolError(404, 'LIBRARY_ITEM_DELETED', `${role} ${id} no longer exists.`);
+    throw error;
+  }
   if (content.kind !== role)
     throw new HttpError(400, `NOT_A_${role.toUpperCase()}: ${id} is a ${content.kind}.`);
   return { id: content.id, revision: content.revision, role };
@@ -878,13 +886,15 @@ function updateChatProfile(
     });
     return { changed: false, ...readChatProfile(store, chatId) };
   }
-  const saved = store.product.updateProfile(chatId, {
+  const { chatId: _chatId, ...change } = parseInput(chatOperations.updateProfile.input, {
+    chatId,
     expectedRevision,
     image: prior.image,
     ...(packageAttachments ? { packageAttachments } : {}),
     ...(args.loreContext !== undefined ? { loreContext: args.loreContext } : {}),
     ...(args.authorNote !== undefined ? { authorNote: args.authorNote } : {}),
   });
+  const saved = store.product.updateProfile(chatId, change);
   const chat = store.chat(chatId);
   const attachmentsChanged = !isDeepStrictEqual(
     keys(prior.packageAttachments),

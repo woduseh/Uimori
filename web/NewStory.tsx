@@ -6,7 +6,8 @@ import { RisuStartPreview } from './RisuStartPreview.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
 import { defaultProfile, type Content, type Library } from '../core/product.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { toUiMessage } from './api-errors.js';
 import { refValue } from './content-ref.js';
 import {
@@ -24,7 +25,7 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import type { ContentRole } from '../core/risu-content.js';
 import { CloseIcon } from './ui-icons.js';
-import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
+import { newChatPersona } from '../core/bot-defaults.js';
 import './new-story.css';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
@@ -140,7 +141,7 @@ export function NewStory({
     let alive = true;
     setDefaultsBotId('');
     setDefaultsError(null);
-    void api<BotDefaults>(`/bots/${encodeURIComponent(botId)}/defaults`)
+    void callEndpoint(chatEndpoints.readBotDefaults, { botId })
       .then((defaults) => {
         if (!alive || submitted.current) return;
         const selected = newChatPersona(defaults.persona, initialFolder?.defaultPersona);

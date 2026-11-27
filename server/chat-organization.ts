@@ -1,11 +1,23 @@
-import { HttpError, boolean, fields, number, record, text } from './request-validation.js';
+import { HttpError, text } from './request-validation.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import {
+  chatEndpoints,
+  type CreateChatFolder,
+  type DeleteChatFolder,
+  type MoveChat,
+  type PersonaChoice,
+  type PinChat,
+  type UpdateBotDefaults,
+  type UpdateChatFolder,
+} from '#contracts';
+import { chatOperations } from '#contracts/operations';
 import { defaultProfile, type Content, type ContentRef, type ChatFolder } from '../core/product.js';
 import type { Store } from './store.js';
 import { loreContextDefaults } from './lore-context-defaults.js';
 import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
 import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 
 export type { ChatFolder } from '../core/product.js';
 export type ChatOrganization = {
@@ -28,36 +40,33 @@ export class ChatOrganizationStore {
       CREATE INDEX IF NOT EXISTS chat_folders_bot ON chat_folders(bot_id);
       CREATE INDEX IF NOT EXISTS chat_organization_folder ON chat_organization(folder_id);`);
   }
-  bot(botId: string) {
+  bot(botId: string, access: 'read' | 'write' = 'read') {
+    if (!this.store.db.prepare("SELECT 1 FROM versions WHERE kind='content' AND id=?").get(botId))
+      throw access === 'write'
+        ? new AppError(409, 'REVISION_CONFLICT')
+        : new AppError(404, 'LIBRARY_ITEM_DELETED');
     const bot = this.store.product.stored<Content>('content', botId);
     if (bot.kind !== 'bot' && !bot.package)
       throw new HttpError(400, 'Organization owner must be a bot or package');
     return bot;
   }
-  defaults(botId: string): BotDefaults {
-    this.bot(botId);
+  defaults(botId: string, access: 'read' | 'write' = 'read'): BotDefaults {
+    this.bot(botId, access);
     const row = this.store.db
       .prepare('SELECT value FROM app_metadata WHERE key=?')
       .get(`bot-defaults:${botId}`);
     return row ? JSON.parse(String(row.value)) : { revision: 1, persona: { mode: 'inherit' } };
   }
-  updateDefaults(botId: string, value: unknown): BotDefaults {
-    const b = record(value);
-    fields(b, ['expectedRevision', 'persona']);
-    const expected = number(b.expectedRevision, 'bot defaults revision');
-    const selection = record(b.persona);
-    fields(selection, selection.mode === 'persona' ? ['mode', 'persona'] : ['mode']);
+  updateDefaults({ botId, expectedRevision, persona: selection }: UpdateBotDefaults): BotDefaults {
     return this.store.transaction(() => {
-      const prior = this.defaults(botId);
-      if (prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
-      const persona = selection.mode === 'persona' ? this.persona(selection.persona) : null;
-      if (selection.mode === 'persona' && !persona)
-        throw new AppError(400, 'BOT_DEFAULT_PERSONA_REQUIRED');
+      const prior = this.defaults(botId, 'write');
+      if (prior.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       const next: BotDefaults = {
         revision: prior.revision + 1,
-        persona: persona
-          ? { mode: 'persona', persona }
-          : { mode: selection.mode as 'inherit' | 'none' },
+        persona:
+          selection.mode === 'persona'
+            ? { mode: 'persona', persona: this.persona(selection.persona) }
+            : selection,
       };
       this.store.db
         .prepare(
@@ -118,7 +127,7 @@ export class ChatOrganizationStore {
     const row = this.store.db
       .prepare('SELECT * FROM chat_folders WHERE id=? AND bot_id=?')
       .get(id, botId) as Row | undefined;
-    if (!row) throw new HttpError(404, 'Folder not found for bot');
+    if (!row) throw new AppError(409, 'REVISION_CONFLICT');
     return this.mapFolder(row);
   }
   folders(botId: string): ChatFolder[] {
@@ -129,65 +138,57 @@ export class ChatOrganizationStore {
         .all(botId) as Row[]
     ).map((row) => this.mapFolder(row));
   }
-  private persona(value: unknown): ContentRef | null {
-    if (value === null) return null;
-    const b = record(value);
-    fields(b, ['id', 'revision']);
-    const ref = {
-      id: text(b.id, 'persona ID', 100),
-      revision: number(b.revision, 'persona revision'),
-    };
-    const content = this.store.product.available<Content>('content', ref.id);
+  private persona({ id }: PersonaChoice): ContentRef {
+    const content = this.store.product.available<Content>('content', id);
     if (content.kind !== 'persona' && !content.package)
       throw new HttpError(400, 'Folder default must be a persona or package');
-    return ref;
+    return { id, revision: content.revision };
   }
-  createFolder(botId: string, value: unknown): ChatFolder {
-    this.bot(botId);
-    const b = record(value);
-    fields(b, ['title', 'defaultPersona']);
-    const title = text(b.title, 'folder title', 200);
-    const persona = b.defaultPersona === undefined ? null : this.persona(b.defaultPersona);
+  private optionalPersona(ref: PersonaChoice | null): ContentRef | null {
+    return ref === null ? null : this.persona(ref);
+  }
+  createFolder({ botId, title, defaultPersona = null }: CreateChatFolder): ChatFolder {
+    this.bot(botId, 'write');
+    const persona = this.optionalPersona(defaultPersona);
     const id = randomUUID();
     this.store.db
       .prepare('INSERT INTO chat_folders VALUES(?,?,?,?,1)')
       .run(id, botId, title, persona === null ? null : JSON.stringify(persona));
     return this.folder(botId, id);
   }
-  updateFolder(botId: string, id: string, value: unknown): ChatFolder {
-    const b = record(value);
-    fields(b, ['expectedRevision', 'title', 'defaultPersona']);
-    const expected = number(b.expectedRevision, 'folder revision');
+  updateFolder({
+    botId,
+    folderId,
+    expectedRevision,
+    title,
+    defaultPersona,
+  }: UpdateChatFolder): ChatFolder {
     return this.store.transaction(() => {
-      const prior = this.folder(botId, id);
-      if (prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
-      const title = b.title === undefined ? prior.title : text(b.title, 'folder title', 200);
+      const prior = this.folder(botId, folderId);
+      if (prior.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       const persona =
-        b.defaultPersona === undefined ? prior.defaultPersona : this.persona(b.defaultPersona);
+        defaultPersona === undefined ? prior.defaultPersona : this.optionalPersona(defaultPersona);
       this.store.db
         .prepare('UPDATE chat_folders SET title=?,default_persona=?,revision=revision+1 WHERE id=?')
-        .run(title, persona === null ? null : JSON.stringify(persona), id);
-      return this.folder(botId, id);
+        .run(title ?? prior.title, persona === null ? null : JSON.stringify(persona), folderId);
+      return this.folder(botId, folderId);
     });
   }
-  deleteFolder(botId: string, id: string, value: unknown) {
-    const b = record(value);
-    fields(b, ['expectedRevision']);
-    const expected = number(b.expectedRevision, 'folder revision');
+  deleteFolder({ botId, folderId, expectedRevision }: DeleteChatFolder) {
     return this.store.transaction(() => {
-      const folder = this.folder(botId, id);
-      if (folder.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
-      const moved = this.orderedIds(botId, id);
+      const folder = this.folder(botId, folderId);
+      if (folder.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+      const moved = this.orderedIds(botId, folderId);
       const unfiled = this.orderedIds(botId, null);
       this.store.db
         .prepare(
           'UPDATE chat_organization SET folder_id=NULL,revision=revision+1 WHERE folder_id=?'
         )
-        .run(id);
+        .run(folderId);
       this.setPositions([...unfiled, ...moved]);
-      this.store.db.prepare('DELETE FROM chat_folders WHERE id=?').run(id);
+      this.store.db.prepare('DELETE FROM chat_folders WHERE id=?').run(folderId);
       for (const chatId of moved) this.store.event(chatId, 'organization.updated', chatId);
-      return { deleted: true, movedChatIds: moved };
+      return { deleted: true as const, movedChatIds: moved };
     });
   }
   create(
@@ -207,7 +208,7 @@ export class ChatOrganizationStore {
     const personaRef = newChatPersona(
       this.defaults(botId).persona,
       folder?.defaultPersona,
-      selection.persona === undefined ? undefined : this.persona(selection.persona)
+      selection.persona === undefined ? undefined : this.optionalPersona(selection.persona)
     );
     if (personaRef && this.store.product.isHidden('content', personaRef.id))
       throw new AppError(409, 'CHAT_DEFAULT_PERSONA_DELETED');
@@ -242,23 +243,16 @@ export class ChatOrganizationStore {
         this.firstPosition(original.botId, original.folderId)
       );
   }
-  move(chatId: string, value: unknown) {
-    const b = record(value);
-    fields(b, ['expectedRevision', 'folderId', 'beforeChatId']);
-    const expected = number(b.expectedRevision, 'organization revision');
-    const folderId = b.folderId === null ? null : text(b.folderId, 'folder ID', 100);
-    const beforeChatId =
-      b.beforeChatId == null ? null : text(b.beforeChatId, 'before chat ID', 100);
+  move({ chatId, expectedRevision, folderId, beforeChatId = null }: MoveChat) {
     return this.store.transaction(() => {
-      this.store.chat(chatId);
+      this.store.writableChat(chatId);
       const prior = this.metadata(chatId);
-      if (!prior || prior.organizationRevision !== expected)
+      if (!prior || prior.organizationRevision !== expectedRevision)
         throw new AppError(409, 'REVISION_CONFLICT');
       if (folderId !== null) this.folder(prior.botId, folderId);
       const siblings = this.orderedIds(prior.botId, folderId).filter((id) => id !== chatId);
       const index = beforeChatId === null ? siblings.length : siblings.indexOf(beforeChatId);
-      if (index < 0)
-        throw new HttpError(409, 'Order anchor is not another chat in the destination folder');
+      if (index < 0) throw new AppError(409, 'REVISION_CONFLICT');
       siblings.splice(index, 0, chatId);
       this.store.db
         .prepare('UPDATE chat_organization SET folder_id=?,revision=revision+1 WHERE chat_id=?')
@@ -268,12 +262,9 @@ export class ChatOrganizationStore {
       return this.store.chat(chatId);
     });
   }
-  pin(chatId: string, value: unknown) {
-    const b = record(value);
-    fields(b, ['pinned']);
-    const pinned = boolean(b.pinned);
+  pin({ chatId, pinned }: PinChat) {
     return this.store.transaction(() => {
-      const prior = this.store.chat(chatId);
+      const prior = this.store.writableChat(chatId);
       if (!!prior.pinnedAt === pinned) return prior;
       if (pinned)
         this.store.db
@@ -305,37 +296,35 @@ export function chatOrganizationRoutes(
   publish: (chatId: string) => void
 ) {
   const org = store.organization;
-  app.get<{ Params: { botId: string } }>('/api/bots/:botId/defaults', async (request) =>
-    org.defaults(request.params.botId)
+  const endpoints = chatEndpoints,
+    operations = chatOperations;
+  registerEndpoint(app, endpoints.readBotDefaults, operations.readBotDefaults, ({ botId }) =>
+    org.defaults(botId)
   );
-  app.patch<{ Params: { botId: string } }>('/api/bots/:botId/defaults', async (request) =>
-    org.updateDefaults(request.params.botId, request.body)
+  registerEndpoint(app, endpoints.updateBotDefaults, operations.updateBotDefaults, (input) =>
+    org.updateDefaults(input)
   );
-  app.get<{ Params: { botId: string } }>('/api/bots/:botId/folders', async (request) =>
-    org.folders(request.params.botId)
+  registerEndpoint(app, endpoints.listFolders, operations.listFolders, ({ botId }) =>
+    org.folders(botId)
   );
-  app.post<{ Params: { botId: string } }>('/api/bots/:botId/folders', async (request) =>
-    org.createFolder(request.params.botId, request.body)
+  registerEndpoint(app, endpoints.createFolder, operations.createFolder, (input) =>
+    org.createFolder(input)
   );
-  app.patch<{ Params: { botId: string; folderId: string } }>(
-    '/api/bots/:botId/folders/:folderId',
-    async (request) => org.updateFolder(request.params.botId, request.params.folderId, request.body)
+  registerEndpoint(app, endpoints.updateFolder, operations.updateFolder, (input) =>
+    org.updateFolder(input)
   );
-  app.delete<{ Params: { botId: string; folderId: string } }>(
-    '/api/bots/:botId/folders/:folderId',
-    async (request) => {
-      const result = org.deleteFolder(request.params.botId, request.params.folderId, request.body);
-      result.movedChatIds.forEach(publish);
-      return result;
-    }
-  );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/pin', async (request) => {
-    const chat = org.pin(request.params.id, request.body);
+  registerEndpoint(app, endpoints.deleteFolder, operations.deleteFolder, (input) => {
+    const result = org.deleteFolder(input);
+    result.movedChatIds.forEach(publish);
+    return result;
+  });
+  registerEndpoint(app, endpoints.pinChat, operations.pinChat, (input) => {
+    const chat = org.pin(input);
     publish(chat.id);
     return chat;
   });
-  app.patch<{ Params: { id: string } }>('/api/chats/:id/organization', async (request) => {
-    const chat = org.move(request.params.id, request.body);
+  registerEndpoint(app, endpoints.moveChat, operations.moveChat, (input) => {
+    const chat = org.move(input);
     publish(chat.id);
     return chat;
   });

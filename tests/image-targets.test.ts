@@ -71,10 +71,13 @@ function fixture(
       expectedRevision: revision,
       packageAttachments: [{ id: content.id, revision: content.revision, role: 'bot' }],
       ...(options.image !== undefined ? { image: options.image } : {}),
-      ...(options.imageTranslation !== undefined
-        ? { imageTranslation: options.imageTranslation }
-        : {}),
     });
+    if (options.imageTranslation !== undefined)
+      store.db
+        .prepare(
+          "UPDATE profiles SET body=json_set(body,'$.imageTranslation',json(?)) WHERE chat_id=?"
+        )
+        .run(JSON.stringify(options.imageTranslation), chat.id);
   }
   const profile = store.product.snapshot(chat.id)!;
   const run = store.createRun(

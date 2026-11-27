@@ -169,7 +169,7 @@ test('deleting a conversation keeps numerical usage but removes all payloads and
   );
   const before = usageReport(store, query);
   expect(before.kinds.map((item) => item.kind).sort()).toEqual(['advisor', 'judgment']);
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(usageReport(store, query)).toEqual(before);
   const rows = store.db.prepare('SELECT * FROM attempts').all();
   expect(rows).toHaveLength(2);

@@ -11,8 +11,8 @@ import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import type { ExternalJudgmentProvider } from '../core/judgment-settings.js';
-import { promptEndpoints } from '#contracts';
-import { api, callEndpoint } from './api.js';
+import { chatEndpoints, promptEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
@@ -133,9 +133,7 @@ export function ProfileEditor({
     if (saving || attachmentPending || lorePending) return false;
     if (!dirty) return true;
     if (!form.current?.reportValidity()) return false;
-    return save(() =>
-      api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody(value), 'PUT')
-    );
+    return save(() => saveProfile(value));
   });
   useSettingsSaveHandler(onDiscardHandlerChange, async () => {
     if (saving) return false;
@@ -182,6 +180,11 @@ export function ProfileEditor({
       setSaving(false);
     }
   }
+  const saveProfile = async (next: ChatProfile) =>
+    (await callEndpoint(chatEndpoints.updateProfile, {
+      chatId: profile.chatId,
+      ...profileBody(next),
+    })) as ChatProfile;
   const profileBody = (next: ChatProfile) => ({
     expectedRevision: next.revision,
     pinned: next.pinned ?? {},
@@ -254,9 +257,7 @@ export function ProfileEditor({
         onSubmit={(event) => {
           event.preventDefault();
           if (onSaveRequest) return onSaveRequest();
-          void save(() =>
-            api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody(value), 'PUT')
-          );
+          void save(() => saveProfile(value));
         }}
       >
         <div

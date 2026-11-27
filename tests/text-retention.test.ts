@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
-import { deleteChat, chatDeletionImpact } from '../server/chat-deletion.js';
+import { deleteChat } from '../server/chat-deletion.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { processImage } from '../server/image-processing.js';
 import { putValidatedImageBlob } from '../server/package-images.js';
@@ -232,9 +232,8 @@ describe('Image references across copies and editing', () => {
     });
     deleteLibraryItem(store, 'content', bot.id, { expectedRevision: bot.revision });
     expect(store.product.stored('content', bot.id)).toBeTruthy();
-    const confirmation = chatDeletionImpact(store, chat.id);
     store.event(chat.id, 'run.usage', 'diagnostic-only');
-    deleteChat(store, chat.id, confirmation.request);
+    deleteChat(store, chat.id);
     expect(store.db.prepare('SELECT * FROM assets').all()).toEqual([]);
     expect(store.db.prepare('SELECT hash FROM image_blobs').all()).toEqual([{ hash: staged.hash }]);
     expect(store.db.prepare('SELECT id FROM versions WHERE id=?').all(bot.id)).toEqual([]);
@@ -269,7 +268,7 @@ describe('Image references across copies and editing', () => {
     );
     pruneUnusedData(store.db, [hash]);
     expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
-    deleteChat(store, chat.id, {});
+    deleteChat(store, chat.id);
     expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
   });
 
@@ -338,12 +337,12 @@ describe('Image references across copies and editing', () => {
       idempotencyKey: randomUUID(),
     });
     saveResource(store, { kind: 'content', id: bot.id, expectedRevision: 2, model: withoutImage });
-    deleteChat(store, chat.id, {});
+    deleteChat(store, chat.id);
     expect(
       store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)
     ).toBeTruthy();
     expect(store.source(copy.headRevision!).text).toContain(image.hash);
-    deleteChat(store, copy.id, {});
+    deleteChat(store, copy.id);
     expect(
       store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)
     ).toBeUndefined();

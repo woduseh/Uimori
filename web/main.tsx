@@ -57,6 +57,7 @@ import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import type { HelperHandoff } from './HelperPanel.js';
+import { chatEndpoints } from '#contracts';
 import { api } from './api.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
@@ -1982,8 +1983,8 @@ function App() {
                     >
                       {s.detail && (
                         <DeleteButton
-                          path={`/chats/${encodeURIComponent(s.selected)}`}
-                          preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
+                          endpoint={chatEndpoints.deleteChat}
+                          params={{ chatId: s.detail.chat.id }}
                           title={s.detail.chat.title}
                           label={uiMessage('main.m072')}
                           confirmLabel={uiMessage('shared.deletePermanently')}

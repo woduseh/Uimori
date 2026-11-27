@@ -208,7 +208,7 @@ test('portable backup round-trip keeps bookmarks, rejects malformed locations at
   delete legacy.chats[0].state.bookmarks;
   const old = await importChatBackup(destination, { backup: legacy, idempotencyKey: 'legacy' });
   expect(listBookmarks(destination, old.chat.id)).toEqual([]);
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(store.db.prepare('SELECT count(*) AS n FROM reading_positions').get()!.n).toBe(0);
   expect(store.db.prepare('SELECT count(*) AS n FROM bookmarks').get()!.n).toBe(0);
   expect(listBookmarks(destination, restored.chat.id)).toHaveLength(1);

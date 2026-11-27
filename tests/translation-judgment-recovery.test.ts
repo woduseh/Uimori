@@ -127,7 +127,6 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
       expectedRevision: profile.revision,
       routes: { ...profile.routes, translation: { id: model.id } },
       image: false,
-      imageTranslation: false,
     });
     const run = app.store.createRun(
       chat.id,

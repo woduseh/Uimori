@@ -1,0 +1,3 @@
+export const CHAT_AUTHOR_NOTE_MAX_CHARS = 32_000;
+export const MAX_MAIN_MODEL_CALLS = 128;
+export const MAX_AUTO_REFUSAL_RETRIES = 5;

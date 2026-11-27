@@ -100,7 +100,7 @@ test('a v0.18.0 automatic backup, made in a worktree of tag v0.18.0, opens with 
     'Summarize the lantern lore',
   ]);
 
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(0);
   store.db.exec("INSERT INTO search_trigrams(search_trigrams) VALUES('integrity-check')");
   expect(store.db.prepare('PRAGMA integrity_check').get()!.integrity_check).toBe('ok');

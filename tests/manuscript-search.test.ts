@@ -96,7 +96,7 @@ test('a dirty source overlays the index immediately, including current translati
   expect((await search.search(query('silver'))).items).toHaveLength(1);
   expect((await search.search(query('별빛'))).items).toEqual([]);
   await index(search, store);
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect((await search.search(query('lantern'))).items).toEqual([]);
   expect(store.db.prepare('SELECT count(*) AS n FROM search_documents').get()!.n).toBe(0);
   expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);

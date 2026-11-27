@@ -38,8 +38,8 @@ import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Store } from './store.js';
+import type { ChatAssetDetails, UpdateChatProfile } from '#contracts';
 import {
-  CHAT_AUTHOR_NOTE_MAX_CHARS,
   defaultProfile,
   workspaceModelRef,
   VERTEX_GEMINI_DEFAULT_TIMEOUT_MS,
@@ -80,7 +80,6 @@ import { projectChatPackageCompilation } from '../core/chat-overrides.js';
 import {
   assertRisuContent,
   validateRisuContent,
-  validateContentAttachment,
   type ContentAttachment,
 } from '../core/risu-content.js';
 import { compileContentAttachment } from '../core/package-runtime.js';
@@ -102,17 +101,7 @@ export const modelRef = (v: unknown): ModelRef => {
   return { id: text(b.id, 'model', 100) };
 };
 export type ReferenceSource = 'library' | 'preserve';
-
-function validatePinnedProfile(value: unknown): NonNullable<ChatProfile['pinned']> {
-  const pinned = record(value);
-  fields(pinned, ['mainPromptPresetId', 'mainModel']);
-  return {
-    ...(pinned.mainPromptPresetId !== undefined
-      ? { mainPromptPresetId: text(pinned.mainPromptPresetId, 'pinned main prompt', 100) }
-      : {}),
-    ...(pinned.mainModel !== undefined ? { mainModel: modelRef(pinned.mainModel) } : {}),
-  };
-}
+export type ProfileChange = Omit<UpdateChatProfile, 'chatId'>;
 
 export class ProductStore {
   readonly store: Store;
@@ -634,37 +623,25 @@ export class ProductStore {
   }
   updateProfile(
     chatId: string,
-    value: unknown,
+    change: ProfileChange,
     held?: Pick<ChatProfile, 'pinned' | 'packageAttachments'>
   ): ChatProfile {
-    const b = record(value);
-    fields(b, [
-      'expectedRevision',
-      'image',
-      'imageTranslation',
-      'packageAttachments',
-      'loreContext',
-      'pinned',
-      'authorNote',
-    ]);
-    const image = boolean(b.image);
-    let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
-    try {
-      requestedLore =
-        b.loreContext === undefined ? undefined : validateLoreContextPolicy(b.loreContext);
-    } catch {
-      throw new HttpError(400, 'Invalid lore context policy');
-    }
-    if (b.imageTranslation !== undefined) boolean(b.imageTranslation);
     return this.store.transaction(() => {
+      this.store.writableChat(chatId);
       const prior = this.profile(chatId);
-      if (prior.revision !== number(b.expectedRevision, 'profile revision'))
-        throw new AppError(409, 'REVISION_CONFLICT');
-      const pinned = b.pinned === undefined ? prior.pinned : validatePinnedProfile(b.pinned);
-      const authorNote =
-        b.authorNote === undefined
-          ? (prior.authorNote ?? '')
-          : text(b.authorNote, 'author note', CHAT_AUTHOR_NOTE_MAX_CHARS, true);
+      if (prior.revision !== change.expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+      let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
+      try {
+        requestedLore =
+          change.loreContext === undefined
+            ? undefined
+            : validateLoreContextPolicy(change.loreContext);
+      } catch {
+        throw new HttpError(400, 'Invalid lore context policy');
+      }
+      const pinned = change.pinned ?? prior.pinned;
+      const authorNote = change.authorNote ?? prior.authorNote ?? '';
+      const image = change.image;
       const baseline = held ?? prior;
       const prompt = pinned?.mainPromptPresetId;
       if (prompt && prompt !== prior.pinned?.mainPromptPresetId) {
@@ -677,13 +654,14 @@ export class ProductStore {
       }
       if (pinned?.mainModel?.id !== baseline.pinned?.mainModel?.id)
         assertModelSelection(this, pinned?.mainModel ?? null);
+      const kept = baseline.packageAttachments ?? [];
       const packageAttachments =
-        b.packageAttachments === undefined
+        change.packageAttachments === undefined
           ? prior.packageAttachments
-          : packageRefs(this, b.packageAttachments, baseline.packageAttachments ?? []).map((r) => ({
-              ...r,
-              ...currentRef(this, 'content', r),
-            }));
+          : change.packageAttachments.map((r) => {
+              attachableContent(this, r, kept);
+              return { ...r, ...currentRef(this, 'content', r) };
+            });
       resolvePackageModules(this, packageAttachments ?? [], {
         latest: true,
       });
@@ -1126,24 +1104,24 @@ export class ProductStore {
         'SELECT a.body,i.bytes FROM assets a JOIN image_blobs i ON i.hash=a.hash WHERE a.id=?'
       )
       .get(id) as Row | undefined;
-    if (!r) throw new HttpError(404, 'Asset not found');
+    if (!r) throw new AppError(404, 'IMAGE_NOT_FOUND');
     return { asset: parse(r.body) as Asset, bytes: Buffer.from(r.bytes) };
   }
-  createAsset(chatId: string, value: unknown) {
-    this.store.chat(chatId);
-    const b = record(value);
-    fields(b, [
-      'title',
-      'mime',
-      'base64',
-      'description',
-      'actor',
-      'outfit',
-      'location',
-      'allowedUse',
-    ]);
-    const image = decodeImage(b.mime, b.base64);
-    return this.insertAsset(chatId, image.mime, image.hash, b, image);
+  createAsset(
+    chatId: string,
+    { mime, base64, ...details }: ChatAssetDetails & { mime: string; base64: string }
+  ) {
+    this.store.writableChat(chatId);
+    const image = decodeImage(mime, base64);
+    return this.insertAsset(chatId, image.mime, image.hash, details, image);
+  }
+  writableAsset(chatId: string, assetId: string): Asset {
+    this.store.writableChat(chatId);
+    const row = this.db
+      .prepare('SELECT body FROM assets WHERE id=? AND chat_id=?')
+      .get(assetId, chatId) as Row | undefined;
+    if (!row || this.isHidden('asset', assetId)) throw new AppError(409, 'REVISION_CONFLICT');
+    return parse(row.body) as Asset;
   }
 
   reuseIllustrationAsset(chatId: string, image: { hash: string; mime: string; caption: string }) {
@@ -1170,7 +1148,7 @@ export class ProductStore {
     chatId: string,
     mime: string,
     hash: string,
-    b: Record<string, unknown>,
+    details: ChatAssetDetails,
     upload?: StoredImage
   ) {
     const id = randomUUID();
@@ -1178,14 +1156,9 @@ export class ProductStore {
       id,
       chatId,
       revision: 1,
-      title: text(b.title, 'title', 200),
+      ...details,
       mime,
       hash,
-      description: text(b.description, 'description', 2000, true),
-      actor: text(b.actor, 'actor', 200, true),
-      outfit: text(b.outfit, 'outfit', 200, true),
-      location: text(b.location, 'location', 200, true),
-      allowedUse: choice(b.allowedUse, ['profile', 'inline', 'both'], 'asset use'),
       url: `/api/assets/${id}`,
     };
     if (upload) storeImage(this.db, upload);
@@ -1267,23 +1240,6 @@ function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile 
       ...currentRef(product, 'content', r),
     }));
   return result;
-}
-function packageRefs(
-  product: ProductStore,
-  value: unknown,
-  held: readonly ContentAttachment[]
-): ContentAttachment[] {
-  if (!Array.isArray(value) || value.length > 100)
-    throw new HttpError(400, 'Invalid package attachments');
-  const refs = value.map(validateContentAttachment);
-  if (
-    new Set(refs.map((r) => `${r.id}:${r.role}`)).size !== refs.length ||
-    refs.filter((r) => r.role === 'bot').length > 1 ||
-    refs.filter((r) => r.role === 'persona').length > 1
-  )
-    throw new HttpError(400, 'Duplicate package or primary role');
-  for (const r of refs) attachableContent(product, r, held);
-  return refs;
 }
 export function attachableContent(
   product: ProductStore,

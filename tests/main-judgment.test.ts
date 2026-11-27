@@ -365,7 +365,6 @@ ${
     {
       expectedRevision: profile.revision,
       image: false,
-      imageTranslation: false,
     },
     'PUT'
   );

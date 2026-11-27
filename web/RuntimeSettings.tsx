@@ -18,7 +18,7 @@ import {
   MAX_MAIN_MODEL_CALLS,
   type ChatGenerationDefaults,
 } from '../core/chat-settings.js';
-import { translationEndpoints } from '#contracts';
+import { chatEndpoints, translationEndpoints } from '#contracts';
 import { api, callEndpoint } from './api.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
 export function SettingsEditor({
@@ -62,7 +62,7 @@ export function SettingsEditor({
         if (active) setGlobalAutoTranslate(value.autoTranslate);
       })
       .catch(() => {});
-    void api<ChatGenerationDefaults>('/chat-generation-defaults')
+    void callEndpoint(chatEndpoints.readGenerationDefaults)
       .then((value) => {
         if (active) setGenerationDefaults(value);
       })

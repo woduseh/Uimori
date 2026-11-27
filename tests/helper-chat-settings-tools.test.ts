@@ -813,7 +813,7 @@ test('chat.organize checks the folder and defaults revisions before the persona 
   const { store, chat } = fixture();
   const persona = libraryContent(store, 'persona', 'Reader');
   const botId = store.organization.metadata(chat.id)!.botId;
-  const folder = store.organization.createFolder(botId, { title: 'Harbor arc' });
+  const folder = store.organization.createFolder({ botId: botId, title: 'Harbor arc' });
   const defaults = store.organization.defaults(botId);
   softDeleteLibraryItem(store, 'content', persona);
   const run = await runScriptedChatHelper(store, chat.id, [

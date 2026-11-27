@@ -507,7 +507,7 @@ test('deleting a bot or chat drops only its appearance choices; a stale tab cann
   expect(p.chatThemes).toEqual({ [chat.id]: theme.id });
   refused('bot', bot.id);
 
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   p = themePreferences(store);
   expect([p.chatThemes, p.chatPalettes, p.chatBackgrounds]).toEqual([{}, {}, {}]);
   expect(readTheme(store, theme.id)).toEqual(theme);

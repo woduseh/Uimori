@@ -5,7 +5,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
-import { assetDeletionRoutes, deleteChatAsset } from '../server/asset-deletion.js';
+import { deleteChatAsset } from '../server/asset-deletion.js';
+import { chatAssetRoutes } from '../server/chat-asset-routes.js';
 import { imageJobInput } from '../server/package-images.js';
 import { updateAssetMetadata } from '../server/asset-metadata.js';
 
@@ -36,7 +37,7 @@ function fixture() {
       .send({ message: (error as Error).message })
   );
   const published: string[] = [];
-  assetDeletionRoutes(app, store, (id) => published.push(id));
+  chatAssetRoutes(app, store, (id) => published.push(id));
   const chat = createFixtureChat(store, 'Synthetic image deletion');
   const asset = store.product.createAsset(chat.id, {
     title: 'Unused synthetic image',
@@ -46,7 +47,7 @@ function fixture() {
     actor: '',
     outfit: '',
     location: '',
-    allowedUse: 'both',
+    allowedUse: 'both' as const,
   });
   return { store, app, chat, asset, published };
 }
@@ -74,8 +75,8 @@ function begin(store: Store, chatId: string) {
   ).run;
 }
 
-test('cross-chat and malformed deletions preserve the uploaded bytes', async () => {
-  const { store, app, chat, asset, published } = fixture(),
+test('a deletion through another chat preserves the uploaded bytes', async () => {
+  const { store, app, asset, published } = fixture(),
     other = createFixtureChat(store, 'Other');
   expect(
     (
@@ -85,38 +86,31 @@ test('cross-chat and malformed deletions preserve the uploaded bytes', async () 
         payload: {},
       })
     ).statusCode
-  ).toBe(404);
-  expect(
-    (
-      await injectWithFixtureBot(app, {
-        method: 'DELETE',
-        url: `/api/chats/${chat.id}/assets/${asset.id}`,
-        payload: { force: true },
-      })
-    ).statusCode
-  ).toBe(400);
+  ).toBe(409);
   expect(store.product.asset(asset.id).bytes).toHaveLength(8);
   expect(published).toEqual([]);
 });
 
-test('a screen that still shows a deleted image gets IMAGE_NOT_FOUND for deletion and edits', () => {
+test('a screen that still shows a deleted image gets REVISION_CONFLICT for deletion and edits', () => {
   const { store, chat, asset } = fixture();
-  deleteChatAsset(store, chat.id, asset.id, {});
-  expect(() => deleteChatAsset(store, chat.id, asset.id, {})).toThrow('IMAGE_NOT_FOUND');
+  const target = { chatId: chat.id, assetId: asset.id };
+  deleteChatAsset(store, target);
+  expect(() => deleteChatAsset(store, target)).toThrow('REVISION_CONFLICT');
   expect(() =>
-    updateAssetMetadata(store, chat.id, asset.id, {
+    updateAssetMetadata(store, {
+      ...target,
       expectedRevision: asset.revision,
       title: 'Renamed from a stale screen',
       description: '',
     })
-  ).toThrow('IMAGE_NOT_FOUND');
+  ).toThrow('REVISION_CONFLICT');
 });
 
 test('deletion preserves active execution and immutable completed image catalogs', () => {
   const { store, chat, asset } = fixture(),
     run = begin(store, chat.id);
   const input = imageJobInput(store, run.snapshot);
-  expect(() => deleteChatAsset(store, chat.id, asset.id, {})).not.toThrow();
+  expect(() => deleteChatAsset(store, { chatId: chat.id, assetId: asset.id })).not.toThrow();
   expect(store.product.assets(chat.id)).toEqual([]);
   store.startRun(run.id);
   const source = store.completeRun(run.id, 'Synthetic source.', {
@@ -143,4 +137,14 @@ test('deletion preserves active execution and immutable completed image catalogs
   expect(store.job('frozen-image-job').input).toEqual(input);
   expect(imageJobInput(store, run.snapshot)).not.toEqual(input);
   expect(store.product.asset(asset.id).bytes).toHaveLength(8);
+});
+
+test('the image bytes route answers a missing image with a refusal no cache keeps', async () => {
+  const { app, asset } = fixture();
+  const missing = await app.inject({ method: 'GET', url: '/api/assets/missing-image' });
+  expect(missing.statusCode).toBe(404);
+  expect(missing.headers['cache-control']).toBe('no-store');
+  const served = await app.inject({ method: 'GET', url: `/api/assets/${asset.id}` });
+  expect(served.statusCode).toBe(200);
+  expect(served.headers['cache-control']).toBe('private, max-age=86400');
 });
