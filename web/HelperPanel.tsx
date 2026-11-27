@@ -1,12 +1,6 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  messageRef,
-  message as descriptor,
-} from './i18n.js';
-import { UiError, uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { formatUiMessage, UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { usageCompact } from './usage-display.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
@@ -490,7 +484,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     const owner = conversation.id;
     const target = conversation;
     setCompactStarting((old) => ({ ...old, [owner]: true }));
-    setCompactErrors((old) => ({ ...old, [owner]: '' }));
+    setCompactErrors((old) => ({ ...old, [owner]: null }));
     try {
       const result = await api<HelperCompactionStart | { cancelled: boolean }>(
         `/helper/conversations/${encodeURIComponent(owner)}/compact`,
@@ -505,8 +499,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     } catch (cause) {
       setCompactErrors((old) => ({
         ...old,
-        [owner]:
-          cause instanceof Error ? cause.message : descriptor('errors.HELPER_COMPACTION_FAILED'),
+        [owner]: toUiMessage(cause, 'errors.HELPER_COMPACTION_FAILED'),
       }));
     } finally {
       setCompactStarting((old) => ({ ...old, [owner]: false }));
@@ -698,7 +691,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     Record<string, SelectedOutline | null>
   >({});
   const [selections, setSelections] = useState<Record<string, HelperSelection | null>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, UiMessage | null>>({});
   const [modelRequired, setModelRequired] = useState<Record<string, boolean>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
@@ -720,7 +713,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     id: string | undefined;
     revision: number;
   } | null>(null);
-  const [saveNotice, setSaveNotice] = useState('');
+  const [saveNotice, setSaveNotice] = useState<UiMessage | null>(null);
   const notify = useTransientNotice();
   const [compactStarting, setCompactStarting] = useState<Record<string, boolean>>({});
   const requestedCompactions = useRef(new Map<string, string>());
@@ -734,7 +727,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (last.status === 'completed')
       notify(uiMessage('helperUsage.compactedNotice', { count: last.compactedMessages }));
   }, [compactionOwner, compaction, notify]);
-  const [compactErrors, setCompactErrors] = useState<Record<string, string>>({});
+  const [compactErrors, setCompactErrors] = useState<Record<string, UiMessage | null>>({});
   const [summaryDialog, setSummaryDialog] = useState<string | null>(null);
   const [summaryDrafts, setSummaryDrafts] = useState<Record<string, HelperSummaryDraft>>({});
   useEffect(() => {
@@ -790,7 +783,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     } catch (cause) {
       setErrors((old) => ({
         ...old,
-        [scopeKey]: cause instanceof Error ? cause.message : descriptor('helpers.m015'),
+        [scopeKey]: toUiMessage(cause, 'helpers.m015'),
       }));
     }
   }, [props.open, props.expanded, props.resource, props.scope, scopeKey, conversation]);
@@ -814,7 +807,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       } catch (cause) {
         setErrors((old) => ({
           ...old,
-          [scopeKey]: cause instanceof Error ? cause.message : descriptor('helpers.m015'),
+          [scopeKey]: toUiMessage(cause, 'helpers.m015'),
         }));
       }
     }
@@ -894,12 +887,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
   const busy = busyScopes[scopeKey] ?? false;
   const failedRecoveryWrites = failedHelperRecoveryKeys(scopeKey);
   const recoveryError = recoveryReadFailed[scopeKey]
-    ? t('helpers.m012')
+    ? uiMessage('helpers.m012')
     : failedRecoveryWrites.length
-      ? t('helpers.draftSaveFailed')
-      : '';
+      ? uiMessage('helpers.draftSaveFailed')
+      : null;
   const error =
-    recoveryError || errors[scopeKey] || data.error || sessions.error || attachments.error;
+    recoveryError ?? errors[scopeKey] ?? data.error ?? sessions.error ?? attachments.error;
   const persona =
     personas[scopeKey] ??
     (conversation
@@ -912,9 +905,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     liveActivity.error || !liveActivity.data || !summarized
       ? undefined
       : helperActivitySummary({ ...liveActivity.data, status: summarized.status });
-  const setError = (message: string) => {
+  const setError = (next: UiMessage | null) => {
     setModelRequired((old) => ({ ...old, [scopeKey]: false }));
-    setErrors((old) => ({ ...old, [scopeKey]: message }));
+    setErrors((old) => ({ ...old, [scopeKey]: next }));
   };
   const retryRecoveryRead = useRetryableEffect(() => {
     if (!scopeKey) return;
@@ -1044,8 +1037,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       if (current())
         setErrors((old) => ({
           ...old,
-          [currentScope.current]:
-            cause instanceof Error ? cause.message : descriptor('helpers.m207'),
+          [currentScope.current]: toUiMessage(cause, 'helpers.m207'),
         }));
     });
     return () => {
@@ -1160,7 +1152,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       try {
         captured = contextualEditor ? captureActiveEditorContext() : (frozenEditors[owner] ?? null);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : descriptor('helpers.m015'));
+        setError(toUiMessage(cause, 'helpers.m015'));
         return false;
       }
       if (captured?.focus && detachedFocus[owner] === editorFocusKey(captured.focus)) {
@@ -1170,8 +1162,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     }
     locks.current.add(owner);
     setBusyScopes((old) => ({ ...old, [owner]: true }));
-    setError('');
-    data.setError('');
+    setError(null);
+    data.setError(null);
     let pendingRequest: Outbox | undefined;
     try {
       if (text.length > REQUEST_TEXT_MAX_CHARS)
@@ -1280,7 +1272,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         void acceptHelperAttachments(owner, request.draftToken).catch(() => {
           setErrors((old) => ({
             ...old,
-            [owner]: descriptor('helperAttachments.acceptCleanupFailed'),
+            [owner]: uiMessage('helperAttachments.acceptCleanupFailed'),
           }));
         });
       if (!request.retryOf && sameDraft)
@@ -1316,7 +1308,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
         void data.refresh(conversation).catch((cause) => {
           setErrors((old) => ({
             ...old,
-            [owner]: descriptor('helpers.m019', { v0: messageRef(cause.message) }),
+            [owner]: uiMessage('helpers.m019', { v0: toUiMessage(cause) }),
           }));
         });
       return true;
@@ -1335,7 +1327,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }));
       setErrors((old) => ({
         ...old,
-        [owner]: cause instanceof Error ? cause.message : descriptor('helpers.m020'),
+        [owner]: toUiMessage(cause, 'helpers.m020'),
       }));
       return false;
     } finally {
@@ -1360,7 +1352,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     const owner = conversation.id;
     locks.current.add(owner);
     setBusyScopes((old) => ({ ...old, [owner]: true }));
-    setErrors((old) => ({ ...old, [owner]: '' }));
+    setErrors((old) => ({ ...old, [owner]: null }));
     try {
       const result = await api<HelperMessageMutation>(
         `/helper/conversations/${encodeURIComponent(owner)}/messages/${encodeURIComponent(messageId)}`,
@@ -1377,7 +1369,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }
       setErrors((old) => ({
         ...old,
-        [owner]: cause instanceof Error ? cause.message : descriptor('helpers.m207'),
+        [owner]: toUiMessage(cause, 'helpers.m207'),
       }));
       return false;
     } finally {
@@ -1392,7 +1384,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       );
       if (conversation) await data.refresh(conversation);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : descriptor('helpers.m021'));
+      setError(toUiMessage(cause, 'helpers.m021'));
     }
   }
   async function retry(
@@ -1404,7 +1396,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     if (props.ready === false || !conversation || outbox || busy || locks.current.has(scopeKey))
       return false;
     if (!resume && task.completedEffects?.count) {
-      setError(descriptor('helpers.m022'));
+      setError(uiMessage('helpers.m022'));
       return false;
     }
     const request: Outbox = {
@@ -1499,7 +1491,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 })}
           </span>
         </div>
-        {task.error && <p className="error">{helperTaskError(task.error)}</p>}
+        {task.error && <p className="error">{formatUiMessage(helperTaskError(task.error))}</p>}
         {task.completedEffects && (
           <p>
             {t('helpers.m312', {
@@ -1776,7 +1768,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           }
         />
       )}
-      <TransientNotice content={legacyUiMessage(saveNotice)} />
+      <TransientNotice content={saveNotice} />
       {props.outlineWorkspace && (
         <div className="outline-helper-return">
           <button
@@ -1841,7 +1833,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 </p>
               )}
 
-              {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+              {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
             </div>
             <div className="helper-settings-actions">
               <button
@@ -1868,7 +1860,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 onClick={() => {
                   if (props.ready === false) return;
                   setSavingPersona(true);
-                  setSaveNotice('');
+                  setSaveNotice(null);
                   void api<HelperConversation>(
                     `/helper/conversations/${conversation.id}`,
                     {
@@ -1878,7 +1870,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     'PATCH'
                   )
                     .then((value) => {
-                      setSaveNotice(descriptor('helpers.toneSaved'));
+                      setSaveNotice(uiMessage('helpers.toneSaved'));
                       data.updateConversation(value);
                       setPersonas((old) => ({
                         ...old,
@@ -1889,7 +1881,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                       }));
                     })
                     .catch(async (cause) => {
-                      setError(cause.message);
+                      setError(toUiMessage(cause));
                       if (cause instanceof ApiError && cause.status === 409) {
                         try {
                           data.updateConversation(
@@ -1968,7 +1960,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
             <LoadingState
               presentation={messages.length ? 'inline' : 'region'}
               loading={!data.error}
-              error={legacyUiMessage(data.error)}
+              error={data.error}
               label={uiMessage('helpers.m061')}
             />
           ) : null}
@@ -2228,9 +2220,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               return draft ? { ...rest, [owner]: draft } : rest;
             });
           }}
-          onChanged={async (message) => {
-            const shown = legacyUiMessage(message);
-            if (shown) notify(shown);
+          onChanged={async (notice) => {
+            notify(notice);
             await data.refresh(conversation);
           }}
           onClose={() => setSummaryDialog(null)}
@@ -2421,8 +2412,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                     label={t('helpers.m078')}
                     className="secondary"
                     onClick={() => {
-                      setError('');
-                      data.setError('');
+                      setError(null);
+                      data.setError(null);
                       sessions.clearError();
                       attachments.clearError();
                     }}
@@ -2431,7 +2422,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               </>
             }
           >
-            {translateMessage(error)}
+            {error}
           </NoticeBanner>
         )}
         {(pendingSteers.length > 0 || queuedTasks.length > 0) && (
@@ -2573,9 +2564,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                           try {
                             await saveActiveEditor();
                           } catch (cause) {
-                            setError(
-                              cause instanceof Error ? cause.message : descriptor('helpers.m015')
-                            );
+                            setError(toUiMessage(cause, 'helpers.m015'));
                           }
                         }}
                       >
@@ -2864,7 +2853,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                 context={data.current?.context}
                 busy={busy || activeTask || data.loading}
                 starting={Boolean(compactStarting[scopeKey])}
-                compactError={compactErrors[scopeKey] ?? ''}
+                compactError={compactErrors[scopeKey] ?? null}
                 onCompact={() => void compactionRequest('POST')}
                 onCancel={() => void compactionRequest('DELETE')}
                 onShowSummary={() => setSummaryDialog(scopeKey)}

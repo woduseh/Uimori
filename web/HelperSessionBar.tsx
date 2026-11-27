@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import {
   useCallback,
   useEffect,
@@ -94,7 +95,7 @@ export function HelperSessionBar(props: Props) {
     return () => cancelAnimationFrame(frame);
   }, [props.navigationHost, props.searchRequest]);
   const [copying, setCopying] = useState<string | null>(null);
-  const [copyError, setCopyError] = useState('');
+  const [copyError, setCopyError] = useState<UiMessage | null>(null);
   const [projects, setProjects] = useState<HelperProject[]>([]);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const projectReadVersion = useRef(0);
@@ -104,17 +105,17 @@ export function HelperSessionBar(props: Props) {
   const [projectDeleting, setProjectDeleting] = useState<HelperProject | null>(null);
   const [moving, setMoving] = useState<HelperSession | null>(null);
   const [moveProject, setMoveProject] = useState('');
-  const [projectError, setProjectError] = useState('');
+  const [projectError, setProjectError] = useState<UiMessage | null>(null);
   const [projectWorking, setProjectWorking] = useState(false);
   const [rename, setRename] = useState<HelperConversation | null>(null);
   const [title, setTitle] = useState('');
   const [deleting, setDeleting] = useState<HelperConversation | null>(null);
   const [impact, setImpact] = useState<HelperConversationDeletion | null>(null);
   const [working, setWorking] = useState(false);
-  const [error, setError] = useState('');
-  const [readError, setReadError] = useState('');
-  const [cleanupFailure, setCleanupFailure] = useState('');
-  const projectReadError = useRef('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [readError, setReadError] = useState<UiMessage | null>(null);
+  const [cleanupFailure, setCleanupFailure] = useState<UiMessage | null>(null);
+  const projectReadError = useRef<UiMessage | null>(null);
   const reloadProjects = useCallback(async () => {
     const version = ++projectReadVersion.current;
     try {
@@ -123,13 +124,12 @@ export function HelperSessionBar(props: Props) {
       setProjects(values);
       setProjectsLoaded(true);
       const stale = projectReadError.current;
-      projectReadError.current = '';
-      if (stale) setProjectError((current) => (current === stale ? '' : current));
+      projectReadError.current = null;
+      if (stale) setProjectError((current) => (current === stale ? null : current));
     } catch (cause) {
       if (version !== projectReadVersion.current) return;
       setProjectsLoaded(false);
-      projectReadError.current =
-        cause instanceof Error ? cause.message : legacyDescriptor('helperNavigation.loadFailed');
+      projectReadError.current = toUiMessage(cause, 'helperNavigation.loadFailed');
       setProjectError(projectReadError.current);
     }
   }, []);
@@ -154,11 +154,10 @@ export function HelperSessionBar(props: Props) {
         );
         if (!disposed) {
           setImpact(value);
-          setReadError('');
+          setReadError(null);
         }
       } catch (cause) {
-        if (!disposed)
-          setReadError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m168'));
+        if (!disposed) setReadError(toUiMessage(cause, 'helpers.m168'));
       } finally {
         if (!disposed) timer = setTimeout(() => void load(), 1200);
       }
@@ -172,19 +171,19 @@ export function HelperSessionBar(props: Props) {
   const startRename = (session: HelperConversation) => {
     setRename(session);
     setTitle(session.title ?? '');
-    setError('');
+    setError(null);
   };
   const startDelete = (session: HelperConversation) => {
     setDeleting(session);
     setImpact(null);
-    setError('');
-    setReadError('');
+    setError(null);
+    setReadError(null);
   };
   const copySession = async (session: HelperSession) => {
     if (copying) return;
     const selectionEpoch = props.onCloneStart();
     setCopying(session.id);
-    setCopyError('');
+    setCopyError(null);
     const storageKey = storageKeys.helperCopy(session.id);
     const input = {
       expectedRevision: session.revision,
@@ -223,9 +222,7 @@ export function HelperSessionBar(props: Props) {
       ) {
         clearPendingHelperRequest(storageKey, pending);
       }
-      setCopyError(
-        cause instanceof Error ? cause.message : legacyDescriptor('helperNavigation.copyFailed')
-      );
+      setCopyError(toUiMessage(cause, 'helperNavigation.copyFailed'));
     } finally {
       setCopying(null);
     }
@@ -249,7 +246,7 @@ export function HelperSessionBar(props: Props) {
           onClick={() => {
             setMoving(session);
             setMoveProject(session.projectId ?? '');
-            setProjectError('');
+            setProjectError(null);
           }}
         >
           <FolderInput size={18} aria-hidden="true" />
@@ -268,7 +265,7 @@ export function HelperSessionBar(props: Props) {
   const moveSession = async (session: HelperSession, projectId: string | null) => {
     if (projectWorking) return false;
     setProjectWorking(true);
-    setProjectError('');
+    setProjectError(null);
     try {
       const value = await api<HelperConversation>(
         `/helper/conversations/${encodeURIComponent(session.id)}/project`,
@@ -279,9 +276,7 @@ export function HelperSessionBar(props: Props) {
       props.onProjectsChanged?.();
       return true;
     } catch (cause) {
-      setProjectError(
-        cause instanceof Error ? cause.message : legacyDescriptor('helperNavigation.saveFailed')
-      );
+      setProjectError(toUiMessage(cause, 'helperNavigation.saveFailed'));
       return false;
     } finally {
       setProjectWorking(false);
@@ -309,33 +304,33 @@ export function HelperSessionBar(props: Props) {
       onNewProject={() => {
         setProjectEditor('new');
         setProjectTitle('');
-        setProjectError('');
+        setProjectError(null);
       }}
       onRenameProject={(project) => {
         setProjectEditor(project);
         setProjectTitle(project.title);
-        setProjectError('');
+        setProjectError(null);
       }}
       onDeleteProject={(project) => {
         setProjectDeleting(project);
-        setProjectError('');
+        setProjectError(null);
       }}
     >
       {projectError && !projectEditor && !projectDeleting && !moving && (
         <NoticeBanner tone="error">
-          {translateMessage(projectError)}{' '}
+          {formatUiMessage(projectError)}{' '}
           <button type="button" onClick={() => void reloadProjects()}>
             {t('helperNavigation.retry')}
           </button>
         </NoticeBanner>
       )}
-      {copyError && <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>}
+      {copyError && <NoticeBanner tone="error">{copyError}</NoticeBanner>}
     </HelperNavigation>
   );
   async function stop() {
     if (!deleting || working) return;
     setWorking(true);
-    setError('');
+    setError(null);
     try {
       let before: string | undefined;
       for (;;) {
@@ -350,15 +345,15 @@ export function HelperSessionBar(props: Props) {
       const value = await api<HelperConversationDeletion>(
         `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
       ).catch((cause) => {
-        setReadError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m168'));
+        setReadError(toUiMessage(cause, 'helpers.m168'));
         return null;
       });
       if (value) {
         setImpact(value);
-        setReadError('');
+        setReadError(null);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : legacyDescriptor('helpers.m169'));
+      setError(toUiMessage(cause, 'helpers.m169'));
     } finally {
       setWorking(false);
     }
@@ -427,7 +422,7 @@ export function HelperSessionBar(props: Props) {
                 onClick={() => {
                   setRename(props.conversation);
                   setTitle(props.conversation?.title ?? '');
-                  setError('');
+                  setError(null);
                 }}
               >
                 <EditIcon size={18} aria-hidden="true" />
@@ -452,7 +447,7 @@ export function HelperSessionBar(props: Props) {
                   if (session) {
                     setMoving(session);
                     setMoveProject(session.projectId ?? '');
-                    setProjectError('');
+                    setProjectError(null);
                   }
                 }}
               >
@@ -468,8 +463,8 @@ export function HelperSessionBar(props: Props) {
                 onClick={() => {
                   setDeleting(props.conversation);
                   setImpact(null);
-                  setError('');
-                  setReadError('');
+                  setError(null);
+                  setReadError(null);
                 }}
               >
                 <DeleteIcon size={18} aria-hidden="true" />
@@ -480,9 +475,7 @@ export function HelperSessionBar(props: Props) {
         </div>
       </div>
       {props.expanded && props.navigationHost && createPortal(navigation, props.navigationHost)}
-      {copyError && !props.navigationHost && (
-        <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>
-      )}
+      {copyError && !props.navigationHost && <NoticeBanner tone="error">{copyError}</NoticeBanner>}
       <Dialog
         open={!!projectEditor}
         title={t(
@@ -497,7 +490,7 @@ export function HelperSessionBar(props: Props) {
             event.preventDefault();
             if (!projectEditor || !projectTitle.trim() || projectWorking) return;
             setProjectWorking(true);
-            setProjectError('');
+            setProjectError(null);
             const title = projectTitle.trim();
             void (async () => {
               if (projectEditor === 'new') {
@@ -546,13 +539,7 @@ export function HelperSessionBar(props: Props) {
               setProjectEditor(null);
               projectChanged();
             })()
-              .catch((cause) =>
-                setProjectError(
-                  cause instanceof Error
-                    ? cause.message
-                    : legacyDescriptor('helperNavigation.saveFailed')
-                )
-              )
+              .catch((cause) => setProjectError(toUiMessage(cause, 'helperNavigation.saveFailed')))
               .finally(() => setProjectWorking(false));
           }}
         >
@@ -565,9 +552,7 @@ export function HelperSessionBar(props: Props) {
               onChange={(event) => setProjectTitle(event.target.value)}
             />
           </label>
-          {projectError && (
-            <NoticeBanner tone="error">{translateMessage(projectError)}</NoticeBanner>
-          )}
+          {projectError && <NoticeBanner tone="error">{projectError}</NoticeBanner>}
           <div className="form-actions">
             <button
               type="button"
@@ -597,7 +582,7 @@ export function HelperSessionBar(props: Props) {
         <p>
           {t('helperNavigation.deleteProjectDescription', { title: projectDeleting?.title ?? '' })}
         </p>
-        {projectError && <NoticeBanner tone="error">{translateMessage(projectError)}</NoticeBanner>}
+        {projectError && <NoticeBanner tone="error">{projectError}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -614,7 +599,7 @@ export function HelperSessionBar(props: Props) {
             onClick={() => {
               if (!projectDeleting || projectWorking) return;
               setProjectWorking(true);
-              setProjectError('');
+              setProjectError(null);
               void api(
                 `/helper/projects/${encodeURIComponent(projectDeleting.id)}`,
                 { expectedRevision: projectDeleting.revision },
@@ -626,11 +611,7 @@ export function HelperSessionBar(props: Props) {
                   projectChanged();
                 })
                 .catch((cause) =>
-                  setProjectError(
-                    cause instanceof Error
-                      ? cause.message
-                      : legacyDescriptor('helperNavigation.saveFailed')
-                  )
+                  setProjectError(toUiMessage(cause, 'helperNavigation.saveFailed'))
                 )
                 .finally(() => setProjectWorking(false));
             }}
@@ -651,7 +632,7 @@ export function HelperSessionBar(props: Props) {
             event.preventDefault();
             if (!moving || projectWorking) return;
             setProjectWorking(true);
-            setProjectError('');
+            setProjectError(null);
             void api<HelperConversation>(
               `/helper/conversations/${encodeURIComponent(moving.id)}/project`,
               { projectId: moveProject || null, expectedRevision: moving.revision },
@@ -662,13 +643,7 @@ export function HelperSessionBar(props: Props) {
                 setMoving(null);
                 props.onProjectsChanged?.();
               })
-              .catch((cause) =>
-                setProjectError(
-                  cause instanceof Error
-                    ? cause.message
-                    : legacyDescriptor('helperNavigation.saveFailed')
-                )
-              )
+              .catch((cause) => setProjectError(toUiMessage(cause, 'helperNavigation.saveFailed')))
               .finally(() => setProjectWorking(false));
           }}
         >
@@ -692,9 +667,7 @@ export function HelperSessionBar(props: Props) {
               {t('helperNavigation.retry')}
             </button>
           )}
-          {projectError && (
-            <NoticeBanner tone="error">{translateMessage(projectError)}</NoticeBanner>
-          )}
+          {projectError && <NoticeBanner tone="error">{projectError}</NoticeBanner>}
           <div className="form-actions">
             <button
               type="button"
@@ -710,9 +683,7 @@ export function HelperSessionBar(props: Props) {
           </div>
         </form>
       </Dialog>
-      {cleanupFailure && (
-        <NoticeBanner tone="error">{translateMessage(cleanupFailure)}</NoticeBanner>
-      )}
+      {cleanupFailure && <NoticeBanner tone="error">{cleanupFailure}</NoticeBanner>}
       <Dialog
         open={!!rename}
         title={t('helpers.m183')}
@@ -725,7 +696,7 @@ export function HelperSessionBar(props: Props) {
             event.preventDefault();
             if (!rename || working || !title.trim()) return;
             setWorking(true);
-            setError('');
+            setError(null);
             void api<HelperConversation>(
               `/helper/conversations/${encodeURIComponent(rename.id)}`,
               { expectedRevision: rename.revision, title: title.trim() },
@@ -736,7 +707,7 @@ export function HelperSessionBar(props: Props) {
                 setRename(null);
               })
               .catch(async (cause) => {
-                setError(cause.message);
+                setError(toUiMessage(cause));
                 if (cause instanceof ApiError && cause.status === 409) {
                   try {
                     setRename(
@@ -759,7 +730,7 @@ export function HelperSessionBar(props: Props) {
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+          {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
           <div className="form-actions">
             <button
               type="button"
@@ -800,8 +771,8 @@ export function HelperSessionBar(props: Props) {
             })}
           </p>
         )}
-        {readError && <NoticeBanner tone="error">{translateMessage(readError)}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {readError && <NoticeBanner tone="error">{readError}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -830,7 +801,7 @@ export function HelperSessionBar(props: Props) {
             onClick={() => {
               if (!deleting || !impact || working) return;
               setWorking(true);
-              setError('');
+              setError(null);
               void api(
                 `/helper/conversations/${encodeURIComponent(deleting.id)}`,
                 impact.request,
@@ -841,12 +812,12 @@ export function HelperSessionBar(props: Props) {
                   try {
                     await deleteHelperSessionRecovery(deleting.id);
                   } catch {
-                    setCleanupFailure(legacyDescriptor('helpers.m194'));
+                    setCleanupFailure(uiMessage('helpers.m194'));
                   }
                   setDeleting(null);
                   props.onDelete(deleting.id);
                 })
-                .catch((cause) => setError(cause.message))
+                .catch((cause) => setError(toUiMessage(cause)))
                 .finally(() => setWorking(false));
             }}
           >
