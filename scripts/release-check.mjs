@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { assertBuild, json, newId, root } from './lib.mjs';
 import { privateMaterialEnv, readFeatureMap, verificationNames } from './verify.mjs';
@@ -10,7 +9,6 @@ import {
   readJson,
   releaseFingerprint,
   runExternal,
-  sha256,
 } from './release-common.mjs';
 
 const defaultArea = 'browser-smoke';
@@ -29,43 +27,6 @@ export function requiredChecks(area = defaultArea, full = false, featureMap = re
       ...(full ? [fullRegression] : []),
     ]),
   ];
-}
-
-export async function cachedCheckPassed(check, command) {
-  if (
-    check?.status !== 'PASS' ||
-    (command && check.command !== command) ||
-    check.code !== 0 ||
-    check.timedOut ||
-    check.cancelled ||
-    !check.log ||
-    !/^[a-f0-9]{64}$/u.test(check.logHash ?? '')
-  )
-    return false;
-  try {
-    return sha256(await readFile(check.log)) === check.logHash;
-  } catch {
-    return false;
-  }
-}
-
-export async function verifyReleaseReceipt(receipt, identity, checks) {
-  if (
-    receipt?.schema !== 1 ||
-    receipt.status !== 'PASS' ||
-    identityKey(receipt.identity) !== identityKey(identity)
-  )
-    throw new Error('Release verification receipt is missing, failed or stale');
-  for (const name of checks)
-    if (!(await cachedCheckPassed(receipt.checks?.[name], name)))
-      throw new Error(`Required release check unavailable: ${name}`);
-  const failures = Object.entries(receipt.checks).filter(
-    ([, value]) => value.status !== 'PASS' && value.status !== 'NOT_RUN'
-  );
-  if (failures.length)
-    throw new Error(
-      `Known failed checks for this source: ${failures.map(([name]) => name).join(', ')}`
-    );
 }
 
 export async function runReleaseChecks(
@@ -103,23 +64,12 @@ export async function runReleaseChecks(
   };
   const log = dependencies.log ?? console.log;
   const cli = dependencies.npmCli ?? npmCli();
-  for (const name of new Set([...(reusable ? (cached.requested ?? []) : []), ...checks]))
-    summary.checks[name] ??= { command: name, status: 'NOT_RUN' };
+  for (const name of checks) summary.checks[name] ??= { command: name, status: 'NOT_RUN' };
   await json(report, summary);
   try {
-    const omittedFailures = Object.entries(summary.checks).filter(
-      ([name, value]) =>
-        value.status !== 'PASS' && value.status !== 'NOT_RUN' && !checks.includes(name)
-    );
-    if (omittedFailures.length)
-      throw new Error(
-        `Resolve recorded failures with the matching --area or --full: ${omittedFailures.map(([name]) => name).join(', ')}`
-      );
     for (const name of checks) {
       if (signal?.aborted) throw new Error('Release checks cancelled');
-      if (identityKey(await sourceIdentity()) !== identityKey(identity))
-        throw new Error('Source changed during release checks');
-      const reusableCheck = await cachedCheckPassed(summary.checks[name], name);
+      const reusableCheck = summary.checks[name].status === 'PASS';
       if (reusableCheck && (name === 'quality:full' || name === 'build')) {
         try {
           await buildIdentity();
@@ -149,24 +99,18 @@ export async function runReleaseChecks(
         env: syntheticEnv,
       });
       const { output, ...record } = result;
-      const unchanged = identityKey(await sourceIdentity()) === identityKey(identity);
-      const passed = result.code === 0 && !result.timedOut && !result.cancelled && unchanged;
+      const passed = result.code === 0 && !result.timedOut && !result.cancelled;
       summary.checks[name] = {
         command: name,
         ...record,
         status: passed ? 'PASS' : 'FAIL',
-        ...(passed
-          ? {}
-          : { error: unchanged ? output.slice(-1800) : 'Source changed during check' }),
+        ...(passed ? {} : { error: output.slice(-1800) }),
       };
       await json(report, summary);
       if (!passed) throw new Error(`${name} failed. Evidence: ${record.log}`);
     }
     summary.build = await buildIdentity();
-    if (identityKey(await sourceIdentity()) !== identityKey(identity))
-      throw new Error('Source changed before release verification completed');
     summary.status = 'PASS';
-    await verifyReleaseReceipt(summary, identity, checks);
   } catch (error) {
     summary.status = 'FAIL';
     summary.error = error.message;

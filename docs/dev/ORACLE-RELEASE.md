@@ -41,7 +41,7 @@ CI 관문이 막히면 선택한 실행의 링크·ID·attempt·status·conclusi
 
 문서 전용 커밋을 실제 배포하려면 해당 branch의 정확한 SHA에 workflow를 수동 실행해 전체 필수 검사를 통과시켜요. `workflow_dispatch`의 `browser=true`는 전체 브라우저 회귀까지 추가해요. 다른 branch 배포도 같은 전체 검증이 필요해요. 진행 중 main이 앞서가더라도 이미 선택한 검증 SHA를 바꾸거나 정상 전환을 롤백하지 않아요.
 
-`npm run release:check -- --area <domain>`은 별도의 로컬 개발 검증 명령으로 남아요. 기본 `quality`·build·선택한 synthetic 테스트와 내용 기반 영수증 재사용 규칙은 유지하지만, 이 영수증으로 Oracle의 CI 관문을 대체하지 않아요. 로컬에서 동일한 E2E를 다시 실행하거나 영수증을 수동 수정할 필요가 없어요.
+`npm run release:check -- --area <domain>`은 별도의 로컬 개발 검증 명령이에요. 같은 소스에서 이미 통과한 검사는 다시 실행하지 않아요. 그 결과는 로컬 보고서일 뿐이고 Oracle 배포는 이를 읽지 않으며 CI 관문을 대체하지 않아요.
 
 ## 실행 모드
 

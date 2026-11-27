@@ -5,18 +5,12 @@ import { mkdtemp, mkdir, readFile, writeFile, copyFile, rm } from 'node:fs/promi
 import path from 'node:path';
 import { test } from 'node:test';
 import { artifactRoot, json, removeOwned } from './lib.mjs';
-import {
-  cachedCheckPassed,
-  requiredChecks,
-  runReleaseChecks,
-  verifyReleaseReceipt,
-} from './release-check.mjs';
+import { requiredChecks, runReleaseChecks } from './release-check.mjs';
 import {
   identityKey,
   parseOptions,
   releaseFingerprint,
   runExternal,
-  sha256,
   shellQuote,
 } from './release-common.mjs';
 import {
@@ -86,7 +80,6 @@ async function checksFixture(t) {
         cancelled: false,
         output,
         log: options.log,
-        logHash: sha256(output),
         ...override,
       };
     },
@@ -186,57 +179,14 @@ test('unchanged release reuses successful evidence and refreshes only a missing 
   assert.deepEqual(fixture.calls.slice(3), ['build']);
 });
 
-test('failed later check preserves earlier passes but cannot be bypassed by a narrower scope', async (t) => {
+test('a failed later check keeps earlier passes and reruns only the failed check', async (t) => {
   const fixture = await checksFixture(t);
   fixture.setFailure((name) => (name === fullRegression ? { code: 1 } : {}));
-  const first = await fixture.run({ full: true });
-  assert.equal(first.status, 'FAIL');
-  const narrower = await fixture.run();
-  assert.equal(narrower.status, 'FAIL');
-  assert.match(narrower.error, /recorded failures/);
+  assert.equal((await fixture.run({ full: true })).status, 'FAIL');
   assert.deepEqual(fixture.calls, ['quality:full', fullRegression]);
   fixture.setFailure(undefined);
-  const fixed = await fixture.run({ full: true });
-  assert.equal(fixed.status, 'PASS');
+  assert.equal((await fixture.run({ full: true })).status, 'PASS');
   assert.deepEqual(fixture.calls.slice(2), [fullRegression]);
-});
-
-test('unstarted optional checks remain recorded without blocking a narrower request', async (t) => {
-  const fixture = await checksFixture(t);
-  const previous = await fixture.run();
-  previous.status = 'FAIL';
-  previous.requested.push(fullRegression);
-  await json(previous.report, previous);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await fixture.run();
-    assert.equal(result.status, 'PASS');
-    assert.equal(result.checks[fullRegression].status, 'NOT_RUN');
-    await verifyReleaseReceipt(result, identity, requiredChecks(undefined, false, featureMap));
-    await assert.rejects(
-      verifyReleaseReceipt(result, identity, requiredChecks(undefined, true, featureMap)),
-      /unavailable/
-    );
-  }
-  assert.equal(fixture.calls.length, 3);
-  assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['quality:full', fullRegression]);
-});
-
-test('an interrupted started check still blocks narrowing until it is rerun', async (t) => {
-  const fixture = await checksFixture(t);
-  const previous = await fixture.run();
-  previous.checks[fullRegression] = { command: fullRegression, status: 'RUNNING' };
-  await json(previous.report, previous);
-  await assert.rejects(
-    verifyReleaseReceipt(previous, identity, requiredChecks(undefined, false, featureMap)),
-    /Known failed checks/
-  );
-  const narrower = await fixture.run();
-  assert.equal(narrower.status, 'FAIL');
-  assert.match(narrower.error, /recorded failures/);
-  assert.equal(fixture.calls.length, 3);
-  assert.equal((await fixture.run({ full: true })).status, 'PASS');
-  assert.deepEqual(fixture.calls.slice(3), ['quality:full', fullRegression]);
 });
 
 test('failed termination without a close event still produces a bounded timeout result', async () => {
@@ -256,44 +206,22 @@ test('failed termination without a close event still produces a bounded timeout 
   assert.match(result.output, /termination refused/);
 });
 
-test('changed source invalidates cache and mid-run source changes remain failures', async (t) => {
+test('changed source invalidates cached passes', async (t) => {
   const fixture = await checksFixture(t);
   await fixture.run();
   fixture.setSource({ ...identity, sourceHash: 'f'.repeat(64) });
   assert.equal((await fixture.run()).status, 'PASS');
   assert.equal(fixture.calls.length, 6);
-  fixture.setSource({ ...identity, sourceHash: '1'.repeat(64) });
-  fixture.setFailure(() => {
-    fixture.setSource({ ...identity, sourceHash: '2'.repeat(64) });
-    return {};
-  });
-  assert.equal((await fixture.run()).status, 'FAIL');
-  assert.equal(fixture.calls.length, 7);
 });
 
-test('timeout, cancellation, missing logs and swapped commands cannot certify a release', async (t) => {
-  const fixture = await checksFixture(t);
-  const receipt = await fixture.run();
-  await verifyReleaseReceipt(receipt, identity, requiredChecks(undefined, false, featureMap));
-  await assert.rejects(
-    () => verifyReleaseReceipt(receipt, { ...identity, sourceHash: '9'.repeat(64) }, ['quality']),
-    /stale/
-  );
-  await assert.rejects(
-    () => verifyReleaseReceipt(receipt, identity, [fullRegression]),
-    /unavailable/
-  );
-  const quality = receipt.checks['quality'];
-  assert.equal(await cachedCheckPassed({ ...quality, timedOut: true }, 'quality'), false);
-  assert.equal(await cachedCheckPassed({ ...quality, cancelled: true }, 'quality'), false);
-  assert.equal(
-    await cachedCheckPassed({ ...quality, command: 'verify -- reader' }, 'quality'),
-    false
-  );
-  await writeFile(quality.log, 'changed log');
-  assert.equal(await cachedCheckPassed(quality, 'quality'), false);
-  fixture.setFailure(() => ({ code: 0, timedOut: true }));
-  assert.equal((await fixture.run()).status, 'FAIL');
+test('a timed-out or cancelled check fails even with exit code 0', async (t) => {
+  for (const override of [{ timedOut: true }, { cancelled: true }]) {
+    const fixture = await checksFixture(t);
+    fixture.setFailure(() => ({ code: 0, ...override }));
+    const result = await fixture.run();
+    assert.equal(result.status, 'FAIL');
+    assert.equal(result.checks.quality.status, 'FAIL');
+  }
 });
 
 test('Oracle configuration rejects remote shell options, overlapping paths and embedded secrets', () => {

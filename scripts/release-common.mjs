@@ -175,7 +175,7 @@ export async function runExternal(
     finishedAt,
     elapsedMs: Date.parse(finishedAt) - Date.parse(startedAt),
     output,
-    ...(log ? { log, logHash: sha256(output) } : {}),
+    ...(log ? { log } : {}),
   };
 }
 
