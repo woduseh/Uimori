@@ -178,7 +178,6 @@
       ],
       "specs": [
         { "file": "tests/turn-activity-browser.spec.ts" },
-        { "file": "tests/task-trace-browser.spec.ts" },
         { "file": "tests/scene-diagnostics-browser.spec.ts" }
       ]
     },

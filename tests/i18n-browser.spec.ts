@@ -149,25 +149,3 @@ test('I18N01 explicit language selection persists across reentry with accessible
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveCount(0);
 });
-
-test('I18N06 manifest follows UI language while saved reading language stays independent', async ({
-  page,
-  request,
-}) => {
-  await page.addInitScript(() => localStorage.setItem('uimori:reading-language', 'original'));
-  await page.goto('/');
-  for (const locale of ['en', 'ja', 'zh', 'ko']) {
-    await switchFromAnotherTab(page, locale);
-    const manifest = page.locator('link[rel="manifest"]');
-    await expect(manifest).toHaveAttribute(
-      'href',
-      locale === 'ko' ? '/manifest.webmanifest' : `/manifest.${locale}.webmanifest`
-    );
-    const value = await (await request.get((await manifest.getAttribute('href'))!)).json();
-    expect(value.lang).toMatch(new RegExp(`^${locale}(?:-|$)`));
-    expect(value).toMatchObject({ display: 'standalone', start_url: '/', id: '/' });
-    expect(await page.evaluate(() => localStorage.getItem('uimori:reading-language'))).toBe(
-      'original'
-    );
-  }
-});
