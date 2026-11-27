@@ -6,14 +6,15 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { Store } from '../dist/server/store.js';
-import { importChatTranscript } from '../dist/server/chat-transcript.js';
-import { captureLogicalHistory } from '../dist/server/prompt-snapshot.js';
-import { buildMainProviderRequest } from '../dist/server/main-request.js';
-import { prepareNativeRisuRun } from '../dist/server/risu-native-run.js';
-import { disposeAllNativeRisuSessions } from '../dist/server/risu-native-runtime.js';
-import { encodeResponses } from '../dist/core/openai-protocol.js';
-import { createSyntheticBot, syntheticStoryScenes } from './synthetic-story.mjs';
+import { Store } from '#dist/server/store.js';
+import { importChatTranscript } from '#dist/server/chat-transcript.js';
+import { captureLogicalHistory } from '#dist/server/prompt-snapshot.js';
+import { buildMainProviderRequest } from '#dist/server/main-request.js';
+import { prepareNativeRisuRun } from '#dist/server/risu-native-run.js';
+import { disposeAllNativeRisuSessions } from '#dist/server/risu-native-runtime.js';
+import { encodeResponses } from '#dist/core/openai-protocol.js';
+import type { RunSnapshot } from '#dist/core/types.js';
+import { createSyntheticBot, syntheticStoryScenes } from './synthetic-story.ts';
 import { assertBuild, fingerprint, json, root } from './lib.mjs';
 
 const directory = path.resolve(process.argv[2]);
@@ -24,6 +25,27 @@ const scenarios = [
   { scenes: 10, lore: 50 },
   { scenes: 100, lore: 500 },
 ];
+type Sample = {
+  preparationMs: number;
+  elapsedMs: number;
+  cpuMs: number;
+  initialRss: number;
+  peakRss: number;
+  workers: number;
+  outputHash: string;
+  wireHash: string;
+  wireBytes: number;
+};
+type Condition = (typeof scenarios)[number] & {
+  fixtureHash: string;
+  dbHash: string;
+  metrics: unknown;
+  first: Sample;
+  samples: Sample[];
+  summary: Record<string, ReturnType<typeof summary>>;
+};
+const summaryKeys = ['preparationMs', 'elapsedMs', 'cpuMs', 'peakRss'] as const;
+const identityKeys = ['outputHash', 'wireHash', 'wireBytes', 'workers'] as const;
 const marker = path.join(directory, 'fixture.json');
 if (!existsSync(directory)) {
   await mkdir(directory, { recursive: true });
@@ -33,8 +55,8 @@ assert.deepEqual(JSON.parse(await readFile(marker, 'utf8')), {
   kind: 'uimori-native-run-benchmark-v2',
   scenarios,
 });
-const hash = (value) => createHash('sha256').update(value).digest('hex');
-const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 const report = {
   startedAt: new Date().toISOString(),
   build: await assertBuild(),
@@ -65,25 +87,26 @@ const report = {
     acceptance:
       '100-scene local preparation median saves >=50ms and >=15%; no material normal-case regression; identical prepared output and wire body; no retained cache/dependency',
   },
-  conditions: [],
+  conditions: [] as Condition[],
+  finishedAt: undefined as string | undefined,
 };
 await writeFile(path.join(directory, `${label}.diff`), git('diff', 'HEAD', '--binary'));
 await writeFile(
-  path.join(directory, `${label}-runner.mjs`),
+  path.join(directory, `${label}-runner.ts`),
   await readFile(new URL(import.meta.url))
 );
 globalThis.fetch = () => {
   throw new Error('External calls forbidden in benchmark');
 };
-const summary = (samples, key) => {
+const summary = (samples: Sample[], key: (typeof summaryKeys)[number]) => {
   const values = samples.map((row) => row[key]).sort((a, b) => a - b);
   return { median: values[4], min: values[0], max: values.at(-1) };
 };
-function databaseHash(store) {
+function databaseHash(store: Store) {
   const digest = createHash('sha256');
   for (const { name } of store.db
     .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
-    .all()) {
+    .all() as { name: string }[]) {
     const rows = store.db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all();
     digest.update(
       name +
@@ -128,7 +151,6 @@ for (const scenario of scenarios) {
         revision: 1,
         title: 'Synthetic',
         connectionId: 'synthetic',
-        connectionRevision: 1,
         modelId: 'gpt-5.6-sol',
         maxOutputTokens: 8192,
         temperature: null,
@@ -143,7 +165,7 @@ for (const scenario of scenarios) {
           catalogError: null,
         },
       };
-      const snapshot = {
+      const snapshot: RunSnapshot = {
         chatId: chat.id,
         parentRevision: chat.headRevision,
         settingsRevision: chat.settingsRevision,
@@ -157,19 +179,19 @@ for (const scenario of scenarios) {
       await json(fixtureFile, { snapshot, metrics: scenes.map((entry) => entry.metrics) });
     }
     const fixtureBytes = await readFile(fixtureFile);
-    const { snapshot, metrics } = JSON.parse(fixtureBytes);
+    const { snapshot, metrics } = JSON.parse(fixtureBytes.toString('utf8'));
     const dbBefore = databaseHash(store);
     const inputHash = hash(JSON.stringify(snapshot));
-    const changesBefore = store.db.prepare('SELECT total_changes() AS n').get().n;
+    const changesBefore = store.db.prepare('SELECT total_changes() AS n').get()!.n;
     let workers = 0;
     const hook = createHook({
       init(_id, type) {
         if (type === 'WORKER') workers++;
       },
     });
-    let expected;
-    async function flow() {
-      globalThis.gc();
+    let expected: Pick<Sample, 'outputHash' | 'wireHash' | 'wireBytes'> | undefined;
+    async function flow(): Promise<Sample> {
+      globalThis.gc!();
       workers = 0;
       const initialRss = process.memoryUsage().rss;
       let peakRss = initialRss;
@@ -183,7 +205,7 @@ for (const scenario of scenarios) {
         const prepared = await prepareNativeRisuRun(snapshot);
         const preparationMs = performance.now() - start;
         const built = buildMainProviderRequest(prepared);
-        assert.ok(built.request.prompt.messages.length > scenario.scenes);
+        assert.ok(built.request.prompt!.messages.length > scenario.scenes);
         const wire = JSON.stringify(encodeResponses(built.request).body);
         const elapsedMs = performance.now() - start;
         const used = process.cpuUsage(cpu);
@@ -199,13 +221,14 @@ for (const scenario of scenarios) {
           wireHash: hash(wire),
           wireBytes: Buffer.byteLength(wire),
         };
-        assert.equal(prepared.nativeRisuExecution.variables.benchmark, 'ready');
+        assert.equal(prepared.nativeRisuExecution!.variables.benchmark, 'ready');
         expected ??= {
           outputHash: result.outputHash,
           wireHash: result.wireHash,
           wireBytes: result.wireBytes,
         };
-        for (const [key, value] of Object.entries(expected)) assert.equal(result[key], value);
+        for (const [key, value] of Object.entries(expected))
+          assert.equal(result[key as keyof typeof expected], value);
         return result;
       } finally {
         hook.disable();
@@ -215,25 +238,20 @@ for (const scenario of scenarios) {
     }
     const first = await flow();
     for (let i = 0; i < 2; i++) await flow();
-    const samples = [];
+    const samples: Sample[] = [];
     for (let i = 0; i < 9; i++) samples.push(await flow());
     assert.equal(databaseHash(store), dbBefore);
     assert.equal(hash(JSON.stringify(snapshot)), inputHash);
-    assert.equal(store.db.prepare('SELECT total_changes() AS n').get().n, changesBefore);
+    assert.equal(store.db.prepare('SELECT total_changes() AS n').get()!.n, changesBefore);
     assert.deepEqual(store.db.prepare('PRAGMA foreign_key_check').all(), []);
-    const condition = {
+    const condition: Condition = {
       ...scenario,
       fixtureHash: hash(fixtureBytes),
       dbHash: dbBefore,
       metrics,
       first,
       samples,
-      summary: Object.fromEntries(
-        ['preparationMs', 'elapsedMs', 'cpuMs', 'peakRss'].map((key) => [
-          key,
-          summary(samples, key),
-        ])
-      ),
+      summary: Object.fromEntries(summaryKeys.map((key) => [key, summary(samples, key)])),
     };
     report.conditions.push(condition);
     console.log(
@@ -255,8 +273,7 @@ if (label !== 'baseline') {
     assert.equal(condition.fixtureHash, before.fixtureHash);
     assert.equal(condition.dbHash, before.dbHash);
     for (const sample of [condition.first, ...condition.samples])
-      for (const key of ['outputHash', 'wireHash', 'wireBytes', 'workers'])
-        assert.equal(sample[key], before.samples[0][key]);
+      for (const key of identityKeys) assert.equal(sample[key], before.samples[0][key]);
   }
 }
 report.finishedAt = new Date().toISOString();

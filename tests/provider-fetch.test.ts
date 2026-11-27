@@ -76,7 +76,7 @@ describe('provider-specific HTTP dispatcher and safe failure codes', () => {
     async (phase) => {
       const result = await exec(
         process.execPath,
-        [fileURLToPath(new URL('./fixtures/provider-timeout-clock.mjs', import.meta.url)), phase],
+        [fileURLToPath(new URL('./fixtures/provider-timeout-clock.ts', import.meta.url)), phase],
         { timeout: 8000, maxBuffer: 32_768 }
       );
       expect(JSON.parse(result.stdout)).toEqual({

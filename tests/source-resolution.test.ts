@@ -11,12 +11,17 @@ test('every package.json subpath import has a tsconfig path to its TypeScript so
   const imports = read('package.json').imports ?? {};
   const paths = read('tsconfig.json').compilerOptions?.paths ?? {};
   const expected = Object.fromEntries(
-    Object.entries(imports).map(([key, target]) => [key, [target.replace(/\.js$/u, '.ts')]])
+    Object.entries(imports).map(([key, target]) => [
+      key,
+      [target.replace(/^\.\/dist\//u, './').replace(/\.js$/u, '.ts')],
+    ])
   );
   expect(
     paths,
     'Playwright loads specs from source and resolves "#…" imports only through tsconfig paths; add the matching entry'
   ).toEqual(expected);
   for (const [source] of Object.values(expected))
-    expect(existsSync(new URL(`../${source}`, import.meta.url)), source).toBe(true);
+    expect(existsSync(new URL(`../${source.replace(/\*$/u, '')}`, import.meta.url)), source).toBe(
+      true
+    );
 });

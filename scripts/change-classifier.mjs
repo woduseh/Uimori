@@ -4,11 +4,13 @@ const browserRoots = runtimeRoots.filter((root) => root !== 'runner');
 
 const patterns = {
   biomeFile: /\.(?:ts|tsx|mts|js|mjs|cjs|json|jsonc|css)$/u,
-  typeScriptInput: /(?:\.(?:ts|tsx|mts)|^package\.json|^tsconfig[^/]*\.json)$/u,
+  typeScriptInput:
+    /(?:\.(?:ts|tsx|mts)|^(?:core|packages|server|web|tests|scripts)\/.+\.(?:js|mjs)|^package\.json|^tsconfig[^/]*\.json)$/u,
   moduleFile: new RegExp(`^(?:${sourceRoots.join('|')})/.+\\.(?:ts|tsx|mts|js|mjs)$`, 'u'),
   commentSource: /\.(?:ts|tsx|mts|cts|js|mjs|cjs|css)$/u,
   vitestFile: /^tests\/.+\.test\.ts$/u,
-  toolingTestFile: /^(?:scripts\/[^/]+\.test\.mjs|tests\/[^/]+\.node\.test\.mjs)$/u,
+  toolingTestFile: /^(?:scripts\/[^/]+\.test\.(?:mjs|ts)|tests\/[^/]+\.node\.test\.mjs)$/u,
+  scriptImportInput: /^(?!(?:server|core|web|packages|dist)\/)[^\r\n]*\.(?:mjs|js|cjs)$/u,
   fullSuiteInput:
     /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u,
   fullCommentScan: /^scripts\/(?:check-comments\.mjs|comment-allowlist\.json)$/u,

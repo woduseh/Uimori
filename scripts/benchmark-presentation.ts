@@ -7,11 +7,11 @@ import os from 'node:os';
 import path from 'node:path';
 import Fastify from 'fastify';
 import { assertBuild, fingerprint, json, newId, root } from './lib.mjs';
-import { Store } from '../dist/server/store.js';
-import { settleSnapshot } from '../dist/server/execution-snapshot.js';
-import { projectNativeRisuPackage } from '../dist/server/risu-native-projection.js';
-import { packagePresentationRoutes } from '../dist/server/package-presentation-routes.js';
-import { readerDetail } from '../dist/server/reader.js';
+import { Store } from '#dist/server/store.js';
+import { settleSnapshot } from '#dist/server/execution-snapshot.js';
+import { projectNativeRisuPackage } from '#dist/server/risu-native-projection.js';
+import { packagePresentationRoutes } from '#dist/server/package-presentation-routes.js';
+import { readerDetail } from '#dist/server/reader.js';
 
 const directory = path.resolve(
   process.argv[2] ?? path.join(root, 'output/benchmarks', `presentation-${newId()}`)
@@ -32,8 +32,26 @@ assert.deepEqual(JSON.parse(await readFile(marker, 'utf8')), {
   kind: 'uimori-presentation-benchmark-v1',
   scenarios,
 });
-const hash = (text) => createHash('sha256').update(text).digest('hex');
-const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+type Counted = 'history' | 'prepare' | 'resources';
+type Counters = Record<Counted, { calls: number; ms: number }> & { sqlStatements: number };
+type Sample = Counters & {
+  elapsedMs: number;
+  readerMs: number;
+  cpuMs: number;
+  initialRss: number;
+  peakRss: number;
+  responseBytes: number;
+  responseHash: string;
+};
+type Condition = (typeof scenarios)[number] & {
+  contentHash: string;
+  first: Sample;
+  samples: Sample[];
+  summary: Record<string, { median?: number; min?: number; max?: number }>;
+};
+const summaryKeys = ['elapsedMs', 'readerMs', 'cpuMs', 'peakRss'] as const;
+const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 const source = await fingerprint();
 await writeFile(path.join(directory, `${label}.diff`), git('diff', 'HEAD', '--binary'));
 const report = {
@@ -63,7 +81,8 @@ const report = {
     acceptance:
       'Long scenario median saves at least 50ms and 10%, normal scenario no material regression, identical responses and unchanged DB; no cache/schema/dependency',
   },
-  conditions: [],
+  conditions: [] as Condition[],
+  finishedAt: undefined as string | undefined,
 };
 globalThis.fetch = () => {
   throw new Error('External calls forbidden in benchmark');
@@ -145,8 +164,10 @@ for (const scenario of scenarios) {
         store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(parent, chat.id);
       });
     }
-    const chatId = String(store.db.prepare('SELECT id FROM chats').get().id);
-    const fixtureRows = store.db.prepare('SELECT id,text,hash FROM sources ORDER BY rowid').all();
+    const chatId = String(store.db.prepare('SELECT id FROM chats').get()!.id);
+    const fixtureRows = store.db
+      .prepare('SELECT id,text,hash FROM sources ORDER BY rowid')
+      .all() as { id: string; text: string; hash: string }[];
     assert.equal(fixtureRows.length, scenario.scenes);
     assert.ok(fixtureRows.every((row) => row.text.length === scenario.chars));
     const contentHash = hash(JSON.stringify(fixtureRows));
@@ -155,14 +176,9 @@ for (const scenario of scenarios) {
       readerDetail(store, chatId, { source: `source-${scenario.scenes - 1}` })
     );
     await app.ready();
-    let counters;
-    for (const [owner, key] of [
-      [store, 'history'],
-      [store.story, 'prepare'],
-      [store.product, 'resources'],
-    ]) {
-      const original = owner[key].bind(owner);
-      owner[key] = (...args) => {
+    let counters: Counters | null = null;
+    const timed = <F extends (...args: never[]) => unknown>(key: Counted, original: F) =>
+      ((...args: Parameters<F>) => {
         const start = performance.now();
         try {
           return original(...args);
@@ -172,16 +188,18 @@ for (const scenario of scenarios) {
             counters[key].ms += performance.now() - start;
           }
         }
-      };
-    }
+      }) as F;
+    store.history = timed('history', store.history.bind(store));
+    store.story.prepare = timed('prepare', store.story.prepare.bind(store.story));
+    store.product.resources = timed('resources', store.product.resources.bind(store.product));
     const originalPrepare = store.db.prepare.bind(store.db);
-    store.db.prepare = (...args) => {
+    store.db.prepare = (...args: Parameters<typeof originalPrepare>) => {
       if (counters) counters.sqlStatements++;
       return originalPrepare(...args);
     };
-    let expected;
-    const changesBefore = store.db.prepare('SELECT total_changes() AS n').get().n;
-    async function flow() {
+    let expected: string | undefined;
+    const changesBefore = store.db.prepare('SELECT total_changes() AS n').get()!.n;
+    async function flow(): Promise<Sample> {
       globalThis.gc?.();
       counters = {
         history: { calls: 0, ms: 0 },
@@ -203,7 +221,9 @@ for (const scenario of scenarios) {
         const responses = await Promise.all(
           reader
             .json()
-            .reader.order.map((id) => app.inject(`/api/chats/${chatId}/sources/${id}/presentation`))
+            .reader.order.map((id: string) =>
+              app.inject(`/api/chats/${chatId}/sources/${id}/presentation`)
+            )
         );
         const elapsedMs = performance.now() - start;
         const used = process.cpuUsage(cpu);
@@ -229,9 +249,9 @@ for (const scenario of scenarios) {
     }
     const first = await flow();
     for (let i = 0; i < 2; i++) await flow();
-    const samples = [];
+    const samples: Sample[] = [];
     for (let i = 0; i < 9; i++) samples.push(await flow());
-    assert.equal(store.db.prepare('SELECT total_changes() AS n').get().n, changesBefore);
+    assert.equal(store.db.prepare('SELECT total_changes() AS n').get()!.n, changesBefore);
     assert.equal(
       hash(
         JSON.stringify(store.db.prepare('SELECT id,text,hash FROM sources ORDER BY rowid').all())
@@ -239,7 +259,7 @@ for (const scenario of scenarios) {
       contentHash
     );
     const summary = Object.fromEntries(
-      ['elapsedMs', 'readerMs', 'cpuMs', 'peakRss'].map((key) => {
+      summaryKeys.map((key) => {
         const values = samples.map((row) => row[key]).sort((a, b) => a - b);
         return [key, { median: values[4], min: values[0], max: values.at(-1) }];
       })

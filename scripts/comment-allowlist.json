@@ -50,7 +50,7 @@
     "system": "Node test runner"
   },
   {
-    "file": "tests/fixtures/provider-timeout-clock.mjs",
+    "file": "tests/fixtures/provider-timeout-clock.ts",
     "comment": "Node 26 MockTimers' refresh does not repeatedly schedule Undici's fast timer. Use its supported optional-refresh fallback, only in this process.",
     "system": "Node MockTimers; Undici"
   },

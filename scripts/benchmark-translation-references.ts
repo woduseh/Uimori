@@ -5,9 +5,10 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { Store } from '../dist/server/store.js';
-import { captureTranslationReferences } from '../dist/server/translation-context.js';
-import { createSyntheticBot } from './synthetic-story.mjs';
+import type { SQLInputValue } from 'node:sqlite';
+import { Store } from '#dist/server/store.js';
+import { captureTranslationReferences } from '#dist/server/translation-context.js';
+import { createSyntheticBot } from './synthetic-story.ts';
 import { assertBuild, fingerprint, json, root } from './lib.mjs';
 
 const directory = path.resolve(process.argv[2]);
@@ -27,8 +28,10 @@ if (!existsSync(directory)) {
   await json(path.join(directory, 'fixture.json'), marker);
 }
 assert.deepEqual(JSON.parse(await readFile(path.join(directory, 'fixture.json'), 'utf8')), marker);
-const hash = (value) => createHash('sha256').update(value).digest('hex');
-const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+type Counters = { sqlStatements: number; returnedTextBytes: number; wordingRows: number };
+type Sample = Counters & { ms: number; cpuMs: number; heapDelta: number; rssAfter: number };
+const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
 const report = {
   build: await assertBuild(),
   source: await fingerprint(),
@@ -56,21 +59,21 @@ const report = {
         ? 'Same exact reference output and unchanged stored rows; long-case median saves at least 50ms and 15%; no material normal-case regression'
         : 'Exact selected wording and unchanged stored rows',
   },
-  conditions: [],
+  conditions: [] as unknown[],
 };
 await writeFile(path.join(directory, `${label}.diff`), git('diff', 'HEAD', '--binary'));
 await writeFile(
-  path.join(directory, `${label}-runner.mjs`),
+  path.join(directory, `${label}-runner.ts`),
   await readFile(new URL(import.meta.url))
 );
 globalThis.fetch = () => {
   throw new Error('External calls forbidden in benchmark');
 };
-function databaseHash(store) {
+function databaseHash(store: Store) {
   const digest = createHash('sha256');
   for (const { name } of store.db
     .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
-    .all()) {
+    .all() as { name: string }[]) {
     const rows = store.db.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all();
     digest.update(
       name +
@@ -83,7 +86,7 @@ function databaseHash(store) {
   }
   return digest.digest('hex');
 }
-const summary = (samples, key) => {
+const summary = (samples: Sample[], key: keyof Sample) => {
   const values = samples.map((sample) => sample[key]).sort((a, b) => a - b);
   return { median: values[Math.floor(values.length / 2)], min: values[0], max: values.at(-1) };
 };
@@ -148,8 +151,12 @@ for (const scenario of scenarios) {
         store.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(parent, chat.id);
       });
     }
-    const chatId = String(store.db.prepare('SELECT id FROM chats').get().id);
-    const rows = store.db.prepare('SELECT id,text,hash FROM sources ORDER BY rowid').all();
+    const chatId = String(store.db.prepare('SELECT id FROM chats').get()!.id);
+    const rows = store.db.prepare('SELECT id,text,hash FROM sources ORDER BY rowid').all() as {
+      id: string;
+      text: string;
+      hash: string;
+    }[];
     assert.equal(rows.length, scenario.scenes);
     assert.ok(rows.every((row) => row.text.length === scenario.sourceChars));
     const snapshot = {
@@ -161,7 +168,7 @@ for (const scenario of scenarios) {
         String(
           store.db
             .prepare('SELECT result FROM job_results WHERE job_id=?')
-            .get(`translation-${index}`).result
+            .get(`translation-${index}`)!.result
         )
       );
       assert.equal(saved.text.length, scenario.translationChars);
@@ -175,16 +182,16 @@ for (const scenario of scenarios) {
       };
     });
     const fixtureHash = databaseHash(store);
-    const changesBefore = store.db.prepare('SELECT total_changes() AS n').get().n;
+    const changesBefore = store.db.prepare('SELECT total_changes() AS n').get()!.n;
     const originalPrepare = store.db.prepare.bind(store.db);
-    let counters;
-    store.db.prepare = (...args) => {
+    let counters: Counters | undefined;
+    store.db.prepare = (...args: Parameters<typeof originalPrepare>) => {
       if (counters) counters.sqlStatements++;
       const statement = originalPrepare(...args);
-      const measure = (row) => {
+      const measure = <T>(row: T): T => {
         if (counters && row) {
-          if (typeof row.result === 'string') counters.wordingRows++;
-          counters.returnedTextBytes += Object.values(row).reduce(
+          if (typeof (row as { result?: unknown }).result === 'string') counters.wordingRows++;
+          counters.returnedTextBytes += Object.values(row).reduce<number>(
             (sum, value) => sum + (typeof value === 'string' ? Buffer.byteLength(value) : 0),
             0
           );
@@ -194,15 +201,17 @@ for (const scenario of scenarios) {
       const get = statement.get.bind(statement);
       const all = statement.all.bind(statement);
       const iterate = statement.iterate.bind(statement);
-      statement.get = (...parameters) => measure(get(...parameters));
-      statement.all = (...parameters) => all(...parameters).map(measure);
-      statement.iterate = function* (...parameters) {
+      statement.get = ((...parameters: SQLInputValue[]) =>
+        measure(get(...parameters))) as typeof statement.get;
+      statement.all = ((...parameters: SQLInputValue[]) =>
+        all(...parameters).map(measure)) as typeof statement.all;
+      statement.iterate = function* (...parameters: SQLInputValue[]) {
         for (const row of iterate(...parameters)) yield measure(row);
-      };
+      } as typeof statement.iterate;
       return statement;
     };
-    function flow() {
-      globalThis.gc();
+    function flow(): Sample {
+      globalThis.gc!();
       counters = { sqlStatements: 0, returnedTextBytes: 0, wordingRows: 0 };
       const memory = process.memoryUsage(),
         cpu = process.cpuUsage(),
@@ -234,7 +243,7 @@ for (const scenario of scenarios) {
     const first = flow();
     for (let i = 0; i < 2; i++) flow();
     const samples = Array.from({ length: 9 }, flow);
-    assert.equal(store.db.prepare('SELECT total_changes() AS n').get().n, changesBefore);
+    assert.equal(store.db.prepare('SELECT total_changes() AS n').get()!.n, changesBefore);
     assert.equal(databaseHash(store), fixtureHash);
     const condition = {
       access,
@@ -246,7 +255,9 @@ for (const scenario of scenarios) {
       ),
       first,
       samples,
-      summary: Object.fromEntries(Object.keys(first).map((key) => [key, summary(samples, key)])),
+      summary: Object.fromEntries(
+        (Object.keys(first) as (keyof Sample)[]).map((key) => [key, summary(samples, key)])
+      ),
     };
     report.conditions.push(condition);
     console.log(JSON.stringify({ scenes: scenario.scenes, ...condition.summary }));

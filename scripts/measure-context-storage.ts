@@ -1,23 +1,39 @@
-import { createSyntheticBot, syntheticStoryScenes } from './synthetic-story.mjs';
-import { importChatTranscript } from '../dist/server/chat-transcript.js';
+import { createSyntheticBot, syntheticStoryScenes } from './synthetic-story.ts';
+import { importChatTranscript } from '#dist/server/chat-transcript.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { cpus, totalmem } from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { Store } from '../dist/server/store.js';
-import { previousContextPlan } from '../dist/server/context-planning.js';
-import { captureLogicalHistory } from '../dist/server/prompt-snapshot.js';
-import { nativeSourceSnapshot } from '../dist/server/risu-native-actions.js';
+import type { DatabaseSync, StatementSync } from 'node:sqlite';
+import { Store } from '#dist/server/store.js';
+import { previousContextPlan } from '#dist/server/context-planning.js';
+import { captureLogicalHistory } from '#dist/server/prompt-snapshot.js';
+import { nativeSourceSnapshot } from '#dist/server/risu-native-actions.js';
 import { assertBuild, root } from './lib.mjs';
+import type { RunSnapshot } from '#dist/core/types.js';
+
+type Scenario = {
+  count: number;
+  charsPerSource: number | null;
+  sources?: unknown[] | null;
+  chatId: string;
+  head: string | null;
+  expectedHistoryHash: string;
+  settings: RunSnapshot['settings'];
+  plan: RunSnapshot['contextPlan'];
+  expectedPathHashes?: Record<string, string>;
+};
+type Fixture = { kind: string; mode?: string; corpus?: unknown; scenarios: Scenario[] };
+type Sample = { elapsedMs: number; cpuMs: number; heapDeltaBytes: number };
 
 const args = process.argv.slice(2);
 const longStory = args.includes('--long-story');
-const option = (name) => args[args.indexOf(name) + 1];
+const option = (name: string) => args[args.indexOf(name) + 1];
 const label = args.includes('--label') ? option('--label') : 'measurement';
 if (!/^[a-z0-9-]+$/iu.test(label)) throw new Error('Invalid label');
-if (!global.gc) throw new Error('Run node --expose-gc scripts/measure-context-storage.mjs');
+if (!global.gc) throw new Error('Run node --expose-gc scripts/measure-context-storage.ts');
 const build = await assertBuild();
 const base = path.join(root, 'output', 'context-storage');
 await mkdir(base, { recursive: true });
@@ -28,23 +44,24 @@ const within = path.relative(base, directory);
 if (path.isAbsolute(within) || within.startsWith('..') || !within.startsWith('fixture-'))
   throw new Error('Only owned output/context-storage/fixture-* directories are accepted');
 const descriptor = path.join(directory, 'fixture.json');
-const hash = (value) => createHash('sha256').update(value).digest('hex');
-const outputHash = (value) =>
+const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+const outputHash = (value: unknown) =>
   hash(
-    JSON.stringify(value, (_key, item) =>
+    JSON.stringify(value, (_key: string, item: unknown) =>
       item && typeof item === 'object' && !Array.isArray(item)
         ? Object.fromEntries(
             Object.keys(item)
               .sort()
-              .map((key) => [key, item[key]])
+              .map((key) => [key, (item as Record<string, unknown>)[key]])
           )
         : item
     )
   );
-const save = (file, value) => writeFile(file, JSON.stringify(value, null, 2) + '\n');
-let fixture;
+const save = (file: string, value: unknown) =>
+  writeFile(file, JSON.stringify(value, null, 2) + '\n');
+let fixture: Fixture | undefined;
 if (args.includes('--fixture')) {
-  fixture = JSON.parse(await readFile(descriptor, 'utf8'));
+  fixture = JSON.parse(await readFile(descriptor, 'utf8')) as Fixture;
   assert.equal(fixture.kind, 'uimori-context-storage-synthetic-v2');
   if (longStory) assert.equal(fixture.mode, 'long-story');
 }
@@ -88,7 +105,7 @@ try {
       );
       const chat = imported.chat,
         history = store.history(chat.headRevision);
-      const plan = {
+      const plan: RunSnapshot['contextPlan'] = {
         version: 1,
         status: 'ready',
         budget: { inputTokenLimit: 272000, estimator: 'o200k_base-v1' },
@@ -118,11 +135,11 @@ try {
     await save(descriptor, fixture);
   }
   assert.deepEqual(store.db.prepare('PRAGMA foreign_key_check').all(), []);
-  assert.equal(store.db.prepare('PRAGMA integrity_check').get().integrity_check, 'ok');
+  assert.equal(store.db.prepare('PRAGMA integrity_check').get()!.integrity_check, 'ok');
   const digest = createHash('sha256');
   for (const row of store.db.prepare('SELECT id,snapshot FROM runs ORDER BY id').iterate()) {
-    digest.update(row.id);
-    digest.update(row.snapshot);
+    digest.update(String(row.id));
+    digest.update(String(row.snapshot));
   }
   const report = {
     label,
@@ -146,7 +163,7 @@ try {
     },
     warmups: 3,
     repetitions: 9,
-    scenarios: [],
+    scenarios: [] as unknown[],
     limitations: [
       'Storage stages called by generation, not end-to-end model latency or billing.',
       fixture.mode === 'long-story'
@@ -159,8 +176,10 @@ try {
       'SQL instrumentation is a separate untimed diagnostic invocation; timings have no instrumentation.',
       'Ready plans have no compacted sources: exercises full checkpoint miss. Reuse/invalidation verified by tests.',
     ],
+    finishedAt: undefined as string | undefined,
+    status: undefined as string | undefined,
   };
-  const summary = (values) => {
+  const summary = (values: number[]) => {
     const sorted = [...values].sort((a, b) => a - b);
     return {
       median: sorted[Math.floor(sorted.length / 2)],
@@ -171,12 +190,14 @@ try {
     };
   };
   for (const scenario of fixture.scenarios) {
-    const history = store.history(scenario.head);
+    const head = scenario.head;
+    assert.ok(head, 'Fixture scenario has no head revision');
+    const history = store.history(head);
     assert.equal(hash(JSON.stringify(history)), scenario.expectedHistoryHash);
     const chat = store.chat(scenario.chatId);
-    const snapshot = {
+    const snapshot: RunSnapshot = {
       chatId: scenario.chatId,
-      parentRevision: scenario.head,
+      parentRevision: head,
       request: 'Synthetic next-scene preparation measurement.',
       settingsRevision: chat.settingsRevision,
       history,
@@ -185,32 +206,47 @@ try {
       contextPlan: scenario.plan,
     };
     const paths = {
-      history: () => store.history(scenario.head),
+      history: () => store.history(head),
       previousCheckpoint: () => previousContextPlan(store, snapshot),
       combined: () => {
-        const current = store.history(scenario.head);
+        const current = store.history(head);
         return {
           history: current,
           previous: previousContextPlan(store, { ...snapshot, history: current }),
         };
       },
       captureLogicalHistory: () => captureLogicalHistory(store, snapshot),
-      nativeSourceSnapshot: () => nativeSourceSnapshot(store, scenario.chatId, scenario.head),
+      nativeSourceSnapshot: () => nativeSourceSnapshot(store, scenario.chatId, head),
     };
-    scenario.expectedPathHashes ??= {};
-    for (const name of ['captureLogicalHistory', 'nativeSourceSnapshot']) {
-      if (!scenario.expectedPathHashes[name]) {
-        scenario.expectedPathHashes[name] = outputHash(paths[name]());
+    const expectedPathHashes = (scenario.expectedPathHashes ??= {});
+    for (const name of ['captureLogicalHistory', 'nativeSourceSnapshot'] as const) {
+      if (!expectedPathHashes[name]) {
+        expectedPathHashes[name] = outputHash(paths[name]());
         await save(descriptor, fixture);
       }
     }
-    const results = {};
+    const results: Record<
+      string,
+      {
+        first: Sample;
+        elapsedMs: ReturnType<typeof summary>;
+        cpuMs: ReturnType<typeof summary>;
+        heapDeltaBytes: ReturnType<typeof summary>;
+        queries: number;
+        returnedStringBytes: number;
+        outputHash?: string;
+      }
+    > = {};
     for (const [name, action] of Object.entries(paths)) {
-      const check = (value) => {
+      const check = (value: unknown) => {
         if (name === 'previousCheckpoint') assert.equal(value, undefined);
         else if (name === 'captureLogicalHistory' || name === 'nativeSourceSnapshot') {
-          assert.equal(outputHash(value), scenario.expectedPathHashes[name]);
-          const logical = name === 'captureLogicalHistory' ? value : value.snapshot.logicalHistory;
+          assert.equal(outputHash(value), expectedPathHashes[name]);
+          const native = value as ReturnType<typeof paths.nativeSourceSnapshot>;
+          const logical =
+            name === 'captureLogicalHistory'
+              ? (value as ReturnType<typeof paths.captureLogicalHistory>)
+              : native.snapshot.logicalHistory!;
           assert.deepEqual(
             logical
               .filter((message) => message.role === 'assistant')
@@ -219,20 +255,21 @@ try {
           );
           assert.equal(logical.length, scenario.count * 2);
           if (name === 'nativeSourceSnapshot') {
-            assert.equal(value.source.id, scenario.head);
-            assert.equal(value.source.text, history.at(-1).text);
-            assert.equal(outputHash(logical), scenario.expectedPathHashes.captureLogicalHistory);
+            assert.equal(native.source.id, head);
+            assert.equal(native.source.text, history.at(-1)!.text);
+            assert.equal(outputHash(logical), expectedPathHashes.captureLogicalHistory);
           }
         } else {
+          const combined = value as ReturnType<typeof paths.combined>;
           assert.equal(
-            hash(JSON.stringify(name === 'history' ? value : value.history)),
+            hash(JSON.stringify(name === 'history' ? value : combined.history)),
             scenario.expectedHistoryHash
           );
-          if (name === 'combined') assert.equal(value.previous, undefined);
+          if (name === 'combined') assert.equal(combined.previous, undefined);
         }
       };
-      const sample = () => {
-        global.gc();
+      const sample = (): Sample => {
+        global.gc!();
         const heap = process.memoryUsage().heapUsed;
         const cpu = process.cpuUsage();
         const start = performance.now();
@@ -249,21 +286,21 @@ try {
       const original = store.db.prepare;
       let queries = 0;
       let returnedStringBytes = 0;
-      store.db.prepare = function (sql) {
+      const counted = <F extends StatementSync['get'] | StatementSync['all']>(execute: F) =>
+        function (this: StatementSync, ...values: unknown[]) {
+          queries++;
+          const result = Reflect.apply(execute, this, values);
+          for (const row of Array.isArray(result) ? result : [result])
+            for (const value of Object.values(row ?? {}))
+              if (typeof value === 'string') returnedStringBytes += Buffer.byteLength(value);
+          return result;
+        } as F;
+      store.db.prepare = function (this: DatabaseSync, sql: string) {
         const statement = original.call(this, sql);
-        for (const method of ['get', 'all']) {
-          const execute = statement[method];
-          statement[method] = function (...values) {
-            queries++;
-            const result = execute.apply(this, values);
-            for (const row of Array.isArray(result) ? result : [result])
-              for (const value of Object.values(row ?? {}))
-                if (typeof value === 'string') returnedStringBytes += Buffer.byteLength(value);
-            return result;
-          };
-        }
+        statement.get = counted(statement.get);
+        statement.all = counted(statement.all);
         return statement;
-      };
+      } as typeof original;
       try {
         check(action());
       } finally {
@@ -276,9 +313,7 @@ try {
         heapDeltaBytes: summary(samples.map((s) => s.heapDeltaBytes)),
         queries,
         returnedStringBytes,
-        ...(scenario.expectedPathHashes[name]
-          ? { outputHash: scenario.expectedPathHashes[name] }
-          : {}),
+        ...(expectedPathHashes[name] ? { outputHash: expectedPathHashes[name] } : {}),
       };
     }
     report.scenarios.push({

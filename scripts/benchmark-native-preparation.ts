@@ -1,14 +1,20 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { assertBuild, json, newId, root } from './lib.mjs';
-import { prepareNativeRisuText } from '../dist/server/risu-native-prepare.js';
-import { evaluateNativeRisuFields } from '../dist/server/risu-native-cbs.js';
-import { processNativeRisuText } from '../dist/server/risu-native-render.js';
+import { prepareNativeRisuText } from '#dist/server/risu-native-prepare.js';
+import { evaluateNativeRisuFields } from '#dist/server/risu-native-cbs.js';
+import { processNativeRisuText } from '#dist/server/risu-native-render.js';
+import type { RisuContentSource } from '#dist/core/risu-native.js';
 
 const identity = await assertBuild();
-const native = { version: 1, sourceHash: 'a'.repeat(64), card: { name: 'Synthetic' }, assets: [] };
-const results = [];
-async function measured(run) {
+const native: RisuContentSource = {
+  version: 1,
+  sourceHash: 'a'.repeat(64),
+  card: { name: 'Synthetic' },
+  assets: [],
+};
+const results: unknown[] = [];
+async function measured<T>(run: () => Promise<T>) {
   globalThis.gc?.();
   const initialRss = process.memoryUsage().rss;
   let peakRss = initialRss;
@@ -33,9 +39,9 @@ for (const count of [10, 50, 100]) {
     native,
     fields: [{ key: 'bot', fields: { body: '{{setvar::step::0}}' } }],
     context: {
-      variables: {},
+      variables: {} as Record<string, string>,
       messages: Array.from({ length: count }, (_, index) => ({
-        role: index % 2 ? 'user' : 'char',
+        role: index % 2 ? ('user' as const) : ('char' as const),
         data: `Scene ${index}: ${'synthetic history '.repeat(100)}{{getvar::step}}{{setvar::step::${index + 1}}}`,
       })),
     },

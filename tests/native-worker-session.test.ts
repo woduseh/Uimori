@@ -35,7 +35,7 @@ function session(timeout = 3000, signal?: AbortSignal) {
 
 test('a worker run from source resolves #contracts to its TypeScript module', async () => {
   const value = createNativeRisuWorkerSession<undefined, string>(
-    new URL('./fixtures/native-worker-contracts.mjs', import.meta.url),
+    new URL('./fixtures/native-worker-contracts.ts', import.meta.url),
     'evaluate',
     3000
   );

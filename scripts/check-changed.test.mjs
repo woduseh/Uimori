@@ -82,6 +82,9 @@ test('a scripts change runs its paired tooling test, or the whole tooling suite 
   ]);
   assert.equal(tooling(['scripts/doctor.mjs', 'scripts/lib.mjs']), 'all');
   assert.deepEqual(tooling(['core/provider.ts']), []);
+  const typed = ['scripts/perf-ledger.test.ts'];
+  assert.deepEqual(tooling(['scripts/perf-ledger.mjs'], {}, typed), typed);
+  assert.deepEqual(tooling(typed, {}, typed), typed);
   const importers = {
     'scripts/ci-changes.test.mjs': "import { docsOnly } from './ci-changes.mjs';",
     'scripts/check-changed.test.mjs': "import { docsOnly } from './ci-changes.mjs';",
@@ -104,8 +107,8 @@ test('a scripts change runs its paired tooling test, or the whole tooling suite 
   assert.equal(tooling(['.claude/hooks/release-guard.mjs']), 'all');
   assert.equal(checkChanged.toolingNeedsBuild('all'), true);
   assert.equal(
-    checkChanged.toolingNeedsBuild(['scripts/perf-ledger.test.mjs'], {
-      'scripts/perf-ledger.test.mjs': "import '../dist/server/app.js';",
+    checkChanged.toolingNeedsBuild(['scripts/perf-ledger.test.ts'], {
+      'scripts/perf-ledger.test.ts': "import '../dist/server/app.js';",
     }),
     true
   );
@@ -261,6 +264,17 @@ test('comments check only the changed files, and i18n runs for the runtime sourc
     checkChanged.selectChecks(['core/a.ts', 'scripts/comment-allowlist.json'], {}).comments,
     'all'
   );
+});
+
+test('JavaScript outside the app runs the script import check and tsc when the program includes it', () => {
+  const select = (file) => checkChanged.selectChecks([file], {});
+  assert.equal(select('scripts/doctor.mjs').scriptImports, true);
+  assert.equal(select('tests/fixtures/worker.mjs').scriptImports, true);
+  assert.equal(select('.githooks/pre-push.mjs').scriptImports, true);
+  assert.equal(select('scripts/helper-eval.ts').scriptImports, false);
+  assert.equal(select('server/worker.mjs').scriptImports, false);
+  assert.equal(select('scripts/lib.mjs').typeScript, true);
+  assert.equal(select('runner/runner.mjs').typeScript, false);
 });
 
 test('root user guides select the guide test, and server entry changes say the dist tests need a build', () => {
