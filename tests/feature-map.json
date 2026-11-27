@@ -453,6 +453,7 @@
       ],
       "specs": [
         { "file": "tests/settings-compact-browser.spec.ts" },
+        { "file": "tests/settings-dialog-consistency-browser.spec.ts" },
         { "file": "tests/settings-save-decisions-browser.spec.ts" },
         { "file": "tests/settings-sync-browser.spec.ts" }
       ]

@@ -920,3 +920,174 @@ test('SAVEACK saving both provider drafts stops on a failed write but continues 
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
 });
+
+test('PMUI Vertex location comparison includes the saved custom location, cancels, retries per location and changes the connection location', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const title = 'PMUI location ' + Date.now(),
+    observed = observe(page),
+    endpoint = (location: string) =>
+      `https://${location}-aiplatform.googleapis.com/v1/projects/synthetic-compare/locations/${location}/publishers/google/models`;
+  const connection = await api<Connection>(request, '/connections', {
+    title,
+    protocol: 'vertex-gemini-v1',
+    endpoint: endpoint('asia-south1'),
+    apiKey: 'PM_SYNTHETIC_KEY',
+    enabled: true,
+  });
+  const model = await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(connection, title),
+    modelId: 'gemini-4-carbon',
+  });
+  const finished: Record<string, Partial<ProviderConnectionTest>> = {
+    'asia-south1': { status: 'completed', latencyMs: 500 },
+    'asia-northeast3': { status: 'completed', latencyMs: 120 },
+    'us-central1': { status: 'completed', latencyMs: 300 },
+    eu: { status: 'error', error: 'HTTP_429' },
+    'europe-west4': { status: 'error', error: 'HTTP_404' },
+  };
+  const posts: { idempotencyKey: string; location: string }[] = [],
+    tests = new Map<string, ProviderConnectionTest>(),
+    released = new Set<string>();
+  const view = (
+    id: string,
+    location: string,
+    outcome?: Partial<ProviderConnectionTest>
+  ): ProviderConnectionTest => ({
+    id,
+    modelId: model.id,
+    modelRevision: model.revision,
+    providerModelId: model.modelId,
+    connectionId: connection.id,
+    location,
+    createdAt: '2026-11-20T00:00:00.000Z',
+    finishedAt: outcome ? '2026-11-20T00:00:01.000Z' : null,
+    status: 'running',
+    text: outcome?.status === 'completed' ? 'OK' : '',
+    truncated: false,
+    latencyMs: null,
+    error: null,
+    usage: { inputTokens: null, outputTokens: null, costUsd: null },
+    ...outcome,
+  });
+  await page.route(`**/api/provider-management/models/${model.id}/test`, (route) => {
+    const body = route.request().postDataJSON();
+    posts.push(body);
+    const test = view(`synthetic-location-${posts.length}`, body.location, finished[body.location]);
+    tests.set(test.id, test);
+    if (body.location === 'eu') finished.eu = { status: 'completed', latencyMs: 200 };
+    return route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify(test),
+    });
+  });
+  await page.route('**/api/provider-management/tests/*', (route) => {
+    const test = tests.get(new URL(route.request().url()).pathname.split('/').pop() ?? '');
+    if (!test) return route.fulfill({ status: 404, body: '{}' });
+    const location = test.location ?? '';
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(
+        released.has(location)
+          ? view(test.id, location, { status: 'completed', latencyMs: 640 })
+          : test
+      ),
+    });
+  });
+  await settings(page);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
+  await openProviderMenu(page, '모델', title);
+  const card = page.getByRole('article', { name: `${title} 모델`, exact: true });
+  const compare = card.getByRole('button', { name: '위치별 응답 비교', exact: true });
+  await expect(compare).toHaveAccessibleDescription('9개 위치에 짧은 요청을 하나씩 보내요.');
+  await expect(card.getByText('9개 위치에 짧은 요청을 하나씩 보내요.')).toBeVisible();
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('provider-location-menu-mobile.png') });
+  await compare.click();
+  const region = page.getByRole('region', { name: `${title} 응답 테스트 결과`, exact: true }),
+    list = region.getByRole('list', { name: `${title} 위치별 응답`, exact: true }),
+    row = (label: string) => list.getByRole('listitem').filter({ hasText: label });
+  await expect(list.getByRole('listitem')).toHaveCount(9);
+  await expect.poll(() => posts.length).toBe(9);
+  expect(posts.map((post) => post.location).sort()).toEqual([
+    'asia-northeast1',
+    'asia-northeast3',
+    'asia-south1',
+    'eu',
+    'europe-west4',
+    'global',
+    'us',
+    'us-central1',
+    'us-east4',
+  ]);
+  await expect(row('asia-south1')).toContainText('현재 위치');
+  await expect(row('asia-south1')).toContainText('0.5초');
+  await expect(row('asia-south1').getByRole('button')).toHaveCount(0);
+  await expect(row('asia-northeast3 (서울)')).toContainText('가장 빠름');
+  await expect(row('global (Google 자동 배치)')).toContainText('응답 확인 중…');
+  await expect(row('europe-west4 (네덜란드)')).toContainText('이 위치에서는 제공하지 않아요');
+  await expect(row('europe-west4 (네덜란드)').getByRole('button')).toHaveCount(0);
+
+  await region.getByRole('button', { name: `${title} 위치별 응답 비교 취소`, exact: true }).click();
+  await expect(row('global (Google 자동 배치)')).toContainText('확인을 취소했어요');
+  await expect(region.getByRole('button', { name: /위치별 응답 비교 취소/ })).toHaveCount(0);
+  if (visualReview)
+    await region.screenshot({ path: info.outputPath('provider-location-compare-mobile.png') });
+
+  await row('eu (유럽 다중 리전)')
+    .getByRole('button', { name: 'eu (유럽 다중 리전) 다시 시도', exact: true })
+    .click();
+  await expect(row('eu (유럽 다중 리전)')).toContainText('0.2초');
+  expect(posts).toHaveLength(10);
+  expect(posts[9].idempotencyKey).not.toBe(
+    posts.find((post) => post.location === 'eu')?.idempotencyKey
+  );
+
+  released.add('global');
+  await row('global (Google 자동 배치)')
+    .getByRole('button', { name: 'global (Google 자동 배치) 다시 시도', exact: true })
+    .click();
+  await expect(row('global (Google 자동 배치)')).toContainText('0.6초');
+  expect(posts).toHaveLength(10);
+
+  await row('asia-northeast3 (서울)')
+    .getByRole('button', { name: '이 위치로 변경: asia-northeast3 (서울)', exact: true })
+    .click();
+  await expect(page.getByText(`${title} 프로바이더 변경 저장됨`)).toBeVisible();
+  await expect
+    .poll(async () => (await api<Connection>(request, `/connections/${connection.id}`)).endpoint)
+    .toBe(endpoint('asia-northeast3'));
+  await expect(row('asia-northeast3 (서울)')).toContainText('현재 위치');
+  await expect(row('asia-south1')).not.toContainText('현재 위치');
+  await expect(
+    row('asia-south1').getByRole('button', { name: '이 위치로 변경: asia-south1', exact: true })
+  ).toBeVisible();
+  await expect(list).toBeFocused();
+
+  const moved = await api<Connection>(request, `/connections/${connection.id}`);
+  await api(
+    request,
+    `/connections/${connection.id}`,
+    connectionBody(moved, { title: `${title} renamed` }),
+    'PUT'
+  );
+  const useIowa = row('us-central1 (아이오와)').getByRole('button', {
+    name: '이 위치로 변경: us-central1 (아이오와)',
+    exact: true,
+  });
+  await useIowa.click();
+  await expect(page.getByTestId('connection-editor').getByRole('alert')).toBeVisible();
+  expect((await api<Connection>(request, `/connections/${connection.id}`)).endpoint).toBe(
+    endpoint('asia-northeast3')
+  );
+  await useIowa.click();
+  await expect
+    .poll(async () => (await api<Connection>(request, `/connections/${connection.id}`)).endpoint)
+    .toBe(endpoint('us-central1'));
+  expect(posts).toHaveLength(10);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+});

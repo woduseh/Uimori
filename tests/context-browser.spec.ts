@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { ContextDetail as Detail } from '../core/context-plan.js';
 import type { Chat, ChatDetail } from '../core/types.js';
+import type { StoryDetail } from '../core/story.js';
 import type { ModelWorkspace, PromptWorkspace } from '../core/product.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
@@ -13,6 +15,10 @@ async function read<T>(request: APIRequestContext, path: string): Promise<T> {
   const response = await request.get(`/api${path}`);
   expect(response.ok(), await response.text()).toBe(true);
   return response.json();
+}
+async function reenterMemory(page: Page) {
+  await selectChatSettingsSection(page, '생성 설정');
+  await selectChatSettingsSection(page, '기억과 메모');
 }
 async function create(page: Page, title: string) {
   const prompts = await read<PromptWorkspace>(page.request, '/prompt-workspace');
@@ -69,6 +75,19 @@ async function create(page: Page, title: string) {
   await expect(panel.getByRole('button', { name: '직접 요약 작성', exact: true })).toBeEnabled();
   return { chat, panel };
 }
+async function saveSummary(request: APIRequestContext, chatId: string, summary: string) {
+  const detail = await read<Detail>(request, `/chats/${chatId}/context`);
+  const response = await request.put(`/api/chats/${chatId}/context/summary`, {
+    data: {
+      expectedRevision: detail.activeRevision,
+      expectedHeadRevision: detail.headRevision,
+      idempotencyKey: randomUUID(),
+      summary,
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return response.json() as Promise<Detail>;
+}
 test('CTXUI01 summary authoring without a Run, edits replace the current summary durably', async ({
   page,
   request,
@@ -96,6 +115,66 @@ test('CTXUI01 summary authoring without a Run, edits replace the current summary
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '두 번째 요약: 배가 출발했다.'
   );
+});
+
+test('CTXUI02 concurrent summary and note changes preserve local drafts and require explicit rebase', async ({
+  page,
+  request,
+}) => {
+  const { chat, panel } = await create(page, 'CTXUI02 합성 충돌');
+  await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
+  await panel.getByLabel('편집할 컨텍스트 요약').fill('내 요약 초안');
+  await saveSummary(request, chat.id, '다른 창에서 저장한 요약');
+  await reenterMemory(page);
+  await expect(panel.getByTestId('context-summary-text')).toHaveText('다른 창에서 저장한 요약');
+  await expect(panel.getByLabel('편집할 컨텍스트 요약')).toHaveValue('내 요약 초안');
+  await expect(panel.getByRole('button', { name: '요약 저장', exact: true })).toBeDisabled();
+  await panel
+    .getByRole('button', { name: '최신 요약을 확인하고 내 초안 유지', exact: true })
+    .click();
+  await panel.getByRole('button', { name: '요약 저장', exact: true }).click();
+  await expect(panel.getByTestId('context-summary-text')).toHaveText('내 요약 초안');
+  const notes = panel.getByTestId('context-notes');
+  await notes.locator(':scope > summary').click();
+  await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
+  await notes.getByLabel('메모와 정정 내용').fill('내 메모 초안');
+  const before = await read<StoryDetail>(request, `/chats/${chat.id}/story`);
+  const added = await request.post(`/api/chats/${chat.id}/notes`, {
+    data: {
+      expectedRevision: before.notesRevision,
+      expectedHeadRevision: null,
+      idempotencyKey: randomUUID(),
+      author: '다른 작가',
+      text: '다른 창의 메모',
+    },
+  });
+  expect(added.ok(), await added.text()).toBe(true);
+  await reenterMemory(page);
+  await expect(notes.getByText('다른 창의 메모', { exact: true })).toBeVisible();
+  await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
+  await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
+  await selectChatSettingsSection(page, '생성 설정');
+  await selectChatSettingsSection(page, '기억과 메모');
+  await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
+  await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
+  const noteConflict = page.getByRole('alertdialog', { name: '메모 저장 충돌', exact: true });
+  await expect(noteConflict).toBeVisible();
+  await noteConflict.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
+  await notes.getByRole('button', { name: '저장 충돌 확인', exact: true }).click();
+  await expect(noteConflict.getByText('다른 창의 메모', { exact: true })).toBeVisible();
+  await noteConflict.getByRole('button', { name: '저장본 확인 완료', exact: true }).click();
+  await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await read<StoryDetail>(request, `/chats/${chat.id}/story`)).notes
+        .map((note) => note.text)
+        .sort()
+    )
+    .toEqual(['내 메모 초안', '다른 창의 메모'].sort());
+  expect((await read<ChatDetail>(request, `/chats/${chat.id}`)).sources).toEqual([]);
+  expect(await read<unknown[]>(request, `/chats/${chat.id}/attempts`)).toEqual([]);
 });
 
 const width = 412;

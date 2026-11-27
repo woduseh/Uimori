@@ -218,13 +218,14 @@ test('JEVUI03 an uncertain test resubmits the same idempotency key and the next 
   await expect(statusButton).toBeVisible();
   expect(submissions).toHaveLength(1);
   await statusButton.click();
-  await expect.poll(() => polls.length).toBe(1);
   await expect(run).toBeEnabled();
+  expect(polls).toHaveLength(1);
   expect(submissions).toHaveLength(2);
   expect(submissions[1]).toEqual(submissions[0]);
   expect(submissions[0]?.expectedRevision).toBe(current.revision);
   await run.click();
   await expect.poll(() => polls.length).toBe(2);
+  await expect(run).toBeEnabled();
   expect(submissions).toHaveLength(3);
   expect(submissions[2]?.idempotencyKey).not.toBe(submissions[1]?.idempotencyKey);
 });
