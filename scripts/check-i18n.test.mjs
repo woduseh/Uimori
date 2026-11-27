@@ -36,6 +36,7 @@ test('a new Korean literal in an unlisted file fails and points to the catalog',
     'web/Text.tsx': 'export const View = () => <p>불러오는 중</p>;',
     'web/Attribute.tsx': 'export const View = () => <input placeholder="입력" />;',
     'web/Jamo.ts': "export const laugh = 'ㅋㅋ';",
+    'web/Cast.ts': "export const title = <string>'제목';",
     'web/content.css': '.empty::after { content: "없음"; }',
   };
   for (const [file, source] of Object.entries(cases))
