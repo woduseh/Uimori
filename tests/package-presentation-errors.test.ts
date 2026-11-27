@@ -86,13 +86,23 @@ const luaSessionFailure = (code: string) =>
 test('a Risu worker failure while displaying a scene answers a logged 500', async () => {
   const { response, lines } = await presentation(luaSessionFailure('RISU_NATIVE_WORKER_EXIT'));
   expect(response.statusCode).toBe(500);
+  const detailed = await presentation(
+    Object.assign(new Error('RISU_NATIVE_OPERATOR_UNSUPPORTED: pow'), { statusCode: 400 })
+  );
+  expect(detailed.response.statusCode).toBe(500);
+  expect(detailed.lines.join('')).toContain('/presentation RISU_NATIVE_OPERATOR_UNSUPPORTED');
   expect(lines).toContain(
     'REQUEST_FAILED GET /api/chats/:id/sources/:sourceId/presentation RISU_NATIVE_WORKER_EXIT\n'
   );
 });
 
 test('a Risu script timeout in a user action stays a definite refusal with the timeout code', async () => {
-  const { response } = await presentation(luaSessionFailure('RISU_LUA_PROGRAM_TIMEOUT'), true);
-  expect(response.statusCode).toBe(400);
-  expect(response.json()).toEqual({ code: 'RISU_NATIVE_TIMEOUT' });
+  for (const error of [
+    luaSessionFailure('RISU_LUA_PROGRAM_TIMEOUT'),
+    new Error('RISU_NATIVE_CBS_TIMEOUT'),
+  ]) {
+    const { response } = await presentation(error, true);
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ code: 'RISU_NATIVE_TIMEOUT' });
+  }
 });

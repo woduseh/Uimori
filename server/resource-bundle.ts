@@ -159,8 +159,10 @@ function bundleReceipt(body: Record<string, any>, fileDigest: string, prefix = '
 
 function sortedBindings(value: unknown) {
   if (!Array.isArray(value)) return value ?? [];
-  const key = (binding: unknown) =>
-    String((binding as { requirementKey?: unknown })?.requirementKey);
+  const key = (binding: unknown) => {
+    const requirementKey = (binding as { requirementKey?: unknown } | null)?.requirementKey;
+    return typeof requirementKey === 'string' ? requirementKey : '';
+  };
   return [...value].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 }
 
