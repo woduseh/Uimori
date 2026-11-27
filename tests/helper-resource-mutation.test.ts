@@ -373,3 +373,10 @@ test('resource.delete refuses an argument outside its contract instead of deleti
   ).toThrow(expect.objectContaining({ code: 'INVALID_REQUEST', statusCode: 400 }));
   expect(f.store.product.isLive('content', bot.id)).toBe(true);
 });
+
+test('resource.delete answers a malformed id with the operation schema', () => {
+  const f = fixture();
+  expect(() =>
+    invokeResourceTool(f.store, 'resource.delete', { kind: 'content', id: 7, expectedRevision: 1 })
+  ).toThrow(expect.objectContaining({ code: 'INVALID_REQUEST', statusCode: 400 }));
+});

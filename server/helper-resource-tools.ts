@@ -582,18 +582,6 @@ export function invokeResourceTool(
     const input = parseInput(resourceEditorOperations.undoResource.input, args);
     return summary(undoResource(store, input.kind, input.id, input.expectedRevision));
   }
-  const id = args.id == null ? null : text(args.id, 'resource ID', 100);
-  if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
-  if (name === 'resource.patch') {
-    if (!id) throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id is required');
-    return patchHelperResource(
-      store,
-      kind,
-      id,
-      number(args.expectedRevision, 'revision'),
-      args.changes
-    );
-  }
   if (name === 'resource.delete' && kind !== 'prompt-workspace') {
     const { kind: _kind, ...target } = args;
     const { id, expectedRevision } = parseInput(
@@ -606,6 +594,18 @@ export function invokeResourceTool(
       return deleteIllustrationPreset(store, id, expectedRevision);
     if (kind === 'theme') return deleteTheme(store, id, expectedRevision);
     return deleteLibraryItem(store, kind, id, { expectedRevision });
+  }
+  const id = args.id == null ? null : text(args.id, 'resource ID', 100);
+  if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
+  if (name === 'resource.patch') {
+    if (!id) throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id is required');
+    return patchHelperResource(
+      store,
+      kind,
+      id,
+      number(args.expectedRevision, 'revision'),
+      args.changes
+    );
   }
   throw new HelperToolError(
     400,
