@@ -10,9 +10,11 @@ afterEach(() => {
 });
 
 async function rejected(status: number, error: unknown, method = 'POST') {
-  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-    new Response(JSON.stringify({ error }), { status })
-  );
+  return rejectedWith(status, { error }, method);
+}
+
+async function rejectedWith(status: number, body: unknown, method = 'POST') {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(body), { status }));
   const result = await api('/synthetic', {}, method).catch((error: unknown) => error);
   expect(result).toBeInstanceOf(ApiError);
   return result as ApiError;
@@ -55,4 +57,24 @@ test('generic errors keep provider/internal text hidden and retain deletion conf
   });
   const deletion = '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.';
   expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
+});
+
+test('a coded error renders its message from params in the current locale', async () => {
+  const body = { code: 'INPUT_TRANSLATION_TOO_LONG', params: { limit: 1234 } };
+  const result = await rejectedWith(422, body);
+  expect(result).toMatchObject({
+    status: 422,
+    code: 'INPUT_TRANSLATION_TOO_LONG',
+    message: expect.stringContaining('1,234자'),
+  });
+  setLocale('en');
+  expect(result.displayMessage).toContain('1,234 characters');
+});
+
+test('a catalogued code still arriving as a legacy error string uses the catalog message', async () => {
+  const legacy = await rejected(422, 'INPUT_TRANSLATION_REFUSED');
+  const coded = await rejectedWith(422, { code: 'INPUT_TRANSLATION_REFUSED' });
+  expect(legacy).toMatchObject({ code: 'INPUT_TRANSLATION_REFUSED', message: coded.message });
+  setLocale('en');
+  expect(legacy.displayMessage).toBe('The translation model refused to translate this input.');
 });

@@ -237,20 +237,24 @@ test('does not apply, truncate or automatically retry an unusable result', async
   const f = await setup();
   const before = databaseState(f.app);
   const cases = [
-    [{ status: 'refused', refusal: 'No' }, 422, 'INPUT_TRANSLATION_REFUSED'],
-    [{ status: 'partial', text: 'Only half' }, 502, 'INPUT_TRANSLATION_FAILED'],
+    [{ status: 'refused', refusal: 'No' }, 422, { error: 'INPUT_TRANSLATION_REFUSED' }],
+    [{ status: 'partial', text: 'Only half' }, 502, { error: 'INPUT_TRANSLATION_FAILED' }],
     [
       { status: 'tool_calls', toolCalls: [{ id: '1', name: 'invented', arguments: {} }] },
       502,
-      'INPUT_TRANSLATION_FAILED',
+      { error: 'INPUT_TRANSLATION_FAILED' },
     ],
-    [{ text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) }, 422, 'INPUT_TRANSLATION_TOO_LONG'],
+    [
+      { text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },
+      422,
+      { code: 'INPUT_TRANSLATION_TOO_LONG', params: { limit: REQUEST_TEXT_MAX_CHARS } },
+    ],
   ] as const;
-  for (const [index, [delta, status, error]] of cases.entries()) {
+  for (const [index, [delta, status, body]] of cases.entries()) {
     const send = mockSend({ ...success, ...delta } as transport.ProviderResult);
     const response = await f.post(payload);
     expect(response.statusCode, response.body).toBe(status);
-    expect(response.json()).toEqual({ error });
+    expect(response.json()).toEqual(body);
     expect(send).toHaveBeenCalledTimes(1);
     send.mockRestore();
     expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(index + 1);

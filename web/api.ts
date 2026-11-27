@@ -1,4 +1,4 @@
-import { MAINTENANCE_CLOSED, type MaintenanceStatus } from '#contracts';
+import { MAINTENANCE_CLOSED, type MaintenanceStatus, readErrorWire } from '#contracts';
 import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 import { t } from './i18n.js';
 import { writeOptionalStorage } from './optional-storage.js';
@@ -57,17 +57,17 @@ async function readApiResponse<T>(
   if (response.ok) return (await response.json()) as T;
   if (response.status === 401 && notifySession && typeof window !== 'undefined')
     window.dispatchEvent(new Event(sessionRequiredEvent));
-  const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+  const payload = readErrorWire(await response.json().catch(() => null));
   if (
     response.status === 503 &&
-    payload?.error === MAINTENANCE_CLOSED &&
+    (payload.code ?? payload.error) === MAINTENANCE_CLOSED &&
     typeof window !== 'undefined'
   )
     window.dispatchEvent(new Event(maintenanceChangedEvent));
-  const diagnostic = apiErrorDiagnostic(payload?.error, response.status, method);
-  apiErrorDisplay(payload?.error, response.status, method);
+  const diagnostic = apiErrorDiagnostic(payload, response.status, method);
+  apiErrorDisplay(payload, response.status, method);
   throw new ApiError(diagnostic.message, response.status, diagnostic.code, () =>
-    apiErrorDisplay(payload?.error, response.status, method)
+    apiErrorDisplay(payload, response.status, method)
   );
 }
 

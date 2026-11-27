@@ -33,6 +33,7 @@ import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
+import { errorWire } from './app-errors.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -963,17 +964,21 @@ export async function createApp(options: AppOptions): Promise<App> {
       process.stderr.write(
         `REQUEST_FAILED ${request.method} ${request.routeOptions.url ?? 'unknown'} ${requestFailureLabel(error)}\n`
       );
-    void reply.code(code).send({
-      error:
-        error instanceof HttpError ||
-        error instanceof ChatTranscriptError ||
-        transferCode ||
-        startLimitCode
-          ? error.message
-          : code === 400
-            ? 'Invalid request'
-            : 'Request failed',
-    });
+    void reply
+      .code(code)
+      .send(
+        errorWire(
+          error,
+          error instanceof HttpError ||
+            error instanceof ChatTranscriptError ||
+            transferCode ||
+            startLimitCode
+            ? error.message
+            : code === 400
+              ? 'Invalid request'
+              : 'Request failed'
+        )
+      );
   });
   let pushService: PushService | undefined;
   const session = productRoutes(app, store, {

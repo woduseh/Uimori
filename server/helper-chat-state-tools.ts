@@ -31,6 +31,7 @@ import { sceneRequestLore } from './request-lore.js';
 import { sceneTitle, setSceneTitle } from './scene-titles.js';
 import { inspectNextRequest } from './request-preview.js';
 import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
+import { HelperToolError } from './app-errors.js';
 import type { Store } from './store.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
@@ -530,7 +531,7 @@ function readSceneLore(store: Store, chatId: string, args: Record<string, unknow
     args.sourceId === undefined ? chat.headRevision : text(args.sourceId, 'source ID', 100);
   if (!sourceId) return { sourceId: null, attemptId: null, lore: null };
   if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
-    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+    throw new HelperToolError(404, 'SCENE_NOT_IN_CHAT', 'Find the scene id with chat.read.');
   const { attemptId, lore } = sceneRequestLore(store, sourceId);
   if (!lore) return { sourceId, attemptId, lore: null };
   const start = number(args.offset ?? 0, 'offset', 0);
@@ -563,7 +564,11 @@ function readHelperChatVariables(store: Store, chatId: string, args: Record<stri
       throw new HttpError(400, 'name reads one variable; omit query, offset and limit');
     const name = text(args.name, 'variable name', 1000);
     if (!(name in resolved || name in view.values || name in defaults))
-      throw new HttpError(404, 'CHAT_VARIABLE_NOT_FOUND: List the names with chat.variables.read.');
+      throw new HelperToolError(
+        404,
+        'CHAT_VARIABLE_NOT_FOUND',
+        'List the names with chat.variables.read.'
+      );
     return textPage(value(name), args, (page) => ({
       ...guards,
       name,
@@ -663,7 +668,7 @@ function nameScene(
   const sourceId = text(args.sourceId, 'source ID', 100);
   const chat = store.chat(chatId);
   if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
-    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+    throw new HelperToolError(404, 'SCENE_NOT_IN_CHAT', 'Find the scene id with chat.read.');
   const before = sceneTitle(store, sourceId);
   const saved = withHelperChange(
     store,
@@ -943,7 +948,7 @@ function updateHelperSceneContext(
   const sourceId = text(args.sourceId, 'source ID', 100);
   const chat = store.chat(chatId);
   if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
-    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+    throw new HelperToolError(404, 'SCENE_NOT_IN_CHAT', 'Find the scene id with chat.read.');
   const before = readSceneContext(store.db, sourceId);
   const { sourceId: _sourceId, ...change } = args;
   const after = updateSceneContext(store, sourceId, change);

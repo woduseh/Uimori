@@ -47,6 +47,7 @@ import {
 } from './helper-confirmations.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
+import { HelperToolError } from './app-errors.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
 import {
   HELPER_SETTINGS_TOOLS,
@@ -563,12 +564,14 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
       ? 'DATA_SQL_INVALID'
       : patch
         ? `PATCH_${patch.details.reason.toUpperCase()}`
-        : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
-          (status === 409
-            ? 'SOURCE_CONFLICT'
-            : status === 400
-              ? 'INVALID_ARGUMENTS'
-              : 'HELPER_TOOL_FAILED'));
+        : error instanceof HelperToolError
+          ? error.code
+          : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
+            (status === 409
+              ? 'SOURCE_CONFLICT'
+              : status === 400
+                ? 'INVALID_ARGUMENTS'
+                : 'HELPER_TOOL_FAILED'));
   const stopped =
     status === 401 ||
     status === 403 ||

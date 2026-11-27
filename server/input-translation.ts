@@ -23,6 +23,7 @@ import {
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { HttpError, fields, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 
 type Options = Pick<
@@ -111,7 +112,9 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
           if (result.status !== 'completed' || result.toolCalls.length || !result.text.trim())
             throw new HttpError(502, 'INPUT_TRANSLATION_FAILED');
           if (result.text.length > REQUEST_TEXT_MAX_CHARS)
-            throw new HttpError(422, 'INPUT_TRANSLATION_TOO_LONG');
+            throw new AppError(422, 'INPUT_TRANSLATION_TOO_LONG', {
+              limit: REQUEST_TEXT_MAX_CHARS,
+            });
           return { text: result.text, targetLanguage: language.code };
         } catch (error) {
           if (attemptId && !finished)

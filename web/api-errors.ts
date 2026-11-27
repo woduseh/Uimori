@@ -1,9 +1,10 @@
-import { t, registerMessage, formatMessage, getLocale } from './i18n.js';
+import { type AppErrorCode, isAppErrorCode, type ReceivedErrorWire } from '#contracts';
+import { t, registerMessage, formatMessage, getLocale, type MessageValues } from './i18n.js';
 import ko from './locales/ko.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { requestImageErrors } from './request-image-errors.js';
 import { requestFileErrors } from './request-file-errors.js';
-import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import {
   RISU_IMPORT_MAX_UPLOAD_BYTES,
   RISU_IMPORT_MAX_PREPARED_BYTES,
@@ -12,11 +13,36 @@ import {
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const storyUiErrors: Record<string, string> = {
+  OUTPUT_STORY_UI_INVALID: 'storyUi.errorTranslation.details',
+};
+
+export const appErrorMessages = {
+  MAINTENANCE_CLOSED: 'errors.MAINTENANCE_CLOSED',
   STORY_UI_STALE_SOURCE: 'storyUi.errorStaleSource',
   STORY_UI_DISABLED: 'storyUi.errorDisabled',
   STORY_UI_INVALID_ACTION: 'storyUi.errorInvalidAction',
-  OUTPUT_STORY_UI_INVALID: 'storyUi.errorTranslation.details',
-};
+  INPUT_TRANSLATION_LANGUAGE_INVALID: 'errors.INPUT_TRANSLATION_LANGUAGE_INVALID',
+  INPUT_TRANSLATION_CANCELLED: 'errors.INPUT_TRANSLATION_CANCELLED',
+  INPUT_TRANSLATION_TIMEOUT: 'errors.INPUT_TRANSLATION_TIMEOUT',
+  INPUT_TRANSLATION_REFUSED: 'errors.INPUT_TRANSLATION_REFUSED',
+  INPUT_TRANSLATION_FAILED: 'errors.INPUT_TRANSLATION_FAILED',
+  INPUT_TRANSLATION_TOO_LONG: 'errors.INPUT_TRANSLATION_TOO_LONG',
+  SELECTION_REVISION_RANGE_INVALID: 'errors.SELECTION_REVISION_RANGE_INVALID',
+  SELECTION_REVISION_STALE: 'errors.SELECTION_REVISION_STALE',
+  SELECTION_REVISION_TRANSLATION_STALE: 'errors.SELECTION_REVISION_TRANSLATION_STALE',
+  SELECTION_REVISION_TIMEOUT: 'errors.SELECTION_REVISION_TIMEOUT',
+  SELECTION_REVISION_CANCELLED: 'errors.SELECTION_REVISION_CANCELLED',
+  SELECTION_REVISION_REFUSED: 'errors.SELECTION_REVISION_REFUSED',
+  SELECTION_REVISION_FAILED: 'errors.SELECTION_REVISION_FAILED',
+  SELECTION_REVISION_TOO_LONG: 'errors.SELECTION_REVISION_TOO_LONG',
+} satisfies Record<AppErrorCode, string>;
+
+function appErrorMessage(
+  wire: ReceivedErrorWire
+): { code: AppErrorCode; key: string; values?: MessageValues } | null {
+  const code = wire.code ?? wire.error;
+  return isAppErrorCode(code) ? { code, key: appErrorMessages[code], values: wire.params } : null;
+}
 
 const messages: Record<string, string> = {
   CHAT_COPY_REMOVED: '이전에 만든 채팅 사본이 삭제됐어요. 새 사본을 만들 수 있어요.',
@@ -53,24 +79,6 @@ const messages: Record<string, string> = {
   SEARCH_CURSOR_STALE: '검색 조건이 바뀌었어요. 처음부터 다시 검색해 주세요.',
   BACKUP_SETTINGS_CHANGED: '다른 창에서 백업 설정이 바뀌었어요. 백업 설정을 다시 열어 주세요.',
 
-  INPUT_TRANSLATION_LANGUAGE_INVALID: '입력 번역 언어를 다시 선택해 주세요.',
-  SELECTION_REVISION_RANGE_INVALID: '원문에서 퇴고할 구절을 다시 선택해 주세요.',
-  SELECTION_REVISION_STALE: '저장된 원문이 바뀌었어요. 초안을 확인한 뒤 다시 요청해 주세요.',
-  SELECTION_REVISION_TRANSLATION_STALE: '저장된 번역이 바뀌었어요. 구절을 다시 선택해 주세요.',
-  SELECTION_REVISION_TIMEOUT: '퇴고 제안이 제한 시간 안에 끝나지 않았어요.',
-  SELECTION_REVISION_CANCELLED: '퇴고 제안 요청이 중단됐어요.',
-  SELECTION_REVISION_REFUSED: '도우미 모델이 이 구절의 퇴고를 거절했어요.',
-  SELECTION_REVISION_FAILED:
-    '퇴고 제안을 완료하지 못했어요. 도우미 모델 설정과 연결을 확인해 주세요.',
-  SELECTION_REVISION_TOO_LONG:
-    '제안을 반영하면 원문 저장 한도를 넘어요. 더 짧은 구절로 요청해 주세요.',
-  INPUT_TRANSLATION_CANCELLED: '입력 번역이 중단됐어요.',
-  INPUT_TRANSLATION_TIMEOUT: '입력 번역이 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
-  INPUT_TRANSLATION_REFUSED: '번역 모델이 이 입력의 번역을 거절했어요.',
-  INPUT_TRANSLATION_FAILED: '입력 번역을 완료하지 못했어요. 번역 모델 설정과 연결을 확인해 주세요.',
-  INPUT_TRANSLATION_TOO_LONG: `번역문이 저장 한도인 ${REQUEST_TEXT_MAX_CHARS.toLocaleString('en-US')}자를 넘었어요. 초안을 나누어 번역해 주세요.`,
-  MAINTENANCE_CLOSED:
-    '업데이트 유지보수 중이라 새 저장과 생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
   RISU_PRESET_INVALID_FILE:
     '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json, manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
   RISU_PRESET_INVALID: '프리셋의 프롬프트 구성과 옵션 형식을 확인해 주세요.',
@@ -207,10 +215,16 @@ const unavailable =
   '선택한 모델 또는 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 설정 > 프로바이더와 모델에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
 
 export function apiErrorDiagnostic(
-  error: unknown,
+  wire: ReceivedErrorWire,
   status: number,
   method: string
 ): ApiErrorDiagnostic {
+  const app = appErrorMessage(wire);
+  if (app) return { code: app.code, message: formatMessage(app.key, 'ko', app.values) };
+  return legacyErrorDiagnostic(wire.error, status, method);
+}
+
+function legacyErrorDiagnostic(error: unknown, status: number, method: string): ApiErrorDiagnostic {
   if (typeof error === 'string') {
     if (
       status === 409 &&
@@ -297,8 +311,14 @@ export function apiErrorDiagnostic(
   return { code: null, message: `${message} (${status})` };
 }
 
-export function apiErrorDisplay(error: unknown, status: number, method: string): string {
-  const diagnostic = apiErrorDiagnostic(error, status, method);
+export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method: string): string {
+  const app = appErrorMessage(wire);
+  if (app) {
+    registerMessage(formatMessage(app.key, 'ko', app.values), app.key, app.values);
+    return t(app.key, app.values);
+  }
+  const error = wire.error;
+  const diagnostic = legacyErrorDiagnostic(error, status, method);
   const code = diagnostic.code;
   const display = (key: string, values?: Record<string, string | number>) => {
     registerMessage(diagnostic.message, key, values);
@@ -307,7 +327,6 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
   if (code === 'HELPER_CONVERSATION_COPY_CHANGED') return display('helperProjects.copyChanged');
   if (code && Object.hasOwn(storyUiErrors, code)) return display(storyUiErrors[code]);
   const limits: Record<string, number> = {
-    INPUT_TRANSLATION_TOO_LONG: REQUEST_TEXT_MAX_CHARS,
     PACKAGE_START_TEXT_TOO_LONG: SOURCE_TEXT_MAX_CHARS,
     RISU_IMPORT_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
     UPLOAD_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
