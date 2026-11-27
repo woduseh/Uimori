@@ -10,6 +10,7 @@ import { defaultProfile } from '../core/product.js';
 import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
 import { planNativeMessages } from '../core/provider-messages.js';
 import { ProviderContractError } from '../core/provider-errors.js';
+import { failureLabel } from './failure-label.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -35,7 +36,10 @@ import {
 
 type PromptPreviewFailure = { code: string; detail?: string };
 function previewFailure(caught: unknown): PromptPreviewFailure {
-  if (!(caught instanceof ProviderContractError)) return { code: 'PROMPT_PREVIEW_FAILED' };
+  if (!(caught instanceof ProviderContractError)) {
+    process.stderr.write(`PROMPT_PREVIEW_FAILED ${failureLabel(caught)}\n`);
+    return { code: 'PROMPT_PREVIEW_FAILED' };
+  }
   const split = caught.code.indexOf(':');
   return split < 0
     ? { code: caught.code }

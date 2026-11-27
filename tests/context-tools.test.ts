@@ -6,6 +6,7 @@ import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
+import { AppError } from '../server/app-errors.js';
 import { defaultProfile, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
@@ -642,6 +643,40 @@ describe('host read compaction and provider continuation inside one main run', (
     expect(String(stderr.mock.calls)).not.toContain('database is locked');
   });
 
+  test('cancelling during tool-result compaction stops as cancelled without a folded failure', async () => {
+    const fixed = await fixedHeavySnapshot(),
+      log = hooks(),
+      controller = new AbortController();
+    log.value.signal = controller.signal;
+    const record = log.value.onToolEvent;
+    log.value.onToolEvent = (event, timing) => {
+      if (event.name !== 'context.compact') return record(event, timing);
+      controller.abort();
+      throw new Error('Run cancelled');
+    };
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    script([
+      (_body, n) =>
+        toolTurn(
+          Array.from({ length: 4 }, (_, index) => ({
+            id: `cancelled-read-${index}`,
+            name: 'story.read',
+            args: { sceneNumber: index + 1, limit: 16000 },
+          })),
+          n
+        ),
+      () =>
+        sse(
+          { type: 'text_delta', delta: 'Summary of the reads. '.repeat(40) },
+          { type: 'usage', inputTokens: 11, outputTokens: 7, costUsd: null },
+          { type: 'done', reason: 'stop' }
+        ),
+    ]);
+    const result = await runMain(fixed, log.value);
+    expect(result).toMatchObject({ status: 'cancelled', error: 'CANCELLED' });
+    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('CONTEXT_FAILURE_FOLDED'));
+  });
+
   test.each(['completed', 'call-limit', 'authorization-revoked'] as const)(
     'accumulated reads are admitted before the next send; compaction %s preserves originals',
     async (outcome) => {
@@ -650,7 +685,10 @@ describe('host read compaction and provider continuation inside one main run', (
       const original = structuredClone(fixed);
       const log = hooks();
       let revoked = false;
-      log.value.authorize = (connection) => ({ ...connection, enabled: !revoked });
+      log.value.authorize = (connection) => {
+        if (revoked) throw new AppError(403, 'PROVIDER_CONNECTION_UNAVAILABLE');
+        return connection;
+      };
       const bodies = script([
         (_body, n) =>
           toolTurn(

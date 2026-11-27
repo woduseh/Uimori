@@ -1868,10 +1868,10 @@ export const messages = {
     zh: '摘要完成前已达到模型调用上限。请提高调用上限或重新请求。',
   },
   'settings.contextErrorTargetTooSmall': {
-    ko: '컨텍스트 압축 모델의 입력 한도가 너무 작아 장면을 요약할 수 없어요. 입력 한도가 더 큰 모델을 선택해 주세요.',
-    en: 'The context compaction model’s input limit is too small to summarize these scenes. Select a model with a larger input limit.',
-    ja: 'コンテキスト圧縮モデルの入力上限が小さすぎて場面を要約できません。入力上限が大きいモデルを選んでください。',
-    zh: '上下文压缩模型的输入上限太小，无法摘要这些场景。请选择输入上限更大的模型。',
+    ko: '컨텍스트 압축 모델의 입력 한도가 너무 작아 요약할 수 없어요. 입력 한도가 더 큰 컨텍스트 압축 모델을 선택해 주세요.',
+    en: 'The context compaction model’s input limit is too small to summarize this. Select a context compaction model with a larger input limit.',
+    ja: 'コンテキスト圧縮モデルの入力上限が小さすぎて要約できません。入力上限が大きいコンテキスト圧縮モデルを選んでください。',
+    zh: '上下文压缩模型的输入上限太小，无法生成摘要。请选择输入上限更大的上下文压缩模型。',
   },
   'settings.contextErrorSummaryTooLarge': {
     ko: '요약이 저장할 수 있는 길이보다 길게 돌아왔어요. 다시 요청해 주세요.',

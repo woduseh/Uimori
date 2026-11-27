@@ -523,7 +523,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             lastUnhelpfulRead = latestRead;
             if (before > inputLimit) return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
           }
-          authorized = await hooks.authorize(structuredClone(target.connection));
+          try {
+            authorized = await hooks.authorize(structuredClone(target.connection));
+          } catch {
+            return fail('CONNECTION_NOT_AUTHORIZED');
+          }
           if (
             !authorized.enabled ||
             authorized.id !== target.connectionId ||
@@ -533,7 +537,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           )
             return fail('CONNECTION_NOT_AUTHORIZED');
         } catch (error) {
-          return fail(contextFailureCode(error, 'CONTEXT_TOOL_COMPACTION_FAILED'));
+          return fail(
+            hooks.signal.aborted
+              ? 'CANCELLED'
+              : contextFailureCode(error, 'CONTEXT_TOOL_COMPACTION_FAILED')
+          );
         }
       }
     }

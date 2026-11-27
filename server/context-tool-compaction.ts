@@ -13,6 +13,7 @@ import {
   type Json,
   type ProviderRequest,
 } from '../core/transport.js';
+import type { Connection } from '../core/product.js';
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
@@ -180,7 +181,12 @@ export async function compactToolReads(
     if (!lo) throw new Error('CONTEXT_TOOL_COMPACTION_FIXED_INPUT_TOO_LARGE');
     const authorize = async () => {
       hooks.signal.throwIfAborted();
-      const authorized = await hooks.authorize(structuredClone(target.connection));
+      let authorized: Connection;
+      try {
+        authorized = await hooks.authorize(structuredClone(target.connection));
+      } catch {
+        throw new Error('CONNECTION_NOT_AUTHORIZED');
+      }
       if (
         !authorized.enabled ||
         authorized.id !== target.connectionId ||

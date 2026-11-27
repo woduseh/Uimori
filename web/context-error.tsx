@@ -25,7 +25,7 @@ const contextFailures = {
   CONTEXT_COMPACTION_CALL_LIMIT: 'settings.contextErrorCallLimit',
   CONTEXT_TOOL_COMPACTION_CALL_LIMIT: 'settings.contextErrorCallLimit',
   CONTEXT_FIXED_INPUT_TOO_LARGE: 'errors.CONTEXT_FIXED_INPUT_TOO_LARGE',
-  CONTEXT_TOOL_COMPACTION_FIXED_INPUT_TOO_LARGE: 'errors.CONTEXT_FIXED_INPUT_TOO_LARGE',
+  CONTEXT_TOOL_COMPACTION_FIXED_INPUT_TOO_LARGE: 'settings.contextErrorTargetTooSmall',
   CONTEXT_SUMMARY_TARGET_TOO_SMALL: 'settings.contextErrorTargetTooSmall',
   CONTEXT_SUMMARY_TOO_LARGE: 'settings.contextErrorSummaryTooLarge',
   CONTEXT_SUMMARY_MODEL_DISABLED: 'settings.contextErrorModelDisabled',

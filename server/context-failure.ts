@@ -1,5 +1,5 @@
 import { asContextFailureCode, type ContextFailureCode } from '../core/context-plan.js';
-import { storedModelRequired } from './app-errors.js';
+import { AppError, storedModelRequired } from './app-errors.js';
 import { failureLabel } from './failure-label.js';
 
 export function contextFailureCode(
@@ -8,6 +8,8 @@ export function contextFailureCode(
 ): ContextFailureCode {
   const required = storedModelRequired(error);
   if (required) return required;
+  if (error instanceof AppError && error.code === 'PROVIDER_CONNECTION_UNAVAILABLE')
+    return 'CONNECTION_NOT_AUTHORIZED';
   const code = (error as { code?: unknown } | null)?.code;
   const known =
     asContextFailureCode(error instanceof Error ? error.message : '') ??
