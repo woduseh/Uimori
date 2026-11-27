@@ -35,7 +35,7 @@ export function judgmentRuntime(
     };
   let connection: Connection | undefined;
   try {
-    connection = store.product.get<Connection>('connection', selection.connectionId);
+    connection = store.product.stored<Connection>('connection', selection.connectionId);
   } catch (error) {
     if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
   }

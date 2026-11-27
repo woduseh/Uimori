@@ -270,7 +270,7 @@ test('disabled and deleted selections block new work without rewriting historica
     .run(a.connectionId);
   expect(() => store.product.snapshot(chat.id)).toThrow();
   expect(modelWorkspace(store).routes.main).toEqual({ id: a.id });
-  const connection = store.product.get<{ revision: number }>('connection', a.connectionId);
+  const connection = store.product.stored<{ revision: number }>('connection', a.connectionId);
   deleteLibraryItem(store, 'connection', a.connectionId, { expectedRevision: connection.revision });
   expect(modelWorkspace(store).routes).toEqual(emptyModelRoutes());
   expect(frozen.models.main?.id).toBe(a.id);

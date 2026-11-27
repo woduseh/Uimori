@@ -181,7 +181,7 @@ export function createPackageStart(
     if (prior) {
       request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
     } else {
-      const content = store.product.get<Content>(
+      const content = store.product.stored<Content>(
         'content',
         command.packageId,
         command.packageRevision

@@ -61,7 +61,7 @@ function confirmationTargets(
     return titled(
       'model',
       args.modelId,
-      () => store.product.get<{ title: string }>('model', String(args.modelId)).title
+      () => store.product.stored<{ title: string }>('model', String(args.modelId)).title
     );
   if (name === 'font.delete')
     return titled(
@@ -75,7 +75,7 @@ function confirmationTargets(
     return titled(
       'prompt-combination',
       args.id,
-      () => store.product.get<{ title: string }>('prompt-combination', String(args.id)).title
+      () => store.product.stored<{ title: string }>('prompt-combination', String(args.id)).title
     );
   if (name === 'palette.delete')
     return titled('palette', args.id, () => readPalette(store, String(args.id)).title);

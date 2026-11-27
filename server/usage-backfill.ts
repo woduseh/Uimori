@@ -26,8 +26,8 @@ const unpriced = `is_synthetic=0 AND status!='running'
   AND COALESCE(json_type(request,'$.pricingSnapshot'),'null')='null'`;
 
 export function backfillUnpricedCalls(store: Store, modelId: string): UsageBackfill {
-  const model = store.product.get<ModelPreset>('model', modelId);
-  const connection = store.product.get<Connection>('connection', model.connectionId);
+  const model = store.product.stored<ModelPreset>('model', modelId);
+  const connection = store.product.stored<Connection>('connection', model.connectionId);
   const pricing = resolveModelPricing(model, connection);
   if (!pricing) throw new HttpError(409, 'PRICING_UNAVAILABLE: Save a price for this model first.');
   return store.transaction(() =>

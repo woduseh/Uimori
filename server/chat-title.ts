@@ -118,7 +118,7 @@ export class ChatTitleService {
       if (!ref) throw new ProviderContractError('TITLE_MODEL_UNSET');
       const model = structuredClone(this.store.product.available<ModelPreset>('model', ref.id));
       const connection = structuredClone(
-        this.store.product.get<Connection>('connection', model.connectionId)
+        this.store.product.stored<Connection>('connection', model.connectionId)
       );
       const source = this.store.source(run.sourceRevision);
       const revision = this.store.chat(chatId).titleRevision;
@@ -135,8 +135,7 @@ export class ChatTitleService {
           this.store.source(source.id).hash !== source.hash
         )
           throw new ProviderContractError('TITLE_INPUT_CHANGED');
-        const current = this.store.product.get<ModelPreset>('model', model.id);
-        this.store.product.assertAvailable('model', model.id);
+        const current = this.store.product.available<ModelPreset>('model', model.id);
         if (current.enabled === false) throw new ProviderContractError('TITLE_MODEL_DISABLED');
         this.store.product.authorize(connection);
       };

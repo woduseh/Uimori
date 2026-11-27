@@ -29,7 +29,7 @@ export class ChatOrganizationStore {
       CREATE INDEX IF NOT EXISTS chat_organization_folder ON chat_organization(folder_id);`);
   }
   bot(botId: string) {
-    const bot = this.store.product.get<Content>('content', botId);
+    const bot = this.store.product.stored<Content>('content', botId);
     if (bot.kind !== 'bot' && !bot.package)
       throw new HttpError(400, 'Organization owner must be a bot or package');
     return bot;
@@ -53,7 +53,6 @@ export class ChatOrganizationStore {
       const persona = selection.mode === 'persona' ? this.persona(selection.persona) : null;
       if (selection.mode === 'persona' && !persona)
         throw new AppError(400, 'BOT_DEFAULT_PERSONA_REQUIRED');
-      if (persona) this.store.product.assertAvailable('content', persona.id);
       const next: BotDefaults = {
         revision: prior.revision + 1,
         persona: persona
@@ -138,7 +137,7 @@ export class ChatOrganizationStore {
       id: text(b.id, 'persona ID', 100),
       revision: number(b.revision, 'persona revision'),
     };
-    const content = this.store.product.get<Content>('content', ref.id);
+    const content = this.store.product.available<Content>('content', ref.id);
     if (content.kind !== 'persona' && !content.package)
       throw new HttpError(400, 'Folder default must be a persona or package');
     return ref;
@@ -212,7 +211,9 @@ export class ChatOrganizationStore {
     );
     if (personaRef && this.store.product.isHidden('content', personaRef.id))
       throw new AppError(409, 'CHAT_DEFAULT_PERSONA_DELETED');
-    const persona = personaRef ? this.store.product.get<Content>('content', personaRef.id) : null;
+    const persona = personaRef
+      ? this.store.product.stored<Content>('content', personaRef.id)
+      : null;
     const packageAttachments = [
       ...(bot?.package ? [{ id: bot.id, revision: bot.revision, role: 'bot' as const }] : []),
       ...(persona?.package

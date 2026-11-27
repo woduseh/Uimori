@@ -51,7 +51,7 @@ test('library folders and cross-category moves preserve exact content revisions,
     persona = content(store, 'Reader', 'persona');
   const destination = folder(store, 'Characters', 'module');
   const chat = store.createChat('Story', { botId: bot.id });
-  const beforeContent = store.product.get('content', bot.id),
+  const beforeContent = store.product.stored('content', bot.id),
     beforeProfile = store.product.profile(chat.id);
   const beforeOrganization = store.libraryOrganization.snapshot();
   const beforeRevision = beforeOrganization.revision;
@@ -69,7 +69,7 @@ test('library folders and cross-category moves preserve exact content revisions,
         : item
     )
   );
-  expect(store.product.get('content', bot.id)).toEqual(beforeContent);
+  expect(store.product.stored('content', bot.id)).toEqual(beforeContent);
   expect(store.product.profile(chat.id)).toEqual(beforeProfile);
   expect(store.chat(chat.id).botId).toBe(bot.id);
   for (const summary of [false, true]) {
@@ -128,7 +128,7 @@ test('reordering is category scoped and folder deletion moves members to unclass
   expect(current.items).toEqual(
     expect.arrayContaining([...initialItems, { ...key(bot), category: 'bot', folderId: null }])
   );
-  expect(store.product.get('content', bot.id)).toEqual(bot);
+  expect(store.product.stored('content', bot.id)).toEqual(bot);
 });
 
 test('item deletion cleans placement and retains immutable references', () => {
@@ -155,7 +155,7 @@ test('item deletion cleans placement and retains immutable references', () => {
   expect(() =>
     deleteLibraryItem(store, 'content', used.id, { expectedRevision: used.revision })
   ).not.toThrow();
-  expect(store.product.get('content', used.id)).toEqual(used);
+  expect(store.product.stored('content', used.id)).toEqual(used);
   expect(store.product.all('content')).not.toContainEqual(used);
 });
 

@@ -303,7 +303,7 @@ test('module string excerpts can be patched while protected native paths remain 
       },
     ],
   });
-  const after = f.store.product.get<Content>('content', saved.id);
+  const after = f.store.product.stored<Content>('content', saved.id);
   expect(after.package.nativeRisu.module?.lorebook).toMatchObject([
     { content: 'The north harbor opens at dawn.' },
   ]);
@@ -379,7 +379,7 @@ test('prompt reads expose editable titles, options and native strings but exclud
     ...escapedTarget,
     changes: [{ path: escapedPath, op: 'replaceText', oldText: 'Harbor', newText: 'Port' }],
   });
-  expect(f.store.product.get<PromptPreset>('prompt-preset', saved.id)?.values).toEqual({
+  expect(f.store.product.stored<PromptPreset>('prompt-preset', saved.id)?.values).toEqual({
     ...saved.values,
     'scope/name~key': 'Port',
   });

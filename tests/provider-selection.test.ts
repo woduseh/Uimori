@@ -115,8 +115,8 @@ test('disabled models retain assigned IDs but block new assignments and new snap
   expect(assign(s, chat.id, { main: ref(m) }).routes.main).toEqual(ref(m));
   expect(s.source(source.id)).toEqual(original);
   expect(readStoredRunSnapshot(s, run.id)).toEqual(snapshot);
-  expect(s.product.get('model', m.id)).toEqual(disabled);
-  expect(() => s.product.get('model', m.id, m.revision)).toThrow('Setting not found');
+  expect(s.product.stored('model', m.id)).toEqual(disabled);
+  expect(() => s.product.stored('model', m.id, m.revision)).toThrow('Setting not found');
   s.product.model(modelBody(c, { expectedRevision: disabled.revision }), m.id);
   expect(() => assign(s, chat.id, { translation: ref(m) })).not.toThrow();
 });
@@ -138,7 +138,7 @@ test('ID-based selections follow current connections while protocol changes requ
       translation: ref(m),
     });
     expect(isModelSelectable(m, [m], [latest])).toBe(true);
-    expect(s.product.get('model', m.id)).toEqual(m);
+    expect(s.product.stored('model', m.id)).toEqual(m);
     if ('protocol' in change) {
       expect(() => s.product.modelSnapshot(m.id)).toThrow('Connection protocol changed');
       const reviewed = s.product.model(

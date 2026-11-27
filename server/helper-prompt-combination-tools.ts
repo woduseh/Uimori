@@ -198,7 +198,7 @@ export function applyHelperPromptCombination(
       combinationId,
       expectedRevision: number(args.workspaceRevision, 'prompt workspace revision'),
     });
-    const item = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
+    const item = store.product.stored<SavedPromptCombination>('prompt-combination', combinationId);
     report(item);
     return { applied: combinationId, title: item.title, workspaceRevision: updated.revision };
   }

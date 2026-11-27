@@ -30,7 +30,7 @@ import {
 import { detachAttemptUsage } from './usage-accounting.js';
 import { effectiveIllustrationPreset } from './illustration-presets.js';
 import { illustrationPresetStamp } from '../core/illustration-presets.js';
-import { storeImage } from './image-storage.js';
+import { readImage, storeImage } from './image-storage.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
@@ -38,7 +38,6 @@ import { HttpError, fields, number, record, text } from './request-validation.js
 import { AppError, isPlainAppErrorCode } from './app-errors.js';
 import type { Source, Store } from './store.js';
 import { assertModelSelection } from './provider-selection.js';
-import type { PackageImageBlob } from './package-images.js';
 import { packageImages } from '../core/package-images.js';
 import { resolvePackageProfile } from './package-features.js';
 import type { Asset, Connection, ModelPreset, ModelRef } from '../core/product.js';
@@ -235,8 +234,8 @@ export function illustrationSettingsView(store: Store): IllustrationSettingsView
 }
 function assertCodexModel(store: Store, ref: ModelRef | null) {
   if (!ref) return;
-  const model = store.product.get<ModelPreset>('model', ref.id);
-  const connection = store.product.get<Connection>('connection', model.connectionId);
+  const model = store.product.stored<ModelPreset>('model', ref.id);
+  const connection = store.product.stored<Connection>('connection', model.connectionId);
   if (connection.protocol !== 'codex-app-server-v1')
     throw new AppError(400, 'ILLUSTRATION_CODEX_CONNECTION_REQUIRED');
 }
@@ -428,8 +427,8 @@ export function loadIllustrationReference(
     if (reference.ref.startsWith('package:')) {
       const hash = /^\/api\/package-image-blobs\/([a-f0-9]{64})$/u.exec(reference.url)?.[1];
       if (!hash || hash !== reference.hash) return undefined;
-      const blob = store.product.get<PackageImageBlob>('package-image', hash, 1);
-      return { mime: blob.mime, bytes: Buffer.from(blob.base64, 'base64') };
+      const { mime, bytes } = readImage(store.db, hash);
+      return { mime, bytes };
     }
     const { asset, bytes } = store.product.asset(reference.ref);
     if (asset.hash !== reference.hash) return undefined;

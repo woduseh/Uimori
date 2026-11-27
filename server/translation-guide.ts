@@ -11,7 +11,7 @@ export function currentBotTranslationGuide(
   chatId: string
 ): BotTranslationGuide | null {
   const botId = store.chat(chatId).botId;
-  const bot = store.product.get<Content>('content', botId);
+  const bot = store.product.stored<Content>('content', botId);
   const native = bot.package.nativeRisu;
   const document = Object.keys(native.card).length ? native.card : (native.module ?? {});
   const guide = validateTranslationGuide(readTranslationGuide(document));

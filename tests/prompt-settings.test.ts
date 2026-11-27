@@ -74,7 +74,10 @@ test('legacy independent workspace bodies are preserved as presets once before f
   initializePromptWorkspaceReferences(app.store);
   const migrated = await workspace(app);
   expect(migrated.main.presetId).not.toBe(baseline.main.presetId);
-  const preserved = app.store.product.get<PromptPreset>('prompt-preset', migrated.main.presetId!);
+  const preserved = app.store.product.stored<PromptPreset>(
+    'prompt-preset',
+    migrated.main.presetId!
+  );
   expect(preserved).toMatchObject({ title: '독립 보존본', program, values: { tone: '직접 선택' } });
   expect(migrated.main.values).toEqual({ tone: '직접 선택' });
   const raw = app.store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get() as {
@@ -745,7 +748,7 @@ describe('global working prompts and independent library copies', () => {
     });
     expect(response.statusCode, response.body).toBe(409);
     expect(await workspace(app)).toEqual(applied);
-    expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id).id).toBe(preset.id);
+    expect(app.store.product.stored<PromptPreset>('prompt-preset', preset.id).id).toBe(preset.id);
   });
 
   test('new scenes capture current working copies while past output remains and independent rewrites use current prompts', async () => {

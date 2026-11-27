@@ -38,7 +38,7 @@ import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
 import { inspectVertexAccount, type VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
-import { assertLibraryVisible, libraryDeletionRoutes } from './library-deletion.js';
+import { libraryDeletionRoutes } from './library-deletion.js';
 
 export function productRoutes(
   app: FastifyInstance,
@@ -173,13 +173,12 @@ export function productRoutes(
     async (request) => {
       if (request.params.kind !== 'connection' && request.params.kind !== 'model')
         throw new HttpError(404, 'Unsupported management kind');
-      assertLibraryVisible(store, request.params.kind, request.params.id);
+      product.assertAvailable(request.params.kind, request.params.id);
       return managementImpact(product, request.params.kind, request.params.id);
     }
   );
   app.get<{ Params: { id: string } }>('/api/content/:id', async (request) => {
-    assertLibraryVisible(store, 'content', request.params.id);
-    return product.get('content', request.params.id);
+    return product.available('content', request.params.id);
   });
   app.get<{
     Params: { id: string };
@@ -192,7 +191,7 @@ export function productRoutes(
     };
   }>('/api/content/:id/risu-preview', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    assertLibraryVisible(store, 'content', request.params.id);
+    product.assertAvailable('content', request.params.id);
     return nativeRisuPreview(store, request.params.id, request.query);
   });
   app.post<{ Params: { id: string } }>(
@@ -200,7 +199,7 @@ export function productRoutes(
     { bodyLimit: 16 * 1024 * 1024 },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      assertLibraryVisible(store, 'content', request.params.id);
+      product.assertAvailable('content', request.params.id);
       const disconnected = new AbortController();
       reply.raw.on('close', () => {
         if (!reply.raw.writableEnded) disconnected.abort();
@@ -209,8 +208,7 @@ export function productRoutes(
     }
   );
   app.get<{ Params: { id: string } }>('/api/prompt-presets/:id', async (request) => {
-    assertLibraryVisible(store, 'prompt-preset', request.params.id);
-    return product.get('prompt-preset', request.params.id);
+    return product.available('prompt-preset', request.params.id);
   });
   app.post('/api/content', { bodyLimit: 16 * 1024 * 1024 }, async (request) =>
     product.content(request.body)
@@ -230,12 +228,10 @@ export function productRoutes(
     async (request) => product.promptPreset(request.body, request.params.id)
   );
   app.get<{ Params: { id: string } }>('/api/connections/:id', (request) => {
-    assertLibraryVisible(store, 'connection', request.params.id);
-    return product.get('connection', request.params.id);
+    return product.available('connection', request.params.id);
   });
   app.get<{ Params: { id: string } }>('/api/model-presets/:id', (request) => {
-    assertLibraryVisible(store, 'model', request.params.id);
-    return product.get('model', request.params.id);
+    return product.available('model', request.params.id);
   });
   app.post('/api/connections', async (request) => product.connection(request.body));
   app.put<{ Params: { id: string } }>('/api/connections/:id', async (request) =>
@@ -256,8 +252,8 @@ export function productRoutes(
     async (request) => {
       if (!['content', 'prompt-preset'].includes(request.params.kind))
         throw new HttpError(404, 'Revision kind not found');
-      assertLibraryVisible(store, request.params.kind, request.params.id);
-      return product.get(
+      product.assertAvailable(request.params.kind, request.params.id);
+      return product.stored(
         request.params.kind,
         request.params.id,
         number(Number(request.params.revision), 'revision')
@@ -265,14 +261,12 @@ export function productRoutes(
     }
   );
   app.get<{ Params: { id: string } }>('/api/connections/:id/catalog', (request) => {
-    assertLibraryVisible(store, 'connection', request.params.id);
-    return { catalog: product.get<Connection>('connection', request.params.id).catalog };
+    return { catalog: product.available<Connection>('connection', request.params.id).catalog };
   });
   app.post<{ Params: { id: string } }>('/api/connections/:id/catalog', async (request) => {
     const b = record(request.body ?? {});
     fields(b, []);
-    assertLibraryVisible(store, 'connection', request.params.id);
-    const previous = product.get<Connection>('connection', request.params.id);
+    const previous = product.available<Connection>('connection', request.params.id);
     let error: string | null = null;
     let catalog = previous.catalog;
     try {

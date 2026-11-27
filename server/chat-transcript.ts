@@ -104,7 +104,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     const skippedAttachments: ChatTranscriptImport['skippedAttachments'] = [];
     const attachments = transcript.packageAttachments.flatMap((ref) => {
       try {
-        const content = store.product.get<Content>('content', ref.id);
+        const content = store.product.available<Content>('content', ref.id);
         return [{ id: content.id, revision: content.revision, role: ref.role }];
       } catch {
         skippedAttachments.push(ref);

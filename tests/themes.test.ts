@@ -495,7 +495,7 @@ test('deleting a bot or chat drops only its appearance choices; a stale tab cann
   };
 
   deleteLibraryItem(store, 'content', bot.id, {
-    expectedRevision: store.product.get<{ revision: number }>('content', bot.id).revision,
+    expectedRevision: store.product.stored<{ revision: number }>('content', bot.id).revision,
   });
   let p = themePreferences(store);
   expect([p.botThemes, p.botPalettes, p.botStoryUiThemes, p.botBackgrounds]).toEqual([

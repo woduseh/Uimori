@@ -26,6 +26,7 @@ import { saveResource } from '../server/resource-service.js';
 import { deletePalette, deleteTheme, savePalette, saveTheme } from '../server/themes.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 
 type Domain = keyof typeof allEndpoints;
@@ -96,19 +97,8 @@ async function read<T = Record<string, unknown>>(endpoint: Endpoint, input: Inpu
 }
 
 const store = () => app.store;
-const removed = <T extends { id: string; revision: number }>(kind: LibraryKind, item: T) => {
-  store().product.content({
-    kind: 'module',
-    title: 'Stale tab reference',
-    description: item.id,
-    text: 'Keeps the deleted item referenced, as saved text that names it does.',
-    loading: 'pinned',
-    relatedIds: [],
-  });
-  deleteLibraryItem(store(), kind, item.id, { expectedRevision: item.revision });
-  expect(store().product.isHidden(kind, item.id), `${kind} stays soft-deleted`).toBe(true);
-  return store().product.get<T>(kind, item.id).revision;
-};
+const removed = <T extends { id: string; revision: number }>(kind: LibraryKind, item: T) =>
+  softDeleteLibraryItem(store(), kind, item).revision;
 const purged = (kind: LibraryKind, item: { id: string; revision: number }) => {
   deleteLibraryItem(store(), kind, item.id, { expectedRevision: item.revision });
   expect(store().product.isHidden(kind, item.id), `${kind} is purged`).toBe(false);

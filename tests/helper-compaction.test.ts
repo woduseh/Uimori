@@ -191,7 +191,7 @@ async function fixture(
       return store.product.modelSnapshot(role === 'context' ? contextModel.id : helperModel.id);
     },
     updateModel(id: string, changes: Partial<ModelPreset>) {
-      const prior = store.product.get<ModelPreset>('model', id);
+      const prior = store.product.stored<ModelPreset>('model', id);
       store.product.model(
         {
           title: prior.title,
@@ -426,7 +426,7 @@ test('oversized write-only Anthropic continuation with recent history starts a f
   expect(decision.afterTokens).toBeLessThanOrEqual(8192);
   expect(checkpointRows(f)).toEqual([]);
   expect(f.mutations).toBe(1);
-  expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(2);
+  expect(f.store.product.stored<Content>('content', f.saved.id).revision).toBe(2);
 });
 
 test.each([false, true])(
@@ -809,7 +809,7 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
   expect(decisions[0].afterTokens).toBeLessThan(decisions[0].beforeTokens);
   expect(decisions[0].afterTokens).toBeLessThanOrEqual(limit);
   expect(f.mutations).toBe(1);
-  expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(2);
+  expect(f.store.product.stored<Content>('content', f.saved.id).revision).toBe(2);
   expect(checkpointRows(f)).toHaveLength(1);
   expect(task.snapshot.model.maxOutputTokens).toBe(1024);
   expect(task.snapshot).not.toHaveProperty('contextModel');
@@ -1081,7 +1081,7 @@ test.each(['eof', 'cancelled'] as const)(
     expect(task.completedEffects?.count).toBe(1);
     expect(log.requests.map((request) => request.role)).toEqual(['helper', 'helper', 'context']);
     expect(f.mutations).toBe(1);
-    expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(2);
+    expect(f.store.product.stored<Content>('content', f.saved.id).revision).toBe(2);
     expect(() =>
       f.runtime.enqueue(f.conversation.id, randomUUID(), f.request, f.editor, undefined, task.id)
     ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
@@ -1176,7 +1176,7 @@ test.each(['current failed task', 'earlier completed task'] as const)(
     await Promise.all(f.work);
     expect(f.workspace.task(next.id).status).toBe('completed');
     expect(f.mutations).toBe(0);
-    expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(1);
+    expect(f.store.product.stored<Content>('content', f.saved.id).revision).toBe(1);
     expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({
       n: 0,
     });

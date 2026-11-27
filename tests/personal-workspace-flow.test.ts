@@ -159,7 +159,7 @@ test('image metadata editing changes the JEV catalog without rewriting bytes or 
   expect(JSON.stringify(request)).toContain('우산을 들고 웃는 모습');
   expect(JSON.stringify(request)).toContain('비 오는 하굣길');
   expect(readImage(store.db, image.hash).bytes.equals(image.bytes)).toBe(true);
-  expect(store.product.get<Content>('content', bot.id).package.nativeRisu!.assets[0]!.name).toBe(
+  expect(store.product.stored<Content>('content', bot.id).package.nativeRisu!.assets[0]!.name).toBe(
     'stable_script_alias'
   );
 });

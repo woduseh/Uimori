@@ -173,7 +173,7 @@ test.each(['charx'])(
       allowPartial: false,
       idempotencyKey: `long-opening-${format}`,
     });
-    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    const saved = store.product.stored<Content>('content', result.receipt.items[0].id);
     expect(saved.package.nativeRisu.card).toEqual(card);
     expect(saved.package.starts?.map((start) => start.text)).toEqual([
       greeting,
@@ -211,7 +211,7 @@ test('import preserves a stored-message-sized opening and every alternative with
     allowPartial: false,
     idempotencyKey: 'many-openings',
   });
-  const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+  const saved = store.product.stored<Content>('content', result.receipt.items[0].id);
   expect(saved.package.nativeRisu.card).toEqual(card);
   expect(saved.package.starts?.map((start) => start.text)).toEqual([
     first,
@@ -258,7 +258,7 @@ test('explicit persona imports preserve cards without creating a chat', async ()
   const result = await applyRisuImport(store, request);
   expect(result.chat).toBeNull();
   expect(result.receipt.items[0].key).toBe('persona');
-  const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+  const saved = store.product.stored<Content>('content', result.receipt.items[0].id);
   expect(saved.kind).toBe('persona');
   expect(saved.text).toBe(card.description);
   expect(saved.package.nativeRisu.card).toEqual(card);
@@ -363,7 +363,7 @@ test('native edits reproject canonical source, preserve unknown fields and retai
   expect(updated.package!.lore[0].text).toBe('NEW RAW {{char}}');
   expect(updated.package!.loreActivation!.mode).toBe('discoverable');
   expect(updated.package!.nativeRisu!.card.unknown).toEqual(synthetic().unknown);
-  expect(() => store.product.get<Content>('content', id, revision)).toThrow(
+  expect(() => store.product.stored<Content>('content', id, revision)).toThrow(
     'content revision not found'
   );
   expect(() => store.product.content(request, id)).toThrow('REVISION_CONFLICT');
@@ -386,7 +386,7 @@ test('a card without first_mes keeps an empty chat even when alternate greetings
   ).toBe(0);
   expect(
     store.product
-      .get<Content>('content', result.receipt.items[0].id)
+      .stored<Content>('content', result.receipt.items[0].id)
       .package!.starts!.map((start) => start.id)
   ).toEqual(['start-1']);
 });

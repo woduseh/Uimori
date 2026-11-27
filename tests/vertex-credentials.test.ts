@@ -132,7 +132,7 @@ test('direct connection saves reject missing or mismatched saved Vertex accounts
       saved.id
     )
   ).toThrow('VERTEX_PROJECT_MISMATCH');
-  expect(store.product.get('connection', saved.id)).toEqual(saved);
+  expect(store.product.stored('connection', saved.id)).toEqual(saved);
   expect(JSON.parse(store.credentials.get(saved.credentialRef)!).private_key).toBe(
     account.private_key
   );
@@ -270,7 +270,7 @@ test('replacement is atomic and preserves the previous shared service account', 
   expect(JSON.parse(app.store.credentials.get(original.credentialRef)!).client_email).toBe(
     account.client_email
   );
-  expect(app.store.product.get('connection', shared.json().id)).toMatchObject({
+  expect(app.store.product.stored('connection', shared.json().id)).toMatchObject({
     credentialRef: original.credentialRef,
   });
 });

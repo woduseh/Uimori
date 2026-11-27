@@ -346,7 +346,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
     bodies.push(body);
     expect(body).not.toHaveProperty('contextBudget');
     expect(estimateContextTokens(body)).toBeLessThanOrEqual(
-      app.store.product.get<ModelPreset>('model', model.id).inputTokenLimit!
+      app.store.product.stored<ModelPreset>('model', model.id).inputTokenLimit!
     );
     return complete(body.role === 'context' ? summaryText : finalText);
   });

@@ -18,11 +18,11 @@ export function managementImpact(
   kind: 'connection' | 'model',
   id: string
 ): ManagementImpact {
-  store.get(kind, id);
+  store.stored(kind, id);
   const matches = (ref: ModelRef | null | undefined) => {
     if (!ref) return false;
     if (kind === 'model') return ref.id === id;
-    return store.get<ModelPreset>('model', ref.id).connectionId === id;
+    return store.stored<ModelPreset>('model', ref.id).connectionId === id;
   };
   const workspace = promptWorkspace(store.store);
   const globalRoles = Object.entries({

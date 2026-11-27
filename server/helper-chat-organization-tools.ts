@@ -79,7 +79,7 @@ function personaView(store: Store, ref: ContentRef | null) {
   if (!ref) return null;
   let title: string | null = null;
   try {
-    title = store.product.get<Content>('content', ref.id).title;
+    title = store.product.stored<Content>('content', ref.id).title;
   } catch (error) {
     if (!(error instanceof HttpError)) throw error;
   }

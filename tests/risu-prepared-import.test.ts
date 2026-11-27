@@ -141,7 +141,7 @@ test('committed import and retry succeed when staging cleanup is locked, then ex
   };
   const saved = await applyRisuImport(store, command);
   expect(saved.receipt.created).toBe(true);
-  expect(store.product.get('content', saved.receipt.items[0].id)).toMatchObject({
+  expect(store.product.stored('content', saved.receipt.items[0].id)).toMatchObject({
     id: saved.receipt.items[0].id,
   });
   expect(existsSync(path)).toBe(true);

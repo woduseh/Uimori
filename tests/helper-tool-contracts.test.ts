@@ -579,7 +579,7 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
     value: 'Chat override two',
     baseHash: first.items[0].fieldHashes.text,
   });
-  expect(f.store.product.get('content', f.bot.id)).toEqual(original);
+  expect(f.store.product.stored('content', f.bot.id)).toEqual(original);
 });
 
 test('chat lore filters the list by text and saves several overrides from list guards in one call', async () => {
@@ -666,7 +666,7 @@ test('helper discovers an override after its shared lore was removed, retires it
     expectedRevision: f.bot.revision,
     changes: [{ path: '/package/nativeRisu/card/character_book/entries/0', op: 'remove' }],
   });
-  const shared = f.store.product.get<Content>('content', f.bot.id);
+  const shared = f.store.product.stored<Content>('content', f.bot.id);
   expect(shared.package.lore).toEqual([]);
   expect(service.get(f.chat.id).conflicts).toMatchObject([{ kind: 'entry-missing' }]);
   const appCall = (id: string, args: Record<string, unknown>) =>
@@ -726,7 +726,7 @@ test('helper discovers an override after its shared lore was removed, retires it
   });
   const task = await submit(f, '원본 로어가 없어진 채팅 전용 변경을 찾아 제거해줘');
   expect(service.get(f.chat.id).overrides).toEqual([]);
-  expect(f.store.product.get('content', f.bot.id)).toEqual(shared);
+  expect(f.store.product.stored('content', f.bot.id)).toEqual(shared);
   const rollback = await f.app.inject({
     method: 'POST',
     url: `/api/helper/tasks/${task.id}/rollback`,
@@ -791,7 +791,7 @@ test('app.call saves shared bot and persona appearance defaults atomically and p
         result: { outcome: 'unchanged' },
       });
       for (const original of originals)
-        expect(f.store.product.get('content', original.id)).toEqual(original);
+        expect(f.store.product.stored('content', original.id)).toEqual(original);
       expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
       return calls(
         call('save-defaults', 'app.call', {
@@ -819,7 +819,7 @@ test('app.call saves shared bot and persona appearance defaults atomically and p
   });
   const task = await submit(f, '봇과 페르소나에 공유 외형 기본값을 저장해줘');
   for (const original of originals) {
-    const saved = f.store.product.get<Content>('content', original.id);
+    const saved = f.store.product.stored<Content>('content', original.id);
     const card = structuredClone(saved.package.nativeRisu.card);
     expect((card.extensions as any).uimori.illustrationProfiles).toEqual(profiles);
     delete (card.extensions as any).uimori.illustrationProfiles;
@@ -1332,7 +1332,7 @@ test('helper reads the selected bot, saves its Story UI theme, and applies it on
   });
   expect(f.store.chat(f.chat.id).settings).toEqual(f.chat.settings);
   expect(f.store.chat(other.id).settings).toEqual(other.settings);
-  expect(f.store.product.get<Content>('content', f.bot.id)).toEqual(f.bot);
+  expect(f.store.product.stored<Content>('content', f.bot.id)).toEqual(f.bot);
   expect(readTheme(f.store, themeId).storyUi).toEqual({ baseStyle: 'modern', css });
   expect(readHelperTaskResults(f.store, task.id)).toMatchObject({
     unrecordedOperations: 0,

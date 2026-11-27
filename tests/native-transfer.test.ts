@@ -210,7 +210,9 @@ test('NATIVE01 captures nested shared modules at their effective revision and pr
   expect(bot.source.package!.modules![1].revision).toBe(2);
   expect(shared.source.revision).toBe(2);
   expect(bot.modules[1]).toBe(shared.key);
-  expect(f.store.product.get<Content>('content', f.bot.id).package!.modules![1].revision).toBe(1);
+  expect(f.store.product.stored<Content>('content', f.bot.id).package!.modules![1].revision).toBe(
+    1
+  );
   expect(JSON.stringify(f.file)).not.toContain('NATIVE_TRANSFER_PRIVATE_CREDENTIAL');
   expect(JSON.stringify(f.file)).not.toContain('http://127.0.0.1:49999');
   expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -256,10 +258,10 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(image.mime).toBe('image/webp');
   expect(receipt.summary).toMatchObject({ images: 1, imageBytes: image.bytes.length });
   expect(receipt.digest).not.toBe(prepared.json().digest);
-  const bot = target.store.product.get<Content>('content', importedBot.id);
+  const bot = target.store.product.stored<Content>('content', importedBot.id);
   expect(bot.package!.modules![1].id).toBe(graph.attachments[2].id);
   const importedPrompt = receipt.items.find((item: any) => item.kind === 'prompt-preset');
-  const prompt = target.store.product.get<PromptPreset>('prompt-preset', importedPrompt.id);
+  const prompt = target.store.product.stored<PromptPreset>('prompt-preset', importedPrompt.id);
   expect(prompt.program.collaboration!.agents[0].model).toBeNull();
   expect(prompt.values).toEqual({ tone: 'warm' });
   const combinations = target.store.product.all('prompt-combination') as SavedPromptCombination[];
@@ -326,8 +328,8 @@ test('NATIVE04 mapping is explicit and revalidated; unavailable local model and 
   const imported = applyNativeTransfer(fallback, { ...body, modelBindings: [] });
   const prompt = imported.items.find((item) => item.kind === 'prompt-preset')!;
   expect(
-    fallback.product.get<PromptPreset>('prompt-preset', prompt.id).program.collaboration!.agents[0]
-      .model
+    fallback.product.stored<PromptPreset>('prompt-preset', prompt.id).program.collaboration!
+      .agents[0].model
   ).toBeNull();
   expect(() =>
     applyNativeTransfer(store, {
@@ -352,7 +354,7 @@ test('NATIVE04 mapping is explicit and revalidated; unavailable local model and 
   ];
   const receipt = applyNativeTransfer(store, { ...body, modelBindings: mapping });
   expect(
-    store.product.get<PromptPreset>(
+    store.product.stored<PromptPreset>(
       'prompt-preset',
       receipt.items.find((item) => item.kind === 'prompt-preset')!.id
     ).program.collaboration!.agents[0].model
@@ -450,7 +452,7 @@ test('NATIVE07 external related IDs are reported and preserved as origin while b
     expect.objectContaining({ code: 'EXTERNAL_RELATED_IDS', key: root.key })
   );
   const receipt = applyNativeTransfer(store, request(file));
-  const imported = store.product.get<Content>(
+  const imported = store.product.stored<Content>(
     'content',
     receipt.items.find((item) => item.key === root.key)!.id
   );

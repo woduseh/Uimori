@@ -129,7 +129,7 @@ test('small native edit of a 1.36m character card preserves source and refreshes
     revision: content.revision + 1,
     changedPaths: ['/package/nativeRisu/card/character_book/entries/0/content'],
   });
-  const saved = store.product.get<Content>('content', content.id);
+  const saved = store.product.stored<Content>('content', content.id);
   const entry = (saved.package.nativeRisu.card.character_book as { entries: Record<string, any>[] })
     .entries[0]!;
   expect(entry.content).toBe('Unique silver harbor.');
@@ -186,7 +186,7 @@ test('stale revision and ambiguous literal reject the complete proposal', () => 
       ],
     })
   ).toThrow('oldText must appear exactly once');
-  const saved = store.product.get<Content>('content', content.id);
+  const saved = store.product.stored<Content>('content', content.id);
   expect(saved.title).toBe('Native owner');
   expect(saved.revision).toBe(content.revision);
   expect(() =>
@@ -412,7 +412,7 @@ test('standalone module overview and patch use its authored lorebook', () => {
     ],
   });
   expect(updated.revision).toBe(module.revision + 1);
-  const saved = store.product.get<Content>('content', module.id);
+  const saved = store.product.stored<Content>('content', module.id);
   expect(saved.package.nativeRisu.module).toMatchObject({
     lorebook: [{ content: 'Revised port.' }],
   });
@@ -446,7 +446,7 @@ test('creates a guide and edits one term without changing adjacent native fields
     expectedRevision: inserted.revision,
     changes: [{ path: `${guide}/terms/0/target`, op: 'set', value: '해항' }],
   });
-  const saved = store.product.get<Content>('content', content.id);
+  const saved = store.product.stored<Content>('content', content.id);
   expect((saved.package.nativeRisu.card.extensions as any).uimori.translationGuide).toEqual({
     instructions: 'Keep the harbor name.',
     terms: [{ source: 'Harbor', target: '해항' }],
@@ -471,7 +471,7 @@ test('creates a guide and edits one term without changing adjacent native fields
     ],
   });
   expect(
-    (store.product.get<Content>('content', content.id).package.nativeRisu.card.extensions as any)
+    (store.product.stored<Content>('content', content.id).package.nativeRisu.card.extensions as any)
       .uimori.translationGuide
   ).toEqual({
     instructions: 'Use the revised spelling.',
@@ -513,7 +513,7 @@ test('inserting and removing lore preserves authored neighbors and refreshes the
       },
     ],
   });
-  let saved = store.product.get<Content>('content', content.id);
+  let saved = store.product.stored<Content>('content', content.id);
   expect(
     (saved.package.nativeRisu.card.character_book as any).entries.map((entry: any) => entry.comment)
   ).toEqual(['Harbor', 'River', 'Forest']);
@@ -532,7 +532,7 @@ test('inserting and removing lore preserves authored neighbors and refreshes the
     expectedRevision: inserted.revision,
     changes: [{ path: `${entries}/1`, op: 'remove' }],
   });
-  saved = store.product.get<Content>('content', content.id);
+  saved = store.product.stored<Content>('content', content.id);
   expect((saved.package.nativeRisu.card.character_book as any).entries).toEqual(
     (content.package.nativeRisu.card.character_book as any).entries
   );
@@ -667,7 +667,7 @@ test('preset block edits compose sequentially with one save and undo while prese
       { op: 'move', from: `${presetBlocksPath}/1`, path: `${presetBlocksPath}/3` },
     ],
   });
-  const saved = store.product.get<any>('prompt-preset', preset.id);
+  const saved = store.product.stored<any>('prompt-preset', preset.id);
   expect(result.revision).toBe(preset.revision + 1);
   expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
     blocks[2],
@@ -688,7 +688,7 @@ test('preset block edits compose sequentially with one save and undo while prese
   });
   expect(noChange).toEqual({ id: preset.id, revision: saved.revision, changedPaths: [] });
   call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
-  const restored = store.product.get<any>('prompt-preset', preset.id);
+  const restored = store.product.stored<any>('prompt-preset', preset.id);
   expect(restored).toEqual({ ...preset, revision: preset.revision + 2 });
 });
 
@@ -727,7 +727,7 @@ test('invalid explicit value writes are rejected rather than silently reconciled
         changes,
       })
     ).toThrow(error);
-    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual(preset);
     expect(
       store.db
         .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
@@ -762,7 +762,7 @@ test('removing a control still referenced by enabled collaboration is rejected',
       changes: [{ op: 'set', path: presetTogglePath, value: 'style=Style=text' }],
     })
   ).toThrow('AGENT_COLLABORATION_UNKNOWN_CONTROL');
-  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+  expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual(preset);
 });
 
 test('stale and invalid preset structural proposals leave every block and the undo record intact', () => {
@@ -779,7 +779,7 @@ test('stale and invalid preset structural proposals leave every block and the un
     expectedRevision: initial.revision,
     changes: [{ op: 'set', path: '/title', value: 'Saved draft' }],
   });
-  const preset = store.product.get<any>('prompt-preset', initial.id);
+  const preset = store.product.stored<any>('prompt-preset', initial.id);
   const previousUndo = store.db
     .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
     .get(target.kind, target.id);
@@ -806,7 +806,7 @@ test('stale and invalid preset structural proposals leave every block and the un
         changes: [insert, invalid],
       })
     ).toThrow();
-    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual(preset);
     expect(
       store.db
         .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
@@ -833,7 +833,7 @@ test('first lore insertion creates the missing card book without replacing nativ
       },
     ],
   });
-  const saved = store.product.get<Content>('content', content.id);
+  const saved = store.product.stored<Content>('content', content.id);
   expect(inserted.revision).toBe(content.revision + 1);
   expect((saved.package.nativeRisu.card.character_book as any).entries).toHaveLength(1);
   expect(saved.package.nativeRisu.card.extensions).toEqual({ vendor: { keep: true } });
@@ -883,7 +883,7 @@ test('original item targets survive insertion, deletion and movement without rel
       { op: 'remove', target: outline.items[3].target, path: '' },
     ],
   });
-  const saved = store.product.get<any>('prompt-preset', preset.id);
+  const saved = store.product.stored<any>('prompt-preset', preset.id);
   expect(saved.revision).toBe(preset.revision + 1);
   expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
     { ...blocks[2], text: 'Edited duplicate' },
@@ -891,7 +891,7 @@ test('original item targets survive insertion, deletion and movement without rel
     { ...blocks[0], text: 'Edited core' },
   ]);
   call(store, 'resource.undo', { ...target, expectedRevision: result.revision });
-  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+  expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual({
     ...preset,
     revision: preset.revision + 2,
   });
@@ -904,7 +904,7 @@ test('missing original targets and previously removed targets reject the entire 
     expectedRevision: preset.revision,
     changes: [{ op: 'set', path: '/title', value: 'Saved title' }],
   });
-  const saved = store.product.get<any>('prompt-preset', preset.id);
+  const saved = store.product.stored<any>('prompt-preset', preset.id);
   const undo = store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id);
   for (const [changes, expected] of [
     [
@@ -934,7 +934,7 @@ test('missing original targets and previously removed targets reject the entire 
     }
     expect(caught).toBeInstanceOf(HelperResourcePatchError);
     expect(caught).toMatchObject({ details: { ...expected, op: 'set' } });
-    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(saved);
+    expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual(saved);
     expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toEqual(undo);
   }
 });
@@ -970,7 +970,7 @@ test('replaceText prefers exact matches and maps unique CRLF equivalents to orig
     ],
   });
   expect(
-    store.product.get<any>('prompt-preset', preset.id).program.nativeRisuPreset.preset
+    store.product.stored<any>('prompt-preset', preset.id).program.nativeRisuPreset.preset
       .promptTemplate
   ).toEqual([
     { type: 'plain', text: 'exact / same\r\nline' },
@@ -990,7 +990,7 @@ test('replaceText ignores line-end whitespace only for one unique match and leav
     { type: 'plain', text: 'a \nb / a\t\nb' },
   ]);
   const blocks = () =>
-    store.product.get<any>('prompt-preset', preset.id).program.nativeRisuPreset.preset
+    store.product.stored<any>('prompt-preset', preset.id).program.nativeRisuPreset.preset
       .promptTemplate;
   const ambiguous = () =>
     call(store, 'resource.patch', {
@@ -1064,7 +1064,7 @@ test.each([
         },
       ],
     });
-    const saved = store.product.get<any>('prompt-preset', preset.id);
+    const saved = store.product.stored<any>('prompt-preset', preset.id);
     expect(saved.values).toEqual(values);
     expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual(
       preset.program.nativeRisuPreset.preset.promptTemplate
@@ -1077,7 +1077,7 @@ test.each([
     });
     expect(saved.revision).toBe(result.revision);
     call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
-    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+    expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual({
       ...preset,
       revision: preset.revision + 2,
     });
@@ -1105,7 +1105,7 @@ test('new explicit values use final declarations and reverting a declaration rem
       { op: 'set', path, value: 'mood=Mood=select=Quiet,Loud' },
     ],
   });
-  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({ mood: '1' });
+  expect(store.product.stored<any>('prompt-preset', preset.id).values).toEqual({ mood: '1' });
   expect(result.reconciledValues).toEqual({ removedKeys: ['tone'], resetKeys: [] });
 });
 
@@ -1120,7 +1120,7 @@ test('previous reads expose the current undo slot without changing saved state o
     expectedRevision: preset.revision,
     changes: [{ op: 'set', path, value: 'Second' }],
   });
-  const saved = store.product.get<any>('prompt-preset', preset.id);
+  const saved = store.product.stored<any>('prompt-preset', preset.id);
   const undo = store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id);
   const previous = call(store, 'resource.read', { ...target, version: 'previous', path });
   expect(previous).toMatchObject({
@@ -1135,7 +1135,7 @@ test('previous reads expose the current undo slot without changing saved state o
     path: presetBlocksPath,
   });
   expect(outline.items[0]).not.toHaveProperty('target');
-  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(saved);
+  expect(store.product.stored<any>('prompt-preset', preset.id)).toEqual(saved);
   expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toEqual(undo);
   const third = call(store, 'resource.patch', {
     ...target,

@@ -21,6 +21,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { exportManuscript, manuscriptExportMetadata } from '../server/manuscript-export.js';
 import { readerDetail } from '../server/reader.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(async () => {
@@ -465,6 +466,20 @@ describe('chat transcript export and import', () => {
       'Scene one.',
       'Scene two.',
     ]);
+  });
+
+  test('an import reports a deleted library package as skipped instead of attaching it', async () => {
+    const store = await database();
+    const { chat, glossary } = authoredChat(store);
+    const transcript = exportChatTranscript(store, chat.id);
+    softDeleteLibraryItem(store, 'content', glossary);
+    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'deleted-module' });
+    expect(imported.skippedAttachments).toEqual([
+      { id: glossary.id, revision: glossary.revision, role: 'module' },
+    ]);
+    expect(
+      store.product.profile(imported.chat.id).packageAttachments!.map((item) => item.role)
+    ).toEqual(['bot']);
   });
 
   test('a replayed import key returns the same chat and missing library references are reported', async () => {

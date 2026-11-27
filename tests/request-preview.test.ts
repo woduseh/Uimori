@@ -20,6 +20,7 @@ import { freezeReservationSnapshot } from '../server/reservation-snapshot.js';
 import * as nativeRun from '../server/risu-native-run.js';
 import * as nativeRuntime from '../server/risu-native-runtime.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 
 const owned: { app: App; directory: string }[] = [];
 afterEach(async () => {
@@ -330,3 +331,38 @@ test('missing model remains unknown and malformed drafts are rejected before exe
     expect((await f.post(body)).statusCode).toBe(400);
   expect(f.changes()).toBe(before);
 });
+
+test.each(['model', 'prompt-preset'] as const)(
+  'marks a chat-pinned %s deleted while the isolated native preview awaits as stale',
+  async (kind) => {
+    const f = await fixture();
+    const pinned =
+      kind === 'model'
+        ? (f.store.product.model({ ...f.modelInput, title: 'Pinned preview model' }) as {
+            id: string;
+            revision: number;
+          })
+        : (f.store.product.promptPreset({
+            title: 'Pinned preview prompt',
+            role: 'main',
+            text: 'Write',
+          }) as { id: string; revision: number });
+    const profile = f.store.product.profile(f.chat.id);
+    f.store.product.updateProfile(f.chat.id, {
+      expectedRevision: profile.revision,
+      image: profile.image,
+      pinned:
+        kind === 'model' ? { mainModel: { id: pinned.id } } : { mainPromptPresetId: pinned.id },
+    });
+    const original = nativeRun.prepareNativeRisuRun;
+    vi.spyOn(nativeRun, 'prepareNativeRisuRun').mockImplementationOnce(async (...args) => {
+      const result = await original(...args);
+      softDeleteLibraryItem(f.store, kind, pinned);
+      return result;
+    });
+    const result = await f.preview();
+    expect(result.error).toBeNull();
+    expect(result.snapshot.stale).toBe(true);
+    expect(result.caveats).toContain('SNAPSHOT_CHANGED');
+  }
+);

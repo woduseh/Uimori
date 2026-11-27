@@ -117,7 +117,7 @@ test('a library-only bot import preserves its opening without creating a chat, i
   expect(imported.chat).toBeNull();
   expect(store.chats()).toHaveLength(0);
   const botId = imported.receipt.items.find((item) => item.key === 'bot')!.id;
-  const bot = store.product.get<Content>('content', botId);
+  const bot = store.product.stored<Content>('content', botId);
   expect(bot.package.starts?.[0].text).toBe('The pilot waits.');
   expect((await applyRisuImport(store, body)).receipt).toMatchObject({
     created: false,
@@ -162,7 +162,7 @@ test('retired card fields are excluded while active global notes and source byte
     allowPartial: false,
     idempotencyKey: 'guidance',
   });
-  const content = store.product.get<Content>('content', saved.receipt.items[0].id),
+  const content = store.product.stored<Content>('content', saved.receipt.items[0].id),
     chat = saved.chat!;
   const profile = store.product.snapshot(chat.id)!;
   const compiled = compileSnapshotPrompt({
@@ -234,7 +234,7 @@ test('module JSON registers a reusable module without a bot, chat or memory', as
   expect(result.chat).toBeNull();
   expect(result.receipt.items[0].category).toBe('module');
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
-  const content = store.product.get<Content>('content', result.receipt.items[0].id),
+  const content = store.product.stored<Content>('content', result.receipt.items[0].id),
     pkg = content.package!;
   expect(content.kind).toBe('module');
   expect(pkg.identity).toBeUndefined();
@@ -302,7 +302,7 @@ test('module lorebook keys, secondary keys and mode remain in authoritative Risu
     allowPartial: true,
     idempotencyKey: 'module-keyed',
   });
-  const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
+  const pkg = store.product.stored<Content>('content', result.receipt.items[0].id).package!;
   expect(pkg.loreActivation).toEqual({ mode: 'model' });
   expect(pkg.nativeRisu.module!.lorebook).toMatchObject([
     { key: '/harbor/i', useRegex: true },
@@ -342,7 +342,7 @@ test('card imports preserve all lore, trimmed like the Risu decorator reader, an
     });
     expect(normal.statusCode).toBe(201);
     const result = normal.json();
-    const bot = store.product.get<Content>('content', result.receipt.items[0].id);
+    const bot = store.product.stored<Content>('content', result.receipt.items[0].id);
     expect(bot.package!.lore).toHaveLength(2);
     expect(bot.package!.starts).toHaveLength(2);
     expect(bot.package!.body).toBe('{{char}} explores an imaginary planet.');
@@ -471,7 +471,7 @@ test('module project ZIP reads ordered asset files within one project folder wit
     allowPartial: false,
     idempotencyKey: 'module-project',
   });
-  const content = store.product.get<Content>('content', result.receipt.items[0].id);
+  const content = store.product.stored<Content>('content', result.receipt.items[0].id);
   expect(content.package!.lore[0].text).toBe('{{image::green}}');
   expect(content.package!.nativeRisu!.assets).toEqual([
     expect.objectContaining({ name: 'green', imageId: 'image-0' }),
@@ -544,7 +544,7 @@ test('charx keeps card-owned images while reading its embedded module; corrupt f
   };
   expect(store.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(0);
   const result = await applyRisuImport(store, body);
-  const pkg = store.product.get<Content>('content', result.receipt.items[0].id).package!;
+  const pkg = store.product.stored<Content>('content', result.receipt.items[0].id).package!;
   expect(pkg.images).toHaveLength(1);
   expect(pkg.starts![0].text).toBe('{{image::main}}');
   expect(pkg.nativeRisu!.assets).toEqual([
@@ -613,7 +613,7 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     });
     expect(applied.statusCode).toBe(201);
     const receipt = applied.json().receipt;
-    const content = store.product.get<Content>('content', receipt.items[0].id);
+    const content = store.product.stored<Content>('content', receipt.items[0].id);
     expect(content.title).toBe('Synthetic Pilot');
     expect(content.package!.nativeRisu!.sourceHash).toBe(sha256);
 
@@ -797,7 +797,7 @@ test('card metadata and typed assets remain in native source without conversion 
     allowPartial: true,
     idempotencyKey: 'surfaces',
   });
-  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
+  const bot = store.product.stored<Content>('content', saved.receipt.items[0].id);
   expect(bot.description).toBe('Written by the card author.');
   expect(bot.package!.description).toBe('Written by the card author.');
   const expectedCard = structuredClone(value.data) as Record<string, any>;
@@ -816,7 +816,7 @@ test('card metadata and typed assets remain in native source without conversion 
     idempotencyKey: 'plain-card',
   });
   expect(
-    store.product.get<Content>('content', plainSaved.receipt.items[0].id).description
+    store.product.stored<Content>('content', plainSaved.receipt.items[0].id).description
   ).toContain('synthetic-card.json');
 });
 
@@ -837,7 +837,7 @@ test('creator notes beyond the description limit are cut with an ellipsis and a 
     allowPartial: false,
     idempotencyKey: 'long-notes',
   });
-  const bot = store.product.get<Content>('content', saved.receipt.items[0].id);
+  const bot = store.product.stored<Content>('content', saved.receipt.items[0].id);
   expect(bot.description).toHaveLength(4000);
   expect(bot.description.endsWith('A…')).toBe(true);
   expect(bot.package!.description).toBe(bot.description);

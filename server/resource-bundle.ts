@@ -73,7 +73,7 @@ export function captureResourceBundle(
       coverImage: _cover,
       hasPackage: _hasPackage,
       ...source
-    } = store.product.get<Content>('content', id);
+    } = store.product.stored<Content>('content', id);
     const key = `content-${captured.size + 1}`;
     captured.set(id, key);
     const entry = { key, source: structuredClone(source), modules: [] as string[] };
@@ -87,10 +87,11 @@ export function captureResourceBundle(
     return key;
   };
   for (const item of selection) {
-    store.product.assertAvailable(item.kind, item.id);
-    if (item.kind === 'content') file.roots.push({ kind: item.kind, key: capture(item.id) });
-    else {
-      const source = store.product.get<PromptPreset>('prompt-preset', item.id);
+    if (item.kind === 'content') {
+      store.product.assertAvailable('content', item.id);
+      file.roots.push({ kind: item.kind, key: capture(item.id) });
+    } else {
+      const source = store.product.available<PromptPreset>('prompt-preset', item.id);
       const key = `prompt-${file.prompts.length + 1}`;
       const combinations = (
         store.product.all('prompt-combination') as SavedPromptCombination[]

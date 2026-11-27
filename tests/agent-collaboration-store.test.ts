@@ -61,7 +61,7 @@ test('unfinished disabled collaboration can save with the surrounding prompt and
     role: 'main',
     program,
   }) as PromptPreset;
-  expect(store.product.get<PromptPreset>('prompt-preset', saved.id).program).toEqual(program);
+  expect(store.product.stored<PromptPreset>('prompt-preset', saved.id).program).toEqual(program);
   expect(() =>
     store.product.promptPreset({
       title: saved.title,
@@ -91,7 +91,7 @@ test('legacy character limits are retired when saving a preset without changing 
     role: 'main',
     program,
   }) as PromptPreset;
-  const loaded = store.product.get<PromptPreset>('prompt-preset', saved.id);
+  const loaded = store.product.stored<PromptPreset>('prompt-preset', saved.id);
   expect(loaded.program.collaboration!.sharedInstructions).toBe(instructions);
   expect(loaded.program.collaboration!.agents[0].instructions).toBe(instructions);
   expect(loaded.program.collaboration!.agents[0]).not.toHaveProperty('maxOutputChars');
@@ -227,7 +227,7 @@ test('reservation freezes each advisor and prompt; later current settings apply 
   expect(promptWorkspace(f.store).main.program.collaboration!.sharedInstructions).toBe(
     'Shared creative direction'
   );
-  const edited = f.product.get<PromptPreset>('prompt-preset', f.preset.id);
+  const edited = f.product.stored<PromptPreset>('prompt-preset', f.preset.id);
   updatePromptWorkspace(f.store, {
     expectedRevision: promptWorkspace(f.store).revision,
     main: { title: edited.title, program: edited.program, values: { shared: 'selected' } },
@@ -327,7 +327,7 @@ test('model references, prompt role and CAS are checked before storing collabora
       f.preset.id
     )
   ).toThrow('REVISION_CONFLICT');
-  expect(f.product.get<PromptPreset>('prompt-preset', f.preset.id)).toEqual(f.preset);
+  expect(f.product.stored<PromptPreset>('prompt-preset', f.preset.id)).toEqual(f.preset);
 });
 
 test('saving a collaboration preset deleted elsewhere answers a revision conflict', () => {

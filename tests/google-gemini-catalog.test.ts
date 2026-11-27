@@ -193,7 +193,7 @@ test('revoking AI Studio while reading prevents further pages and both success a
     finish();
     await refresh;
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(app.store.product.get('connection', listed.id)).toEqual(disabled);
+    expect(app.store.product.stored('connection', listed.id)).toEqual(disabled);
     expect(disabled.catalog).toEqual(listed.catalog);
     expect(disabled.catalogUpdatedAt).toBe(listed.catalogUpdatedAt);
     expect(disabled.catalogError).toBeNull();

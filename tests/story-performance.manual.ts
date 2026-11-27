@@ -141,7 +141,7 @@ function addArchived(store: Store, chatId: string, start: number, end: number) {
   });
 }
 function addLore(store: Store, chatId: string, start: number, end: number) {
-  const owner = store.product.get<Content>('content', store.chat(chatId).botId);
+  const owner = store.product.stored<Content>('content', store.chat(chatId).botId);
   const card = owner.package.nativeRisu.card;
   const book = (card.character_book ?? {}) as { entries?: Record<string, unknown>[] };
   const saved = store.product.content(

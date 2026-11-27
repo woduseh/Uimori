@@ -110,7 +110,7 @@ test('preset inspection compares retained option meaning without evaluating CBS 
       },
     ],
   });
-  const before = store.product.get('prompt-preset', saved.id);
+  const before = store.product.stored('prompt-preset', saved.id);
   const undo = store.db.prepare('SELECT * FROM resource_undo').all();
   const report = call(store, 'preset.validate', { id: saved.id, limit: 1 });
   expect(report).toMatchObject({
@@ -124,6 +124,6 @@ test('preset inspection compares retained option meaning without evaluating CBS 
   const rest = call(store, 'preset.validate', { id: saved.id, offset: report.nextOffset });
   expect(rest.nextOffset).toBeNull();
   expect(rest.diagnostics).toHaveLength(1);
-  expect(store.product.get('prompt-preset', saved.id)).toEqual(before);
+  expect(store.product.stored('prompt-preset', saved.id)).toEqual(before);
   expect(store.db.prepare('SELECT * FROM resource_undo').all()).toEqual(undo);
 });

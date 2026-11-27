@@ -541,7 +541,7 @@ describe('one-call provider connection diagnostics', () => {
         },
       ])
     );
-    expect(app.store.product.get<Connection>('connection', connection.id).endpoint).toBe(saved);
+    expect(app.store.product.stored<Connection>('connection', connection.id).endpoint).toBe(saved);
     await post(app, model, randomUUID(), 400, { location: 'us_central1' });
     await post(app, fixtureModel, randomUUID(), 400, { location: 'us' });
   });

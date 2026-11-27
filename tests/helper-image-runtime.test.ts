@@ -277,7 +277,7 @@ test('gateway image discovery delivers actual pixels once across continued helpe
   expect(imageData(bodies[2])).toHaveLength(1);
   await expectRedPixels(pixels);
   expect(imageData(bodies[3])).toEqual([pixels]);
-  expect(f.store.product.get('content', original.id)).toEqual(original);
+  expect(f.store.product.stored('content', original.id)).toEqual(original);
   expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(originalBlobs);
   expectNoPersistedPixels(f, pixels);
 });
@@ -702,7 +702,7 @@ test.each(['image.read', 'failed shell image.read with a save'] as const)(
           denied: false,
         },
       ]);
-      expect(f.store.product.get('content', changed.id)).toMatchObject({
+      expect(f.store.product.stored('content', changed.id)).toMatchObject({
         title: 'After',
         revision: 2,
       });

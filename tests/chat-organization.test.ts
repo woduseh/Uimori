@@ -9,6 +9,7 @@ import { captureChatCopy } from '../server/chat-copy.js';
 import type { Content } from '../core/product.js';
 import { createApp } from '../server/app.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 
 const owned: { directory: string; store?: Store }[] = [];
 afterEach(async () => {
@@ -136,6 +137,26 @@ test('bot defaults follow current persona edits and deleted defaults require an 
   ]);
 });
 
+test('a deleted persona cannot become a folder default or a new chat persona', async () => {
+  const { store, bot, persona } = await fixture();
+  const org = store.organization;
+  const folder = org.createFolder(bot.id, { title: 'Kept folder' });
+  const deleted = softDeleteLibraryItem(store, 'content', persona);
+  expect(() =>
+    org.createFolder(bot.id, { title: 'Stale tab', defaultPersona: ref(deleted) })
+  ).toThrow('LIBRARY_ITEM_DELETED');
+  expect(() =>
+    org.updateFolder(bot.id, folder.id, {
+      expectedRevision: folder.revision,
+      defaultPersona: ref(deleted),
+    })
+  ).toThrow('LIBRARY_ITEM_DELETED');
+  expect(org.folders(bot.id)).toEqual([folder]);
+  expect(() => store.createChat('Stale tab', { botId: bot.id, persona: ref(deleted) })).toThrow(
+    'LIBRARY_ITEM_DELETED'
+  );
+});
+
 test('invalid order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();
   const folder = store.organization.createFolder(bot.id, { title: 'Elsewhere' });
@@ -159,7 +180,7 @@ function attach(store: Store, chatId: string, attachments: { id: string; revisio
     expectedRevision: p.revision,
     packageAttachments: attachments.map((ref) => ({
       ...ref,
-      role: store.product.get<Content>('content', ref.id, ref.revision).kind,
+      role: store.product.stored<Content>('content', ref.id, ref.revision).kind,
     })),
 
     routes: p.routes,
@@ -228,7 +249,7 @@ test('cross-bot moves, stale edits and invalid defaults fail without losing orga
       title: 'Bad',
       defaultPersona: { id: 'missing-persona', revision: 1 },
     })
-  ).toThrow('not found');
+  ).toThrow('LIBRARY_ITEM_DELETED');
   expect(() => store.createChat('Bad', { botId: bot.id, folderId: b.id })).toThrow(
     'Folder not found'
   );

@@ -220,7 +220,7 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
     expectedRevision === undefined
       ? store.product.available<ModelPreset>('model', modelId)
       : store.product.editable<ModelPreset>('model', modelId, expectedRevision);
-  const connection = store.product.get<Connection>('connection', model.connectionId);
+  const connection = store.product.stored<Connection>('connection', model.connectionId);
   if (expectedRevision !== undefined) {
     let pricing: ReturnType<typeof validateModelPricing>;
     try {
@@ -312,15 +312,10 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
 }
 
 function pricedConnection(store: Store, target: JudgmentPriceTarget) {
-  if (target.provider === 'typesafe' || store.product.isHidden('connection', target.connectionId!))
+  if (target.provider === 'typesafe' || !store.product.isLive('connection', target.connectionId!))
     return false;
-  try {
-    const connection = store.product.get<Connection>('connection', target.connectionId!);
-    return isJudgmentConnection(target.provider, { ...connection, enabled: true });
-  } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 404) return false;
-    throw error;
-  }
+  const connection = store.product.stored<Connection>('connection', target.connectionId!);
+  return isJudgmentConnection(target.provider, { ...connection, enabled: true });
 }
 
 function describeJudgmentTarget(
@@ -331,7 +326,7 @@ function describeJudgmentTarget(
   let connection: Connection | undefined;
   if (target.connectionId) {
     try {
-      connection = store.product.get<Connection>('connection', target.connectionId);
+      connection = store.product.stored<Connection>('connection', target.connectionId);
     } catch (error) {
       if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
     }

@@ -249,7 +249,7 @@ test('the same package in bot and persona roles receives an override only on the
   expect(
     value.snapshot.profile!.packages!.every((pkg) => pkg.lore[0].text === 'Original lore')
   ).toBe(true);
-  expect(store.product.get<Content>('content', bot.id)).toEqual(bot);
+  expect(store.product.stored<Content>('content', bot.id)).toEqual(bot);
   complete(store, value);
   const original = readStoredRunSnapshot(store, value.id);
   const changed = save(

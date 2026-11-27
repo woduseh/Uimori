@@ -91,7 +91,7 @@ export function savedModelParameters(model: ModelPreset, protocol: Connection['p
 }
 
 function view(store: Store, model: ModelPreset) {
-  const connection = store.product.get<Connection>('connection', model.connectionId);
+  const connection = store.product.stored<Connection>('connection', model.connectionId);
   const supported = supportedParameters(connection.protocol);
   return {
     modelId: model.id,

@@ -112,7 +112,7 @@ export class ProviderConnectionTestStore {
       }
       const model = this.store.product.editable<ModelPreset>('model', modelId, expectedRevision);
       if (model.enabled === false) throw new AppError(403, 'CONNECTION_TEST_MODEL_DISABLED');
-      const authority = this.store.product.get<Connection>('connection', model.connectionId);
+      const authority = this.store.product.stored<Connection>('connection', model.connectionId);
       this.store.product.authorize(authority);
       if (
         this.store.db
@@ -247,7 +247,7 @@ export function createConnectionTestRunner(
           if (signal.aborted)
             throw new ProviderContractError(options.signal.aborted ? 'SERVER_STOPPING' : 'TIMEOUT');
           stillAuthorized();
-          const current = store.product.get<ModelPreset>('model', model.id);
+          const current = store.product.stored<ModelPreset>('model', model.id);
           if (
             store.product.isHidden('model', model.id) ||
             current.enabled === false ||

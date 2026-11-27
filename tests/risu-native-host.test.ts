@@ -623,7 +623,10 @@ end)
   store.db
     .prepare('UPDATE runs SET snapshot=? WHERE id=?')
     .run(JSON.stringify(sourceSnapshot), source.runId);
-  const original = store.product.get<Content>('content', sourceSnapshot.profile!.packages![0]!.id);
+  const original = store.product.stored<Content>(
+    'content',
+    sourceSnapshot.profile!.packages![0]!.id
+  );
   const updated = store.product.content(
     {
       kind: original.kind,

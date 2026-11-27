@@ -4,11 +4,16 @@ import type { ChatBackup, CopiedMessageState } from '../../core/chat-backup.js';
 
 type LegacyChatBackup = ChatBackup & { notices: string[] };
 import type { ChatTranscript } from '../../core/chat-transcript.js';
-import type { NativeTransferFile } from '../../core/native-transfer.js';
+import type { NativeTransferFile, NativeTransferImage } from '../../core/native-transfer.js';
 import type { Store } from '../../server/store.js';
 import { captureChatCopy } from '../../server/chat-copy.js';
 import { captureResourceBundle } from '../../server/resource-bundle.js';
-import { encodedImage } from '../../server/image-storage.js';
+import { readImage } from '../../server/image-storage.js';
+
+function encodedImage(db: Store['db'], hash: string): NativeTransferImage {
+  const image = readImage(db, hash);
+  return { id: hash, revision: 1, hash, mime: image.mime, base64: image.bytes.toString('base64') };
+}
 
 function copiedMessageTexts(messages: readonly CopiedMessageState[]): string[] {
   return messages.flatMap((state) => [

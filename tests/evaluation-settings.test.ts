@@ -91,7 +91,7 @@ test('fresh snapshots opt legacy presets into metadata selection without rewriti
     const captured = store.product.modelSnapshot(model.id);
     expect(captured.evaluationTools).toEqual({ ...legacy, metadataProfile: 'neutral' });
     expect(captured.connection.protocol).toBe(protocol);
-    expect(store.product.get<ModelPreset>('model', model.id).evaluationTools).toEqual(legacy);
+    expect(store.product.stored<ModelPreset>('model', model.id).evaluationTools).toEqual(legacy);
     store.product.model(
       modelBody(c, {
         expectedRevision: model.revision,
@@ -151,8 +151,8 @@ test('only selected model presets persist evaluation tools and captured runs ret
       selected.id
     ) as ModelPreset;
     expect(updated).not.toHaveProperty('evaluationTools');
-    expect(store.product.get('model', selected.id)).toEqual(updated);
-    expect(() => store.product.get('model', selected.id, selected.revision)).toThrow(
+    expect(store.product.stored('model', selected.id)).toEqual(updated);
+    expect(() => store.product.stored('model', selected.id, selected.revision)).toThrow(
       'Setting not found'
     );
     expect(store.product.snapshot(chat.id)?.models.main).not.toHaveProperty('evaluationTools');
