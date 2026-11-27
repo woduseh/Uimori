@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 import type { HelperConversation, HelperConversationSummary, HelperScope } from '../core/helper.js';
 import type { ChatDetail } from '../core/types.js';
+import type { Content } from '../core/product.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import {
   DESKTOP_HEIGHT,
@@ -432,4 +434,73 @@ test('HSPACE07 project and copy retries recover the same saved result through se
     await request.get(`/api/helper/conversations?kind=chat&chatId=${chat.id}`)
   ).json()) as HelperConversationSummary[];
   expect(copies).toHaveLength(2);
+});
+
+test('HSPACE02 expanding a resource helper preserves its unsaved editor', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+  const response = await request.post('/api/content', {
+    data: fixtureBotInput(`편집 중인 자료 ${randomUUID().slice(0, 8)}`, '저장된 원래 인물 설명'),
+  });
+  expect(response.ok()).toBe(true);
+  const resource = (await response.json()) as Content;
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(resource.title);
+  await page.getByRole('button', { name: `${resource.title} 편집`, exact: true }).click();
+  const editor = page.getByLabel(/^(봇|페르소나|모듈) 이름$/u);
+  await editor.fill('저장하지 않은 인물 이름');
+  await page
+    .getByRole('region', { name: '자료 상세', exact: true })
+    .getByRole('button', { name: '도우미 열기', exact: true })
+    .click();
+  const panel = page.locator('#helper-panel');
+  const input = panel.getByLabel('도우미에게 요청', { exact: true });
+  await expect(input).toBeEnabled();
+  await input.fill('이 자료를 검토하려고 남긴 도우미 초안');
+  const session = await panel.getByLabel('도우미 대화 선택', { exact: true }).inputValue();
+  await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+  await expect(panel).toHaveClass(/helper-expanded/u);
+  await expect(editor).toBeAttached();
+  await expect(editor).toBeHidden();
+  await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
+  await panel.getByRole('button', { name: '서재', exact: true }).click();
+  await expect(panel).not.toHaveClass(/helper-expanded/u);
+  await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(session);
+  await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveValue('저장하지 않은 인물 이름');
+  await editor.fill('돌아온 뒤 다시 고친 인물 이름');
+  await page
+    .getByRole('region', { name: '자료 상세', exact: true })
+    .getByRole('button', { name: '도우미 열기', exact: true })
+    .click();
+  const context = panel.locator('.helper-editor-draft .helper-chip-label');
+  await expect(context).toHaveText('편집 중: 돌아온 뒤 다시 고친 인물 이름');
+  await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
+  await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+  await expect(panel).toHaveClass(/helper-expanded/u);
+  const expandedTitle = await context.textContent();
+  const admission = page.waitForRequest(
+    (request) =>
+      request.method() === 'POST' &&
+      new URL(request.url()).pathname === `/api/helper/conversations/${session}/messages`
+  );
+  await page.route(`**/api/helper/conversations/${session}/messages`, (route) =>
+    route.fulfill({ status: 400, contentType: 'application/json', body: '{"error":"synthetic"}' })
+  );
+  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+  const body = (await admission).postDataJSON();
+  expect({ title: expandedTitle, editorTitle: body.editor?.model?.title }).toEqual({
+    title: '편집 중: 돌아온 뒤 다시 고친 인물 이름',
+    editorTitle: '돌아온 뒤 다시 고친 인물 이름',
+  });
+  await panel.getByRole('button', { name: '서재', exact: true }).click();
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await expect(editor).toHaveValue('돌아온 뒤 다시 고친 인물 이름');
+  const saved = (await (await request.get(`/api/content/${resource.id}`)).json()) as Content;
+  expect(saved).toEqual(resource);
 });

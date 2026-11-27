@@ -15,16 +15,36 @@ import { openHelper, expectEditorSection, selectEditorSection } from './ui-navig
 
 test.setTimeout(60000);
 
-async function seed(request: APIRequestContext) {
+async function seed(
+  request: APIRequestContext,
+  profiles?: { name: string; appearance: string }[],
+  followUps = 0
+) {
+  let sendProfiles = !!profiles;
   const provider = createServer(async (incoming, response) => {
     for await (const _chunk of incoming) {
     }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
-    const events = [
-      { type: 'text_delta', delta: '요청 내용을 확인했어요.' },
-      { type: 'usage', inputTokens: 120, outputTokens: 12, costUsd: null },
-      { type: 'done', reason: 'stop' },
-    ];
+    const events = sendProfiles
+      ? [
+          {
+            type: 'tool_delta',
+            index: 0,
+            id: 'save-profiles',
+            name: 'app.call',
+            argumentsDelta: JSON.stringify({
+              name: 'illustration.profiles.save',
+              arguments: { expectedRevision: 0, profiles },
+            }),
+          },
+          { type: 'done', reason: 'tool_calls' },
+        ]
+      : [
+          { type: 'text_delta', delta: '요청 내용을 확인했어요.' },
+          { type: 'usage', inputTokens: 120, outputTokens: 12, costUsd: null },
+          { type: 'done', reason: 'stop' },
+        ];
+    sendProfiles = false;
     response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });
   await new Promise<void>((resolve, reject) => {
@@ -81,19 +101,32 @@ async function seed(request: APIRequestContext) {
     const admitted = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
       data: {
         requestKey: randomUUID(),
-        text: '자료를 변경하지 않고 간단히 답해 주세요.',
+        text: profiles
+          ? '두 인물의 외형을 삽화 참고에 저장해 줘.'
+          : '자료를 변경하지 않고 간단히 답해 주세요.',
       },
     });
     expect(admitted.ok(), await admitted.text()).toBe(true);
     const task = (await admitted.json()) as HelperTaskView;
-    await expect
-      .poll(async () => {
-        const current = await request.get(`/api/helper/tasks/${task.id}`);
-        expect(current.ok()).toBe(true);
-        return ((await current.json()) as HelperTaskView).status;
-      })
-      .toBe('completed');
-    return { chat, task, conversation };
+    const completed = async (id: string) =>
+      expect
+        .poll(async () => {
+          const current = await request.get(`/api/helper/tasks/${id}`);
+          expect(current.ok()).toBe(true);
+          return ((await current.json()) as HelperTaskView).status;
+        })
+        .toBe('completed');
+    await completed(task.id);
+    const later: HelperTaskView[] = [];
+    for (let index = 0; index < followUps; index++) {
+      const next = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
+        data: { requestKey: randomUUID(), text: `이어지는 요청 ${index + 1}` },
+      });
+      expect(next.ok(), await next.text()).toBe(true);
+      later.push((await next.json()) as HelperTaskView);
+      await completed(later.at(-1)!.id);
+    }
+    return { chat, task, conversation, later };
   } finally {
     try {
       if (selected) {
@@ -122,6 +155,38 @@ async function seed(request: APIRequestContext) {
     }
   }
 }
+
+test('an appearance result opens both saved characters in the chat image settings', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await seed(request, [
+    { name: '미라', appearance: '은빛 단발' },
+    { name: '준', appearance: '검은 곱슬머리' },
+  ]);
+  const { characterProfiles: profiles, revision } = await (
+    await request.get(`/api/chats/${chat.id}/illustration-references`)
+  ).json();
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await page.getByRole('button', { name: '준 인물 외형 열기', exact: true }).click();
+  const editor = page.getByTestId('illustration-references');
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('textbox', { name: '외형', exact: true }).nth(1)).toHaveValue(
+    '검은 곱슬머리'
+  );
+  const changed = await request.put(`/api/chats/${chat.id}/illustration-references`, {
+    data: {
+      expectedRevision: revision,
+      references: [],
+      characterProfiles: [profiles[0], { ...profiles[1], appearance: '짧은 곱슬머리' }],
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await expect(editor.getByRole('textbox', { name: '외형', exact: true }).nth(1)).toHaveValue(
+    '짧은 곱슬머리'
+  );
+});
 
 test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps the helper beside it', async ({
   page,
