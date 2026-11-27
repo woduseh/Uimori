@@ -3,6 +3,7 @@ import { deletionEndpoints } from './domains/deletion/endpoints.js';
 import { libraryEndpoints } from './domains/library/endpoints.js';
 import { personalWorkspaceEndpoints } from './domains/personal-workspace/endpoints.js';
 import { promptEndpoints } from './domains/prompts/endpoints.js';
+import { providerEndpoints } from './domains/providers/endpoints.js';
 import { resourceEditorEndpoints } from './domains/resource-editors/endpoints.js';
 import { selfHostEndpoints } from './domains/self-host/endpoints.js';
 import { translationEndpoints } from './domains/translation/endpoints.js';
@@ -13,6 +14,7 @@ export const allEndpoints = {
   library: libraryEndpoints,
   'personal-workspace': personalWorkspaceEndpoints,
   prompts: promptEndpoints,
+  providers: providerEndpoints,
   resourceEditors: resourceEditorEndpoints,
   'self-host': selfHostEndpoints,
   translation: translationEndpoints,

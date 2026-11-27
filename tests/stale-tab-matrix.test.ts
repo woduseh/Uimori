@@ -232,6 +232,8 @@ async function modelWorkspace() {
 }
 const singletonExemption =
   'A singleton setting with no target to delete; its input is fully checked by the operation schema before the revision, so a stale tab meets 409 for any value the schema admits.';
+const jevExemption =
+  'The JEV key and settings are one singleton with no target to delete; the operation schema checks the whole input and the handler checks the revision before the stored key.';
 const fontReason =
   'Fonts are not library items: a removed font answers the catalogued FONT_NOT_FOUND, whose text asks for a reload of the font list.';
 
@@ -807,6 +809,33 @@ const matrix: Record<string, Entry> = {
         targetRevision: true,
       },
     ],
+  },
+  'providers.saveJevKey': { exempt: jevExemption },
+  'providers.deleteJevKey': { exempt: jevExemption },
+  'providers.updateJevSettings': { exempt: jevExemption },
+  'providers.startJevTest': { exempt: jevExemption },
+  'providers.startModelTest': {
+    cases: [
+      {
+        when: 'a model another tab deleted',
+        arrange: () => {
+          const item = model();
+          return {
+            input: {
+              id: item.id,
+              expectedRevision: removed('model', item),
+              idempotencyKey: randomUUID(),
+            },
+          };
+        },
+        answer: conflict,
+        targetRevision: true,
+      },
+    ],
+  },
+  'providers.readConnectionTest': {
+    exempt:
+      'Connection test records are never deleted and their id comes from the answer that started the test, so no tab can hold one that is gone.',
   },
   'resourceEditors.readResource': {
     cases: [
