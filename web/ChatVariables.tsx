@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -47,11 +48,7 @@ function stringMap(value: unknown): Record<string, string> | null {
   return Object.fromEntries(entries) as Record<string, string>;
 }
 function parseValues(text: string): Record<string, string> | null {
-  try {
-    return stringMap(JSON.parse(text));
-  } catch {
-    return null;
-  }
+  return stringMap(tryParseJson(text, null));
 }
 function readDraft(key: string): Draft | null {
   const value = readOptionalJson('session', key, null) as Partial<Draft> | null;

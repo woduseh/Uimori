@@ -153,6 +153,7 @@ import { useRetryableEffect } from './useRetryableEffect.js';
 import { useBottomFollow } from './useBottomFollow.js';
 import { useShortcut, useShortcutLabel } from './shortcuts.js';
 import { storageKeys } from './storage-keys.js';
+import { tryParseJson } from './json.js';
 
 type Props = {
   enterSend: boolean;
@@ -347,46 +348,32 @@ function saveLocal(key: string, value: string | null) {
   void writeHelperRecovery(key, value).catch(() => {});
 }
 function storedOutbox(scope: string): Outbox | null {
-  try {
-    const value = JSON.parse(local(`helper-outbox:${scope}`) ?? 'null') as Outbox | null;
-    return value &&
-      value.scope === scope &&
-      typeof value.requestKey === 'string' &&
-      typeof value.text === 'string' &&
-      typeof value.targetConversationId === 'string'
-      ? value
-      : null;
-  } catch {
-    return null;
-  }
+  const value = tryParseJson(local(`helper-outbox:${scope}`), null) as Outbox | null;
+  return value &&
+    value.scope === scope &&
+    typeof value.requestKey === 'string' &&
+    typeof value.text === 'string' &&
+    typeof value.targetConversationId === 'string'
+    ? value
+    : null;
 }
 function storedSelection(scope: string): HelperSelection | null {
-  try {
-    const value = JSON.parse(
-      local(`helper-selection:${scope}`) ?? 'null'
-    ) as HelperSelection | null;
-    return value &&
-      typeof value.sourceId === 'string' &&
-      typeof value.sourceHash === 'string' &&
-      typeof value.text === 'string'
-      ? value
-      : null;
-  } catch {
-    return null;
-  }
+  const value = tryParseJson(local(`helper-selection:${scope}`), null) as HelperSelection | null;
+  return value &&
+    typeof value.sourceId === 'string' &&
+    typeof value.sourceHash === 'string' &&
+    typeof value.text === 'string'
+    ? value
+    : null;
 }
 type SelectedOutline = { target: OutlineTarget; title: string; request: string };
 function storedOutline(scope: string): SelectedOutline | null {
-  try {
-    const value = JSON.parse(local(`helper-outline:${scope}`) ?? 'null') as SelectedOutline | null;
-    return value &&
-      ['compose', 'review'].includes(value.target?.purpose) &&
-      typeof value.title === 'string'
-      ? value
-      : null;
-  } catch {
-    return null;
-  }
+  const value = tryParseJson(local(`helper-outline:${scope}`), null) as SelectedOutline | null;
+  return value &&
+    ['compose', 'review'].includes(value.target?.purpose) &&
+    typeof value.title === 'string'
+    ? value
+    : null;
 }
 const selectionRequest = () => t('helpers.reviewSelection');
 function editorFocusParts(kind: ResourceKind, focus: EditorFocus) {

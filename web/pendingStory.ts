@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import type { ChatProfile } from '../core/product.js';
 import { api } from './api.js';
 import { validateContentAttachment } from '../core/risu-content.js';
@@ -38,7 +39,7 @@ export function savePendingStoryProfile(chatId: string, intent: NewStoryProfileI
 }
 
 function readIntent(raw: string): NewStoryProfileIntent {
-  const value: unknown = JSON.parse(raw);
+  const value = tryParseJson(raw, null);
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new UiError(uiMessage('transfer.m356'));
   const pending = value as Record<string, unknown>;

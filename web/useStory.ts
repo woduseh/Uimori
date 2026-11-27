@@ -1,3 +1,4 @@
+import { parseOwnJson, tryParseJson } from './json.js';
 import { message as descriptor, useI18n } from './i18n.js';
 import { UiError, uiMessage, type MessageKey } from './ui-message.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
@@ -145,7 +146,7 @@ export type RequestActivity = {
 };
 function readCommand(key: string): { record: PendingCommand; payload: RunPayload } | null {
   try {
-    const record = JSON.parse(sessionStorage.getItem(key) || 'null') as PendingCommand | null;
+    const record = tryParseJson(sessionStorage.getItem(key), null) as PendingCommand | null;
     if (
       !record ||
       typeof record.id !== 'string' ||
@@ -153,7 +154,7 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
       typeof record.payload !== 'string'
     )
       return null;
-    const payload = JSON.parse(record.payload) as RunPayload;
+    const payload = tryParseJson(record.payload, null) as RunPayload | null;
     if (
       !payload ||
       typeof payload.request !== 'string' ||
@@ -613,7 +614,7 @@ export function useStory() {
       },
       message(data) {
         if (!alive || navigation.current.chat !== selected) return;
-        const message = JSON.parse(data) as { kind: string; seq?: number; entityId?: string };
+        const message = parseOwnJson(data) as { kind: string; seq?: number; entityId?: string };
         if (message.kind === 'illustration-references.updated' || message.kind === 'snapshot')
           dispatchEvent(
             new CustomEvent('uimori-illustration-references-changed', { detail: selected })

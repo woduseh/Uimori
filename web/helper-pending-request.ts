@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { UiError, uiMessage } from './ui-message.js';
 
 export type PendingHelperRequest<T> = {
@@ -19,7 +20,7 @@ export function pendingHelperRequest<T>(
       const storage = getStorage();
       const raw = storage.getItem(key);
       if (raw === null) continue;
-      const value: unknown = JSON.parse(raw);
+      const value = tryParseJson(raw, null);
       if (valid(value)) return { request: value, storage, raw, recovered: true };
     } catch {}
   }

@@ -1,3 +1,4 @@
+import { readJsonFile } from './json-input.js';
 import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
 import { UiError, uiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
@@ -44,7 +45,7 @@ export function BotChatImportDialog({
       if (file.size > 60 * 1024 * 1024) throw new UiError(uiMessage('transfer.m101'));
       let transcript: ChatTranscript;
       try {
-        transcript = validateChatTranscript(JSON.parse(await file.text()));
+        transcript = validateChatTranscript(await readJsonFile(file, 'transfer.m102'));
       } catch {
         throw new UiError(uiMessage('transfer.m102'));
       }

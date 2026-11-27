@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { UiError, uiMessage } from './ui-message.js';
 import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-recovery.js';
 import { deleteHelperAttachmentRecovery } from './helper-attachment-draft.js';
@@ -107,7 +108,10 @@ export async function clearHelperRecoveryIf(key: string, expected: string): Prom
 export async function deleteHelperSessionRecovery(id: string): Promise<void> {
   await deleteHelperAttachmentRecovery(id);
   const artifactIndex = `helper-artifacts:${id}`;
-  const artifactKeys = JSON.parse((await loadHelperRecovery(artifactIndex)) ?? '[]') as string[];
+  const index = tryParseJson(await loadHelperRecovery(artifactIndex), []);
+  const artifactKeys = Array.isArray(index)
+    ? index.filter((key): key is string => typeof key === 'string')
+    : [];
   await Promise.all(
     [
       ...['helper-input', 'helper-outbox', 'helper-selection', 'helper-outline'].map(

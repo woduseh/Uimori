@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -27,14 +28,11 @@ function testFailure(code: string | null): string {
 }
 
 function relevance(test: ProviderConnectionTest): number | null {
-  try {
-    const score: unknown = JSON.parse(test.text).scores?.relevant;
-    return typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 1
-      ? score
-      : null;
-  } catch {
-    return null;
-  }
+  const result = tryParseJson(test.text, null) as { scores?: { relevant?: unknown } } | null;
+  const score = result?.scores?.relevant;
+  return typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 1
+    ? score
+    : null;
 }
 
 export function JevProviderSettings({

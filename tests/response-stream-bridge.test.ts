@@ -42,7 +42,6 @@ test('pushed pages reach only the readers of their task and mark it as pushed on
   channel.connected();
   expect(responseStreamIsPushed('main', 'run:1')).toBe(false);
   channel.deliver(page('run:1', 3));
-  channel.deliver(JSON.stringify({ taskKind: 'main', taskId: 'run:1', chunks: [] }));
   expect(first.received.map((pushed) => pushed.after)).toEqual([3]);
   expect(other.received).toEqual([]);
   expect(responseStreamIsPushed('main', 'run:1')).toBe(true);

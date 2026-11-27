@@ -5,6 +5,7 @@ import {
   savePendingStoryProfile,
   acceptSavedStoryProfile,
 } from '../web/pendingStory.js';
+import { uiMessage } from '../web/ui-message.js';
 
 const original = [{ id: 'bot', revision: 1, role: 'bot' as const }];
 const changed = [...original, { id: 'module', revision: 1, role: 'module' as const }];
@@ -109,5 +110,15 @@ test('a pending story without a base revision asks the user instead of writing t
   );
   expect(f.puts).toBe(0);
   expect(f.profile.packageAttachments).toEqual([]);
+  expect(f.values.has('pending-profile:chat')).toBe(true);
+});
+
+test('an unreadable pending story keeps its own message instead of a parser error', async () => {
+  const f = fixture();
+  f.values.set('pending-profile:chat', '{"version":2,');
+  await expect(completePendingStoryProfile('chat')).rejects.toMatchObject({
+    uiMessage: uiMessage('transfer.m356'),
+  });
+  expect(f.puts).toBe(0);
   expect(f.values.has('pending-profile:chat')).toBe(true);
 });

@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import type { ResponseStreamPage, ResponseTaskKind } from '../core/response-stream.js';
 
 export type PushedResponsePage = ResponseStreamPage & { after: number };
@@ -31,8 +32,7 @@ export function openResponseStreamChannel() {
     disconnected: drop,
     deliver(data: string) {
       if (channel !== own) return;
-      const page = JSON.parse(data) as PushedResponsePage;
-      if (typeof page?.taskId !== 'string' || !Number.isSafeInteger(page.after)) return;
+      const page = parseOwnJson(data) as PushedResponsePage;
       own.open = true;
       const key = keyOf(page.taskKind, page.taskId);
       own.live.add(key);

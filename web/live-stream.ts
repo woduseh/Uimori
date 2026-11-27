@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { useEffect } from 'react';
 import { openResponseStreamChannel, responseStreamCursors } from './response-stream-bridge.js';
 import { useStableHandler } from './useStableHandler.js';
@@ -140,7 +141,7 @@ export function createLiveStream(environment: LiveEnvironment) {
     own.addEventListener('live', (event) => {
       if (source !== own) return;
       heard();
-      const tail = JSON.parse(event.data) as NonNullable<typeof seen>;
+      const tail = parseOwnJson(event.data) as NonNullable<typeof seen>;
       const caughtUp =
         seen?.instanceId === tail.instanceId &&
         seen.chatsSeq === tail.chatsSeq &&
@@ -153,7 +154,7 @@ export function createLiveStream(environment: LiveEnvironment) {
       own.addEventListener(name, (event) => {
         if (source !== own) return;
         heard();
-        const frame = { ...JSON.parse(event.data), event: name } as LiveFrame;
+        const frame = { ...(parseOwnJson(event.data) as object), event: name } as LiveFrame;
         if (seen && Number.isSafeInteger(frame.seq)) {
           const position = frame.seq!;
           if (frame.event === 'chats') seen.chatsSeq = Math.max(seen.chatsSeq, position);

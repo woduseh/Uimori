@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { storageKeys } from './storage-keys.js';
 
 const maximumIdentityLength = 1024;
@@ -42,13 +43,9 @@ export function saveAcknowledgements(scope: string, identities: string[]): boole
 }
 
 function startedAt(identity: string): number {
-  try {
-    const value: unknown = JSON.parse(identity);
-    const started = Array.isArray(value) ? Date.parse(String(value.at(-1))) : Number.NaN;
-    return Number.isFinite(started) ? started : Number.POSITIVE_INFINITY;
-  } catch {
-    return Number.POSITIVE_INFINITY;
-  }
+  const value = tryParseJson(identity, null);
+  const started = Array.isArray(value) ? Date.parse(String(value.at(-1))) : Number.NaN;
+  return Number.isFinite(started) ? started : Number.POSITIVE_INFINITY;
 }
 
 export function forgetConfirmedAcknowledgements(scope: string, confirmed: readonly string[]) {

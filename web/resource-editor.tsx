@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
@@ -373,11 +374,8 @@ export function useBufferedEditorState<T>(
   const [standalone, setStandalone] = useState<T>(() => initialValue);
   const raw = editor?.state.local.rawFields[path];
   let value = editor ? initialValue : standalone;
-  if (raw !== undefined) {
-    try {
-      value = (typeof initialValue === 'string' ? raw : JSON.parse(raw)) as T;
-    } catch {}
-  }
+  if (raw !== undefined)
+    value = (typeof initialValue === 'string' ? raw : tryParseJson(raw, value)) as T;
   const current = useRef(value);
   current.current = value;
   const latest = useRef({ editor, initialValue, signature });

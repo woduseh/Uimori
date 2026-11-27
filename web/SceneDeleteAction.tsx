@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { useEffect, useRef, useState } from 'react';
 import { api, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
@@ -62,7 +63,7 @@ export function SceneDeleteDialog({
       try {
         const raw = sessionStorage.getItem(storageKey);
         if (raw !== null) {
-          const previous = JSON.parse(raw) as Pending;
+          const previous = tryParseJson(raw, null) as Pending | null;
           if (
             !previous?.impact?.request ||
             previous.impact.sourceId !== sourceId ||

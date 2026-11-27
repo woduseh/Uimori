@@ -1,3 +1,5 @@
+import { tryParseJson } from './json.js';
+
 export type BrowserStorageArea = 'local' | 'session';
 
 function browserStorage(area: BrowserStorageArea): Storage {
@@ -13,12 +15,7 @@ export function readOptionalStorage(area: BrowserStorageArea, key: string): stri
 }
 
 export function readOptionalJson(area: BrowserStorageArea, key: string, fallback: unknown) {
-  try {
-    const stored = browserStorage(area).getItem(key);
-    return stored === null ? fallback : (JSON.parse(stored) as unknown);
-  } catch {
-    return fallback;
-  }
+  return tryParseJson(readOptionalStorage(area, key), fallback);
 }
 
 export function writeOptionalStorage(area: BrowserStorageArea, key: string, value: string) {

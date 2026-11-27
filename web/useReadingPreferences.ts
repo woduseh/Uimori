@@ -7,6 +7,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react';
 import { readingPositionElements } from './reader-dom.js';
 import { readPresentationSetting, usePresentationSetting } from './presentation-settings.js';
 import { defaultAppFont } from '../core/fonts.js';
+import { tryParseJson } from './json.js';
 import {
   normalizeReadability,
   READABILITY_STORAGE_KEY,
@@ -14,13 +15,7 @@ import {
 } from './reading-preferences.js';
 
 function readPreferences() {
-  try {
-    return normalizeReadability(
-      JSON.parse(readPresentationSetting(READABILITY_STORAGE_KEY) ?? 'null')
-    );
-  } catch {
-    return normalizeReadability(null);
-  }
+  return normalizeReadability(tryParseJson(readPresentationSetting(READABILITY_STORAGE_KEY), null));
 }
 
 type ReadingPosition = { element: HTMLElement; scrollport: HTMLElement; top: number };

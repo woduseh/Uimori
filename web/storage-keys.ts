@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import {
   readOptionalJson,
   removeOptionalStorage,
@@ -271,23 +272,19 @@ function acknowledgedChat(key: string): string | undefined {
   const { prefix } = storageKeys.activityAcknowledgement;
   const end = key.indexOf('":', prefix.length);
   if (!key.startsWith(`${prefix}"`) || end < 0) return undefined;
-  try {
-    return JSON.parse(key.slice(prefix.length, end + 1)) as string;
-  } catch {
-    return undefined;
-  }
+  const chatId = tryParseJson(key.slice(prefix.length, end + 1), undefined);
+  return typeof chatId === 'string' ? chatId : undefined;
 }
 const chatGroupPrefix = storageKeys.helperSession('chat:');
 function scopedChat(key: string): string | undefined {
   if (key.startsWith(chatGroupPrefix)) return key.slice(chatGroupPrefix.length);
   const { prefix } = storageKeys.helperSessionScope;
   if (!key.startsWith(prefix)) return undefined;
-  try {
-    const scope = JSON.parse(key.slice(prefix.length)) as { kind?: unknown; chatId?: unknown };
-    return scope.kind === 'chat' && typeof scope.chatId === 'string' ? scope.chatId : undefined;
-  } catch {
-    return undefined;
-  }
+  const scope = tryParseJson(key.slice(prefix.length), null) as {
+    kind?: unknown;
+    chatId?: unknown;
+  } | null;
+  return scope?.kind === 'chat' && typeof scope.chatId === 'string' ? scope.chatId : undefined;
 }
 function chatOf(key: string): string | undefined {
   const { prefix } = storageKeys.readingPosition;

@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { useEffect, useSyncExternalStore } from 'react';
 import type { HelperRollbackTouch } from '../core/helper.js';
 import { editorContextChanged } from './resource-editor.js';
@@ -15,7 +16,7 @@ export function useUnsavedInput(target: UnsavedInputTarget | null) {
   useEffect(() => {
     if (!key) return;
     const token = Symbol(key);
-    open.set(token, JSON.parse(key) as UnsavedInputTarget);
+    open.set(token, parseOwnJson(key) as UnsavedInputTarget);
     changed();
     return () => {
       open.delete(token);

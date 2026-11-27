@@ -9,22 +9,21 @@ import { api } from './api.js';
 import { IconButton } from './IconButton.js';
 import { PlainProse } from './Prose.js';
 import { loadHelperRecovery } from './helper-recovery.js';
+import { tryParseJson } from './json.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
 export type HelperArtifactView = HelperArtifact;
 type Draft = { key: string; revision: number; text: string };
 
 function storedDraft(key: string, raw: string): Draft | null {
-  try {
-    const value = JSON.parse(raw) as { revision?: unknown; text?: unknown } | null;
-    if (
-      value &&
-      Number.isSafeInteger(value.revision) &&
-      Number(value.revision) > 0 &&
-      typeof value.text === 'string'
-    )
-      return { key, revision: Number(value.revision), text: value.text };
-  } catch {}
+  const value = tryParseJson(raw, null) as { revision?: unknown; text?: unknown } | null;
+  if (
+    value &&
+    Number.isSafeInteger(value.revision) &&
+    Number(value.revision) > 0 &&
+    typeof value.text === 'string'
+  )
+    return { key, revision: Number(value.revision), text: value.text };
   return null;
 }
 
@@ -87,9 +86,10 @@ export function HelperArtifactCard({
       const keys = new Set([`${prefix}${revision}`]);
       let failed = false;
       try {
-        const index = JSON.parse(
-          (await loadHelperRecovery(`helper-artifacts:${conversationId}`)) ?? '[]'
-        ) as unknown;
+        const index = tryParseJson(
+          (await loadHelperRecovery(`helper-artifacts:${conversationId}`)) ?? '[]',
+          null
+        );
         if (!Array.isArray(index)) throw new Error('Invalid draft index');
         for (const key of index)
           if (typeof key === 'string' && key.startsWith(prefix)) keys.add(key);

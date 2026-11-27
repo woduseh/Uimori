@@ -1,5 +1,5 @@
 import { UiError, uiMessage } from './ui-message.js';
-import { parseJsonInput } from './json-input.js';
+import { parseJsonInput, readJsonFile } from './json-input.js';
 import { CHAT_BACKUP_FORMAT, CHAT_BACKUP_MAX_BYTES, type ChatBackup } from '../core/chat-backup.js';
 import {
   NATIVE_ARCHIVE_MAX_BYTES,
@@ -69,12 +69,7 @@ export async function inspectBackupFile(file: File): Promise<BackupFileContents>
     return invalid();
   }
   if (file.size > CHAT_BACKUP_MAX_BYTES) throw new UiError(uiMessage('transfer.m149'));
-  let value: unknown;
-  try {
-    value = JSON.parse(await file.text());
-  } catch {
-    throw new UiError(uiMessage('transfer.m126'));
-  }
+  const value = await readJsonFile(file, 'transfer.m126');
   if (!value || typeof value !== 'object') return invalid();
   const format = (value as { format?: unknown }).format;
   if (format === NATIVE_TRANSFER_FORMAT)

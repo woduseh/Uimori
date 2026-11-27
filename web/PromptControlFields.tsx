@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { useI18n } from './i18n.js';
 import { useId } from 'react';
 import { ToggleRow } from './ToggleRow.js';
@@ -47,7 +48,7 @@ function ValueInput({
               aria-label={label}
               aria-describedby={describedBy}
               value={JSON.stringify(value)}
-              onChange={(event) => onChange(JSON.parse(event.target.value) as PromptValue)}
+              onChange={(event) => onChange(parseOwnJson(event.target.value) as PromptValue)}
             >
               {control.options
                 ?.filter((option) => option.value !== null)

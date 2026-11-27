@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderActivity } from '../core/types.js';
@@ -197,7 +198,7 @@ export function ActivityStatus({
   const resolved = items.filter((item) => translationResolved(item, items));
   const resolvedKeys = JSON.stringify(resolved.map((item) => item.acknowledgementKey));
   useEffect(() => {
-    const keys = JSON.parse(resolvedKeys) as string[];
+    const keys = parseOwnJson(resolvedKeys) as string[];
     if (keys.length) {
       const saved = saveAcknowledgements(chatId, keys);
       if (!saved) setPersistenceError(true);
@@ -208,7 +209,7 @@ export function ActivityStatus({
     .filter((item) => ['main', 'request'].includes(item.kind))
     .reduce((latest, item) => Math.max(latest, Date.parse(item.startedAt) || 0), 0);
   useEffect(() => {
-    const snapshot = JSON.parse(serialized) as Item[];
+    const snapshot = parseOwnJson(serialized) as Item[];
     const previous = observed.current;
     const time = Date.now();
     setNotices((old) => {

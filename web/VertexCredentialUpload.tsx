@@ -1,3 +1,4 @@
+import { readJsonFile } from './json-input.js';
 import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
 import { UiError, uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
@@ -64,12 +65,7 @@ export function VertexCredentialUpload({
             setUploading(true);
             onBusy(true);
             try {
-              let serviceAccount: unknown;
-              try {
-                serviceAccount = JSON.parse(await file.text());
-              } catch {
-                throw new UiError(uiMessage('providers.m401'));
-              }
+              const serviceAccount = await readJsonFile(file, 'providers.m401');
               if (
                 !serviceAccount ||
                 typeof serviceAccount !== 'object' ||

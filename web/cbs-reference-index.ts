@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { useEffect, useMemo, useState } from 'react';
 import {
   createCbsReferenceIndexer,
@@ -34,5 +35,5 @@ export function useCbsNames(index: CbsReferenceIndex): CbsNames {
     if (entry.toggle !== null) names.toggles.push(entry.toggle);
   }
   const key = JSON.stringify(names);
-  return useMemo(() => JSON.parse(key) as CbsNames, [key]);
+  return useMemo(() => parseOwnJson(key) as CbsNames, [key]);
 }

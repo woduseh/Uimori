@@ -1,3 +1,5 @@
+import { tryParseJson } from './json.js';
+
 export type ShortcutKey = {
   code: string;
   mod?: boolean;
@@ -212,12 +214,7 @@ function validStoredKey(value: unknown): ShortcutKey | null {
 export function parseShortcutOverrides(raw: string | null): ShortcutBindings {
   const defaults = defaultShortcutBindings();
   if (!raw) return defaults;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return defaults;
-  }
+  const parsed = tryParseJson(raw, null);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
   const input = parsed as Record<string, unknown>;
   const candidate: ShortcutBindings = { ...defaults };

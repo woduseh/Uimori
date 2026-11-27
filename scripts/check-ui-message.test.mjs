@@ -7,6 +7,8 @@ import {
   allowlistPath,
   readAllowlist,
   errorTextReads,
+  jsonParseCalls,
+  jsonParseRemedy,
   plainErrorTexts,
   shrinkAllowlist,
   uiMessageErrors,
@@ -123,6 +125,31 @@ test('an unlisted read fails with its lines, and the core module is exempt', () 
       const errors = uiMessageErrors(directory, { permanent: {}, debt: {} });
       assert.equal(errors.length, 1);
       assert.match(errors[0], /^web\/Leak\.tsx: 1 error-text reads \(lines 1\), none allowed$/u);
+    }
+  );
+});
+
+test('every reference to JSON.parse counts, and only the JSON boundary module may make one', () => {
+  const source = [
+    'const a = JSON.parse(text);',
+    "const b = JSON['parse'](text);",
+    'const c = lines.map(JSON.parse);',
+    'const d = JSON?.parse(text);',
+    'const e = JSON.stringify(value);',
+    'const f = parser.JSON.parse(text);',
+    'const g = parseJsonInput(text);',
+  ].join('\n');
+  assert.deepEqual(jsonParseCalls(source, 'web/View.ts'), [1, 2, 3, 4]);
+  withRepository(
+    {
+      'web/json.ts': 'export const parse = (text: string) => JSON.parse(text);\n',
+      'web/ui-message.ts': 'export const read = (text: string) => JSON.parse(text);\n',
+      'web/Clean.ts': 'export const a = JSON.stringify({});\n',
+    },
+    (directory) => {
+      assert.deepEqual(uiMessageErrors(directory, { permanent: {}, debt: {} }), [
+        `web/ui-message.ts:1: ${jsonParseRemedy}`,
+      ]);
     }
   );
 });

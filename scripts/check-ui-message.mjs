@@ -131,6 +131,34 @@ function plainErrorLines(tree) {
   return lines.sort((left, right) => left - right);
 }
 
+export const jsonParseFile = 'web/json.ts';
+export const jsonParseRemedy = [
+  'a raw JSON.parse throws a SyntaxError the screen shows as errors.unexpected; call one of these instead:',
+  'parseJsonInput or readJsonFile (web/json-input.ts) for text or a file someone supplied,',
+  `tryParseJson (${jsonParseFile}) with a fallback for browser storage and other text that may be stale or corrupt,`,
+  `or parseOwnJson (${jsonParseFile}) for JSON this build serialized itself, such as a server event frame or a memo key`,
+].join(' ');
+
+function jsonParseLines(tree) {
+  const lines = [];
+  walk(tree, (node) => {
+    if (
+      (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
+      node.object.type === 'Identifier' &&
+      node.object.name === 'JSON' &&
+      (node.computed
+        ? node.property.type === 'StringLiteral' && node.property.value === 'parse'
+        : node.property.name === 'parse')
+    )
+      lines.push(node.loc.start.line);
+  });
+  return lines.sort((left, right) => left - right);
+}
+
+export function jsonParseCalls(source, file = 'web/input.tsx') {
+  return jsonParseLines(parseSource(source, file));
+}
+
 export function plainErrorTexts(source, file = 'web/input.tsx') {
   return plainErrorLines(parseSource(source, file));
 }
@@ -191,8 +219,10 @@ function scanSources(directory) {
   const plain = [];
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
-    if (exemptFiles.has(file)) continue;
     const tree = parseSource(readFileSync(path, 'utf8'), file);
+    if (file !== jsonParseFile)
+      for (const line of jsonParseLines(tree)) plain.push(`${file}:${line}: ${jsonParseRemedy}`);
+    if (exemptFiles.has(file)) continue;
     for (const line of plainErrorLines(tree)) plain.push(`${file}:${line}: ${plainErrorRemedy}`);
     const lines = errorTextLines(tree);
     if (lines.length) counts.set(file, lines);

@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { ProviderProtocol } from '../core/product.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
@@ -75,7 +76,8 @@ function publish(owner: Entry, update: Partial<Snapshot>) {
   for (const listener of owner.listeners) listener();
 }
 function acceptedTokens(id: string): string[] {
-  return JSON.parse(sessionStorage.getItem(acceptedKey(id)) ?? '[]') as string[];
+  const accepted = tryParseJson(sessionStorage.getItem(acceptedKey(id)), []);
+  return Array.isArray(accepted) ? accepted : [];
 }
 
 export async function loadHelperAttachments(id: string): Promise<void> {

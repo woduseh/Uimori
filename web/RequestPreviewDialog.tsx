@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
@@ -91,7 +92,7 @@ export function RequestPreviewDialog({
       `/chats/${encodeURIComponent(chatId)}/request-preview`,
       {
         request,
-        ...(imageKey !== '[]' ? { requestImages: JSON.parse(imageKey) } : {}),
+        ...(imageKey !== '[]' ? { requestImages: parseOwnJson(imageKey) } : {}),
         ...(loreContextReset ? { loreContextReset: true } : {}),
       },
       'POST',

@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { copyRecoveryPrefix } from './editor-recovery.js';
 import {
   deleteAttachmentDraft,
@@ -46,8 +47,13 @@ export async function requestDraftKey(key: string) {
 type DraftState = { token: string; accepted: string[] };
 const stateKey = storageKeys.requestState;
 function readState(key: string): DraftState | undefined {
-  const value = sessionStorage.getItem(stateKey(key));
-  return value ? (JSON.parse(value) as DraftState) : undefined;
+  const value = tryParseJson(
+    sessionStorage.getItem(stateKey(key)),
+    null
+  ) as Partial<DraftState> | null;
+  return typeof value?.token === 'string' && Array.isArray(value.accepted)
+    ? (value as DraftState)
+    : undefined;
 }
 
 export function rememberRequestDraft(key: string, model: RequestDraft) {

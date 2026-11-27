@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import type { SetStateAction } from 'react';
 import type { LibraryConnection, ModelPreset, ProviderProtocol } from '../core/product.js';
 import { initialModel, type ModelDraft } from './provider-model-draft.js';
@@ -129,7 +130,7 @@ export function providerEditorReducer(
                 ...state.model,
                 value: { ...state.model.value, connectionRef: '' },
                 baseline: JSON.stringify({
-                  ...JSON.parse(state.model.baseline),
+                  ...(parseOwnJson(state.model.baseline) as object),
                   connectionRef: '',
                 }),
               }

@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
@@ -192,7 +193,7 @@ export function useHelperSessions(
   const reload = useCallback(async () => {
     const version = (versions.current.get(group) ?? 0) + 1;
     versions.current.set(group, version);
-    const target = JSON.parse(scopeKey) as HelperScope;
+    const target = parseOwnJson(scopeKey) as HelperScope;
     const query = expanded
       ? 'kind=all'
       : target.kind === 'chat'

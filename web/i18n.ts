@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import { useSyncExternalStore } from 'react';
 import { IntlMessageFormat } from 'intl-messageformat';
 import ko from './locales/ko.js';
@@ -114,10 +115,10 @@ export function messageRef(value: string): MessageReference {
 }
 function decodeDescriptor(json: string, locale: UiLocale): string | null {
   try {
-    const descriptor = JSON.parse(json) as {
+    const descriptor = tryParseJson(json, null) as {
       key: string;
       values?: Record<string, string | number | boolean | MessageReference | { uiDate: number }>;
-    };
+    } | null;
     if (!descriptor || typeof descriptor.key !== 'string' || !Object.hasOwn(ko, descriptor.key))
       return null;
     const values =

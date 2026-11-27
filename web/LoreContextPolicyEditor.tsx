@@ -1,3 +1,4 @@
+import { parseOwnJson } from './json.js';
 import { t, translateMessage, useI18n, messageRef, message as descriptor } from './i18n.js';
 import {
   UiError,
@@ -172,8 +173,8 @@ export function LoreContextPolicyEditor({
       setDraft((current) => {
         try {
           return JSON.stringify(parseLorePolicyDraft(current)) ===
-            JSON.stringify(parseLorePolicyDraft(draftOf(JSON.parse(prior))))
-            ? draftOf(JSON.parse(serialized))
+            JSON.stringify(parseLorePolicyDraft(draftOf(parseOwnJson(prior) as LoreContextPolicy)))
+            ? draftOf(parseOwnJson(serialized) as LoreContextPolicy)
             : current;
         } catch {
           return current;
@@ -364,7 +365,7 @@ export function LoreContextPolicyEditor({
               )}
               <LoreContextDiagnostics
                 snapshot={preview.value.loreContext}
-                reset={JSON.parse(preview.fingerprint).reset === true}
+                reset={(parseOwnJson(preview.fingerprint) as { reset?: unknown }).reset === true}
                 label={t('settings.m245')}
               />
               <details>

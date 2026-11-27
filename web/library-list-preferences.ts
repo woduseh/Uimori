@@ -1,3 +1,4 @@
+import { tryParseJson } from './json.js';
 import type { LibraryCategory } from '../core/library-organization.js';
 import { readOptionalJson, writeOptionalStorage } from './optional-storage.js';
 import {
@@ -34,12 +35,8 @@ export function saveLibraryManualOrder(category: LibraryCategory, ids: string[])
 }
 
 export function readCollapsedFolders(): string[] {
-  try {
-    const stored = JSON.parse(readPresentationSetting(collapsedFoldersKey) ?? '[]') as unknown;
-    return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
-  } catch {
-    return [];
-  }
+  const stored = tryParseJson(readPresentationSetting(collapsedFoldersKey), []);
+  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
 }
 
 export function saveCollapsedFolders(ids: string[]) {
