@@ -1301,6 +1301,30 @@ export const messages = {
     ja: '新しい正規表現',
     zh: '新正则',
   },
+  'native.newLore': {
+    ko: '새 로어',
+    en: 'New lore',
+    ja: '新しいロア',
+    zh: '新设定',
+  },
+  'native.newLoreFolder': {
+    ko: '새 폴더',
+    en: 'New folder',
+    ja: '新しいフォルダー',
+    zh: '新文件夹',
+  },
+  'native.newToggleItem': {
+    ko: '새 항목',
+    en: 'New item',
+    ja: '新しい項目',
+    zh: '新项目',
+  },
+  'native.newToggleOption': {
+    ko: '선택 {index}',
+    en: 'Option {index}',
+    ja: '選択肢 {index}',
+    zh: '选项 {index}',
+  },
   'native.regexFallbackName': {
     ko: '정규식',
     en: 'Regex',

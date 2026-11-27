@@ -322,3 +322,46 @@ test('NATIVELORE02 card lore keeps native keyword arrays and folder references',
     })
   );
 });
+
+test('NATIVELORE03 new lore and folders are named in the current UI language and saved names stay', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  const title = `NATIVELORE03 ${randomUUID().slice(0, 8)}`;
+  await seedFolderBot(request, title);
+  const editor = await openLoreEditor(page, title);
+  await loreNavigation(editor);
+
+  const switchLanguage = async (locale: string) => {
+    await page.evaluate((value) => {
+      localStorage.setItem('uimori:ui-language', value);
+      dispatchEvent(new StorageEvent('storage', { key: 'uimori:ui-language', newValue: value }));
+    }, locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+  };
+
+  await switchLanguage('en');
+  const navigation = page.locator('aside.nl-list');
+  await navigation.getByRole('button', { name: 'Add folder', exact: true }).click();
+  await navigation.getByRole('button', { name: 'Add lore', exact: true }).click();
+  await expect(navigation.getByRole('button', { name: 'New folder', exact: true })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: 'New lore', exact: true })).toBeVisible();
+
+  await switchLanguage('ja');
+  await navigation.getByRole('button', { name: 'ロアを追加', exact: true }).click();
+  await expect(navigation.getByRole('button', { name: '新しいロア', exact: true })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: 'New lore', exact: true })).toBeVisible();
+
+  const saveResponse = nextSave(page);
+  await page.getByRole('button', { name: '変更を保存', exact: true }).click();
+  const response = await saveResponse;
+  expect(response.ok(), await response.text()).toBe(true);
+  const saved = ((await response.json()) as { saved: Content }).saved;
+  const lorebook = saved.package.nativeRisu.module!.lorebook as { comment: string }[];
+  expect(lorebook.map((entry) => entry.comment).slice(-3)).toEqual([
+    'New folder',
+    'New lore',
+    '新しいロア',
+  ]);
+});

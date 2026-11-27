@@ -16,14 +16,6 @@
       "count": 1,
       "reason": "The lore-context preview sends this as the request text when none is typed, and lore matching runs on it like a model input, which docs/I18N.md keeps out of the UI language."
     },
-    "web/native-lore-document.ts": {
-      "count": 4,
-      "reason": "The default comment or name of a new lore entry or folder is stored in the Risu card or module; docs/I18N.md keeps new items' default names in the stored data format."
-    },
-    "web/native-toggle-document.ts": {
-      "count": 2,
-      "reason": "The default label and select options of a new toggle are written into the stored toggle source; docs/I18N.md keeps new items' default names in the stored data format."
-    },
     "web/pricing-display.ts": {
       "count": 1,
       "reason": "Frozen cost estimates in stored attempts carry this Korean note from before notes became codes; pricingNote compares against it to render the catalog message."
@@ -39,10 +31,6 @@
     "web/story-ui-preview.ts": {
       "count": 24,
       "reason": "The story UI theme preview is a fixed Korean story fixture; docs/I18N.md keeps theme and reading preview fixtures as written."
-    },
-    "web/useStory.ts": {
-      "count": 1,
-      "reason": "A pasted image without a file name is stored and sent with the request under this name, a model input that docs/I18N.md keeps out of the UI language."
     }
   },
   "debt": {}

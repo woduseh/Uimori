@@ -174,15 +174,20 @@ export function deleteToggleGroup(source: string, id: number) {
   doc.lines.splice(group.start, group.end - group.start);
   return finish(source, doc.lines);
 }
-export function addToggleItem(source: string, groupId: number, type: NativeToggleType) {
+export function addToggleItem(
+  source: string,
+  groupId: number,
+  type: NativeToggleType,
+  defaults: { label: string; options: string }
+) {
   if (type === 'group' || type === 'groupEnd') throw new UiError(uiMessage('native.useAddGroup'));
   const doc = structural(source);
   const group = groupOf(doc, groupId);
   const raw = serializeNativeToggleDefinition({
     type,
     key: controls.has(type) ? uniqueKey(doc.lines) : '',
-    label: '새 항목',
-    options: type === 'select' ? '선택 1,선택 2' : '',
+    label: defaults.label,
+    options: type === 'select' ? defaults.options : '',
   });
   doc.lines.splice(groupId === -1 ? doc.lines.length : group.close, 0, fresh(raw, doc.lines));
   return finish(source, doc.lines);

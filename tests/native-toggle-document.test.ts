@@ -18,6 +18,8 @@ import {
 } from '../web/native-toggle-document.js';
 import { serializeNativeToggleLines } from '../web/native-risu-toggle-editor.js';
 
+const toggleDefaults = { label: 'New item', options: 'Option 1,Option 2' };
+
 describe('grouped toggle document', () => {
   it('projects groups and consecutive captions without rewriting any source bytes', () => {
     const source =
@@ -32,6 +34,16 @@ describe('grouped toggle document', () => {
       definition: { options: ', one,,' },
     });
     expect(doc.groups[1]?.items[1]?.raw).toBe('# future');
+  });
+  it('writes the supplied default label and select options for a new item', () => {
+    const source = addToggleItem('a=A', -1, 'select', {
+      label: '新しい項目',
+      options: '選択肢 1,選択肢 2',
+    });
+    const item = parseToggleDocument(source).groups[0]?.items[1];
+    expect(item?.definition).toMatchObject({ type: 'select', label: '新しい項目' });
+    expect(item?.definition?.options.split(',')).toEqual(['選択肢 1', '選択肢 2']);
+    expect(addToggleItem('a=A', -1, 'toggle', toggleDefaults)).toContain('=New item');
   });
   it('moves and duplicates an item together with all attached captions at an unterminated tail', () => {
     const source = 'a=A\r\n=first=caption\r\n=second=caption\r\nb=B';
@@ -77,7 +89,9 @@ describe('grouped toggle document', () => {
       expect(parseToggleDocument(source).warnings.length).toBeGreaterThan(0);
       expect(serializeNativeToggleLines(parseToggleDocument(source).lines)).toBe(source);
       expect(shownThrow(() => addToggleGroup(source, 'Group'))).toContain('그룹 경계');
-      expect(shownThrow(() => addToggleItem(source, -1, 'toggle'))).toContain('그룹 경계');
+      expect(shownThrow(() => addToggleItem(source, -1, 'toggle', toggleDefaults))).toContain(
+        '그룹 경계'
+      );
     }
   });
 });

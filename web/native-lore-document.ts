@@ -109,13 +109,18 @@ export function moveLoreEntry(
   return { entries: next, index: insertion };
 }
 
-export function newLoreEntry(entries: LoreEntry[], moduleLore: boolean, folder = false): LoreEntry {
+export function newLoreEntry(
+  entries: LoreEntry[],
+  moduleLore: boolean,
+  folder: boolean,
+  name: string
+): LoreEntry {
   const key = folder ? `\uf000folder:${crypto.randomUUID()}` : '';
   const common = { content: '', mode: folder ? 'folder' : 'normal' };
   return moduleLore
     ? {
         ...common,
-        comment: folder ? '새 폴더' : '새 로어',
+        comment: name,
         key,
         insertorder: 100,
         alwaysActive: false,
@@ -127,7 +132,7 @@ export function newLoreEntry(entries: LoreEntry[], moduleLore: boolean, folder =
         id:
           Math.max(-1, ...entries.map((entry) => (typeof entry.id === 'number' ? entry.id : -1))) +
           1,
-        name: folder ? '새 폴더' : '새 로어',
+        name,
         keys: key ? [key] : [],
         enabled: true,
         constant: false,

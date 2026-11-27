@@ -143,7 +143,12 @@ export function NativeRisuLoreEditor({
   const edit = (patch: LoreEntry) =>
     onChange(entries.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   const add = (isFolder: boolean) => {
-    const next = newLoreEntry(entries, moduleLore, isFolder);
+    const next = newLoreEntry(
+      entries,
+      moduleLore,
+      isFolder,
+      t(isFolder ? 'native.newLoreFolder' : 'native.newLore')
+    );
     if (!isFolder && entry) {
       const parent = folder ? loreFolderKey(entry) : loreText(entry.folder);
       if (parent) next.folder = parent;
