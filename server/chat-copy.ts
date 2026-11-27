@@ -126,12 +126,7 @@ function restoreCopiedState(
       packageAttachments: profile.packageAttachments,
       ...copy.state.profile,
     },
-    {
-      packageAttachments: profile.packageAttachments,
-      ...(copy.state.profile.pinned?.mainModel
-        ? { pinned: { mainModel: copy.state.profile.pinned.mainModel } }
-        : {}),
-    }
+    { packageAttachments: profile.packageAttachments, pinned: copy.state.profile.pinned }
   );
   store.settings(chatId, chat.settingsRevision, copy.state.settings);
   if (copy.state.storyGuide)

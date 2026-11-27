@@ -23,6 +23,8 @@ import { readerDetail } from '../server/reader.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
+import { ChatOptionsStore } from '../server/chat-options.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(async () => {
@@ -112,6 +114,32 @@ function authoredChat(store: Store) {
   });
   const second = turn(store, chat.id, 'Continue', 'Scene two.');
   return { chat, glossary, first, second };
+}
+function pinFixedPrompt(store: Store, chatId: string) {
+  const prompt = store.product.promptPreset({
+    title: 'Pinned prompt',
+    role: 'main',
+    program: nativePrompt('Write', { customPromptTemplateToggle: 'tone=Tone=text' }),
+  }) as { id: string; revision: number };
+  const profile = store.product.profile(chatId);
+  store.product.updateProfile(chatId, {
+    expectedRevision: profile.revision,
+    image: profile.image,
+    pinned: { mainPromptPresetId: prompt.id },
+  });
+  const options = new ChatOptionsStore(store);
+  const state = options.get(chatId);
+  options.fixed(
+    chatId,
+    {
+      expectedRevision: state.revision,
+      binding: state.binding,
+      values: { tone: 'bold' },
+      operationId: 'fix-tone',
+    },
+    'pin-fixed-prompt'
+  );
+  return prompt;
 }
 const requests = (store: Store, chatId: string) =>
   store
@@ -528,6 +556,23 @@ describe('chat transcript export and import', () => {
       { id: glossary.id, role: 'module' },
     ]);
     expect(copied.pinned).toEqual({ mainModel: { id: model.id } });
+  });
+
+  test('a fork keeps a deleted pinned prompt and its fixed options and still refuses to run it', async () => {
+    const store = await database();
+    const { chat, second } = authoredChat(store);
+    const prompt = pinFixedPrompt(store, chat.id);
+    softDeleteLibraryItem(store, 'prompt-preset', prompt);
+
+    const fork = forkChat(store, chat.id, {
+      fromRevision: second.id,
+      idempotencyKey: 'deleted-pinned-prompt-fork',
+    });
+    expect(store.product.profile(fork.id).pinned).toEqual({ mainPromptPresetId: prompt.id });
+    expect(new ChatOptionsStore(store).get(fork.id, 'preserve').fixedValues).toEqual({
+      tone: 'bold',
+    });
+    expect(() => store.product.snapshot(fork.id)).toThrow('PINNED_PROMPT_UNAVAILABLE');
   });
 
   test('a restored backup still refuses a pinned prompt that is not a main prompt', async () => {
