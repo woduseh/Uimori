@@ -7,7 +7,8 @@ import {
   validateChatLoreSelector,
 } from '../core/chat-overrides.js';
 import { ChatOverridesStore } from './chat-overrides.js';
-import { HttpError, number, text } from './request-validation.js';
+import { HelperToolError } from './app-errors.js';
+import { number, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const MAX_RESULT_TOKENS = 12_000;
@@ -43,7 +44,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
     const override = current.overrides.find(
       (item) => chatLoreKey(item.selector) === chatLoreKey(selector)
     );
-    if (!lore && !override) throw new HttpError(404, '선택한 채팅 로어가 없어요.');
+    if (!lore && !override) throw new HelperToolError(404, 'CHAT_LORE_NOT_FOUND');
     const original = lore?.[selector.field] ?? null;
     const offset = number(
       args.textOffset ?? 0,
@@ -110,7 +111,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
         low = middle + 1;
       } else high = middle - 1;
     }
-    if (!best) throw new HttpError(413, '읽기 결과가 커요. 더 좁은 범위를 지정해 주세요.');
+    if (!best) throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower range');
     return page(best);
   }
   const query =
@@ -199,7 +200,8 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
     }
     if (countTextTokens(JSON.stringify(page())) > MAX_RESULT_TOKENS) {
       items.pop();
-      if (!items.length) throw new HttpError(413, '로어 목록을 더 좁게 읽어 주세요.');
+      if (!items.length)
+        throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read fewer lore items');
       break;
     }
   }

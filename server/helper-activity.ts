@@ -6,7 +6,7 @@ import type {
   HelperActivityTargetRef,
 } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 import { sceneTitle } from './scene-titles.js';
 
@@ -35,7 +35,7 @@ export function readHelperActivity(store: Store, taskId: string): HelperActivity
   const task = store.db
     .prepare('SELECT conversation_id,status FROM helper_tasks WHERE id=?')
     .get(taskId);
-  if (!task) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+  if (!task) throw new AppError(404, 'HELPER_TASK_NOT_FOUND');
   const rows = store.db
     .prepare(
       `SELECT seq,kind,

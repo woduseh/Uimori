@@ -11,6 +11,7 @@ import { readHelperContextState } from './helper-context.js';
 import { parseHelperReferencePointers, searchHelperReferences } from './helper-references.js';
 import { readHelperTaskResults } from './helper-task-results.js';
 import { markHelperConversationRead } from './helper-read-state.js';
+import { AppError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import {
   HELPER_PERSONA_MAX_CHARS,
@@ -162,7 +163,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       const body = record(request.body);
       fields(body, ['expectedRevision', 'summary']);
       const summary = text(body.summary, 'summary', SOURCE_TEXT_MAX_CHARS, true);
-      if (!summary.trim()) throw new HttpError(400, 'HELPER_SUMMARY_EMPTY');
+      if (!summary.trim()) throw new AppError(400, 'HELPER_SUMMARY_EMPTY');
       return runtime.editContextSummary(
         request.params.id,
         number(body.expectedRevision, 'context revision'),
@@ -185,7 +186,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     const body = record(request.body);
     fields(body, ['expectedRevision', 'title', 'persona']);
     if (body.title === undefined && body.persona === undefined)
-      throw new HttpError(400, '변경할 도우미 설정이 필요해요.');
+      throw new HttpError(400, 'Pass title or persona');
     return store.update(
       request.params.id,
       number(body.expectedRevision, 'helper settings revision'),
@@ -351,9 +352,9 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         if (input.source !== undefined && !['saved', 'unsaved'].includes(input.source))
           throw new HttpError(400, 'Invalid editor source');
         if (input.source === 'saved' && input.model !== undefined)
-          throw new HttpError(400, '저장된 자료는 ID와 수정 번호로 보내 주세요.');
+          throw new HttpError(400, 'A saved editor is sent by ID and revision, without a model');
         if (input.source === 'unsaved' && input.model === undefined)
-          throw new HttpError(400, '미저장 입력을 함께 보내 주세요.');
+          throw new HttpError(400, 'An unsaved editor needs its model');
         editor = {
           targetId: input.targetId === null ? null : text(input.targetId, 'resource ID', 100),
           revision: input.revision === null ? null : number(input.revision, 'revision'),

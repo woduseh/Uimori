@@ -12,12 +12,15 @@ import { helperRoutes } from '../server/helper-routes.js';
 import type { HelperRuntime } from '../server/helper-runtime.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { Store } from '../server/store.js';
+import { createApp } from '../server/app.js';
+import { apiErrorDisplay } from '../web/api-errors.js';
+import { loadLocale, setLocale } from '../web/i18n.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
-const owned: { store: Store; path: string }[] = [];
+const owned: { store?: Store; path: string }[] = [];
 afterEach(() => {
   for (const { store, path } of owned.splice(0)) {
-    store.close();
+    store?.close();
     const inside = relative(tmpdir(), path);
     if (isAbsolute(inside) || !inside.startsWith('uimori-helper-navigation-'))
       throw new Error('Unsafe cleanup');
@@ -132,9 +135,11 @@ test('legacy creation hashes remain compatible and invalid projects cannot leave
   ).toBe(legacyHash);
   expect(f.workspace.create(f.scope, 'legacy', undefined, null).id).toBe(original.id);
   const project = f.workspace.createGroup('프로젝트', 'project');
-  expect(() => f.workspace.create(f.scope, 'legacy', undefined, project.id)).toThrow(/요청 키/);
+  expect(() => f.workspace.create(f.scope, 'legacy', undefined, project.id)).toThrow(
+    /request key/u
+  );
   expect(() => f.workspace.create(f.scope, 'missing-project', undefined, 'missing')).toThrow(
-    /프로젝트/
+    'HELPER_PROJECT_NOT_FOUND'
   );
   expect(f.workspace.list({ kind: 'all' })).toHaveLength(1);
 });
@@ -265,6 +270,79 @@ test('read state only moves forward, survives reopening and is removed with its 
       reopened.db.prepare('SELECT 1 FROM app_metadata WHERE key=?').get(chatKey)
     ).toBeUndefined();
   } finally {
+    await app.close();
+  }
+});
+
+test('a stale screen acting on a project or conversation deleted elsewhere gets a coded error', async () => {
+  const path = mkdtempSync(join(tmpdir(), 'uimori-helper-navigation-'));
+  owned.push({ path });
+  const app = await createApp({
+    dbPath: join(path, 'test.sqlite'),
+    buildId: 'helper-navigation-test',
+    testMode: true,
+  });
+  try {
+    const conversation = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/helper/conversations/new',
+        payload: { scope: { kind: 'library', workId: 'workspace' }, requestKey: 'stale' },
+      })
+    ).json();
+    const impact = (
+      await app.inject({ url: `/api/helper/conversations/${conversation.id}/deletion` })
+    ).json();
+    expect(
+      (
+        await app.inject({
+          method: 'DELETE',
+          url: `/api/helper/conversations/${conversation.id}`,
+          payload: impact.request,
+        })
+      ).statusCode
+    ).toBe(200);
+    const stale = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${conversation.id}`,
+      payload: { expectedRevision: conversation.revision, title: 'Renamed in a stale tab' },
+    });
+    expect([stale.statusCode, stale.json()]).toEqual([
+      404,
+      { code: 'HELPER_CONVERSATION_NOT_FOUND' },
+    ]);
+    await loadLocale('en');
+    setLocale('en');
+    expect(apiErrorDisplay(stale.json(), stale.statusCode, 'PATCH')).toBe(
+      'The assistant conversation was not found. It may have been deleted elsewhere.'
+    );
+    const project = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/helper/projects',
+        payload: { title: 'Project', requestKey: 'project' },
+      })
+    ).json();
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/helper/projects/${project.id}`,
+      payload: { expectedRevision: project.revision },
+    });
+    const kept = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/helper/conversations/new',
+        payload: { scope: { kind: 'library', workId: 'workspace' }, requestKey: 'kept' },
+      })
+    ).json();
+    const move = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${kept.id}/project`,
+      payload: { expectedRevision: kept.revision, projectId: project.id },
+    });
+    expect([move.statusCode, move.json()]).toEqual([404, { code: 'HELPER_PROJECT_NOT_FOUND' }]);
+  } finally {
+    setLocale('ko');
     await app.close();
   }
 });

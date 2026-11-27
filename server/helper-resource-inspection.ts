@@ -3,6 +3,7 @@ import type { PromptPreset } from '../core/product.js';
 import type { ResourceKind } from '../core/resource-editing.js';
 import { diagnoseRisuPreset } from '../core/risu-preset-diagnostics.js';
 import { readHelperResource } from './helper-resource-editing.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { readResource } from './resource-service.js';
 import type { Store } from './store.js';
@@ -23,7 +24,7 @@ const selectionFields = [
 
 export function readHelperResources(store: Store, rawItems: unknown) {
   if (!Array.isArray(rawItems) || !rawItems.length || rawItems.length > 16)
-    throw new HttpError(400, '읽을 자료와 경로를 1개에서 16개까지 지정해 주세요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'items must list 1 to 16 selections');
   const items: unknown[] = [];
   for (const [requestIndex, raw] of rawItems.entries()) {
     let item: unknown;
@@ -36,7 +37,11 @@ export function readHelperResources(store: Store, rawItems: unknown) {
           kind
         )
       )
-        throw new HttpError(400, '자료 종류를 확인해 주세요.');
+        throw new HelperToolError(
+          400,
+          'INVALID_ARGUMENTS',
+          'kind must be content, prompt-preset, prompt-workspace, theme or illustration-preset'
+        );
       const id = text(selection.id, 'resource ID', 100);
       item = { requestIndex, result: readHelperResource(store, kind, id, selection, 11_500) };
     } catch (error) {
@@ -85,7 +90,7 @@ export function validateHelperPreset(store: Store, args: Record<string, unknown>
     if (countTextTokens(JSON.stringify(page())) > MAX_RESULT_TOKENS) {
       diagnostics.pop();
       if (!diagnostics.length)
-        throw new HttpError(413, '검사 결과가 커요. 더 작은 범위로 읽어 주세요.');
+        throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a smaller range');
       break;
     }
   }

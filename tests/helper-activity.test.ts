@@ -88,7 +88,7 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
     expect(activity.events.at(-1)).toMatchObject({ text: '가'.repeat(1000), textTruncated: true });
     expect(JSON.stringify(activity)).not.toContain('PRIVATE_');
     expect(activity.events[0].seq).toBeLessThan(activity.events.at(-1)!.seq);
-    expect(() => readHelperActivity(store, 'missing')).toThrow('도우미 작업을 찾을 수 없어요.');
+    expect(() => readHelperActivity(store, 'missing')).toThrow('HELPER_TASK_NOT_FOUND');
 
     store.db.prepare("UPDATE helper_tasks SET status='completed' WHERE id=?").run(task.id);
     releaseCompletedHelperInputs(store.db, task.id);

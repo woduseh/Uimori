@@ -19,6 +19,7 @@ import type { Usage } from '../core/types.js';
 import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { pruneContextHistory } from './context-retention.js';
 import { checkpointHash } from './context-store.js';
+import { AppError } from './app-errors.js';
 import { HttpError, fields, record } from './request-validation.js';
 import type { Store } from './store.js';
 import { helperMessageAttachments } from './helper-attachments.js';
@@ -153,7 +154,7 @@ export function helperContext(
           .map((message) => message.id)
       )
     )
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+      throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
   }
   return { activeRevision: Number(row?.revision ?? 0), checkpoint };
 }
@@ -252,17 +253,17 @@ export function publishHelperContext(
       store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(task.id)?.status !==
       'running'
     )
-      throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+      throw new AppError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
     const all = helperHistory(store, task.conversationId);
     const user = store.db
       .prepare("SELECT id FROM helper_messages WHERE task_id=? AND role='user'")
       .get(task.id) as Row;
     const prefix = all.slice(0, all.findIndex((message) => message.id === user.id) + 1);
     if (!isDeepStrictEqual(prefix.slice(0, -1), task.snapshot.history))
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+      throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     const compactedCount = prefix.length - 1 - retainedHistory.length;
     if (compactedCount < 0 || !isDeepStrictEqual(prefix.slice(compactedCount, -1), retainedHistory))
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+      throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     const scopeKey = `helper:${task.conversationId}`,
       revision = base.activeRevision + 1;
     const plan: ContextPlan = {
@@ -335,7 +336,7 @@ function assertHelperContextIdle(store: Store, conversationId: string) {
       "SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running') LIMIT 1"
     )
     .get(conversationId);
-  if (busy) throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+  if (busy) throw new AppError(409, 'HELPER_COMPACTION_BUSY');
 }
 
 const summaryTokenLimit = (model: ModelSnapshot) =>
@@ -435,13 +436,13 @@ export function publishEditedHelperContext(
     const history = helperHistory(store, conversationId);
     const current = helperContext(store, conversationId, history);
     if (current.activeRevision !== expectedRevision || !current.checkpoint)
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+      throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     const previous = store.context.checkpoint(current.checkpoint);
     if (previous.plan.summary === summary) return null;
     const budget = contextBudgetForModel(helperModel);
     const afterTokens = estimateContextTokens(summary, budget);
     if (afterTokens > summaryTokenLimit(helperModel))
-      throw new HttpError(400, 'HELPER_SUMMARY_TOO_LARGE');
+      throw new AppError(400, 'HELPER_SUMMARY_TOO_LARGE');
     const revision = current.activeRevision + 1;
     storeHelperCheckpoint(
       store,
@@ -478,8 +479,7 @@ export function resetHelperContext(
       conversationId
     );
     if (!headCheckpointId) return null;
-    if (revision !== expectedRevision)
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+    if (revision !== expectedRevision) throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     store.db
       .prepare('UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE scope_key=?')
       .run(`helper:${conversationId}`);
@@ -512,13 +512,13 @@ export function publishManualHelperContext(
     assertHelperContextIdle(store, conversationId);
     const all = helperHistory(store, conversationId);
     if (!isDeepStrictEqual(all, history))
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+      throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     const current = helperContext(store, conversationId, all);
     if (
       current.activeRevision !== base.activeRevision ||
       !isDeepStrictEqual(current.checkpoint, base.checkpoint)
     )
-      throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
+      throw new AppError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
     const scopeKey = `helper:${conversationId}`;
     const revision = base.activeRevision + 1;
     const plan: ContextPlan = {

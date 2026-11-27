@@ -22,6 +22,7 @@ import { HELPER_TASK_LIMITS } from '../core/helper.js';
 import { UI_HELPER_PERSONA } from '../core/helper-persona.js';
 import type { Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
+import { AppError } from './app-errors.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import type { SynchronousResult } from './synchronous-transaction.js';
@@ -117,7 +118,7 @@ export class HelperWorkspace {
       FROM helper_conversations c
       LEFT JOIN helper_conversation_memberships member ON member.conversation_id=c.id WHERE c.id=?`)
       .get(id) as Row | undefined;
-    if (!row) throw new HttpError(404, '도우미 대화를 찾을 수 없어요.');
+    if (!row) throw new AppError(404, 'HELPER_CONVERSATION_NOT_FOUND');
     return conversationData(row);
   }
   open(scope: HelperScope): HelperConversation {
@@ -143,7 +144,7 @@ export class HelperWorkspace {
         .get(key, creationKey) as Row | undefined;
       if (old) {
         if (old.creation_hash !== creationHash)
-          throw new HttpError(409, '대화 생성 요청 키가 다른 요청에 사용됐어요.');
+          throw new HttpError(409, 'Conversation request key was used for another request');
         return this.conversation(old.id);
       }
       if (projectId) this.group(projectId);
@@ -186,7 +187,7 @@ export class HelperWorkspace {
     const row = this.store.db
       .prepare('SELECT id,title,revision FROM helper_conversation_groups WHERE id=?')
       .get(id) as HelperProject | undefined;
-    if (!row) throw new HttpError(404, '도우미 프로젝트를 찾을 수 없어요.');
+    if (!row) throw new AppError(404, 'HELPER_PROJECT_NOT_FOUND');
     return row;
   }
   createGroup(title: string, key: string): HelperProject {
@@ -197,7 +198,7 @@ export class HelperWorkspace {
         .get(key);
       if (previous) {
         if (previous.creation_title !== title)
-          throw new HttpError(409, '프로젝트 생성 요청이 이전 요청과 충돌했어요.');
+          throw new HttpError(409, 'Project request key was used for another request');
         return this.group(String(previous.id));
       }
       const id = randomUUID();
@@ -217,15 +218,14 @@ export class HelperWorkspace {
         'UPDATE helper_conversation_groups SET title=?,revision=revision+1 WHERE id=? AND revision=?'
       )
       .run(title, id, revision);
-    if (!result.changes) throw new HttpError(409, '도우미 프로젝트가 다른 곳에서 변경됐어요.');
+    if (!result.changes) throw new AppError(409, 'REVISION_CONFLICT');
     this.store.invalidated('helper-list');
     return this.group(id);
   }
   deleteGroup(id: string, revision: number) {
     const deleted = this.store.transaction(() => {
       const group = this.group(id);
-      if (group.revision !== revision)
-        throw new HttpError(409, '도우미 프로젝트가 다른 곳에서 변경됐어요.');
+      if (group.revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
       const members = this.store.db
         .prepare('SELECT conversation_id FROM helper_conversation_memberships WHERE group_id=?')
         .all(id);
@@ -245,8 +245,7 @@ export class HelperWorkspace {
   moveGroup(id: string, revision: number, groupId: string | null): HelperConversation {
     return this.store.transaction(() => {
       const conversation = this.conversation(id);
-      if (conversation.revision !== revision)
-        throw new HttpError(409, '도우미 대화가 다른 곳에서 변경됐어요.');
+      if (conversation.revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
       if (groupId !== null) this.group(groupId);
       const existing = this.store.db
         .prepare('SELECT group_id FROM helper_conversation_memberships WHERE conversation_id=?')
@@ -280,7 +279,7 @@ export class HelperWorkspace {
         .get(scopeKey, creationKey);
       if (old) {
         if (old.creation_hash !== hash)
-          throw new HttpError(409, '대화 복사 요청이 이전 요청과 충돌했어요.');
+          throw new HttpError(409, 'Copy request key was used for another request');
         return this.conversation(String(old.id));
       }
       const impact = this.deletionImpact(id);
@@ -288,11 +287,8 @@ export class HelperWorkspace {
         impact.request.expectedRevision !== expected.expectedRevision ||
         impact.request.expectedEventSequence !== expected.expectedEventSequence
       )
-        throw new HttpError(
-          409,
-          '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.'
-        );
-      if (!impact.canDelete) throw new HttpError(409, '진행 중인 작업이 끝난 뒤 복사해 주세요.');
+        throw new AppError(409, 'REVISION_CONFLICT');
+      if (!impact.canDelete) throw new AppError(409, 'HELPER_TASK_ACTIVE');
       const pages: HelperMessage[][] = [];
       let before: string | undefined;
       do {
@@ -408,7 +404,7 @@ export class HelperWorkspace {
         id,
         revision
       );
-    if (!changed.changes) throw new HttpError(409, '도우미 설정이 다른 곳에서 변경됐어요.');
+    if (!changed.changes) throw new AppError(409, 'REVISION_CONFLICT');
     this.event(id, null, 'conversation.updated');
     return this.conversation(id);
   }
@@ -443,15 +439,8 @@ export class HelperWorkspace {
         impact.request.expectedRevision !== expected.expectedRevision ||
         impact.request.expectedEventSequence !== expected.expectedEventSequence
       )
-        throw new HttpError(
-          409,
-          '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 삭제해 주세요.'
-        );
-      if (!impact.canDelete)
-        throw new HttpError(
-          409,
-          '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 삭제해 주세요.'
-        );
+        throw new AppError(409, 'REVISION_CONFLICT');
+      if (!impact.canDelete) throw new AppError(409, 'HELPER_TASK_ACTIVE');
       const tasks = this.store.db
         .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
         .all(id);
@@ -513,19 +502,11 @@ export class HelperWorkspace {
   ): HelperMessageMutation {
     return this.store.transaction(() => {
       const conversation = this.conversation(id);
-      if (conversation.revision !== expectedRevision)
-        throw new HttpError(
-          409,
-          '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.'
-        );
-      if (!this.deletionImpact(id).canDelete)
-        throw new HttpError(
-          409,
-          '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 수정해 주세요.'
-        );
+      if (conversation.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+      if (!this.deletionImpact(id).canDelete) throw new AppError(409, 'HELPER_TASK_ACTIVE');
       const entries = this.transcriptEntries(id);
       const selected = entries.find((entry) => entry.id === messageId && !entry.deleted);
-      if (!selected) throw new HttpError(404, '도우미 메시지를 찾을 수 없어요.');
+      if (!selected) throw new HttpError(404, 'Helper message not found');
       let projection: Omit<HelperMessageMutation, 'conversation'>;
       if ('text' in change) {
         this.store.db
@@ -589,7 +570,7 @@ export class HelperWorkspace {
       JOIN helper_message_changes c ON c.message_id=m.id AND c.deleted=1
       WHERE t.id=? LIMIT 1`)
       .get(taskId);
-    if (hidden) throw new HttpError(409, '삭제한 도우미 요청은 재시도할 수 없어요.');
+    if (hidden) throw new AppError(409, 'HELPER_REQUEST_DELETED');
   }
   messages(id: string, before?: string): HelperMessage[] {
     const conversation = this.conversation(id);
@@ -704,7 +685,7 @@ export class HelperWorkspace {
         FROM one LEFT JOIN stopped ON stopped.task_id=one.id`
       )
       .get(id) as Row | undefined;
-    if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    if (!row) throw new AppError(404, 'HELPER_TASK_NOT_FOUND');
     const snapshot = JSON.parse(row.snapshot) as HelperTaskSnapshot;
     return {
       ...taskData({ ...row, mode: snapshot.mode }),
@@ -718,7 +699,7 @@ export class HelperWorkspace {
     const row = this.store.db
       .prepare('SELECT id,conversation_id,status,generation,usage FROM helper_tasks WHERE id=?')
       .get(id) as Row | undefined;
-    if (!row) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    if (!row) throw new AppError(404, 'HELPER_TASK_NOT_FOUND');
     return {
       id: row.id,
       conversationId: row.conversation_id,
@@ -781,7 +762,7 @@ export class HelperWorkspace {
       const previous = this.instructions(taskId).find((item) => item.requestKey === requestKey);
       if (previous) {
         if (previous.text !== text)
-          throw new HttpError(409, '같은 요청 키로 내용을 바꿀 수 없어요.');
+          throw new HttpError(409, 'Request key was used with different text');
         return previous;
       }
       this.assertRunning(taskId);
@@ -814,7 +795,7 @@ export class HelperWorkspace {
   }
   taskSummary(id: string) {
     const task = this.readTaskSummaries('t.id=?', [id])[0];
-    if (!task) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+    if (!task) throw new AppError(404, 'HELPER_TASK_NOT_FOUND');
     return task;
   }
   taskSummaries(id: string, before?: string) {
@@ -830,7 +811,7 @@ export class HelperWorkspace {
       .get(conversationId, key) as Row | undefined;
     const task = row ? this.task(row.id) : undefined;
     if (task && (task.request !== request || task.snapshot.retryOf !== retryOf))
-      throw new HttpError(409, '같은 요청 키로 다른 작업을 보낼 수 없어요.');
+      throw new HttpError(409, 'Request key was used for another task');
     return task;
   }
   enqueue(conversationId: string, key: string, request: string, snapshot: HelperTaskSnapshot) {
@@ -841,13 +822,13 @@ export class HelperWorkspace {
         this.assertRetryVisible(snapshot.retryOf);
         const previous = this.task(snapshot.retryOf);
         if (previous.conversationId !== conversationId)
-          throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+          throw new HttpError(403, 'Retry target belongs to another conversation');
         if (previous.snapshot.invalidatedBySceneDeletion)
-          throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
+          throw new AppError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
         if (!['failed', 'cancelled', 'interrupted'].includes(previous.status))
-          throw new HttpError(409, '종료된 실패 요청만 재시도할 수 있어요.');
+          throw new HttpError(409, 'Only a failed, cancelled or interrupted task can be retried');
         if (snapshot.resume ? !previous.resumable : previous.completedEffects?.count)
-          throw new HttpError(
+          throw new AppError(
             409,
             snapshot.resume ? 'HELPER_RESUME_UNAVAILABLE' : 'HELPER_EFFECTS_ALREADY_COMMITTED'
           );
@@ -857,10 +838,9 @@ export class HelperWorkspace {
             "SELECT id FROM helper_tasks WHERE conversation_id=? AND COALESCE(json_extract(snapshot, '$.requestGroupId'),id)=? ORDER BY rowid DESC LIMIT 1"
           )
           .get(conversationId, snapshot.requestGroupId);
-        if (latest?.id !== previous.id)
-          throw new HttpError(409, '이미 다시 시도한 요청이에요. 최신 결과를 확인해 주세요.');
+        if (latest?.id !== previous.id) throw new AppError(409, 'HELPER_ALREADY_RETRIED');
         if (snapshot.confirmations?.some((call) => !call.arguments))
-          throw new HttpError(409, 'CONFIRMATION_UNAVAILABLE');
+          throw new AppError(409, 'HELPER_CONFIRMATION_UNAVAILABLE');
         const retryContext = helperRequestContext(this.store, conversationId, previous.id);
         if (retryContext.invalidatesCheckpoint)
           this.store.db
@@ -959,11 +939,11 @@ export class HelperWorkspace {
   }
   assertActive(id: string, owner: string, generation: number) {
     if (!this.active(id, owner, generation))
-      throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+      throw new AppError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
   }
   assertRunning(taskId: string) {
     const row = this.store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(taskId);
-    if (row?.status !== 'running') throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+    if (row?.status !== 'running') throw new AppError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
   }
   operation<T>(
     taskId: string,
@@ -976,7 +956,7 @@ export class HelperWorkspace {
       if (prior !== undefined) return prior;
       const hash = createHash('sha256').update(json(input)).digest('hex');
       const task = this.task(taskId);
-      if (task.status !== 'running') throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+      if (task.status !== 'running') throw new AppError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
       if (task.snapshot.mode === 'plan') throw new HttpError(403, PLAN_MODE_READ_ONLY);
       const result = apply();
       this.store.db
@@ -994,7 +974,7 @@ export class HelperWorkspace {
     if (row.task_id !== taskId || row.request_hash !== hash)
       throw new HttpError(409, 'OPERATION_ID_CONFLICT');
     const result = JSON.parse(row.result);
-    if (result?.detailsOmitted) throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
+    if (result?.detailsOmitted) throw new AppError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
     return result as T;
   }
   startAttempt(
@@ -1142,7 +1122,7 @@ export class HelperWorkspace {
         `SELECT * FROM helper_artifacts WHERE id=? ${revision === undefined ? 'ORDER BY revision DESC LIMIT 1' : 'AND revision=?'}`
       )
       .get(...(revision === undefined ? [id] : [id, revision])) as Row | undefined;
-    if (!row) throw new HttpError(404, '가정 장면을 찾을 수 없어요.');
+    if (!row) throw new AppError(404, 'HELPER_ARTIFACT_NOT_FOUND');
     return {
       id: row.id,
       revision: row.revision,

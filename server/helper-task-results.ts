@@ -7,7 +7,7 @@ import type {
 } from '../core/helper.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { helperTraceCalls } from './task-trace.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 import { readHelperChanges, recordHelperAction } from './helper-changes.js';
 import { readHelperConfirmations } from './helper-confirmations.js';
@@ -48,7 +48,7 @@ const tokens = (value: unknown): number | null => {
 
 export function readHelperTaskResults(store: Store, taskId: string): HelperTaskResultsView {
   const task = store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(taskId);
-  if (!task) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
+  if (!task) throw new AppError(404, 'HELPER_TASK_NOT_FOUND');
   const rows = store.db
     .prepare(`SELECT e.seq,e.data FROM helper_events e JOIN helper_operations o
       ON o.task_id=e.task_id AND o.id=json_extract(e.data,'$.receiptId')

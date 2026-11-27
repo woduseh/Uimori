@@ -1,5 +1,5 @@
 import type { Store } from './store.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export const HELPER_READ_PREFIX = 'helper-read:v1:';
 export const HELPER_ACTIVITY_EVENT_KINDS =
@@ -13,7 +13,7 @@ export function markHelperConversationRead(
   let raised = false;
   const result = store.transaction(() => {
     if (!store.db.prepare('SELECT 1 FROM helper_conversations WHERE id=?').get(conversationId))
-      throw new HttpError(404, '도우미 대화를 찾을 수 없어요.');
+      throw new AppError(404, 'HELPER_CONVERSATION_NOT_FOUND');
     const latest = Number(
       store.db
         .prepare(

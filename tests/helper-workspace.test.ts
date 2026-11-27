@@ -208,10 +208,10 @@ test('saved editor references freeze at admission and identical retries survive 
       ...editor,
       revision: updated.revision,
     })
-  ).toThrow('같은 요청 키');
+  ).toThrow('Request key was used');
   expect(() =>
     f.runtime.enqueue(f.conversation.id, 'new-request', '내용을 설명해줘', editor)
-  ).toThrow('참고하던 자료가 변경');
+  ).toThrow('REVISION_CONFLICT');
   expect(send).toHaveBeenCalledTimes(1);
 });
 
@@ -271,7 +271,7 @@ test('an unsaved editor is analysis input and a patch of that resource saves its
       title: saved.title,
       model: { ...draft, description: '재전송하면서 바뀐 입력' },
     })
-  ).toThrow('같은 요청 키');
+  ).toThrow('Request key was used');
 });
 
 describe('a helper save under an unsaved editor draft overwrites neither side', () => {
@@ -662,7 +662,7 @@ test('HTTP steering skips a stale write, delivers once and retains the correctio
     id: accepted.id,
     status: 'delivered',
   });
-  expect(() => f.runtime.steer(task.id, 'correction', '다른 내용')).toThrow('같은 요청 키');
+  expect(() => f.runtime.steer(task.id, 'correction', '다른 내용')).toThrow('Request key was used');
   expect(() => f.runtime.steer(task.id, 'too-late', '끝난 뒤의 지시')).toThrow(
     'HELPER_TASK_NO_LONGER_ACTIVE'
   );
@@ -820,7 +820,7 @@ test('library-only helper has durable attempts, idempotent submission and no mai
     'assistant',
   ]);
   expect(() => f.runtime.enqueue(f.conversation.id, 'same-request', '다른 요청')).toThrow(
-    '같은 요청 키'
+    'Request key was used'
   );
 });
 
@@ -1094,7 +1094,7 @@ test('a resumed task that stops again carries the whole chain and still refuses 
   expect(() =>
     f.runtime.enqueue(conversation.id, 'again', '제목을 바꿔줘', undefined, undefined, second.id)
   ).toThrow('HELPER_EFFECTS_ALREADY_COMMITTED');
-  expect(() => resume('stale', stopped.id)).toThrow('이미 다시 시도한 요청이에요');
+  expect(() => resume('stale', stopped.id)).toThrow('HELPER_ALREADY_RETRIED');
 
   const third = resume('resume-2', second.id);
   await Promise.all(f.work);
@@ -1555,10 +1555,10 @@ test('helper retries retain attempts but project the latest response at the orig
   ).toBe(third.id);
   expect(() =>
     f.runtime.enqueue(f.conversation.id, 'stale', '원래 요청', undefined, undefined, first.id)
-  ).toThrow('이미 다시 시도');
+  ).toThrow('HELPER_ALREADY_RETRIED');
   expect(() =>
     f.runtime.enqueue(f.conversation.id, 'attempt-3', '수정한 요청', undefined, undefined, first.id)
-  ).toThrow('같은 요청 키');
+  ).toThrow('Request key was used');
   const reloaded = new HelperWorkspace(f.store);
   const messages = reloaded.messages(f.conversation.id);
   const visible = messages.filter((message) => message.latestTaskId === message.taskId);
@@ -2272,7 +2272,7 @@ test('pair deletion hides every retry attempt without deleting task evidence or 
       ...snapshot(f),
       retryOf: retry.id,
     })
-  ).toThrow('삭제한 도우미 요청');
+  ).toThrow('HELPER_REQUEST_DELETED');
   expect(() =>
     f.runtime.enqueue(
       f.conversation.id,
@@ -2282,7 +2282,7 @@ test('pair deletion hides every retry attempt without deleting task evidence or 
       undefined,
       retry.id
     )
-  ).toThrow('삭제한 도우미 요청');
+  ).toThrow('HELPER_REQUEST_DELETED');
 });
 
 test('seed edits and following deletion use request chronology rather than retry insertion order', () => {
@@ -2349,7 +2349,7 @@ test('message changes block only activity in their conversation, including unset
   const message = f.workspace.messages(f.conversation.id)[0];
   const revision = f.workspace.conversation(f.conversation.id).revision;
   expect(() => f.runtime.editMessage(f.conversation.id, message.id, revision, '변경')).toThrow(
-    '진행 중인 작업'
+    'HELPER_TASK_ACTIVE'
   );
   f.workspace.start(task.id, 'owner');
   const attempt = f.workspace.startAttempt(task.id, 'owner', 1, 'helper', 0, {
@@ -2366,7 +2366,7 @@ test('message changes block only activity in their conversation, including unset
   });
   f.workspace.cancel(task.id);
   expect(() => f.runtime.deleteMessages(f.conversation.id, message.id, revision, 'pair')).toThrow(
-    '진행 중인 작업'
+    'HELPER_TASK_ACTIVE'
   );
   f.workspace.finishAttempt(task.id, attempt, success);
   const other = f.workspace.create(f.conversation.scope, 'other');
@@ -2394,6 +2394,6 @@ test('a new request invalidates an older delete confirmation but duplicate admis
   expect(f.workspace.conversation(f.conversation.id).revision).toBe(revision + 1);
   expect(() =>
     f.workspace.deleteMessages(f.conversation.id, message.id, revision, 'following')
-  ).toThrow('대화가 변경됐어요');
+  ).toThrow('REVISION_CONFLICT');
   expect(f.workspace.messages(f.conversation.id)).toHaveLength(2);
 });

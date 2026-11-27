@@ -10,7 +10,8 @@ import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
 import { cloneResource, readResource, saveResource, undoResource } from './resource-service.js';
 import { deleteLibraryItem } from './library-deletion.js';
-import { fields, record, number, text, HttpError } from './request-validation.js';
+import { HelperToolError } from './app-errors.js';
+import { fields, record, number, text } from './request-validation.js';
 import { patchHelperResource, readHelperResource } from './helper-resource-editing.js';
 import { patchHelperResources } from './helper-resource-batch.js';
 import { readHelperResources, validateHelperPreset } from './helper-resource-inspection.js';
@@ -523,7 +524,7 @@ export function invokeResourceTool(
     const content = readResource(store, 'content', id) as Content;
     const imageId = text(args.imageId, 'image ID', 200);
     if (!content.package.images?.some((image) => image.id === imageId))
-      throw new HttpError(404, '이미지를 찾을 수 없어요.');
+      throw new HelperToolError(404, 'IMAGE_NOT_FOUND_IN_CONTENT');
     const title = text(args.title, 'image title', 200);
     const description = text(args.description, 'image description', 2000, true);
     return summary(
@@ -548,14 +549,22 @@ export function invokeResourceTool(
       String(args.kind)
     )
   )
-    throw new HttpError(400, '자료 종류를 확인해 주세요.');
+    throw new HelperToolError(
+      400,
+      'INVALID_ARGUMENTS',
+      'kind must be content, prompt-preset, prompt-workspace, theme or illustration-preset'
+    );
   const kind = args.kind as ResourceKind;
   if (name === 'resource.clone') {
     fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title', 'syncNativeName']);
     if (args.syncNativeName !== undefined && typeof args.syncNativeName !== 'boolean')
-      throw new HttpError(400, '내부 이름 동기화 옵션을 확인해 주세요.');
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'syncNativeName must be a boolean');
     if (kind !== 'content' && kind !== 'prompt-preset')
-      throw new HttpError(400, '봇, 페르소나, 모듈과 프롬프트 프리셋만 복제할 수 있어요.');
+      throw new HelperToolError(
+        400,
+        'INVALID_ARGUMENTS',
+        'Only content and prompt-preset can be cloned'
+      );
     const result = cloneResource(store, {
       kind,
       sourceId: text(args.sourceId, 'source resource ID', 100),
@@ -568,7 +577,7 @@ export function invokeResourceTool(
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
   if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
   if (name === 'resource.patch') {
-    if (!id) throw new HttpError(400, '자료 ID가 필요해요.');
+    if (!id) throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id is required');
     return patchHelperResource(
       store,
       kind,
@@ -589,7 +598,7 @@ export function invokeResourceTool(
       })
     );
   if (!id || expectedRevision === undefined)
-    throw new HttpError(400, '자료 ID와 수정 번호가 필요해요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id and expectedRevision are required');
   if (name === 'resource.undo') return summary(undoResource(store, kind, id, expectedRevision));
   if (name === 'resource.delete' && kind === 'illustration-preset')
     return deleteIllustrationPreset(store, id, expectedRevision);
@@ -597,5 +606,9 @@ export function invokeResourceTool(
     return deleteTheme(store, id, expectedRevision);
   if (name === 'resource.delete' && (kind === 'content' || kind === 'prompt-preset'))
     return deleteLibraryItem(store, kind, id, { expectedRevision });
-  throw new HttpError(400, '지원하지 않는 자료 작업이에요.');
+  throw new HelperToolError(
+    400,
+    'INVALID_ARGUMENTS',
+    'Unsupported resource operation for this kind'
+  );
 }

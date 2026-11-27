@@ -32,6 +32,7 @@ import {
 } from './helper-changes.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { AppError } from './app-errors.js';
 import { HttpError } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
 import { latestTranslation } from './source-editing.js';
@@ -532,7 +533,7 @@ export function rollBackHelperTask(
   const changedChats = new Set<string>();
   const view = store.transaction((): HelperRollbackView => {
     const task = workspace.taskState(taskId);
-    if (activeTask(store, task.conversationId)) throw new HttpError(409, 'HELPER_TASK_ACTIVE');
+    if (activeTask(store, task.conversationId)) throw new AppError(409, 'HELPER_TASK_ACTIVE');
     const all = readUnits(store, taskId);
     const selected = unitKeyFilter ? all.filter((unit) => unit.unit === unitKeyFilter) : all;
     if (unitKeyFilter && !selected.length)

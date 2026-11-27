@@ -162,6 +162,24 @@ export const appErrorMessages = {
   COMFYUI_BASE_URL_INVALID: 'visuals.m228',
   COMFYUI_RESULT_UNAVAILABLE: 'visuals.m236',
   NOVELAI_TOKEN_MISSING: 'visuals.novelaiTokenMissing',
+  HELPER_CONVERSATION_NOT_FOUND: 'errors.HELPER_CONVERSATION_NOT_FOUND',
+  HELPER_PROJECT_NOT_FOUND: 'errors.HELPER_PROJECT_NOT_FOUND',
+  HELPER_TASK_NOT_FOUND: 'errors.HELPER_TASK_NOT_FOUND',
+  HELPER_ARTIFACT_NOT_FOUND: 'errors.HELPER_ARTIFACT_NOT_FOUND',
+  HELPER_TASK_ACTIVE: 'errors.HELPER_TASK_ACTIVE',
+  HELPER_TASK_NO_LONGER_ACTIVE: 'errors.HELPER_TASK_NO_LONGER_ACTIVE',
+  HELPER_EFFECTS_ALREADY_COMMITTED: 'errors.HELPER_EFFECTS_ALREADY_COMMITTED',
+  HELPER_RESUME_UNAVAILABLE: 'errors.HELPER_RESUME_UNAVAILABLE',
+  HELPER_ALREADY_RETRIED: 'errors.HELPER_ALREADY_RETRIED',
+  HELPER_REQUEST_DELETED: 'errors.HELPER_REQUEST_DELETED',
+  HELPER_CONFIRMATION_UNAVAILABLE: 'errors.HELPER_CONFIRMATION_UNAVAILABLE',
+  HELPER_MODEL_EVALUATION_TOOLS: 'errors.HELPER_MODEL_EVALUATION_TOOLS',
+  HELPER_SELECTION_STALE: 'errors.HELPER_SELECTION_STALE',
+  HELPER_CONTEXT_DEPENDENCY_CHANGED: 'errors.HELPER_CONTEXT_DEPENDENCY_CHANGED',
+  HELPER_COMPACTION_BUSY: 'errors.HELPER_COMPACTION_BUSY',
+  HELPER_COMPACTION_CODEX_NATIVE: 'errors.HELPER_COMPACTION_CODEX_NATIVE',
+  HELPER_SUMMARY_TOO_LARGE: 'errors.HELPER_SUMMARY_TOO_LARGE',
+  HELPER_SUMMARY_EMPTY: 'errors.HELPER_SUMMARY_EMPTY',
 } satisfies Record<AppErrorCode, string>;
 
 const MIB = 1024 * 1024;
@@ -263,27 +281,6 @@ const messages: Record<string, string> = {
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
   RISU_IMPORT_PARTIAL_REQUIRED:
     '자동 이식할 수 없는 부분을 확인하고 부분 가져오기에 동의해 주세요.',
-  HELPER_EFFECTS_ALREADY_COMMITTED:
-    '이 요청의 변경 사항은 이미 저장됐어요. 저장된 결과를 확인하고 남은 작업만 새 요청으로 알려 주세요.',
-  HELPER_RESUME_UNAVAILABLE: '이 작업은 이어서 할 수 없어요. 남은 작업을 새로 요청해 주세요.',
-  HELPER_TASK_NO_LONGER_ACTIVE: '도우미 작업이 이미 종료됐어요. 최신 결과를 확인해 주세요.',
-  HELPER_CONTEXT_DEPENDENCY_CHANGED:
-    '도우미 대화가 변경됐어요. 최신 대화를 확인한 뒤 새 요청을 보내 주세요.',
-  HELPER_COMPACTION_BUSY: '진행 중인 도우미 작업이나 대화 정리가 끝난 뒤 다시 시도해 주세요.',
-  HELPER_SUMMARY_TOO_LARGE:
-    '요약이 도우미 모델의 자동 정리 기준보다 길어요. 요약을 줄이거나 초기화해 주세요.',
-  HELPER_SUMMARY_EMPTY: '요약이 비어 있어요. 요약을 지우려면 요약 초기화를 사용해 주세요.',
-  HELPER_COMPACTION_CODEX_NATIVE:
-    '네이티브 에이전트는 컨텍스트를 스스로 관리해서 수동 정리를 지원하지 않아요.',
-  HELPER_COMPACTION_FAILED:
-    '도우미 대화를 정리하지 못했어요. 잠시 뒤 다시 시도하거나 요약 모델을 확인해 주세요.',
-  HELPER_COMPACTION_EOF: '도우미 대화 정리 응답이 중간에 끊겼어요. 잠시 뒤 다시 시도해 주세요.',
-  HELPER_COMPACTION_CANCELLED: '도우미 대화 정리를 취소했어요.',
-  HELPER_FIXED_CONTEXT_TOO_LARGE:
-    '요약할 고정 입력만으로 요약 모델의 컨텍스트 한도를 넘었어요. 입력 한도가 더 큰 요약 모델을 선택해 주세요.',
-  EDITOR_WORKSPACE_UNAVAILABLE: '선택한 편집 초안을 사용할 수 없어요. 편집기를 다시 열어 주세요.',
-  DRAFT_UNAPPLIED_FIELDS: '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.',
-  DRAFT_DISCARDED: '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
   CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
     '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
   CHAT_TRANSCRIPT_INVALID_REQUEST:
@@ -350,22 +347,7 @@ export function apiErrorDiagnostic(
 
 function legacyErrorDiagnostic(error: unknown, status: number, method: string): ApiErrorDiagnostic {
   if (typeof error === 'string') {
-    if (
-      status === 409 &&
-      method === 'POST' &&
-      error === '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.'
-    )
-      return { code: 'HELPER_CONVERSATION_COPY_CHANGED', message: error };
-    const code =
-      error === '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.'
-        ? 'DRAFT_UNAPPLIED_FIELDS'
-        : [
-              '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
-              '편집 초안이 폐기됐어요.',
-              '초안이 폐기됐어요. 새 초안을 열어 주세요.',
-            ].includes(error)
-          ? 'DRAFT_DISCARDED'
-          : error;
+    const code = error;
     if (Object.hasOwn(storyUiErrors, code)) return { code, message: ko[storyUiErrors[code]] };
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
     if (status === 409 && nativeActionConflict.test(code))
@@ -408,7 +390,6 @@ export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method:
     registerMessage(diagnostic.message, key, values);
     return t(key, values);
   };
-  if (code === 'HELPER_CONVERSATION_COPY_CHANGED') return display('helperProjects.copyChanged');
   if (code && Object.hasOwn(storyUiErrors, code)) return display(storyUiErrors[code]);
   const limits: Record<string, number> = {
     PACKAGE_START_TEXT_TOO_LONG: SOURCE_TEXT_MAX_CHARS,

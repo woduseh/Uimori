@@ -163,7 +163,7 @@ test('file-only helper admission binds immutable metadata and replays the same k
       { files: [{ ...upload, uploadId: 'e'.repeat(32), sha256: 'f'.repeat(64) }] },
       false
     )
-  ).rejects.toThrow('같은 요청 키');
+  ).rejects.toThrow('Request key was used');
   expect(f.workspace.taskSummaries(f.conversation.id)).toHaveLength(1);
 });
 

@@ -1,4 +1,5 @@
 import { patchHelperResource } from './helper-resource-editing.js';
+import { HelperToolError } from './app-errors.js';
 import { HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -30,7 +31,7 @@ export class HelperResourceBatchError extends HttpError {
 
 export function helperResourceBatchItems(rawItems: unknown): PatchItem[] {
   if (!Array.isArray(rawItems) || !rawItems.length || rawItems.length > 16)
-    throw new HttpError(400, '수정할 자료는 1개부터 16개까지 지정해 주세요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'items must list 1 to 16 resources');
   const seen = new Set<string>();
   return rawItems.map((raw, itemIndex): PatchItem => {
     let kind: PatchItem['kind'] | undefined;
@@ -39,14 +40,19 @@ export function helperResourceBatchItems(rawItems: unknown): PatchItem[] {
       const item = record(raw);
       const inputKind: unknown = item.kind;
       if (inputKind !== 'content' && inputKind !== 'prompt-preset' && inputKind !== 'theme')
-        throw new HttpError(400, '부분 수정은 native 자료, 프리셋과 이야기 UI 테마에 지원해요.');
+        throw new HelperToolError(
+          400,
+          'INVALID_ARGUMENTS',
+          'kind must be content, prompt-preset or theme'
+        );
       kind = inputKind;
       id = text(item.id, 'id', 200);
       const expectedRevision = number(item.expectedRevision, 'revision');
       if (!Array.isArray(item.changes) || !item.changes.length)
-        throw new HttpError(400, '변경 목록이 필요해요.');
+        throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'changes must be a non-empty list');
       const key = JSON.stringify([kind, id]);
-      if (seen.has(key)) throw new HttpError(400, '같은 자료는 한 번만 지정해 주세요.');
+      if (seen.has(key))
+        throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'Each resource may appear only once');
       seen.add(key);
       return { kind, id, expectedRevision, changes: item.changes };
     } catch (error) {

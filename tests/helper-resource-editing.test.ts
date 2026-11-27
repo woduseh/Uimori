@@ -185,7 +185,7 @@ test('stale revision and ambiguous literal reject the complete proposal', () => 
         },
       ],
     })
-  ).toThrow('정확히 한 번');
+  ).toThrow('oldText must appear exactly once');
   const saved = store.product.get<Content>('content', content.id);
   expect(saved.title).toBe('Native owner');
   expect(saved.revision).toBe(content.revision);
@@ -196,7 +196,7 @@ test('stale revision and ambiguous literal reject the complete proposal', () => 
       expectedRevision: content.revision,
       changes: [{ path: '/package/nativeRisu/assets', op: 'set', value: [] }],
     })
-  ).toThrow('native 원문 필드만');
+  ).toThrow('Only native source fields');
 });
 
 test('field and item pages expose typed values, optional paths and exact UTF-16 text continuation', () => {
@@ -525,7 +525,7 @@ test('inserting and removing lore preserves authored neighbors and refreshes the
       expectedRevision: content.revision,
       changes: [{ path: `${entries}/0`, op: 'remove' }],
     })
-  ).toThrow('저장된 자료가 변경됐어요');
+  ).toThrow('REVISION_CONFLICT');
   const removed = call(store, 'resource.patch', {
     kind: 'content',
     id: content.id,
@@ -588,7 +588,7 @@ test('opt-in preset body pages include full authored fields and mark oversized b
   expect(next.text).toBe(huge.slice(0, next.nextOffset));
   expect(next.nextOffset).not.toBeNull();
   expect(() => call(store, 'resource.read', { ...target, includeBodies: true })).toThrow(
-    '프롬프트 블록 목록'
+    'includeBodies only applies'
   );
   expect(() =>
     call(store, 'resource.read', {
@@ -596,7 +596,7 @@ test('opt-in preset body pages include full authored fields and mark oversized b
       path: presetBlocksPath,
       includeBodies: 'true',
     })
-  ).toThrow('본문 포함 옵션');
+  ).toThrow('includeBodies must be a boolean');
 });
 
 test('preset clones keep native names by default and can synchronize them atomically', () => {
@@ -631,7 +631,9 @@ test('preset clones keep native names by default and can synchronize them atomic
       path: `${presetBlocksPath}/0/text`,
     }).text
   ).toBe('Preserved authored prompt');
-  expect(() => clone('Bad', 'true' as unknown as boolean)).toThrow('동기화');
+  expect(() => clone('Bad', 'true' as unknown as boolean)).toThrow(
+    'syncNativeName must be a boolean'
+  );
 });
 
 test('preset block edits compose sequentially with one save and undo while preserving slot metadata', () => {
@@ -788,7 +790,7 @@ test('stale and invalid preset structural proposals leave every block and the un
       expectedRevision: preset.revision + 1,
       changes: [insert],
     })
-  ).toThrow('저장된 자료가 변경됐어요');
+  ).toThrow('REVISION_CONFLICT');
   for (const invalid of [
     { op: 'move', from: `${presetBlocksPath}/0`, path: `${presetBlocksPath}/3` },
     { op: 'move', from: '/values/tone/0', path: `${presetBlocksPath}/1` },
@@ -1152,7 +1154,7 @@ test('previous reads expose the current undo slot without changing saved state o
     .prepare('UPDATE resource_undo SET saved_revision=? WHERE id=?')
     .run(second.revision, preset.id);
   expect(() => call(store, 'resource.read', { ...target, version: 'previous', path })).toThrow(
-    '최근 저장 이후'
+    'REVISION_CONFLICT'
   );
   store.db
     .prepare('UPDATE resource_undo SET saved_revision=?,model=? WHERE id=?')

@@ -1142,7 +1142,7 @@ export class HelperRuntime {
     if (mode === 'plan' && confirmations.length)
       throw new HttpError(400, 'HELPER_PLAN_CONFIRMATIONS');
     const resume = options.resume === true;
-    if (resume && !retryOf) throw new HttpError(400, 'HELPER_RESUME_UNAVAILABLE');
+    if (resume && !retryOf) throw new AppError(400, 'HELPER_RESUME_UNAVAILABLE');
     const requestFingerprint = createHash('sha256')
       .update(
         JSON.stringify({
@@ -1166,24 +1166,24 @@ export class HelperRuntime {
         prior.snapshot.requestFingerprint &&
         prior.snapshot.requestFingerprint !== requestFingerprint
       )
-        throw new HttpError(409, '같은 요청 키로 입력 내용을 바꿀 수 없어요.');
+        throw new HttpError(409, 'Request key was used with a different request');
       const recorded = prior.snapshot.outline?.target ?? prior.snapshot.outlineTarget;
       if (JSON.stringify(recorded ?? null) !== JSON.stringify(outlineTarget ?? null))
-        throw new HttpError(409, '같은 요청 키로 구성 대상을 바꿀 수 없어요.');
+        throw new HttpError(409, 'Request key was used with a different outline target');
       return prior;
     }
     if (retryOf) {
       this.workspace.assertRetryVisible(retryOf);
       const previous = this.workspace.task(retryOf);
       if (previous.conversationId !== conversationId)
-        throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+        throw new HttpError(403, 'Retry target belongs to another conversation');
       if (previous.snapshot.invalidatedBySceneDeletion)
-        throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
+        throw new AppError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
       if (resume) {
         if (!previous.resumable || !recordedHelperExchanges(this.store.db, retryOf))
-          throw new HttpError(409, 'HELPER_RESUME_UNAVAILABLE');
+          throw new AppError(409, 'HELPER_RESUME_UNAVAILABLE');
       } else if (previous.completedEffects?.count)
-        throw new HttpError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
+        throw new AppError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
       editor ??= previous.snapshot.editor;
       selection ??= previous.snapshot.selection;
       outlineTarget ??= previous.snapshot.outline?.target ?? previous.snapshot.outlineTarget;
@@ -1195,13 +1195,12 @@ export class HelperRuntime {
     }
     const conversation = this.workspace.conversation(conversationId),
       workspace = promptWorkspace(this.store);
-    if (this.compacting.has(conversationId)) throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+    if (this.compacting.has(conversationId)) throw new AppError(409, 'HELPER_COMPACTION_BUSY');
     const helperModel = workspaceModelRef(workspace, 'helper');
     const contextModel = workspaceModelRef(workspace, 'context');
     if (!helperModel) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     const model = this.store.product.modelSnapshot(helperModel.id);
-    if (model.evaluationTools)
-      throw new HttpError(409, '도우미 모델에서는 평가 도구를 해제해 주세요.');
+    if (model.evaluationTools) throw new AppError(409, 'HELPER_MODEL_EVALUATION_TOOLS');
     const scope = conversation.scope;
     if (selection) {
       if (scope.kind !== 'chat') throw new HttpError(403, 'SELECTION_OUTSIDE_SCOPE');
@@ -1209,7 +1208,7 @@ export class HelperRuntime {
         .history(this.store.chat(scope.chatId).headRevision)
         .find((item) => item.revision === selection.sourceId);
       if (!source || (source.contentHash ?? sourceHash(source.text)) !== selection.sourceHash)
-        throw new HttpError(409, '선택한 원문이 변경됐어요. 다시 선택해 주세요.');
+        throw new AppError(409, 'HELPER_SELECTION_STALE');
     }
     if (outlineTarget && scope.kind !== 'chat') throw new HttpError(403, 'OUTLINE_OUTSIDE_SCOPE');
     const validatedReferences = references?.length
@@ -1255,10 +1254,9 @@ export class HelperRuntime {
         const source = editor.source ?? (editor.model === undefined ? 'saved' : 'unsaved');
         if (source === 'saved' && editor.model === undefined) {
           if (!editor.targetId || editor.revision === null)
-            throw new HttpError(400, '저장된 자료의 ID와 수정 번호가 필요해요.');
+            throw new HttpError(400, 'A saved editor needs its resource ID and revision');
           const saved = readResource(this.store, editor.kind, editor.targetId);
-          if (saved.revision !== editor.revision)
-            throw new HttpError(409, '참고하던 자료가 변경됐어요. 최신 자료를 확인해 주세요.');
+          if (saved.revision !== editor.revision) throw new AppError(409, 'REVISION_CONFLICT');
           editor = { ...editor, source, model: editableResource(editor.kind, saved) };
         } else editor = structuredClone({ ...editor, source });
       }
@@ -1398,7 +1396,7 @@ export class HelperRuntime {
   editContextSummary(conversationId: string, expectedRevision: number, summary: string) {
     const { scope } = this.workspace.conversation(conversationId);
     if (!this.deletionImpact(conversationId).canDelete)
-      throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+      throw new AppError(409, 'HELPER_COMPACTION_BUSY');
     const model = this.summaryModel();
     if (!model) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     this.store.transaction(() => {
@@ -1416,7 +1414,7 @@ export class HelperRuntime {
   }
   resetContextSummary(conversationId: string, expectedRevision: number) {
     if (!this.deletionImpact(conversationId).canDelete)
-      throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+      throw new AppError(409, 'HELPER_COMPACTION_BUSY');
     this.store.transaction(() => {
       const change = resetHelperContext(
         this.store,
@@ -1431,13 +1429,13 @@ export class HelperRuntime {
   compactConversation(conversationId: string): HelperCompactionStart {
     const conversation = this.workspace.conversation(conversationId);
     if (!this.deletionImpact(conversationId).canDelete)
-      throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
+      throw new AppError(409, 'HELPER_COMPACTION_BUSY');
     const workspace = promptWorkspace(this.store);
     const helperModelRef = workspaceModelRef(workspace, 'helper');
     if (!helperModelRef) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     const helperModel = this.store.product.modelSnapshot(helperModelRef.id);
     if (helperModel.connection.protocol === 'codex-app-server-v1')
-      throw new HttpError(409, 'HELPER_COMPACTION_CODEX_NATIVE');
+      throw new AppError(409, 'HELPER_COMPACTION_CODEX_NATIVE');
     const contextModelRef = workspaceModelRef(workspace, 'context');
     if (!contextModelRef) throw new AppError(409, 'MODEL_REQUIRED', { role: 'context' });
     const contextModel = this.store.product.modelSnapshot(contextModelRef.id, undefined, false);
@@ -1551,20 +1549,12 @@ export class HelperRuntime {
     expected: ReturnType<HelperWorkspace['deletionImpact']>['request']
   ) {
     return this.store.transaction(() => {
-      if (!this.deletionImpact(id).canDelete)
-        throw new HttpError(
-          409,
-          '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 삭제해 주세요.'
-        );
+      if (!this.deletionImpact(id).canDelete) throw new AppError(409, 'HELPER_TASK_ACTIVE');
       return this.workspace.delete(id, expected);
     });
   }
   editMessage(id: string, messageId: string, expectedRevision: number, text: string) {
-    if (!this.deletionImpact(id).canDelete)
-      throw new HttpError(
-        409,
-        '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 수정해 주세요.'
-      );
+    if (!this.deletionImpact(id).canDelete) throw new AppError(409, 'HELPER_TASK_ACTIVE');
     return this.workspace.editMessage(id, messageId, expectedRevision, text);
   }
   deleteMessages(
@@ -1573,11 +1563,7 @@ export class HelperRuntime {
     expectedRevision: number,
     scope: 'pair' | 'following'
   ) {
-    if (!this.deletionImpact(id).canDelete)
-      throw new HttpError(
-        409,
-        '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 수정해 주세요.'
-      );
+    if (!this.deletionImpact(id).canDelete) throw new AppError(409, 'HELPER_TASK_ACTIVE');
     return this.workspace.deleteMessages(id, messageId, expectedRevision, scope);
   }
   pump() {
@@ -3732,7 +3718,11 @@ export class HelperRuntime {
     }
     if (name.startsWith('context.') || name === 'notes.write') {
       if (scope.kind !== 'chat' || !this.options.services?.context)
-        throw new HttpError(404, '채팅 컨텍스트가 필요해요.');
+        throw new HelperToolError(
+          404,
+          'CHAT_CONTEXT_UNAVAILABLE',
+          'Context tools need a chat-scoped conversation'
+        );
       if (name !== 'context.read') this.workspace.assertRunning(task.id);
       return await this.options.services.context(task, name, args, hooks, operationId);
     }

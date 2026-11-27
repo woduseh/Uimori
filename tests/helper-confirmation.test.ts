@@ -337,7 +337,7 @@ test('deleting a target a held call names removes its arguments and the hold exp
       undefined,
       { confirmations: [confirmation!.id] }
     )
-  ).toThrow('CONFIRMATION_UNAVAILABLE');
+  ).toThrow('HELPER_CONFIRMATION_UNAVAILABLE');
 });
 
 test('deleting a chat removes the arguments of a call another conversation held for it', () => {
@@ -409,7 +409,7 @@ test('only a confirmation from the latest task can be granted, and declining nee
         undefined,
         { confirmations: [id] }
       )
-    ).toThrow('CONFIRMATION_UNAVAILABLE');
+    ).toThrow('HELPER_CONFIRMATION_UNAVAILABLE');
 });
 
 test('a plan-mode request cannot carry a confirmation, which stays grantable', async () => {

@@ -11,6 +11,7 @@ import { helperResourceOperation } from './helper-resource-tools.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { fontCatalog } from './fonts.js';
 import { modelInUse } from './helper-model-usage.js';
+import { AppError } from './app-errors.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readPalette } from './themes.js';
@@ -234,7 +235,7 @@ export function resolveHelperConfirmations(
   const read = latestTaskConfirmations(store, conversationId);
   return ids.map((id) => {
     const recorded = read(id);
-    if (!recorded?.arguments) throw new HttpError(409, 'CONFIRMATION_UNAVAILABLE');
+    if (!recorded?.arguments) throw new AppError(409, 'HELPER_CONFIRMATION_UNAVAILABLE');
     return {
       id,
       operation: recorded.operation,

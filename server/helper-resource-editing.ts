@@ -20,6 +20,7 @@ import type { Content } from '../core/product.js';
 import { RisuContentError } from '../core/risu-content.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
+import { HelperToolError } from './app-errors.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readPreviousResource, readResource, saveResource } from './resource-service.js';
 import {
@@ -59,28 +60,31 @@ const joined = (path: string, part: string) => `${path}/${encode(part)}`;
 function parts(path: unknown): string[] {
   if (path === '') return [];
   if (typeof path !== 'string' || !path.startsWith('/') || path.length > MAX_PATH)
-    throw new HttpError(400, '올바른 자료 경로가 필요해요.');
+    throw new HttpError(400, 'path must be a JSON Pointer that starts with /');
   const segments = path
     .slice(1)
     .split('/')
     .map((part) => {
-      if (/~(?![01])/u.test(part)) throw new HttpError(400, '올바른 자료 경로가 필요해요.');
+      if (/~(?![01])/u.test(part))
+        throw new HttpError(400, 'path must be a JSON Pointer that starts with /');
       return part.replaceAll('~1', '/').replaceAll('~0', '~');
     });
   if (
     segments.length > pathPolicy.maxSegments ||
     segments.some((part) => !part || part.length > pathPolicy.maxSegmentLength)
   )
-    throw new HttpError(400, '자료 경로가 너무 길어요.');
+    throw new HttpError(400, 'path has too many or too long segments');
   return segments;
 }
 function member(parent: unknown, part: string): { exists: boolean; value: unknown } {
   if (Array.isArray(parent)) {
-    if (!/^(0|[1-9]\d*)$/u.test(part)) throw new HttpError(400, '배열 인덱스를 확인해 주세요.');
+    if (!/^(0|[1-9]\d*)$/u.test(part))
+      throw new HttpError(400, 'An array path segment must be an index');
     const index = Number(part);
     return { exists: index < parent.length, value: parent[index] };
   }
-  if (!object(parent)) throw new HttpError(400, '자료 경로가 존재하지 않아요.');
+  if (!object(parent))
+    throw new HttpError(400, 'path goes through a value that is not an object or array');
   return { exists: Object.hasOwn(parent, part), value: parent[part] };
 }
 function locate(
@@ -92,8 +96,7 @@ function locate(
   for (let i = 0; i < segments.length; i++) {
     parent = value;
     const item = member(value, segments[i]!);
-    if (!item.exists && i < segments.length - 1)
-      throw new HttpError(404, '자료 경로가 존재하지 않아요.');
+    if (!item.exists && i < segments.length - 1) throw new HttpError(404, 'path does not exist');
     value = item.value;
     if (!item.exists) return { ...item, parent };
   }
@@ -101,7 +104,7 @@ function locate(
 }
 function bounded(result: unknown, maximum = MAX_RESULT_TOKENS): unknown {
   if (countTextTokens(JSON.stringify(result)) > maximum)
-    throw new HttpError(413, '읽기 결과가 커요. 더 작은 범위로 읽어 주세요.');
+    throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a smaller range');
   return result;
 }
 function optionalInt(value: unknown, name: string, maximum: number, defaultValue: number): number {
@@ -218,31 +221,40 @@ export function readHelperResource(
 ) {
   const paths = args.paths;
   if (args.includeBodies !== undefined && typeof args.includeBodies !== 'boolean')
-    throw new HttpError(400, '본문 포함 옵션을 확인해 주세요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'includeBodies must be a boolean');
   if (
     args.includeBodies &&
     (kind !== 'prompt-preset' || args.path !== PRESET_TEMPLATE_PATH || paths !== undefined)
   )
-    throw new HttpError(400, '프롬프트 블록 목록에서만 본문을 함께 읽을 수 있어요.');
+    throw new HelperToolError(
+      400,
+      'INVALID_ARGUMENTS',
+      'includeBodies only applies to a single path read of the prompt block list'
+    );
   if (paths !== undefined) {
-    if (args.path !== undefined) throw new HttpError(400, 'path와 paths 중 하나만 지정해 주세요.');
+    if (args.path !== undefined)
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'Pass path or paths, not both');
     if (
       !Array.isArray(paths) ||
       !paths.length ||
       paths.length > 16 ||
       paths.some((path) => typeof path !== 'string' || path.length > MAX_PATH)
     )
-      throw new HttpError(400, '읽을 경로를 1개에서 16개까지 지정해 주세요.');
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'paths must list 1 to 16 paths');
   }
   const saved = readResource(store, kind, id);
   let model = editableResource(kind, saved);
   if (args.version !== undefined && args.version !== 'current' && args.version !== 'previous')
-    throw new HttpError(400, '읽을 저장본을 확인해 주세요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', "version must be 'current' or 'previous'");
   const previous = args.version === 'previous';
   if (previous) {
     const row = readPreviousResource(store, kind, id);
     if (row.savedRevision !== saved.revision)
-      throw new HttpError(409, '최근 저장 이후 자료가 변경됐어요.');
+      throw new HelperToolError(
+        409,
+        'REVISION_CONFLICT',
+        'The resource was saved again after its previous version was recorded'
+      );
     model = row.model;
   }
   const read = (selection: JsonObject, limit = maximum) =>
@@ -384,7 +396,8 @@ export function readHelperModel(
       args.textLimit === undefined
         ? textTokenExcerpt(value.slice(start), 2_000).text.length || 1
         : optionalInt(args.textLimit, 'text limit', MAX_TEXT, 4_000);
-    if (limit === 0) throw new HttpError(400, '읽기 길이는 1 이상이어야 해요.');
+    if (limit === 0)
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'textLimit must be at least 1');
     let low = start + 1;
     let high = Math.min(value.length, start + limit);
     let best = start;
@@ -411,7 +424,8 @@ export function readHelperModel(
     }
     if (best === start && start + 1 < value.length && /[\uD800-\uDBFF]/u.test(value[start]!))
       best = start + 2;
-    if (best === start) throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
+    if (best === start)
+      throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower path');
     return bounded(page(best), maximum);
   }
   if (!object(value) && !Array.isArray(value)) return bounded({ ...head, value }, maximum);
@@ -423,7 +437,11 @@ export function readHelperModel(
       fields.length > 50 ||
       fields.some((field) => typeof field !== 'string' || !field || field.length > 300))
   )
-    throw new HttpError(400, '읽을 필드 목록을 확인해 주세요.');
+    throw new HelperToolError(
+      400,
+      'INVALID_ARGUMENTS',
+      'fields must list up to 50 field names of an object value'
+    );
   const keys = Array.isArray(value)
     ? value.map((_item, index) => String(index))
     : fields === undefined
@@ -431,7 +449,7 @@ export function readHelperModel(
       : (fields as string[]);
   const offset = optionalInt(args.offset, 'offset', keys.length, 0);
   const limit = optionalInt(args.limit, 'limit', 50, 20);
-  if (limit === 0) throw new HttpError(400, '읽기 개수는 1 이상이어야 해요.');
+  if (limit === 0) throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'limit must be at least 1');
   const entries: unknown[] = [];
   const withBodies =
     args.includeBodies === true && kind === 'prompt-preset' && path === PRESET_TEMPLATE_PATH;
@@ -462,7 +480,7 @@ export function readHelperModel(
     if (countTextTokens(JSON.stringify(candidate)) > maximum) {
       if (!withBodies || entries.length) {
         if (entries.length) break;
-        throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
+        throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower path');
       }
       const omittedBodyPaths = Object.fromEntries(
         BODY_FIELDS.flatMap((field) =>
@@ -476,7 +494,7 @@ export function readHelperModel(
         block: { ...promptBlock(item.value, joined(path, key)), omittedBodyPaths },
       };
       if (countTextTokens(JSON.stringify({ ...candidate, items: [next] })) > maximum)
-        throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
+        throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower path');
     }
     entries.push(next);
   }
@@ -513,7 +531,7 @@ function patchFailure(
   const input = object(change) ? change : {};
   throw new HelperResourcePatchError(
     error instanceof HttpError ? error.statusCode : 400,
-    error instanceof Error ? error.message : '변경 내용을 확인해 주세요.',
+    error instanceof Error ? error.message : 'Invalid change',
     {
       changeIndex,
       path: typeof input.path === 'string' ? input.path.slice(0, MAX_PATH) : null,
@@ -527,7 +545,7 @@ function patchFailure(
 function validationFailure(error: unknown): never {
   throw new HelperResourcePatchError(
     error instanceof HttpError ? error.statusCode : 400,
-    error instanceof Error ? error.message : '변경 내용을 확인해 주세요.',
+    error instanceof Error ? error.message : 'Invalid change',
     { stage: 'validation', changeIndex: null, path: null, op: null, reason: 'invalid_change' }
   );
 }
@@ -538,7 +556,7 @@ function bindTarget(model: ResourceModel, kind: ResourceKind, change: Change): B
     !['set', 'replaceText', 'remove'].includes(change.op) ||
     (change.op === 'remove' && change.path !== '')
   )
-    throw new HttpError(400, '대상 참조는 필드 수정 또는 항목 삭제에만 사용할 수 있어요.');
+    throw new HttpError(400, 'target works only with set, replaceText, or remove with path ""');
   const segments = parts(change.target);
   const list = segments.slice(0, -1);
   const listKind = resourceListKind(list);
@@ -548,15 +566,15 @@ function bindTarget(model: ResourceModel, kind: ResourceKind, change: Change): B
     (kind === 'prompt-preset' ? listKind !== 'prompt' : listKind === 'prompt') ||
     !/^(0|[1-9]\d*)$/u.test(segments.at(-1)!)
   )
-    throw new HttpError(400, '원본 목록 항목의 대상 경로가 필요해요.');
+    throw new HttpError(400, 'target must point to an item of an editable list');
   let target: ReturnType<typeof locate>;
   try {
     target = locate(model, segments);
   } catch {
-    throw new HttpError(404, '원본 대상 항목이 존재하지 않아요.');
+    throw new HttpError(404, 'target item does not exist');
   }
   if (!target.exists || !object(target.value) || !Array.isArray(target.parent))
-    throw new HttpError(404, '원본 대상 항목이 존재하지 않아요.');
+    throw new HttpError(404, 'target item does not exist');
   return { list, item: target.value };
 }
 function targetPath(model: ResourceModel, target: BoundTarget, relative: string): string {
@@ -564,10 +582,10 @@ function targetPath(model: ResourceModel, target: BoundTarget, relative: string)
   try {
     list = locate(model, target.list).value;
   } catch {
-    throw new HttpError(409, '앞선 변경에서 대상 항목이 삭제되거나 교체됐어요.');
+    throw new HttpError(409, 'An earlier change removed or replaced the target item');
   }
   const index = Array.isArray(list) ? list.indexOf(target.item) : -1;
-  if (index < 0) throw new HttpError(409, '앞선 변경에서 대상 항목이 삭제되거나 교체됐어요.');
+  if (index < 0) throw new HttpError(409, 'An earlier change removed or replaced the target item');
   return [...target.list, String(index), ...parts(relative)].reduce(joined, '');
 }
 export type HelperTextNormalization = 'crlf-lf' | 'line-end-whitespace';
@@ -638,19 +656,24 @@ export function patchHelperResource(
   rawChanges: unknown
 ) {
   if (kind !== 'content' && kind !== 'prompt-preset' && kind !== 'theme')
-    throw new HttpError(400, '부분 수정은 native 자료, 프리셋과 이야기 UI 테마에 지원해요.');
+    throw new HelperToolError(
+      400,
+      'INVALID_ARGUMENTS',
+      'kind must be content, prompt-preset or theme'
+    );
   if (!Array.isArray(rawChanges) || !rawChanges.length)
-    throw new HttpError(400, '변경 목록이 필요해요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'changes must be a non-empty list');
   const current = readResource(store, kind, id);
   if (current.revision !== revision)
-    throw new HttpError(
+    throw new HelperToolError(
       409,
-      `저장된 자료가 변경됐어요. 최신 자료를 확인해 주세요. (expected revision ${revision}, current revision ${current.revision})`
+      'REVISION_CONFLICT',
+      `expected revision ${revision}, current revision ${current.revision}`
     );
   const original = editableResource(kind, current);
   const model = structuredClone(original) as ResourceModel;
   if (kind === 'content' && !sourceFor(current as Content))
-    throw new HttpError(400, 'native 원문이 없는 자료예요.');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'This resource has no native source');
   const changes = rawChanges as Change[];
   const targets = changes.map((change, changeIndex) => {
     if (
@@ -658,7 +681,14 @@ export function patchHelperResource(
       typeof change.path !== 'string' ||
       !['set', 'replaceText', 'insert', 'remove', 'move'].includes(change.op)
     )
-      patchFailure(changeIndex, change, new HttpError(400, '변경 형식을 확인해 주세요.'));
+      patchFailure(
+        changeIndex,
+        change,
+        new HttpError(
+          400,
+          'Each change needs a path and an op: set, replaceText, insert, remove or move'
+        )
+      );
     try {
       parts(change.path);
     } catch (error) {
@@ -714,24 +744,27 @@ export function patchHelperResource(
         throw new HttpError(
           400,
           kind === 'theme'
-            ? '이야기 UI 필드만 부분 수정할 수 있어요.'
-            : 'native 원문 필드만 수정할 수 있어요.'
+            ? 'Only story UI fields can be patched'
+            : 'Only native source fields can be patched'
         );
       if (
         kind === 'content' &&
         segments[2] === 'module' &&
         !(current as Content).package.nativeRisu.module
       )
-        throw new HttpError(400, '존재하는 모듈만 수정할 수 있어요.');
+        throw new HttpError(400, 'Only an existing module can be patched');
       if (change.op === 'insert' || change.op === 'remove' || change.op === 'move') {
         if (!/^(0|[1-9]\d*)$/u.test(segments.at(-1)!))
-          throw new HttpError(400, '목록 항목의 인덱스가 필요해요.');
+          throw new HttpError(400, 'A list change needs an item index');
         const parentSegments = segments.slice(0, -1);
         const list = resourceListKind(parentSegments);
         if (!list || (kind === 'prompt-preset' ? list !== 'prompt' : list === 'prompt'))
-          throw new HttpError(400, '로어, 번역 표기 또는 프롬프트 블록 목록만 수정할 수 있어요.');
+          throw new HttpError(
+            400,
+            'Only lore, translation term and prompt block lists can be changed'
+          );
         if (change.op === 'move' && list !== 'prompt')
-          throw new HttpError(400, '프롬프트 블록만 이동할 수 있어요.');
+          throw new HttpError(400, 'Only prompt blocks can be moved');
         if (change.op === 'insert' && list === 'lore' && parentSegments[2] === 'card') {
           const card = (model as Content).package.nativeRisu.card;
           if (card.character_book == null) card.character_book = { entries: [] };
@@ -747,7 +780,7 @@ export function patchHelperResource(
           parent = locate(model, parentSegments);
         }
         if (!parent.exists || !Array.isArray(parent.value))
-          throw new HttpError(400, '수정할 목록이 없어요.');
+          throw new HttpError(400, 'The list does not exist');
         const index = Number(segments.at(-1));
         if (change.op === 'move') {
           const from = parts(change.from);
@@ -756,12 +789,12 @@ export function patchHelperResource(
             from.slice(0, -1).some((part, offset) => part !== parentSegments[offset]) ||
             !/^(0|[1-9]\d*)$/u.test(from.at(-1)!)
           )
-            throw new HttpError(400, '같은 프롬프트 목록의 출발 인덱스가 필요해요.');
+            throw new HttpError(400, 'move needs a from index in the same prompt list');
           const sourceIndex = Number(from.at(-1));
           // https://www.rfc-editor.org/rfc/rfc6902.html#section-4.4 (2026-11-20): "move" is
           // functionally identical to "remove" at "from" followed immediately by "add" at "path".
           if (sourceIndex >= parent.value.length || index >= parent.value.length)
-            throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
+            throw new HttpError(400, 'List index is out of range');
           if (sourceIndex === index) continue;
           const [moved] = parent.value.splice(sourceIndex, 1);
           parent.value.splice(index, 0, moved);
@@ -772,11 +805,11 @@ export function patchHelperResource(
           index > parent.value.length ||
           (change.op === 'remove' && index === parent.value.length)
         )
-          throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
+          throw new HttpError(400, 'List index is out of range');
         if (change.op === 'insert') {
-          if (!object(change.value)) throw new HttpError(400, '새 항목 객체가 필요해요.');
+          if (!object(change.value)) throw new HttpError(400, 'insert needs an object value');
           if (list === 'lore' && typeof change.value.content !== 'string')
-            throw new HttpError(400, '로어 항목의 내용을 확인해 주세요.');
+            throw new HttpError(400, 'A lore item needs string content');
           parent.value.splice(index, 0, structuredClone(change.value));
         } else parent.value.splice(index, 1);
         changedPaths.push(change.path);
@@ -790,16 +823,17 @@ export function patchHelperResource(
       ) {
         const field = segments[5]!;
         if (field === 'illustrationProfiles') validateIllustrationAppearanceProfiles(change.value);
-        else if (!object(change.value)) throw new HttpError(400, '번역 지침 객체가 필요해요.');
+        else if (!object(change.value))
+          throw new HttpError(400, 'Translation guidance must be an object');
         const document =
           segments[2] === 'card'
             ? (model as Content).package.nativeRisu.card
             : (model as Content).package.nativeRisu.module!;
         if (document.extensions != null && !object(document.extensions))
-          throw new HttpError(400, '기존 확장 필드를 확인해 주세요.');
+          throw new HttpError(400, 'The existing extensions field is not an object');
         const extensions = object(document.extensions) ? document.extensions : {};
         if (extensions.uimori != null && !object(extensions.uimori))
-          throw new HttpError(400, '기존 Uimori 확장 필드를 확인해 주세요.');
+          throw new HttpError(400, 'The existing extensions.uimori field is not an object');
         const uimori = object(extensions.uimori) ? extensions.uimori : {};
         if (isDeepStrictEqual(uimori[field], change.value)) continue;
         document.extensions = {
@@ -811,7 +845,7 @@ export function patchHelperResource(
       }
       const target = locate(model, segments);
       if (kind === 'theme' && change.path === '/storyUi' && change.op === 'set') {
-        if (!object(change.value)) throw new HttpError(400, '이야기 UI 스타일 객체가 필요해요.');
+        if (!object(change.value)) throw new HttpError(400, 'storyUi must be an object');
         if (!isDeepStrictEqual(target.value, change.value)) {
           (target.parent as JsonObject).storyUi = structuredClone(change.value);
           changedPaths.push(change.path);
@@ -819,14 +853,17 @@ export function patchHelperResource(
         continue;
       }
       if (!target.exists && Array.isArray(target.parent))
-        throw new HttpError(400, '새 배열 항목은 만들 수 없어요.');
+        throw new HttpError(400, 'set cannot create a new array item; use insert');
       if (change.op === 'set') {
         if (
           !Object.hasOwn(change, 'value') ||
           !allowedValue(change.value) ||
           (target.exists && !allowedValue(target.value))
         )
-          throw new HttpError(400, '기존의 단순 값만 수정할 수 있어요.');
+          throw new HttpError(
+            400,
+            'set can only replace an existing scalar value or list of scalars'
+          );
         if (!isDeepStrictEqual(target.value, change.value)) {
           (target.parent as JsonObject)[segments.at(-1)!] = structuredClone(change.value);
           changedPaths.push(change.path);
@@ -839,13 +876,16 @@ export function patchHelperResource(
           !change.oldText ||
           typeof change.newText !== 'string'
         )
-          throw new HttpError(400, '문자열과 찾을 문구가 필요해요.');
+          throw new HttpError(
+            400,
+            'replaceText needs a string field, a non-empty oldText and a newText'
+          );
         const match = matchHelperText(target.value, change.oldText);
         if (!match.ranges)
           patchFailure(
             changeIndex,
             input,
-            new HttpError(409, '문구가 정확히 한 번 나타나야 해요.'),
+            new HttpError(409, 'oldText must appear exactly once'),
             match.count === 0 ? 'text_not_found' : 'text_ambiguous',
             match.count
           );
