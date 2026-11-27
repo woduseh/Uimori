@@ -162,8 +162,7 @@ export async function compareVertexLocations(
   const args = record(value);
   fields(args, ['modelId', 'locations']);
   const modelId = text(args.modelId, 'saved model ID', 100);
-  store.product.assertAvailable('model', modelId);
-  const model = store.product.get<ModelPreset>('model', modelId);
+  const model = store.product.available<ModelPreset>('model', modelId);
   const { connection, endpoint } = vertexConnection(store, model.connectionId);
   let locations: string[] = [...VERTEX_LOCATION_CHOICES];
   if (args.locations !== undefined) {

@@ -368,8 +368,10 @@ export function initializePromptWorkspaceReferences(store: Store): void {
       let source: PromptPreset | undefined;
       if (current.presetId) {
         try {
-          store.product.assertAvailable('prompt-preset', current.presetId);
-          const candidate = store.product.get<PromptPreset>('prompt-preset', current.presetId);
+          const candidate = store.product.available<PromptPreset>(
+            'prompt-preset',
+            current.presetId
+          );
           if (
             candidate.role === role &&
             candidate.title === current.title &&
@@ -421,8 +423,7 @@ function resolveSelection(
   role: PromptRole
 ): CurrentPrompt {
   if (!selection.presetId) throw new HttpError(409, 'PROMPT_SOURCE_REQUIRED');
-  store.product.assertAvailable('prompt-preset', selection.presetId);
-  const preset = store.product.get<PromptPreset>('prompt-preset', selection.presetId);
+  const preset = store.product.available<PromptPreset>('prompt-preset', selection.presetId);
   if (preset.role !== role) throw new HttpError(409, 'Prompt role mismatch');
   const defaultValues = resolvePromptValues(preset.program, preset.values ?? {});
   const reconciled = reconcilePromptValues(preset.program, selection.values);
@@ -499,8 +500,7 @@ export function chatPromptWorkspace(
   if (pinned?.mainPromptPresetId) {
     let preset: PromptPreset;
     try {
-      store.product.assertAvailable('prompt-preset', pinned.mainPromptPresetId);
-      preset = store.product.get<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+      preset = store.product.available<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
       if (preset.role !== 'main')
         throw new HttpError(400, 'The pinned prompt is not a main prompt');
     } catch (error) {
@@ -617,8 +617,7 @@ export function updateModelWorkspace(store: Store, input: UpdateModelWorkspace):
     ) {
       let connection: Connection;
       try {
-        store.product.assertAvailable('connection', judgment.connectionId);
-        connection = store.product.get<Connection>('connection', judgment.connectionId);
+        connection = store.product.available<Connection>('connection', judgment.connectionId);
       } catch (error) {
         if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
         throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
@@ -780,8 +779,7 @@ export function applyWorkspacePromptPreset(
 ) {
   return store.transaction(() => {
     assertRevision(promptWorkspace(store).revision, expectedRevision);
-    store.product.assertAvailable('prompt-preset', presetId);
-    const preset = store.product.get<PromptPreset>('prompt-preset', presetId);
+    const preset = store.product.available<PromptPreset>('prompt-preset', presetId);
     if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
     return updatePromptWorkspace(
       store,
@@ -835,8 +833,10 @@ export function applyPromptCombination(
   return store.transaction(() => {
     const workspace = promptWorkspace(store);
     assertRevision(workspace.revision, expectedRevision);
-    store.product.assertAvailable('prompt-combination', combinationId);
-    const preset = store.product.get<SavedPromptCombination>('prompt-combination', combinationId);
+    const preset = store.product.available<SavedPromptCombination>(
+      'prompt-combination',
+      combinationId
+    );
     if (preset.role !== role) throw new HttpError(400, 'Prompt role mismatch');
     const current = workspace[role];
     if (!matchesPromptCombination(preset, combinationOwner(current, role), role, current.program))

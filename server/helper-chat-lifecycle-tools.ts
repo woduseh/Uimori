@@ -63,8 +63,7 @@ export const HELPER_CHAT_LIFECYCLE_TOOLS: ProviderTool[] = [
 ];
 
 function bot(store: Store, botId: string) {
-  store.product.assertAvailable('content', botId);
-  const content = store.product.get<Content>('content', botId);
+  const content = store.product.available<Content>('content', botId);
   if (content.kind !== 'bot')
     throw new HelperToolError(400, 'NOT_A_BOT', `${botId} is a ${content.kind}.`);
   return content;
@@ -74,8 +73,7 @@ function persona(store: Store, value: unknown) {
   if (value === undefined) return {};
   if (value === null) return { persona: null };
   const personaId = text(value, 'persona ID', 100);
-  store.product.assertAvailable('content', personaId);
-  const content = store.product.get<Content>('content', personaId);
+  const content = store.product.available<Content>('content', personaId);
   if (content.kind !== 'persona')
     throw new HelperToolError(400, 'NOT_A_PERSONA', `${personaId} is a ${content.kind}.`);
   return { persona: { id: content.id, revision: content.revision } };

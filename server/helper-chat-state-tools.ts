@@ -837,8 +837,7 @@ function readChatProfile(store: Store, chatId: string) {
 
 function attachable(store: Store, value: unknown, role: 'persona' | 'module'): ContentAttachment {
   const id = text(value, `${role} ID`, 100);
-  store.product.assertAvailable('content', id);
-  const content = store.product.get<Content>('content', id);
+  const content = store.product.available<Content>('content', id);
   if (content.kind !== role)
     throw new HttpError(400, `NOT_A_${role.toUpperCase()}: ${id} is a ${content.kind}.`);
   return { id: content.id, revision: content.revision, role };

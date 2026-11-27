@@ -156,10 +156,7 @@ export class LibraryOrganizationStore {
     return this.edit(expectedRevision, () => {
       if (folderId !== null && this.folder(folderId).category !== destination)
         throw new HttpError(400, 'Destination folder belongs to another category');
-      for (const item of items) {
-        this.store.product.assertAvailable(item.kind, item.id);
-        this.store.product.get(item.kind, item.id);
-      }
+      for (const item of items) this.store.product.assertAvailable(item.kind, item.id);
       const move = this.store.db.prepare(
         'UPDATE library_placements SET category=?,folder_id=? WHERE kind=? AND id=?'
       );

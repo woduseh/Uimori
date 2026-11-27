@@ -116,8 +116,7 @@ export class ChatTitleService {
       const locale = enrolledLocale as UiLocale;
       const ref = workspaceModelRef(promptWorkspace(this.store), 'title');
       if (!ref) throw new ProviderContractError('TITLE_MODEL_UNSET');
-      this.store.product.assertAvailable('model', ref.id);
-      const model = structuredClone(this.store.product.get<ModelPreset>('model', ref.id));
+      const model = structuredClone(this.store.product.available<ModelPreset>('model', ref.id));
       const connection = structuredClone(
         this.store.product.get<Connection>('connection', model.connectionId)
       );

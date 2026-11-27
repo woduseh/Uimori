@@ -753,8 +753,7 @@ export function invokeHelperSettingsTool(
     const choice = (ref: { id: string } | null | undefined) => {
       if (!ref) return null;
       try {
-        store.product.assertAvailable('model', ref.id);
-        const model = store.product.get<ModelPreset>('model', ref.id);
+        const model = store.product.available<ModelPreset>('model', ref.id);
         return { id: ref.id, title: model.title, providerModelId: model.modelId };
       } catch (error) {
         if (!(error instanceof HttpError)) throw error;

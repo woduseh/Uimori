@@ -69,8 +69,7 @@ export const HELPER_CHAT_ORGANIZATION_TOOLS: ProviderTool[] = [
 
 function personaRef(store: Store, value: unknown): ContentRef {
   const personaId = text(value, 'persona ID', 100);
-  store.product.assertAvailable('content', personaId);
-  const persona = store.product.get<Content>('content', personaId);
+  const persona = store.product.available<Content>('content', personaId);
   if (persona.kind !== 'persona')
     throw new HelperToolError(400, 'NOT_A_PERSONA', `${personaId} is a ${persona.kind}.`);
   return { id: persona.id, revision: persona.revision };
