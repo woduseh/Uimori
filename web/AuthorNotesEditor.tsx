@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
@@ -61,8 +62,8 @@ export function AuthorNotesEditor({
     headRevision: string | null;
     originalExists: boolean;
   } | null>(null);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const alive = useRef(true);
   const locked = useRef(false);
   const commandKey = useRef({ fingerprint: '', key: crypto.randomUUID() });
@@ -95,17 +96,17 @@ export function AuthorNotesEditor({
   function begin(note?: AuthorNote) {
     setDraft(fromNote(note));
     setRetiring(null);
-    setError('');
-    setMessage('');
+    setError(null);
+    setMessage(null);
   }
   async function refresh() {
     try {
       await onRefresh();
     } catch {
       if (!alive.current) return;
-      const text = descriptor('library.couldNotRefreshNotesYourInputAnd');
+      const text = uiMessage('library.couldNotRefreshNotesYourInputAnd');
       setError(text);
-      onError(legacyUiMessage(text));
+      onError(text);
     }
   }
   async function save(value: NoteDraft, retired = false) {
@@ -129,8 +130,8 @@ export function AuthorNotesEditor({
       commandKey.current = { fingerprint, key: crypto.randomUUID() };
     locked.current = true;
     setBusy(true);
-    setError('');
-    setMessage('');
+    setError(null);
+    setMessage(null);
     try {
       await onSave({ ...command, idempotencyKey: commandKey.current.key });
       if (!alive.current) return false;
@@ -139,17 +140,16 @@ export function AuthorNotesEditor({
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
       setMessage(
         retired
-          ? descriptor('library.thisNoteWillNoLongerBeUsed')
-          : descriptor('library.noteSavedItAppliesToFutureRequests')
+          ? uiMessage('library.thisNoteWillNoLongerBeUsed')
+          : uiMessage('library.noteSavedItAppliesToFutureRequests')
       );
       await refresh();
       return true;
     } catch (caught) {
       if (!alive.current) return false;
-      const text =
-        caught instanceof Error ? caught.message : descriptor('library.couldNotSaveTheNote');
+      const text = toUiMessage(caught, 'library.couldNotSaveTheNote');
       setError(text);
-      onError(legacyUiMessage(text));
+      onError(text);
       if (caught instanceof ApiError && caught.status === 409) {
         setConflictOpen(true);
         await refresh();
@@ -175,10 +175,10 @@ export function AuthorNotesEditor({
       </summary>
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
-      <TransientNotice content={legacyUiMessage(message)} />
+      <TransientNotice content={message} />
       {notes.length > 0 && (
         <ul className="story-records">
           {notes.map((note) => (
@@ -211,8 +211,8 @@ export function AuthorNotesEditor({
                   disabled={busy || disabled || editing !== null}
                   onClick={() => {
                     setRetiring(fromNote(note));
-                    setError('');
-                    setMessage('');
+                    setError(null);
+                    setMessage(null);
                   }}
                 >
                   <PowerIcon size={18} aria-hidden="true" />
@@ -268,7 +268,7 @@ export function AuthorNotesEditor({
               disabled={busy}
               onClick={() => {
                 setDraft(null);
-                setError('');
+                setError(null);
               }}
             >
               <CloseIcon size={18} aria-hidden="true" />
@@ -320,7 +320,7 @@ export function AuthorNotesEditor({
                     : null;
                 setDraft(update);
                 if (saved.originalExists) setRetiring(update);
-                setError('');
+                setError(null);
               }
             : undefined
         }
@@ -344,7 +344,7 @@ export function AuthorNotesEditor({
               disabled={busy}
               onClick={() => {
                 setRetiring(null);
-                setError('');
+                setError(null);
               }}
             >
               <BackIcon size={18} aria-hidden="true" />

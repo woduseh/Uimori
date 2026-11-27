@@ -1,5 +1,6 @@
-import { t, translateMessage, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useState } from 'react';
 import type { AutoTranslationDefaults as Defaults } from '../core/chat-settings.js';
 import {
@@ -24,7 +25,7 @@ const LANGUAGE_NAMES: Record<WrittenLanguage, string> = {
 export function AutoTranslationDefaults() {
   useI18n();
   const [defaults, setDefaults] = useState<Defaults | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const retry = useRetryableEffect(() => {
@@ -33,11 +34,11 @@ export function AutoTranslationDefaults() {
       .then((value) => {
         if (alive) {
           setDefaults(value);
-          setError('');
+          setError(null);
         }
       })
       .catch((cause) => {
-        if (alive) setError((cause as Error).message);
+        if (alive) setError(toUiMessage(cause, 'settings.m100'));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -49,7 +50,7 @@ export function AutoTranslationDefaults() {
   async function change(next: Pick<Defaults, 'autoTranslate' | 'translationLanguage'>) {
     if (!defaults || saving) return;
     setSaving(true);
-    setError('');
+    setError(null);
     setDefaults({ ...defaults, ...next });
     try {
       setDefaults(
@@ -60,7 +61,7 @@ export function AutoTranslationDefaults() {
       );
     } catch (cause) {
       setDefaults(defaults);
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     } finally {
       setSaving(false);
     }
@@ -70,7 +71,7 @@ export function AutoTranslationDefaults() {
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={!defaults ? legacyUiMessage(error) : null}
+        error={!defaults ? error : null}
         label={uiMessage('settings.m99')}
         errorLabel={uiMessage('settings.m100')}
         onRetry={() => {
@@ -128,7 +129,7 @@ export function AutoTranslationDefaults() {
       )}
       {defaults && error && (
         <NoticeBanner tone="error">
-          {translateMessage(error)}{' '}
+          {formatUiMessage(error)}{' '}
           <button
             type="button"
             className="link-button"

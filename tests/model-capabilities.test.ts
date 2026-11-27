@@ -368,7 +368,7 @@ test.each(removedModels)(
       ...options,
     };
     const draft = modelDraft(preset);
-    expect(modelDraftError(draft, connection)).toBe('');
+    expect(modelDraftError(draft, connection)).toBeNull();
     const resaved = modelPayload({ ...draft, title: 'Renamed' }, connection) as ModelPreset;
     expect(generationFromModel(resaved)).toEqual(generationFromModel(preset));
     const generation = generationFromModel(preset);

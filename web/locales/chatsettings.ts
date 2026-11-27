@@ -1007,6 +1007,12 @@ export const messages = {
     ja: '資料の既定変数を適用できませんでした：{error}',
     zh: '无法应用资料默认变量：{error}',
   },
+  'chatsettings.defaultsLimit': {
+    ko: '변수가 너무 많거나 값이 너무 길어요.',
+    en: 'There are too many variables or a value is too long.',
+    ja: '変数が多すぎるか、値が長すぎます。',
+    zh: '变量过多或值过长。',
+  },
   'chatsettings.effectiveCount': {
     ko: '현재 적용값 {count, number}개',
     en: '{count, plural, one {# effective value} other {# effective values}}',

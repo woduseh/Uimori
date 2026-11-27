@@ -1,11 +1,6 @@
-import {
-  t,
-  translateMessage,
-  translateStoredCode,
-  useI18n,
-  message as legacyDescriptor,
-} from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, translateStoredCode, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -81,9 +76,9 @@ export function ContextPanel({
     notesSave.current = handler;
   }).current;
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [readFailed, setReadFailed] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<UiMessage | null>(null);
   const alive = useRef(true);
   const readSequence = useRef(0);
   const actionLock = useRef(false);
@@ -135,9 +130,9 @@ export function ContextPanel({
   }, [draft, notesDirty, busy, onDirtyChange]);
   useUnsavedInput(notesDirty ? { domain: 'notes', chatId } : null);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : legacyDescriptor('settings.m273');
+    const text = toUiMessage(caught, 'settings.m273');
     setError(text);
-    onError(legacyUiMessage(text));
+    onError(text);
   }
   async function load() {
     const generation = scope.current.generation;
@@ -192,14 +187,14 @@ export function ContextPanel({
     path: string,
     body: unknown,
     method: 'POST' | 'PUT',
-    success: string,
+    success: UiMessage,
     clearDraft = false
   ) {
     if (actionLock.current) return false;
     actionLock.current = true;
     setBusy(true);
-    setError('');
-    setMessage('');
+    setError(null);
+    setMessage(null);
     const generation = scope.current.generation;
     try {
       await api(path, body, method);
@@ -247,7 +242,7 @@ export function ContextPanel({
         summary: draft.text,
       }),
       'PUT',
-      legacyDescriptor('settings.m274'),
+      uiMessage('settings.m274'),
       true
     );
   }
@@ -276,7 +271,7 @@ export function ContextPanel({
                   className="secondary"
                   disabled={busy}
                   onClick={() => {
-                    setError('');
+                    setError(null);
                     void refreshAll();
                   }}
                 >
@@ -285,18 +280,18 @@ export function ContextPanel({
               ) : undefined
             }
           >
-            {translateMessage(error)}
+            {formatUiMessage(error)}
           </NoticeBanner>
         )}
-        <TransientNotice content={legacyUiMessage(message)} />
+        <TransientNotice content={message} />
         {!detail ? (
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={legacyUiMessage(error)}
+            error={error}
             label={uiMessage('settings.m278')}
             onRetry={() => {
-              setError('');
+              setError(null);
               void refreshAll();
             }}
           />
@@ -341,12 +336,12 @@ export function ContextPanel({
                 onChange={(text) => setDraft({ ...draft, text })}
                 onRebase={() => {
                   setDraft({ ...draft, revision: detail.activeRevision, headRevision });
-                  setError('');
+                  setError(null);
                 }}
                 onCancel={() => {
                   returnFocus.current = true;
                   setDraft(null);
-                  setError('');
+                  setError(null);
                 }}
                 onSave={() => {
                   returnFocus.current = true;
@@ -379,8 +374,8 @@ export function ContextPanel({
                   onClick={() => {
                     focusEditor.current = true;
                     setDraft({ text: summary, revision: detail.activeRevision, headRevision });
-                    setError('');
-                    setMessage('');
+                    setError(null);
+                    setMessage(null);
                   }}
                 >
                   {summary ? t('settings.m289') : t('settings.m290')}
@@ -396,7 +391,7 @@ export function ContextPanel({
                       `${base}/compact`,
                       keyed(command()),
                       'POST',
-                      legacyDescriptor('settings.m291')
+                      uiMessage('settings.m291')
                     )
                   }
                 >
@@ -412,7 +407,7 @@ export function ContextPanel({
                       `${base}/jobs/${id(working.id)}/cancel`,
                       {},
                       'POST',
-                      legacyDescriptor('settings.m293')
+                      uiMessage('settings.m293')
                     )
                   }
                 >

@@ -1,12 +1,12 @@
 import { readJsonFile } from './json-input.js';
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
 import { providerEndpoints } from '#contracts';
 import { ApiError, callEndpoint } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import type { VertexAccountDraft } from './provider-editor-state.js';
 
 export function VertexCredentialUpload({
@@ -24,7 +24,7 @@ export function VertexCredentialUpload({
 }) {
   useI18n();
   const [uploading, setUploading] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState<UiMessage | null>(null);
   const epoch = useRef(0);
   useEffect(
     () => () => {
@@ -56,9 +56,9 @@ export function VertexCredentialUpload({
             const file = event.target.files?.[0];
             event.target.value = '';
             if (!file) return;
-            setError('');
+            setError(null);
             if (file.size > 64 * 1024) {
-              setError(descriptor('providers.m400'));
+              setError(uiMessage('providers.m400'));
               return;
             }
             const current = ++epoch.current;
@@ -82,8 +82,8 @@ export function VertexCredentialUpload({
               if (current === epoch.current)
                 setError(
                   caught instanceof ApiError && caught.status === 400
-                    ? descriptor('providers.m403')
-                    : errorDescriptor(caught, 'providers.m404')
+                    ? uiMessage('providers.m403')
+                    : toUiMessage(caught, 'providers.m404')
                 );
             } finally {
               if (current === epoch.current) {
@@ -101,7 +101,7 @@ export function VertexCredentialUpload({
           <small>{account.clientEmail}</small>
         </p>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </section>
   );
 }

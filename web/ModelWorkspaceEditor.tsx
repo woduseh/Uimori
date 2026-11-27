@@ -1,5 +1,6 @@
-import { t, translateMessage, useI18n, getLocale, message as legacyDescriptor } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, getLocale } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -96,11 +97,11 @@ export function ModelWorkspaceEditor({
   const [operation, setOperation] = useState<'save' | 'reload' | null>(null);
   const busy = operation !== null;
   const lock = useRef(false);
-  const [message, setMessage] = useState('');
-  const [saveError, setSaveError] = useState('');
+  const [message, setMessage] = useState<UiMessage | null>(null);
+  const [saveError, setSaveError] = useState<UiMessage | null>(null);
   const [saveConflict, setSaveConflict] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
-  const [reloadError, setReloadError] = useState('');
+  const [reloadError, setReloadError] = useState<UiMessage | null>(null);
   const { canSelect, choices } = useModelSelection(library.models, library.connections);
   useEffect(() => {
     if (workspace && !dirty && !busy)
@@ -209,8 +210,8 @@ export function ModelWorkspaceEditor({
     if (!dirty) return true;
     lock.current = true;
     setOperation('save');
-    setSaveError('');
-    setMessage('');
+    setSaveError(null);
+    setMessage(null);
     return callEndpoint(promptEndpoints.updateModelWorkspace, {
       expectedRevision: draft.revision,
       routes: draft.routes,
@@ -231,12 +232,12 @@ export function ModelWorkspaceEditor({
         setDraft(editable(accepted as ModelWorkspace));
         setJudgmentEdited(false);
         setDirty(false);
-        setMessage(legacyDescriptor('settings.m1'));
+        setMessage(uiMessage('settings.m1'));
         void refresh();
         return true;
       })
-      .catch((caught: Error) => {
-        setSaveError(caught.message);
+      .catch((caught: unknown) => {
+        setSaveError(toUiMessage(caught));
         if (caught instanceof ApiError && caught.status === 409) setSaveConflict(true);
         return false;
       })
@@ -248,7 +249,7 @@ export function ModelWorkspaceEditor({
   function change(next: EditableWorkspace) {
     setDraft(next);
     setDirty(true);
-    setMessage('');
+    setMessage(null);
   }
   function changeJudgment(next: JudgmentSelection) {
     if (!draft) return;
@@ -259,18 +260,18 @@ export function ModelWorkspaceEditor({
     if (lock.current) return;
     lock.current = true;
     setOperation('reload');
-    setReloadError('');
+    setReloadError(null);
     try {
       const accepted = (await callEndpoint(promptEndpoints.readModelWorkspace)) as ModelWorkspace;
       setDraft(editable(accepted));
       setJudgmentEdited(false);
       setDirty(false);
-      setSaveError('');
-      setMessage('');
+      setSaveError(null);
+      setMessage(null);
       setConfirmReload(false);
       void refresh();
     } catch {
-      setReloadError(legacyDescriptor('settings.m2'));
+      setReloadError(uiMessage('settings.m2'));
     } finally {
       lock.current = false;
       setOperation(null);
@@ -846,7 +847,7 @@ export function ModelWorkspaceEditor({
               type="button"
               className="secondary"
               onClick={() => {
-                setReloadError('');
+                setReloadError(null);
                 if (dirty) setConfirmReload(true);
                 else void reload();
               }}
@@ -874,7 +875,7 @@ export function ModelWorkspaceEditor({
         }}
       >
         <p>{t('settings.m65')}</p>
-        {reloadError && <NoticeBanner tone="error">{translateMessage(reloadError)}</NoticeBanner>}
+        {reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
         <DraftDiscardActions
           open={confirmReload}
           disabled={busy}
@@ -917,12 +918,10 @@ export function ModelWorkspaceEditor({
         }}
       />
       {conflict && dirty && <NoticeBanner tone="error">{t('settings.m75')}</NoticeBanner>}
-      {saveError && <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>}
-      <TransientNotice content={legacyUiMessage(message)} />
+      {saveError && <NoticeBanner tone="error">{saveError}</NoticeBanner>}
+      <TransientNotice content={message} />
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-      {!confirmReload && reloadError && (
-        <NoticeBanner tone="error">{translateMessage(reloadError)}</NoticeBanner>
-      )}
+      {!confirmReload && reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
       {choices.length > 0 && (
         <button type="button" className="secondary" onClick={onManage}>
           <SettingsIcon size={18} aria-hidden="true" />

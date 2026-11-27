@@ -1,6 +1,6 @@
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -60,8 +60,8 @@ export function IllustrationReferencesEditor({
   const [dirty, setDirty] = useState(false);
   const dirtyDraft = useRef(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [loadError, setLoadError] = useState('');
+  const [message, setMessage] = useState<UiMessage | null>(null);
+  const [loadError, setLoadError] = useState<UiMessage | null>(null);
   const [conflict, setConflict] = useState(false);
   const [reviewConflict, setReviewConflict] = useState(false);
   const [picking, setPicking] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export function IllustrationReferencesEditor({
   const loadEpoch = useRef(0);
   const load = useCallback(async () => {
     const epoch = ++loadEpoch.current;
-    setLoadError('');
+    setLoadError(null);
     try {
       const value = await api<Loaded>(
         `/chats/${encodeURIComponent(chatId)}/illustration-references`
@@ -87,7 +87,7 @@ export function IllustrationReferencesEditor({
       );
       return value;
     } catch (error) {
-      if (epoch === loadEpoch.current) setLoadError((error as Error).message);
+      if (epoch === loadEpoch.current) setLoadError(toUiMessage(error));
       return null;
     }
   }, [chatId]);
@@ -121,7 +121,7 @@ export function IllustrationReferencesEditor({
         <LoadingState
           presentation="placeholder"
           loading={!loadError}
-          error={legacyUiMessage(loadError)}
+          error={loadError}
           label={uiMessage('visuals.m029')}
           errorLabel={uiMessage('visuals.m030')}
           onRetry={() => void refresh()}
@@ -139,7 +139,7 @@ export function IllustrationReferencesEditor({
   const markDirty = () => {
     dirtyDraft.current = true;
     setDirty(true);
-    setMessage('');
+    setMessage(null);
   };
   const editProfile = (id: string, patch: Partial<IllustrationCharacterProfile>) => {
     setProfiles((current) =>
@@ -173,7 +173,7 @@ export function IllustrationReferencesEditor({
     }
     lock.current = true;
     setSaving(true);
-    setMessage('');
+    setMessage(null);
     try {
       const value = await api<IllustrationReferences>(
         `/chats/${encodeURIComponent(chatId)}/illustration-references`,
@@ -197,7 +197,7 @@ export function IllustrationReferencesEditor({
       dirtyDraft.current = false;
       setDirty(false);
       setConflict(false);
-      setMessage(legacyDescriptor('visuals.m031'));
+      setMessage(uiMessage('visuals.m031'));
       return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -232,7 +232,7 @@ export function IllustrationReferencesEditor({
             </button>
           }
         >
-          {t('visuals.referenceRefreshError', { error: translateMessage(loadError) })}
+          {t('visuals.referenceRefreshError', { error: formatUiMessage(loadError) })}
         </NoticeBanner>
       )}
       {conflict && (
@@ -462,7 +462,7 @@ export function IllustrationReferencesEditor({
           />
         </div>
       )}
-      <TransientNotice content={legacyUiMessage(message)} />
+      <TransientNotice content={message} />
       <SaveConflictDialog
         open={reviewConflict}
         title={t('visuals.reviewReferences')}
@@ -481,7 +481,7 @@ export function IllustrationReferencesEditor({
               setDirty(false);
             }
             setConflict(false);
-            setLoadError('');
+            setLoadError(null);
             setReviewConflict(false);
           };
           return () => ({
