@@ -110,7 +110,7 @@ export function BackupFileImport({
         setSelection({ kind: 'chat', backup, key });
       }
     } catch (caught) {
-      if (current === version.current) setError(toUiMessage(caught, 'transfer.m126'));
+      if (current === version.current) setError(toUiMessage(caught));
     } finally {
       lock.current = false;
       if (current === version.current) setReading(false);

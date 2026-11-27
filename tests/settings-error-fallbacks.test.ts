@@ -19,6 +19,7 @@ vi.mock('../web/ThemeContext.js', () => ({ useThemes: () => ({ disabled: false }
 
 const { FontSettings } = await import('../web/FontSettings.js');
 const { PushSettings } = await import('../web/PushSettings.js');
+const { BackupFileImport } = await import('../web/BackupFileImport.js');
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -65,6 +66,36 @@ test('a font file the browser cannot read reports the read failure, not a generi
   expect(fetch).not.toHaveBeenCalled();
   expect(host.textContent).toContain(formatUiMessage(uiMessage('transfer.m190')));
   expect(host.textContent).not.toContain(formatUiMessage(uiMessage('fonts.failed')));
+  unmount();
+});
+
+test('a network failure while preparing a valid backup file is not reported as a broken file', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    })
+  );
+  const { host, unmount } = mount(
+    createElement(BackupFileImport, { onImported: async () => {}, onDirtyChange: () => {} })
+  );
+  const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: [
+      new File([JSON.stringify({ format: 'uimori-native-transfer', version: 1 })], 'b.json', {
+        type: 'application/json',
+      }),
+    ],
+  });
+  await act(async () => {
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await act(async () => {});
+
+  expect(host.textContent).toContain(formatUiMessage(uiMessage('errors.unexpected')));
+  expect(host.textContent).not.toContain(formatUiMessage(uiMessage('transfer.m126')));
+  expect(host.textContent).not.toContain('Failed to fetch');
   unmount();
 });
 
