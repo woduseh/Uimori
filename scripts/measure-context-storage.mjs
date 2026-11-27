@@ -70,18 +70,22 @@ try {
     };
     for (const count of counts) {
       const scenes = syntheticStoryScenes(count, { longStory });
-      const imported = importChatTranscript(store, {
-        idempotencyKey: 'measurement-' + count,
-        transcript: {
-          format: 'uimori-chat-transcript',
-          version: 2,
-          exportedAt: new Date().toISOString(),
-          title: 'Synthetic ' + count,
-          packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-          notes: [],
-          entries: scenes.map(({ metrics: _metrics, ...entry }) => entry),
+      const imported = importChatTranscript(
+        store,
+        {
+          idempotencyKey: 'measurement-' + count,
+          transcript: {
+            format: 'uimori-chat-transcript',
+            version: 2,
+            exportedAt: new Date().toISOString(),
+            title: 'Synthetic ' + count,
+            packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+            notes: [],
+            entries: scenes.map(({ metrics: _metrics, ...entry }) => entry),
+          },
         },
-      });
+        'library'
+      );
       const chat = imported.chat,
         history = store.history(chat.headRevision);
       const plan = {

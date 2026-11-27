@@ -51,7 +51,11 @@ for (const count of counts) {
     const hash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
     const start = performance.now();
     const timer = new Promise((done) => setTimeout(() => done(performance.now() - start), 0));
-    const imported = importChatTranscript(store, { transcript, idempotencyKey: 'measurement' });
+    const imported = importChatTranscript(
+      store,
+      { transcript, idempotencyKey: 'measurement' },
+      'library'
+    );
     const elapsedMs = performance.now() - start;
     const eventLoopDelayMs = await timer;
     const snapshotBytes = Number(

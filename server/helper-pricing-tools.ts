@@ -191,12 +191,7 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
   if (args.backfill !== undefined && typeof args.backfill !== 'boolean')
     throw new HttpError(400, 'Invalid backfill');
   if (args.judgment !== undefined || args.judgmentTarget !== undefined) {
-    if (args.judgment !== true || args.modelId !== undefined)
-      throw new HelperToolError(
-        400,
-        'PRICING_TARGET_INVALID',
-        'Give either modelId or judgment:true.'
-      );
+    assertJudgmentPricingRequest(store, name, args);
     const result = judgmentPricingTool(store, name, args) as Record<string, unknown>;
     return args.backfill === true
       ? {
@@ -259,6 +254,24 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
   };
 }
 
+export function assertJudgmentPricingRequest(
+  store: Store,
+  name: string,
+  args: Record<string, unknown>
+) {
+  if (args.judgment !== true || args.modelId !== undefined)
+    throw new HelperToolError(
+      400,
+      'PRICING_TARGET_INVALID',
+      'Give either modelId or judgment:true.'
+    );
+  if (
+    name === 'model.pricing.update' &&
+    number(args.expectedRevision, 'model workspace revision') !== modelWorkspace(store).revision
+  )
+    throw new AppError(409, 'REVISION_CONFLICT');
+}
+
 function judgmentPricingTool(store: Store, name: string, args: Record<string, unknown>) {
   const current = modelWorkspace(store);
   const chosen = judgmentPriceTarget(current.judgment ?? DEFAULT_JUDGMENT_SELECTION);
@@ -276,8 +289,6 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
     return { judgment: true, ...describe(current.judgmentPricing), ...backfill };
   }
   if (name === 'model.pricing.update') {
-    const expectedRevision = number(args.expectedRevision, 'model workspace revision');
-    if (expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
     if (target.connectionId && !pricedConnection(store, target))
       throw new HelperToolError(400, 'JUDGMENT_CONNECTION_INVALID');
     let pricing: JudgmentPricing | undefined;
@@ -294,7 +305,7 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
       (entry) => judgmentPriceKey(entry) !== key
     );
     updateModelWorkspace(store, {
-      expectedRevision,
+      expectedRevision: number(args.expectedRevision, 'model workspace revision'),
       routes: current.routes,
       translationPolicy: current.translationPolicy,
       judgmentPricing: pricing ? [...others, { ...target, pricing }] : others,

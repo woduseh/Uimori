@@ -105,18 +105,22 @@ for (const scenario of scenarios) {
     if (fresh) {
       const bot = createSyntheticBot(store, { loreCount: scenario.lore });
       const scenes = syntheticStoryScenes(scenario.scenes, { longStory: true });
-      const imported = importChatTranscript(store, {
-        idempotencyKey: 'benchmark',
-        transcript: {
-          format: 'uimori-chat-transcript',
-          version: 2,
-          exportedAt: '2020-01-01T00:00:00.000Z',
-          title: 'Synthetic preparation',
-          packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-          notes: [],
-          entries: scenes.map(({ metrics: _metrics, ...entry }) => entry),
+      const imported = importChatTranscript(
+        store,
+        {
+          idempotencyKey: 'benchmark',
+          transcript: {
+            format: 'uimori-chat-transcript',
+            version: 2,
+            exportedAt: '2020-01-01T00:00:00.000Z',
+            title: 'Synthetic preparation',
+            packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+            notes: [],
+            entries: scenes.map(({ metrics: _metrics, ...entry }) => entry),
+          },
         },
-      });
+        'library'
+      );
       const chat = imported.chat;
       const profile = store.product.snapshot(chat.id);
       profile.models.main = {

@@ -530,6 +530,30 @@ describe('chat transcript export and import', () => {
     expect(copied.pinned).toEqual({ mainModel: { id: model.id } });
   });
 
+  test('a restored backup still refuses a pinned prompt that is not a main prompt', async () => {
+    const store = await database();
+    const { chat } = authoredChat(store);
+    const prompt = store.product.promptPreset({
+      title: 'Pinned prompt',
+      role: 'main',
+      text: 'Write',
+    }) as { id: string };
+    const profile = store.product.profile(chat.id);
+    store.product.updateProfile(chat.id, {
+      expectedRevision: profile.revision,
+      image: profile.image,
+      pinned: { mainPromptPresetId: prompt.id },
+    });
+    const backup = legacyChatBackupFixture(store, chat.id);
+    const pinned = backup.resources.prompts.find((entry) => entry.source.id === prompt.id)!;
+    pinned.source.role = 'translation';
+    const destination = await database();
+    await expect(
+      importChatBackup(destination, { backup, idempotencyKey: 'translation-pinned' })
+    ).rejects.toThrow('PINNED_PROMPT_NOT_MAIN');
+    expect(destination.chats()).toEqual([]);
+  });
+
   test('a profile save keeps a deleted package it already holds and refuses a newly attached one', async () => {
     const store = await database();
     const { chat, glossary } = authoredChat(store);
