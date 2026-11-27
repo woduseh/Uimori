@@ -2,6 +2,7 @@ import { helperCallOperationId } from './helper-workspace.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { IllustrationDiagnostic, IllustrationJobInput } from '../core/illustration.js';
 import type { HelperTask } from '../core/helper.js';
+import { HelperToolError } from './app-errors.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { attemptUsageDetails } from './task-trace.js';
@@ -186,7 +187,7 @@ export type TaskControlActions = {
 
 function row(store: Store, query: string, id: string): Row {
   const found = store.db.prepare(query).get(id) as Row | undefined;
-  if (!found) throw new HttpError(404, 'TASK_NOT_FOUND');
+  if (!found) throw new HelperToolError(404, 'TASK_NOT_FOUND');
   return found;
 }
 
@@ -791,16 +792,16 @@ export function invokeTaskTool(
   );
   if (name === 'task.inspect') return before;
   if (target === 'helper' && targetId === current.id)
-    throw new HttpError(409, 'CURRENT_HELPER_TASK');
+    throw new HelperToolError(409, 'CURRENT_HELPER_TASK');
   if (name === 'task.cancel') {
-    if (!before.canCancel) throw new HttpError(409, 'TASK_NOT_CANCELLABLE');
+    if (!before.canCancel) throw new HelperToolError(409, 'TASK_NOT_CANCELLABLE');
     if (target === 'run') actions.cancelRun(targetId);
     else if (target === 'job') actions.cancelJob(targetId);
     else if (target === 'illustration') actions.cancelIllustration(targetId);
     else actions.cancelHelper(targetId);
     return inspect(store, current.id, target, targetId);
   }
-  if (name !== 'task.retry') throw new HttpError(400, 'UNKNOWN_HELPER_TOOL');
+  if (name !== 'task.retry') throw new HelperToolError(400, 'UNKNOWN_HELPER_TOOL');
   if (!before.canRetry) throw new HttpError(409, before.retryBlock ?? 'TASK_NOT_RETRYABLE');
   let newId = targetId;
   if (target === 'run')

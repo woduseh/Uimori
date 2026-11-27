@@ -5,6 +5,7 @@ import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { displayTranslationJob } from '../core/translation-display.js';
 import { latestTranslation, sourceVersions } from './source-editing.js';
+import { HelperToolError } from './app-errors.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { matchHelperText, type HelperTextNormalization } from './helper-resource-editing.js';
@@ -498,7 +499,7 @@ function searchChatScenes(store: Store, chatId: string, args: Record<string, unk
     })
   );
   if (offset > 0 && args.searchHash === undefined)
-    throw new HttpError(400, 'SCENE_SEARCH_GUARDS_REQUIRED: Copy nextSearch or restart');
+    throw new HelperToolError(400, 'SCENE_SEARCH_GUARDS_REQUIRED', 'Copy nextSearch or restart');
   if (args.searchHash !== undefined && args.searchHash !== searchHash)
     throw new HttpError(409, 'Scene search changed; restart search');
   const matches: Record<string, unknown>[] = [];

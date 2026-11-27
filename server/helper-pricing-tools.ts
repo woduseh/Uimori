@@ -24,6 +24,7 @@ import {
   updateModelWorkspace,
   validateJudgmentPriceTarget,
 } from './prompt-workspace.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { backfillUnpricedCalls, backfillUnpricedJudgmentCalls } from './usage-backfill.js';
@@ -179,7 +180,7 @@ const hostname = (endpoint: string) => {
 export function invokeHelperPricingTool(store: Store, name: string, value: unknown): unknown {
   const args = record(value);
   if (!['model.pricing.read', 'model.pricing.update', 'model.pricing.backfill'].includes(name))
-    throw new HttpError(400, 'UNKNOWN_PRICING_TOOL');
+    throw new HelperToolError(400, 'UNKNOWN_PRICING_TOOL');
   const target = ['modelId', 'judgment', 'judgmentTarget'];
   fields(
     args,
@@ -191,7 +192,11 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
     throw new HttpError(400, 'Invalid backfill');
   if (args.judgment !== undefined || args.judgmentTarget !== undefined) {
     if (args.judgment !== true || args.modelId !== undefined)
-      throw new HttpError(400, 'PRICING_TARGET_INVALID: Give either modelId or judgment:true.');
+      throw new HelperToolError(
+        400,
+        'PRICING_TARGET_INVALID',
+        'Give either modelId or judgment:true.'
+      );
     const result = judgmentPricingTool(store, name, args) as Record<string, unknown>;
     return args.backfill === true
       ? {
@@ -214,10 +219,10 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
     try {
       pricing = validateModelPricing(args.pricing);
     } catch {
-      throw new HttpError(400, 'INVALID_MODEL_PRICING');
+      throw new HelperToolError(400, 'INVALID_MODEL_PRICING');
     }
     if (pricing.mode === 'manual' && (!pricing.sourceUrl || !pricing.checkedAt))
-      throw new HttpError(400, 'PRICING_SOURCE_REQUIRED');
+      throw new HelperToolError(400, 'PRICING_SOURCE_REQUIRED');
     model = store.product.save(
       'model',
       { ...model, pricing },
@@ -265,16 +270,16 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
   }
   if (name === 'model.pricing.update') {
     if (target.connectionId && !pricedConnection(store, target))
-      throw new HttpError(400, 'JUDGMENT_CONNECTION_INVALID');
+      throw new HelperToolError(400, 'JUDGMENT_CONNECTION_INVALID');
     let pricing: JudgmentPricing | undefined;
     if (args.pricing !== null) {
       try {
         pricing = validateJudgmentPricing(args.pricing, target.provider);
       } catch {
-        throw new HttpError(400, 'INVALID_MODEL_PRICING');
+        throw new HelperToolError(400, 'INVALID_MODEL_PRICING');
       }
       if (!pricing.sourceUrl || !pricing.checkedAt)
-        throw new HttpError(400, 'PRICING_SOURCE_REQUIRED');
+        throw new HelperToolError(400, 'PRICING_SOURCE_REQUIRED');
     }
     const others = (current.judgmentPricing ?? []).filter(
       (entry) => judgmentPriceKey(entry) !== key

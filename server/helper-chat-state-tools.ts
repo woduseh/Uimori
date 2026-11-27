@@ -446,9 +446,10 @@ async function readChatPreview(store: Store, chatId: string, args: Record<string
     ? createHash('sha256').update(JSON.stringify(messages)).digest('hex')
     : null;
   if (args.expectedPromptHash !== undefined && args.expectedPromptHash !== promptHash)
-    throw new HttpError(
+    throw new HelperToolError(
       409,
-      'PREVIEW_CHANGED: The chat or its settings changed since that page. Start again from the first page.'
+      'PREVIEW_CHANGED',
+      'The chat or its settings changed since that page. Start again from the first page.'
     );
   const describe = (item: LogicalMessage, index: number, body: string) => ({
     index,
@@ -627,7 +628,7 @@ export async function readHelperChatState(
     fields(args, ['action']);
     return { chatId, bookmarks: listBookmarks(store, chatId).map(bookmarkView) };
   }
-  throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
+  throw new HelperToolError(400, 'UNKNOWN_CHAT_STATE_TOOL');
 }
 
 type ResultTask = Pick<HelperTask, 'id' | 'conversationId'>;
@@ -653,7 +654,7 @@ export function applyHelperChatState(
     return updateHelperSceneContext(store, workspace, task, receiptId, chatId, args);
   if (name === 'chat.bookmark')
     return changeBookmark(store, workspace, task, receiptId, chatId, args);
-  throw new HttpError(400, 'UNKNOWN_CHAT_STATE_TOOL');
+  throw new HelperToolError(400, 'UNKNOWN_CHAT_STATE_TOOL');
 }
 
 function nameScene(
@@ -706,9 +707,10 @@ function updateStoryGuide(
   try {
     config = normalizeStoryGuideConfig({ ...current.config, ...changes });
   } catch {
-    throw new HttpError(
+    throw new HelperToolError(
       400,
-      `STORY_GUIDE_INVALID: enabled, followCanon and webSearch are booleans; work, position and reference are text of at most ${STORY_GUIDE_LIMITS.work}, ${STORY_GUIDE_LIMITS.position} and ${STORY_GUIDE_LIMITS.reference} characters.`
+      'STORY_GUIDE_INVALID',
+      `enabled, followCanon and webSearch are booleans; work, position and reference are text of at most ${STORY_GUIDE_LIMITS.work}, ${STORY_GUIDE_LIMITS.position} and ${STORY_GUIDE_LIMITS.reference} characters.`
     );
   }
   const saved = store.storyGuide.update(chatId, { expectedRevision, config });
@@ -771,9 +773,10 @@ function updateChatVariables(
   try {
     validateChatVariableValues(next);
   } catch {
-    throw new HttpError(
+    throw new HelperToolError(
       400,
-      `CHAT_VARIABLE_VALUES_INVALID: At most ${CHAT_VARIABLE_LIMITS.maxEntries} variables, ${CHAT_VARIABLE_LIMITS.maxValueChars} characters per value and ${CHAT_VARIABLE_LIMITS.maxTotalChars} in total.`
+      'CHAT_VARIABLE_VALUES_INVALID',
+      `At most ${CHAT_VARIABLE_LIMITS.maxEntries} variables, ${CHAT_VARIABLE_LIMITS.maxValueChars} characters per value and ${CHAT_VARIABLE_LIMITS.maxTotalChars} in total.`
     );
   }
   const changed = !isDeepStrictEqual(next, current.values);
@@ -788,9 +791,9 @@ function updateChatVariables(
       values: next,
     }).revision;
   else if (current.revision !== expectedRevision)
-    throw new HttpError(409, 'CHAT_VARIABLE_REVISION_CONFLICT');
+    throw new HelperToolError(409, 'CHAT_VARIABLE_REVISION_CONFLICT');
   else if (sourceHash !== args.expectedSourceHash)
-    throw new HttpError(409, 'CHAT_VARIABLE_SOURCE_CONFLICT');
+    throw new HelperToolError(409, 'CHAT_VARIABLE_SOURCE_CONFLICT');
   recordHelperTaskResult(workspace, task, {
     receiptId,
     operation: 'chat.variables.update',
@@ -1039,7 +1042,7 @@ function changeBookmark(
     return { changed: true, bookmark: bookmarkView(saved) };
   }
   if (args.action !== 'update' && args.action !== 'delete')
-    throw new HttpError(400, 'INVALID_BOOKMARK_ACTION');
+    throw new HelperToolError(400, 'INVALID_BOOKMARK_ACTION');
   fields(
     args,
     args.action === 'update'
@@ -1049,9 +1052,10 @@ function changeBookmark(
   const id = text(args.id, 'bookmark ID', 100);
   const current = listBookmarks(store, chatId).find((bookmark) => bookmark.id === id);
   if (!current)
-    throw new HttpError(
+    throw new HelperToolError(
       404,
-      'BOOKMARK_NOT_FOUND: List the bookmarks of this chat with action=read.'
+      'BOOKMARK_NOT_FOUND',
+      'List the bookmarks of this chat with action=read.'
     );
   const keep = (after: { title: string; note: string } | null) =>
     recordHelperAction(store, task, {

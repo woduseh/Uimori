@@ -11,6 +11,7 @@ import { nativeRisuVariableDefaults } from './risu-native-cbs.js';
 import { clipText, splitsSurrogatePair, textPageEnd } from '../core/text-pages.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import type { Json, ProviderTool } from '../core/transport.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { readResource } from './resource-service.js';
 import {
@@ -238,7 +239,8 @@ function loadTarget(store: Store, args: Record<string, unknown>): Loaded {
   if (args.kind === 'content') {
     const content = readResource(store, 'content', id) as Content;
     const native = (content.package as { nativeRisu?: RisuContentSource } | undefined)?.nativeRisu;
-    if (!native) throw new HttpError(400, 'NATIVE_RISU_REQUIRED: this content has no Risu source');
+    if (!native)
+      throw new HelperToolError(400, 'NATIVE_RISU_REQUIRED', 'this content has no Risu source');
     return {
       kind: 'content',
       id,
@@ -252,7 +254,7 @@ function loadTarget(store: Store, args: Record<string, unknown>): Loaded {
   if (args.kind === 'prompt-preset') {
     const saved = readResource(store, 'prompt-preset', id) as PromptPreset;
     const preset = saved.program.nativeRisuPreset?.preset;
-    if (!preset) throw new HttpError(400, 'NATIVE_RISU_PRESET_REQUIRED');
+    if (!preset) throw new HelperToolError(400, 'NATIVE_RISU_PRESET_REQUIRED');
     return {
       kind: 'prompt-preset',
       id,
@@ -263,7 +265,7 @@ function loadTarget(store: Store, args: Record<string, unknown>): Loaded {
       target: { kind: 'prompt-preset', preset },
     };
   }
-  throw new HttpError(400, 'INVALID_ARGUMENTS: kind must be content or prompt-preset');
+  throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'kind must be content or prompt-preset');
 }
 
 function pointer(root: unknown, path: string): unknown {
@@ -295,7 +297,7 @@ function excerpt(source: string, line: number) {
 function bounded<T>(build: () => T, shrink: () => boolean): T {
   let result = build();
   while (countTextTokens(JSON.stringify(result)) > MAX_RESULT_TOKENS) {
-    if (!shrink()) throw new HttpError(413, 'HELPER_READ_TOO_LARGE: narrow the request');
+    if (!shrink()) throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'narrow the request');
     result = build();
   }
   return result;
@@ -307,7 +309,7 @@ function stringRecord(value: unknown, name: string): Record<string, string> {
   const result: Record<string, string> = Object.create(null);
   for (const [key, item] of Object.entries(input)) {
     if (typeof item !== 'string' || key.length > 200 || item.length > 10_000)
-      throw new HttpError(400, `INVALID_ARGUMENTS: ${name} must map names to strings`);
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS', `${name} must map names to strings`);
     result[key] = item;
   }
   return result;
@@ -319,18 +321,26 @@ function checkCbs(store: Store, args: Record<string, unknown>) {
   let value: string;
   if (args.text !== undefined) {
     if (args.kind !== undefined || args.id !== undefined || args.path !== undefined)
-      throw new HttpError(400, 'INVALID_ARGUMENTS: pass text or kind, id and path, not both');
+      throw new HelperToolError(
+        400,
+        'INVALID_ARGUMENTS',
+        'pass text or kind, id and path, not both'
+      );
     value = text(args.text, 'CBS text', MAX_CBS_TEXT, true);
     source = { text: true };
   } else {
     const loaded = loadTarget(store, args);
     const path = text(args.path, 'path', 1024);
     if (!path.startsWith(`${loaded.root}/`))
-      throw new HttpError(400, `INVALID_ARGUMENTS: path must start with ${loaded.root}/`);
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS', `path must start with ${loaded.root}/`);
     const field = pointer(loaded.document, path.slice(loaded.root.length));
     if (typeof field !== 'string')
-      throw new HttpError(400, 'CODE_FIELD_NOT_TEXT: path must point at an existing string field');
-    if (field.length > MAX_CBS_TEXT) throw new HttpError(413, 'CODE_FIELD_TOO_LARGE');
+      throw new HelperToolError(
+        400,
+        'CODE_FIELD_NOT_TEXT',
+        'path must point at an existing string field'
+      );
+    if (field.length > MAX_CBS_TEXT) throw new HelperToolError(413, 'CODE_FIELD_TOO_LARGE');
     value = field;
     source = { kind: loaded.kind, id: loaded.id, revision: loaded.revision, path };
   }
@@ -408,7 +418,7 @@ function references(store: Store, args: Record<string, unknown>) {
   const loaded = loadTarget(store, args);
   const filter = args.name === undefined ? '' : text(args.name, 'name', 200).toLocaleLowerCase();
   if (args.scope !== undefined && !['chat', 'temp', 'global'].includes(String(args.scope)))
-    throw new HttpError(400, 'INVALID_ARGUMENTS: scope must be chat, temp or global');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'scope must be chat, temp or global');
   const index = indexCbsReferences(codeDiagnosisReferenceInput(loaded.target));
   const matches = (scope: string, name: string) =>
     (args.scope === undefined || args.scope === scope) &&
@@ -476,16 +486,17 @@ async function diagnose(store: Store, args: Record<string, unknown>, signal?: Ab
       !args.sections.length ||
       args.sections.some((section) => !CODE_DIAGNOSIS_SECTIONS.includes(section))
     )
-      throw new HttpError(
+      throw new HelperToolError(
         400,
-        `INVALID_ARGUMENTS: sections are ${CODE_DIAGNOSIS_SECTIONS.join(', ')}`
+        'INVALID_ARGUMENTS',
+        `sections are ${CODE_DIAGNOSIS_SECTIONS.join(', ')}`
       );
     sections = applicable.filter((section) => (args.sections as unknown[]).includes(section));
   }
   const ranks = ['info', 'warning', 'error'];
   const minimum = args.severity === undefined ? 0 : ranks.indexOf(String(args.severity));
   if (minimum < 0)
-    throw new HttpError(400, 'INVALID_ARGUMENTS: severity is error, warning or info');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'severity is error, warning or info');
   const all = await diagnoseRisuCode(loaded.target, sections, signal);
   const counts: Record<string, Record<CodeFinding['severity'], number>> = {};
   for (const section of sections) counts[section] = { error: 0, warning: 0, info: 0 };
@@ -541,7 +552,7 @@ async function traceRegex(store: Store, args: Record<string, unknown>, signal?: 
   const loaded = loadTarget(store, args);
   const modes: readonly string[] = NATIVE_RISU_REGEX_MODES;
   if (!modes.includes(String(args.stage)))
-    throw new HttpError(400, `INVALID_ARGUMENTS: stage is ${modes.join(', ')}`);
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', `stage is ${modes.join(', ')}`);
   const stage = args.stage as (typeof NATIVE_RISU_REGEX_MODES)[number];
   const sample = text(args.text, 'sample text', MAX_TRACE_TEXT, true);
   const variables = stringRecord(args.variables, 'variables');
@@ -654,10 +665,11 @@ async function preview(store: Store, args: Record<string, unknown>, signal?: Abo
   fields(args, ['id', 'greeting', 'text', 'toggles', 'userName', 'offset', 'limit']);
   const id = text(args.id, 'bot ID', 100);
   if (args.text !== undefined && args.greeting !== undefined)
-    throw new HttpError(400, 'INVALID_ARGUMENTS: pass greeting or text, not both');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'pass greeting or text, not both');
   const content = readResource(store, 'content', id) as Content;
   const native = (content.package as { nativeRisu?: RisuContentSource } | undefined)?.nativeRisu;
-  if (!native) throw new HttpError(400, 'NATIVE_RISU_REQUIRED: this content has no Risu source');
+  if (!native)
+    throw new HelperToolError(400, 'NATIVE_RISU_REQUIRED', 'this content has no Risu source');
   const greeting = args.greeting === undefined ? 0 : number(args.greeting, 'greeting', 0, 10_000);
   const options = { toggleValues: stringRecord(args.toggles, 'toggles') };
   const userName = args.userName === undefined ? undefined : text(args.userName, 'user name', 200);
@@ -690,7 +702,7 @@ async function preview(store: Store, args: Record<string, unknown>, signal?: Abo
       );
     } catch (error) {
       if (error instanceof HttpError && error.statusCode === 404)
-        throw new HttpError(404, 'GREETING_NOT_FOUND: no first message has this number');
+        throw new HelperToolError(404, 'GREETING_NOT_FOUND', 'no first message has this number');
       throw error;
     }
   }

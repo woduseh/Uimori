@@ -3,6 +3,7 @@ import type { Content, ContentRef } from '../core/product.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -71,7 +72,7 @@ function personaRef(store: Store, value: unknown): ContentRef {
   store.product.assertAvailable('content', personaId);
   const persona = store.product.get<Content>('content', personaId);
   if (persona.kind !== 'persona')
-    throw new HttpError(400, `NOT_A_PERSONA: ${personaId} is a ${persona.kind}.`);
+    throw new HelperToolError(400, 'NOT_A_PERSONA', `${personaId} is a ${persona.kind}.`);
   return { id: persona.id, revision: persona.revision };
 }
 
@@ -190,7 +191,7 @@ export function applyHelperChatOrganization(
       fields(args, ['action', 'botId', 'chatId', 'expectedRevision', 'folderId', 'beforeChatId']);
       const chatId = text(args.chatId, 'chat ID', 100);
       if (organization.metadata(chatId)?.botId !== botId)
-        throw new HttpError(409, 'CHAT_OF_ANOTHER_BOT: The chat belongs to another bot.');
+        throw new HelperToolError(409, 'CHAT_OF_ANOTHER_BOT', 'The chat belongs to another bot.');
       organization.move(chatId, {
         expectedRevision: args.expectedRevision,
         folderId: args.folderId === undefined ? null : args.folderId,
@@ -221,7 +222,7 @@ export function applyHelperChatOrganization(
       fields(args, ['action', 'botId', 'chatId', 'pinned']);
       const chatId = text(args.chatId, 'chat ID', 100);
       if (organization.metadata(chatId)?.botId !== botId)
-        throw new HttpError(409, 'CHAT_OF_ANOTHER_BOT: The chat belongs to another bot.');
+        throw new HelperToolError(409, 'CHAT_OF_ANOTHER_BOT', 'The chat belongs to another bot.');
       const before = !!store.chat(chatId).pinnedAt;
       const chat = organization.pin(chatId, { pinned: args.pinned });
       recordHelperTaskResult(workspace, task, {
@@ -249,5 +250,5 @@ export function applyHelperChatOrganization(
       return { changedChatIds: [], defaults };
     }
   }
-  throw new HttpError(400, 'INVALID_CHAT_ORGANIZE_ACTION');
+  throw new HelperToolError(400, 'INVALID_CHAT_ORGANIZE_ACTION');
 }

@@ -10,6 +10,7 @@ import { withImageProcessing } from './image-processing.js';
 import { readResource } from './resource-service.js';
 import { illustrationReferenceCandidates } from './illustrations.js';
 import { resolvePackageProfile } from './package-features.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -231,7 +232,7 @@ export async function readIllustrationHelperImage(
   const asset = illustrationReferenceCandidates(store, chatId).find(
     (candidate) => candidate.id === ref
   );
-  if (!asset) throw new HttpError(404, 'ILLUSTRATION_REFERENCE_NOT_FOUND');
+  if (!asset) throw new HelperToolError(404, 'ILLUSTRATION_REFERENCE_NOT_FOUND');
   const packages =
     resolvePackageProfile(store.product, store.product.profile(chatId)).packages ?? [];
   return prepareHelperImage(
@@ -252,7 +253,7 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
   const content = owner(store, args.contentId);
   const imageId = text(args.imageId, 'image ID', 100);
   const source = content.package.images?.find((image) => image.id === imageId);
-  if (!source) throw new HttpError(404, 'IMAGE_NOT_FOUND_IN_CONTENT');
+  if (!source) throw new HelperToolError(404, 'IMAGE_NOT_FOUND_IN_CONTENT');
   return prepareHelperImage(
     store,
     source.blobHash,
@@ -288,7 +289,7 @@ export async function prepareHelperImage<T extends object>(
       const metadata = await sharp(stored.bytes, options).metadata();
       const width = metadata.width ?? 0;
       const height = metadata.pageHeight ?? metadata.height ?? 0;
-      if (!width || !height) throw new HttpError(400, 'HELPER_IMAGE_INVALID');
+      if (!width || !height) throw new HelperToolError(400, 'HELPER_IMAGE_INVALID');
       const frames = metadata.pages ?? 1;
       const edgeLimit = mode === 'thumbnail' ? 512 : 2048;
       const reuse =
@@ -346,7 +347,7 @@ export async function prepareHelperImage<T extends object>(
     } catch (error) {
       signal?.throwIfAborted();
       if (error instanceof HttpError) throw error;
-      throw new HttpError(400, 'HELPER_IMAGE_INVALID');
+      throw new HelperToolError(400, 'HELPER_IMAGE_INVALID');
     }
   });
 }

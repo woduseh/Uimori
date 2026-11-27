@@ -12,6 +12,7 @@ import type { HelperWorkspace } from './helper-workspace.js';
 import { deleteLibraryItem } from './library-deletion.js';
 import { updatePromptCombination } from './prompt-combinations.js';
 import { applyPromptCombination, promptWorkspace } from './prompt-workspace.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -197,5 +198,5 @@ export function applyHelperPromptCombination(
     report(item);
     return { applied: combinationId, title: item.title, workspaceRevision: updated.revision };
   }
-  throw new HttpError(400, 'UNKNOWN_HELPER_TOOL');
+  throw new HelperToolError(400, 'UNKNOWN_HELPER_TOOL');
 }

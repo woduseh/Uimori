@@ -6,6 +6,7 @@ import type { Job, Run, RunSnapshot } from '../core/types.js';
 import { composerRunSnapshot } from './composer-run.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { latestTranslation, requestTranslation } from './source-editing.js';
 import type { Store } from './store.js';
@@ -100,9 +101,10 @@ export function requestHelperStory(
         .prepare("SELECT 1 FROM runs WHERE chat_id=? AND status IN ('queued','running')")
         .get(chatId)
     )
-      throw new HttpError(
+      throw new HelperToolError(
         409,
-        'SCENE_REQUEST_BUSY: Another request of this chat is queued or running. Tell the user instead of sending it again.'
+        'SCENE_REQUEST_BUSY',
+        'Another request of this chat is queued or running. Tell the user instead of sending it again.'
       );
     const { run, created } = store.createRunInTransaction(chatId, command, (current) => {
       const snapshot = composerRunSnapshot(store, current, command.request);
@@ -120,13 +122,13 @@ export function requestHelperStory(
       ...(created && run.status === 'queued' ? { started: { run } } : {}),
     };
   }
-  if (name !== 'scene.translate') throw new HttpError(400, 'UNKNOWN_STORY_TOOL');
+  if (name !== 'scene.translate') throw new HelperToolError(400, 'UNKNOWN_STORY_TOOL');
   fields(args, ['sourceId', 'retranslate']);
   const sourceId = text(args.sourceId, 'source ID', 100);
   if (args.retranslate !== undefined && typeof args.retranslate !== 'boolean')
     throw new HttpError(400, 'Invalid retranslate: expected a boolean');
   if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
-    throw new HttpError(404, 'SCENE_NOT_IN_CHAT: Find the scene id with chat.read.');
+    throw new HelperToolError(404, 'SCENE_NOT_IN_CHAT', 'Find the scene id with chat.read.');
   const previous = latestTranslation(store, sourceId)?.id;
   const job = requestTranslation(
     store,

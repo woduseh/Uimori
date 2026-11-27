@@ -32,7 +32,7 @@ import { latestTranslation } from './source-editing.js';
 import { displayTranslationJob } from '../core/translation-display.js';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from './helper-app-tools.js';
 import { fields, HttpError, record } from './request-validation.js';
-import { errorWire } from './app-errors.js';
+import { errorWire, HelperToolError } from './app-errors.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { shellRunnerRpc as rpc } from './shell-transport.js';
@@ -157,10 +157,10 @@ function workspacePath(base: string, file: string) {
   const path = resolve(base, file);
   const rel = relative(base, path);
   if (!rel || rel === '..' || rel.startsWith('../') || rel.startsWith('..\\'))
-    throw new HttpError(400, 'SHELL_PATH_INVALID');
+    throw new HelperToolError(400, 'SHELL_PATH_INVALID');
   const baseStat = lstatSync(base);
   if (!baseStat.isDirectory() || baseStat.isSymbolicLink() || realpathSync(base) !== base)
-    throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+    throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
   let current = base;
   for (const part of relative(base, dirname(path)).split(/[\\/]/u).filter(Boolean)) {
     current = join(current, part);
@@ -171,7 +171,7 @@ function workspacePath(base: string, file: string) {
     }
     const stat = lstatSync(current);
     if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(current) !== current)
-      throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+      throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
   }
   return path;
 }
@@ -182,7 +182,7 @@ function writeWorkspaceFile(base: string, file: string, text: string, createOnly
     try {
       const stat = lstatSync(path);
       if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink > 1)
-        throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+        throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -202,7 +202,7 @@ function writeWorkspaceFile(base: string, file: string, text: string, createOnly
     }
   } catch (error) {
     if (['EEXIST', 'ELOOP'].includes((error as NodeJS.ErrnoException).code ?? ''))
-      throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+      throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
     throw error;
   }
 }
@@ -215,7 +215,7 @@ function assertNewWorkspaceFile(base: string, file: string) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
     throw error;
   }
-  throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+  throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
 }
 
 function assertExistingWorkspaceFile(base: string, file: string) {
@@ -226,7 +226,7 @@ function assertExistingWorkspaceFile(base: string, file: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
-  throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+  throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
 }
 export class HelperShellExecutionError extends Error {
   readonly applied: unknown[];
@@ -569,23 +569,23 @@ export class HelperShell {
   private exportData(taskId: string, args: Record<string, unknown>) {
     fields(args, ['scope', 'id', 'all']);
     if (args.id !== undefined && (typeof args.id !== 'string' || !safeId(args.id)))
-      throw new HttpError(400, 'SHELL_EXPORT_ID_INVALID');
+      throw new HelperToolError(400, 'SHELL_EXPORT_ID_INVALID');
     if (args.all !== undefined && typeof args.all !== 'boolean')
-      throw new HttpError(400, 'SHELL_EXPORT_ALL_INVALID');
+      throw new HelperToolError(400, 'SHELL_EXPORT_ALL_INVALID');
     const task = this.tasks.get(taskId);
-    if (!task) throw new HttpError(400, 'SHELL_WORKSPACE_MISSING');
+    if (!task) throw new HelperToolError(400, 'SHELL_WORKSPACE_MISSING');
     const exported: string[] = [];
     const reused: string[] = [];
     if (args.scope === 'library') {
       const index = this.writeLibraryIndex(taskId, task.files);
       const selected = index.filter((row) => args.all === true || row.id === args.id);
-      if (args.id && !selected.length) throw new HttpError(404, 'SHELL_EXPORT_NOT_FOUND');
+      if (args.id && !selected.length) throw new HelperToolError(404, 'SHELL_EXPORT_NOT_FOUND');
       try {
         for (const item of selected) {
           const target = task.files.get(item.file);
           if (target) {
             if (target.kind !== 'resource' || target.resourceKind !== item.kind)
-              throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+              throw new HelperToolError(409, 'SHELL_EXPORT_PATH_CONFLICT');
             assertExistingWorkspaceFile(this.taskDir(taskId), item.file);
             reused.push(item.file);
           } else {
@@ -601,7 +601,7 @@ export class HelperShell {
     if (args.scope === 'chats') {
       const index = this.writeChatIndex(taskId, task.chats);
       const selected = index.filter((row) => args.all === true || row.id === args.id);
-      if (args.id && !selected.length) throw new HttpError(404, 'SHELL_EXPORT_NOT_FOUND');
+      if (args.id && !selected.length) throw new HelperToolError(404, 'SHELL_EXPORT_NOT_FOUND');
       try {
         for (const item of selected) {
           const file = `chats/${item.id}/scenes.json`;
@@ -627,17 +627,17 @@ export class HelperShell {
       }
       return { index: 'chats/index.jsonl', count: index.length, exported, reused };
     }
-    throw new HttpError(400, 'SHELL_EXPORT_SCOPE_REQUIRED: use library or chats');
+    throw new HelperToolError(400, 'SHELL_EXPORT_SCOPE_REQUIRED', 'use library or chats');
   }
 
   private execution(taskId: unknown, toolId: unknown) {
     if (typeof taskId !== 'string' || typeof toolId !== 'string')
-      throw new HttpError(400, 'SHELL_INVALID_SESSION');
+      throw new HelperToolError(400, 'SHELL_INVALID_SESSION');
     const execution = this.active.get(`${taskId}:${toolId}`);
-    if (!execution) throw new HttpError(409, 'SHELL_EXECUTION_NOT_ACTIVE');
+    if (!execution) throw new HelperToolError(409, 'SHELL_EXECUTION_NOT_ACTIVE');
     execution.controller.signal.throwIfAborted();
     this.workspace.assertRunning(taskId);
-    if (execution.fatalError) throw new HttpError(409, 'SHELL_EXECUTION_STOPPED');
+    if (execution.fatalError) throw new HelperToolError(409, 'SHELL_EXECUTION_STOPPED');
     return execution;
   }
 
@@ -648,9 +648,9 @@ export class HelperShell {
     input: Record<string, unknown>
   ) {
     const execution = this.execution(taskId, toolId);
-    if (!execution.invoke) throw new HttpError(400, 'SHELL_APP_UNAVAILABLE');
+    if (!execution.invoke) throw new HelperToolError(400, 'SHELL_APP_UNAVAILABLE');
     if (route === '/call' && (typeof input.name !== 'string' || !input.name.trim()))
-      throw new HttpError(400, 'APP_OPERATION_NAME_REQUIRED');
+      throw new HelperToolError(400, 'APP_OPERATION_NAME_REQUIRED');
     const name = route === '/tools' ? 'app.tools' : String(input.name);
     const args =
       input.flagArguments === undefined
@@ -758,14 +758,14 @@ export class HelperShell {
   }
 
   private refresh(taskId: string, name: unknown) {
-    if (typeof name !== 'string') throw new HttpError(400, 'SHELL_PATH_REQUIRED');
+    if (typeof name !== 'string') throw new HelperToolError(400, 'SHELL_PATH_REQUIRED');
     const task = this.tasks.get(taskId)!;
     const base = this.taskDir(taskId);
     const path = resolve(base, name);
     const rel = relative(base, path).replaceAll('\\', '/');
     const target = task.files.get(rel);
     if (!target || !existsSync(path) || realpathSync(path) !== path)
-      throw new HttpError(400, 'SHELL_FILE_NOT_EDITABLE');
+      throw new HelperToolError(400, 'SHELL_FILE_NOT_EDITABLE');
     const dirty = sha(readFileSync(path, 'utf8')) !== target.hash;
     const latestPath = dirty
       ? `scratch/refresh-${randomUUID()}/${target.kind === 'resource' ? 'resource.json' : 'scene.txt'}`
@@ -808,7 +808,7 @@ export class HelperShell {
   private apply(taskId: unknown, toolId: unknown, name: unknown) {
     this.execution(taskId, toolId);
     if (typeof taskId !== 'string' || typeof toolId !== 'string' || typeof name !== 'string')
-      throw new HttpError(400, 'SHELL_PATH_REQUIRED');
+      throw new HelperToolError(400, 'SHELL_PATH_REQUIRED');
     const task = this.tasks.get(taskId);
     if (!task) throw new Error('SHELL_WORKSPACE_MISSING');
     const base = this.taskDir(taskId);
@@ -899,9 +899,10 @@ export class HelperShell {
                 }
               : after;
           if (isDeepStrictEqual(before, comparable))
-            throw new HttpError(
+            throw new HelperToolError(
               400,
-              'SHELL_NO_AUTHORED_CHANGE: The submitted edits do not change saved data. Content title/description/text are derived; edit the native card/module paths in manifest.json. Your local file is preserved.'
+              'SHELL_NO_AUTHORED_CHANGE',
+              'The submitted edits do not change saved data. Content title/description/text are derived; edit the native card/module paths in manifest.json. Your local file is preserved.'
             );
           const changed = changedPaths(before, comparable);
           const normalized = changedPaths(model, comparable);
@@ -1077,7 +1078,8 @@ export class HelperShell {
     maxOutputBytes = 16384
   ) {
     signal?.throwIfAborted();
-    if (!process.env.UIMORI_SHELL_ROOT) throw new HttpError(400, 'SHELL_RUNNER_NOT_CONFIGURED');
+    if (!process.env.UIMORI_SHELL_ROOT)
+      throw new HelperToolError(400, 'SHELL_RUNNER_NOT_CONFIGURED');
     this.exportTask(task);
     await this.startBridge();
     const key = `${task.id}:${toolId}`;
@@ -1116,9 +1118,10 @@ export class HelperShell {
         ((error as NodeJS.ErrnoException).code === 'ENOENT' ||
           (error as NodeJS.ErrnoException).code === 'ECONNREFUSED')
       )
-        throw new HttpError(
+        throw new HelperToolError(
           400,
-          'SHELL_RUNNER_UNAVAILABLE: start the shell-runner Compose service'
+          'SHELL_RUNNER_UNAVAILABLE',
+          'start the shell-runner Compose service'
         );
       throw new HelperShellExecutionError(
         error instanceof Error ? error.message : 'SHELL_EXECUTION_FAILED',

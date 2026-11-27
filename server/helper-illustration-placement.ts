@@ -8,6 +8,7 @@ import {
   saveIllustrationPresentation,
 } from './illustration-presentation.js';
 import { illustrationJob } from './illustrations.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -121,12 +122,12 @@ export function placeIllustrationCuts(store: Store, chatId: string, args: Record
       scenes.set(job.sourceRevision, layout);
       const { source, previous, current, blocks } = layout;
       if (text(entry.expectedSourceHash, 'source hash', 100) !== source.hash)
-        throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+        throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
       if (
         number(entry.expectedPresentationRevision, 'illustration layout revision', 0) !==
         current.revision
       )
-        throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
+        throw new HelperToolError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
       const prior = previous?.targets[targetId] ?? previous?.detached?.[targetId];
       if (
         job.status !== 'completed' ||
@@ -144,14 +145,14 @@ export function placeIllustrationCuts(store: Store, chatId: string, args: Record
               )
               .get(source.id, targetId)?.id !== job.id
       )
-        throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
+        throw new HelperToolError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
       if (
         store.db
           .prepare(`SELECT 1 FROM illustration_jobs WHERE source_revision=?
         AND COALESCE(json_extract(input,'$.target.id'),id)=? AND status IN ('queued','running') LIMIT 1`)
           .get(source.id, targetId)
       )
-        throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+        throw new HelperToolError(409, 'ILLUSTRATION_ACTIVE');
       const start = blocks.get(text(entry.startAnchor, 'startAnchor', 150));
       const end = blocks.get(text(entry.endAnchor, 'endAnchor', 150));
       if (!start || !end || start.index > end.index)

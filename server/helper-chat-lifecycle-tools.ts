@@ -9,7 +9,8 @@ import { createChat } from './chat-creation.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { createPackageStart } from './package-start.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { HelperToolError } from './app-errors.js';
+import { fields, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const id: Json = { type: 'string', minLength: 1, maxLength: 100 };
@@ -64,7 +65,8 @@ export const HELPER_CHAT_LIFECYCLE_TOOLS: ProviderTool[] = [
 function bot(store: Store, botId: string) {
   store.product.assertAvailable('content', botId);
   const content = store.product.get<Content>('content', botId);
-  if (content.kind !== 'bot') throw new HttpError(400, `NOT_A_BOT: ${botId} is a ${content.kind}.`);
+  if (content.kind !== 'bot')
+    throw new HelperToolError(400, 'NOT_A_BOT', `${botId} is a ${content.kind}.`);
   return content;
 }
 
@@ -75,7 +77,7 @@ function persona(store: Store, value: unknown) {
   store.product.assertAvailable('content', personaId);
   const content = store.product.get<Content>('content', personaId);
   if (content.kind !== 'persona')
-    throw new HttpError(400, `NOT_A_PERSONA: ${personaId} is a ${content.kind}.`);
+    throw new HelperToolError(400, 'NOT_A_PERSONA', `${personaId} is a ${content.kind}.`);
   return { persona: { id: content.id, revision: content.revision } };
 }
 
@@ -85,7 +87,7 @@ function openingId(content: Content, value: unknown) {
   if (value !== undefined) {
     const startId = text(value, 'start ID', 100);
     if (!starts.some((start) => start.id === startId))
-      throw new HttpError(400, `PACKAGE_START_NOT_FOUND: the bot has no start ${startId}.`);
+      throw new HelperToolError(400, 'PACKAGE_START_NOT_FOUND', `the bot has no start ${startId}.`);
     return startId;
   }
   if (starts.some((start) => start.id === 'start-0')) return 'start-0';
@@ -160,9 +162,10 @@ export function deleteHelperChat(
   const chatId = text(args.chatId, 'chat ID', 100);
   const scope = task.snapshot.scope;
   if (scope.kind === 'chat' && scope.chatId === chatId)
-    throw new HttpError(
+    throw new HelperToolError(
       409,
-      'CURRENT_CHAT_DELETION: deleting this chat would also delete this helper conversation and the task making the call. Tell the owner to delete it from the chat list, or from a helper conversation in the library.'
+      'CURRENT_CHAT_DELETION',
+      'deleting this chat would also delete this helper conversation and the task making the call. Tell the owner to delete it from the chat list, or from a helper conversation in the library.'
     );
   const chat = store.chat(chatId);
   assertChatIdleForDeletion(store, chatId);

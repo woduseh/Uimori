@@ -34,6 +34,7 @@ import {
   readIllustrationPreset,
   selectIllustrationPreset,
 } from './illustration-presets.js';
+import { HelperToolError } from './app-errors.js';
 import { choice, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { USAGE_BREAKDOWNS, usageReport } from './usage-report.js';
@@ -530,7 +531,7 @@ export function applyHelperSettingsMutation(
       !args.updates.length ||
       args.updates.length > SETTINGS_UPDATE_BATCH_MAX
     )
-      throw new HttpError(400, 'INVALID_SETTINGS_UPDATES');
+      throw new HelperToolError(400, 'INVALID_SETTINGS_UPDATES');
     const groups = new Map<string, { expected: number; current: number }>();
     const updates: unknown[] = [];
     const targets: HelperTaskResultTarget[] = [];
@@ -542,9 +543,10 @@ export function applyHelperSettingsMutation(
       const group = settingGroup(setting);
       const chained = groups.get(group);
       if (chained && chained.expected !== expected)
-        throw new HttpError(
+        throw new HelperToolError(
           409,
-          `SETTINGS_REVISION_MISMATCH: give every update of ${setting}'s group the same expectedRevision from settings.read.`
+          'SETTINGS_REVISION_MISMATCH',
+          `give every update of ${setting}'s group the same expectedRevision from settings.read.`
         );
       const updated = updateSetting(
         store,
@@ -723,7 +725,7 @@ export function invokeHelperSettingsTool(
     store.product.assertAvailable('model', modelId);
     const model = store.product.get<ModelPreset>('model', modelId);
     const use = modelInUse(store, modelId);
-    if (use) throw new HttpError(409, `MODEL_IN_USE: ${use}`);
+    if (use) throw new HelperToolError(409, 'MODEL_IN_USE', `${use}`);
     deleteLibraryItem(store, 'model', modelId, {
       expectedRevision: number(args.expectedRevision, 'model revision'),
     });
@@ -811,11 +813,11 @@ export function invokeHelperSettingsTool(
     };
   }
   if (name === 'illustration-preset.select') return selectIllustrationPreset(store, args);
-  if (name !== 'settings.update') throw new HttpError(400, 'UNKNOWN_SETTINGS_TOOL');
+  if (name !== 'settings.update') throw new HelperToolError(400, 'UNKNOWN_SETTINGS_TOOL');
   fields(args, ['setting', 'expectedRevision', 'value']);
   const setting = text(args.setting, 'setting', 100);
   if (!(settings as readonly string[]).includes(setting))
-    throw new HttpError(400, 'INVALID_SETTING');
+    throw new HelperToolError(400, 'INVALID_SETTING');
   const expectedRevision = number(args.expectedRevision, 'settings revision', 0);
   if (setting === 'newChat.loreContext') {
     const { revision, ...policy } = updateLoreContextDefaults(store, {
@@ -867,7 +869,7 @@ export function invokeHelperSettingsTool(
   }
   if (setting.startsWith('global.')) {
     if (args.value !== null && typeof args.value !== 'string')
-      throw new HttpError(400, 'INVALID_MODEL_ID');
+      throw new HelperToolError(400, 'INVALID_MODEL_ID');
     const modelId = args.value === null ? null : text(args.value, 'model ID', 100);
     const current = modelWorkspace(store);
     const role = setting.slice('global.'.length, -'Model'.length) as WorkspaceModelRole;
@@ -888,10 +890,10 @@ export function invokeHelperSettingsTool(
       value: workspaceModelRef(promptWorkspace(store), role),
     };
   }
-  if (!chatId) throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
+  if (!chatId) throw new HelperToolError(403, 'CHAT_SCOPE_REQUIRED');
   if (setting === 'chat.mainModel' || setting === 'chat.mainPromptPreset') {
     if (args.value !== null && typeof args.value !== 'string')
-      throw new HttpError(400, 'INVALID_SELECTION_ID');
+      throw new HelperToolError(400, 'INVALID_SELECTION_ID');
     const id = args.value === null ? null : text(args.value, 'selection ID', 100);
     const profile = store.product.profile(chatId);
     const pinned = { ...profile.pinned };
@@ -921,7 +923,7 @@ export function invokeHelperSettingsTool(
       Number(args.value) < 1 ||
       Number(args.value) > MAX_MAIN_MODEL_CALLS)
   )
-    throw new HttpError(400, 'INVALID_MAX_CALLS');
+    throw new HelperToolError(400, 'INVALID_MAX_CALLS');
   const key = setting.slice('chat.'.length) as keyof Settings;
   const next = normalizeChatSettings({ ...chat.settings, [key]: args.value });
   const updated = store.settings(chatId, expectedRevision, next);

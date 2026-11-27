@@ -1,6 +1,7 @@
 import type { Json, ProviderTool } from '../core/transport.js';
 import { listAppGuides, readAppGuide, searchAppGuides } from './app-guides.js';
-import { fields, HttpError, number, text } from './request-validation.js';
+import { HelperToolError } from './app-errors.js';
+import { fields, number, text } from './request-validation.js';
 
 export const HELPER_GUIDE_TOOLS: ProviderTool[] = [
   {
@@ -31,7 +32,7 @@ export const HELPER_GUIDE_TOOLS: ProviderTool[] = [
 export function invokeHelperGuideTool(args: Record<string, unknown>): unknown {
   fields(args, ['name', 'query', 'offset', 'limit']);
   if (args.name !== undefined && args.query !== undefined)
-    throw new HttpError(400, 'INVALID_ARGUMENTS: pass name or query, not both');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'pass name or query, not both');
   if (args.query !== undefined) return searchAppGuides(text(args.query, 'guide query', 200));
   if (args.name === undefined) return { guides: listAppGuides() };
   return readAppGuide(

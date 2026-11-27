@@ -23,6 +23,7 @@ import { HELPER_ILLUSTRATION_TOOLS } from './helper-illustration-workflow.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
+import { HelperToolError } from './app-errors.js';
 import { HttpError } from './request-validation.js';
 import { countTextTokens } from '../core/text-tokens.js';
 
@@ -1101,14 +1102,14 @@ export function describeHelperTools(
     args = { ...rest, names: [name] };
   }
   if (Object.keys(args).some((key) => !['names', 'query', 'offset', 'limit'].includes(key)))
-    throw new HttpError(400, 'INVALID_ARGUMENTS');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS');
   if (args.names !== undefined) {
     if (
       !Array.isArray(args.names) ||
       !args.names.length ||
       args.names.some((n) => typeof n !== 'string')
     )
-      throw new HttpError(400, 'INVALID_ARGUMENTS');
+      throw new HelperToolError(400, 'INVALID_ARGUMENTS');
     return {
       tools: [...new Set(args.names)].map((name) => {
         const tool = allowed.find((t) => t.name === name);
@@ -1129,7 +1130,7 @@ export function describeHelperTools(
     !Number.isSafeInteger(limit) ||
     Number(limit) < 1
   )
-    throw new HttpError(400, 'INVALID_ARGUMENTS');
+    throw new HelperToolError(400, 'INVALID_ARGUMENTS');
   const found = searching ? searchHelperTools(allowed, query, scope) : [...allowed].sort(byArea);
   if (!searching && scope === 'library')
     found.sort((a, b) => Number(chatToolNames.has(a.name)) - Number(chatToolNames.has(b.name)));

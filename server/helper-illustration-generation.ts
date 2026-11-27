@@ -2,6 +2,7 @@ import type { SelectedIllustrationMoment } from '../core/illustration-storyboard
 import type { ProviderTool } from '../core/transport.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import { reserveSelectedIllustrations } from './illustrations.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Source, Store } from './store.js';
 
@@ -67,9 +68,10 @@ export function generateHelperIllustrations(
   if (!Array.isArray(args.moments) || !args.moments.length)
     throw new HttpError(400, 'Select at least one illustration moment.');
   if (args.moments.length > HELPER_ILLUSTRATION_MOMENTS_MAX)
-    throw new HttpError(
+    throw new HelperToolError(
       400,
-      `ILLUSTRATION_MOMENTS_LIMIT: Queue at most ${HELPER_ILLUSTRATION_MOMENTS_MAX} pictures per call.`
+      'ILLUSTRATION_MOMENTS_LIMIT',
+      `Queue at most ${HELPER_ILLUSTRATION_MOMENTS_MAX} pictures per call.`
     );
   const moments = args.moments;
   return store.transaction(() => {
@@ -100,7 +102,7 @@ export function generateHelperIllustrations(
         groups.set(sourceId, group);
       }
       if (text(moment.expectedSourceHash, 'source hash', 64) !== group.source.hash)
-        throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+        throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
       const direction =
         moment.direction === undefined
           ? ''

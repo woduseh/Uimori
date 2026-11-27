@@ -4,6 +4,7 @@ import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, record, text, number, HttpError } from './request-validation.js';
 import {
   fontCatalog,
@@ -216,7 +217,7 @@ export function invokePresentationTool(
   }
   if (name === 'font.register') {
     fields(args, ['title', 'url']);
-    if (!bytes) throw new HttpError(400, 'FONT_DOWNLOAD_REQUIRED');
+    if (!bytes) throw new HelperToolError(400, 'FONT_DOWNLOAD_REQUIRED');
     text(args.url, 'font URL', 4000);
     return {
       ...registerFont(store, {
@@ -258,5 +259,5 @@ export function invokePresentationTool(
     );
   }
   if (name === 'theme.select') return selectTheme(store, args);
-  throw new HttpError(400, 'UNKNOWN_PRESENTATION_TOOL');
+  throw new HelperToolError(400, 'UNKNOWN_PRESENTATION_TOOL');
 }

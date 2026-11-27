@@ -2,6 +2,7 @@ import { protocolOptionKeys } from '../core/model-capabilities.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { modelOptionKeys } from './provider-archive.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -119,18 +120,24 @@ export function invokeHelperModelParameterTool(
   store.product.assertAvailable('model', modelId);
   const model = store.product.get<ModelPreset>('model', modelId);
   if (name === 'model.parameters.read') return view(store, model);
-  if (name !== 'model.parameters.update') throw new HttpError(400, 'UNKNOWN_MODEL_PARAMETER_TOOL');
+  if (name !== 'model.parameters.update')
+    throw new HelperToolError(400, 'UNKNOWN_MODEL_PARAMETER_TOOL');
   const expectedRevision = number(args.expectedRevision, 'model revision', 1);
   const changes = record(args.changes);
   const supported = view(store, model).supported as string[];
   const unsupported = Object.keys(changes).filter((key) => !supported.includes(key));
   if (!Object.keys(changes).length || unsupported.length)
-    throw new HttpError(
+    throw new HelperToolError(
       400,
-      `MODEL_PARAMETER_UNSUPPORTED: ${unsupported.join(', ') || 'no change'}; this model accepts ${supported.join(', ')}.`
+      'MODEL_PARAMETER_UNSUPPORTED',
+      `${unsupported.join(', ') || 'no change'}; this model accepts ${supported.join(', ')}.`
     );
   if (changes.maxOutputTokens === null)
-    throw new HttpError(400, 'MODEL_PARAMETER_REQUIRED: maxOutputTokens cannot be removed.');
+    throw new HelperToolError(
+      400,
+      'MODEL_PARAMETER_REQUIRED',
+      'maxOutputTokens cannot be removed.'
+    );
   const input: Record<string, unknown> = { expectedRevision };
   for (const key of SAVED_MODEL_KEYS) {
     const current = (model as Record<string, unknown>)[key];
@@ -145,9 +152,10 @@ export function invokeHelperModelParameterTool(
     prepared = store.product.prepareModel(input, modelId);
   } catch (error) {
     if (error instanceof HttpError && error.statusCode === 409) throw error;
-    throw new HttpError(
+    throw new HelperToolError(
       400,
-      `MODEL_PARAMETERS_INVALID: ${error instanceof Error ? error.message : 'Check the parameter values.'}`
+      'MODEL_PARAMETERS_INVALID',
+      `${error instanceof Error ? error.message : 'Check the parameter values.'}`
     );
   }
   const saved = store.product.save(

@@ -14,6 +14,7 @@ import {
   regenerateIllustration,
   removeIllustration,
 } from './illustrations.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -192,7 +193,7 @@ export function readIllustrationScene(store: Store, chatId: string, args: Args) 
   fields(args, ['sourceId', 'expectedSourceHash', 'anchor', 'offset', 'limit', 'maxBlockChars']);
   const source = helperSceneSource(store, chatId, text(args.sourceId, 'source ID', 100));
   if (args.expectedSourceHash !== undefined && args.expectedSourceHash !== source.hash)
-    throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
   const { offset: requestedOffset, limit } = page(args);
   const maxChars =
     args.maxBlockChars === undefined ? undefined : number(args.maxBlockChars, 'block characters');
@@ -202,7 +203,7 @@ export function readIllustrationScene(store: Store, chatId: string, args: Args) 
       ? -1
       : all.findIndex((block) => block.anchor === text(args.anchor, 'anchor', 100));
   if (args.anchor !== undefined && anchorIndex < 0)
-    throw new HttpError(404, 'ILLUSTRATION_ANCHOR_NOT_FOUND');
+    throw new HelperToolError(404, 'ILLUSTRATION_ANCHOR_NOT_FOUND');
   if (args.anchor !== undefined && args.offset !== undefined)
     throw new HttpError(400, 'Specify anchor or offset, not both');
   const offset =
@@ -325,7 +326,7 @@ export function resolveIllustrationCutImage(store: Store, chatId: string, imageI
         caption: string;
       }
     | undefined;
-  if (!image) throw new HttpError(404, 'ILLUSTRATION_IMAGE_NOT_FOUND');
+  if (!image) throw new HelperToolError(404, 'ILLUSTRATION_IMAGE_NOT_FOUND');
   return image;
 }
 
@@ -416,16 +417,18 @@ export function redrawIllustrationCut(store: Store, chatId: string, args: Args, 
       : text(args.changeRequest, 'change request', 8000, true);
   return store.transaction(() => {
     const source = helperSceneSource(store, chatId, image.sourceId);
-    if (source.hash !== expectedHash) throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    if (source.hash !== expectedHash) throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
     const job = projectIllustration(store, illustrationJob(store, image.jobId));
-    if (job.sourceHash !== source.hash) throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
-    if (!job.target || !job.display) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    if (job.sourceHash !== source.hash)
+      throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    if (!job.target || !job.display)
+      throw new HelperToolError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
     if (
       job.display.revision !== presentationRevision ||
       job.display.displayedJobId !== job.id ||
       (latestId && job.display.latestRequestedJobId !== latestId)
     )
-      throw new HttpError(409, 'ILLUSTRATION_CUT_CHANGED');
+      throw new HelperToolError(409, 'ILLUSTRATION_CUT_CHANGED');
     const next = regenerateIllustration(store, job.id, testMode, changes, image.imageId);
     return {
       chatId,
@@ -443,26 +446,26 @@ export function redrawIllustrationCut(store: Store, chatId: string, args: Args, 
 function currentCut(store: Store, chatId: string, args: Args, permitStale = false) {
   const job = illustrationJob(store, text(args.expectedLatestJobId, 'latest job ID', 100));
   if (job.chatId !== chatId || job.input.task !== 'render' || !job.input.target)
-    throw new HttpError(404, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    throw new HelperToolError(404, 'ILLUSTRATION_TARGET_UNAVAILABLE');
   const source = helperSceneSource(store, chatId, job.sourceRevision);
   if (
     source.hash !== text(args.expectedSourceHash, 'source hash', 64) ||
     (!permitStale && source.hash !== job.sourceHash)
   )
-    throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
   const presentation = illustrationPresentation(store, source.id);
   if (!permitStale && presentation?.sourceHash !== source.hash)
-    throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    throw new HelperToolError(409, 'ILLUSTRATION_SOURCE_CHANGED');
   if (
     !presentation ||
     presentation.revision !== number(args.expectedPresentationRevision, 'presentation revision', 0)
   )
-    throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
+    throw new HelperToolError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
   const entry =
     presentation.targets[job.input.target.id] ??
     (permitStale ? presentation.detached?.[job.input.target.id] : undefined);
   if (!entry || entry.latestRequestedJobId !== job.id)
-    throw new HttpError(409, 'ILLUSTRATION_CUT_CHANGED');
+    throw new HelperToolError(409, 'ILLUSTRATION_CUT_CHANGED');
   return { job, source, presentation, entry };
 }
 
@@ -486,9 +489,9 @@ export function reviseFailedIllustrationCut(
   return store.transaction(() => {
     const { job, source, presentation, entry } = currentCut(store, chatId, args);
     if (text(args.targetId, 'target ID', 100) !== job.input.target!.id)
-      throw new HttpError(409, 'ILLUSTRATION_CUT_CHANGED');
+      throw new HelperToolError(409, 'ILLUSTRATION_CUT_CHANGED');
     if (!['failed', 'cancelled', 'interrupted'].includes(job.status) || entry.displayedJobId)
-      throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      throw new HelperToolError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
     const before = entry.placedTarget ?? job.input.target!;
     const startAnchor =
       args.startAnchor === undefined
@@ -503,7 +506,7 @@ export function reviseFailedIllustrationCut(
       index.get(endAnchor) === undefined ||
       index.get(startAnchor)! > index.get(endAnchor)!
     )
-      throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      throw new HelperToolError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
     if (
       Object.keys(presentation.targets).some(
         (other) =>
@@ -513,7 +516,7 @@ export function reviseFailedIllustrationCut(
               ?.endAnchor) === endAnchor
       )
     )
-      throw new HttpError(409, 'ILLUSTRATION_TARGET_CONFLICT');
+      throw new HelperToolError(409, 'ILLUSTRATION_TARGET_CONFLICT');
     const focus = args.focus === undefined ? before.focus : text(args.focus, 'focus', 8000);
     const visualBrief =
       args.visualBrief === undefined

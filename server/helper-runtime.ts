@@ -1821,7 +1821,7 @@ export class HelperRuntime {
               (envelope.name !== 'app.tools' &&
                 !HELPER_APP_TOOLS.some((tool) => tool.name === envelope.name))
             )
-              throw new HttpError(400, 'UNKNOWN_APP_TOOL');
+              throw new HelperToolError(400, 'UNKNOWN_APP_TOOL');
             call = { ...call, name: envelope.name, arguments: record(envelope.arguments) };
           }
           const execution = await this.invokeOperation(
@@ -2968,7 +2968,7 @@ export class HelperRuntime {
     hooks.signal.throwIfAborted();
     this.workspace.assertRunning(task.id);
     if (task.snapshot.outline?.target.purpose === 'review' && !helperToolTraits(name).reviewAllowed)
-      throw new HttpError(403, 'OUTLINE_REVIEW_READ_ONLY');
+      throw new HelperToolError(403, 'OUTLINE_REVIEW_READ_ONLY');
     const traits = helperToolTraits(name, args);
     if (task.snapshot.mode === 'plan' && !traits.readOnly)
       throw new HttpError(403, PLAN_MODE_READ_ONLY);
@@ -3063,12 +3063,12 @@ export class HelperRuntime {
     let execution: HelperShellAppResult;
     try {
       if (name !== 'app.tools' && !HELPER_APP_TOOLS.some((tool) => tool.name === name))
-        throw new HttpError(400, 'UNKNOWN_APP_TOOL');
+        throw new HelperToolError(400, 'UNKNOWN_APP_TOOL');
       if (
         task.snapshot.model.connection.protocol !== 'codex-app-server-v1' &&
         this.workspace.instructions(task.id).some((item) => item.status === 'pending')
       )
-        throw new HttpError(409, 'USER_INSTRUCTION_UPDATED');
+        throw new HelperToolError(409, 'USER_INSTRUCTION_UPDATED');
       execution = await this.invokeOperation(task, name, args, hooks, operationId, collectImage);
     } catch (error) {
       const result = helperToolError(error, readOnly, name);
@@ -3122,12 +3122,12 @@ export class HelperRuntime {
     if (name === 'web.search') {
       const target = task.snapshot.model;
       if (helperWebSearchCapability(target.connection.protocol, target.modelId).mode !== 'separate')
-        throw new HttpError(400, 'HELPER_WEB_SEARCH_UNAVAILABLE');
+        throw new HelperToolError(400, 'HELPER_WEB_SEARCH_UNAVAILABLE');
       fields(args, ['query']);
       const query = text(args.query, 'web search query', Infinity).trim();
-      if (!query) throw new HttpError(400, 'WEB_SEARCH_QUERY_REQUIRED');
+      if (!query) throw new HelperToolError(400, 'WEB_SEARCH_QUERY_REQUIRED');
       if (this.workspace.taskState(task.id).usage.modelCalls >= task.snapshot.limits.totalCalls)
-        throw new HttpError(429, 'MODEL_CALL_BUDGET_EXHAUSTED');
+        throw new HelperToolError(429, 'MODEL_CALL_BUDGET_EXHAUSTED');
       const result = await this.execute(task, target, geminiHelperSearchRequest(target, query), {
         ...hooks,
         onResponseProgress: undefined,
@@ -3161,7 +3161,7 @@ export class HelperRuntime {
       name === 'illustration.image.read' ||
       name === 'illustration.cut.read'
     ) {
-      if (!chatId) throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (!chatId) throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       if (name === 'illustration.cut.read' && args.includeImage === false)
         return inspectIllustrationCut(this.store, chatId, args);
       if (name === 'illustration.image.list')
@@ -3174,7 +3174,7 @@ export class HelperRuntime {
     ) {
       const model = task.snapshot.model;
       if (imageInputSupported(model.connection.protocol, model.modelId) === false)
-        throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
+        throw new HelperToolError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
       const read =
         name === 'image.read'
           ? await readHelperImage(this.store, args, hooks.signal)
@@ -3218,7 +3218,7 @@ export class HelperRuntime {
       const operationKey = `${task.id}:${operationId}`;
       if (name === 'vertex.location.compare') {
         const runner = this.options.services?.connectionTests;
-        if (!runner) throw new HttpError(400, 'VERTEX_LOCATION_COMPARE_UNAVAILABLE');
+        if (!runner) throw new HelperToolError(400, 'VERTEX_LOCATION_COMPARE_UNAVAILABLE');
         return compareVertexLocations(
           this.store,
           runner,
@@ -3306,7 +3306,7 @@ export class HelperRuntime {
     }
     if (name.startsWith('task.')) {
       const service = this.options.services?.task;
-      if (!service) throw new HttpError(400, 'TASK_CONTROL_UNAVAILABLE');
+      if (!service) throw new HelperToolError(400, 'TASK_CONTROL_UNAVAILABLE');
       return service(task, name, args, operationId);
     }
     if (name === 'data.exec') {
@@ -3314,7 +3314,7 @@ export class HelperRuntime {
       try {
         options = shellExecutionOptions(args, HELPER_SHELL_OUTPUT_DEFAULT_BYTES);
       } catch {
-        throw new HttpError(400, 'INVALID_SHELL_ARGUMENTS');
+        throw new HelperToolError(400, 'INVALID_SHELL_ARGUMENTS');
       }
       return this.shell.exec(
         task,
@@ -3397,7 +3397,7 @@ export class HelperRuntime {
       );
     }
     if (HELPER_SCENE_TOOLS.some((tool) => tool.name === name)) {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       const invoke = () =>
         name === 'scene.search' && args.regex === true
           ? invokeSceneRegexSearch(this.store, scope.chatId, args, hooks.signal)
@@ -3418,7 +3418,7 @@ export class HelperRuntime {
       return result;
     }
     if (HELPER_CHAT_STATE_TOOLS.some((tool) => tool.name === name)) {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       if (helperToolTraits(name, args).readOnly)
         return readHelperChatState(this.store, scope.chatId, name, args);
       this.workspace.assertRunning(task.id);
@@ -3495,9 +3495,9 @@ export class HelperRuntime {
       return result;
     }
     if (HELPER_STORY_TOOLS.some((tool) => tool.name === name)) {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       const service = this.options.services?.story;
-      if (!service) throw new HttpError(400, 'STORY_REQUEST_UNAVAILABLE');
+      if (!service) throw new HelperToolError(400, 'STORY_REQUEST_UNAVAILABLE');
       this.workspace.assertRunning(task.id);
       const receiptId = `${task.id}:${operationId}`;
       let started: ReturnType<typeof requestHelperStory>['started'];
@@ -3524,7 +3524,7 @@ export class HelperRuntime {
       return result;
     }
     if (name === 'chat.read') {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       fields(args, ['includePreview', 'includeRequest', 'order', 'offset', 'limit']);
       for (const key of ['includePreview', 'includeRequest'])
         if (args[key] !== undefined && typeof args[key] !== 'boolean')
@@ -3591,7 +3591,7 @@ export class HelperRuntime {
         : this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, invoke);
     }
     if (name === 'chat.lore') {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
       if (args.action === 'read') return readHelperChatLore(this.store, scope.chatId, args);
       if (args.action === 'patchMany') {
@@ -3601,14 +3601,14 @@ export class HelperRuntime {
           !args.items.length ||
           args.items.length > CHAT_LORE_BATCH_MAX
         )
-          throw new HttpError(400, 'INVALID_LORE_ITEMS');
+          throw new HelperToolError(400, 'INVALID_LORE_ITEMS');
         this.workspace.assertRunning(task.id);
         const items = args.items.map((item: unknown) => record(item));
         if (
           new Set(items.map((item) => chatLoreKey(validateChatLoreSelector(item.selector))))
             .size !== items.length
         )
-          throw new HttpError(400, 'CHAT_LORE_DUPLICATE_SELECTOR');
+          throw new HelperToolError(400, 'CHAT_LORE_DUPLICATE_SELECTOR');
         return this.workspace.operation(
           task.id,
           `${task.id}:${operationId}`,
@@ -3618,9 +3618,10 @@ export class HelperRuntime {
             let revision: number | undefined;
             const saved = items.map((item: Record<string, unknown>, index: number) => {
               if (item.expectedRevision !== expected)
-                throw new HttpError(
+                throw new HelperToolError(
                   409,
-                  'CHAT_LORE_REVISION_MISMATCH: give every item the same expectedRevision from chat.lore read.'
+                  'CHAT_LORE_REVISION_MISMATCH',
+                  'give every item the same expectedRevision from chat.lore read.'
                 );
               const prior = service.current(scope.chatId, item.selector);
               const result = service.patch(
@@ -3641,7 +3642,7 @@ export class HelperRuntime {
         );
       }
       if (args.action !== 'patch' && args.action !== 'remove')
-        throw new HttpError(400, 'INVALID_LORE_ACTION');
+        throw new HelperToolError(400, 'INVALID_LORE_ACTION');
       this.workspace.assertRunning(task.id);
       const body = { ...record(args.body), operationId };
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () => {
@@ -3661,7 +3662,7 @@ export class HelperRuntime {
     }
     if (name === 'editor.read') return readHelperEditor(task.snapshot.editor, args);
     if (name === 'chat.rename' || name === 'chat.fork') {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       this.workspace.assertRunning(task.id);
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () => {
         if (name === 'chat.rename')
@@ -3672,7 +3673,7 @@ export class HelperRuntime {
           );
         const sourceId = text(args.sourceId, 'source ID', 100);
         if (!task.snapshot.writing?.history.some((source) => source.revision === sourceId))
-          throw new HttpError(403, 'SOURCE_OUTSIDE_SCOPE');
+          throw new HelperToolError(403, 'SOURCE_OUTSIDE_SCOPE');
         return forkChat(this.store, scope.chatId, {
           fromRevision: sourceId,
           idempotencyKey: `helper:${operationId}`,
@@ -3695,11 +3696,11 @@ export class HelperRuntime {
             ? this.store.libraryOrganization.deleteFolder(id, body, expectedCategory)
             : this.store.libraryOrganization.updateFolder(id, body, expectedCategory);
         }
-        throw new HttpError(400, 'INVALID_LIBRARY_ACTION');
+        throw new HelperToolError(400, 'INVALID_LIBRARY_ACTION');
       });
     }
     if (name === 'outline.read' || name === 'outline.write') {
-      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       if (name === 'outline.read')
         return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
       this.workspace.assertRunning(task.id);
@@ -3733,7 +3734,7 @@ export class HelperRuntime {
       );
       const field: unknown = args.field ?? 'text';
       if (field !== 'text' && field !== 'request')
-        throw new HttpError(400, 'INVALID_ARTIFACT_FIELD');
+        throw new HelperToolError(400, 'INVALID_ARTIFACT_FIELD');
       const value = artifact[field];
       const offset = number(args.offset ?? 0, 'artifact offset', 0, value.length);
       const boundary = (at: number) =>
@@ -3762,10 +3763,11 @@ export class HelperRuntime {
       return page();
     }
     if (helperToolTraits(name).writingRead)
-      throw new HttpError(
+      throw new HelperToolError(
         400,
-        'CHAT_SCOPE_REQUIRED: This operation reads one chat and this conversation has none selected. Pass chatId in its arguments.'
+        'CHAT_SCOPE_REQUIRED',
+        'This operation reads one chat and this conversation has none selected. Pass chatId in its arguments.'
       );
-    throw new HttpError(400, 'UNKNOWN_HELPER_TOOL');
+    throw new HelperToolError(400, 'UNKNOWN_HELPER_TOOL');
   }
 }

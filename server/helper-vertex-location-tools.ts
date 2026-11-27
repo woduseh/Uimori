@@ -12,6 +12,7 @@ import {
   CONNECTION_TEST_TIMEOUT_MS,
   type ConnectionTestRunner,
 } from './provider-connection-test.js';
+import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -90,7 +91,7 @@ function vertexConnection(store: Store, id: string) {
   const connection = store.product.get<Connection>('connection', id);
   const endpoint =
     connection.protocol === 'vertex-gemini-v1' ? parseVertexEndpoint(connection.endpoint) : null;
-  if (!endpoint) throw new HttpError(400, 'VERTEX_CONNECTION_REQUIRED');
+  if (!endpoint) throw new HelperToolError(400, 'VERTEX_CONNECTION_REQUIRED');
   return { connection, endpoint };
 }
 
@@ -170,10 +171,10 @@ export async function compareVertexLocations(
       args.locations.length < 1 ||
       args.locations.length > VERTEX_LOCATION_CHOICES.length
     )
-      throw new HttpError(400, 'INVALID_VERTEX_LOCATIONS');
+      throw new HelperToolError(400, 'INVALID_VERTEX_LOCATIONS');
     locations = args.locations.map((item) => text(item, 'location', 40));
     if (new Set(locations).size !== locations.length || !locations.every(isVertexLocation))
-      throw new HttpError(400, 'INVALID_VERTEX_LOCATIONS');
+      throw new HelperToolError(400, 'INVALID_VERTEX_LOCATIONS');
   }
   const key = createHash('sha256').update(operationKey).digest('hex').slice(0, 32);
   const results = await Promise.all(
@@ -232,7 +233,7 @@ export function updateVertexLocation(store: Store, value: unknown) {
   const connectionId = text(args.connectionId, 'connection ID', 100);
   const location = text(args.location, 'location', 40);
   const expectedRevision = number(args.expectedRevision, 'connection revision', 1);
-  if (!isVertexLocation(location)) throw new HttpError(400, 'INVALID_VERTEX_LOCATION');
+  if (!isVertexLocation(location)) throw new HelperToolError(400, 'INVALID_VERTEX_LOCATION');
   const { connection, endpoint } = vertexConnection(store, connectionId);
   if (connection.revision !== expectedRevision) throw new HttpError(409, 'Revision conflict');
   const saved =
