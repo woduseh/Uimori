@@ -420,7 +420,8 @@ export class ProductStore {
       if (role !== 'main')
         throw new HttpError(400, 'Collaboration is only available on main prompts');
       const previous = id
-        ? this.get<PromptPreset>('prompt-preset', id).program.collaboration
+        ? this.editable<PromptPreset>('prompt-preset', id, number(b.expectedRevision, 'revision'))
+            .program.collaboration
         : undefined;
       for (const agent of program.collaboration.agents) {
         assertModelSelection(

@@ -15,6 +15,7 @@ import { buildAgentProviderRequest } from '../server/agent-collaboration.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 
 const owned: { root: string; store: Store }[] = [];
 function database() {
@@ -294,4 +295,22 @@ test('model references, prompt role and CAS are checked before storing collabora
     )
   ).toThrow('REVISION_CONFLICT');
   expect(f.product.get<PromptPreset>('prompt-preset', f.preset.id)).toEqual(f.preset);
+});
+
+test('saving a collaboration preset deleted elsewhere answers a revision conflict', () => {
+  const store = database();
+  const program = createDefaultRisuPrompt('Deleted elsewhere');
+  program.collaboration = createAgentCollaboration();
+  const saved = store.product.promptPreset({
+    title: 'Shared',
+    role: 'main',
+    program,
+  }) as PromptPreset;
+  deleteLibraryItem(store, 'prompt-preset', saved.id, { expectedRevision: saved.revision });
+  expect(() =>
+    store.product.promptPreset(
+      { title: 'Draft', role: 'main', program, expectedRevision: saved.revision },
+      saved.id
+    )
+  ).toThrow(expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' }));
 });
