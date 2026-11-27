@@ -7,11 +7,6 @@ const timeouts = new Set([
   'RISU_LUA_PROGRAM_TIMEOUT',
 ]);
 
-function failureStatus(error: Error): number {
-  const status = (error as { statusCode?: unknown }).statusCode;
-  return typeof status === 'number' ? status : 500;
-}
-
 export async function withRisuFailureCode<T>(
   work: () => Promise<T>,
   route: 'presentation' | 'action'
@@ -19,11 +14,12 @@ export async function withRisuFailureCode<T>(
   try {
     return await work();
   } catch (error) {
-    if (!(error instanceof Error)) throw error;
-    if (timeouts.has(error.message))
-      throw new AppError(route === 'action' ? failureStatus(error) : 500, 'RISU_NATIVE_TIMEOUT');
-    if (route === 'presentation' && /^RISU_[A-Z0-9_]{1,100}$/u.test(error.message))
-      throw new HttpError(500, error.message);
+    const code =
+      error instanceof Error && /^(RISU_[A-Z0-9_]{1,100})(?=:|$)/u.exec(error.message)?.[1];
+    if (!code) throw error;
+    if (timeouts.has(code))
+      throw new AppError(route === 'action' ? 400 : 500, 'RISU_NATIVE_TIMEOUT');
+    if (route === 'presentation') throw new HttpError(500, code);
     throw error;
   }
 }

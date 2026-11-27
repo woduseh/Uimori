@@ -321,6 +321,12 @@ test('a transfer retry is the same request in any binding order, and only for th
     modelBindings: [...command.modelBindings].reverse(),
   });
   expect(reordered.json()).toEqual({ ...first.json(), created: false });
+  const malformed = await apply({
+    ...command,
+    idempotencyKey: 'malformed-binding',
+    modelBindings: [command.modelBindings[0], { requirementKey: { toString: null } }],
+  });
+  expect(malformed.statusCode, malformed.body).toBe(400);
   const otherFile = structuredClone(source.file);
   otherFile.contents[0].source.title += ' edited';
   for (const payload of [
