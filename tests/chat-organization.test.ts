@@ -96,7 +96,7 @@ test('new chats prefer explicit persona including none, then folder, then bot de
   );
   expect(() =>
     org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'inherit' } })
-  ).toThrow('BOT_DEFAULTS_CHANGED');
+  ).toThrow('REVISION_CONFLICT');
   org.updateDefaults(bot.id, { expectedRevision: 3, persona: { mode: 'inherit' } });
   expect(selected()).toBe(persona.id);
 });

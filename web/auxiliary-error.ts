@@ -186,6 +186,11 @@ define(
   'errors.auxiliary.TOOL_CORRECTION_EXHAUSTED.action'
 );
 define(
+  ['AUTO_TRANSLATION_PREPARE_FAILED'],
+  'errors.auxiliary.AUTO_TRANSLATION_PREPARE_FAILED.message',
+  'errors.auxiliary.AUTO_TRANSLATION_PREPARE_FAILED.action'
+);
+define(
   ['AUXILIARY_CANCELLED', 'JUDGMENT_CANCELLED'],
   'errors.auxiliary.AUXILIARY_CANCELLED.message',
   'errors.auxiliary.AUXILIARY_CANCELLED.action'

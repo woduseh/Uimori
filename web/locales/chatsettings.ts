@@ -713,6 +713,18 @@ export const messages = {
     ja: 'オプションが変更されました。変更内容を確認してください。',
     zh: '选项已更改。请确认更改内容。',
   },
+  'chatsettings.fixedOptionsDefinitionChanged': {
+    ko: '프롬프트 소속이나 옵션 정의가 바뀌어 이전 채팅 고정값을 적용하지 않아요. 현재 정의로 다시 저장해 주세요.',
+    en: 'The prompt or its option definitions changed, so the earlier fixed values for this chat are not applied. Save them again with the current definitions.',
+    ja: 'プロンプトの所属またはオプション定義が変わったため、以前のチャット固定値は適用しません。現在の定義で保存し直してください。',
+    zh: '提示词归属或选项定义已更改，因此不再应用此前的聊天固定值。请按当前定义重新保存。',
+  },
+  'chatsettings.pendingOptionsDefinitionChanged': {
+    ko: '다음 요청 옵션의 프롬프트 정의가 바뀌었어요. 선택을 취소하고 다시 지정해 주세요.',
+    en: "The prompt definitions behind the next request's options changed. Cancel the selection and set it again.",
+    ja: '次の依頼のオプションのプロンプト定義が変わりました。選択を取り消して指定し直してください。',
+    zh: '下一次请求选项的提示词定义已更改。请取消选择后重新指定。',
+  },
   'chatsettings.m133': {
     ko: '불러오는 중…',
     en: 'Loading…',

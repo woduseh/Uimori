@@ -91,12 +91,10 @@ export type ChatBackup = {
   title: string;
   resources: NativeTransferFile;
   chats: ChatCopy[];
-  notices: string[];
 };
 export type ChatBackupImport = {
   chat: import('./types.js').Chat;
   created: boolean;
   sources: number;
   chats: import('./types.js').Chat[];
-  notices: string[];
 };

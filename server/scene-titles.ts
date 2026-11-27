@@ -46,7 +46,7 @@ export function setSceneTitle(store: Store, sourceId: string, value: unknown) {
     const source = store.sourceMetadata(sourceId);
     const key = `source-title:${sourceId}`;
     const current = sceneTitle(store, sourceId);
-    if (current !== expected && current !== title) throw new AppError(409, 'SCENE_TITLE_CHANGED');
+    if (current !== expected && current !== title) throw new AppError(409, 'REVISION_CONFLICT');
     if (title)
       store.db
         .prepare('INSERT OR REPLACE INTO app_metadata(key,value) VALUES(?,?)')

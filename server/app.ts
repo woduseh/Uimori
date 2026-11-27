@@ -50,7 +50,6 @@ import { invokeTaskTool } from './helper-task-tools.js';
 import { readHelperChatContext } from './helper-context.js';
 import { helperRoutes } from './helper-routes.js';
 import { contextRoutes } from './context-routes.js';
-import { ChatOverridesStore, chatOverrideRoutes } from './chat-overrides.js';
 import { chatOptionRoutes } from './chat-options.js';
 import { chatVariableRoutes } from './chat-variable-routes.js';
 import {
@@ -1083,7 +1082,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     vertexRequestTier: options.vertexRequestTier,
     track,
   });
-  chatOverrideRoutes(app, new ChatOverridesStore(store), publish);
   responseStreamRoutes(app, streams, { authenticated: session.authenticated });
   connectionTestRoutes(app, connectionTests, session.authenticated);
   agentRuntimeRoutes(app, codex);

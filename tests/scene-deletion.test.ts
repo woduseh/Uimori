@@ -331,7 +331,7 @@ test('a stale head, settings, or hash review rejects deletion without changing t
   ];
   for (const change of stale)
     expect(() => deleteScenes(f.store, f.chatId, f.b.id, { ...request(f), ...change })).toThrow(
-      'SCENE_DELETE_CHAT_CHANGED'
+      'REVISION_CONFLICT'
     );
   expect(
     f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
@@ -354,9 +354,7 @@ test('a later source, request context, or variables change after reviewing a fol
     const command = request(f, 'following');
     change();
     const variables = readChatVariables(f.store, f.chatId);
-    expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow(
-      'SCENE_DELETE_CHAT_CHANGED'
-    );
+    expect(() => deleteScenes(f.store, f.chatId, f.b.id, command)).toThrow('REVISION_CONFLICT');
     expect(
       f.store.history(f.store.chat(f.chatId).headRevision).map((source) => source.revision)
     ).toEqual([f.a.id, f.b.id, f.c.id]);

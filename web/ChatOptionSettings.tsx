@@ -10,7 +10,7 @@ import {
   type PromptValue,
 } from '../core/risu-prompt.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChatOptionState } from '../core/chat-options.js';
+import type { ChatOptionConflict, ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError, definiteRejection } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { PromptOptionGroup } from './PromptOptionGroup.js';
@@ -30,6 +30,10 @@ import { ConfirmDialog } from './ConfirmDialog.js';
 import { helperDataFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperRefreshSpacing } from './poll-delays.js';
+const conflictMessages = {
+  fixed_definition_changed: 'chatsettings.fixedOptionsDefinitionChanged',
+  pending_definition_changed: 'chatsettings.pendingOptionsDefinitionChanged',
+} satisfies Record<ChatOptionConflict, string>;
 
 type Values = Record<string, PromptValue>;
 type Props = {
@@ -387,7 +391,7 @@ export function ChatOptionSettings(props: Props) {
         )}
         {displayState.conflicts.map((item) => (
           <NoticeBanner tone="error" key={item}>
-            {translateMessage(item)}
+            {t(conflictMessages[item])}
           </NoticeBanner>
         ))}
         {conflict && <NoticeBanner tone="error">{t('chatsettings.m132')}</NoticeBanner>}

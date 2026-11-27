@@ -564,8 +564,8 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
       ? 'DATA_SQL_INVALID'
       : patch
         ? `PATCH_${patch.details.reason.toUpperCase()}`
-        : error instanceof HelperToolError || error instanceof AppError
-          ? error.code
+        : cause instanceof HelperToolError || cause instanceof AppError
+          ? cause.code
           : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
             (status === 409
               ? 'SOURCE_CONFLICT'
@@ -605,7 +605,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
   return {
     error: message,
     code,
-    ...(error instanceof AppError && error.params !== undefined ? { params: error.params } : {}),
+    ...(cause instanceof AppError && cause.params !== undefined ? { params: cause.params } : {}),
     recoverable: !['never', 'inspect_outcome'].includes(retryMode),
     retryMode,
     outcome: retryMode === 'inspect_outcome' ? 'unknown' : 'unchanged',

@@ -1,6 +1,8 @@
 import type { Content } from '../../core/product.js';
 import type { Settings } from '../../core/types.js';
 import type { ChatBackup, CopiedMessageState } from '../../core/chat-backup.js';
+
+type LegacyChatBackup = ChatBackup & { notices: string[] };
 import type { ChatTranscript } from '../../core/chat-transcript.js';
 import type { NativeTransferFile } from '../../core/native-transfer.js';
 import type { Store } from '../../server/store.js';
@@ -41,7 +43,7 @@ export function legacyResourceBundleFixture(
   };
 }
 
-export function legacyChatBackupFixture(store: Store, chatId: string): ChatBackup {
+export function legacyChatBackupFixture(store: Store, chatId: string): LegacyChatBackup {
   const copy = captureChatCopy(store, chatId);
   const items = [
     ...new Map(
@@ -85,7 +87,7 @@ export function legacyChatBackupWithBot(
   bot: Content,
   settings: Settings,
   scene?: { title: string; text: string; translation: string }
-): ChatBackup {
+): LegacyChatBackup {
   return {
     format: 'uimori-personal-chat',
     version: 1,

@@ -21,3 +21,10 @@ describe('safe auxiliary error diagnostics', () => {
     }
   });
 });
+
+it('names an automatic translation that could not be prepared', () => {
+  expect(auxiliaryErrorDiagnostic('AUTO_TRANSLATION_PREPARE_FAILED')).toMatchObject({
+    code: 'AUTO_TRANSLATION_PREPARE_FAILED',
+    message: '자동 번역을 준비하지 못했어요.',
+  });
+});

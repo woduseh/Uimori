@@ -2,7 +2,9 @@ import { t, useI18n, message as retainedMessage } from './i18n.js';
 import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
+import { readErrorWire } from '#contracts';
 import { sessionRequiredEvent } from './api.js';
+import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
 
 const exportMessages = (): Record<string, string> => ({
   RISU_EXPORT_MODULE_UNSUPPORTED: retainedMessage('transfer.m087'),
@@ -66,11 +68,13 @@ export function RisuExportButton({
             );
             if (!response.ok) {
               if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
-              const payload = (await response.json().catch(() => null)) as {
-                error?: string;
-              } | null;
+              const wire = readErrorWire(await response.json().catch(() => null));
+              const known = wire.error === undefined ? undefined : exportMessages()[wire.error];
               throw new Error(
-                exportMessages()[payload?.error ?? ''] ?? retainedMessage('transfer.m096')
+                known ??
+                  (apiErrorDiagnostic(wire, response.status, 'GET').code === null
+                    ? retainedMessage('transfer.m096')
+                    : apiErrorDisplay(wire, response.status, 'GET'))
               );
             }
             const blob = await response.blob();

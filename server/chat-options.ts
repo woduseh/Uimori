@@ -10,6 +10,7 @@ import {
   type OptionValues,
   type PendingChatOptions,
   type ChatOptionState,
+  type ChatOptionConflict,
 } from '../core/chat-options.js';
 import type { HelperTask } from '../core/helper.js';
 import type { CurrentPrompt, ProfileSnapshot } from '../core/product.js';
@@ -129,17 +130,10 @@ export class ChatOptionsStore {
       saved = this.saved(chatId);
     const compatible = !saved.binding || isDeepStrictEqual(saved.binding, binding);
     const pending = this.pending(chatId);
-    const conflicts: string[] = [];
-    if (!compatible && Object.keys(saved.values).length)
-      conflicts.push(
-        '프롬프트 소속이나 옵션 정의가 바뀌어 이전 채팅 고정값을 적용하지 않아요. 현재 정의로 다시 저장해 주세요.'
-      );
-    for (const item of pending) {
-      if (!isDeepStrictEqual(item.binding, binding))
-        conflicts.push(
-          '다음 요청 옵션의 프롬프트 정의가 바뀌었어요. 선택을 취소하고 다시 지정해 주세요.'
-        );
-    }
+    const conflicts: ChatOptionConflict[] = [];
+    if (!compatible && Object.keys(saved.values).length) conflicts.push('fixed_definition_changed');
+    if (pending.some((item) => !isDeepStrictEqual(item.binding, binding)))
+      conflicts.push('pending_definition_changed');
     return {
       chatId,
       revision: saved.revision,
@@ -203,7 +197,7 @@ export class ChatOptionsStore {
   }
   private assertBinding(value: unknown, state: ChatOptionState): void {
     if (!isDeepStrictEqual(readBinding(value), state.binding))
-      throw new AppError(409, 'CHAT_OPTIONS_BINDING_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
   }
   stage(chatId: string, value: unknown, requestId: string): ChatOptionState {
     return this.write(chatId, value, 'oneoff', requestId, ['binding', 'values'], (body, state) => {
@@ -234,7 +228,7 @@ export class ChatOptionsStore {
       ['pendingId'],
       (_b, state) => {
         const pending = state.pending.find((item) => item.id === pendingId);
-        if (!pending) throw new AppError(409, 'CHAT_OPTIONS_PENDING_CHANGED');
+        if (!pending) throw new AppError(409, 'REVISION_CONFLICT');
         this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pendingId);
         this.bump(chatId);
       }
@@ -250,7 +244,7 @@ export class ChatOptionsStore {
       !isDeepStrictEqual(frozenOptionBinding(profile), state.binding) ||
       profile.promptWorkspaceRevision !== state.workspaceRevision
     )
-      throw new AppError(409, 'CHAT_OPTIONS_PROMPT_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const controls = effectiveRisuControls(profile, preset.program);
     const globalValues = resolveControlValues(
       controls,

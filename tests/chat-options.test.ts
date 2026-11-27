@@ -165,7 +165,7 @@ test('stale revisions and changed definitions cannot overwrite options', () => {
       },
       requestId
     )
-  ).toThrow('CHAT_OPTIONS_BINDING_CHANGED');
+  ).toThrow('REVISION_CONFLICT');
   expect(() =>
     f.service.fixed(f.chat.id, input(f, { modelId: 'foreign-model' }), requestId)
   ).toThrow();

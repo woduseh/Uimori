@@ -75,7 +75,7 @@ test('device-local last positions use CAS, accept backwards reading, and reject 
   expect(readingPositions(store, chat.id, b).other).toEqual(saved);
   expect(() =>
     saveReadingPosition(store, chat.id, { clientId: a, expectedRevision: 0, target: target(first) })
-  ).toThrow('READING_POSITION_CHANGED');
+  ).toThrow('REVISION_CONFLICT');
   const previous = saveReadingPosition(store, chat.id, {
     clientId: a,
     expectedRevision: 1,
@@ -120,7 +120,7 @@ test('bookmarks preserve snapshots through edits, deduplicate an acknowledged cr
   });
   expect(edited).toMatchObject({ revision: 2, title: 'New title' });
   expect(() => updateBookmark(store, created.id, { expectedRevision: 1 }, true)).toThrow(
-    'BOOKMARK_CHANGED'
+    'REVISION_CONFLICT'
   );
   updateBookmark(store, created.id, { expectedRevision: 2 }, true);
   expect(listBookmarks(store, chat.id)).toEqual([]);
@@ -183,6 +183,17 @@ test('portable backup round-trip keeps bookmarks, rejects malformed locations at
   await expect(
     importChatBackup(destination, { backup: malformed, idempotencyKey: 'bad' })
   ).rejects.toThrow('CHAT_BACKUP_INVALID');
+  for (const [index, corruption] of [
+    { title: '' },
+    { title: 7 },
+    { representation: 'summary' },
+  ].entries()) {
+    const corrupt = structuredClone(backup);
+    Object.assign(corrupt.chats[0].state.bookmarks![0], corruption);
+    await expect(
+      importChatBackup(destination, { backup: corrupt, idempotencyKey: `corrupt-${index}` })
+    ).rejects.toMatchObject({ statusCode: 400, code: 'CHAT_BACKUP_INVALID' });
+  }
   expect(destination.chats()).toHaveLength(previousChats);
   const legacy = structuredClone(backup);
   delete legacy.chats[0].state.bookmarks;

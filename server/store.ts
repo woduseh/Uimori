@@ -339,7 +339,7 @@ export class Store {
     return this.transaction(() => {
       const prior = this.chat(id);
       if (prior.titleRevision !== expectedTitleRevision)
-        throw new AppError(409, 'CHAT_TITLE_CHANGED');
+        throw new AppError(409, 'REVISION_CONFLICT');
       this.db.prepare('UPDATE chats SET title=? WHERE id=?').run(title, id);
       this.event(id, 'chat.title.manual', id);
       return this.chat(id);
@@ -849,7 +849,7 @@ export class Store {
             source.id,
             source.hash,
             json({ autoTranslateRunId: id }),
-            '자동 번역을 준비하지 못했어요. 번역 모델 설정을 확인하고 직접 다시 요청해 주세요.',
+            'AUTO_TRANSLATION_PREPARE_FAILED',
             time,
             time
           );

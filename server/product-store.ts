@@ -403,7 +403,8 @@ export class ProductStore {
             createDefaultRisuPrompt(text(b.text, 'prompt text', 200000, true), role)
           );
     if (program.collaboration) {
-      if (role !== 'main') throw new AppError(400, 'PROMPT_COLLABORATION_MAIN_ONLY');
+      if (role !== 'main')
+        throw new HttpError(400, 'Collaboration is only available on main prompts');
       const previous = id
         ? this.get<PromptPreset>('prompt-preset', id).program.collaboration
         : undefined;
@@ -546,12 +547,12 @@ export class ProductStore {
         !Array.isArray(body.expectedOrder) ||
         JSON.stringify(body.expectedOrder) !== JSON.stringify(group.map((item) => item.id))
       )
-        throw new AppError(409, 'PROVIDER_ORDER_CHANGED');
+        throw new AppError(409, 'REVISION_CONFLICT');
       const index = group.findIndex((item) => item.id === id);
       if (targetId === id) return { moved: false };
       const [moving] = group.splice(index, 1);
       const target = group.findIndex((item) => item.id === targetId);
-      if (target < 0) throw new AppError(409, 'PROVIDER_ORDER_OTHER_GROUP');
+      if (target < 0) throw new HttpError(400, 'Move target outside the list');
       group.splice(target + (position === 'after' ? 1 : 0), 0, moving!);
       const update = this.db.prepare(
         "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind=? AND id=?"

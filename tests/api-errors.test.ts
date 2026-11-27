@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
-import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
+import { downloadArchive } from '../web/archive-download.js';
+import { loadLocale, setLocale, translateMessage, UI_LOCALES } from '../web/i18n.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
@@ -86,4 +87,23 @@ test('a catalogued code still arriving as a legacy error string uses the catalog
 test('a legacy error string naming a code that needs params falls back instead of formatting', async () => {
   const result = await rejected(422, 'INPUT_TRANSLATION_TOO_LONG');
   expect(result).toMatchObject({ status: 422, message: expect.any(String) });
+});
+
+test('archive downloads show coded errors and keep their own fallback for an empty body', async () => {
+  const download = async (body: string, status = 400) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status }));
+    const result = await downloadArchive('/native-transfers/export-archive', 'x.uimori', {}).then(
+      () => null,
+      (error: unknown) => error
+    );
+    expect(result).toBeInstanceOf(ApiError);
+    return result as ApiError;
+  };
+  expect(await download(JSON.stringify({ code: 'RESOURCE_BUNDLE_MODULE_CYCLE' }))).toMatchObject({
+    code: 'RESOURCE_BUNDLE_MODULE_CYCLE',
+    message: '모듈 연결에 순환이 있어요.',
+  });
+  const empty = await download('', 500);
+  expect(empty.code).toBeNull();
+  expect(translateMessage(empty.message)).toBe('백업 파일을 받지 못했어요.');
 });

@@ -1158,7 +1158,7 @@ test('previous reads expose the current undo slot without changing saved state o
     .prepare('UPDATE resource_undo SET saved_revision=?,model=? WHERE id=?')
     .run(third.revision, '{broken', preset.id);
   expect(() => call(store, 'resource.read', { ...target, version: 'previous', path })).toThrow(
-    'RESOURCE_UNDO_UNREADABLE'
+    'RESOURCE_UNDO_UNAVAILABLE'
   );
   expect(call(store, 'resource.read', { ...target, path }).text).toBe('Third');
 });

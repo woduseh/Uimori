@@ -36,7 +36,7 @@ export function saveChatGenerationDefaults(store: Store, input: unknown): ChatGe
 
   return store.transaction(() => {
     const previous = chatGenerationDefaults(store.db);
-    if (previous.revision !== expected) throw new AppError(409, 'CHAT_DEFAULTS_CHANGED');
+    if (previous.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     const next: ChatGenerationDefaults = {
       revision: previous.revision + 1,
       maxCalls,

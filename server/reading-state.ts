@@ -33,11 +33,7 @@ const bounded = (value: unknown, max: number, name: string, empty = false) => {
     throw new HttpError(400, `Invalid ${name}`);
   return value;
 };
-const client = (value: unknown) => {
-  const id = text(value, 'browser ID', 100);
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, 'Invalid browser ID');
-  return id;
-};
+const client = (value: unknown) => text(value, 'browser ID', 100);
 export function validateReaderTarget(store: Store, chatId: string, value: unknown): ReaderTarget {
   const body = record(value);
   fields(body, [
@@ -48,7 +44,6 @@ export function validateReaderTarget(store: Store, chatId: string, value: unknow
     'blockAnchor',
     'offsetRatio',
   ]);
-  if (body.chatId !== chatId) throw new HttpError(400, 'Reader target outside chat');
   const chat = store.chat(chatId);
   const sourceId = text(body.sourceId, 'source', 120);
   const member = store.db
@@ -121,7 +116,7 @@ export function saveReadingPosition(store: Store, chatId: string, value: unknown
       !Number.isSafeInteger(body.expectedRevision) ||
       body.expectedRevision !== (old?.revision ?? 0)
     )
-      throw new AppError(409, 'READING_POSITION_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const now = new Date(
       Math.max(Date.now(), (old ? Date.parse(old.updatedAt) : 0) + 1)
     ).toISOString();
@@ -193,7 +188,7 @@ export function updateBookmark(
   return store.transaction(() => {
     const old = store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id);
     if (!old) throw new AppError(404, 'BOOKMARK_NOT_FOUND');
-    if (body.expectedRevision !== old.revision) throw new AppError(409, 'BOOKMARK_CHANGED');
+    if (body.expectedRevision !== old.revision) throw new AppError(409, 'REVISION_CONFLICT');
     if (remove) {
       store.db.prepare('DELETE FROM bookmarks WHERE id=?').run(id);
       return { deleted: true as const };

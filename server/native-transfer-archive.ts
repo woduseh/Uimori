@@ -254,9 +254,7 @@ export async function prepareNativeArchive(
         typeof backup.createdAt !== 'string' ||
         typeof backup.title !== 'string' ||
         !Array.isArray(backup.chats) ||
-        !backup.chats.length ||
-        !Array.isArray(backup.notices) ||
-        backup.notices.some((notice: unknown) => typeof notice !== 'string')
+        !backup.chats.length
       )
         invalid();
       for (const rawCopy of backup.chats) {

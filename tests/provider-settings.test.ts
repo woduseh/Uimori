@@ -506,7 +506,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       app,
       `/model-presets/${model.id}/move`,
       { targetId: otherModel.id, position: 'before', expectedOrder: [model.id] },
-      409
+      400
     );
     expect(fetch).not.toHaveBeenCalled();
   });

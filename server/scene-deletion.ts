@@ -152,7 +152,7 @@ export function deleteScenes(
       historyHash(history) !== expectedHistoryHash ||
       readChatVariables(store, chatId).revision !== expectedVariablesRevision
     )
-      throw new AppError(409, 'SCENE_DELETE_CHAT_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     assertChatIdleForDeletion(store, chatId);
     const removed = scope === 'only' ? [history[index]] : history.slice(index);
     const ids = new Set(removed.map((source) => source.revision));

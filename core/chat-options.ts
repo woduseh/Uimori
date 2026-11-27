@@ -22,8 +22,9 @@ export type ChatOptionState = {
   globalValues: OptionValues;
   fixedValues: OptionValues;
   pending: PendingChatOptions[];
-  conflicts: string[];
+  conflicts: ChatOptionConflict[];
 };
+export type ChatOptionConflict = 'fixed_definition_changed' | 'pending_definition_changed';
 export type ChatOptionResolution = {
   binding: OptionBinding;
   revision: number;

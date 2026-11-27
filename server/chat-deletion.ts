@@ -48,8 +48,6 @@ export function chatDeletionImpact(store: Store, chatId: string) {
   store.chat(chatId);
   return {
     request: {},
-    description:
-      '이 채팅의 원문, 번역, 메모, 도우미와 작업 기록을 삭제해요. 독립 사본과 공통 자료는 유지돼요. 사용량 합계는 원문이나 요청 내용 없이 유지해요.',
   };
 }
 
@@ -173,9 +171,9 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
     const command = store.story.command(id);
     assertChatIdleForDeletion(store, command.chatId);
     if (command.runId || command.sourceRevision)
-      throw new AppError(409, 'SCENE_COMMAND_RUN_LINKED');
+      throw new Error('Scene command is linked to a run');
     if (store.db.prepare('SELECT 1 FROM outline_writings WHERE command_id=?').get(id))
-      throw new AppError(409, 'SCENE_COMMAND_OUTLINE_LINKED');
+      throw new Error('Scene command is linked to an outline item');
     store.db.prepare('DELETE FROM scene_commands WHERE id=?').run(id);
     store.event(command.chatId, 'scene.command.deleted', id);
     return { deleted: true, chatId: command.chatId };

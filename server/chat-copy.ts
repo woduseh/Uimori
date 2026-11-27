@@ -97,50 +97,65 @@ export function restoreChatCopy(
       idempotencyKey: requestKey,
     });
     if (!imported.created) return imported.chat;
-    const chatId = imported.chat.id;
-    const history = store.history(imported.chat.headRevision);
-    if (copy.state.checkpoints.length !== history.length)
-      throw new AppError(400, 'CHAT_BACKUP_INVALID');
-    const variables = validateChatVariableState(copy.state.variables);
-    const profile = store.product.profile(chatId);
-    store.product.updateProfile(chatId, {
-      expectedRevision: profile.revision,
-      packageAttachments: profile.packageAttachments,
-      ...copy.state.profile,
-    });
-    store.settings(chatId, imported.chat.settingsRevision, copy.state.settings);
-    if (copy.state.storyGuide)
-      store.storyGuide.update(chatId, { expectedRevision: 0, config: copy.state.storyGuide });
-    restoreIllustrationContinuity(store, chatId, history, copy.state.illustrationContinuity);
-    for (const [index, source] of history.entries()) {
-      const checkpoint = copy.state.checkpoints[index];
-      if (checkpoint)
-        store.db
-          .prepare(
-            'INSERT INTO chat_variable_outputs(source_id,body) VALUES(?,?) ON CONFLICT(source_id) DO UPDATE SET body=excluded.body'
-          )
-          .run(source.revision, JSON.stringify(validateChatVariableState(checkpoint)));
+    try {
+      return restoreCopiedState(store, copy, imported.chat, readBinary);
+    } catch (error) {
+      if (error instanceof HttpError && !(error instanceof AppError) && error.statusCode === 400)
+        throw new AppError(400, 'CHAT_BACKUP_INVALID');
+      throw error;
     }
-    store.db
-      .prepare(`INSERT INTO chat_variable_states(chat_id,revision,values_json) VALUES(?,?,?)
-      ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json`)
-      .run(chatId, variables.revision, JSON.stringify(variables.values));
-    if (copy.state.authoring) restoreChatAuthoring(store, chatId, history, copy.state.authoring);
-    if (copy.state.illustrationReferences)
-      restoreIllustrationReferences(store, chatId, copy.state.illustrationReferences, readBinary);
-    if (copy.state.messages) restoreCopiedMessages(store, copy.state.messages, history);
-    restoreSceneTitles(
-      store,
-      history.map((source) => source.revision),
-      copy.state.sceneTitles
-    );
-    restoreBookmarks(
-      store,
-      chatId,
-      history.map((source) => source.revision),
-      copy.state.bookmarks
-    );
-    restoreIllustrations(store, history, copy.illustrations, readBinary);
-    return store.chat(chatId);
   });
+}
+
+function restoreCopiedState(
+  store: Store,
+  copy: ChatCopy,
+  chat: Chat,
+  readBinary?: (reference: string) => Buffer
+): Chat {
+  const chatId = chat.id;
+  const history = store.history(chat.headRevision);
+  if (copy.state.checkpoints.length !== history.length)
+    throw new AppError(400, 'CHAT_BACKUP_INVALID');
+  const variables = validateChatVariableState(copy.state.variables);
+  const profile = store.product.profile(chatId);
+  store.product.updateProfile(chatId, {
+    expectedRevision: profile.revision,
+    packageAttachments: profile.packageAttachments,
+    ...copy.state.profile,
+  });
+  store.settings(chatId, chat.settingsRevision, copy.state.settings);
+  if (copy.state.storyGuide)
+    store.storyGuide.update(chatId, { expectedRevision: 0, config: copy.state.storyGuide });
+  restoreIllustrationContinuity(store, chatId, history, copy.state.illustrationContinuity);
+  for (const [index, source] of history.entries()) {
+    const checkpoint = copy.state.checkpoints[index];
+    if (checkpoint)
+      store.db
+        .prepare(
+          'INSERT INTO chat_variable_outputs(source_id,body) VALUES(?,?) ON CONFLICT(source_id) DO UPDATE SET body=excluded.body'
+        )
+        .run(source.revision, JSON.stringify(validateChatVariableState(checkpoint)));
+  }
+  store.db
+    .prepare(`INSERT INTO chat_variable_states(chat_id,revision,values_json) VALUES(?,?,?)
+    ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json`)
+    .run(chatId, variables.revision, JSON.stringify(variables.values));
+  if (copy.state.authoring) restoreChatAuthoring(store, chatId, history, copy.state.authoring);
+  if (copy.state.illustrationReferences)
+    restoreIllustrationReferences(store, chatId, copy.state.illustrationReferences, readBinary);
+  if (copy.state.messages) restoreCopiedMessages(store, copy.state.messages, history);
+  restoreSceneTitles(
+    store,
+    history.map((source) => source.revision),
+    copy.state.sceneTitles
+  );
+  restoreBookmarks(
+    store,
+    chatId,
+    history.map((source) => source.revision),
+    copy.state.bookmarks
+  );
+  restoreIllustrations(store, history, copy.illustrations, readBinary);
+  return store.chat(chatId);
 }

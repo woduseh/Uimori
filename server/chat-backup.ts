@@ -28,7 +28,6 @@ import { validateChatVariableState } from '../core/chat-variables.js';
 import { normalizeStoryGuideConfig } from '../core/story-guide.js';
 import { fields, record, text } from './request-validation.js';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { importPreparedResourceBundle } from './resource-bundle.js';
 import {
   exportNativeArchive,
@@ -83,10 +82,6 @@ export function exportChatBackupArchive(store: Store, chatId: string) {
     createdAt: new Date().toISOString(),
     title: chat.title,
     chats: [copy],
-    notices: [
-      '모델 연결과 API 키는 가져오지 않아요. 대상 작업실의 모델을 사용해요.',
-      '실행 기록, 도우미 내부 작업, 자동 요약 체크포인트, 일회성 옵션은 복원하지 않아요. 원문과 메모로 다시 이어가요.',
-    ],
   });
 }
 
@@ -109,7 +104,6 @@ export function importPreparedChatBackup(
         chats,
         created: false,
         sources: prior.sources,
-        notices: original.notices,
       };
     }
     const receipt = importPreparedResourceBundle(store, file, prepared.images, {
@@ -148,19 +142,13 @@ export function importPreparedChatBackup(
         (reference) => {
           const image = binary.get(reference);
           if (!image) throw new AppError(400, 'CHAT_BACKUP_INVALID');
-          const bytes = readFileSync(image.path);
-          if (
-            bytes.length !== image.bytes ||
-            createHash('sha256').update(bytes).digest('hex') !== image.hash
-          )
-            throw new AppError(409, 'CHAT_BACKUP_IMAGE_CHANGED');
-          return bytes;
+          return readFileSync(image.path);
         }
       );
     });
     const sources = original.chats.reduce((sum, copy) => sum + copy.transcript.entries.length, 0);
     saveImportReceipt(store, key, digest, { chatIds: chats.map((chat) => chat.id), sources });
-    return { chat: chats[0]!, chats, created: true, sources, notices: original.notices };
+    return { chat: chats[0]!, chats, created: true, sources };
   });
 }
 
@@ -172,11 +160,7 @@ export function importChatBackupArchiveRequest(store: Store, value: unknown): Ch
     key = `chat:archive-request:${text(body.idempotencyKey, 'import request', 100)}`;
   const command = bundleDigest({ id, digest });
   const result = store.transaction(() => {
-    const prior = readImportReceipt<{ chatIds: string[]; sources: number; notices: string[] }>(
-      store,
-      key,
-      command
-    );
+    const prior = readImportReceipt<{ chatIds: string[]; sources: number }>(store, key, command);
     if (prior) {
       const chats = prior.chatIds.map((chatId) => store.chat(chatId));
       return {
@@ -184,7 +168,6 @@ export function importChatBackupArchiveRequest(store: Store, value: unknown): Ch
         chats,
         created: false,
         sources: prior.sources,
-        notices: prior.notices,
       };
     }
     const result = importPreparedChatBackup(
@@ -195,7 +178,6 @@ export function importChatBackupArchiveRequest(store: Store, value: unknown): Ch
     saveImportReceipt(store, key, command, {
       chatIds: result.chats.map((chat) => chat.id),
       sources: result.sources,
-      notices: result.notices,
     });
     return result;
   });
@@ -218,7 +200,6 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       chats,
       created: false,
       sources: saved.sources,
-      notices: original.notices,
     };
   };
   const prior = previous();
@@ -305,7 +286,6 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       chats,
       created: true,
       sources,
-      notices: original.notices,
     };
   });
 }

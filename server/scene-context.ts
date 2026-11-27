@@ -76,7 +76,7 @@ export function updateSceneContext(store: Store, sourceId: string, value: unknow
       .get(source.chatId);
     if (active) throw new AppError(409, 'SCENE_CONTEXT_RUN_ACTIVE');
     const current = readSceneContext(store.db, sourceId);
-    if (current.revision !== expected) throw new HttpError(409, 'Scene context revision conflict');
+    if (current.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     const next: SceneContext = {
       revision: expected + 1,
       requestText: requestText === undefined ? current.requestText : requestText,

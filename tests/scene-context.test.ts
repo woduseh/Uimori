@@ -205,7 +205,7 @@ describe('authored scene context without replaying prior runs', () => {
     const first = turn(store, chat.id, 'Original request', 'Original scene');
     expect(() =>
       updateSceneContext(store, first.id, { expectedRevision: 3, sceneEnabled: false })
-    ).toThrow('revision conflict');
+    ).toThrow('REVISION_CONFLICT');
     const state = store.chat(chat.id);
     store.createRun(
       chat.id,

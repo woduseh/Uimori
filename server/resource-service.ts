@@ -80,7 +80,7 @@ export function saveResource(
           ?.model
       : null;
     if (previous && previous.revision !== edit.expectedRevision)
-      throw new AppError(409, 'RESOURCE_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const input = { ...edit.model, expectedRevision: edit.expectedRevision };
     const saved: SavedResource =
       edit.kind === 'illustration-preset'
@@ -174,7 +174,7 @@ export function cloneResource(
     store.product.assertAvailable(request.kind, request.sourceId);
     const source = readResource(store, request.kind, request.sourceId);
     if (source.revision !== request.expectedSourceRevision)
-      throw new AppError(409, 'RESOURCE_CLONE_SOURCE_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const model = structuredClone(editableResource(request.kind, source));
     if (request.kind === 'content') {
       const content = model as ContentEditModel;
@@ -208,20 +208,22 @@ export function readPreviousResource(store: Store, kind: ResourceKind, id: strin
   const row = store.db
     .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
     .get(kind, id);
-  if (!row) throw new AppError(404, 'RESOURCE_UNDO_UNAVAILABLE');
-  let model: unknown;
-  try {
-    model = JSON.parse(String(row.model));
-  } catch {
-    throw new AppError(409, 'RESOURCE_UNDO_UNREADABLE');
-  }
-  if (!model || typeof model !== 'object' || Array.isArray(model))
-    throw new AppError(409, 'RESOURCE_UNDO_UNREADABLE');
+  const model = row ? parsedObject(String(row.model)) : null;
+  if (!row || !model) throw new AppError(404, 'RESOURCE_UNDO_UNAVAILABLE');
   return { savedRevision: Number(row.saved_revision), model: model as ResourceModel };
+}
+
+function parsedObject(value: string): object | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 export function undoResource(store: Store, kind: ResourceKind, id: string, revision: number) {
   const previous = readPreviousResource(store, kind, id);
-  if (previous.savedRevision !== revision) throw new AppError(409, 'RESOURCE_UNDO_CHANGED');
+  if (previous.savedRevision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
   return saveResource(store, { kind, id, expectedRevision: revision, model: previous.model });
 }

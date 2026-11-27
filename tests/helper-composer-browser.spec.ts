@@ -55,7 +55,7 @@ test('HELPMODEL rejected and uncertain helper changes require an explicit reread
     if (writes === 1)
       return route.fulfill({
         status: 409,
-        json: { code: 'MODEL_WORKSPACE_CHANGED' },
+        json: { code: 'REVISION_CONFLICT' },
       });
     await route.fetch();
     await route.abort('failed');

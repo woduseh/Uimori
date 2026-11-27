@@ -47,11 +47,9 @@ export class ChatOrganizationStore {
     const expected = number(b.expectedRevision, 'bot defaults revision');
     const selection = record(b.persona);
     fields(selection, selection.mode === 'persona' ? ['mode', 'persona'] : ['mode']);
-    if (!['inherit', 'none', 'persona'].includes(selection.mode))
-      throw new HttpError(400, 'Invalid default persona mode');
     return this.store.transaction(() => {
       const prior = this.defaults(botId);
-      if (prior.revision !== expected) throw new AppError(409, 'BOT_DEFAULTS_CHANGED');
+      if (prior.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
       const persona = selection.mode === 'persona' ? this.persona(selection.persona) : null;
       if (selection.mode === 'persona' && !persona)
         throw new AppError(400, 'BOT_DEFAULT_PERSONA_REQUIRED');

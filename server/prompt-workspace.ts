@@ -575,7 +575,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
   return store.transaction(() => {
     const prior = promptWorkspace(store);
     if (prior.revision !== number(input.expectedRevision, 'model workspace revision'))
-      throw new AppError(409, 'MODEL_WORKSPACE_CHANGED');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const next = validatePromptWorkspace({
       ...prior,
       ...(Object.hasOwn(input, 'judgment') ? { judgment: input.judgment } : {}),
@@ -692,7 +692,7 @@ export function updatePromptWorkspace(
             incoming.presetRevision !== undefined &&
             incoming.presetRevision !== prior[role].presetRevision
           )
-            throw new AppError(409, 'PROMPT_PRESET_CHANGED');
+            throw new AppError(409, 'REVISION_CONFLICT');
           if (
             !applying &&
             (!isDeepStrictEqual(incoming.program, prior[role].program) ||
