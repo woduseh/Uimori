@@ -22,7 +22,6 @@ async function post<T>(request: APIRequestContext, path: string, data: unknown):
       request,
       '/api/package-image-blobs',
       {
-        mime: 'image/png',
         base64:
           'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
       }
