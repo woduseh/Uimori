@@ -188,3 +188,35 @@ test('ITRAN send intent invalidates a running translation without making transla
     released.release();
   }
 });
+
+test('ITRAN refused translation and rejected submission preserve the editable draft and undo', async ({
+  page,
+  request,
+}) => {
+  const chat = await createChat(request);
+  let rejectedTranslation = true;
+  await page.route(endpoint, async (route) => {
+    if (rejectedTranslation)
+      await route.fulfill({ status: 422, json: { error: 'INPUT_TRANSLATION_REFUSED' } });
+    else await answer(route);
+  });
+  await open(page, chat.id);
+  await composer(page).fill(original);
+  await (await translate(page)).click();
+  await expect(page.getByRole('alert').filter({ hasText: '번역을 거절했어요' })).toBeVisible();
+  await expect(composer(page)).toHaveValue(original);
+  rejectedTranslation = false;
+  await (await translate(page)).click();
+  await expect(composer(page)).toHaveValue(translated);
+  await page.route(`**/api/chats/${chat.id}/runs`, (route) =>
+    route.fulfill({ status: 400, json: { error: 'Rejected fixture' } })
+  );
+  await send(page).click();
+  await expect(composer(page)).toHaveValue(translated);
+  await expect(page.getByRole('button', { name: '되돌리기', exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(composer(page)).toHaveValue(translated);
+  await page.getByRole('button', { name: '되돌리기', exact: true }).click();
+  await expect(composer(page)).toHaveValue(original);
+  expect((await detail(request, chat.id)).runs).toHaveLength(0);
+});

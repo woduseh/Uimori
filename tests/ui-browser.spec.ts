@@ -12,6 +12,7 @@ import {
   selectChatSettingsSection,
   sourceAction,
   openChatMenu,
+  openMoreSourceActions,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
@@ -843,3 +844,162 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
 });
 
 preservePromptWorkspace();
+
+test('UI12 lost response reconfirms the original command and preserves a newer draft', async ({
+  page,
+  request,
+}) => {
+  const response = await postFixtureChat(request, {
+    data: { title: `합성 UI lost response ${Date.now()}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  const chat = (await response.json()) as Chat;
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByRole('heading', { name: chat.title, exact: true })).toBeVisible();
+  const commands: Record<string, unknown>[] = [];
+  let lose = true;
+  await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
+    commands.push(route.request().postDataJSON());
+    if (lose) {
+      lose = false;
+      const received = await route.fetch();
+      expect(received.ok()).toBeTruthy();
+      await route.abort('failed');
+    } else await route.continue();
+  });
+  await page.getByLabel('다음 장면 요청').fill('합성 최초 요청');
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  await expect.poll(async () => (await data(request, chat.id)).runs[0]?.status).toBe('completed');
+  await expect(page.getByTestId('source')).toHaveCount(1);
+  await page.getByLabel('다음 장면 요청').fill('합성 새 초안은 원래 요청과 달라요');
+  await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+  const notification = page.getByRole('dialog', { name: '작업 알림', exact: true });
+  await expect(notification.getByRole('button', { name: '접수 확인', exact: true })).toBeVisible();
+  await expect(notification).toContainText('다시 확인하면 접수되지 않은 요청이 실행될 수 있어요.');
+  await expect(notification).toContainText('접수 여부를 확인하지 못했어요.');
+  expect(commands).toHaveLength(1);
+  await notification.getByRole('button', { name: '접수 확인', exact: true }).click();
+  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).toEqual(commands[0]);
+  expect((await data(request, chat.id)).runs).toHaveLength(1);
+  expect((await data(request, chat.id)).sources).toHaveLength(1);
+  await expect(page.getByLabel('다음 장면 요청')).toHaveValue('합성 새 초안은 원래 요청과 달라요');
+  expect(await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id)).toBeNull();
+});
+
+test('UI whole-source translation retains completed results across retry and cancellation', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await seed(
+    request,
+    `전체 번역 ${Date.now()}`,
+    'Synthetic whole source translation.'
+  );
+  const before = await data(request, chat.id);
+  const source = before.sources[0];
+  const original = ['A'.repeat(150), 'B'.repeat(150)].join('\n\n');
+  expect(
+    (
+      await request.put(`/api/sources/${source.id}/text`, {
+        data: { text: original, expectedRevision: source.editRevision ?? 0 },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '생성 설정');
+  await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
+  if (visualReview)
+    await page.screenshot({
+      path: info.outputPath(`translation-whole-source-settings-${MOBILE_WIDTH}.png`),
+    });
+  await close(page);
+  const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
+  const latest = async () =>
+    (await data(request, chat.id)).jobs
+      .filter((job) => job.kind === 'translation')
+      .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0];
+  await expect.poll(async () => (await latest())?.status).toBe('completed');
+  const first = await latest();
+  expect(first).not.toHaveProperty('chunks');
+  expect(first).not.toHaveProperty('translationPlan');
+  const translated = nativeProse(scene.getByTestId('translation-text'));
+  await expect(translated).toContainText('A'.repeat(150));
+  const firstText = await translated.innerText();
+  expect(
+    (
+      await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } })
+    ).ok()
+  ).toBeTruthy();
+  await openMoreSourceActions(scene);
+  page.once('dialog', (dialog) => dialog.accept());
+  await scene.getByRole('button', { name: '현재 설정으로 새 번역', exact: true }).click();
+  await expect.poll(async () => (await latest()).status).toBe('running');
+  const pending = await latest();
+  expect(pending.id).not.toBe(first.id);
+  expect(pending.previousResult?.jobId).toBe(first.id);
+  await expect(translated).toHaveText(firstText);
+  expect((await request.post(`/api/jobs/${pending.id}/cancel`, { data: {} })).ok()).toBeTruthy();
+  expect(
+    (
+      await request.post('/api/test/control', {
+        data: { action: 'release', barrier: 'translation' },
+      })
+    ).ok()
+  ).toBeTruthy();
+  await expect.poll(async () => (await latest()).status).toBe('cancelled');
+  await expect(translated).toHaveText(firstText);
+  if (visualReview)
+    await page.screenshot({
+      path: info.outputPath(`translation-previous-cancelled-${MOBILE_WIDTH}.png`),
+    });
+  let previousSuccess = first;
+  for (const terminal of ['cancelled', 'failed'] as const) {
+    if (terminal === 'failed') {
+      expect(
+        (
+          await request.post('/api/test/control', {
+            data: { action: 'fail-next', point: 'translation' },
+          })
+        ).ok()
+      ).toBeTruthy();
+      expect(
+        (await request.post(`/api/sources/${source.id}/retranslate`, { data: {} })).ok()
+      ).toBeTruthy();
+      await expect.poll(async () => (await latest()).status).toBe('failed');
+    }
+    const stopped = await latest();
+    await expect(scene.getByTestId('translation-text')).toBeVisible();
+    const activity = scene.getByTestId('turn-activity');
+    if ((await activity.getAttribute('open')) === null)
+      await activity.locator(':scope > summary').click();
+    const retry = scene
+      .getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
+      .filter({ visible: true })
+      .first();
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect
+      .poll(async () => {
+        const value = await latest();
+        return value.id !== stopped.id && value.status === 'completed';
+      })
+      .toBe(true);
+    const retried = await latest();
+    expect(retried.sourceHash).toBe(first.sourceHash);
+    expect((await data(request, chat.id)).sources[0].text).toBe(original);
+    expect((await (await request.get(`/api/jobs/${previousSuccess.id}`)).json()).result).toEqual(
+      previousSuccess.result
+    );
+    previousSuccess = retried;
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`translation-whole-source-${terminal}-retry-${MOBILE_WIDTH}.png`),
+      });
+  }
+});
