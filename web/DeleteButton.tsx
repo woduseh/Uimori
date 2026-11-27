@@ -66,7 +66,8 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
   useI18n();
   const [target, setTarget] = useState<{
     title: Title;
-    body: Record<string, unknown>;
+    send: () => Promise<unknown>;
+    onDeleted: () => Promise<void> | void;
   } | null>(null);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<UiMessage | null>(null);
@@ -83,11 +84,15 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
     setBusy(true);
     setError(null);
     try {
+      const { endpoint, params, path, preparePath } = request;
       const revisionBody = revision === undefined ? {} : { expectedRevision: revision };
-      const body = request.preparePath
-        ? (await api<{ request: Record<string, unknown> }>(request.preparePath)).request
+      const body = preparePath
+        ? (await api<{ request: Record<string, unknown> }>(preparePath)).request
         : (request.body ?? revisionBody);
-      setTarget({ title, body });
+      const send = endpoint
+        ? () => sendDelete(endpoint, { ...params, ...body })
+        : () => api(path!, body, 'DELETE');
+      setTarget({ title, send, onDeleted });
     } catch (caught) {
       fail(caught);
     } finally {
@@ -101,11 +106,9 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
     setBusy(true);
     setError(null);
     try {
-      if (request.endpoint)
-        await sendDelete(request.endpoint, { ...request.params, ...target.body });
-      else await api(request.path!, target.body, 'DELETE');
+      await target.send();
       flushSync(() => setTarget(null));
-      await onDeleted();
+      await target.onDeleted();
     } catch (caught) {
       fail(caught);
     } finally {
