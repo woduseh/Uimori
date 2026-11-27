@@ -231,7 +231,7 @@ describe('Image references across copies and editing', () => {
       base64: staged.bytes.toString('base64'),
     });
     deleteLibraryItem(store, 'content', bot.id, { expectedRevision: bot.revision });
-    expect(store.product.get('content', bot.id)).toBeTruthy();
+    expect(store.product.stored('content', bot.id)).toBeTruthy();
     const confirmation = chatDeletionImpact(store, chat.id);
     store.event(chat.id, 'run.usage', 'diagnostic-only');
     deleteChat(store, chat.id, confirmation.request);
@@ -310,7 +310,7 @@ describe('Image references across copies and editing', () => {
     expect(
       store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)
     ).toBeTruthy();
-    const current = store.product.get<Content>('content', bot.id);
+    const current = store.product.stored<Content>('content', bot.id);
     const chat = importChatTranscript(store, {
       idempotencyKey: randomUUID(),
       transcript: {

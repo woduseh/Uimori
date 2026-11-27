@@ -88,7 +88,7 @@ function profile(
           (ref) =>
             !prior.packageAttachments?.some((owner) => owner.role === 'bot' && owner.id === ref.id)
         )
-        .map((ref) => ({ ...ref, role: product.get<Content>('content', ref.id).kind })),
+        .map((ref) => ({ ...ref, role: product.stored<Content>('content', ref.id).kind })),
     ],
 
     routes: prior.routes,
@@ -192,7 +192,9 @@ describe('M1 product data with actual file SQLite', () => {
         .snapshot.resources.find((item) => item.id === `package:${lore.id}:module:lore:lore-0`)
         ?.text
     ).toBe('UNREAD_LORE_V1');
-    expect(() => product.get<Content>('content', lore.id, 1)).toThrow('content revision not found');
+    expect(() => product.stored<Content>('content', lore.id, 1)).toThrow(
+      'content revision not found'
+    );
     expect(
       product.snapshot(chat.id)?.packages?.find((item) => item.id === lore.id)?.lore[0].text
     ).toBe('EDITED_LORE_V2');
@@ -286,8 +288,10 @@ describe('M1 product data with actual file SQLite', () => {
     expect(disabled.revision).toBe(2);
     expect(snapshot.models.main?.connection.enabled).toBe(true);
     expect(() => product.authorize(snapshot.models.main!.connection)).toThrow();
-    expect(product.get<Connection>('connection', bound.id)).toEqual(disabled);
-    expect(() => product.get<Connection>('connection', bound.id, 1)).toThrow('Setting not found');
+    expect(product.stored<Connection>('connection', bound.id)).toEqual(disabled);
+    expect(() => product.stored<Connection>('connection', bound.id, 1)).toThrow(
+      'Setting not found'
+    );
     expect(snapshot.models.main?.connection).toEqual(bound);
   });
 });

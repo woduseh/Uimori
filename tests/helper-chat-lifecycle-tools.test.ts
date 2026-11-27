@@ -169,9 +169,9 @@ test('option presets are listed, saved, renamed, applied and deleted through the
   expect(listed.finished('rename')).toMatchObject({ denied: false });
   expect(listed.finished('apply')).toMatchObject({ denied: false });
   expect(listed.finished('delete')).toMatchObject({ errorCode: 'CONFIRMATION_REQUIRED' });
-  expect(f.store.product.get<SavedPromptCombination>('prompt-combination', saved!.id).title).toBe(
-    '짧고 담백하게'
-  );
+  expect(
+    f.store.product.stored<SavedPromptCombination>('prompt-combination', saved!.id).title
+  ).toBe('짧고 담백하게');
   expect(listed.results.map((result) => result.operation)).toEqual([
     'prompt.combination.update',
     'prompt.combination.apply',

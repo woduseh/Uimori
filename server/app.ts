@@ -216,7 +216,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const jevCredentials = new JevCredentialStore(store.db);
   const codex = options.codexRuntime ?? new CodexRuntime(options.dbPath, options.codex);
   const authorizeCodex = (connection: ProviderConnection) => {
-    const current = store.product.get<Connection>('connection', connection.id);
+    const current = store.product.stored<Connection>('connection', connection.id);
     if (
       !current.enabled ||
       current.protocol !== connection.protocol ||
@@ -331,7 +331,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   ) => {
     const authorize = () => {
       if (!connection) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
-      const current = store.product.get<Connection>('connection', connection.id);
+      const current = store.product.stored<Connection>('connection', connection.id);
       if (
         !current.enabled ||
         current.protocol !== connection.protocol ||

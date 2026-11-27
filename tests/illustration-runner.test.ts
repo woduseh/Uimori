@@ -544,7 +544,7 @@ describe('illustration runner through a prompt model and remote ComfyUI', () => 
       status: 'requeued',
       code: 'COMFYUI_EXECUTION_FAILED',
     });
-    const bot = store.product.get<Content>('content', chat.botId);
+    const bot = store.product.stored<Content>('content', chat.botId);
     store.product.content(
       { ...fixtureBotInput(bot.title, 'Mira wears a red coat.'), expectedRevision: bot.revision },
       bot.id

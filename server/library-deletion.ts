@@ -18,10 +18,6 @@ export type LibraryKind =
   | 'prompt-combination'
   | 'connection'
   | 'model';
-export function assertLibraryVisible(store: Store, kind: string, id: string) {
-  store.product.assertAvailable(kind, id);
-}
-
 export function deleteLibraryItem(
   store: Store,
   kind: LibraryKind,

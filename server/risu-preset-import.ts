@@ -79,7 +79,7 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
     const saved = receipt.items.find(
       (item) => item.kind === 'prompt-preset' && item.key === 'prompt'
     )!;
-    return { receipt, preset: store.product.get<PromptPreset>('prompt-preset', saved.id) };
+    return { receipt, preset: store.product.stored<PromptPreset>('prompt-preset', saved.id) };
   });
 }
 

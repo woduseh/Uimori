@@ -227,7 +227,7 @@ test('library.organize renames and removes a folder without deleting its items',
   expect(run.finished('rename')).toMatchObject({ denied: false });
   expect(run.finished('remove')).toMatchObject({ denied: false });
   expect(store.libraryOrganization.snapshot().folders.some((f) => f.id === folderId)).toBe(false);
-  expect(store.product.get<Content>('content', bot.id).title).toBe('Filed bot');
+  expect(store.product.stored<Content>('content', bot.id).title).toBe('Filed bot');
 });
 
 test('scene.title names a scene and refuses a stale expected name', async () => {
@@ -309,7 +309,7 @@ test('model.parameters.update changes supported parameters and keeps pricing', a
     }),
     helperDone,
   ]);
-  const saved = store.product.get<ModelPreset>('model', priced.id);
+  const saved = store.product.stored<ModelPreset>('model', priced.id);
   expect(saved).toMatchObject({
     revision: priced.revision + 2,
     title: priced.title,

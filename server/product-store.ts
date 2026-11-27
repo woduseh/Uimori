@@ -2,7 +2,7 @@ import { inferUsageKind, usageOnlyWire, usageOnlyResult } from './usage-accounti
 import type { UsageKind } from '../core/usage-report.js';
 import { compareConnectionDisplayOrder, compareModelDisplayOrder } from '../core/model-order.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { encodedImage, storeImage, type StoredImage } from './image-storage.js';
+import { storeImage, type StoredImage } from './image-storage.js';
 import { saveConnection } from './provider-connections.js';
 import { recordContentProfileEvents } from './content-profile-events.js';
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
@@ -199,14 +199,13 @@ export class ProductStore {
   }
   available<T>(kind: string, id: string): T {
     this.assertAvailable(kind, id);
-    return this.get<T>(kind, id);
+    return this.stored<T>(kind, id);
   }
   writable<T>(kind: string, id: string): T {
     if (!this.isLive(kind, id)) throw new AppError(409, 'REVISION_CONFLICT');
-    return this.get<T>(kind, id);
+    return this.stored<T>(kind, id);
   }
-  get<T>(kind: string, id: string, revision?: number): T {
-    if (kind === 'package-image') return encodedImage(this.db, id) as T;
+  stored<T>(kind: string, id: string, revision?: number): T {
     if (isProviderSetting(kind)) {
       const row = this.db
         .prepare('SELECT revision,body FROM provider_settings WHERE kind=? AND id=?')
@@ -786,7 +785,8 @@ export class ProductStore {
     if (profile.packages)
       profile.packages = profile.packages.map(
         (pkg) =>
-          projectNativeRisuPackage(pkg, this.get<Content>('content', pkg.id, pkg.revision).kind).pkg
+          projectNativeRisuPackage(pkg, this.stored<Content>('content', pkg.id, pkg.revision).kind)
+            .pkg
       );
     for (const preset of Object.values(profile.promptPresets ?? {}))
       if (preset.program.nativeRisuPreset)
@@ -883,7 +883,7 @@ export class ProductStore {
     ];
   }
   authorize(connection: Connection) {
-    const current = this.get<Connection>('connection', connection.id);
+    const current = this.stored<Connection>('connection', connection.id);
     if (
       this.isHidden('connection', connection.id) ||
       !current.enabled ||
@@ -1267,7 +1267,7 @@ function packageRefs(product: ProductStore, value: unknown): ContentAttachment[]
   )
     throw new HttpError(400, 'Duplicate package or primary role');
   for (const r of refs)
-    if (!product.get<Content>('content', r.id).package)
+    if (!product.stored<Content>('content', r.id).package)
       throw new HttpError(400, 'Content is not a package');
   return refs;
 }

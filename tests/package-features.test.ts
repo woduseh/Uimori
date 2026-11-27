@@ -91,6 +91,6 @@ test('missing module dependencies, conflicting revisions and cycles are rejected
     resolvePackageModules(store.product, [ref(bot, 'bot'), ref(revised, 'module')])
   ).toThrow('content revision not found');
   expect(() => save(store, 'Cycle', [bot], revised)).toThrow('Package module dependency cycle');
-  expect(store.product.get<Content>('content', revised.id)).toEqual(revised);
+  expect(store.product.stored<Content>('content', revised.id)).toEqual(revised);
   expect(() => save(store, 'Missing', [{ id: 'missing', revision: 1 }])).toThrow();
 });

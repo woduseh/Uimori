@@ -277,7 +277,7 @@ test('model.register saves a model on a connection and model.delete refuses whil
     providerModelId: 'fixture-next',
     title: 'Next',
   }) as { modelId: string; revision: number };
-  expect(store.product.get<ModelPreset>('model', registered.modelId)).toMatchObject({
+  expect(store.product.stored<ModelPreset>('model', registered.modelId)).toMatchObject({
     title: 'Next',
     connectionId: existing.connectionId,
     modelId: 'fixture-next',

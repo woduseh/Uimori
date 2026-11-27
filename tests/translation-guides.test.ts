@@ -138,7 +138,7 @@ test('ordinary and helper saves use one native field, validate atomically and su
     expectedRevision: original.revision,
     model,
   }) as { revision: number };
-  const saved = store.product.get<Content>('content', original.id);
+  const saved = store.product.stored<Content>('content', original.id);
   expect(readTranslationGuide(saved.package.nativeRisu.card)).toEqual(changed);
   expect(saved.text).toBe(original.text);
   expect(saved.package.nativeRisu.card.extensions).toMatchObject({
@@ -157,7 +157,7 @@ test('ordinary and helper saves use one native field, validate atomically and su
       ),
     })
   );
-  expect(store.product.get<Content>('content', original.id).revision).toBe(result.revision);
+  expect(store.product.stored<Content>('content', original.id).revision).toBe(result.revision);
   expect(() => save(store, original, guide)).toThrow('REVISION_CONFLICT');
   const restored = undoResource(store, 'content', original.id, result.revision).saved as Content;
   expect(readTranslationGuide(restored.package.nativeRisu.card)).toEqual(guide);
@@ -177,7 +177,7 @@ test('guide survives restart, native projection, independent resource and chat b
     idempotencyKey: randomUUID(),
   };
   const imported = importResourceBundle(target, bundleInput);
-  const copy = target.product.get<Content>('content', imported.items[0].id);
+  const copy = target.product.stored<Content>('content', imported.items[0].id);
   expect(copy.id).not.toBe(original.id);
   expect(copy.text).toBe(original.text);
   expect(readTranslationGuide(copy.package.nativeRisu.card)).toEqual(guide);
@@ -203,7 +203,7 @@ test('guide survives restart, native projection, independent resource and chat b
   owned.find((item) => item.store === source)!.store = reopened;
   expect(
     readTranslationGuide(
-      reopened.product.get<Content>('content', original.id).package.nativeRisu.card
+      reopened.product.stored<Content>('content', original.id).package.nativeRisu.card
     )
   ).toEqual(guide);
 });

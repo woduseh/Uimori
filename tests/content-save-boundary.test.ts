@@ -98,9 +98,9 @@ test('saving projects native fields without sharing objects with input or respon
   expect(saved.package!.images).not.toBe(incoming.package.images);
   expect(validateRisuContent(saved.package)).toEqual(saved.package);
   saved.package!.nativeRisu.card.description = 'Response changed';
-  expect(store.product.get<Content>('content', saved.id).package!.nativeRisu.card.description).toBe(
-    'Native body'
-  );
+  expect(
+    store.product.stored<Content>('content', saved.id).package!.nativeRisu.card.description
+  ).toBe('Native body');
 });
 
 test('native descriptions survive saving through the common stored text boundary', () => {
@@ -109,7 +109,7 @@ test('native descriptions survive saving through the common stored text boundary
   const text = 'x'.repeat(SOURCE_TEXT_MAX_CHARS);
   incoming.package.nativeRisu.card.description = text;
   const saved = store.product.content(incoming) as Content;
-  const loaded = store.product.get<Content>('content', saved.id);
+  const loaded = store.product.stored<Content>('content', saved.id);
   expect(loaded.text).toBe(text);
   expect(loaded.package.body).toBe(text);
   expect(loaded.package.nativeRisu.card.description).toBe(text);
@@ -141,7 +141,7 @@ test('revision conflicts preserve the saved version and incoming native data', (
   const before = structuredClone(incoming);
   expect(() => store.product.content(incoming, saved.id)).toThrow('REVISION_CONFLICT');
   expect(incoming).toEqual(before);
-  expect(store.product.get<Content>('content', saved.id)).toEqual(saved);
+  expect(store.product.stored<Content>('content', saved.id)).toEqual(saved);
 });
 
 test('repeated ordinary saves keep only the latest undo and reject a stale revision', () => {

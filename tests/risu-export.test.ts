@@ -151,7 +151,7 @@ test.each([false, true])(
       createChat: false,
       idempotencyKey: 'png-default-cover',
     });
-    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    const saved = store.product.stored<Content>('content', result.receipt.items[0].id);
     const files = cardZip(exportRisuContent(store.product, saved).bytes);
     const exported = JSON.parse(files.get('card.json')!().toString()).data;
     expect(exported.description).toBe(data.description);
@@ -233,7 +233,7 @@ test.each([false, true])(
       createChat: false,
       idempotencyKey: 'png-named-attachment',
     });
-    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    const saved = store.product.stored<Content>('content', result.receipt.items[0].id);
     const files = cardZip(exportRisuContent(store.product, saved).bytes);
     const exported = JSON.parse(files.get('card.json')!().toString()).data;
     expect(exported.description).toBe(data.description);
@@ -279,7 +279,7 @@ test('CHARX icon/main takes precedence over other main assets on either side', a
     createChat: false,
     idempotencyKey: 'charx-icon-role',
   });
-  const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+  const saved = store.product.stored<Content>('content', result.receipt.items[0].id);
   expect(
     saved.package.nativeRisu.assets.find((asset) => asset.imageId === saved.package.portraitImageId)
       ?.uri
@@ -448,7 +448,7 @@ test('large imported images export and reimport within the same ZIP and module b
     },
     () => container
   );
-  const saved = store.product.get<Content>('content', applied.receipt.items[0].id);
+  const saved = store.product.stored<Content>('content', applied.receipt.items[0].id);
   const exported = exportRisuContent(store.product, saved);
   const read = readCharacterCard(
     { name: exported.filename, uploadId: 'exported-memory-fixture' },
@@ -549,7 +549,7 @@ test.each([false, true])(
     });
     saved.package.modules = [{ id: dependency.id, revision: dependency.revision }];
     const before = structuredClone(saved);
-    const linkedBefore = store.product.get<Content>('content', dependency.id);
+    const linkedBefore = store.product.stored<Content>('content', dependency.id);
     const exported = exportRisuContent(store.product, saved);
     const read = readCharacterCard(source(exported.bytes, exported.filename));
     expect(read.nativeModule).toMatchObject(before.package.nativeRisu.module!);
@@ -561,7 +561,7 @@ test.each([false, true])(
       expect(cardZip(exported.bytes).size).toBe(3);
     }
     expect(saved).toEqual(before);
-    expect(store.product.get<Content>('content', dependency.id)).toEqual(linkedBefore);
+    expect(store.product.stored<Content>('content', dependency.id)).toEqual(linkedBefore);
     saved.package.modules = [{ id: 'missing-linked-resource', revision: 1 }];
     expect(exportRisuContent(store.product, saved).bytes).toEqual(exported.bytes);
   }

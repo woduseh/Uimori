@@ -152,7 +152,7 @@ test('12,288 logical assets export as one binary image and reimport preserves na
   });
   expect(imported.statusCode).toBe(200);
   const receipt = imported.json(),
-    saved = target.product.get<Content>('content', receipt.items[0].id);
+    saved = target.product.stored<Content>('content', receipt.items[0].id);
   expect(saved.package.images).toHaveLength(12_288);
   expect(saved.package.images!.at(-1)!.title).toBe('Name 12287');
   expect(readImage(target.db, saved.package.images![0].blobHash).bytes).toEqual(
@@ -339,8 +339,8 @@ test('chat copies and backups preserve character appearances and remap only thei
       .profile(result.id)
       .packageAttachments!.find((item) => item.role === 'bot')!;
     const importedPackageRef = `package:${importedBot.id}:bot:asset-0`;
-    const importedBotContent = owner.product.get<Content>('content', importedBot.id);
-    const importedIntermediate = owner.product.get<Content>(
+    const importedBotContent = owner.product.stored<Content>('content', importedBot.id);
+    const importedIntermediate = owner.product.stored<Content>(
       'content',
       importedBotContent.package.modules![0].id
     );
@@ -445,7 +445,7 @@ test('an explicit v1 JSON backup still restores without a JSON output endpoint',
   const botId = source.product
     .profile(chat.id)
     .packageAttachments!.find((ref) => ref.role === 'bot')!.id;
-  const owner = source.product.get<Content>('content', botId);
+  const owner = source.product.stored<Content>('content', botId);
   const backup = legacyChatBackupWithBot(owner, chat.settings, {
     title: 'Archived JSON conversation',
     text: 'The old manuscript stays readable.',

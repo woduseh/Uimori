@@ -235,7 +235,7 @@ test('source reservation and delayed worker keep old names and removed images; e
     result: null,
   });
   expect(imageCatalog(next.input).some((asset) => asset.ref.startsWith('package:'))).toBe(false);
-  expect(() => store.product.get<Content>('content', first.id, first.revision)).toThrow(
+  expect(() => store.product.stored<Content>('content', first.id, first.revision)).toThrow(
     'content revision not found'
   );
   expect(() => requestImages(store, source.id, command)).toThrow();

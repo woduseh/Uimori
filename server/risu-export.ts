@@ -16,7 +16,6 @@ import {
 } from '../core/risu-import.js';
 import type { ProductStore } from './product-store.js';
 import type { Store } from './store.js';
-import { assertLibraryVisible } from './library-deletion.js';
 import { readImage } from './image-storage.js';
 import { HttpError } from './request-validation.js';
 import {
@@ -242,17 +241,10 @@ export function risuExportRoutes(app: FastifyInstance, store: Store): void {
             : Number(request.query.expectedRevision);
         if (expected !== undefined && (!Number.isSafeInteger(expected) || expected < 1))
           throw new HttpError(400, 'Invalid expected revision');
-        let item: Content | PromptPreset;
-        try {
-          assertLibraryVisible(store, kind, request.params.id);
-          item = store.product.get<Content | PromptPreset>(kind, request.params.id);
-        } catch (error) {
-          if (expected !== undefined && error instanceof HttpError && error.statusCode === 404)
-            throw new AppError(409, 'REVISION_CONFLICT');
-          throw error;
-        }
-        if (expected !== undefined && item.revision !== expected)
-          throw new AppError(409, 'REVISION_CONFLICT');
+        const item =
+          expected === undefined
+            ? store.product.available<Content | PromptPreset>(kind, request.params.id)
+            : store.product.editable<Content | PromptPreset>(kind, request.params.id, expected);
         const exported =
           kind === 'content'
             ? exportRisuContent(store.product, item as Content)

@@ -248,7 +248,7 @@ test('a stale tab cannot select a recipe for a deleted bot or chat', () => {
   const chat = createFixtureChat(store, 'Gone chat');
   const preset = save(store, 'Shared');
   deleteLibraryItem(store, 'content', chat.botId, {
-    expectedRevision: store.product.get<{ revision: number }>('content', chat.botId).revision,
+    expectedRevision: store.product.stored<{ revision: number }>('content', chat.botId).revision,
   });
   expect(() => choose(store, preset.id, 'bot', chat.botId)).toThrow('REVISION_CONFLICT');
   expect(illustrationPresetPreferences(store).botPresets).toEqual({});

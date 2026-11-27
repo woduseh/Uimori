@@ -3,13 +3,6 @@ import type { PackageImage } from '../core/package-images.js';
 import { AppError } from './app-errors.js';
 
 export type StoredImage = { hash: string; mime: PackageImage['mime']; bytes: Buffer };
-export type EncodedImage = {
-  id: string;
-  revision: 1;
-  hash: string;
-  mime: PackageImage['mime'];
-  base64: string;
-};
 
 export function storeImage(db: DatabaseSync, image: StoredImage): void {
   db.prepare(
@@ -25,9 +18,4 @@ export function readImage(db: DatabaseSync, hash: string): StoredImage {
     mime: row.mime as StoredImage['mime'],
     bytes: Buffer.from(row.bytes as Uint8Array),
   };
-}
-
-export function encodedImage(db: DatabaseSync, hash: string): EncodedImage {
-  const image = readImage(db, hash);
-  return { id: hash, revision: 1, hash, mime: image.mime, base64: image.bytes.toString('base64') };
 }

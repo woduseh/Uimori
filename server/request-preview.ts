@@ -226,14 +226,15 @@ export async function inspectNextRequest(
       stale ||= latest?.revision !== attachment.revision;
     }
     if (target)
-      stale ||= store.product.get<ModelPreset>('model', target.id).revision !== target.revision;
+      stale ||=
+        store.product.available<ModelPreset>('model', target.id).revision !== target.revision;
     if (target)
       stale ||=
-        store.product.get<Connection>('connection', target.connection.id).revision !==
+        store.product.available<Connection>('connection', target.connection.id).revision !==
         target.connection.revision;
     if (profile.pinned?.mainPromptPresetId && prompt)
       stale ||=
-        store.product.get<PromptPreset>('prompt-preset', profile.pinned.mainPromptPresetId)
+        store.product.available<PromptPreset>('prompt-preset', profile.pinned.mainPromptPresetId)
           .revision !== prompt.revision;
   } catch {
     stale = true;

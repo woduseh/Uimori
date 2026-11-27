@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { supportedModels } from '../core/model-capabilities.js';
 import { createConnectionTestRunner } from '../server/provider-connection-test.js';
@@ -94,7 +95,7 @@ test('update moves only the location and keeps the credential and model catalog'
     expectedRevision: connection.revision,
   });
   expect(moved).toMatchObject({ previousLocation: 'global', location: 'us' });
-  const saved = store.product.get<Connection>('connection', connection.id);
+  const saved = store.product.stored<Connection>('connection', connection.id);
   expect(saved).toMatchObject({
     endpoint:
       'https://aiplatform.us.rep.googleapis.com/v1/projects/synthetic-project/locations/us/publishers/google/models',
@@ -174,4 +175,16 @@ test('compare reports each location once and a replayed operation sends nothing 
       new AbortController().signal
     )
   ).rejects.toThrow('INVALID_VERTEX_LOCATIONS');
+});
+
+test('a deleted connection refuses the update even when the location is unchanged', () => {
+  const { store, connection } = fixture();
+  const { revision } = softDeleteLibraryItem(store, 'connection', connection);
+  expect(() =>
+    updateVertexLocation(store, {
+      connectionId: connection.id,
+      location: 'global',
+      expectedRevision: revision,
+    })
+  ).toThrow('REVISION_CONFLICT');
 });

@@ -119,7 +119,7 @@ function assertSelectionTarget(store: Store, input: SelectThemeRequest | SelectT
   assertAppearanceTargetLive(store, input.scope, input.targetId);
   if (
     input.scope === 'bot' &&
-    store.product.get<{ kind: string }>('content', input.targetId).kind !== 'bot'
+    store.product.stored<{ kind: string }>('content', input.targetId).kind !== 'bot'
   )
     throw new HttpError(400, 'Invalid target ID: expected a bot');
 }

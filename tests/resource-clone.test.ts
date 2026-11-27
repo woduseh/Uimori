@@ -101,20 +101,20 @@ test('cloning a saved preset preserves all authored fields and current values, w
   expect(result.saved.id).not.toBe(source.id);
   expect(result.saved.program).toEqual(source.program);
   expect(result.saved.values).toEqual({ tone: 'warm', mode: '1' });
-  expect(store.product.get('prompt-preset', source.id)).toEqual(source);
-  expect(store.product.get('prompt-preset', result.saved.id)).toEqual(result.saved);
+  expect(store.product.stored('prompt-preset', source.id)).toEqual(source);
+  expect(store.product.stored('prompt-preset', result.saved.id)).toEqual(result.saved);
   expect(promptWorkspace(store)).toEqual(selected);
-  expect(store.product.get('prompt-combination', combination.id)).toEqual(combination);
+  expect(store.product.stored('prompt-combination', combination.id)).toEqual(combination);
   expect(
     store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='prompt-combination'").get()!.n
   ).toBe(1);
   expect(store.db.prepare('SELECT * FROM resource_undo').all()).toEqual(undoBefore);
 
   result.saved.program.nativeRisuPreset.preset.promptTemplate[0].text = 'Caller changed result';
-  expect(store.product.get<PromptPreset>('prompt-preset', source.id).program).toEqual(
+  expect(store.product.stored<PromptPreset>('prompt-preset', source.id).program).toEqual(
     source.program
   );
-  expect(store.product.get<PromptPreset>('prompt-preset', result.saved.id).program).toEqual(
+  expect(store.product.stored<PromptPreset>('prompt-preset', result.saved.id).program).toEqual(
     source.program
   );
 });
@@ -196,9 +196,9 @@ test.each(['card', 'module'] as const)(
     if (format === 'module') expectedNative.module!.name = 'New copy';
     else expectedNative.card.name = 'New copy';
     expect(copy.package.nativeRisu).toEqual(expectedNative);
-    expect(store.product.get('content', source.id)).toEqual(source);
-    expect(store.product.get('content', referenced.id)).toEqual(referenced);
-    expect(store.product.get('content', copy.id)).toEqual(copy);
+    expect(store.product.stored('content', source.id)).toEqual(source);
+    expect(store.product.stored('content', referenced.id)).toEqual(referenced);
+    expect(store.product.stored('content', copy.id)).toEqual(copy);
     expect(store.chats()).toEqual(chatsBefore);
   }
 );

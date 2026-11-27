@@ -313,7 +313,7 @@ test('scene, chat, conversation and resource deletion leave no edited text in th
     scope: 'only',
     idempotencyKey: randomUUID(),
   });
-  const saved = f.store.product.get<Content>('content', bot.id);
+  const saved = f.store.product.stored<Content>('content', bot.id);
   deleteLibraryItem(f.store, 'content', bot.id, { expectedRevision: saved.revision });
   expect(f.rows()).not.toContain(marker);
   expect(f.rows()).not.toContain('가자');
@@ -496,7 +496,7 @@ test.each(['expired', 'chat deleted', 'conversation deleted'] as const)(
     f.resource(task, 'resource.patch', {
       kind: 'content',
       id: bot.id,
-      expectedRevision: f.store.product.get<Content>('content', bot.id).revision,
+      expectedRevision: f.store.product.stored<Content>('content', bot.id).revision,
       changes: [{ op: 'set', path: '/package/nativeRisu/card/creator_notes', value: '다른 메모' }],
     });
     f.store.db

@@ -56,9 +56,9 @@ test('removes unreferenced resources physically while enforcing revision conflic
   });
   expect(s.db.prepare('SELECT * FROM versions WHERE id=?').all(a.id)).toHaveLength(0);
   expect(s.product.all('content').some((item) => item.id === a.id)).toBe(false);
-  expect(() => s.product.get('content', a.id, 1)).toThrow('content revision not found');
-  expect(() => s.product.get('content', a.id)).toThrow('content revision not found');
-  expect(s.product.get('content', b.id)).toEqual(b);
+  expect(() => s.product.stored('content', a.id, 1)).toThrow('content revision not found');
+  expect(() => s.product.stored('content', a.id)).toThrow('content revision not found');
+  expect(s.product.stored('content', b.id)).toEqual(b);
   expect(() => deleteLibraryItem(s, 'content', a.id, { expectedRevision: 2 })).toThrow(
     'REVISION_CONFLICT'
   );
@@ -74,7 +74,7 @@ test('historical and current content references do not block removing a library 
   expect(s.db.prepare('SELECT * FROM versions ORDER BY kind,id,revision').all()).toEqual(
     history.filter((row) => row.id !== module.id)
   );
-  expect(s.product.get<{ revision: number }>('content', owner.id).revision).toBe(2);
+  expect(s.product.stored<{ revision: number }>('content', owner.id).revision).toBe(2);
 });
 
 test('prompt copies and chat contents survive preset deletion', () => {
@@ -100,8 +100,8 @@ test('prompt copies and chat contents survive preset deletion', () => {
     })
   ).toThrow('REVISION_CONFLICT');
   expect(s.product.profile(chat.id)).toEqual(before);
-  expect(() => s.product.get('prompt-preset', prompt.id, 1)).toThrow('revision not found');
-  expect(() => s.product.get('prompt-combination', combination.id, 1)).toThrow(
+  expect(() => s.product.stored('prompt-preset', prompt.id, 1)).toThrow('revision not found');
+  expect(() => s.product.stored('prompt-combination', combination.id, 1)).toThrow(
     'revision not found'
   );
 });
@@ -126,9 +126,9 @@ test('connection deletion revokes future sends and hides dependent models while 
     .run('test', 'key', m.id, 1, 'running', null, JSON.stringify({ model: m, connection: c }));
   const before = s.db.prepare('SELECT * FROM provider_connection_tests').all();
   deleteLibraryItem(s, 'connection', c.id, { expectedRevision: 1 });
-  expect(s.product.get('connection', c.id)).toMatchObject({ enabled: false, revision: 2 });
+  expect(s.product.stored('connection', c.id)).toMatchObject({ enabled: false, revision: 2 });
   expect(s.product.all('model')).toEqual([]);
-  expect(s.product.get('model', m.id)).toEqual(m);
+  expect(s.product.stored('model', m.id)).toEqual(m);
   expect(s.db.prepare('SELECT * FROM provider_connection_tests').all()).toEqual(before);
 });
 
@@ -138,7 +138,7 @@ test('deleting a bot preserves existing chat ownership and attachments but publi
   const organization = s.db
     .prepare('SELECT * FROM chat_organization WHERE chat_id=?')
     .get(chat.id) as { bot_id: string };
-  const bot = s.product.get<{ id: string; revision: number }>('content', organization.bot_id);
+  const bot = s.product.stored<{ id: string; revision: number }>('content', organization.bot_id);
   const profile = s.product.profile(chat.id);
   const app = Fastify();
   productRoutes(app, s, { publish: () => {} });
@@ -149,7 +149,7 @@ test('deleting a bot preserves existing chat ownership and attachments but publi
     expect(s.db.prepare('SELECT * FROM chat_organization WHERE chat_id=?').get(chat.id)).toEqual(
       organization
     );
-    expect(s.product.get('content', bot.id, bot.revision)).toEqual(bot);
+    expect(s.product.stored('content', bot.id, bot.revision)).toEqual(bot);
     for (const url of [
       `/api/content/${bot.id}`,
       `/api/revisions/content/${bot.id}/${bot.revision}`,

@@ -621,22 +621,12 @@ export function updateModelWorkspace(store: Store, input: UpdateModelWorkspace):
     }
 
     next.judgmentPricing = next.judgmentPricing?.filter(
-      (entry) => !entry.connectionId || connectionExists(store, entry.connectionId)
+      (entry) => !entry.connectionId || store.product.isLive('connection', entry.connectionId)
     );
     savePromptWorkspace(store, next);
     recordPromptWorkspaceUpdate(store.db);
     return modelWorkspace(store);
   });
-}
-
-function connectionExists(store: Store, id: string) {
-  try {
-    store.product.get<Connection>('connection', id);
-    return !store.product.isHidden('connection', id);
-  } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 404) return false;
-    throw error;
-  }
 }
 
 export function updatePromptWorkspace(

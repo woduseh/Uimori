@@ -27,7 +27,7 @@ type PreviewRequest = {
 const EVALUATION_MESSAGE_MAX_CHARS = 500;
 
 function savedPackage(store: Store, id: string, revision: unknown) {
-  const content = store.product.get<Content>(
+  const content = store.product.stored<Content>(
     'content',
     id,
     number(Number(revision), 'content revision')

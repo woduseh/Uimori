@@ -175,7 +175,7 @@ export function applyHelperPresentationMutation(
             {
               kind: 'settings',
               id: botId,
-              title: store.product.get<Content>('content', botId).title,
+              title: store.product.stored<Content>('content', botId).title,
               revision: result.revision,
               setting: 'bot.storyUiTheme',
               before,

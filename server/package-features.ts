@@ -26,7 +26,7 @@ export function resolvePackageModules(
         return row.revision;
       },
       read: (ref) => {
-        const pkg = product.get<Content>('content', ref.id, ref.revision).package;
+        const pkg = product.stored<Content>('content', ref.id, ref.revision).package;
         if (!pkg) throw new HttpError(400, 'Required module is not a package');
         return pkg;
       },
@@ -39,7 +39,7 @@ export function resolvePackageModules(
 export function assertPackageReferences(product: ProductStore, pkg: RisuContent) {
   assertPackageImages(product, pkg);
   for (const module of pkg.modules ?? [])
-    if (!product.get<Content>('content', module.id).package)
+    if (!product.stored<Content>('content', module.id).package)
       throw new HttpError(400, 'Required module is not a package');
 }
 export function resolvePackageProfile(

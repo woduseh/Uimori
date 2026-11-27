@@ -107,7 +107,7 @@ test('resource deletion waits for confirmation, and a patch of three resources s
   rollBackHelperTask(f.store(), workspace, run.task.id, undefined);
   expect(
     [one, two, three].map(
-      (bot) => f.store().product.get<Content>('content', bot.id).package!.nativeRisu!.card
+      (bot) => f.store().product.stored<Content>('content', bot.id).package!.nativeRisu!.card
     )
   ).toMatchObject([{ description: '설명' }, { description: '설명' }, { description: '설명' }]);
 });

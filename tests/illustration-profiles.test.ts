@@ -43,7 +43,7 @@ test('native appearance metadata preserves extensions and validates authored tra
 test('shared bot defaults follow native revisions, chat overrides win, CHARX round trips and invalid saves are atomic', () => {
   const store = databases.create();
   const { chat } = chatWithSource(store);
-  const bot = store.product.get<Content>('content', chat.botId);
+  const bot = store.product.stored<Content>('content', chat.botId);
   const model = editableResource('content', bot) as ContentEditModel;
   model.package.nativeRisu.card = withIllustrationAppearanceProfiles(
     model.package.nativeRisu.card,
@@ -87,7 +87,7 @@ test('shared bot defaults follow native revisions, chat overrides win, CHARX rou
       model: invalid,
     })
   ).toThrow();
-  expect(store.product.get<Content>('content', bot.id).revision).toBe(saved.revision);
+  expect(store.product.stored<Content>('content', bot.id).revision).toBe(saved.revision);
 });
 
 test('a new character named like a renamed default keeps its own identity instead of colliding', () => {

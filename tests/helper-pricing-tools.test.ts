@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -9,6 +9,12 @@ import type { WireRecord } from '../core/transport.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import {
+  helperCall,
+  helperDone,
+  runScriptedChatHelper,
+  selectFixtureModels,
+} from './fixtures/scripted-helper.js';
 import { modelWorkspace } from '../server/prompt-workspace.js';
 
 const owned: { path: string; store: Store }[] = [];
@@ -72,7 +78,7 @@ test('helper pricing discovery and narrow revision update preserve model setting
     revision: model.revision + 1,
     effective: { source: 'manual', rates: pricing.rates, checkedAt: pricing.checkedAt },
   });
-  const saved = store.product.get<ModelPreset>('model', model.id);
+  const saved = store.product.stored<ModelPreset>('model', model.id);
   expect(saved).toEqual({ ...model, revision: model.revision + 1, pricing });
   const frozen = store.product.modelSnapshot(model.id).pricingSnapshot!;
   expect(() =>
@@ -108,7 +114,7 @@ test('helper rejects missing source, unsafe metadata and unrelated writable mode
         ...body,
       })
     ).toThrow();
-  expect(store.product.get<ModelPreset>('model', model.id)).toEqual(model);
+  expect(store.product.stored<ModelPreset>('model', model.id)).toEqual(model);
 });
 
 test('backfill prices only the calls recorded without a price and marks them as priced afterwards', () => {
@@ -288,7 +294,7 @@ test('helper reads and updates judgment prices per target through the role setti
       { ...gatewayTarget, pricing: gatewayPricing },
     ],
   });
-  expect(store.product.get<ModelPreset>('model', model.id)).toEqual(model);
+  expect(store.product.stored<ModelPreset>('model', model.id)).toEqual(model);
   call(store, 'model.pricing.update', {
     judgment: true,
     expectedRevision: revision + 2,
@@ -442,4 +448,23 @@ test('model.pricing.update tells a stale or deleted target to refresh before che
       pricing,
     })
   ).toThrow(conflict);
+});
+
+test('a helper pricing update for a model that is gone answers a revision conflict', async () => {
+  const { store } = fixture();
+  selectFixtureModels(store);
+  const chat = createFixtureChat(store, 'Missing model');
+  try {
+    const run = await runScriptedChatHelper(store, chat.id, [
+      helperCall('missing', 'model.pricing.update', {
+        modelId: 'missing-model',
+        expectedRevision: 1,
+        pricing,
+      }),
+      helperDone,
+    ]);
+    expect(run.finished('missing')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  } finally {
+    vi.restoreAllMocks();
+  }
 });

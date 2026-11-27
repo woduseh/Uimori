@@ -88,8 +88,8 @@ test('model preparation is read only and create/update enforce the same CAS cont
   expect(() => p.connection(connectionBody(), c.id)).toThrow('Invalid revision');
   p.connection(editConnection(c, { title: 'Renamed' }), c.id);
   expect(() => p.connection(editConnection(c), c.id)).toThrow('REVISION_CONFLICT');
-  expect(p.get<ModelPreset>('model', m.id)).toEqual(updated);
-  expect(() => p.get<ModelPreset>('model', m.id, 1)).toThrow('Setting not found');
+  expect(p.stored<ModelPreset>('model', m.id)).toEqual(updated);
+  expect(() => p.stored<ModelPreset>('model', m.id, 1)).toThrow('Setting not found');
   expect(count(s)).toBe(2);
   expect(
     s.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind IN ('model','connection')").get()
@@ -149,8 +149,8 @@ test('catalog/error retention uses credential authority and old connection execu
   ) as Connection;
   expect(changed).toMatchObject({ catalog: [], catalogUpdatedAt: null, catalogError: null });
   expect(() => p.authorize(cached)).toThrow('PROVIDER_CONNECTION_UNAVAILABLE');
-  expect(p.get('connection', cached.id)).toEqual(changed);
-  expect(() => p.get('connection', cached.id, cached.revision)).toThrow('Setting not found');
+  expect(p.stored('connection', cached.id)).toEqual(changed);
+  expect(() => p.stored('connection', cached.id, cached.revision)).toThrow('Setting not found');
   expect(cached).toMatchObject({
     catalog: rename.catalog,
     credentialRef: c.credentialRef,
@@ -230,7 +230,7 @@ test('model metadata is server sourced and disabling blocks new selection while 
     source: 'manual',
     rates: pricing.rates,
   });
-  expect(p.get<ModelPreset>('model', m.id).pricing).toMatchObject({ rates: { input: 4 } });
+  expect(p.stored<ModelPreset>('model', m.id).pricing).toMatchObject({ rates: { input: 4 } });
   expect(p.profile(chat.id).routes.main).toEqual({ id: m.id });
   expect(p.authorize(cached)).toEqual(cached);
   for (const pricing of [

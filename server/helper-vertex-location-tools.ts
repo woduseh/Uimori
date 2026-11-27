@@ -15,7 +15,6 @@ import {
 import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { AppError } from './app-errors.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -88,12 +87,11 @@ export const HELPER_VERTEX_LOCATION_TOOLS: ProviderTool[] = [
 export const isVertexLocationTool = (name: string) =>
   HELPER_VERTEX_LOCATION_TOOLS.some((tool) => tool.name === name);
 
-function vertexConnection(store: Store, id: string) {
-  const connection = store.product.get<Connection>('connection', id);
+function vertexEndpoint(connection: Connection) {
   const endpoint =
     connection.protocol === 'vertex-gemini-v1' ? parseVertexEndpoint(connection.endpoint) : null;
   if (!endpoint) throw new HelperToolError(400, 'VERTEX_CONNECTION_REQUIRED');
-  return { connection, endpoint };
+  return endpoint;
 }
 
 export function readVertexLocations(store: Store, value: unknown) {
@@ -163,7 +161,8 @@ export async function compareVertexLocations(
   fields(args, ['modelId', 'locations']);
   const modelId = text(args.modelId, 'saved model ID', 100);
   const model = store.product.available<ModelPreset>('model', modelId);
-  const { connection, endpoint } = vertexConnection(store, model.connectionId);
+  const connection = store.product.available<Connection>('connection', model.connectionId);
+  const endpoint = vertexEndpoint(connection);
   let locations: string[] = [...VERTEX_LOCATION_CHOICES];
   if (args.locations !== undefined) {
     if (
@@ -234,8 +233,12 @@ export function updateVertexLocation(store: Store, value: unknown) {
   const location = text(args.location, 'location', 40);
   const expectedRevision = number(args.expectedRevision, 'connection revision', 1);
   if (!isVertexLocation(location)) throw new HelperToolError(400, 'INVALID_VERTEX_LOCATION');
-  const { connection, endpoint } = vertexConnection(store, connectionId);
-  if (connection.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+  const connection = store.product.editable<Connection>(
+    'connection',
+    connectionId,
+    expectedRevision
+  );
+  const endpoint = vertexEndpoint(connection);
   const saved =
     endpoint.location === location
       ? connection

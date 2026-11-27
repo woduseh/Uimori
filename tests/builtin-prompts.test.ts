@@ -275,7 +275,7 @@ test('reopening preserves legacy working programs as preset references, options 
   expect(migrated).toMatchObject(prior);
   for (const role of ['main', 'translation'] as const) {
     expect(
-      reopened.app!.store.product.get('prompt-preset', migrated[role].presetId!)
+      reopened.app!.store.product.stored('prompt-preset', migrated[role].presetId!)
     ).toMatchObject({
       title: prior[role].title,
       role,
@@ -290,8 +290,8 @@ test('reopening preserves legacy working programs as preset references, options 
     presetId: migrated.main.presetId,
     values: prior.main.values,
   });
-  expect(reopened.app!.store.product.get('prompt-preset', preset.id)).toEqual(preset);
-  expect(reopened.app!.store.product.get('prompt-preset', legacyOoc.id)).toEqual(legacyOoc);
+  expect(reopened.app!.store.product.stored('prompt-preset', preset.id)).toEqual(preset);
+  expect(reopened.app!.store.product.stored('prompt-preset', legacyOoc.id)).toEqual(legacyOoc);
   expect(reopened.app!.store.product.all('prompt-preset')).toHaveLength(initialPresetCount + 4);
   expect(
     (await reopened.app!.inject({ method: 'GET', url: '/api/prompt-templates' })).json()

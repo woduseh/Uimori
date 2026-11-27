@@ -1,6 +1,5 @@
 import { illustrationSettings } from './illustrations.js';
 import { managementImpact } from './provider-management.js';
-import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
 const globalRoleSettings: Record<string, string> = {
@@ -13,13 +12,7 @@ const globalRoleSettings: Record<string, string> = {
 };
 
 export function modelInUse(store: Store, modelId: string): string | null {
-  if (store.product.isHidden('model', modelId)) return null;
-  try {
-    store.product.get('model', modelId);
-  } catch (error) {
-    if (error instanceof HttpError) return null;
-    throw error;
-  }
+  if (!store.product.isLive('model', modelId)) return null;
   const impact = managementImpact(store.product, 'model', modelId);
   const settings = illustrationSettings(store);
   const illustration = [

@@ -394,7 +394,7 @@ test('Responses automatically supplies matching OpenAI context/reviewer in model
   expect(run.status).toBe('completed');
   expect(observedMetadata).toBe(true);
   expect(
-    state.app.store.product.get<ModelPreset>('model', state.model.id).evaluationTools
+    state.app.store.product.stored<ModelPreset>('model', state.model.id).evaluationTools
       ?.metadataProfile
   ).toBe('anthropic');
   expect(state.provider.requests).toHaveLength(2);

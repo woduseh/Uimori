@@ -426,12 +426,15 @@ describe('provider settings, catalogs and archive contracts', () => {
       ).toEqual([beta.id, alpha.id, models[2].id]);
     }
     for (const original of models) {
-      const { displayOrder, ...current } = app.store.product.get<ModelPreset>('model', original.id);
+      const { displayOrder, ...current } = app.store.product.stored<ModelPreset>(
+        'model',
+        original.id
+      );
       expect(current).toEqual(original);
       expect(displayOrder).toBeDefined();
     }
     expect(models.map((model) => app.store.product.modelSnapshot(model.id))).toEqual(snapshots);
-    const betaOrder = app.store.product.get<ModelPreset>('model', beta.id).displayOrder;
+    const betaOrder = app.store.product.stored<ModelPreset>('model', beta.id).displayOrder;
     const edited = await request<ModelPreset>(
       app,
       `/model-presets/${beta.id}`,
@@ -464,7 +467,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     for (const summary of [false, true])
       expect(app.store.product.library(summary).connections.map((item) => item.id)).toEqual(order);
     for (const original of connections) {
-      const { displayOrder, ...current } = app.store.product.get<Connection>(
+      const { displayOrder, ...current } = app.store.product.stored<Connection>(
         'connection',
         original.id
       );
@@ -485,7 +488,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       200,
       'PUT'
     );
-    expect(app.store.product.get<Connection>('connection', beta.id).displayOrder).toBe(2);
+    expect(app.store.product.stored<Connection>('connection', beta.id).displayOrder).toBe(2);
     const beforeFailure = app.store.product.all('connection');
     app.store.db.exec(
       "CREATE TRIGGER fail_provider_order BEFORE UPDATE ON provider_settings WHEN NEW.kind='connection' AND NEW.id='" +
@@ -787,6 +790,6 @@ describe('provider settings, catalogs and archive contracts', () => {
     );
     accept(response({ data: [{ id: 'late-model' }] }));
     await refresh;
-    expect(app.store.product.get('connection', connection.id)).toEqual(edited);
+    expect(app.store.product.stored('connection', connection.id)).toEqual(edited);
   });
 });

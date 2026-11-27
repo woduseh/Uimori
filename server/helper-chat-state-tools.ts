@@ -810,7 +810,7 @@ function updateChatVariables(
 function attachmentView(store: Store, ref: ContentAttachment) {
   let title: string | null = null;
   try {
-    title = store.product.get<Content>('content', ref.id).title;
+    title = store.product.stored<Content>('content', ref.id).title;
   } catch (error) {
     if (!(error instanceof HttpError)) throw error;
   }

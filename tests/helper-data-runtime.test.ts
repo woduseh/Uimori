@@ -752,16 +752,16 @@ test('native gateway patches one field of a 1.36M-character bot without sending 
     expect(body.model).toBe('synthetic-helper');
     expect(JSON.stringify(body)).not.toContain('preserved native detail 🌱');
   }
-  expect(f.store.product.get<Content>('content', original.id)).toMatchObject({
+  expect(f.store.product.stored<Content>('content', original.id)).toMatchObject({
     title: 'Renamed through gateway',
     revision: 2,
     text: original.text,
   });
-  expect(f.store.product.get<Content>('content', original.id).package.nativeRisu.card).toEqual({
+  expect(f.store.product.stored<Content>('content', original.id).package.nativeRisu.card).toEqual({
     ...original.package.nativeRisu.card,
     name: 'Renamed through gateway',
   });
-  expect(f.store.product.get<Content>('content', sameName.id)).toEqual(sameName);
+  expect(f.store.product.stored<Content>('content', sameName.id)).toEqual(sameName);
   expect(unrelatedState()).toEqual(before);
   expect(
     f.runtime.workspace

@@ -324,7 +324,7 @@ function selectionLabel(store: Store, setting: string, value: SettingValue) {
       return isStoryUiThemeSetting(value)
         ? readTheme(store, value.slice('theme:'.length)).title
         : undefined;
-    return store.product.get<{ title: string }>(
+    return store.product.stored<{ title: string }>(
       setting === 'chat.mainPromptPreset' || promptPresetSettings.includes(setting)
         ? 'prompt-preset'
         : 'model',
@@ -383,11 +383,11 @@ export function applyHelperSettingsMutation(
   }
   if (name === 'model.pricing.update') {
     const modelId = text(args.modelId, 'saved model ID', 100);
-    const before = store.product.get<ModelPreset>('model', modelId);
+    const before = store.product.writable<ModelPreset>('model', modelId);
     const result = invokeHelperSettingsTool(store, name, args, chatId) as {
       backfill?: { estimatedCalls: number; partialCalls: number };
     };
-    const after = store.product.get<ModelPreset>('model', modelId);
+    const after = store.product.stored<ModelPreset>('model', modelId);
     recordHelperTaskResult(workspace, task, {
       receiptId,
       operation: name,
@@ -418,7 +418,7 @@ export function applyHelperSettingsMutation(
       estimatedCalls: number;
       partialCalls: number;
     };
-    const model = store.product.get<ModelPreset>('model', result.modelId);
+    const model = store.product.stored<ModelPreset>('model', result.modelId);
     recordHelperTaskResult(workspace, task, {
       receiptId,
       operation: name,
@@ -496,7 +496,7 @@ export function applyHelperSettingsMutation(
                   scope === 'global'
                     ? '기본값'
                     : scope === 'bot'
-                      ? store.product.get<{ title: string }>('content', targetId).title
+                      ? store.product.stored<{ title: string }>('content', targetId).title
                       : store.chat(targetId).title,
                 revision: result.revision,
                 setting:

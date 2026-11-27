@@ -161,7 +161,7 @@ export async function applyRisuImport(
     }
     const botId = receipt.items.find((item) => item.key === 'bot')!.id;
     const chat = store.createChat(preview.title, { botId }, receipt.id);
-    const content = store.product.get<Content>('content', botId);
+    const content = store.product.stored<Content>('content', botId);
     const first =
       content.package?.nativeRisu &&
       content.package.starts?.find(
