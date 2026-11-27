@@ -24,6 +24,7 @@ import {
   loreParents,
   loreText,
   moveLoreEntry,
+  loreTitle,
   newLoreEntry,
   removeLoreFolder,
   type LoreEntry,
@@ -76,9 +77,6 @@ export function NativeRisuLoreEditor({
   focus?: { index: number; epoch: number } | null;
 }) {
   const { t } = useI18n();
-  const loreTitle = (entry: LoreEntry) =>
-    loreText(entry.comment ?? entry.name) || t('native.unnamedLore');
-
   const [selected, setSelected] = useState(focus?.index ?? 0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');

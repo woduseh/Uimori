@@ -76,7 +76,7 @@ describe('grouped toggle document', () => {
     ]) {
       expect(parseToggleDocument(source).warnings.length).toBeGreaterThan(0);
       expect(serializeNativeToggleLines(parseToggleDocument(source).lines)).toBe(source);
-      expect(shownThrow(() => addToggleGroup(source))).toContain('그룹 경계');
+      expect(shownThrow(() => addToggleGroup(source, 'Group'))).toContain('그룹 경계');
       expect(shownThrow(() => addToggleItem(source, -1, 'toggle'))).toContain('그룹 경계');
     }
   });

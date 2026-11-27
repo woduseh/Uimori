@@ -1,0 +1,53 @@
+{
+  "permanent": {
+    "web/AuthorNotesEditor.tsx": {
+      "count": 1,
+      "reason": "A new note's default author is stored in its declaration and reaches the model through transcripts and helper reads; docs/I18N.md keeps model inputs and stored defaults out of the UI language."
+    },
+    "web/AutoTranslationDefaults.tsx": {
+      "count": 1,
+      "reason": "LANGUAGE_NAMES names each written language in itself, so Korean reads 한국어 in every UI language."
+    },
+    "web/LanguageSelect.tsx": {
+      "count": 1,
+      "reason": "The UI language picker names each language in itself, so a reader can find their own language from any other."
+    },
+    "web/LoreContextPolicyEditor.tsx": {
+      "count": 1,
+      "reason": "The lore-context preview sends this as the request text when none is typed, and lore matching runs on it like a model input, which docs/I18N.md keeps out of the UI language."
+    },
+    "web/native-lore-document.ts": {
+      "count": 4,
+      "reason": "The default comment or name of a new lore entry or folder is stored in the Risu card or module; docs/I18N.md keeps new items' default names in the stored data format."
+    },
+    "web/native-toggle-document.ts": {
+      "count": 2,
+      "reason": "The default label and select options of a new toggle are written into the stored toggle source; docs/I18N.md keeps new items' default names in the stored data format."
+    },
+    "web/pricing-display.ts": {
+      "count": 1,
+      "reason": "Frozen cost estimates in stored attempts carry this Korean note from before notes became codes; pricingNote compares against it to render the catalog message."
+    },
+    "web/public/sw.js": {
+      "count": 18,
+      "reason": "The service worker cannot import web/locales; notificationCatalogs is its own four-language table, and these are its Korean entries."
+    },
+    "web/reading-sample.ts": {
+      "count": 2,
+      "reason": "The reading preview's prose sample and its credit are a fixed public-domain Korean passage; docs/I18N.md keeps theme and reading preview fixtures as written."
+    },
+    "web/resource-editor-session.ts": {
+      "count": 1,
+      "reason": "The title an untitled default prompt carries in the helper capture is a model input, which docs/I18N.md keeps out of the UI language."
+    },
+    "web/story-ui-preview.ts": {
+      "count": 24,
+      "reason": "The story UI theme preview is a fixed Korean story fixture; docs/I18N.md keeps theme and reading preview fixtures as written."
+    },
+    "web/useStory.ts": {
+      "count": 1,
+      "reason": "A pasted image without a file name is stored and sent with the request under this name, a model input that docs/I18N.md keeps out of the UI language."
+    }
+  },
+  "debt": {}
+}

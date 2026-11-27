@@ -500,7 +500,7 @@ function SelectiveValues({
   const words = getScopeWords()[mode];
   const groups = new Map<string, PromptControl[]>();
   for (const control of definitions) {
-    const group = control.group?.trim() || '기본 설정';
+    const group = control.group?.trim() ?? '';
     groups.set(group, [...(groups.get(group) ?? []), control]);
   }
   const row = (control: PromptControl) => {

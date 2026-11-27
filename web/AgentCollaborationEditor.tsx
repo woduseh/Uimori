@@ -105,12 +105,12 @@ export function AgentCollaborationEditor({
   const missingControls = collaboration.sharedControls.filter(
     (controlId) => !controls.some((control) => control.id === controlId)
   );
-  const controlGroups = [...new Set(controls.map((control) => control.group || '기본 설정'))];
+  const controlGroups = [...new Set(controls.map((control) => control.group || ''))];
   const visibleControls = controls.filter((control) => {
     if (controlGroup === 'selected' && !collaboration.sharedControls.includes(control.id))
       return false;
     if (controlGroup !== 'all' && controlGroup !== 'selected') {
-      if ((control.group || '기본 설정') !== controlGroup) return false;
+      if ((control.group || '') !== controlGroup) return false;
     }
     return `${control.label} ${control.description ?? ''}`
       .toLocaleLowerCase()
@@ -458,11 +458,10 @@ export function AgentCollaborationEditor({
                   aria-pressed={controlGroup === group}
                   onClick={() => setControlGroup(group)}
                 >
-                  <strong>{group === '기본 설정' ? t('settings.m133') : group}</strong>
+                  <strong>{group || t('settings.m133')}</strong>
                   <small>
                     {t('settings.flow9', {
-                      v0: controls.filter((control) => (control.group || '기본 설정') === group)
-                        .length,
+                      v0: controls.filter((control) => (control.group || '') === group).length,
                     })}
                   </small>
                 </button>
