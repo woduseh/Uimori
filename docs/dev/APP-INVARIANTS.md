@@ -73,7 +73,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
 
 ### Idempotency receipt retention policy
 
-- **256-entry rotating prune with long-term exclusions (`saveImportReceipt`)**: Retains the 256 most recent general resource import receipts. Chat backup (`chat:`), transcript (`transcript:`), Risu (`risu-result:`), resource-legacy (`resource:`), and retry (`retry:`) receipts are excluded from pruning so prior imports never duplicate after many subsequent general imports.
+- **Receipts are never pruned (`saveImportReceipt`)**: Every import, restore, copy and retry receipt stays, so a lost-response retry of any of them answers its original result however many imports followed. Each receipt row is small next to the data its import created, and an earlier prefix-based prune silently dropped archive and transfer restores. Receipt-first routes (`importNormalizedResourceBundle`, `applyRisuPresetImport`, `applyRisuImport`) read the receipt before re-validating, analyzing or converting the request, so a later 409 `*_DRAFT_CHANGED` or 410 `NATIVE_TRANSFER_EXPIRED` means nothing was saved under that key; the web relies on that in `definiteImportFailure`.
 
 ## Resource editing, recovery, selection revision and helper changes
 

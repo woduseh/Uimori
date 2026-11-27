@@ -12,7 +12,7 @@ import type {
   NativeTransferPrepare,
   NativeTransferReceipt,
 } from '../core/native-transfer.js';
-import { api, apiBinary, definiteRejection } from './api.js';
+import { api, apiBinary, definiteImportFailure } from './api.js';
 import { toUiMessage } from './api-errors.js';
 import { inspectBackupFile } from './backup-file.js';
 import { LoadingState } from './LoadingState.js';
@@ -160,7 +160,7 @@ export function BackupFileImport({
       if (input.current) input.current.value = '';
       await onImported().catch(() => setError(uiMessage('transfer.m127')));
     } catch (caught) {
-      setUncertain(uncertain || !definiteRejection(caught));
+      setUncertain(!definiteImportFailure(caught, uncertain));
       setError(toUiMessage(caught));
     } finally {
       lock.current = false;

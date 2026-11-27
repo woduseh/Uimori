@@ -131,23 +131,33 @@ function prepareImport(value: unknown) {
 
 export function importResourceBundle(store: Store, value: unknown): NativeTransferReceipt {
   const { body, bundle } = prepareImport(value);
-  return applyPreparedBundle(store, body, bundle);
+  return applyPreparedBundle(store, body, bundleReceipt(body, bundle.preview.digest), bundle);
 }
 
 export async function importNormalizedResourceBundle(
   store: Store,
   value: unknown
 ): Promise<NativeTransferReceipt> {
-  const { body, bundle } = prepareImport(value);
+  const body = record(value);
+  fields(body, ['file', 'digest', 'modelBindings', 'idempotencyKey']);
+  const receipt = bundleReceipt(body, text(body.digest, 'import digest', 100), 'transfer:');
+  const prior = readImportReceipt<NativeTransferReceipt>(store, receipt.key, receipt.digest);
+  if (prior) return { ...prior, created: false };
+  const { bundle } = prepareImport(body);
   const converted = await normalizeTransferImages(bundle.checked.file);
-  return applyPreparedBundle(store, body, prepareBundle(converted));
+  return applyPreparedBundle(store, body, receipt, prepareBundle(converted));
 }
 
-function bundleCommand(
-  body: Record<string, any>,
-  checked: ValidatedPreparedNativeTransfer,
-  prepared: NativeTransferPrepare
-) {
+type BundleReceipt = { key: string; digest: string };
+
+function bundleReceipt(body: Record<string, any>, fileDigest: string, prefix = ''): BundleReceipt {
+  return {
+    key: `${prefix}${text(body.idempotencyKey, 'import request', 200)}`,
+    digest: bundleDigest({ file: fileDigest, bindings: body.modelBindings ?? [] }),
+  };
+}
+
+function bundleBindings(body: Record<string, any>, checked: ValidatedPreparedNativeTransfer) {
   const supplied = body.modelBindings ?? [];
   if (!Array.isArray(supplied)) throw new HttpError(400, 'Invalid model bindings');
   const requirements = new Set(checked.modelRequirements.map((item) => item.key));
@@ -171,37 +181,20 @@ function bundleCommand(
       });
     else throw new HttpError(400, 'Invalid model binding mode');
   }
-  const bindings = [...requirements]
-    .sort()
-    .map(
-      (requirementKey) =>
-        mapped.get(requirementKey) ?? { requirementKey, mode: 'inherit-main' as const }
-    );
-  const commandDigest = bundleDigest({ file: prepared.digest, bindings });
-  const key = text(body.idempotencyKey, 'import request', 200);
-  return { key, commandDigest, mapped };
-}
-
-export function readResourceBundleReceipt(
-  store: Store,
-  value: unknown
-): NativeTransferReceipt | undefined {
-  const { body, bundle } = prepareImport(value);
-  const { key, commandDigest } = bundleCommand(body, bundle.checked, bundle.preview);
-  const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
-  return prior && { ...prior, created: false };
+  return mapped;
 }
 
 function applyPreparedBundle(
   store: Store,
   body: Record<string, any>,
+  { key, digest: commandDigest }: BundleReceipt,
   {
     checked,
     preview: prepared,
   }: { checked: ValidatedPreparedNativeTransfer; preview: NativeTransferPrepare },
   putImages?: () => void
 ): NativeTransferReceipt {
-  const { key, commandDigest, mapped } = bundleCommand(body, checked, prepared);
+  const mapped = bundleBindings(body, checked);
   return store.transaction(() => {
     const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
     if (prior) return { ...prior, created: false };
@@ -287,10 +280,20 @@ export function importPreparedResourceBundle(
       imageBytes: images.reduce((sum, item) => sum + item.bytes, 0),
     },
   };
-  return applyPreparedBundle(store, value, { checked, preview }, () => {
-    for (const image of images) {
-      if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
-      storeImage(store.db, { hash: image.hash, mime: image.mime, bytes: readFileSync(image.path) });
+  return applyPreparedBundle(
+    store,
+    value,
+    bundleReceipt(value, preview.digest),
+    { checked, preview },
+    () => {
+      for (const image of images) {
+        if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
+        storeImage(store.db, {
+          hash: image.hash,
+          mime: image.mime,
+          bytes: readFileSync(image.path),
+        });
+      }
     }
-  });
+  );
 }

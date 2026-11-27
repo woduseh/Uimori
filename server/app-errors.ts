@@ -6,6 +6,10 @@ import {
   type ErrorWire,
   isAppErrorCode,
 } from '#contracts';
+import { AgentCollaborationError } from '../core/agent-collaboration.js';
+import { ChatTranscriptError } from '../core/chat-transcript.js';
+import { NativeTransferError } from '../core/native-transfer-validation.js';
+import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js';
 import { ValidationError } from '../core/validation-error.js';
 import { HttpError } from './request-validation.js';
 
@@ -47,8 +51,34 @@ export function validationAppError(error: ValidationError): AppError {
   return appError;
 }
 
+const transcriptErrorCodes = [
+  'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION',
+  'CHAT_TRANSCRIPT_INVALID_REQUEST',
+  'CHAT_TRANSCRIPT_INVALID_TEXT',
+  'CHAT_TRANSCRIPT_INVALID_TRANSLATION',
+] as const;
+
+function coreErrorCode(error: unknown): PlainAppErrorCode | undefined {
+  if (error instanceof NativeTransferError)
+    return error.code === 'NATIVE_TRANSFER_FORMAT' ||
+      error.code === 'NATIVE_TRANSFER_MODULE_BINDINGS'
+      ? error.code
+      : 'NATIVE_TRANSFER_FILE_INVALID';
+  if (error instanceof ChatTranscriptError)
+    return transcriptErrorCodes.find((code) => code === error.message) ?? 'CHAT_TRANSCRIPT_INVALID';
+  if (error instanceof RisuPromptError) return risuPromptAppErrorCode(error);
+  if (error instanceof AgentCollaborationError) return 'AGENT_COLLABORATION_INVALID';
+  return undefined;
+}
+
 export function asAppError<T>(error: T): T | AppError {
-  return error instanceof ValidationError ? validationAppError(error) : error;
+  if (error instanceof ValidationError) return validationAppError(error);
+  const code = coreErrorCode(error);
+  if (!code) return error;
+  const appError = new AppError(400, code);
+  const detail = (error as Error).message;
+  if (detail !== code) appError.message = `${code}: ${detail}`;
+  return appError;
 }
 
 export function assertRevision(actual: number, expected: number): void {

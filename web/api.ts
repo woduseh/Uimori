@@ -31,10 +31,15 @@ export function definiteRejection(error: unknown): boolean {
     error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408
   );
 }
+const receiptCheckedFailures = new Set([
+  'RISU_IMPORT_DRAFT_CHANGED',
+  'NATIVE_TRANSFER_DRAFT_CHANGED',
+  'NATIVE_TRANSFER_EXPIRED',
+]);
 export function definiteImportFailure(error: unknown, uncertain: boolean): boolean {
   return (
     definiteRejection(error) &&
-    (!uncertain || (error as ApiError).code === 'RISU_IMPORT_DRAFT_CHANGED')
+    (!uncertain || receiptCheckedFailures.has((error as ApiError).code ?? ''))
   );
 }
 export const sessionRequiredEvent = 'uimori-session-required';

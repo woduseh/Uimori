@@ -20,7 +20,6 @@ import { cardZip } from '../server/character-card-file.js';
 import { uploadDirectory, uploadRoutes } from '../server/uploads.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { existsSync, statSync } from 'node:fs';
-import { saveImportReceipt } from '../server/import-operations.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -69,32 +68,13 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('bounded import history retains the latest 256 ordinary receipts, protected keys and the original bot chat', async () => {
+test('a replayed bot import returns its original receipt and chat', async () => {
   const store = database();
   const source = sourceOf(card());
   const preview = prepareRisuImport({ source });
   const body = { source, digest: preview.digest, allowPartial: false, idempotencyKey: 'old-risu' };
   const first = await applyRisuImport(store, body);
   expect(first.chat).not.toBeNull();
-  const protectedKeys = [
-    'retry:protected',
-    'transcript:protected',
-    'resource:protected',
-    'chat:protected',
-    'CHAT:legacy-case',
-  ];
-  for (const key of protectedKeys) saveImportReceipt(store, key, 'digest', {});
-  for (let index = 0; index < 260; index++)
-    saveImportReceipt(store, `ordinary-${index}`, 'digest', { index });
-  const keys = store.db
-    .prepare('SELECT key FROM import_operations ORDER BY rowid')
-    .all()
-    .map((row) => row.key);
-  expect(keys).toEqual([
-    'risu-result:old-risu',
-    ...protectedKeys,
-    ...Array.from({ length: 256 }, (_, index) => `ordinary-${index + 4}`),
-  ]);
   const replay = await applyRisuImport(store, body);
   expect(replay.receipt).toMatchObject({ id: first.receipt.id, created: false });
   expect(replay.chat?.id).toBe(first.chat?.id);

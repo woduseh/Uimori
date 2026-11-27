@@ -36,7 +36,6 @@ export type AppErrorParams = {
   SCENE_DELETE_REFERENCED: undefined;
   SCENE_DELETED_RETRY_UNAVAILABLE: undefined;
   READING_SCENE_NOT_FOUND: undefined;
-  BOOKMARK_NOT_FOUND: undefined;
   RUN_RETRY_AUTHORED_FIRST_MESSAGE: undefined;
   RUN_RETRY_REPLACE_LATEST_ONLY: undefined;
   RUN_RETRY_STORY_ADVANCED: undefined;
@@ -254,6 +253,7 @@ export type AppErrorParams = {
   PACKAGE_START_NOT_FOUND: undefined;
   RISU_PROMPT_INVALID: undefined;
   RISU_PROMPT_TOO_LARGE: undefined;
+  AGENT_COLLABORATION_INVALID: undefined;
 };
 
 export type AppErrorCode = keyof AppErrorParams;
@@ -300,7 +300,6 @@ const takesParams = {
   SCENE_DELETE_REFERENCED: false,
   SCENE_DELETED_RETRY_UNAVAILABLE: false,
   READING_SCENE_NOT_FOUND: false,
-  BOOKMARK_NOT_FOUND: false,
   RUN_RETRY_AUTHORED_FIRST_MESSAGE: false,
   RUN_RETRY_REPLACE_LATEST_ONLY: false,
   RUN_RETRY_STORY_ADVANCED: false,
@@ -518,6 +517,7 @@ const takesParams = {
   PACKAGE_START_NOT_FOUND: false,
   RISU_PROMPT_INVALID: false,
   RISU_PROMPT_TOO_LARGE: false,
+  AGENT_COLLABORATION_INVALID: false,
 } satisfies { [C in AppErrorCode]: AppErrorParams[C] extends undefined ? false : true };
 
 export const APP_ERROR_CODES = Object.keys(takesParams) as AppErrorCode[];

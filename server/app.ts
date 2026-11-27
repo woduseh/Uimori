@@ -25,15 +25,12 @@ import { fontRoutes } from './fonts.js';
 import { inputTranslationRoutes } from './input-translation.js';
 import { storyGuideRoutes } from './story-guide-routes.js';
 import { selectionRevisionRoutes } from './selection-revision.js';
-import { ChatTranscriptError } from '../core/chat-transcript.js';
 import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
-import { AppError, errorWire, storedModelRequired, validationAppError } from './app-errors.js';
-import { ValidationError } from '../core/validation-error.js';
-import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js';
+import { AppError, asAppError, errorWire, storedModelRequired } from './app-errors.js';
 import { checkEndpointOutputs } from './endpoint.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
@@ -93,6 +90,7 @@ import { packageImageRoutes, imageCatalog, imageTargetSource } from './package-i
 import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { applyNativeRisuAction } from './risu-native-actions.js';
+import { withRisuFailureCode } from './risu-failure-code.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
 import { startImportStagingCleanup } from './import-staging-cleanup.js';
 import { requestFileRoutes } from './request-files.js';
@@ -105,7 +103,6 @@ import {
 import { admissionOpen, maintenanceRoutes, maintenanceStatus } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { risuExportRoutes } from './risu-export.js';
-import { NativeTransferError } from '../core/native-transfer-validation.js';
 import { packageFeatureRoutes } from './package-features.js';
 import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
 import {
@@ -169,17 +166,6 @@ type RecordBody = Record<string, unknown>;
 const DOCUMENT_CONTENT_SECURITY_POLICY =
   "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
-const transcriptErrorCodes = [
-  'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION',
-  'CHAT_TRANSCRIPT_INVALID_REQUEST',
-  'CHAT_TRANSCRIPT_INVALID_TEXT',
-  'CHAT_TRANSCRIPT_INVALID_TRANSLATION',
-] as const;
-function transcriptErrorCode(
-  message: string
-): (typeof transcriptErrorCodes)[number] | 'CHAT_TRANSCRIPT_INVALID' {
-  return transcriptErrorCodes.find((code) => code === message) ?? 'CHAT_TRANSCRIPT_INVALID';
-}
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
@@ -949,22 +935,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (denied) throw new HttpError(403, denied);
   });
   app.setErrorHandler((error, request, reply) => {
-    const coreError =
-      error instanceof ValidationError
-        ? validationAppError(error)
-        : error instanceof NativeTransferError
-          ? new AppError(
-              400,
-              error.code === 'NATIVE_TRANSFER_FORMAT' ||
-                error.code === 'NATIVE_TRANSFER_MODULE_BINDINGS'
-                ? error.code
-                : 'NATIVE_TRANSFER_FILE_INVALID'
-            )
-          : error instanceof ChatTranscriptError
-            ? new AppError(400, transcriptErrorCode(error.message))
-            : error instanceof RisuPromptError
-              ? new AppError(400, risuPromptAppErrorCode(error))
-              : undefined;
+    const appError = asAppError(error);
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =
@@ -981,7 +952,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       .code(code)
       .send(
         errorWire(
-          coreError ?? error,
+          appError,
           error instanceof HttpError
             ? error.message
             : code === 400
@@ -1141,12 +1112,8 @@ export async function createApp(options: AppOptions): Promise<App> {
       stopping.signal.addEventListener('abort', onStop, { once: true });
       let actionRunId: string | undefined;
       try {
-        const result = await applyNativeRisuAction(
-          store,
-          request.params.id,
-          request.params.sourceId,
-          request.body,
-          {
+        const result = await withRisuFailureCode(() =>
+          applyNativeRisuAction(store, request.params.id, request.params.sourceId, request.body, {
             signal: controller.signal,
             createHost: (runId, snapshot, usage) => {
               actionRunId = runId;
@@ -1165,7 +1132,7 @@ export async function createApp(options: AppOptions): Promise<App> {
                 'user-action'
               );
             },
-          }
+          })
         );
         publish(request.params.id);
         return result;

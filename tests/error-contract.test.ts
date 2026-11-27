@@ -9,6 +9,10 @@ import { UI_LOCALES } from '../core/ui-locale.js';
 import { messages } from '../web/locales/index.js';
 import { appErrorMessages } from '../web/api-errors.js';
 import { RisuPromptError } from '../core/risu-prompt.js';
+import { AgentCollaborationError } from '../core/agent-collaboration.js';
+import { ChatTranscriptError } from '../core/chat-transcript.js';
+import { NativeTransferError } from '../core/native-transfer-validation.js';
+import { shellBridgeFailure } from '../server/helper-shell.js';
 import { validateRisuContent } from '../core/risu-content.js';
 import type { RisuImportFindingCode, RisuImportFindingParams } from '../core/risu-import.js';
 import type { RisuPresetFindingCode, RisuPresetFindingParams } from '../core/risu-preset.js';
@@ -78,6 +82,12 @@ test('a core validator error thrown inside any route answers its catalogued code
       throw new RisuPromptError('PROMPT_INVALID_FIELDS');
     });
     app.get('/api/test-risu-content-error', () => validateRisuContent({ version: 1 }));
+    app.get('/api/test-agent-collaboration-error', () => {
+      throw new AgentCollaborationError('AGENT_COLLABORATION_AGENT_ID');
+    });
+    expect((await app.inject('/api/test-agent-collaboration-error')).json()).toEqual({
+      code: 'AGENT_COLLABORATION_INVALID',
+    });
     expect((await app.inject('/api/test-risu-prompt-error')).json()).toEqual({
       code: 'RISU_PROMPT_INVALID',
     });
@@ -94,6 +104,16 @@ test('a core validator error thrown inside any route answers its catalogued code
     await app.close();
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('the helper shell bridge answers a core error with the code the app answers', () => {
+  for (const [error, code] of [
+    [new RisuPromptError('PROMPT_PROGRAM_LIMIT'), 'RISU_PROMPT_TOO_LARGE'],
+    [new AgentCollaborationError('AGENT_COLLABORATION_AGENT_ID'), 'AGENT_COLLABORATION_INVALID'],
+    [new ChatTranscriptError('CHAT_TRANSCRIPT_INVALID_TEXT'), 'CHAT_TRANSCRIPT_INVALID_TEXT'],
+    [new NativeTransferError('NATIVE_TRANSFER_GRAPH'), 'NATIVE_TRANSFER_FILE_INVALID'],
+  ] as const)
+    expect(shellBridgeFailure(error)).toMatchObject({ status: 400, body: { code } });
 });
 
 test('every catalogued code has a message in every locale whose arguments are its params', () => {

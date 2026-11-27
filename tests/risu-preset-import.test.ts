@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -10,13 +10,24 @@ import {
   risuPresetImportRoutes,
 } from '../server/risu-preset-import.js';
 
-import { saveImportReceipt, savedOrDraftChanged } from '../server/import-operations.js';
+const analysis = vi.hoisted(() => ({ broken: false }));
+vi.mock('../server/risu-preset-program.js', async (original) => {
+  const actual = await original<typeof import('../server/risu-preset-program.js')>();
+  return {
+    ...actual,
+    importRisuPresetProgram: (...args: Parameters<typeof actual.importRisuPresetProgram>) => {
+      if (analysis.broken) throw new Error('analysis no longer accepts this source');
+      return actual.importRisuPresetProgram(...args);
+    },
+  };
+});
 import { promptWorkspace, promptWorkspaceRoutes } from '../server/prompt-workspace.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { path: string; store: Store; app: FastifyInstance }[] = [];
 afterEach(async () => {
+  analysis.broken = false;
   for (const { path, store, app } of owned.splice(0)) {
     await app.close();
     store.close();
@@ -175,21 +186,18 @@ test('a saved import whose response was lost answers its receipt even when the p
     );
 });
 
-test('a lost-response retry finds its preset receipt after hundreds of other imports', () => {
+test('a lost-response retry answers its receipt before the source is analyzed again', () => {
   const { store } = fixture();
   const source = sourceOf(document());
-  const preview = prepareRisuPresetImport({ source });
   const command = {
     source,
-    digest: preview.digest,
+    digest: prepareRisuPresetImport({ source }).digest,
     allowPartial: false,
     idempotencyKey: 'outlived',
   };
   const first = applyRisuPresetImport(store, command);
-  for (let index = 0; index < 260; index++)
-    saveImportReceipt(store, `unrelated-import-${index}`, 'digest', { index });
-  const retry = applyRisuPresetImport(store, { ...command, digest: 'digest-before-upgrade' });
+  analysis.broken = true;
+  const retry = applyRisuPresetImport(store, command);
+  expect(retry.receipt).toEqual({ ...first.receipt, created: false });
   expect(retry.preset.id).toBe(first.preset.id);
-  // @ts-expect-error a definite 409 needs a receipt key that is never trimmed
-  expect(savedOrDraftChanged('risu-trimmed:key', () => 1)).toBe(1);
 });

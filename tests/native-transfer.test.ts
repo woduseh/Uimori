@@ -7,6 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
+import { saveImportReceipt } from '../server/import-operations.js';
 import {
   applyNativeTransfer,
   nativeTransferRoutes,
@@ -291,6 +292,17 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(retry.statusCode, retry.body).toBe(200);
   expect(retry.json()).toEqual({ ...receipt, created: false });
   expect(snapshot(target.store)).toEqual(applied);
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(target.store, `unrelated-${index}`, 'digest', { index });
+  const reviewedBeforeUpgrade = structuredClone(source.file);
+  reviewedBeforeUpgrade.contents[0].source.title += ' as re-read after an upgrade';
+  const late = await target.app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply',
+    payload: { ...request(source.file), file: reviewedBeforeUpgrade },
+  });
+  expect(late.json()).toEqual({ ...receipt, created: false });
+  expect(snapshot(target.store).versions).toEqual(applied.versions);
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
 

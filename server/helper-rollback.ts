@@ -32,7 +32,7 @@ import {
 } from './helper-changes.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import type { HelperWorkspace } from './helper-workspace.js';
-import { AppError } from './app-errors.js';
+import { AppError, asAppError } from './app-errors.js';
 import { HttpError } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
 import { latestTranslation } from './source-editing.js';
@@ -563,7 +563,8 @@ export function rollBackHelperTask(
               JSON.stringify(unit.rows.map((row) => row.target_id))
             );
         });
-      } catch (error) {
+      } catch (thrown) {
+        const error = asAppError(thrown);
         return [
           {
             ...describe(store, unit, { status: 'failed' }),
