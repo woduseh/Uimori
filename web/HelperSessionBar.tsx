@@ -230,7 +230,7 @@ export function HelperSessionBar(props: Props) {
   };
   const sessionMenu = (session: HelperSession, orderActions?: ReactNode) => (
     <ActionMenu
-      label={t('helperNavigation.actions', { title: session.title || t('helpers.m173') })}
+      label={t('helperNavigation.actions', { title: session.title || t('helpers.m176') })}
       viewport
     >
       <div className="action-menu-group">
@@ -367,7 +367,7 @@ export function HelperSessionBar(props: Props) {
         <div className="helper-work-selector">
           {props.expanded && (
             <strong className="helper-session-title">
-              {props.conversation?.title || t('helpers.m173')}
+              {props.conversation?.title || t('helpers.m176')}
             </strong>
           )}
           <label className="helper-session-picker">
@@ -393,7 +393,7 @@ export function HelperSessionBar(props: Props) {
                   {group.items.map((session) => (
                     <option key={session.id} value={session.id}>
                       {props.unread.includes(session.id) ? '● ' : ''}
-                      {session.title || t('helpers.m173')}
+                      {session.title || t('helpers.m176')}
                       {session.activity?.running
                         ? t('helpers.m174')
                         : session.activity?.queued
@@ -781,7 +781,7 @@ export function HelperSessionBar(props: Props) {
           if (!working) setDeleting(null);
         }}
       >
-        <p>{t('helpers.m326', { title: deleting?.title || t('helpers.m173') })}</p>
+        <p>{t('helpers.m326', { title: deleting?.title || t('helpers.m176') })}</p>
         {!impact && !readError && <LoadingState presentation="inline" label={t('helpers.m188')} />}
         {impact && !impact.canDelete && (
           <p role="status">

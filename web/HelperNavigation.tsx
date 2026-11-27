@@ -206,7 +206,7 @@ export function HelperNavigation(props: Props) {
       </div>
     );
   };
-  const sessionTitle = (session: HelperSession) => session.title || t('helpers.m173');
+  const sessionTitle = (session: HelperSession) => session.title || t('helpers.m176');
   const runningLabel = (session: HelperSession) => {
     const count = (session.activity?.running ?? 0) + (session.activity?.queued ?? 0);
     if (!count) return undefined;
