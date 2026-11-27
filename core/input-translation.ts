@@ -1,16 +1,24 @@
+import {
+  INPUT_TRANSLATION_LANGUAGE_CODES,
+  type InputTranslationLanguage,
+  type InputTranslationResult,
+} from '#contracts';
 import type { TranslationGuide } from './translation-guide.js';
 
-export const INPUT_TRANSLATION_LANGUAGES = [
-  { code: 'en', label: '영어', name: 'English' },
-  { code: 'ja', label: '일본어', name: 'Japanese' },
-  { code: 'ko', label: '한국어', name: 'Korean' },
-  { code: 'zh', label: '중국어', name: 'Chinese' },
-  { code: 'fr', label: '프랑스어', name: 'French' },
-  { code: 'de', label: '독일어', name: 'German' },
-  { code: 'es', label: '스페인어', name: 'Spanish' },
-] as const;
-export type InputTranslationLanguage = (typeof INPUT_TRANSLATION_LANGUAGES)[number]['code'];
-export type InputTranslationResult = { text: string; targetLanguage: InputTranslationLanguage };
+const LANGUAGE_NAMES: Record<InputTranslationLanguage, { label: string; name: string }> = {
+  en: { label: '영어', name: 'English' },
+  ja: { label: '일본어', name: 'Japanese' },
+  ko: { label: '한국어', name: 'Korean' },
+  zh: { label: '중국어', name: 'Chinese' },
+  fr: { label: '프랑스어', name: 'French' },
+  de: { label: '독일어', name: 'German' },
+  es: { label: '스페인어', name: 'Spanish' },
+};
+export const INPUT_TRANSLATION_LANGUAGES = INPUT_TRANSLATION_LANGUAGE_CODES.map((code) => ({
+  code,
+  ...LANGUAGE_NAMES[code],
+}));
+export type { InputTranslationLanguage, InputTranslationResult };
 export const INPUT_TRANSLATION_CONTEXT_TOKENS = 1500;
 
 export function inputTranslationLanguage(value: unknown) {

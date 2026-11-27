@@ -229,10 +229,19 @@ test('invalid input is rejected before calling the model', async () => {
     { ...payload, text: ' '.repeat(10) },
     { ...payload, text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },
     { ...payload, modelId: 'another-model' },
+    { ...payload, targetLanguage: 'tlh' },
   ]) {
     const response = await f.post(body);
     expect(response.statusCode).toBe(400);
+    expect(response.headers['cache-control']).toBe('no-store');
   }
+  const gone = await f.app.inject({
+    method: 'POST',
+    url: '/api/chats/unknown-chat/input-translation',
+    payload,
+  });
+  expect(gone.statusCode).toBe(404);
+  expect(gone.json()).toEqual({ code: 'LIBRARY_ITEM_DELETED' });
   expect(send).not.toHaveBeenCalled();
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });

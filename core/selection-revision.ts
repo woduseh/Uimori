@@ -1,7 +1,6 @@
-export type SelectionRevisionResult = { text: string };
+import { REVISION_CONTEXTS, type RevisionContext, type SelectionRevisionResult } from '#contracts';
 
-export type RevisionContext = 'scene' | 'nearby';
-export const REVISION_CONTEXTS: readonly RevisionContext[] = ['scene', 'nearby'];
+export { REVISION_CONTEXTS, type RevisionContext, type SelectionRevisionResult };
 export const NEARBY_CONTEXT_CHARS = 3000;
 
 const splitsPair = (text: string, index: number) =>

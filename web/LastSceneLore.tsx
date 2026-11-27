@@ -1,6 +1,8 @@
+import { readerEndpoints } from '#contracts';
 import { t, useI18n } from './i18n.js';
 import type { LastSceneLoreDetail } from '../core/scene-usage.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
+import { endpointRecord, type RecordSource } from './useApiRecord.js';
 import { RequestLoreView } from './AttemptInspector.js';
 
 export function LastSceneLore({
@@ -14,7 +16,11 @@ export function LastSceneLore({
   return (
     <section aria-label={t('library.loreIncludedInTheLastScene')}>
       <LazyDiagnostics<LastSceneLoreDetail>
-        path={`/chats/${encodeURIComponent(chatId)}/last-scene-lore`}
+        source={
+          endpointRecord(readerEndpoints.readLastSceneLore, {
+            chatId,
+          }) as RecordSource<LastSceneLoreDetail>
+        }
         revision={headRevision ?? ''}
         title={t('library.inclusionRecords')}
         initiallyOpen

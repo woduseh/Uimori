@@ -1,3 +1,4 @@
+import { readerEndpoints } from '#contracts';
 import { t, useI18n, formatNumber } from './i18n.js';
 import { uiMessage, type UiMessage } from './ui-message.js';
 import { useState, type ReactNode } from 'react';
@@ -22,7 +23,7 @@ import { IllustrationPhases, IllustrationUsageReportView } from './IllustrationA
 import { illustrationProgress } from './illustration-progress.js';
 import { sceneCostLabels } from './pricing-display.js';
 import { usageCompact } from './usage-display.js';
-import { useApiRecord } from './useApiRecord.js';
+import { endpointRecord, type RecordSource, useApiRecord } from './useApiRecord.js';
 import './scene-inspector.css';
 
 function RunNumbers({ run }: { run: ReaderRun }) {
@@ -155,7 +156,12 @@ function LinkedIllustrations({
   );
 }
 
-type RawTab = { key: string; label: string; path: string; revision: string | number };
+type RawTab = {
+  key: string;
+  label: string;
+  source: string | RecordSource<unknown>;
+  revision: string | number;
+};
 type ApiRecord<T> = ReturnType<typeof useApiRecord<T>>;
 
 function RawRecords({
@@ -269,11 +275,11 @@ export function SceneInspector({
     .map((item) => `${item.id}:${item.status}:${item.updatedAt}`)
     .join('|');
   const tabs: RawTab[] = [
-    { key: 'main', label: t('helpers.m216'), path: `/runs/${run.id}`, revision },
+    { key: 'main', label: t('helpers.m216'), source: `/runs/${run.id}`, revision },
     ...jobs.map((job) => ({
       key: job.id,
       label: jobTitle(job),
-      path: `/jobs/${job.id}`,
+      source: endpointRecord(readerEndpoints.readJob, { jobId: job.id }) as RecordSource<unknown>,
       revision: `${job.status}:${job.attempt}:${job.revision}`,
     })),
     ...(source && illustrations.length
@@ -281,7 +287,7 @@ export function SceneInspector({
           {
             key: 'illustration',
             label: t('visuals.m098'),
-            path: `/sources/${source.id}/illustration-usage`,
+            source: `/sources/${source.id}/illustration-usage`,
             revision: illustrationRevision,
           },
         ]
@@ -295,7 +301,7 @@ export function SceneInspector({
     loreOpen || (rawOpen && mainSelected)
   );
   const tabRecord = useApiRecord<unknown>(
-    selectedTab.path,
+    selectedTab.source,
     selectedTab.revision,
     rawOpen && !mainSelected
   );

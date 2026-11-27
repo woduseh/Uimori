@@ -1,3 +1,4 @@
+import { readerEndpoints } from '#contracts';
 import { Fragment, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { Info } from 'lucide-react';
 import {
@@ -15,7 +16,7 @@ import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoadingState } from './LoadingState.js';
-import { useApiRecord } from './useApiRecord.js';
+import { endpointRecord, type RecordSource, useApiRecord } from './useApiRecord.js';
 import { formatUsd, formatUsdSubtotal, formatUsdSummary } from './pricing-display.js';
 import { CopyTextButton } from './TaskHistory.js';
 import {
@@ -438,7 +439,11 @@ export function TraceCallTable({
                   <td colSpan={columns}>
                     {expanded && (
                       <LazyDiagnostics<Attempt>
-                        path={`/attempts/${call.id}`}
+                        source={
+                          endpointRecord(readerEndpoints.readAttempt, {
+                            attemptId: call.id,
+                          }) as RecordSource<Attempt>
+                        }
                         revision={revision}
                         disclosure={false}
                         title={t('visualpanels.attemptDetail')}
@@ -526,7 +531,11 @@ export function TraceDisclosure({
 }
 
 export function useChatTrace(chatId: string, revision: number | string, enabled = true) {
-  return useApiRecord<ChatTraceCall[]>(`/chats/${chatId}/attempts`, revision, enabled);
+  return useApiRecord(
+    endpointRecord(readerEndpoints.listChatAttempts, { chatId }) as RecordSource<ChatTraceCall[]>,
+    revision,
+    enabled
+  );
 }
 
 export function TraceLoading({ error, retry }: { error: UiMessage | null; retry: () => void }) {

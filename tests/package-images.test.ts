@@ -220,14 +220,17 @@ test('source reservation and delayed worker keep old names and removed images; e
     initial.id
   );
   expect(loaded.assets).toEqual(frozen);
-  const command = { expectedSourceHash: source.hash, expectedRevision: initial.revision };
-  expect(requestImages(store, source.id, command).id).toBe(initial.id);
-  expect(() =>
-    requestImages(store, source.id, { ...command, expectedSourceHash: 'wrong' })
-  ).toThrow();
-  expect(() => requestImages(store, source.id, { ...command, expectedRevision: 0 })).toThrow();
+  const command = {
+    sourceId: source.id,
+    target: 'original' as const,
+    expectedSourceHash: source.hash,
+    expectedRevision: initial.revision!,
+  };
+  expect(requestImages(store, command).id).toBe(initial.id);
+  expect(() => requestImages(store, { ...command, expectedSourceHash: 'wrong' })).toThrow();
+  expect(() => requestImages(store, { ...command, expectedRevision: 0 })).toThrow();
   completeImage(store, source);
-  const next = requestImages(store, source.id, command);
+  const next = requestImages(store, command);
   expect(next).toMatchObject({
     id: initial.id,
     status: 'queued',
@@ -238,9 +241,26 @@ test('source reservation and delayed worker keep old names and removed images; e
   expect(() => store.product.stored<Content>('content', first.id, first.revision)).toThrow(
     'content revision not found'
   );
-  expect(() => requestImages(store, source.id, command)).toThrow();
+  expect(() => requestImages(store, command)).toThrow();
 });
 
+test('an image request for a scene without the placement role answers a stale tab before the missing role', () => {
+  const { store } = fixture();
+  const chat = createFixtureChat(store, 'Synthetic');
+  const source = finish(store, begin(store, chat.id));
+  const request = {
+    sourceId: source.id,
+    target: 'original' as const,
+    expectedSourceHash: source.hash,
+    expectedRevision: 0,
+  };
+  expect(() => requestImages(store, { ...request, expectedSourceHash: 'stale' })).toThrow(
+    'REVISION_CONFLICT'
+  );
+  expect(() => requestImages(store, { ...request, sourceId: 'gone' })).toThrow('REVISION_CONFLICT');
+  expect(() => requestImages(store, request)).toThrow('IMAGE_SELECTION_ROLE_REQUIRED');
+  expect(store.db.prepare("SELECT count(*) AS n FROM jobs WHERE kind='image'").get()!.n).toBe(0);
+});
 test('an automatically translated scene places images on the translation and leaves the original to an explicit request', () => {
   const { store } = fixture(),
     content = save(store, [image(store)]),
@@ -273,7 +293,8 @@ test('an automatically translated scene places images on the translation and lea
     ['image', 'translation'],
   ]);
 
-  const original = requestImages(store, source.id, {
+  const original = requestImages(store, {
+    sourceId: source.id,
     target: 'original',
     expectedSourceHash: source.hash,
     expectedRevision: 0,

@@ -910,6 +910,16 @@ export class Store {
     if (!row) throw new HttpError(404, 'Source not found');
     return row;
   }
+  readableSource(id: string): Source {
+    if (!this.db.prepare('SELECT 1 FROM sources WHERE id=?').get(id))
+      throw new AppError(404, 'LIBRARY_ITEM_DELETED');
+    return this.source(id);
+  }
+  writableSource(id: string): Source {
+    if (!this.db.prepare('SELECT 1 FROM sources WHERE id=?').get(id))
+      throw new AppError(409, 'REVISION_CONFLICT');
+    return this.source(id);
+  }
   sourceOriginal(id: string): Source {
     const row = this.db
       .prepare(

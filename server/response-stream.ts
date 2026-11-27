@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
+import { readerEndpoints } from '#contracts';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
 import type {
   ResponseChunk,
@@ -11,6 +13,8 @@ import type {
   ResponseTaskKind,
 } from '../core/response-stream.js';
 import { RESPONSE_TASK_KINDS } from '../core/response-stream.js';
+import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -126,7 +130,7 @@ export class ResponseStreamStore {
       throw new HttpError(400, 'Invalid stream cursor');
     const identity = { taskKind, taskId };
     const row = this.row(identity);
-    if (!row) throw new HttpError(404, 'Response stream not found');
+    if (!row) throw new AppError(404, 'LIBRARY_ITEM_DELETED');
     const stream = this.active.get(keyOf(identity));
     const rows =
       stream && after >= stream.durableSeq
@@ -476,12 +480,11 @@ export function responseStreamRoutes(
     if (!Number.isSafeInteger(result)) throw new HttpError(400, 'Invalid stream cursor');
     return result;
   };
-  app.get<{ Params: { taskKind: string; taskId: string }; Querystring: { after?: string } }>(
-    '/api/response-streams/:taskKind/:taskId',
-    (request) => {
-      const target = identity(request.params);
-      return streams.read(target.taskKind, target.taskId, cursor(request.query.after));
-    }
+  registerEndpoint(
+    app,
+    readerEndpoints.readResponseStream,
+    readerOperations.readResponseStream,
+    ({ taskKind, taskId, after }) => streams.read(taskKind, taskId, after ?? 0)
   );
   app.get<{ Params: { taskKind: string; taskId: string }; Querystring: { after?: string } }>(
     '/api/response-streams/:taskKind/:taskId/events',

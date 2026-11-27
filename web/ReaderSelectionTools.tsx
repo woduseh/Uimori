@@ -33,13 +33,17 @@ import {
 import { themeBodyScroll } from './theme-body-scroll.js';
 import { TransientNotice } from './TransientNotice.js';
 import { CheckIcon, CopyIcon, EditIcon, HelperIcon, RefreshIcon, StopIcon } from './ui-icons.js';
-import { useSelectionRevision, type SelectionRevisionTarget } from './useSelectionRevision.js';
+import {
+  type SelectionRevisionRequest,
+  type SelectionRevisionTarget,
+  useSelectionRevision,
+} from './useSelectionRevision.js';
 import './reader-selection.css';
 
 export type ReaderRevisionTarget = {
   representation: 'original' | 'translation';
   text: string;
-  request: Omit<SelectionRevisionTarget, 'draft' | 'start' | 'end'>;
+  request: SelectionRevisionRequest;
   parts: { source: string; translation: string };
 };
 

@@ -139,7 +139,7 @@ test('imported options apply through existing workspace and actual chat preview 
   const request = await app.inject({
     method: 'POST',
     url: `/api/chats/${chat.id}/prompt-preview`,
-    payload: { request: 'CURRENT REQUEST' },
+    payload: { role: 'main', request: 'CURRENT REQUEST' },
   });
   expect(request.statusCode, request.body).toBe(200);
   const messages = request

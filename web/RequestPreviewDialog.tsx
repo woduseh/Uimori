@@ -5,7 +5,8 @@ import { uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { RequestImagePreview } from '../core/request-images.js';
-import { api, libraryChangedKey } from './api.js';
+import { readerEndpoints } from '#contracts';
+import { callEndpoint, libraryChangedKey } from './api.js';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -90,18 +91,21 @@ export function RequestPreviewDialog({
       return;
     }
     const controller = new AbortController();
-    void api<RequestPreview>(
-      `/chats/${encodeURIComponent(chatId)}/request-preview`,
+    void callEndpoint(
+      readerEndpoints.previewRequest,
       {
+        chatId,
         request,
-        ...(imageKey !== '[]' ? { requestImages: parseOwnJson(imageKey) } : {}),
+        ...(imageKey !== '[]'
+          ? { requestImages: parseOwnJson(imageKey) as RequestImagePreview[] }
+          : {}),
         ...(loreContextReset ? { loreContextReset: true } : {}),
       },
-      'POST',
       controller.signal
     )
       .then((value) => {
-        if (!controller.signal.aborted && sequence.current === version) setResult({ key, value });
+        if (!controller.signal.aborted && sequence.current === version)
+          setResult({ key, value: value as RequestPreview });
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted && sequence.current === version)

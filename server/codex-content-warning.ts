@@ -1,12 +1,12 @@
 import { textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
+import { readerEndpoints } from '#contracts';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
 import {
   CODEX_CONTENT_WARNING_THRESHOLD,
   CODEX_SEXUAL_CONTENT_BOUNDARY,
 } from '../core/codex-content-warning.js';
-import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { REQUEST_IMAGE_MAX_COUNT } from '../core/request-images.js';
 import type {
   CodexContentPreflightResult,
   CodexContentWarningRole,
@@ -17,7 +17,8 @@ import type { JevCredentialStore } from './jev-credentials.js';
 import { executeJudgment, type JudgmentHooks, type JudgmentRequest } from './judgment.js';
 import { jevSettings } from './jev-settings.js';
 import { judgmentRuntime, assertJudgmentRuntimeWire } from './judgment-runtime.js';
-import { HttpError, fields, record, text } from './request-validation.js';
+import { registerEndpoint } from './endpoint.js';
+import { HttpError } from './request-validation.js';
 import { promptWorkspace } from './prompt-workspace.js';
 
 const RECENT_CONTEXT_TOKENS = 8000;
@@ -132,15 +133,14 @@ function currentContext(store: Store, chatId: string): string {
 function mainTarget(
   store: Store,
   chatId: string,
-  retryRunId: unknown
+  retryRunId: string | undefined
 ): { model: ModelSnapshot | undefined; context: string } {
   if (retryRunId === undefined)
     return {
       model: store.product.snapshot(chatId, 'main').models.main,
       context: currentContext(store, chatId),
     };
-  const id = text(retryRunId, 'run ID', 200);
-  const run = store.run(id);
+  const run = store.run(retryRunId);
   if (run.chatId !== chatId) throw new HttpError(404, 'Run not found');
   return {
     model: store.product.snapshot(chatId, 'main').models.main,
@@ -158,52 +158,33 @@ export function codexContentWarningRoutes(
   credentials: JevCredentialStore,
   signal: AbortSignal
 ) {
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/codex-content-preflight',
-    { bodyLimit: 32 * 1024 * 1024 },
-    async (request, reply): Promise<CodexContentPreflightResult> => {
-      reply.header('Cache-Control', 'no-store');
-      const body = record(request.body);
-      fields(body, ['role', 'text', 'retryRunId', 'selection', 'imageCount']);
-      const role = body.role;
-      if (role !== 'main' && role !== 'translation' && role !== 'selection-revision')
-        throw new HttpError(400, 'CODEX_CONTENT_PREFLIGHT_ROLE_INVALID');
-      if (
-        body.imageCount !== undefined &&
-        (!Number.isSafeInteger(body.imageCount) ||
-          body.imageCount < 1 ||
-          body.imageCount > REQUEST_IMAGE_MAX_COUNT ||
-          role !== 'main')
-      )
-        throw new HttpError(400, 'Invalid preflight image count');
-      const content = text(
-        body.text,
-        'preflight text',
-        REQUEST_TEXT_MAX_CHARS,
-        role === 'main' && body.imageCount !== undefined
-      );
-      store.chat(request.params.id);
+  registerEndpoint(
+    app,
+    readerEndpoints.preflightChatContent,
+    readerOperations.preflightChatContent,
+    async (input): Promise<CodexContentPreflightResult> => {
+      const { chatId, role, text: content } = input;
+      store.chat(chatId);
       if (role === 'selection-revision') {
-        const selection = text(body.selection, 'selected passage', REQUEST_TEXT_MAX_CHARS);
         const selected = workspaceModelRef(promptWorkspace(store), 'helper');
         if (!selected || !isCodex(store.product.modelSnapshot(selected.id, 'helper')))
           return { warning: false };
         return judge(
           role,
           content,
-          selection,
+          input.selection,
           credentials.resolve,
           signal,
           false,
           jevSettings(store.db),
-          { store, chatId: request.params.id }
+          { store, chatId }
         );
       }
       const target =
         role === 'main'
-          ? mainTarget(store, request.params.id, body.retryRunId)
+          ? mainTarget(store, chatId, input.retryRunId)
           : {
-              model: store.product.snapshot(request.params.id, 'translation').models.translation,
+              model: store.product.snapshot(chatId, 'translation').models.translation,
               context: '',
             };
       if (!isCodex(target.model)) return { warning: false };
@@ -215,18 +196,17 @@ export function codexContentWarningRoutes(
         signal,
         false,
         jevSettings(store.db),
-        { store, chatId: request.params.id }
+        { store, chatId }
       );
     }
   );
 
-  app.post<{ Params: { id: string } }>(
-    '/api/sources/:id/codex-content-preflight',
-    async (request, reply): Promise<CodexContentPreflightResult> => {
-      reply.header('Cache-Control', 'no-store');
-      const body = record(request.body ?? {});
-      fields(body, []);
-      const source = store.source(request.params.id);
+  registerEndpoint(
+    app,
+    readerEndpoints.preflightSourceContent,
+    readerOperations.preflightSourceContent,
+    async ({ sourceId }): Promise<CodexContentPreflightResult> => {
+      const source = store.readableSource(sourceId);
       const model = store.product.snapshot(source.chatId, 'translation').models.translation;
       if (!isCodex(model)) return { warning: false };
       return judge(

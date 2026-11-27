@@ -159,16 +159,19 @@ function selectTranslation(
   translation: Job,
   expectedRevision = latestImageJob(store, source.id, 'translation')?.revision ?? 0
 ) {
-  return requestImages(store, source.id, {
+  return requestImages(store, {
+    sourceId: source.id,
     target: 'translation',
     expectedSourceHash: source.hash,
     expectedRevision,
     expectedTranslationJobId: translation.id,
-    expectedTranslationRevision: translation.revision,
+    expectedTranslationRevision: translation.revision!,
   });
 }
 function selectOriginal(store: Store, source: Source) {
-  return requestImages(store, source.id, {
+  return requestImages(store, {
+    sourceId: source.id,
+    target: 'original',
     expectedSourceHash: source.hash,
     expectedRevision: latestImageJob(store, source.id, 'original')?.revision ?? 0,
   });

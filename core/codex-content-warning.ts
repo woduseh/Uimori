@@ -1,6 +1,7 @@
-export type CodexContentWarningRole = 'main' | 'translation' | 'selection-revision';
+import type { CodexContentPreflightInput } from '#contracts';
 
-export type CodexContentPreflightResult = { warning: boolean };
+export type { CodexContentPreflightResult } from '#contracts';
+export type CodexContentWarningRole = CodexContentPreflightInput['role'];
 
 export const CODEX_CONTENT_WARNING_THRESHOLD = 0.9;
 export const CODEX_SEXUAL_CONTENT_BOUNDARY =

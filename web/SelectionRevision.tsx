@@ -76,6 +76,7 @@ export function SelectionRevision(props: Props) {
           }
           onClick={() =>
             revision.open({
+              target: 'source',
               draft: props.text,
               start: props.selection.start,
               end: props.selection.end,

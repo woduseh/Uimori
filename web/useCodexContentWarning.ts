@@ -3,9 +3,9 @@ import type {
   CodexContentPreflightResult,
   CodexContentWarningRole,
 } from '../core/codex-content-warning.js';
-import { api } from './api.js';
 
 export type CodexContentWarningGate = ReturnType<typeof useCodexContentWarning>;
+export type Preflight = (signal?: AbortSignal) => Promise<CodexContentPreflightResult>;
 type Pending = { controller: AbortController; resolve: (proceed: boolean) => void };
 
 export function useCodexContentWarning() {
@@ -32,8 +32,7 @@ export function useCodexContentWarning() {
   );
 
   function check(
-    path: string,
-    body: unknown,
+    send: Preflight,
     role: CodexContentWarningRole,
     signal?: AbortSignal
   ): Promise<boolean> {
@@ -52,7 +51,7 @@ export function useCodexContentWarning() {
       };
       pending.current = request;
       signal?.addEventListener('abort', onAbort, { once: true });
-      void api<CodexContentPreflightResult>(path, body, 'POST', controller.signal).then(
+      void send(controller.signal).then(
         (result) => {
           if (pending.current !== request) return;
           if (result.warning) setWarning(role);
@@ -65,9 +64,9 @@ export function useCodexContentWarning() {
     });
   }
 
-  async function needsConfirmation(path: string, body: unknown): Promise<boolean> {
+  async function needsConfirmation(send: Preflight): Promise<boolean> {
     try {
-      return (await api<CodexContentPreflightResult>(path, body, 'POST')).warning;
+      return (await send()).warning;
     } catch {
       return true;
     }

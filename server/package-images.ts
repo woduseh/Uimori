@@ -6,7 +6,10 @@ import { HttpError, fields, isSha256Hex, record, text } from './request-validati
 import { AppError } from './app-errors.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { readerEndpoints, type RequestImagesInput } from '#contracts';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
+import { registerEndpoint } from './endpoint.js';
 import {
   packageImages,
   PACKAGE_IMAGE_MIMES,
@@ -368,30 +371,20 @@ export function scheduleTranslationImages(store: Store, translation: Job) {
     frozen
   );
 }
-export function requestImages(store: Store, sourceId: string, value: unknown) {
-  const request = record(value);
-  fields(request, [
-    'target',
-    'expectedSourceHash',
-    'expectedRevision',
-    'expectedTranslationJobId',
-    'expectedTranslationRevision',
-  ]);
-  const mode = request.target ?? 'original';
-  if (mode !== 'original' && mode !== 'translation')
-    throw new HttpError(400, 'Invalid image target');
+export function requestImages(store: Store, request: RequestImagesInput) {
+  const { sourceId, target: mode } = request;
   return store.transaction(() => {
-    const source = store.source(sourceId);
-    if (!store.product.profile(source.chatId).image)
-      throw new AppError(409, 'IMAGE_SELECTION_ROLE_REQUIRED');
+    const source = store.writableSource(sourceId);
     const job = latestImageJob(store, sourceId, mode);
     if (
       source.hash !== request.expectedSourceHash ||
       (job?.revision ?? 0) !== request.expectedRevision
     )
       throw new AppError(409, 'REVISION_CONFLICT');
+    if (!store.product.profile(source.chatId).image)
+      throw new AppError(409, 'IMAGE_SELECTION_ROLE_REQUIRED');
     let target: ImageTarget = { mode: 'original', textHash: source.hash };
-    if (mode === 'translation') {
+    if (request.target === 'translation') {
       const translation = successfulTranslation(store, source);
       if (
         !translation ||
@@ -472,10 +465,15 @@ export function packageImageRoutes(
         .send(image.bytes);
     }
   );
-  app.post<{ Params: { id: string } }>('/api/sources/:id/images', async (request) => {
-    const job = requestImages(store, request.params.id, request.body);
-    hooks.publish(job.chatId);
-    hooks.pump();
-    return job;
-  });
+  registerEndpoint(
+    app,
+    readerEndpoints.requestImages,
+    readerOperations.requestImages,
+    (request) => {
+      const job = requestImages(store, request);
+      hooks.publish(job.chatId);
+      hooks.pump();
+      return job;
+    }
+  );
 }

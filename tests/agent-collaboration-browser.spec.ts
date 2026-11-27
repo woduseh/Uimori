@@ -101,7 +101,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API', async (
     ).ok()
   ).toBe(true);
   const preview = await request.post(`/api/chats/${chat.id}/prompt-preview`, {
-    data: { request: '합성 장면을 이어 줘.' },
+    data: { role: 'main', request: '합성 장면을 이어 줘.' },
   });
   expect(preview.ok(), await preview.text()).toBe(true);
   const plan = JSON.stringify(await preview.json());

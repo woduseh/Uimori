@@ -1,10 +1,32 @@
+import {
+  type Endpoint,
+  type EndpointInput,
+  type EndpointOutput,
+  endpointRequest,
+} from '#contracts';
 import { useState } from 'react';
-import { api } from './api.js';
+import { api, callEndpoint } from './api.js';
 import { toUiMessage } from './api-errors.js';
 import type { UiMessage } from './ui-message.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
-export function useApiRecord<T>(path: string, revision: number | string, enabled: boolean) {
+export type RecordSource<T> = { key: string; load: () => Promise<T> };
+
+export const endpointRecord = <E extends Endpoint>(
+  endpoint: E,
+  input: EndpointInput<E>
+): RecordSource<EndpointOutput<E>> => ({
+  key: endpointRequest(endpoint, input as Record<string, unknown>).path,
+  load: () => callEndpoint(endpoint, input as never) as Promise<EndpointOutput<E>>,
+});
+
+export function useApiRecord<T>(
+  source: string | RecordSource<T>,
+  revision: number | string,
+  enabled: boolean
+) {
+  const { key: path, load } =
+    typeof source === 'string' ? { key: source, load: () => api<T>(source) } : source;
   const [record, setRecord] = useState<{ path: string; value: T | null; error: UiMessage | null }>({
     path,
     value: null,
@@ -15,7 +37,7 @@ export function useApiRecord<T>(path: string, revision: number | string, enabled
     if (!enabled) return;
     let alive = true;
     setRecord((old) => ({ path, value: old.path === path ? old.value : null, error: null }));
-    void api<T>(path)
+    void load()
       .then((value) => {
         if (alive) setRecord({ path, value, error: null });
       })

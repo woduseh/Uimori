@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { RevisionContext, SelectionRevisionResult } from '../core/selection-revision.js';
-import { api } from './api.js';
+import { readerEndpoints, type SelectionRevisionInput } from '#contracts';
+import type { RevisionContext } from '../core/selection-revision.js';
+import { callEndpoint } from './api.js';
 import { toUiMessage } from './api-errors.js';
 import type { UiMessage } from './ui-message.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
@@ -11,15 +12,12 @@ const CONTEXT_KEY = storageKeys.selectionRevisionContext;
 const storedContext = (): RevisionContext =>
   readOptionalStorage('local', CONTEXT_KEY) === 'nearby' ? 'nearby' : 'scene';
 
-export type SelectionRevisionTarget = {
-  target?: 'translation';
-  draft: string;
-  start: number;
-  end: number;
-  expectedSourceHash: string;
-  expectedRevision: number;
-  expectedTextHash?: string;
-};
+type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+export type SelectionRevisionTarget = Without<
+  SelectionRevisionInput,
+  'sourceId' | 'instruction' | 'context'
+>;
+export type SelectionRevisionRequest = Without<SelectionRevisionTarget, 'draft' | 'start' | 'end'>;
 type Captured = { request: SelectionRevisionTarget; identity: string };
 
 export function useSelectionRevision({
@@ -82,12 +80,17 @@ export function useSelectionRevision({
     setProposal(null);
     try {
       const proceed = await codexWarning.check(
-        `/chats/${encodeURIComponent(chatId)}/codex-content-preflight`,
-        {
-          role: 'selection-revision',
-          text: instruction,
-          selection: request.draft.slice(request.start, request.end),
-        },
+        (signal) =>
+          callEndpoint(
+            readerEndpoints.preflightChatContent,
+            {
+              chatId,
+              role: 'selection-revision',
+              text: instruction,
+              selection: request.draft.slice(request.start, request.end),
+            },
+            signal
+          ),
         'selection-revision',
         controller.signal
       );
@@ -98,10 +101,9 @@ export function useSelectionRevision({
         !current(captured)
       )
         return;
-      const result = await api<SelectionRevisionResult>(
-        `/sources/${encodeURIComponent(sourceId)}/selection-revision`,
-        { ...request, instruction, ...(context === 'nearby' ? { context } : {}) },
-        'POST',
+      const result = await callEndpoint(
+        readerEndpoints.reviseSelection,
+        { ...request, sourceId, instruction, ...(context === 'nearby' ? { context } : {}) },
         controller.signal
       );
       if (pending.current === controller && !controller.signal.aborted) setProposal(result.text);

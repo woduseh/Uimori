@@ -36,6 +36,8 @@ test('a stalled SSE subscriber pauses reads, resumes after its accepted cursor a
   responseStreamRoutes(
     {
       addHook() {},
+      hasDecorator: () => false,
+      route() {},
       get(path: string, handler: (request: Request, reply: Reply) => Promise<void>) {
         routes.set(path, handler);
       },
