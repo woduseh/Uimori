@@ -240,7 +240,7 @@ export function ThemeBackgroundSettings({
         )}
       </div>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
     </section>
   );
 }

@@ -313,7 +313,7 @@ test('a stale screen acting on a project or conversation deleted elsewhere gets 
     ]);
     await loadLocale('en');
     setLocale('en');
-    expect(apiErrorDisplay(stale.json(), stale.statusCode, 'PATCH')).toBe(
+    expect(apiErrorDisplay(stale.json(), stale.statusCode)).toBe(
       'The assistant conversation was not found. It may have been deleted elsewhere.'
     );
     const project = (

@@ -44,7 +44,7 @@ export async function exportThemeFile(theme: ThemeDefinition) {
   for (const asset of theme.assets ?? []) {
     if (files.some((file) => file.hash === asset.hash)) continue;
     const response = await fetch(themeAssetUrl(asset.hash));
-    if (!response.ok) await throwApiError(response, 'GET');
+    if (!response.ok) await throwApiError(response);
     const blob = await response.blob();
     files.push({
       hash: asset.hash,

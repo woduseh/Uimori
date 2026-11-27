@@ -953,6 +953,12 @@ export const messages = {
     ja: '現在の状態ではこの依頼を完了できません。設定と作業状態を確認してください。({status})',
     zh: '当前状态下无法完成此请求。请检查设置和任务状态。({status})',
   },
+  'errors.unexpected': {
+    ko: '작업을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    en: 'Could not complete the action. Try again in a moment.',
+    ja: '操作を完了できませんでした。しばらくしてからもう一度お試しください。',
+    zh: '无法完成此操作。请稍后再试。',
+  },
   'errors.requestFailed': {
     ko: '요청을 처리할 수 없어요. ({status})',
     en: 'Could not process the request. ({status})',

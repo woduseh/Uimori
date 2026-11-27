@@ -153,7 +153,7 @@ export function HelperModelPicker({
           {t('helpers.modelRefreshFailed', { error: translateMessage(shared.error) })}
         </NoticeBanner>
       )}
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
     </>
   );
 }

@@ -9,16 +9,17 @@ import {
 } from '#contracts';
 import { apiErrorMessage } from './api-errors.js';
 import { t } from './i18n.js';
+import { UiError, type UiMessage } from './ui-message.js';
 import { writeOptionalStorage } from './optional-storage.js';
 import { forgetBotStorage, forgetChatStorage, storageKeys } from './storage-keys.js';
 import { promptWorkspaceChange } from './live-frames.js';
 import { announceLocalChange } from './live-stream.js';
 
-export class ApiError extends Error {
+export class ApiError extends UiError {
   readonly status: number;
   readonly code: string | null;
-  constructor(message: string, status: number, code: string | null = null) {
-    super(message);
+  constructor(uiMessage: UiMessage, status: number, code: string | null = null) {
+    super(uiMessage);
     this.status = status;
     this.code = code;
     this.name = 'ApiError';
@@ -52,19 +53,14 @@ function forgetDeletedStorage(path: string) {
   else forgetBotStorage(decodeURIComponent(id));
 }
 
-async function readApiResponse<T>(
-  response: Response,
-  method: string,
-  notifySession = true
-): Promise<T> {
+async function readApiResponse<T>(response: Response, notifySession = true): Promise<T> {
   if (response.ok) return (await response.json()) as T;
-  return throwApiError(response, method, { notifySession });
+  return throwApiError(response, { notifySession });
 }
 
 export async function throwApiError(
   response: Response,
-  method: string,
-  { notifySession = true, emptyMessage }: { notifySession?: boolean; emptyMessage?: string } = {}
+  { notifySession = true, emptyMessage }: { notifySession?: boolean; emptyMessage?: UiMessage } = {}
 ): Promise<never> {
   if (response.status === 401 && notifySession && typeof window !== 'undefined')
     window.dispatchEvent(new Event(sessionRequiredEvent));
@@ -77,8 +73,8 @@ export async function throwApiError(
     typeof window !== 'undefined'
   )
     window.dispatchEvent(new Event(maintenanceChangedEvent));
-  const { message, code } = apiErrorMessage(payload, response.status, method);
-  throw new ApiError(message, response.status, code);
+  const { uiMessage, code } = apiErrorMessage(payload, response.status);
+  throw new ApiError(uiMessage, response.status, code);
 }
 
 const runAdmission =
@@ -104,7 +100,7 @@ export async function api<T>(
           body: JSON.stringify(body),
         }
   );
-  const result = await readApiResponse<T>(response, method, path.split('?')[0] !== '/session');
+  const result = await readApiResponse<T>(response, path.split('?')[0] !== '/session');
   if (method === 'DELETE' && body !== undefined) forgetDeletedStorage(path);
   const providerSettingsChanged =
     body !== undefined && /^(?:\/model-presets|\/connections)(?:\/[^/]+)?$/.test(path);
@@ -147,7 +143,7 @@ export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSigna
     body,
     signal,
   });
-  return readApiResponse<T>(response, 'POST');
+  return readApiResponse<T>(response);
 }
 
 export const labels: Record<string, string> = {

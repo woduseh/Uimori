@@ -426,7 +426,7 @@ export function ThemeSettings({
           </NoticeBanner>
         )}
         {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-        <TransientNotice message={notice} />
+        <TransientNotice content={notice} />
         <div className="theme-toolbar theme-control-bar">
           <label>
             {t('visualpanels.scope')}{' '}

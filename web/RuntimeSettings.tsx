@@ -326,7 +326,7 @@ export function SettingsEditor({
             </div>
           )}
         </fieldset>
-        <TransientNotice message={hideSaveActions ? '' : message} />
+        <TransientNotice content={hideSaveActions ? '' : message} />
         {localError && (
           <NoticeBanner tone="error" className="full">
             {translateMessage(localError)}

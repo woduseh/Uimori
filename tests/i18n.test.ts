@@ -326,6 +326,11 @@ test('static candidate scan sees attribute names, templates, status text and mod
     ])
   );
   expect(result.calls).toEqual([expect.objectContaining({ key: 'sample.count', args: ['count'] })]);
+  expect(
+    scanI18nSource(
+      "import { uiMessage as typed } from './ui-message.js'; typed('sample.count', { total });"
+    ).calls
+  ).toEqual([expect.objectContaining({ key: 'sample.count', args: ['total'] })]);
   expect(scanI18nSource('t(variableKey, forwardedArguments)').dynamicCalls).toEqual([
     expect.objectContaining({ expression: 't(variableKey, forwardedArguments)' }),
   ]);

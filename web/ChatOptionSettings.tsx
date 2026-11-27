@@ -409,7 +409,7 @@ export function ChatOptionSettings(props: Props) {
         )}
         {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
-        <TransientNotice message={completion} />
+        <TransientNotice content={completion} />
         {uncertain && (
           <button
             type="button"

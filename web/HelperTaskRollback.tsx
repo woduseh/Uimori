@@ -58,7 +58,7 @@ function reasonText(unit: HelperRollbackUnit) {
   if (unit.status === 'restored') return t('helperRollback.alreadyRestored');
   if (unit.status === 'failed') {
     if (unit.error && isAppErrorCode(unit.error))
-      return apiErrorDisplay({ code: unit.error, params: unit.errorParams }, 409, 'POST');
+      return apiErrorDisplay({ code: unit.error, params: unit.errorParams }, 409);
     return unit.error ? translateMessage(unit.error) : t('helperRollback.failed');
   }
   if (unit.reason === 'changed-after-task') return t('helperRollback.changedAfter');

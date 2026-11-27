@@ -254,7 +254,7 @@ export function AssetEditor({
             </select>
           </label>
           <div className="form-actions full settings-save-actions">
-            <TransientNotice message={message} />
+            <TransientNotice content={message} />
             <SaveButton
               icon={ImageAddIcon}
               label={t('library.registerImage')}

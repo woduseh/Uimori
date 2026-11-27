@@ -109,7 +109,7 @@ export function LoreContextDefaultsEditor({
           }
         />
       </fieldset>
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </section>
   );

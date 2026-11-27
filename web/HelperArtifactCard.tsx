@@ -239,7 +239,7 @@ export function HelperArtifactCard({
         </NoticeBanner>
       )}
       {copyError && <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
     </section>
   );
 }

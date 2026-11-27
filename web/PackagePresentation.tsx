@@ -71,7 +71,7 @@ export function usePackagePresentation(
           `/api/chats/${encodeURIComponent(source.chatId)}/sources/${encodeURIComponent(source.id)}/presentation?${query}`,
           { signal: controller.signal }
         );
-        if (!response.ok) await throwApiError(response, 'GET');
+        if (!response.ok) await throwApiError(response);
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)
           throw new Error(uiMessage('library.theOriginalSnapshotDiffersFromThePresentation'));

@@ -1,25 +1,30 @@
-import {
-  t,
-  translateMessage,
-  useI18n,
-  message as uiMessage,
-  type MessageReference,
-} from './i18n.js';
+import { t, useI18n, type MessageReference } from './i18n.js';
 import { useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { toUiMessage } from './api-errors.js';
+import {
+  displayMessage,
+  formatUiMessage,
+  isUiMessage,
+  legacyMessageString,
+  uiMessage,
+  type DisplayMessage,
+  type UiMessage,
+} from './ui-message.js';
 import './deletion.css';
 
+type Title = string | MessageReference | UiMessage;
 type Props = {
   path: string;
   revision?: number;
-  title: string | MessageReference;
-  label?: string;
-  confirmLabel?: string;
-  description?: string;
+  title: Title;
+  label?: DisplayMessage;
+  confirmLabel?: DisplayMessage;
+  description?: DisplayMessage;
   disabled?: boolean;
   iconOnly?: boolean;
   preparePath?: string;
@@ -44,26 +49,30 @@ export function DeleteButton({
   useI18n();
   const [target, setTarget] = useState<{
     path: string;
-    title: string | MessageReference;
+    title: Title;
     body: Record<string, unknown>;
   } | null>(null);
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState<UiMessage | null>(null);
   const lock = useRef(false);
+  const titleValue = (value: Title) => (isUiMessage(value) ? formatUiMessage(value) : value);
+  function fail(caught: unknown) {
+    const shown = toUiMessage(caught);
+    setError(shown);
+    onError?.(legacyMessageString(shown));
+  }
   async function open() {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       const request = preparePath
         ? (await api<{ request: Record<string, unknown> }>(preparePath)).request
         : (body ?? (revision === undefined ? {} : { expectedRevision: revision }));
       setTarget({ path, title, body: request });
     } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      onError?.(message);
+      fail(caught);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -73,15 +82,13 @@ export function DeleteButton({
     if (!target || lock.current) return;
     lock.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await api(target.path, target.body, 'DELETE');
       flushSync(() => setTarget(null));
       await onDeleted();
     } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      onError?.(message);
+      fail(caught);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -92,18 +99,21 @@ export function DeleteButton({
       <button
         type="button"
         className={`secondary delete-button ${iconOnly ? 'icon-only' : ''}`}
-        aria-label={t('shared.deleteAccessible', { title, action: translateMessage(label) })}
+        aria-label={t('shared.deleteAccessible', {
+          title: titleValue(title),
+          action: displayMessage(label),
+        })}
         aria-haspopup="dialog"
-        title={iconOnly ? translateMessage(label) : undefined}
+        title={iconOnly ? displayMessage(label) : undefined}
         disabled={disabled || busy}
         onClick={() => void open()}
       >
         <DeleteIcon size={iconOnly ? 14 : 18} aria-hidden="true" />
-        {!iconOnly && <span>{translateMessage(label)}</span>}
+        {!iconOnly && <span>{displayMessage(label)}</span>}
       </button>
       {!target && error && (
         <span className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </span>
       )}
       <Dialog
@@ -116,9 +126,9 @@ export function DeleteButton({
           if (!lock.current) setTarget(null);
         }}
       >
-        <p>{t('shared.deleteQuestion', { title: target?.title ?? '' })}</p>
-        {description && <p className="muted">{translateMessage(description)}</p>}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        <p>{t('shared.deleteQuestion', { title: target ? titleValue(target.title) : '' })}</p>
+        {description && <p className="muted">{displayMessage(description)}</p>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -135,7 +145,7 @@ export function DeleteButton({
             disabled={busy}
             onClick={() => void remove()}
           >
-            {busy ? t('shared.deleting') : translateMessage(confirmLabel ?? label)}
+            {busy ? t('shared.deleting') : displayMessage(confirmLabel ?? label)}
           </button>
         </div>
       </Dialog>

@@ -381,7 +381,7 @@ export function CodexAgentSettings({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice message={copied ? uiMessage('providers.loginCodeCopied') : ''} />
+      <TransientNotice content={copied ? uiMessage('providers.loginCodeCopied') : ''} />
     </section>
   );
 }

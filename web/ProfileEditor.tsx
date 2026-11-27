@@ -459,7 +459,7 @@ export function ProfileEditor({
             aria-busy={saving}
           />
         </div>
-        <TransientNotice message={hideSaveActions ? '' : status} />
+        <TransientNotice content={hideSaveActions ? '' : status} />
       </form>
       {generationSettings}
       <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">

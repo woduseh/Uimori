@@ -49,13 +49,17 @@ export function scanI18nSource(source, file = 'input.tsx') {
     ['t', 'message', 'retainedMessage', 'formatMessage'].map((name) => [name, name])
   );
   for (const entry of tree.program.body) {
-    if (entry.type !== 'ImportDeclaration' || !/\/i18n\.[jt]s$/u.test(entry.source.value)) continue;
+    if (entry.type !== 'ImportDeclaration') continue;
+    const imported = /\/i18n\.[jt]s$/u.test(entry.source.value)
+      ? { t: 't', message: 'message', formatMessage: 'formatMessage' }
+      : /\/ui-message\.[jt]s$/u.test(entry.source.value)
+        ? { uiMessage: 'message' }
+        : null;
+    if (!imported) continue;
     for (const item of entry.specifiers) {
-      if (
-        item.type === 'ImportSpecifier' &&
-        ['t', 'message', 'formatMessage'].includes(propertyName(item.imported))
-      )
-        functions.set(item.local.name, propertyName(item.imported));
+      const name = propertyName(item.imported);
+      if (item.type === 'ImportSpecifier' && Object.hasOwn(imported, name))
+        functions.set(item.local.name, imported[name]);
     }
   }
   walk(tree, (node) => {

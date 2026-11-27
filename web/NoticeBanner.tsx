@@ -1,6 +1,7 @@
-import { translateMessage, useI18n } from './i18n.js';
+import { useI18n } from './i18n.js';
 import type { ReactNode } from 'react';
 import { Info, TriangleAlert } from 'lucide-react';
+import { displayMessage, isUiMessage, type DisplayMessage, type UiMessage } from './ui-message.js';
 import './notices.css';
 
 export function NoticeBanner({
@@ -10,9 +11,9 @@ export function NoticeBanner({
   tone = 'info',
   className = '',
 }: {
-  children: ReactNode;
+  children: ReactNode | UiMessage;
   actions?: ReactNode;
-  label?: string;
+  label?: DisplayMessage;
   tone?: 'info' | 'error';
   className?: string;
 }) {
@@ -22,11 +23,13 @@ export function NoticeBanner({
     <aside
       className={`notice-banner notice-${tone} ${className}`}
       role={tone === 'error' ? 'alert' : 'status'}
-      aria-label={label ? translateMessage(label) : label}
+      aria-label={label ? displayMessage(label) : undefined}
     >
       <Icon size={18} className="notice-banner-icon" aria-hidden="true" />
       <div className="notice-banner-message">
-        {typeof children === 'string' ? translateMessage(children) : children}
+        {typeof children === 'string' || isUiMessage(children)
+          ? displayMessage(children)
+          : children}
       </div>
       {actions && <div className="notice-banner-actions">{actions}</div>}
     </aside>

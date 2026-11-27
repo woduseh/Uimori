@@ -205,7 +205,7 @@ export function PaletteEditor({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice message={library.notice} />
+      <TransientNotice content={library.notice} />
       {draft && (
         <div className="palette-editor">
           <label>

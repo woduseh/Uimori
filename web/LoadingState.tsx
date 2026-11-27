@@ -1,6 +1,7 @@
-import { translateMessage, useI18n, message as uiMessage } from './i18n.js';
+import { useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { RunningIcon } from './ui-icons.js';
+import { displayMessage, uiMessage, type DisplayMessage } from './ui-message.js';
 import './loading-state.css';
 import './activity-status.css';
 
@@ -14,33 +15,34 @@ export function LoadingState({
   presentation = 'region',
 }: {
   loading?: boolean;
-  error?: string;
-  label?: string;
-  errorLabel?: string;
+  error?: DisplayMessage | null;
+  label?: DisplayMessage;
+  errorLabel?: DisplayMessage;
   onRetry?: () => void;
-  retryLabel?: string;
+  retryLabel?: DisplayMessage;
   presentation?: 'region' | 'placeholder' | 'inline';
 }) {
   useI18n();
   const [visible, setVisible] = useState(false);
+  const failed = Boolean(error);
   useEffect(() => {
     setVisible(false);
-    if (!loading || error) return;
+    if (!loading || failed) return;
     const timer = setTimeout(() => setVisible(true), 200);
     return () => clearTimeout(timer);
-  }, [loading, error]);
+  }, [loading, failed]);
   if (!error && (!loading || (!visible && presentation !== 'region'))) return null;
   return (
     <div className={`loading-state loading-state-${presentation}`}>
       {error ? (
         <>
           <div role="alert">
-            <p>{translateMessage(errorLabel)}</p>
-            <p className="muted">{translateMessage(error)}</p>
+            <p>{displayMessage(errorLabel)}</p>
+            <p className="muted">{displayMessage(error)}</p>
           </div>
           {onRetry && (
             <button type="button" className="secondary" disabled={loading} onClick={onRetry}>
-              {translateMessage(retryLabel)}
+              {displayMessage(retryLabel)}
             </button>
           )}
         </>
@@ -51,7 +53,7 @@ export function LoadingState({
             className="activity-spinner"
             aria-hidden="true"
           />
-          <p>{translateMessage(label)}</p>
+          <p>{displayMessage(label)}</p>
         </div>
       ) : null}
     </div>

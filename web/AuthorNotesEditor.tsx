@@ -177,7 +177,7 @@ export function AuthorNotesEditor({
           {translateMessage(error)}
         </p>
       )}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
       {notes.length > 0 && (
         <ul className="story-records">
           {notes.map((note) => (

@@ -1,4 +1,5 @@
-import { t, useI18n, message as retainedMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
@@ -56,8 +57,8 @@ export function RisuExportButton({
               { signal: request.signal }
             );
             if (!response.ok)
-              await throwApiError(response, 'GET', {
-                emptyMessage: retainedMessage('transfer.m096'),
+              await throwApiError(response, {
+                emptyMessage: uiMessage('transfer.m096'),
               });
             const blob = await response.blob();
             request.signal.throwIfAborted();

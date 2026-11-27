@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { ApiError, definiteRejection } from '../web/api.js';
+import { uiText } from '../web/ui-message.js';
 import { requestChatFork } from '../web/fork-request.js';
 
 const key = 'fork-command:chat:source';
@@ -115,8 +116,8 @@ test('different source scopes do not share pending fork identities', async () =>
 
 test('admission rejection classification retains the existing contract', () => {
   for (const status of [400, 401, 403, 404, 409, 422, 429])
-    expect(definiteRejection(new ApiError('Synthetic', status))).toBe(true);
+    expect(definiteRejection(new ApiError(uiText('Synthetic'), status))).toBe(true);
   for (const status of [408, 500, 502, 503])
-    expect(definiteRejection(new ApiError('Synthetic', status))).toBe(false);
+    expect(definiteRejection(new ApiError(uiText('Synthetic'), status))).toBe(false);
   expect(definiteRejection(new Error('Network failure'))).toBe(false);
 });

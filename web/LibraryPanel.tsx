@@ -1664,7 +1664,7 @@ function ContentEditor({
           notice={
             <>
               <RestoredVersionNotice commands={commands} />
-              <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
+              <DismissibleError error={exportError} onDismiss={() => setExportError('')} />
             </>
           }
         >
@@ -1705,7 +1705,7 @@ function ContentEditor({
                 {translateMessage(error)}
               </p>
             )}
-            <TransientNotice message={saved} />
+            <TransientNotice content={saved} />
             {!!saveWarnings.length && (
               <NoticeBanner className="full" label={t('library.reviewAfterSaving')}>
                 {saveWarnings.map((warning) => (

@@ -350,7 +350,7 @@ export function ReaderSelectionTools({
   };
   return (
     <>
-      {copied > 0 && <TransientNotice key={copied} message={uiMessage('helpers.m129')} />}
+      {copied > 0 && <TransientNotice key={copied} content={uiMessage('helpers.m129')} />}
       {barVisible &&
         selected &&
         createPortal(

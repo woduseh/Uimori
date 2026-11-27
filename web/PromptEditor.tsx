@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
+import { t, useI18n, message as uiMessage, messageRef } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -530,10 +530,7 @@ export function PromptEditor({
           notice={
             <>
               <RestoredVersionNotice commands={commands} />
-              <DismissibleError
-                message={translateMessage(exportError)}
-                onDismiss={() => setExportError('')}
-              />
+              <DismissibleError error={exportError} onDismiss={() => setExportError('')} />
             </>
           }
         >
@@ -579,11 +576,8 @@ export function PromptEditor({
               </CodeFieldBaseContext>
             </fieldset>
           </fieldset>
-          <TransientNotice message={busy ? '' : status} />
-          <DismissibleError
-            message={error ? translateMessage(error) : ''}
-            onDismiss={() => setError('')}
-          />
+          <TransientNotice content={busy ? '' : status} />
+          <DismissibleError error={error} onDismiss={() => setError('')} />
         </EditorStudio>
       </section>
     </ResourceEditorProvider>

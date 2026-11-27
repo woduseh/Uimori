@@ -460,7 +460,7 @@ export function IllustrationReferencesEditor({
           />
         </div>
       )}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
       <SaveConflictDialog
         open={reviewConflict}
         title={t('visuals.reviewReferences')}

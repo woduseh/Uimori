@@ -262,7 +262,7 @@ export function PushSettings() {
           {translateStoredCode(info.device.lastError, deviceErrors)}
         </NoticeBanner>
       )}
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
       {warning && <NoticeBanner>{translateMessage(warning)}</NoticeBanner>}
       {error && (
         <NoticeBanner

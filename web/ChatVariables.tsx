@@ -296,7 +296,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
         </div>
       )}
       {hasUncertainSave && <p role="status">{t('chatsettings.m175')}</p>}
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
       {error && (
         <NoticeBanner
           tone="error"

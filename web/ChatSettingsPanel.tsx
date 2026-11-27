@@ -587,7 +587,7 @@ export function ChatSettingsPanel({
           {translateMessage(state.error)}
         </p>
       )}
-      <TransientNotice message={saveNotice} />
+      <TransientNotice content={saveNotice} />
       <Dialog
         open={discard}
         title={t('chatsettings.m105')}

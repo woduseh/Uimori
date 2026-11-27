@@ -107,6 +107,7 @@ export function selectChecks(
     typeScript: files.some(is.typeScriptInput),
     comments: files.some(is.fullCommentScan) ? 'all' : files.filter(is.commentSource),
     i18n: files.some(is.i18nInput),
+    uiMessage: files.some(is.uiMessageInput),
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
     firstHopTests,
@@ -344,6 +345,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         ])
       );
     if (checks.i18n) statics.push(run('i18n', node, ['scripts/check-i18n.mjs']));
+    if (checks.uiMessage) statics.push(run('ui-message', node, ['scripts/check-ui-message.mjs']));
     if (checks.vitest.length) listing = affectedTests(checks.vitest);
   }
   const results = await Promise.all(statics);

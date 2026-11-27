@@ -318,7 +318,7 @@ export function BackupSettings({
         {!status && !error && (
           <LoadingState presentation="placeholder" label={t('transfer.m173')} />
         )}
-        <TransientNotice message={message} />
+        <TransientNotice content={message} />
         <Dialog
           open={confirmReload}
           title={t('transfer.m174')}

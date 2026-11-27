@@ -119,14 +119,14 @@ export function OrphanMemoryPanel({
   }
   const current = detail?.headRevision === headRevision;
   if (current && !detail.entries.length && !loading && !error)
-    return <TransientNotice message={notice} />;
+    return <TransientNotice content={notice} />;
   return (
     <section
       className="orphan-memory"
       aria-label={t('orphanmemory.title')}
       data-testid="orphan-memory"
     >
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
       {error && (
         <NoticeBanner
           tone="error"

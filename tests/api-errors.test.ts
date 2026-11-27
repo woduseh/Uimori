@@ -3,6 +3,7 @@ import { api, ApiError } from '../web/api.js';
 import { downloadArchive } from '../web/archive-download.js';
 import { loadLocale, setLocale, translateMessage, UI_LOCALES } from '../web/i18n.js';
 import { errorDescriptor } from '../web/api-errors.js';
+import { formatUiMessage } from '../web/ui-message.js';
 import { emptyTheme, validateTheme } from '../core/themes.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
@@ -23,7 +24,11 @@ async function rejectedWith(status: number, body: unknown, method = 'POST') {
   return result as ApiError;
 }
 
-const shown = (error: ApiError) => translateMessage(error.message);
+const shown = (error: ApiError) => {
+  const text = formatUiMessage(error.uiMessage);
+  expect(translateMessage(error.message)).toBe(text);
+  return text;
+};
 
 test('unavailable models retain only the role code and show the current selection paths', async () => {
   const result = await rejectedWith(409, { code: 'MODEL_UNAVAILABLE', params: { role: 'main' } });
@@ -46,15 +51,18 @@ test('only recognized revision errors are described as a concurrent save', async
   expect(shown(unknown)).not.toMatch(/다른 요청|private|credential/);
 });
 
-test('generic errors keep provider/internal text hidden and retain deletion conflict details', async () => {
+test('generic errors keep provider, internal and deletion-conflict text hidden', async () => {
   const server = await rejected(503, 'remote model response secret');
   expect(server).toMatchObject({ status: 503, code: null });
   expect(shown(server)).toBe('서버 작업을 완료하지 못했어요. (503)');
   const request = await rejected(400, 'unrecognized request secret');
   expect(request).toMatchObject({ status: 400, code: null });
   expect(shown(request)).toBe('요청을 처리할 수 없어요. (400)');
-  const deletion = 'The bot is still used by Alice';
-  expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
+  const deletion = await rejected(409, 'Chat organization is missing', 'DELETE');
+  expect(deletion).toMatchObject({ status: 409, code: null });
+  expect(shown(deletion)).toBe(
+    '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)'
+  );
   const coded = await rejectedWith(409, { code: 'CHAT_DELETE_HELPER_ACTIVE' }, 'DELETE');
   expect(coded.code).toBe('CHAT_DELETE_HELPER_ACTIVE');
   expect(shown(coded)).toBe('진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.');

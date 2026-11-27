@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ContentEditModel, ResourceSaveResult } from '../core/resource-editing.js';
 import { api, ApiError } from '../web/api.js';
+import { uiText } from '../web/ui-message.js';
 import {
   readRecovery,
   writeRecovery,
@@ -288,7 +289,7 @@ test('save conflicts preserve local input and clean reload restores the latest b
   const session = editor();
   await session.open();
   session.setModel({ ...model, title: 'Keep me' });
-  vi.mocked(api).mockRejectedValueOnce(new ApiError('Revision changed', 409));
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Revision changed'), 409));
   await expect(session.save()).rejects.toThrow('Revision changed');
   expect(session.snapshot()).toMatchObject({
     dirty: true,
@@ -353,7 +354,7 @@ test('a failed copy does not clear a pre-existing conflict or silently discard a
   const session = editor();
   await session.open();
   session.setModel({ ...model, title: 'Local changes' });
-  vi.mocked(api).mockRejectedValueOnce(new ApiError('Revision changed', 409));
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Revision changed'), 409));
   await expect(session.save()).rejects.toThrow('Revision changed');
   expect(session.snapshot().conflict).toBe(true);
 
@@ -439,7 +440,7 @@ test('a rejected create releases its frozen key and retries the edited draft as 
   const session = editor(null);
   await session.open();
   session.setModel({ ...model, title: 'Invalid' });
-  vi.mocked(api).mockRejectedValueOnce(new ApiError('Validation failed', 400));
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Validation failed'), 400));
   await expect(session.save()).rejects.toThrow('Validation failed');
   expect(
     disk.get(
@@ -523,7 +524,7 @@ test.each([400, 429])(
     const pending = disk.get(key);
     expect(pending).toBeDefined();
 
-    vi.mocked(api).mockRejectedValueOnce(new ApiError('Replay rejected', status));
+    vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Replay rejected'), status));
     await expect(session.save()).rejects.toThrow('Replay rejected');
     expect(disk.get(key)).toEqual(pending);
     vi.mocked(api).mockResolvedValueOnce({ saved: saved(submitted, 1, 'created'), created: false });

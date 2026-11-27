@@ -220,7 +220,7 @@ export function BookmarkButton({
         disabled={disabled || busy}
         onClick={() => void add()}
       />
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
       {error && (
         <span role="alert" className="error">
           {translateMessage(error)}

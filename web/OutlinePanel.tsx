@@ -666,9 +666,7 @@ export function OutlinePanel({
           )}
         </div>
       </header>
-      {outline && (
-        <DismissibleError message={translateMessage(error)} onDismiss={() => setError('')} />
-      )}
+      {outline && <DismissibleError error={error} onDismiss={() => setError('')} />}
       {outline && loadError && (
         <LoadingState
           presentation="inline"

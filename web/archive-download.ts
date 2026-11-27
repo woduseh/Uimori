@@ -1,4 +1,4 @@
-import { message as retainedMessage } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { throwApiError } from './api.js';
 
 export async function downloadArchive(path: string, name: string, body?: unknown) {
@@ -13,8 +13,7 @@ export async function downloadArchive(path: string, name: string, body?: unknown
           body: JSON.stringify(body),
         }
   );
-  if (!response.ok)
-    await throwApiError(response, method, { emptyMessage: retainedMessage('transfer.m188') });
+  if (!response.ok) await throwApiError(response, { emptyMessage: uiMessage('transfer.m188') });
   const url = URL.createObjectURL(await response.blob()),
     link = document.createElement('a');
   link.href = url;

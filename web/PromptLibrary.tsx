@@ -746,7 +746,7 @@ export function PromptLibrary({
         }}
       />
       {folderEditor.dialogs}
-      <TransientNotice message={defaultNotice} />
+      <TransientNotice content={defaultNotice} />
       {!library ? (
         <LoadingState presentation="region" label={t('prompts.uiLoadingPrompts')} />
       ) : editing ? (

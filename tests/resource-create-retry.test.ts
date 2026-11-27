@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
+import { uiText } from '../web/ui-message.js';
 import { cloneWithReceipt } from '../web/resource-create-retry.js';
 import { shownRejection } from './shown-error.js';
 
@@ -54,11 +55,11 @@ test('an uncertain clone replays the exact request across the next click, then a
 });
 
 test('a definite validation rejection permits a corrected request, but a rate limit keeps the receipt', async () => {
-  vi.mocked(api).mockRejectedValueOnce(new ApiError('Invalid source', 409));
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Invalid source'), 409));
   await expect(cloneWithReceipt(key, input)).rejects.toThrow('Invalid source');
   expect(persisted.has(key)).toBe(false);
 
-  vi.mocked(api).mockRejectedValueOnce(new ApiError('Try again', 429));
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Try again'), 429));
   await expect(cloneWithReceipt(key, input)).rejects.toThrow('Try again');
   expect(persisted.has(key)).toBe(true);
   vi.mocked(api).mockResolvedValueOnce({ saved: { id: 'copy' } });
@@ -77,7 +78,7 @@ test('a definite rejection on a retry cannot discard an earlier uncertain clone 
   await expect(cloneWithReceipt(key, input)).rejects.toThrow('Connection lost');
   const pending = persisted.get(key);
 
-  vi.mocked(api).mockRejectedValueOnce(new ApiError('Replay rejected', 409));
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(uiText('Replay rejected'), 409));
   await expect(cloneWithReceipt(key, input)).rejects.toThrow('Replay rejected');
   expect(persisted.get(key)).toBe(pending);
   vi.mocked(api).mockResolvedValueOnce({ saved: { id: 'copy-once' }, created: false });
@@ -90,7 +91,7 @@ test('a confirmed removed clone releases the old identity for a deliberate new c
   await expect(cloneWithReceipt(key, input)).rejects.toThrow('Connection lost');
   const old = JSON.parse(persisted.get(key)!);
   vi.mocked(api).mockRejectedValueOnce(
-    new ApiError('The created copy was removed', 410, 'RESOURCE_CREATION_REMOVED')
+    new ApiError(uiText('The created copy was removed'), 410, 'RESOURCE_CREATION_REMOVED')
   );
   await expect(cloneWithReceipt(key, input)).rejects.toThrow('removed');
   expect(persisted.has(key)).toBe(false);

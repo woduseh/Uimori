@@ -153,7 +153,7 @@ export function ThemeAssetEditor({
           <Plus size={18} aria-hidden="true" /> {t('themeAssets.add')}
         </button>
       </div>
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
     </section>
   );
 }

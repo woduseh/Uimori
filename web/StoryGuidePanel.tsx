@@ -270,7 +270,7 @@ function StoryGuideEditor({
           {translateMessage(error)}
         </p>
       )}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
       <section className="story-guide-section" aria-label={t('prompts.uiLastWritingBrief')}>
         {loaded.brief ? (
           <details className="story-guide-last-brief">

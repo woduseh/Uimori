@@ -530,7 +530,7 @@ export function JevProviderSettings({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
     </section>
   );
 }

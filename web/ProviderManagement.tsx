@@ -1489,7 +1489,7 @@ export function ConnectionEditor({
         />
       </SettingsDetail>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
       {refreshWarning && <NoticeBanner>{translateMessage(refreshWarning)}</NoticeBanner>}
     </section>
   );

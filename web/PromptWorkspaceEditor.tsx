@@ -363,7 +363,7 @@ export function PromptWorkspaceEditor({
             {t('prompts.uiSaving')}
           </p>
         )}
-        <TransientNotice message={busy || dirty ? '' : message} />
+        <TransientNotice content={busy || dirty ? '' : message} />
       </section>
       <PromptCombinationManager
         open={manageCombinations}

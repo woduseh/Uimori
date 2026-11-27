@@ -2091,7 +2091,7 @@ function App() {
               />
             )}
             <DismissibleError
-              message={!s.library && s.error === s.libraryError ? '' : s.error}
+              error={!s.library && s.error === s.libraryError ? '' : s.error}
               onDismiss={() => s.setError('')}
             />
           </div>
@@ -2518,7 +2518,7 @@ function App() {
                     </button>
                   </NoticeBanner>
                 )}
-                <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
+                <DismissibleError error={s.error} onDismiss={() => s.setError('')} />
                 {/^MODEL_(?:REQUIRED|UNAVAILABLE)(?::|$)/u.test(s.errorCode ?? '') && (
                   <button
                     type="button"
@@ -3478,7 +3478,7 @@ function App() {
             >
               {t('main.m145')}
             </button>
-            <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
+            <DismissibleError error={s.error} onDismiss={() => s.setError('')} />
           </>
         )}
       </Dialog>
@@ -3653,7 +3653,7 @@ function App() {
   );
   return (
     <ReadingPreferencesContext value={reading.settings}>
-      <TransientNotice message={s.notice} />
+      <TransientNotice content={s.notice} />
       <ReaderEditingContext value={onSourceEditing}>
         <ResourceAnchorContext value={resourceAnchorRequest}>
           <EditorHelperContext value={askEditorHelper}>{workspace}</EditorHelperContext>

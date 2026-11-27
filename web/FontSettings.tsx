@@ -113,7 +113,7 @@ export function FontSettings({
   return (
     <section className="font-settings" aria-label={t('fonts.title')}>
       <h3 id={`${id}-heading`}>{t('fonts.title')}</h3>
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
       <LoadingState loading={state.loading} presentation="inline" />
       {(state.error || error) && (
         <NoticeBanner

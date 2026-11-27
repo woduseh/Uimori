@@ -1786,7 +1786,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           }
         />
       )}
-      <TransientNotice message={saveNotice} />
+      <TransientNotice content={saveNotice} />
       {props.outlineWorkspace && (
         <div className="outline-helper-return">
           <button

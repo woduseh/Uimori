@@ -5,9 +5,19 @@ import {
   type ReceivedErrorWire,
 } from '#contracts';
 import { ValidationError } from '../core/validation-error.js';
-import { message, messageRef, translateMessage, type MessageValues } from './i18n.js';
+import {
+  formatUiMessage,
+  legacyErrorMessage,
+  legacyMessageString,
+  UiError,
+  uiMessage,
+  uiText,
+  type MessageKey,
+  type UiMessage,
+  type UiMessageValue,
+} from './ui-message.js';
 
-const storyUiErrors: Record<string, string> = {
+const storyUiErrors: Record<string, MessageKey> = {
   OUTPUT_STORY_UI_INVALID: 'storyUi.errorTranslation.details',
 };
 
@@ -250,9 +260,9 @@ export const appErrorMessages = {
   TRANSLATION_GUIDE_TERM_INVALID: 'errors.TRANSLATION_GUIDE_TERM_INVALID',
   TRANSLATION_GUIDE_NOTE_TOO_LONG: 'errors.TRANSLATION_GUIDE_NOTE_TOO_LONG',
   LORE_PINNED_BUDGET_EXCEEDED: 'errors.LORE_PINNED_BUDGET_EXCEEDED',
-} satisfies Record<AppErrorCode, string>;
+} satisfies Record<AppErrorCode, MessageKey>;
 
-const themeFields: Record<string, string> = {
+const themeFields: Record<string, MessageKey> = {
   theme: 'errors.field.theme',
   file: 'visualpanels.themeFile',
   title: 'visualpanels.themeName',
@@ -268,7 +278,7 @@ const themeFields: Record<string, string> = {
   assets: 'themeAssets.title',
   files: 'themeAssets.title',
 };
-const illustrationPresetFields: Record<string, string> = {
+const illustrationPresetFields: Record<string, MessageKey> = {
   title: 'visualpanels.presetName',
   description: 'palettes.description',
   styleGuidance: 'visualpanels.illustrationInstructions',
@@ -276,7 +286,7 @@ const illustrationPresetFields: Record<string, string> = {
   'comfyui.negativeGuidance': 'errors.field.negativeGuidance',
   'novelai.negativeGuidance': 'errors.field.negativeGuidance',
 };
-const fieldLabels: Partial<Record<AppErrorCode, Record<string, string>>> = {
+const fieldLabels: Partial<Record<AppErrorCode, Record<string, MessageKey>>> = {
   ILLUSTRATION_PRESET_FIELD_TOO_LONG: illustrationPresetFields,
   THEME_OBJECT_REQUIRED: themeFields,
   THEME_FIELD_TOO_LONG: themeFields,
@@ -284,20 +294,21 @@ const fieldLabels: Partial<Record<AppErrorCode, Record<string, string>>> = {
 
 const MIB = 1024 * 1024;
 
-function sceneList(scenes: unknown, total: unknown): string {
+function sceneList(scenes: unknown, total: unknown): UiMessage[] {
   const numbers = String(scenes).split(',').map(Number);
-  const labels = numbers.map((scene) =>
-    scene === 0 ? message('errors.firstMessage') : message('errors.scene', { scene })
-  );
-  return `${labels.join(', ')}${typeof total === 'number' && total > numbers.length ? ', …' : ''}`;
+  const parts = numbers.flatMap((scene, index) => [
+    ...(index ? [uiText(', ')] : []),
+    scene === 0 ? uiMessage('errors.firstMessage') : uiMessage('errors.scene', { scene }),
+  ]);
+  return typeof total === 'number' && total > numbers.length ? [...parts, uiText(', …')] : parts;
 }
 
 function messageValues(
   code: AppErrorCode,
   params: ReceivedErrorWire['params']
-): MessageValues | undefined {
+): Record<string, UiMessageValue> | undefined {
   if (!params) return undefined;
-  const values: MessageValues = Object.fromEntries(
+  const values: Record<string, UiMessageValue> = Object.fromEntries(
     Object.entries(params).map(([name, value]) => [
       name,
       name.endsWith('Bytes') && typeof value === 'number'
@@ -306,23 +317,33 @@ function messageValues(
     ])
   );
   if (code === 'MANUSCRIPT_TRANSLATION_MISSING')
-    values.scenes = messageRef(sceneList(params.scenes, params.total));
+    values.scenes = sceneList(params.scenes, params.total);
   const label = typeof params.field === 'string' ? fieldLabels[code]?.[params.field] : undefined;
-  if (label) values.field = messageRef(message(label));
+  if (label) values.field = uiMessage(label);
   return values;
 }
 
-export function appErrorDescriptor(
+export function appErrorUiMessage(
   code: AppErrorCode,
   params?: ReceivedErrorWire['params']
-): string {
-  return message(appErrorMessages[code], messageValues(code, params));
+): UiMessage {
+  return uiMessage(appErrorMessages[code], messageValues(code, params));
+}
+
+export function toUiMessage(
+  cause: unknown,
+  fallback: MessageKey | UiMessage = 'errors.unexpected'
+): UiMessage {
+  if (cause instanceof UiError) return cause.uiMessage;
+  if (cause instanceof ValidationError)
+    return appErrorUiMessage(cause.code, cause.params as ReceivedErrorWire['params']);
+  return (
+    legacyErrorMessage(cause) ?? (typeof fallback === 'string' ? uiMessage(fallback) : fallback)
+  );
 }
 
 export function errorDescriptor(error: unknown): string {
-  return error instanceof ValidationError
-    ? appErrorDescriptor(error.code, error.params as ReceivedErrorWire['params'])
-    : (error as Error).message;
+  return legacyMessageString(toUiMessage(error));
 }
 
 function appErrorCode(wire: ReceivedErrorWire): AppErrorCode | null {
@@ -330,7 +351,7 @@ function appErrorCode(wire: ReceivedErrorWire): AppErrorCode | null {
   return isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error) ? wire.error : null;
 }
 
-function genericErrorKey(status: number): string {
+function genericErrorKey(status: number): MessageKey {
   return status >= 500
     ? 'errors.serverFailed'
     : status === 409
@@ -340,25 +361,20 @@ function genericErrorKey(status: number): string {
 
 export function apiErrorMessage(
   wire: ReceivedErrorWire,
-  status: number,
-  method: string
-): { code: string | null; message: string } {
+  status: number
+): { code: string | null; uiMessage: UiMessage } {
   const code = appErrorCode(wire);
   if (code)
     return {
       code,
-      message: appErrorDescriptor(code, code === wire.code ? wire.params : undefined),
+      uiMessage: appErrorUiMessage(code, code === wire.code ? wire.params : undefined),
     };
   const { error } = wire;
-  if (typeof error === 'string') {
-    if (Object.hasOwn(storyUiErrors, error))
-      return { code: error, message: message(storyUiErrors[error]) };
-    if (status === 409 && method === 'DELETE' && error.length <= 4000)
-      return { code: null, message: error };
-  }
-  return { code: null, message: message(genericErrorKey(status), { status }) };
+  if (typeof error === 'string' && Object.hasOwn(storyUiErrors, error))
+    return { code: error, uiMessage: uiMessage(storyUiErrors[error]) };
+  return { code: null, uiMessage: uiMessage(genericErrorKey(status), { status }) };
 }
 
-export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method: string): string {
-  return translateMessage(apiErrorMessage(wire, status, method).message);
+export function apiErrorDisplay(wire: ReceivedErrorWire, status: number): string {
+  return formatUiMessage(apiErrorMessage(wire, status).uiMessage);
 }

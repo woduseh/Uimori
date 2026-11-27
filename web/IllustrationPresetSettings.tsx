@@ -387,7 +387,7 @@ export function IllustrationPresetSettings({
           {translateMessage(error || loadError)}
         </NoticeBanner>
       )}
-      <TransientNotice message={notice} />
+      <TransientNotice content={notice} />
       {importNotice && <NoticeBanner>{translateMessage(importNotice)}</NoticeBanner>}
       <div
         className="illustration-preset-grid"

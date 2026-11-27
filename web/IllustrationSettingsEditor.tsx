@@ -849,7 +849,7 @@ function IllustrationEnvironmentEditor({
       ) : saveError ? (
         <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>
       ) : null}
-      <TransientNotice message={message} />
+      <TransientNotice content={message} />
       {loadError && !confirmReload && (
         <NoticeBanner
           tone="error"

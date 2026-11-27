@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { BackupSettings } from './BackupSettings.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackupFileImport } from './BackupFileImport.js';
@@ -68,8 +69,8 @@ export function ArchivePanel({
                 try {
                   const response = await fetch('/api/backup');
                   if (!response.ok)
-                    await throwApiError(response, 'GET', {
-                      emptyMessage: retainedMessage('transfer.d010', { v0: response.status }),
+                    await throwApiError(response, {
+                      emptyMessage: uiMessage('transfer.d010', { v0: response.status }),
                     });
                   const url = URL.createObjectURL(await response.blob());
                   const link = document.createElement('a');

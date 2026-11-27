@@ -1,4 +1,4 @@
-import { translateMessage, useI18n } from './i18n.js';
+import { useI18n } from './i18n.js';
 import {
   createContext,
   useCallback,
@@ -10,29 +10,33 @@ import {
   type ReactNode,
 } from 'react';
 import { CheckIcon } from './ui-icons.js';
+import { displayMessage, type DisplayMessage } from './ui-message.js';
 import './notices.css';
 
-type Notice = { id: string; message: string };
-const NoticeContext = createContext<(notice: Notice) => void>(() => {});
+type Notice = { id: string; content: DisplayMessage; identity: string };
+const NoticeContext = createContext<(id: string, content: DisplayMessage) => void>(() => {});
+const identityOf = (content: DisplayMessage) =>
+  typeof content === 'string' ? content : JSON.stringify(content);
 
 export function TransientNoticeProvider({ children }: { children: ReactNode }) {
   useI18n();
   const [notices, setNotices] = useState<Notice[]>([]);
   const host = useRef<HTMLDivElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const show = useCallback((notice: Notice) => {
-    clearTimeout(timers.current.get(notice.message));
+  const show = useCallback((id: string, content: DisplayMessage) => {
+    const notice = { id, content, identity: identityOf(content) };
+    clearTimeout(timers.current.get(notice.identity));
     setNotices((old) => {
-      const kept = old.filter((item) => item.id !== notice.id || item.message === notice.message);
-      return kept.some((item) => item.message === notice.message)
-        ? kept.map((item) => (item.message === notice.message ? notice : item))
+      const kept = old.filter((item) => item.id !== notice.id || item.identity === notice.identity);
+      return kept.some((item) => item.identity === notice.identity)
+        ? kept.map((item) => (item.identity === notice.identity ? notice : item))
         : [...kept, notice];
     });
     timers.current.set(
-      notice.message,
+      notice.identity,
       setTimeout(() => {
-        timers.current.delete(notice.message);
-        setNotices((old) => old.filter((item) => item.message !== notice.message));
+        timers.current.delete(notice.identity);
+        setNotices((old) => old.filter((item) => item.identity !== notice.identity));
       }, 4000)
     );
   }, []);
@@ -54,9 +58,9 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
       {children}
       <div ref={host} popover="manual" className="transient-notices" aria-live="polite">
         {notices.map((notice) => (
-          <div className="transient-notice" role="status" key={notice.message}>
+          <div className="transient-notice" role="status" key={notice.identity}>
             <CheckIcon size={18} aria-hidden="true" />
-            <span>{translateMessage(notice.message)}</span>
+            <span>{displayMessage(notice.content)}</span>
           </div>
         ))}
       </div>
@@ -67,15 +71,18 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
 export function useTransientNotice() {
   const id = useId();
   const show = useContext(NoticeContext);
-  return useCallback((message: string) => show({ id, message }), [id, show]);
+  return useCallback((content: DisplayMessage) => show(id, content), [id, show]);
 }
 
-export function TransientNotice({ message }: { message: string }) {
+export function TransientNotice({ content }: { content: DisplayMessage | null | undefined }) {
   useI18n();
   const id = useId();
   const show = useContext(NoticeContext);
+  const identity = content ? identityOf(content) : '';
+  const latest = useRef(content);
+  latest.current = content;
   useEffect(() => {
-    if (message) show({ id, message });
-  }, [id, message, show]);
+    if (identity && latest.current) show(id, latest.current);
+  }, [id, identity, show]);
   return null;
 }

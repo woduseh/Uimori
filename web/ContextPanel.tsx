@@ -281,7 +281,7 @@ export function ContextPanel({
             {translateMessage(error)}
           </NoticeBanner>
         )}
-        <TransientNotice message={message} />
+        <TransientNotice content={message} />
         {!detail ? (
           <LoadingState
             presentation="placeholder"
