@@ -25,28 +25,30 @@ export type AppErrorParamsArgument<C extends AppErrorCode> = AppErrorParams[C] e
   ? []
   : [params: AppErrorParams[C]];
 
-const catalog = {
-  MAINTENANCE_CLOSED: true,
-  STORY_UI_STALE_SOURCE: true,
-  STORY_UI_DISABLED: true,
-  STORY_UI_INVALID_ACTION: true,
-  INPUT_TRANSLATION_LANGUAGE_INVALID: true,
-  INPUT_TRANSLATION_CANCELLED: true,
-  INPUT_TRANSLATION_TIMEOUT: true,
-  INPUT_TRANSLATION_REFUSED: true,
-  INPUT_TRANSLATION_FAILED: true,
+const takesParams = {
+  MAINTENANCE_CLOSED: false,
+  STORY_UI_STALE_SOURCE: false,
+  STORY_UI_DISABLED: false,
+  STORY_UI_INVALID_ACTION: false,
+  INPUT_TRANSLATION_LANGUAGE_INVALID: false,
+  INPUT_TRANSLATION_CANCELLED: false,
+  INPUT_TRANSLATION_TIMEOUT: false,
+  INPUT_TRANSLATION_REFUSED: false,
+  INPUT_TRANSLATION_FAILED: false,
   INPUT_TRANSLATION_TOO_LONG: true,
-  SELECTION_REVISION_RANGE_INVALID: true,
-  SELECTION_REVISION_STALE: true,
-  SELECTION_REVISION_TRANSLATION_STALE: true,
-  SELECTION_REVISION_TIMEOUT: true,
-  SELECTION_REVISION_CANCELLED: true,
-  SELECTION_REVISION_REFUSED: true,
-  SELECTION_REVISION_FAILED: true,
-  SELECTION_REVISION_TOO_LONG: true,
-} satisfies Record<AppErrorCode, true>;
+  SELECTION_REVISION_RANGE_INVALID: false,
+  SELECTION_REVISION_STALE: false,
+  SELECTION_REVISION_TRANSLATION_STALE: false,
+  SELECTION_REVISION_TIMEOUT: false,
+  SELECTION_REVISION_CANCELLED: false,
+  SELECTION_REVISION_REFUSED: false,
+  SELECTION_REVISION_FAILED: false,
+  SELECTION_REVISION_TOO_LONG: false,
+} satisfies { [C in AppErrorCode]: AppErrorParams[C] extends undefined ? false : true };
 
-export const APP_ERROR_CODES = Object.keys(catalog) as AppErrorCode[];
+export const APP_ERROR_CODES = Object.keys(takesParams) as AppErrorCode[];
 
 export const isAppErrorCode = (value: unknown): value is AppErrorCode =>
-  typeof value === 'string' && Object.hasOwn(catalog, value);
+  typeof value === 'string' && Object.hasOwn(takesParams, value);
+
+export const appErrorTakesParams = (code: AppErrorCode): boolean => takesParams[code];

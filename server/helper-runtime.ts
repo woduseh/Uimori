@@ -47,7 +47,7 @@ import {
 } from './helper-confirmations.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
-import { HelperToolError } from './app-errors.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
 import {
   HELPER_SETTINGS_TOOLS,
@@ -564,7 +564,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
       ? 'DATA_SQL_INVALID'
       : patch
         ? `PATCH_${patch.details.reason.toUpperCase()}`
-        : error instanceof HelperToolError
+        : error instanceof HelperToolError || error instanceof AppError
           ? error.code
           : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
             (status === 409
@@ -605,6 +605,7 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
   return {
     error: message,
     code,
+    ...(error instanceof AppError && error.params !== undefined ? { params: error.params } : {}),
     recoverable: !['never', 'inspect_outcome'].includes(retryMode),
     retryMode,
     outcome: retryMode === 'inspect_outcome' ? 'unknown' : 'unchanged',

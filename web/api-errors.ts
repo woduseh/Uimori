@@ -1,4 +1,9 @@
-import { type AppErrorCode, isAppErrorCode, type ReceivedErrorWire } from '#contracts';
+import {
+  type AppErrorCode,
+  appErrorTakesParams,
+  isAppErrorCode,
+  type ReceivedErrorWire,
+} from '#contracts';
 import { t, registerMessage, formatMessage, getLocale, type MessageValues } from './i18n.js';
 import ko from './locales/ko.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
@@ -40,8 +45,11 @@ export const appErrorMessages = {
 function appErrorMessage(
   wire: ReceivedErrorWire
 ): { code: AppErrorCode; key: string; values?: MessageValues } | null {
-  const code = wire.code ?? wire.error;
-  return isAppErrorCode(code) ? { code, key: appErrorMessages[code], values: wire.params } : null;
+  if (isAppErrorCode(wire.code))
+    return { code: wire.code, key: appErrorMessages[wire.code], values: wire.params };
+  return isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error)
+    ? { code: wire.error, key: appErrorMessages[wire.error] }
+    : null;
 }
 
 const messages: Record<string, string> = {

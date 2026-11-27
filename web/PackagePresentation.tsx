@@ -2,6 +2,7 @@ import { t, useI18n, translateMessage, message as uiMessage, messageRef } from '
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
 import { useWindowViewport } from './window-viewport.js';
+import { readErrorWire } from '#contracts';
 import { apiErrorDisplay } from './api-errors.js';
 
 export type PackagePresentation = {
@@ -72,8 +73,8 @@ export function usePackagePresentation(
           { signal: controller.signal }
         );
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(apiErrorDisplay(error.error, response.status, 'GET'));
+          const wire = readErrorWire(await response.json().catch(() => null));
+          throw new Error(apiErrorDisplay(wire, response.status, 'GET'));
         }
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)

@@ -78,3 +78,8 @@ test('a catalogued code still arriving as a legacy error string uses the catalog
   setLocale('en');
   expect(legacy.displayMessage).toBe('The translation model refused to translate this input.');
 });
+
+test('a legacy error string naming a code that needs params falls back instead of formatting', async () => {
+  const result = await rejected(422, 'INPUT_TRANSLATION_TOO_LONG');
+  expect(result).toMatchObject({ status: 422, message: expect.any(String) });
+});
