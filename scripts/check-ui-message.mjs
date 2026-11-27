@@ -210,37 +210,84 @@ export const legacyWrapperRemedy =
 export const legacyDescriptorRemedy =
   'build a UiMessage with uiMessage(key, values) or toUiMessage(caught) instead of a descriptor string';
 
-function importedNames(tree, file) {
-  const names = new Map();
-  for (const node of tree.program.body) {
-    if (node.type !== 'ImportDeclaration' || !node.source.value.startsWith('.')) continue;
-    const module = posix.join(posix.dirname(file), node.source.value);
-    for (const specifier of node.specifiers)
-      if (specifier.type === 'ImportSpecifier')
-        names.set(specifier.local.name, {
-          module,
-          imported: specifier.imported.name ?? specifier.imported.value,
-        });
-  }
-  return names;
-}
+const legacyExports = {
+  ...legacyDescriptorApis,
+  'web/ui-message.js': [...legacyDescriptorApis['web/ui-message.js'], 'legacyUiMessage'],
+};
+const exportName = (node) => node.name ?? node.value;
+const memberName = (node) =>
+  node.computed
+    ? node.property.type === 'StringLiteral'
+      ? node.property.value
+      : null
+    : node.property.name;
+const isMember = (node) =>
+  node?.type === 'MemberExpression' || node?.type === 'OptionalMemberExpression';
+const bindingOnly = (node, parent) =>
+  parent?.type === 'ImportSpecifier' ||
+  parent?.type === 'ImportNamespaceSpecifier' ||
+  parent?.type === 'ExportSpecifier' ||
+  (parent?.type === 'VariableDeclarator' && parent.id === node) ||
+  (isMember(parent) && parent.property === node && !parent.computed) ||
+  (parent?.type === 'ObjectProperty' && parent.key === node && !parent.computed);
 
 function legacyUses(tree, file) {
-  const names = importedNames(tree, file);
-  const apis = [...names.values()]
-    .filter(({ module, imported }) => legacyDescriptorApis[module]?.includes(imported))
-    .map(({ imported }) => imported)
-    .sort();
-  const wrapper = [...names].find(
-    ([, { module, imported }]) => module === 'web/ui-message.js' && imported === 'legacyUiMessage'
-  )?.[0];
-  let wrappers = 0;
-  if (wrapper)
-    walk(tree, (node) => {
-      if (node.type === 'CallExpression' && node.callee.type === 'Identifier')
-        if (node.callee.name === wrapper) wrappers++;
-    });
-  return { apis, wrappers };
+  const apis = new Set();
+  const wrappers = new Set();
+  const namespaces = new Map();
+  let wrapperUses = 0;
+  const resolveModule = (source) => posix.join(posix.dirname(file), source);
+  const take = (module, name, local) => {
+    if (!legacyExports[module]?.includes(name)) return;
+    if (name === 'legacyUiMessage') {
+      if (local) wrappers.add(local);
+    } else apis.add(name);
+  };
+  for (const node of tree.program.body) {
+    if (!node.source?.value?.startsWith('.')) continue;
+    const module = resolveModule(node.source.value);
+    if (node.type === 'ImportDeclaration')
+      for (const specifier of node.specifiers) {
+        if (specifier.type === 'ImportSpecifier')
+          take(module, exportName(specifier.imported), specifier.local.name);
+        else if (legacyExports[module]) namespaces.set(specifier.local.name, module);
+      }
+    if (node.type === 'ExportNamedDeclaration')
+      for (const specifier of node.specifiers) {
+        const name = exportName(specifier.local);
+        take(module, name);
+        if (name === 'legacyUiMessage' && legacyExports[module]?.includes(name)) wrapperUses++;
+      }
+    if (node.type === 'ExportAllDeclaration' && legacyExports[module]) {
+      for (const name of legacyExports[module]) take(module, name);
+      if (legacyExports[module].includes('legacyUiMessage')) wrapperUses++;
+    }
+  }
+  const fromNamespace = (node) =>
+    node?.type === 'Identifier' ? namespaces.get(node.name) : undefined;
+  walk(tree, (node) => {
+    if (node.type === 'VariableDeclarator' && node.init?.type === 'Identifier') {
+      if (node.id.type === 'Identifier' && wrappers.has(node.init.name)) wrappers.add(node.id.name);
+      const module = fromNamespace(node.init);
+      if (module && node.id.type === 'ObjectPattern')
+        for (const property of node.id.properties)
+          if (property.type === 'ObjectProperty' && !property.computed)
+            take(module, exportName(property.key), property.value.name);
+    }
+  });
+  walk(tree, (node, parent) => {
+    if (isMember(node)) {
+      const module = fromNamespace(node.object);
+      const name = module && memberName(node);
+      if (name && legacyExports[module].includes(name)) {
+        take(module, name);
+        if (name === 'legacyUiMessage') wrapperUses++;
+      }
+    }
+    if (node.type === 'Identifier' && wrappers.has(node.name) && !bindingOnly(node, parent))
+      wrapperUses++;
+  });
+  return { apis: [...apis].sort(), wrappers: wrapperUses };
 }
 
 export function legacyMessageUses(source, file = 'web/input.tsx') {
@@ -311,13 +358,13 @@ function legacyErrors({ legacyWrappers = {}, legacyDescriptors = [] }, { wrapper
     const allowed = legacyWrappers[file] ?? 0;
     if (found > allowed)
       errors.push(
-        `${file}: ${found} legacyUiMessage calls, ${allowed ? `${allowlistPath} allows ${allowed}` : 'none allowed'}; ${legacyWrapperRemedy}`
+        `${file}: ${found} legacyUiMessage uses, ${allowed ? `${allowlistPath} allows ${allowed}` : 'none allowed'}; ${legacyWrapperRemedy}`
       );
     else if (found < allowed)
       errors.push(
         found
-          ? `${allowlistPath}: ${file} now has ${found} legacyUiMessage calls; lower legacyWrappers from ${allowed} to ${found} ${shrink}`
-          : `${allowlistPath}: ${file} has no legacyUiMessage calls; remove its legacyWrappers entry ${shrink}`
+          ? `${allowlistPath}: ${file} now has ${found} legacyUiMessage uses; lower legacyWrappers from ${allowed} to ${found} ${shrink}`
+          : `${allowlistPath}: ${file} has no legacyUiMessage uses; remove its legacyWrappers entry ${shrink}`
       );
   }
   const listed = new Set(legacyDescriptors);
@@ -411,7 +458,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const owed = Object.values(debt).reduce((sum, count) => sum + count, 0);
     const wrapped = Object.values(legacyWrappers).reduce((sum, count) => sum + count, 0);
     console.log(
-      `UI messages PASS (${owed} unconverted error-text reads in ${Object.keys(debt).length} files; ${Object.keys(permanent).length} permanent exceptions; ${wrapped} legacyUiMessage calls in ${Object.keys(legacyWrappers).length} files; ${legacyDescriptors.length} files on legacy descriptors)`
+      `UI messages PASS (${owed} unconverted error-text reads in ${Object.keys(debt).length} files; ${Object.keys(permanent).length} permanent exceptions; ${wrapped} legacyUiMessage uses in ${Object.keys(legacyWrappers).length} files; ${legacyDescriptors.length} files on legacy descriptors)`
     );
   }
 }

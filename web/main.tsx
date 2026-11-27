@@ -1,12 +1,6 @@
 import { t, useI18n, loadInitialLocale } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import {
-  formatUiMessage,
-  sameUiMessage,
-  UiError,
-  uiMessage,
-  type UiMessage,
-} from './ui-message.js';
+import { formatUiMessage, UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
 import { downloadArchive } from './archive-download.js';
@@ -2102,7 +2096,7 @@ function App() {
               />
             )}
             <DismissibleError
-              error={!s.library && sameUiMessage(s.error, s.libraryError) ? null : s.error}
+              error={!s.library && s.errorFromLibrary ? null : s.error}
               onDismiss={() => s.setError(null)}
             />
           </div>
