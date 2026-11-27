@@ -208,13 +208,20 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
       : result;
   }
   const modelId = text(args.modelId, 'saved model ID', 100);
-  store.product.assertAvailable('model', modelId);
-  if (name === 'model.pricing.backfill')
+  if (name === 'model.pricing.backfill') {
+    store.product.assertAvailable('model', modelId);
     return { modelId, ...backfillUnpricedCalls(store, modelId) };
-  let model = store.product.get<ModelPreset>('model', modelId);
+  }
+  const expectedRevision =
+    name === 'model.pricing.update'
+      ? number(args.expectedRevision, 'model revision', 1)
+      : undefined;
+  let model =
+    expectedRevision === undefined
+      ? store.product.available<ModelPreset>('model', modelId)
+      : store.product.editable<ModelPreset>('model', modelId, expectedRevision);
   const connection = store.product.get<Connection>('connection', model.connectionId);
-  if (name === 'model.pricing.update') {
-    const expectedRevision = number(args.expectedRevision, 'model revision', 1);
+  if (expectedRevision !== undefined) {
     let pricing: ReturnType<typeof validateModelPricing>;
     try {
       pricing = validateModelPricing(args.pricing);

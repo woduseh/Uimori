@@ -9,6 +9,8 @@ import { ChatOptionsStore } from '../server/chat-options.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { sceneTitle } from '../server/scene-titles.js';
 import { Store } from '../server/store.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
+import { invokeHelperModelParameterTool } from '../server/helper-model-parameter-tools.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { forgetHelperSceneChanges, readHelperChanges } from '../server/helper-changes.js';
@@ -581,4 +583,24 @@ test('chat.organize files a chat into a folder, sets the default persona and unf
   expect(store.organization.folders(botId)).toEqual([]);
   expect(store.chats().map((item) => item.id)).toContain(chat.id);
   expect(changed).toHaveBeenCalledWith(chat.id);
+});
+
+test('model.parameters.update tells a stale or deleted target to refresh before checking changes', () => {
+  const { store, model } = fixture();
+  const conflict = expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' });
+  expect(() =>
+    invokeHelperModelParameterTool(store, 'model.parameters.update', {
+      modelId: model.id,
+      expectedRevision: model.revision + 1,
+      changes: { topP: 0.9 },
+    })
+  ).toThrow(conflict);
+  deleteLibraryItem(store, 'model', model.id, { expectedRevision: model.revision });
+  expect(() =>
+    invokeHelperModelParameterTool(store, 'model.parameters.update', {
+      modelId: model.id,
+      expectedRevision: model.revision,
+      changes: { temperature: 0.7 },
+    })
+  ).toThrow(conflict);
 });

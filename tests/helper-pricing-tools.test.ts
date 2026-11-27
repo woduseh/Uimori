@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import type { ModelPreset } from '../core/product.js';
 import type { WireRecord } from '../core/transport.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
@@ -421,4 +422,24 @@ test('judgment backfill prices only the unpriced judgment calls of the matching 
     addedUsd: 0,
   });
   expect(estimate(unpricedJev)).toMatchObject({ status: 'estimated', usd: 0.042 });
+});
+
+test('model.pricing.update tells a stale or deleted target to refresh before checking the price', () => {
+  const { store, model } = fixture();
+  const conflict = expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' });
+  expect(() =>
+    call(store, 'model.pricing.update', {
+      modelId: model.id,
+      expectedRevision: model.revision + 1,
+      pricing: { ...pricing, sourceUrl: '' },
+    })
+  ).toThrow(conflict);
+  deleteLibraryItem(store, 'model', model.id, { expectedRevision: model.revision });
+  expect(() =>
+    call(store, 'model.pricing.update', {
+      modelId: model.id,
+      expectedRevision: model.revision,
+      pricing,
+    })
+  ).toThrow(conflict);
 });

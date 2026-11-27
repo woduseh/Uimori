@@ -117,11 +117,12 @@ export function invokeHelperModelParameterTool(
     name === 'model.parameters.read' ? ['modelId'] : ['modelId', 'expectedRevision', 'changes']
   );
   const modelId = text(args.modelId, 'saved model ID', 100);
-  const model = store.product.available<ModelPreset>('model', modelId);
-  if (name === 'model.parameters.read') return view(store, model);
+  if (name === 'model.parameters.read')
+    return view(store, store.product.available<ModelPreset>('model', modelId));
   if (name !== 'model.parameters.update')
     throw new HelperToolError(400, 'UNKNOWN_MODEL_PARAMETER_TOOL');
   const expectedRevision = number(args.expectedRevision, 'model revision', 1);
+  const model = store.product.editable<ModelPreset>('model', modelId, expectedRevision);
   const changes = record(args.changes);
   const supported = view(store, model).supported as string[];
   const unsupported = Object.keys(changes).filter((key) => !supported.includes(key));
