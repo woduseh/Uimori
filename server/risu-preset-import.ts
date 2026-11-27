@@ -16,7 +16,7 @@ import { readRisuPresetFile } from './risu-preset-file.js';
 import { importRisuPresetProgram } from './risu-preset-program.js';
 import type { Store } from './store.js';
 import { AppError } from './app-errors.js';
-import { savedOrDraftChanged } from './import-operations.js';
+import { savedOrDraftChanged, type RetainedReceiptKey } from './import-operations.js';
 import { readResourceBundleReceipt } from './resource-bundle.js';
 
 function analyze(value: unknown) {
@@ -68,12 +68,8 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
   fields(body, ['source', 'digest', 'allowPartial', 'idempotencyKey']);
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   const { file, transfer, preview } = analyze(body.source);
-  const command = {
-    file,
-    digest: transfer.digest,
-    modelBindings: [],
-    idempotencyKey: `risu-preset:${requestKey}`,
-  };
+  const receiptKey: RetainedReceiptKey = `risu-preset:${requestKey}`;
+  const command = { file, digest: transfer.digest, modelBindings: [], idempotencyKey: receiptKey };
   const result = (receipt: NativeTransferReceipt): RisuPresetImportResult => {
     const saved = receipt.items.find(
       (item) => item.kind === 'prompt-preset' && item.key === 'prompt'
@@ -81,8 +77,8 @@ export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetI
     return { receipt, preset: store.product.stored<PromptPreset>('prompt-preset', saved.id) };
   };
   if (body.digest !== preview.digest)
-    return savedOrDraftChanged(() => {
-      const receipt = readResourceBundleReceipt(store, command);
+    return savedOrDraftChanged(receiptKey, (key) => {
+      const receipt = readResourceBundleReceipt(store, { ...command, idempotencyKey: key });
       return receipt && result(receipt);
     });
   if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');

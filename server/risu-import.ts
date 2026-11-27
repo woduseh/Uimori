@@ -1,4 +1,9 @@
-import { readImportReceipt, saveImportReceipt, savedOrDraftChanged } from './import-operations.js';
+import {
+  readImportReceipt,
+  saveImportReceipt,
+  savedOrDraftChanged,
+  type RetainedReceiptKey,
+} from './import-operations.js';
 import { bundleDigest, importPreparedResourceBundle } from './resource-bundle.js';
 import {
   prepareStoredRisuImport,
@@ -82,7 +87,7 @@ export async function applyRisuImport(
   if (body.preparedId !== undefined && typeof body.preparedId !== 'string')
     throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   const requestKey = text(body.idempotencyKey, 'request key', 100);
-  const operationKey = `risu-result:${requestKey}`;
+  const operationKey: RetainedReceiptKey = `risu-result:${requestKey}`;
   const commandDigest = bundleDigest({
     digest: text(body.digest, 'import digest', 100),
     kind: body.kind ?? null,
@@ -110,14 +115,14 @@ export async function applyRisuImport(
         : findPreparedRisuImport(store.path, body.digest, body.source);
   } catch (error) {
     if (error instanceof AppError && error.code === 'RISU_IMPORT_DRAFT_CHANGED')
-      return savedOrDraftChanged(previous);
+      return savedOrDraftChanged(operationKey, previous);
     throw error;
   }
   const { file: originalFile, preview } =
     staged ?? analyze(body.source, body.kind as RisuImportKind | undefined, readStaged);
   if (staged && body.kind !== undefined && body.kind !== preview.kind)
-    return savedOrDraftChanged(previous);
-  if (body.digest !== preview.digest) return savedOrDraftChanged(previous);
+    return savedOrDraftChanged(operationKey, previous);
+  if (body.digest !== preview.digest) return savedOrDraftChanged(operationKey, previous);
   if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
     throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');

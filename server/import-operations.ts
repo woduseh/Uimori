@@ -2,7 +2,15 @@ import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 import { AppError } from './app-errors.js';
 
-const retainedPrefixes = ['retry:', 'transcript:', 'resource:', 'chat:', 'risu-result:'] as const;
+const retainedPrefixes = [
+  'retry:',
+  'transcript:',
+  'resource:',
+  'chat:',
+  'risu-result:',
+  'risu-preset:',
+] as const;
+export type RetainedReceiptKey = `${(typeof retainedPrefixes)[number]}${string}`;
 const boundedReceipt = retainedPrefixes.map(() => 'key NOT LIKE ?').join(' AND ');
 const retainedPatterns = retainedPrefixes.map((prefix) => `${prefix}%`);
 
@@ -20,8 +28,11 @@ export function readImportReceipt<T>(
   return JSON.parse(String(prior.result)) as T;
 }
 
-export function savedOrDraftChanged<T>(saved: () => T | undefined): T {
-  const prior = saved();
+export function savedOrDraftChanged<T>(
+  receiptKey: RetainedReceiptKey,
+  saved: (receiptKey: RetainedReceiptKey) => T | undefined
+): T {
+  const prior = saved(receiptKey);
   if (prior !== undefined) return prior;
   throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
 }

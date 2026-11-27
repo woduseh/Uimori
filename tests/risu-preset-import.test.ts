@@ -10,6 +10,7 @@ import {
   risuPresetImportRoutes,
 } from '../server/risu-preset-import.js';
 
+import { saveImportReceipt, savedOrDraftChanged } from '../server/import-operations.js';
 import { promptWorkspace, promptWorkspaceRoutes } from '../server/prompt-workspace.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -163,4 +164,23 @@ test('a saved import whose response was lost answers its receipt even when the p
   expect(() =>
     applyRisuPresetImport(store, { ...command, digest: 'stale', idempotencyKey: 'never-saved' })
   ).toThrow(expect.objectContaining({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' }));
+});
+
+test('a lost-response retry finds its preset receipt after hundreds of other imports', () => {
+  const { store } = fixture();
+  const source = sourceOf(document());
+  const preview = prepareRisuPresetImport({ source });
+  const command = {
+    source,
+    digest: preview.digest,
+    allowPartial: false,
+    idempotencyKey: 'outlived',
+  };
+  const first = applyRisuPresetImport(store, command);
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(store, `unrelated-import-${index}`, 'digest', { index });
+  const retry = applyRisuPresetImport(store, { ...command, digest: 'digest-before-upgrade' });
+  expect(retry.preset.id).toBe(first.preset.id);
+  // @ts-expect-error a definite 409 needs a receipt key that is never trimmed
+  expect(savedOrDraftChanged('risu-trimmed:key', () => 1)).toBe(1);
 });
