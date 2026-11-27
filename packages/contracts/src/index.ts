@@ -27,4 +27,7 @@ export type * from './domains/providers/operations.js';
 export * from './domains/reader/limits.js';
 export * from './domains/reader/endpoints.js';
 export type * from './domains/reader/operations.js';
+export * from './domains/transfer/transfer-limits.js';
+export * from './domains/transfer/endpoints.js';
+export type * from './domains/transfer/operations.js';
 export * from './endpoint-registry.js';

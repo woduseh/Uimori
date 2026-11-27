@@ -26,7 +26,7 @@ import { processImage } from './image-processing.js';
 import { validateChatTranscript } from '../core/chat-transcript.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import { normalizeStoryGuideConfig } from '../core/story-guide.js';
-import { fields, record, text } from './request-validation.js';
+import { fields, record } from './request-validation.js';
 import { readFileSync } from 'node:fs';
 import { importPreparedResourceBundle } from './resource-bundle.js';
 import {
@@ -36,6 +36,35 @@ import {
   type PreparedArchive,
 } from './native-transfer-archive.js';
 import { AppError } from './app-errors.js';
+import type { ImportChatBackup, ImportChatBackupArchive } from '#contracts/operations';
+
+type ImportedEntries = { key: string; source: { id: string } }[];
+
+function remapRestoredResources(
+  copy: ChatCopy,
+  file: { contents: ImportedEntries; prompts: ImportedEntries },
+  imported: ReadonlyMap<string, string>
+): void {
+  const ids = (entries: ImportedEntries) =>
+    new Map(entries.map((entry) => [entry.source.id, imported.get(entry.key)!]));
+  const contents = ids(file.contents),
+    prompts = ids(file.prompts);
+  const content = (id: string) => {
+    const target = contents.get(id);
+    if (!target) throw new AppError(400, 'CHAT_BACKUP_INVALID');
+    return target;
+  };
+  if (copy.state.illustrationReferences)
+    remapIllustrationPackageReferences(copy.state.illustrationReferences, contents);
+  copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
+    ...ref,
+    id: content(ref.id),
+    revision: 1,
+  }));
+  const prompt = prompts.get(copy.state.profile.pinned?.mainPromptPresetId ?? '');
+  copy.state.profile.pinned = prompt ? { mainPromptPresetId: prompt } : undefined;
+  if (copy.state.authoring) remapChatAuthoring(copy.state.authoring, contents);
+}
 
 function checkedBackup(value: unknown, binary = false): ChatBackup {
   const body = record(value);
@@ -92,7 +121,7 @@ export function importPreparedChatBackup(
 ): ChatBackupImport {
   const file = prepared.manifest.resources;
   const original = checkedBackup({ ...prepared.manifest.backup, resources: file }, true);
-  const key = `chat:${text(idempotencyKey, 'import request', 120)}`,
+  const key = `chat:${idempotencyKey}`,
     digest = bundleDigest(prepared.manifest);
   const binary = new Map(prepared.images.map((image) => [`archive:${image.hash}`, image]));
   return store.transaction(() => {
@@ -110,29 +139,10 @@ export function importPreparedChatBackup(
       idempotencyKey: `resources:${key}`,
       modelBindings: [],
     });
-    const importedIds = new Map(receipt.items.map((item) => [item.key, item.id]));
-    const remap = new Map(
-      [...file.contents, ...file.prompts].map((entry) => [
-        entry.source.id,
-        importedIds.get(entry.key)!,
-      ])
-    );
-    const contentRemap = new Map(
-      file.contents.map((entry) => [entry.source.id, importedIds.get(entry.key)!])
-    );
+    const imported = new Map(receipt.items.map((item) => [item.key, item.id]));
     const chats = original.chats.map((originalCopy, index) => {
       const copy = structuredClone(originalCopy);
-      if (copy.state.illustrationReferences)
-        remapIllustrationPackageReferences(copy.state.illustrationReferences, contentRemap);
-      copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
-        ...ref,
-        id: remap.get(ref.id)!,
-        revision: 1,
-      }));
-      const prompt = copy.state.profile.pinned?.mainPromptPresetId;
-      copy.state.profile.pinned =
-        prompt && remap.has(prompt) ? { mainPromptPresetId: remap.get(prompt)! } : undefined;
-      if (copy.state.authoring) remapChatAuthoring(copy.state.authoring, remap);
+      remapRestoredResources(copy, file, imported);
       return restoreChatCopy(
         store,
         copy,
@@ -151,12 +161,12 @@ export function importPreparedChatBackup(
   });
 }
 
-export function importChatBackupArchiveRequest(store: Store, value: unknown): ChatBackupImport {
-  const body = record(value);
-  fields(body, ['preparedId', 'digest', 'idempotencyKey']);
-  const id = text(body.preparedId, 'prepared ID', 32),
-    digest = text(body.digest, 'digest', 64),
-    key = `chat:archive-request:${text(body.idempotencyKey, 'import request', 100)}`;
+export function importChatBackupArchiveRequest(
+  store: Store,
+  input: ImportChatBackupArchive
+): ChatBackupImport {
+  const { preparedId: id, digest } = input,
+    key = `chat:archive-request:${input.idempotencyKey}`;
   const command = bundleDigest({ id, digest });
   const result = store.transaction(() => {
     const prior = readImportReceipt<{ chatIds: string[]; sources: number }>(store, key, command);
@@ -172,7 +182,7 @@ export function importChatBackupArchiveRequest(store: Store, value: unknown): Ch
     const result = importPreparedChatBackup(
       store,
       readPreparedArchive(store, id, digest, 'chat'),
-      `archive:${body.idempotencyKey}`
+      `archive:${input.idempotencyKey}`
     );
     saveImportReceipt(store, key, command, {
       chatIds: result.chats.map((chat) => chat.id),
@@ -184,11 +194,12 @@ export function importChatBackupArchiveRequest(store: Store, value: unknown): Ch
   return result;
 }
 
-export async function importChatBackup(store: Store, value: unknown): Promise<ChatBackupImport> {
-  const body = record(value);
-  fields(body, ['backup', 'idempotencyKey']);
-  const key = `chat:${text(body.idempotencyKey, 'import request', 100)}`;
-  const original = checkedBackup(body.backup);
+export async function importChatBackup(
+  store: Store,
+  input: ImportChatBackup
+): Promise<ChatBackupImport> {
+  const key = `chat:${input.idempotencyKey}`;
+  const original = checkedBackup(input.backup);
   const digest = bundleDigest(original);
   const previous = (): ChatBackupImport | undefined => {
     const saved = readImportReceipt<{ chatIds: string[]; sources: number }>(store, key, digest);
@@ -252,30 +263,9 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       idempotencyKey: `resources:${key}`,
       modelBindings: [],
     });
-    const remap = new Map(
-      [...file.contents, ...file.prompts].map((entry) => [
-        entry.source.id,
-        receipt.items.find((item) => item.key === entry.key)!.id,
-      ])
-    );
-    const contentRemap = new Map(
-      file.contents.map((entry) => [
-        entry.source.id,
-        receipt.items.find((item) => item.key === entry.key)!.id,
-      ])
-    );
+    const imported = new Map(receipt.items.map((item) => [item.key, item.id]));
     const chats = copies.map((copy, index) => {
-      if (copy.state.illustrationReferences)
-        remapIllustrationPackageReferences(copy.state.illustrationReferences, contentRemap);
-      copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
-        ...ref,
-        id: remap.get(ref.id)!,
-        revision: 1,
-      }));
-      const prompt = copy.state.profile.pinned?.mainPromptPresetId;
-      copy.state.profile.pinned =
-        prompt && remap.has(prompt) ? { mainPromptPresetId: remap.get(prompt)! } : undefined;
-      if (copy.state.authoring) remapChatAuthoring(copy.state.authoring, remap);
+      remapRestoredResources(copy, file, imported);
       return restoreChatCopy(store, copy, `restore:${key}:${index}`);
     });
     const sources = copies.reduce((sum, copy) => sum + copy.transcript.entries.length, 0);

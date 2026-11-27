@@ -111,7 +111,7 @@ describe('integrated illustration audit regressions', () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/package-image-blobs',
-        payload: { mime: downloaded.mime, base64: downloaded.bytes.toString('base64') },
+        payload: { base64: downloaded.bytes.toString('base64') },
       });
       expect(response.statusCode, response.body).toBe(200);
       const uploaded = response.json() as { hash: string; mime: 'image/webp' };

@@ -106,4 +106,13 @@ export const libraryOperations = {
     libraryOrganization
   ),
   moveItems: defineOperation('library.moveItems', moveLibraryItemsInput, libraryOrganization),
+  uploadPackageImage: defineOperation(
+    'library.uploadPackageImage',
+    z.strictObject({ base64: z.string() }),
+    z.strictObject({
+      hash: z.string().regex(/^[a-f0-9]{64}$/u),
+      mime: z.enum(['image/webp', 'image/png', 'image/jpeg', 'image/avif', 'image/gif']),
+      url: z.string(),
+    })
+  ),
 };

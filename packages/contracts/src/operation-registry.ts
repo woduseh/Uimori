@@ -7,6 +7,7 @@ import { providerOperations } from './domains/providers/operations.js';
 import { readerOperations } from './domains/reader/operations.js';
 import { resourceEditorOperations } from './domains/resource-editors/operations.js';
 import { selfHostOperations } from './domains/self-host/operations.js';
+import { transferOperations } from './domains/transfer/operations.js';
 import { translationOperations } from './domains/translation/operations.js';
 
 export const allOperations = {
@@ -19,5 +20,6 @@ export const allOperations = {
   reader: readerOperations,
   resourceEditors: resourceEditorOperations,
   'self-host': selfHostOperations,
+  transfer: transferOperations,
   translation: translationOperations,
 };

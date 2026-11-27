@@ -1,4 +1,5 @@
 import { defineEndpoint } from '../../endpoint.js';
+import { PACKAGE_IMAGE_UPLOAD_MAX_BYTES } from '../../image-limits.js';
 import type { libraryOperations as operations } from './operations.js';
 
 export const libraryEndpoints = {
@@ -30,5 +31,11 @@ export const libraryEndpoints = {
     method: 'POST',
     path: '/library/organization/move',
     invalidates: ['library'],
+  }),
+  uploadPackageImage: defineEndpoint<typeof operations.uploadPackageImage>()({
+    operation: 'library.uploadPackageImage',
+    method: 'POST',
+    path: '/package-image-blobs',
+    bodyLimit: PACKAGE_IMAGE_UPLOAD_MAX_BYTES,
   }),
 };

@@ -14,7 +14,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyReply } from 'fastify';
+import type { ApplyNativeArchive } from '#contracts/operations';
 import type { NativeTransferPrepare } from '../core/native-transfer.js';
 import {
   validatePreparedNativeTransfer,
@@ -25,11 +26,12 @@ import { CHAT_BACKUP_FORMAT, CHAT_BACKUP_VERSION, type ChatBackup } from '../cor
 import { validateChatTranscript } from '../core/chat-transcript.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
 import type { Store } from './store.js';
-import { fields, record, text } from './request-validation.js';
+import { fields, record } from './request-validation.js';
 import { AppError } from './app-errors.js';
 import {
   bundleDigest,
   importPreparedResourceBundle,
+  sortedBindings,
   type PreparedBundleImage,
 } from './resource-bundle.js';
 import { readImage } from './image-storage.js';
@@ -218,6 +220,7 @@ export async function prepareNativeArchive(
   try {
     prunePreparedArchives(store);
     checkImportPreparation(signal);
+    if (!existsSync(source)) throw new AppError(404, 'UPLOAD_NOT_FOUND');
     fd = openSync(source, 'r');
     mkdirSync(directory, { recursive: true });
     activeArchives.add(directory);
@@ -434,24 +437,17 @@ export async function prepareNativeArchive(
 
 export async function prepareNativeArchiveRequest(
   store: Store,
-  request: FastifyRequest,
+  uploadId: string,
   reply: FastifyReply,
   kind: 'resources' | 'chat'
 ) {
-  const body = record(request.body);
-  fields(body, ['uploadId']);
   const abort = new AbortController();
   const closed = () => {
     if (!reply.raw.writableFinished) abort.abort();
   };
   reply.raw.once('close', closed);
   try {
-    return await prepareNativeArchive(
-      store,
-      text(body.uploadId, 'upload ID', 32),
-      kind,
-      abort.signal
-    );
+    return await prepareNativeArchive(store, uploadId, kind, abort.signal);
   } finally {
     reply.raw.removeListener('close', closed);
   }
@@ -478,45 +474,24 @@ export function readPreparedArchive(
   return result;
 }
 
-export function nativeTransferArchiveRoutes(
-  app: FastifyInstance,
-  store: Store,
-  capture: (value: unknown) => PreparedNativeTransferFile
-) {
-  app.post('/api/native-transfers/export-archive', (request, reply) =>
-    reply
-      .type('application/zip')
-      .header('Content-Disposition', 'attachment; filename="resources.uimori"')
-      .send(exportNativeArchive(store, capture(request.body)))
-  );
-  app.post('/api/native-transfers/prepare-archive', (request, reply) =>
-    prepareNativeArchiveRequest(store, request, reply, 'resources')
-  );
-  app.post('/api/native-transfers/apply-archive', (request) => {
-    const body = record(request.body);
-    fields(body, ['preparedId', 'digest', 'idempotencyKey', 'modelBindings']);
-    const id = text(body.preparedId, 'prepared ID', 32),
-      digest = text(body.digest, 'digest', 64),
-      key = `archive:${text(body.idempotencyKey, 'import request', 100)}`;
-    const command = bundleDigest({ id, digest, modelBindings: body.modelBindings ?? [] });
-    const result = store.transaction(() => {
-      const prior = readImportReceipt<NativeTransferReceipt>(store, key, command);
-      if (prior) return { ...prior, created: false };
-      const prepared = readPreparedArchive(store, id, digest, 'resources');
-      const receipt = importPreparedResourceBundle(
-        store,
-        prepared.manifest.resources,
-        prepared.images,
-        {
-          idempotencyKey: `resources:${key}`,
-          modelBindings: body.modelBindings,
-        }
-      );
-      const result = { ...receipt, digest };
-      saveImportReceipt(store, key, command, result);
-      return result;
-    });
-    deletePreparedArchive(store, id);
+export function applyNativeArchive(store: Store, input: ApplyNativeArchive) {
+  const { preparedId: id, digest } = input,
+    key = `archive:${input.idempotencyKey}`;
+  const command = bundleDigest({ id, digest, modelBindings: sortedBindings(input.modelBindings) });
+  const result = store.transaction(() => {
+    const prior = readImportReceipt<NativeTransferReceipt>(store, key, command);
+    if (prior) return { ...prior, created: false };
+    const prepared = readPreparedArchive(store, id, digest, 'resources');
+    const receipt = importPreparedResourceBundle(
+      store,
+      prepared.manifest.resources,
+      prepared.images,
+      { idempotencyKey: `resources:${key}`, modelBindings: input.modelBindings }
+    );
+    const result = { ...receipt, digest };
+    saveImportReceipt(store, key, command, result);
     return result;
   });
+  deletePreparedArchive(store, id);
+  return result;
 }

@@ -8,11 +8,8 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import { saveImportReceipt } from '../server/import-operations.js';
-import {
-  applyNativeTransfer,
-  nativeTransferRoutes,
-  prepareNativeTransfer,
-} from '../server/native-transfer.js';
+import { applyNativeTransfer, prepareNativeTransfer } from '../server/native-transfer.js';
+import { transferRoutes } from '../server/transfer-routes.js';
 import { validateNativeTransfer } from '../core/native-transfer-validation.js';
 import { type NativeTransferFile } from '../core/native-transfer.js';
 import type {
@@ -55,7 +52,7 @@ function database() {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-native-transfer-'));
   const store = new Store(join(directory, 'synthetic.sqlite'));
   const app = Fastify();
-  nativeTransferRoutes(app, store);
+  transferRoutes(app, store, () => {});
   owned.push({ directory, store, app });
   return { store, app };
 }
@@ -470,6 +467,7 @@ test.each([
     file,
     digest: createHash('sha256').update(JSON.stringify(file)).digest('hex'),
     idempotencyKey: 'invalid-file',
+    modelBindings: [],
   };
   expect(() => applyNativeTransfer(store, body)).toThrow();
   const response = await app.inject({

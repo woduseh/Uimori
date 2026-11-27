@@ -87,7 +87,6 @@ import { sceneDeletionRoutes } from './scene-deletion.js';
 import { orphanMemoryRoutes } from './orphan-memory.js';
 import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes, imageCatalog, imageTargetSource } from './package-images.js';
-import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { applyNativeRisuAction } from './risu-native-actions.js';
 import { withRisuFailureCode } from './risu-failure-code.js';
@@ -1101,7 +1100,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     resolveCredential: (name) => process.env[name],
   });
   packageFeatureRoutes(app, store);
-  nativeTransferRoutes(app, store);
   uploadRoutes(app, store.path);
   requestFileRoutes(app, store);
   risuImportRoutes(app, store);

@@ -19,6 +19,8 @@ import { fields, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { deleteUpload, readUpload } from './uploads.js';
 import { AppError } from './app-errors.js';
+import { transferRawInputs } from '#contracts/operations';
+import { noStoreRefusals, parseInput } from './endpoint.js';
 
 const HASH = /^[a-f0-9]{64}$/u;
 function invalidFormat(): never {
@@ -190,25 +192,25 @@ export function readRequestFile(store: Pick<Store, 'db'>, file: RequestFile): Re
 }
 
 export function requestFileRoutes(app: FastifyInstance, store: Pick<Store, 'db'>): void {
-  app.get<{ Params: { hash: string }; Querystring: { name?: string } }>(
-    '/api/request-files/:hash',
-    (request, reply) => {
-      const blob = readRequestFileBlob(store.db, request.params.hash);
-      const name =
-        request.query.name === undefined ? 'attachment.bin' : fileName(request.query.name);
-      const encodedName = encodeURIComponent(name).replace(
-        /[!'()*]/gu,
-        (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
-      );
-      return reply
-        .header('X-Content-Type-Options', 'nosniff')
-        .header('Cache-Control', 'private, max-age=31536000, immutable')
-        .header(
-          'Content-Disposition',
-          `attachment; filename="attachment"; filename*=UTF-8''${encodedName}`
-        )
-        .type(classifyRequestFile(name)?.mime ?? 'application/octet-stream')
-        .send(blob.bytes);
-    }
-  );
+  app.get('/api/request-files/:hash', { onSend: noStoreRefusals }, (request, reply) => {
+    const input = parseInput(transferRawInputs.requestFile, {
+      ...(request.query as object),
+      ...(request.params as object),
+    });
+    const blob = readRequestFileBlob(store.db, input.hash);
+    const name = input.name === undefined ? 'attachment.bin' : fileName(input.name);
+    const encodedName = encodeURIComponent(name).replace(
+      /[!'()*]/gu,
+      (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+    );
+    return reply
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'private, max-age=31536000, immutable')
+      .header(
+        'Content-Disposition',
+        `attachment; filename="attachment"; filename*=UTF-8''${encodedName}`
+      )
+      .type(classifyRequestFile(name)?.mime ?? 'application/octet-stream')
+      .send(blob.bytes);
+  });
 }

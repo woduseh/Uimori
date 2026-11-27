@@ -1,1 +1,2 @@
 export const IMAGE_INPUT_MAX_BYTES = 64 * 1024 * 1024;
+export const PACKAGE_IMAGE_UPLOAD_MAX_BYTES = 90 * 1024 * 1024;

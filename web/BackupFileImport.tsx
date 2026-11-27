@@ -1,18 +1,11 @@
 import { t, useI18n } from './i18n.js';
 import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
-import {
-  CHAT_BACKUP_VERSION,
-  type ChatBackup,
-  type ChatBackupImport,
-} from '../core/chat-backup.js';
+import { CHAT_BACKUP_VERSION, type ChatBackup } from '../core/chat-backup.js';
 import type { NativeArchivePrepare } from '../core/native-archive.js';
-import type {
-  NativeTransferFile,
-  NativeTransferPrepare,
-  NativeTransferReceipt,
-} from '../core/native-transfer.js';
-import { api, apiBinary, definiteImportFailure } from './api.js';
+import type { NativeTransferFile, NativeTransferPrepare } from '../core/native-transfer.js';
+import { transferEndpoints } from '#contracts';
+import { apiBinary, callEndpoint, definiteImportFailure } from './api.js';
 import { toUiMessage } from './api-errors.js';
 import { inspectBackupFile } from './backup-file.js';
 import { LoadingState } from './LoadingState.js';
@@ -79,12 +72,12 @@ export function BackupFileImport({
       const key = crypto.randomUUID();
       if (contents.archive) {
         const upload = await apiBinary<{ uploadId: string }>('/uploads', file);
-        const preview = await api<NativeArchivePrepare>(
+        const preview = (await callEndpoint(
           contents.kind === 'chat'
-            ? '/chats/prepare-backup-archive'
-            : '/native-transfers/prepare-archive',
+            ? transferEndpoints.prepareChatArchive
+            : transferEndpoints.prepareArchive,
           { uploadId: upload.uploadId }
-        );
+        )) as NativeArchivePrepare;
         if (current === version.current)
           setSelection(
             contents.kind === 'chat'
@@ -92,9 +85,9 @@ export function BackupFileImport({
               : { kind: 'resources', preview, preparedId: preview.preparedId, key }
           );
       } else if (contents.kind === 'resources') {
-        const preview = await api<NativeTransferPrepare>('/native-transfers/prepare', {
+        const preview = (await callEndpoint(transferEndpoints.prepareFile, {
           file: contents.file,
-        });
+        })) as NativeTransferPrepare;
         if (current === version.current)
           setSelection({ kind: 'resources', file: contents.file, preview, key });
       } else {
@@ -125,28 +118,30 @@ export function BackupFileImport({
     setNotice(null);
     try {
       if (selection.kind === 'resources') {
-        const result = await api<NativeTransferReceipt>(
-          selection.preparedId ? '/native-transfers/apply-archive' : '/native-transfers/apply',
-          {
-            ...(selection.preparedId
-              ? { preparedId: selection.preparedId }
-              : { file: selection.file }),
-            digest: selection.preview.digest,
-            idempotencyKey: selection.key,
-            modelBindings: [],
-          }
-        );
+        const command = {
+          digest: selection.preview.digest,
+          idempotencyKey: selection.key,
+          modelBindings: [],
+        };
+        const result = selection.preparedId
+          ? await callEndpoint(transferEndpoints.applyArchive, {
+              ...command,
+              preparedId: selection.preparedId,
+            })
+          : await callEndpoint(transferEndpoints.applyFile, { ...command, file: selection.file });
         setNotice(uiMessage('transfer.d006', { v0: result.items.length }));
       } else {
-        const result = await api<ChatBackupImport>(
-          selection.archive ? '/chats/import-backup-archive' : '/chats/import-backup',
-          {
-            ...(selection.archive
-              ? { preparedId: selection.archive.preparedId, digest: selection.archive.digest }
-              : { backup: selection.backup }),
-            idempotencyKey: selection.key,
-          }
-        );
+        const idempotencyKey = selection.key;
+        const result = selection.archive
+          ? await callEndpoint(transferEndpoints.importChatArchive, {
+              preparedId: selection.archive.preparedId,
+              digest: selection.archive.digest,
+              idempotencyKey,
+            })
+          : await callEndpoint(transferEndpoints.importChatBackup, {
+              backup: selection.backup,
+              idempotencyKey,
+            });
         setNotice(
           uiMessage('transfer.d007', {
             v0: result.chat.title,

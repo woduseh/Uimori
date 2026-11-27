@@ -6,7 +6,7 @@ import type { ChatProfile } from './product.js';
 
 export const CHAT_BACKUP_FORMAT = 'uimori-personal-chat';
 export const CHAT_BACKUP_VERSION = 1;
-export const CHAT_BACKUP_MAX_BYTES = 256 * 1024 * 1024;
+export { CHAT_BACKUP_MAX_BYTES } from '#contracts';
 export type CopiedMessageState = {
   sourceId: string;
   sourceHash: string;
