@@ -8,7 +8,7 @@ import { deleteChat } from '../server/chat-deletion.js';
 import { type App } from '../server/app.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
-import type { ManuscriptSearchQuery } from '../core/manuscript-search.js';
+import type { ManuscriptSearchInput } from '#contracts/operations';
 
 const owned: { directory: string; store: Store; search: ManuscriptSearch }[] = [];
 const apps: App[] = [];
@@ -30,13 +30,14 @@ afterEach(async () => {
 });
 const query = (
   text: string,
-  overrides: Partial<ManuscriptSearchQuery> = {}
-): ManuscriptSearchQuery => ({
-  query: text,
-  scope: 'workspace',
-  kinds: ['original', 'translation', 'request'],
-  ...overrides,
-});
+  overrides: { scope?: string; chatId?: string; botId?: string; limit?: number } = {}
+) =>
+  ({
+    query: text,
+    scope: 'workspace',
+    kinds: ['original', 'translation', 'request'],
+    ...overrides,
+  }) as ManuscriptSearchInput;
 async function index(search: ManuscriptSearch, store: Store) {
   for (
     let count = 0;

@@ -90,6 +90,7 @@ export const updateBackupSettingsInput = z.strictObject({
 export type UpdateBackupSettings = z.infer<typeof updateBackupSettingsInput>;
 
 const browserId = nonBlank(100);
+const chatId = nonBlank(120);
 const representation = z.enum(['original', 'translation']);
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 
@@ -103,7 +104,7 @@ export const readerTarget = z.strictObject({
   changedParagraph: z.int().nullable().optional(),
 });
 export const readerTargetInput = z.strictObject({
-  chatId: z.string().optional(),
+  chatId: chatId.optional(),
   sourceId: nonBlank(120),
   representation,
   contentHash: sha256.optional(),
@@ -123,7 +124,7 @@ export const readingPositions = z.strictObject({
   other: readingPosition.nullable(),
 });
 export const saveReadingPositionInput = z.strictObject({
-  chatId: z.string(),
+  chatId,
   clientId: browserId,
   expectedRevision: revision,
   target: readerTargetInput,
@@ -143,7 +144,7 @@ export const bookmark = z.strictObject({
 const bookmarkTitle = nonBlank(BOOKMARK_TITLE_MAX_CHARS);
 const bookmarkNote = z.string().max(BOOKMARK_NOTE_MAX_CHARS);
 export const addBookmarkInput = z.strictObject({
-  chatId: z.string(),
+  chatId,
   id: browserId,
   target: readerTargetInput,
   title: bookmarkTitle,
@@ -152,13 +153,13 @@ export const addBookmarkInput = z.strictObject({
 });
 export type AddBookmark = z.infer<typeof addBookmarkInput>;
 export const updateBookmarkInput = z.strictObject({
-  id: z.string(),
+  id: browserId,
   expectedRevision: revision,
   title: bookmarkTitle,
   note: bookmarkNote,
 });
 export type UpdateBookmark = z.infer<typeof updateBookmarkInput>;
-export const deleteBookmarkInput = z.strictObject({ id: z.string(), expectedRevision: revision });
+export const deleteBookmarkInput = z.strictObject({ id: browserId, expectedRevision: revision });
 
 export const pushPreferences = z.strictObject({
   main: z.boolean(),
@@ -201,24 +202,17 @@ export const unsubscribePushInput = z.strictObject({
 export type UnsubscribePush = z.infer<typeof unsubscribePushInput>;
 
 const searchKind = z.enum(['original', 'translation', 'request']);
-export const manuscriptSearchInput = z
-  .strictObject({
-    query: nonBlank(500),
-    scope: z.enum(['workspace', 'chat', 'bot']),
-    chatId: nonBlank(120).optional(),
-    botId: nonBlank(120).optional(),
-    kinds: z.array(searchKind).min(1).max(3),
-    cursor: nonBlank(1500).nullable().optional(),
-    limit: z.int().min(1).max(50).optional(),
-  })
-  .refine((input) => input.scope !== 'chat' || input.chatId !== undefined, {
-    message: 'A chat search names its chat',
-    path: ['chatId'],
-  })
-  .refine((input) => input.scope !== 'bot' || input.botId !== undefined, {
-    message: 'A bot search names its bot',
-    path: ['botId'],
-  });
+const manuscriptSearchFields = {
+  query: nonBlank(500),
+  kinds: z.array(searchKind).min(1).max(3),
+  cursor: nonBlank(1500).nullable().optional(),
+  limit: z.int().min(1).max(50).optional(),
+};
+export const manuscriptSearchInput = z.discriminatedUnion('scope', [
+  z.strictObject({ ...manuscriptSearchFields, scope: z.literal('workspace') }),
+  z.strictObject({ ...manuscriptSearchFields, scope: z.literal('chat'), chatId }),
+  z.strictObject({ ...manuscriptSearchFields, scope: z.literal('bot'), botId: nonBlank(120) }),
+]);
 export type ManuscriptSearchInput = z.infer<typeof manuscriptSearchInput>;
 export const manuscriptSearchResult = z.strictObject({
   items: z.array(
@@ -255,7 +249,7 @@ export const personalWorkspaceOperations = {
   ),
   readReadingPositions: defineOperation(
     'personal-workspace.readReadingPositions',
-    z.strictObject({ chatId: z.string(), clientId: browserId }),
+    z.strictObject({ chatId, clientId: browserId }),
     readingPositions
   ),
   saveReadingPosition: defineOperation(
@@ -265,7 +259,7 @@ export const personalWorkspaceOperations = {
   ),
   listBookmarks: defineOperation(
     'personal-workspace.listBookmarks',
-    z.strictObject({ chatId: z.string() }),
+    z.strictObject({ chatId }),
     z.array(bookmark)
   ),
   addBookmark: defineOperation('personal-workspace.addBookmark', addBookmarkInput, bookmark),

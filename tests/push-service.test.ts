@@ -249,6 +249,12 @@ test('current preferences apply before dispatch, titles are explicit, and stale 
       other
     )
   ).toThrow(expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' }));
+  expect(() =>
+    f.service.update(
+      { clientId: f.clientId, expectedRevision: 0, preferences: DEFAULT_PUSH_PREFERENCES },
+      other
+    )
+  ).toThrow(expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' }));
   f.service.update(
     {
       clientId: f.clientId,

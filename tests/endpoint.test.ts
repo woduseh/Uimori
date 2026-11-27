@@ -244,6 +244,13 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
       url: '/api/search',
       payload: { query: 'x', scope: 'chat', kinds: ['original'] },
     },
+    {
+      method: 'POST',
+      url: '/api/search',
+      payload: { query: 'x', scope: 'workspace', chatId: 'c1', kinds: ['original'] },
+    },
+    { method: 'GET', url: '/api/chats/%20/bookmarks' },
+    { method: 'DELETE', url: '/api/bookmarks/%20', payload: { expectedRevision: 1 } },
     { method: 'POST', url: '/api/maintenance', payload: { status: 'paused' } },
     {
       method: 'PATCH',

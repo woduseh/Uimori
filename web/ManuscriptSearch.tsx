@@ -88,10 +88,16 @@ export function ManuscriptSearchPanel({
     }
     setBusy(true);
     setError('');
+    const scoped =
+      value.scope === 'chat' && chatId
+        ? { scope: value.scope, chatId }
+        : value.scope === 'bot' && botId
+          ? { scope: value.scope, botId }
+          : { scope: 'workspace' as const };
     try {
       const next = await callEndpoint(
         endpoints.searchManuscripts,
-        { ...value, chatId, botId, cursor, limit: 20 },
+        { query: value.query, kinds: value.kinds, ...scoped, cursor, limit: 20 },
         controller.signal
       );
       if (controller.signal.aborted) return;

@@ -133,8 +133,8 @@ export class PushService {
   ): PushInfo {
     const session = this.authority(cookie);
     const current = this.device(id, session);
-    assertRevision(current ? Number(current.revision) : 0, expectedRevision);
-    if (!current) throw new AppError(404, 'REVISION_CONFLICT');
+    if (!current) throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(Number(current.revision), expectedRevision);
     this.store.db
       .prepare(
         'UPDATE push_subscriptions SET preferences=?,revision=revision+1,updated_at=? WHERE id=?'
