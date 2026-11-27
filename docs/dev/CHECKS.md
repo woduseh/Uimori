@@ -14,6 +14,8 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |
 | Release candidate | `npm run release:check -- --area <domain>`; see [DEVELOPMENT](DEVELOPMENT.md#release-checks) |
 
+A review of a branch follows [REVIEW-RUBRIC](REVIEW-RUBRIC.md).
+
 Use the smallest existing tests that exercise the affected behavior and plausible failures. Once the relevant checks pass, finish. Rerun or expand only for a subsequent change, failure, or unresolved risk.
 
 ## Which tests to keep
