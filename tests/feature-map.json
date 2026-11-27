@@ -116,6 +116,7 @@
         "server/chat-options.ts",
         "server/chat-overrides.ts",
         "server/chat-variable*.ts",
+        "packages/contracts/src/domains/chat-settings/**",
         "server/agent-collaboration.ts",
         "server/evaluation-session.ts",
         "web/chat-*.css",

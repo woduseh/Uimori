@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { chatSettingsEndpoints } from '#contracts';
+import { chatSettingsOperations } from '#contracts/operations';
 import { chatVariableView } from './chat-variable-context.js';
-import { writeChatVariables, validateChatVariableCommand } from './chat-variables.js';
-import { fields, record } from './request-validation.js';
+import { writeChatVariables } from './chat-variables.js';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 
 export function chatVariableRoutes(
@@ -9,14 +11,20 @@ export function chatVariableRoutes(
   store: Store,
   publish: (chatId: string) => void
 ) {
-  app.get<{ Params: { id: string } }>('/api/chats/:id/variables', (request) =>
-    chatVariableView(store, request.params.id)
+  registerEndpoint(
+    app,
+    chatSettingsEndpoints.readVariables,
+    chatSettingsOperations.readVariables,
+    ({ chatId }) => chatVariableView(store, chatId)
   );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/variables', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision', 'expectedSourceHash', 'idempotencyKey', 'values']);
-    const state = writeChatVariables(store, request.params.id, validateChatVariableCommand(body));
-    publish(request.params.id);
-    return chatVariableView(store, request.params.id, state);
-  });
+  registerEndpoint(
+    app,
+    chatSettingsEndpoints.writeVariables,
+    chatSettingsOperations.writeVariables,
+    ({ chatId, ...command }) => {
+      const state = writeChatVariables(store, chatId, command);
+      publish(chatId);
+      return chatVariableView(store, chatId, state);
+    }
+  );
 }

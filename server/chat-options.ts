@@ -3,7 +3,14 @@ import { effectiveRisuControls } from '../core/risu-effective-controls.js';
 import { resolvePackageProfile } from './package-features.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod/v4';
 import type { FastifyInstance } from 'fastify';
+import { chatSettingsEndpoints } from '#contracts';
+import {
+  chatSettingsOperations,
+  type ChatOptionsCancel,
+  type ChatOptionsCommand,
+} from '#contracts/operations';
 import {
   promptOptionOwner,
   type OptionBinding,
@@ -19,7 +26,8 @@ import type { ProviderTool, Json } from '../core/transport.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import { HelperWorkspace } from './helper-workspace.js';
 import { chatPromptWorkspace } from './prompt-workspace.js';
-import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
+import { parseInput, registerEndpoint } from './endpoint.js';
+import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import type { ReferenceSource } from './product-store.js';
 import { AppError, HelperToolError } from './app-errors.js';
@@ -54,19 +62,11 @@ function frozenOptionBinding(profile: ProfileSnapshot): OptionBinding | undefine
     definitionHash: hash(effectiveRisuControls(profile, preset.program)),
   };
 }
-const readBinding = (value: unknown): OptionBinding => {
-  const b = record(value);
-  fields(b, ['owner', 'definitionHash']);
-  const result = {
-    owner: text(b.owner, 'prompt owner', 200),
-    definitionHash: text(b.definitionHash, 'option definition hash', 64),
-  };
-  if (!isSha256Hex(result.definitionHash))
-    throw new HttpError(400, 'Invalid option definition hash');
-  return result;
-};
-function valuesFor(program: RisuPrompt | PromptControl[], value: unknown): OptionValues {
-  const input = record(value) as OptionValues;
+function valuesFor(
+  program: RisuPrompt | PromptControl[],
+  value: Record<string, unknown>
+): OptionValues {
+  const input = value as OptionValues;
   const resolved = resolveControlValues(
     Array.isArray(program) ? program : promptControls(program),
     input
@@ -148,20 +148,15 @@ export class ChatOptionsStore {
       conflicts,
     };
   }
-  private write(
+  private write<B extends ChatOptionsCancel>(
     chatId: string,
-    value: unknown,
+    body: B,
     action: 'fixed' | 'oneoff' | 'cancel',
     requestId: string,
-    allowed: string[],
-    apply: (body: Record<string, unknown>, state: ChatOptionState) => void
+    apply: (body: B, state: ChatOptionState) => void
   ): ChatOptionState {
-    const body = record(value);
-    fields(body, ['expectedRevision', 'operationId', ...allowed]);
-    const operationId = text(body.operationId, 'operation ID', 100);
-    text(requestId, 'request ID', 200);
-    const revision = number(body.expectedRevision, 'options revision', 0, Number.MAX_SAFE_INTEGER);
-    this.store.chat(chatId);
+    const { operationId, expectedRevision: revision } = body;
+    this.store.writableChat(chatId);
     const commandHash = hash({ action, chatId, body });
     return this.store.transaction(() => {
       const prior = this.store.db
@@ -186,22 +181,21 @@ export class ChatOptionsStore {
       return result;
     });
   }
-  fixed(chatId: string, value: unknown, requestId: string): ChatOptionState {
-    return this.write(chatId, value, 'fixed', requestId, ['binding', 'values'], (b, state) => {
-      this.assertBinding(b.binding, state);
+  fixed(chatId: string, command: ChatOptionsCommand, requestId: string): ChatOptionState {
+    return this.write(chatId, command, 'fixed', requestId, (body, state) => {
+      this.assertBinding(body.binding, state);
       this.bump(chatId, {
         binding: state.binding,
-        values: valuesFor(state.controls ?? state.program, b.values),
+        values: valuesFor(state.controls ?? state.program, body.values),
         definitions: state.controls ?? promptControls(state.program),
       });
     });
   }
-  private assertBinding(value: unknown, state: ChatOptionState): void {
-    if (!isDeepStrictEqual(readBinding(value), state.binding))
-      throw new AppError(409, 'REVISION_CONFLICT');
+  private assertBinding(binding: OptionBinding, state: ChatOptionState): void {
+    if (!isDeepStrictEqual(binding, state.binding)) throw new AppError(409, 'REVISION_CONFLICT');
   }
-  stage(chatId: string, value: unknown, requestId: string): ChatOptionState {
-    return this.write(chatId, value, 'oneoff', requestId, ['binding', 'values'], (body, state) => {
+  stage(chatId: string, command: ChatOptionsCommand, requestId: string): ChatOptionState {
+    return this.write(chatId, command, 'oneoff', requestId, (body, state) => {
       this.assertBinding(body.binding, state);
       const values = valuesFor(state.controls ?? state.program, body.values);
       if (!Object.keys(values).length) throw new AppError(400, 'CHAT_OPTIONS_EMPTY');
@@ -220,20 +214,18 @@ export class ChatOptionsStore {
     });
   }
 
-  cancel(chatId: string, pendingId: string, value: unknown, requestId: string): ChatOptionState {
-    return this.write(
-      chatId,
-      { ...record(value), pendingId },
-      'cancel',
-      requestId,
-      ['pendingId'],
-      (_b, state) => {
-        const pending = state.pending.find((item) => item.id === pendingId);
-        if (!pending) throw new AppError(409, 'REVISION_CONFLICT');
-        this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pendingId);
-        this.bump(chatId);
-      }
-    );
+  cancel(
+    chatId: string,
+    pendingId: string,
+    command: ChatOptionsCancel,
+    requestId: string
+  ): ChatOptionState {
+    return this.write(chatId, { ...command, pendingId }, 'cancel', requestId, (_body, state) => {
+      const pending = state.pending.find((item) => item.id === pendingId);
+      if (!pending) throw new AppError(409, 'REVISION_CONFLICT');
+      this.store.db.prepare('DELETE FROM chat_option_pending WHERE id=?').run(pendingId);
+      this.bump(chatId);
+    });
   }
 
   freeze(profile: ProfileSnapshot, runId?: string): void {
@@ -364,25 +356,30 @@ export function invokeHelperOptions(
   const scope = task.snapshot.scope;
   if (scope.kind !== 'chat') throw new HelperToolError(403, 'CHAT_SCOPE_REQUIRED');
   const service = new ChatOptionsStore(store);
+  const { chatId } = scope;
+  const args = (value ?? {}) as Record<string, unknown>;
   if (name === 'options.read') {
-    fields(record(value), []);
-    return helperOptionState(service.get(scope.chatId));
+    parseInput(chatSettingsOperations.readOptions.input, { ...args, chatId });
+    return helperOptionState(service.get(chatId));
   }
   const workspace = new HelperWorkspace(store);
   workspace.assertRunning(task.id);
-  const body: Record<string, unknown> = { ...record(value), operationId };
-  if (name === 'options.oneoff')
-    return helperOptionState(service.stage(scope.chatId, body, task.id));
+  const body: Record<string, unknown> = { ...args, operationId, chatId };
+  if (name === 'options.oneoff') {
+    const { chatId: _chatId, ...command } = parseInput(
+      chatSettingsOperations.stageOptions.input,
+      body
+    );
+    return helperOptionState(service.stage(chatId, command, task.id));
+  }
   if (name !== 'options.fix') throw new HttpError(400, 'Unknown option tool');
-  const current = service.get(scope.chatId);
+  const current = service.get(chatId);
   const before = current.revision;
   if (body.set !== undefined || body.unset !== undefined) {
     if (body.values !== undefined)
       throw new HttpError(400, 'Give either values or set/unset, not both');
-    const set = body.set === undefined ? {} : record(body.set);
-    const unset = body.unset === undefined ? [] : body.unset;
-    if (!Array.isArray(unset) || unset.some((id) => typeof id !== 'string'))
-      throw new HttpError(400, 'Invalid unset');
+    const set = parseInput(chatSettingsOperations.fixOptions.input.shape.values, body.set ?? {});
+    const unset = parseInput(z.array(z.string()), body.unset ?? []);
     const controls = new Set(current.controls?.map((control) => control.id));
     for (const id of unset) {
       if (!controls.has(id)) throw new HttpError(400, 'Unknown option to unset');
@@ -394,7 +391,8 @@ export function invokeHelperOptions(
     delete body.unset;
     body.values = values;
   }
-  const state = service.fixed(scope.chatId, body, task.id);
+  const { chatId: _chatId, ...command } = parseInput(chatSettingsOperations.fixOptions.input, body);
+  const state = service.fixed(chatId, command, task.id);
   recordHelperTaskResult(workspace, task, {
     receiptId: `${task.id}:${operationId}`,
     operation: name,
@@ -417,24 +415,23 @@ export function invokeHelperOptions(
 
 export function chatOptionRoutes(app: FastifyInstance, store: Store): void {
   const service = new ChatOptionsStore(store);
-  const requestId = (body: unknown) => 'ui:' + text(record(body).operationId, 'operation ID', 100);
-  app.get<{ Params: { id: string } }>('/api/chats/:id/options', (request) =>
-    service.get(request.params.id)
+  const endpoints = chatSettingsEndpoints,
+    operations = chatSettingsOperations;
+  const requestId = (operationId: string) => `ui:${operationId}`;
+  registerEndpoint(app, endpoints.readOptions, operations.readOptions, ({ chatId }) =>
+    service.get(chatId)
   );
-  app.post<{ Params: { id: string } }>('/api/chats/:id/options/fixed', (request) =>
-    service.fixed(request.params.id, request.body, requestId(request.body))
+  registerEndpoint(app, endpoints.fixOptions, operations.fixOptions, ({ chatId, ...command }) =>
+    service.fixed(chatId, command, requestId(command.operationId))
   );
-  app.post<{ Params: { id: string } }>('/api/chats/:id/options/oneoff', (request) =>
-    service.stage(request.params.id, request.body, requestId(request.body))
+  registerEndpoint(app, endpoints.stageOptions, operations.stageOptions, ({ chatId, ...command }) =>
+    service.stage(chatId, command, requestId(command.operationId))
   );
-  app.post<{ Params: { id: string; pendingId: string } }>(
-    '/api/chats/:id/options/pending/:pendingId/cancel',
-    (request) =>
-      service.cancel(
-        request.params.id,
-        request.params.pendingId,
-        request.body,
-        requestId(request.body)
-      )
+  registerEndpoint(
+    app,
+    endpoints.cancelStagedOptions,
+    operations.cancelStagedOptions,
+    ({ chatId, pendingId, ...command }) =>
+      service.cancel(chatId, pendingId, command, requestId(command.operationId))
   );
 }

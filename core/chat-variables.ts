@@ -1,3 +1,4 @@
+import { CHAT_VARIABLE_LIMITS } from '#contracts';
 import { evaluationFail, inspectRuntimeValue, PromptBudget } from './prompt-values.js';
 
 export interface ChatVariableState {
@@ -5,11 +6,7 @@ export interface ChatVariableState {
   values: Record<string, string>;
 }
 
-export const CHAT_VARIABLE_LIMITS = {
-  maxEntries: 2000,
-  maxValueChars: 200_000,
-  maxTotalChars: 1_000_000,
-} as const;
+export { CHAT_VARIABLE_LIMITS };
 
 export function validateChatVariableValues(value: unknown): Record<string, string> {
   inspectRuntimeValue(

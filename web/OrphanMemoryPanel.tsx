@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { OrphanMemoryDetail, OrphanMemoryEntry } from '../core/orphan-memory.js';
-import { api, ApiError } from './api.js';
+import { chatSettingsEndpoints as endpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { uiMessage, type UiMessage } from './ui-message.js';
@@ -53,7 +54,6 @@ export function OrphanMemoryPanel({
   const scopeKey = JSON.stringify([chatId, headRevision]);
   if (scope.current.key !== scopeKey)
     scope.current = { key: scopeKey, generation: scope.current.generation + 1 };
-  const base = `/chats/${encodeURIComponent(chatId)}/orphan-memory`;
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -65,7 +65,9 @@ export function OrphanMemoryPanel({
     const read = ++sequence.current;
     setLoading(true);
     try {
-      const result = await api<OrphanMemoryDetail>(base);
+      const result = (await callEndpoint(endpoints.readOrphanMemory, {
+        chatId,
+      })) as OrphanMemoryDetail;
       if (!alive.current || generation !== scope.current.generation || read !== sequence.current)
         return;
       setDetail(result);
@@ -89,7 +91,8 @@ export function OrphanMemoryPanel({
     setBusy(true);
     setError(null);
     try {
-      await api(base, {
+      await callEndpoint(endpoints.applyOrphanMemory, {
+        chatId,
         kind: review.entry.kind,
         entryId: entryId(review.entry),
         action: review.action,

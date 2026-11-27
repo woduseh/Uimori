@@ -13,7 +13,8 @@ import {
 } from '../core/risu-prompt.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatOptionConflict, ChatOptionState } from '../core/chat-options.js';
-import { api, ApiError, definiteRejection } from './api.js';
+import { chatSettingsEndpoints as endpoints, type EndpointInput } from '#contracts';
+import { ApiError, callEndpoint, definiteRejection } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { PromptOptionGroup } from './PromptOptionGroup.js';
 import { ToggleRow } from './ToggleRow.js';
@@ -47,11 +48,16 @@ type Props = {
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
 };
-type Operation = {
-  path: string;
-  body: Record<string, unknown>;
-  kind: 'fixed' | 'oneoff' | 'cancel';
-};
+type Operation =
+  | { kind: 'fixed'; input: EndpointInput<typeof endpoints.fixOptions> }
+  | { kind: 'oneoff'; input: EndpointInput<typeof endpoints.stageOptions> }
+  | { kind: 'cancel'; input: EndpointInput<typeof endpoints.cancelStagedOptions> };
+const send = (operation: Operation) =>
+  operation.kind === 'fixed'
+    ? callEndpoint(endpoints.fixOptions, operation.input)
+    : operation.kind === 'oneoff'
+      ? callEndpoint(endpoints.stageOptions, operation.input)
+      : callEndpoint(endpoints.cancelStagedOptions, operation.input);
 const sameValues = (left: Values, right: Values) => {
   const keys = Object.keys(left);
   return (
@@ -84,13 +90,14 @@ export function ChatOptionSettings(props: Props) {
   const dirty = Object.keys(draft).length > 0 || !!uncertain;
   const current = useRef({ base, draft, dirty });
   current.current = { base, draft, dirty };
-  const path = `/chats/${encodeURIComponent(props.chatId)}/options`;
   const refresh = useCallback(async () => {
     if (lock.current) return;
     const version = ++requestVersion.current;
     setLoading(true);
     try {
-      const state = await api<ChatOptionState>(path);
+      const state = (await callEndpoint(endpoints.readOptions, {
+        chatId: props.chatId,
+      })) as ChatOptionState;
       if (version !== requestVersion.current) return;
       const draft = current.current;
       setLatest(state);
@@ -112,7 +119,7 @@ export function ChatOptionSettings(props: Props) {
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [path]);
+  }, [props.chatId]);
   useEffect(() => {
     if (!props.active || props.disabled) return;
     void refresh();
@@ -171,7 +178,7 @@ export function ChatOptionSettings(props: Props) {
     setError(null);
     setCompletion(null);
     try {
-      const accepted = await api<ChatOptionState>(operation.path, operation.body);
+      const accepted = (await send(operation)) as ChatOptionState;
       setBase(accepted);
       setLatest(accepted);
       if (operation.kind !== 'cancel') setDraft({});
@@ -205,21 +212,27 @@ export function ChatOptionSettings(props: Props) {
       setBusy(false);
     }
   }
-  function submit(kind: Operation['kind'], suffix: string, input: Record<string, unknown> = {}) {
+  function submit(
+    operation: { kind: 'fixed' | 'oneoff'; values: Values } | { kind: 'cancel'; pendingId: string }
+  ) {
     if (!base || uncertain || loading) return;
     if (conflict) {
       setSaveConflict(true);
       return;
     }
-    void execute({
-      kind,
-      path: `${path}/${suffix}`,
-      body: {
-        expectedRevision: base.revision,
-        operationId: crypto.randomUUID(),
-        ...input,
-      },
-    });
+    const request = {
+      chatId: props.chatId,
+      expectedRevision: base.revision,
+      operationId: crypto.randomUUID(),
+    };
+    void execute(
+      operation.kind === 'cancel'
+        ? { kind: 'cancel', input: { ...request, pendingId: operation.pendingId } }
+        : {
+            kind: operation.kind,
+            input: { ...request, binding: base.binding, values: operation.values },
+          }
+    );
   }
   if (!base)
     return (
@@ -249,7 +262,9 @@ export function ChatOptionSettings(props: Props) {
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
           const input = current.current;
-          const value = await api<ChatOptionState>(path);
+          const value = (await callEndpoint(endpoints.readOptions, {
+            chatId: props.chatId,
+          })) as ChatOptionState;
           const controls = value.controls ?? promptControls(value.program);
           const review = reviewOptionDraft(input.base!, input.draft, value);
           const adopt = (keepInput: boolean) => {
@@ -368,7 +383,7 @@ export function ChatOptionSettings(props: Props) {
           onCancel={() => setClearingFixed(false)}
           onConfirm={() => {
             setClearingFixed(false);
-            submit('fixed', 'fixed', { binding: base.binding, values: {} });
+            submit({ kind: 'fixed', values: {} });
           }}
         />
         {displayState.pending.length > 0 && (
@@ -385,7 +400,7 @@ export function ChatOptionSettings(props: Props) {
                 <button
                   type="button"
                   disabled={blocked}
-                  onClick={() => submit('cancel', `pending/${encodeURIComponent(item.id)}/cancel`)}
+                  onClick={() => submit({ kind: 'cancel', pendingId: item.id })}
                 >
                   {t('chatsettings.m131')}
                 </button>
@@ -434,12 +449,7 @@ export function ChatOptionSettings(props: Props) {
             text={t(scope === 'oneoff' ? 'chatsettings.reserve' : 'shared.save')}
             aria-busy={busy}
             disabled={!scopedDirty || blocked}
-            onClick={() =>
-              submit(scope, scope, {
-                binding: base.binding,
-                values: scope === 'oneoff' ? oneoff : fixed,
-              })
-            }
+            onClick={() => submit({ kind: scope, values: scope === 'oneoff' ? oneoff : fixed })}
           />
         </div>
       </footer>

@@ -3,38 +3,14 @@ import {
   validateChatVariableValues,
   type ChatVariableState,
 } from '../core/chat-variables.js';
+import type { ChatVariableCommand } from '#contracts';
 import { jsonPayloadHash } from './json-hash.js';
-import { fields, HttpError, isSha256Hex, number, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
+import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readRunState } from './run-projections.js';
 
-export type ChatVariableCommand = {
-  expectedRevision: number;
-  expectedSourceHash: string | null;
-  idempotencyKey: string;
-  values: Record<string, string>;
-};
-
-export function validateChatVariableCommand(value: unknown): ChatVariableCommand {
-  const body = record(value);
-  fields(body, ['expectedRevision', 'expectedSourceHash', 'idempotencyKey', 'values']);
-  const expectedRevision = number(
-    body.expectedRevision,
-    'chat variable revision',
-    0,
-    Number.MAX_SAFE_INTEGER - 1
-  );
-  const expectedSourceHash =
-    body.expectedSourceHash === null ? null : text(body.expectedSourceHash, 'source hash', 64);
-  if (expectedSourceHash !== null && !isSha256Hex(expectedSourceHash))
-    throw new HttpError(400, 'Invalid source hash');
-  return {
-    expectedRevision,
-    expectedSourceHash,
-    idempotencyKey: text(body.idempotencyKey, 'chat variable request key', 200),
-    values: validateChatVariableValues(body.values),
-  };
-}
+export type { ChatVariableCommand };
 
 export function readChatVariables(store: Store, chatId: string): ChatVariableState {
   store.chat(chatId);
@@ -62,8 +38,8 @@ function applyChatVariablesInTransaction(
   checkActivity: boolean
 ): ChatVariableState {
   if (!store.db.isTransaction) throw new Error('CHAT_VARIABLE_TRANSACTION_REQUIRED');
-  const command = validateChatVariableCommand(value);
-  const chat = store.chat(chatId);
+  const command = { ...value, values: validateChatVariableValues(value.values) };
+  const chat = store.writableChat(chatId);
   const payloadHash = jsonPayloadHash(command);
   const receipt = store.db
     .prepare('SELECT payload_hash FROM chat_variable_journal WHERE chat_id=? AND request_key=?')
@@ -76,12 +52,11 @@ function applyChatVariablesInTransaction(
   if (checkActivity && chatVariablesPending(store, chatId))
     throw new HttpError(409, 'CHAT_VARIABLE_CHAT_BUSY');
   const current = readChatVariables(store, chatId);
-  if (current.revision !== command.expectedRevision)
-    throw new HttpError(409, 'CHAT_VARIABLE_REVISION_CONFLICT');
+  if (current.revision !== command.expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
   const source = chat.headRevision ? store.source(chat.headRevision) : null;
   if (source && source.chatId !== chatId) throw new HttpError(400, 'CHAT_VARIABLE_SOURCE_OWNER');
   if ((source?.hash ?? null) !== command.expectedSourceHash)
-    throw new HttpError(409, 'CHAT_VARIABLE_SOURCE_CONFLICT');
+    throw new AppError(409, 'REVISION_CONFLICT');
   const result = { revision: current.revision + 1, values: command.values };
   store.db
     .prepare(

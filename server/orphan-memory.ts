@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { chatSettingsEndpoints, type OrphanMemoryCommand } from '#contracts';
+import { chatSettingsOperations } from '#contracts/operations';
 import { chatLoreKey, type ChatLoreOverride } from '../core/chat-overrides.js';
 import type { AuthorNote } from '../core/notes.js';
 import type {
@@ -9,7 +11,9 @@ import type {
 } from '../core/orphan-memory.js';
 import { sourceHash } from '../core/source-history.js';
 import { ChatOverridesStore } from './chat-overrides.js';
-import { choice, fields, HttpError, number, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
+import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
 export class OrphanMemory {
@@ -66,33 +70,20 @@ export class OrphanMemory {
     };
   }
 
-  apply(chatId: string, value: unknown) {
-    const body = record(value);
-    fields(body, [
-      'kind',
-      'entryId',
-      'action',
-      'expectedRevision',
-      'expectedLoreRevision',
-      'expectedHeadRevision',
-      'expectedHeadHash',
-      'idempotencyKey',
-    ]);
-    const kind = choice(body.kind, ['note', 'lore'], 'memory kind');
-    const action = choice(body.action, ['reanchor', 'retire'], 'memory action');
-    const entryId = text(body.entryId, 'memory ID', 100);
-    const expectedRevision = number(body.expectedRevision, 'notes revision', 0);
-    const expectedLoreRevision = number(body.expectedLoreRevision, 'lore revision', 0);
-    const expectedHead =
-      body.expectedHeadRevision === null
-        ? null
-        : text(body.expectedHeadRevision, 'source revision', 100);
-    const expectedHeadHash =
-      body.expectedHeadHash === null ? null : text(body.expectedHeadHash, 'source hash', 64);
-    const key = text(body.idempotencyKey, 'request key', 120);
+  apply(chatId: string, body: OrphanMemoryCommand) {
+    const {
+      kind,
+      action,
+      entryId,
+      expectedRevision,
+      expectedLoreRevision,
+      expectedHeadRevision: expectedHead,
+      expectedHeadHash,
+      idempotencyKey: key,
+    } = body;
     const command = JSON.stringify({ orphanMemory: body });
     return this.store.transaction(() => {
-      this.store.chat(chatId);
+      this.store.writableChat(chatId);
       const prior = this.store.db
         .prepare(
           'SELECT command,result FROM author_note_commands WHERE chat_id=? AND request_key=?'
@@ -109,14 +100,13 @@ export class OrphanMemory {
         current.headRevision !== expectedHead ||
         current.headHash !== expectedHeadHash
       )
-        throw new HttpError(409, 'Memory changed. Refresh and review the item again.');
+        throw new AppError(409, 'REVISION_CONFLICT');
       const selected = current.entries.find(
         (entry) =>
           entry.kind === kind &&
           (entry.kind === 'note' ? entry.note.id : entry.override.id) === entryId
       );
-      if (!selected)
-        throw new HttpError(409, 'Memory item is no longer orphaned. Refresh and review again.');
+      if (!selected) throw new AppError(409, 'REVISION_CONFLICT');
       const atHash = current.headHash;
       const id = randomUUID();
       if (selected.kind === 'note') {
@@ -178,12 +168,20 @@ export function orphanMemoryRoutes(
   hooks: { publish: (chatId: string) => void }
 ) {
   const memory = new OrphanMemory(store);
-  app.get<{ Params: { id: string } }>('/api/chats/:id/orphan-memory', async (request) =>
-    memory.detail(request.params.id)
+  registerEndpoint(
+    app,
+    chatSettingsEndpoints.readOrphanMemory,
+    chatSettingsOperations.readOrphanMemory,
+    ({ chatId }) => memory.detail(chatId)
   );
-  app.post<{ Params: { id: string } }>('/api/chats/:id/orphan-memory', async (request) => {
-    const result = memory.apply(request.params.id, request.body);
-    hooks.publish(request.params.id);
-    return result;
-  });
+  registerEndpoint(
+    app,
+    chatSettingsEndpoints.applyOrphanMemory,
+    chatSettingsOperations.applyOrphanMemory,
+    ({ chatId, ...command }) => {
+      const result = memory.apply(chatId, command);
+      hooks.publish(chatId);
+      return result;
+    }
+  );
 }

@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { chatSettingsEndpoints } from '#contracts';
+import { chatSettingsOperations } from '#contracts/operations';
 import type { StoryGuideDetail } from '../core/story-guide.js';
 import type { RunSnapshot } from '../core/types.js';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 
 export function storyGuideRoutes(
@@ -48,16 +51,20 @@ export function storyGuideRoutes(
         : {}),
     };
   };
-  app.get<{ Params: { id: string } }>('/api/chats/:id/story-guide', async (request) =>
-    detail(request.params.id)
+  registerEndpoint(
+    app,
+    chatSettingsEndpoints.readStoryGuide,
+    chatSettingsOperations.readStoryGuide,
+    ({ chatId }) => detail(chatId)
   );
-  app.put<{ Params: { id: string } }>(
-    '/api/chats/:id/story-guide',
-    { bodyLimit: 256 * 1024 },
-    async (request) => {
-      store.storyGuide.update(request.params.id, request.body);
-      options.publish(request.params.id);
-      return detail(request.params.id);
+  registerEndpoint(
+    app,
+    chatSettingsEndpoints.updateStoryGuide,
+    chatSettingsOperations.updateStoryGuide,
+    ({ chatId, ...update }) => {
+      store.storyGuide.update(chatId, update);
+      options.publish(chatId);
+      return detail(chatId);
     }
   );
 }

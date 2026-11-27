@@ -9,7 +9,8 @@ import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import type { TemplateVariableOrigin } from '../core/template-variables.js';
-import { api, ApiError, definiteRejection } from './api.js';
+import { chatSettingsEndpoints as endpoints } from '#contracts';
+import { ApiError, callEndpoint, definiteRejection } from './api.js';
 import { SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
 import { readOptionalJson } from './optional-storage.js';
@@ -103,13 +104,11 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
   const alive = useRef(true);
   const readEpoch = useRef(0);
   const saving = useRef(false);
-  const endpoint = `/chats/${encodeURIComponent(chatId)}/variables`;
-  const readEndpoint = endpoint;
   const load = useCallback(async () => {
     const epoch = ++readEpoch.current;
     setLoading(true);
     try {
-      const next = await api<VariableView>(readEndpoint);
+      const next = (await callEndpoint(endpoints.readVariables, { chatId })) as VariableView;
       if (alive.current && readEpoch.current === epoch) {
         setView(next);
         setError(null);
@@ -123,7 +122,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
     } finally {
       if (alive.current && readEpoch.current === epoch) setLoading(false);
     }
-  }, [readEndpoint]);
+  }, [chatId]);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -185,7 +184,10 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
       return;
     }
     try {
-      const saved = await api<VariableView>(endpoint, body, 'PUT');
+      const saved = (await callEndpoint(endpoints.writeVariables, {
+        chatId,
+        ...body,
+      })) as VariableView;
       if (!alive.current) return;
       readEpoch.current++;
       setLoading(false);

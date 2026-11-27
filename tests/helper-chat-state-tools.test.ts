@@ -196,7 +196,7 @@ test('chat.variables.update merges changes with a receipt and rejects a stale re
   expect(finished('merge')).toMatchObject({ denied: false });
   expect(finished('stale')).toMatchObject({
     denied: true,
-    errorCode: 'CHAT_VARIABLE_REVISION_CONFLICT',
+    errorCode: 'REVISION_CONFLICT',
   });
   expect(finished('same')).toMatchObject({ denied: false });
   expect(results.map((item) => [item.operation, item.changedTargets])).toEqual([

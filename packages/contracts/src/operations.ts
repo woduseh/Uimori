@@ -12,3 +12,4 @@ export * from './domains/transfer/operations.js';
 export * from './domains/query.js';
 export * from './domains/text.js';
 export * from './operation-registry.js';
+export * from './domains/chat-settings/operations.js';
