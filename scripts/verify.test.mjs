@@ -25,7 +25,11 @@ const map = {
         { file: 'tests/risu-import-browser.spec.ts' },
         {
           file: 'tests/risu-native-samples-browser.spec.ts',
-          launch: { privateMaterials: true, requiredEnv: ['SAMPLE_ROOT'] },
+          launch: {
+            privateMaterials: true,
+            requiredEnv: ['SAMPLE_ROOT'],
+            diagnosticEnv: 'SAMPLE_DIAGNOSTIC',
+          },
         },
         {
           file: 'tests/narrative-browser.spec.ts',
@@ -87,12 +91,41 @@ test('domains merge into one run per launch and skip specs whose required enviro
   );
 });
 
-test('a runner gets only the options it accepts while engines keep every option', () => {
+test('a diagnostic environment labels the run so it cannot pass as an acceptance receipt', () => {
+  const env = { SAMPLE_ROOT: '/cards', SAMPLE_DIAGNOSTIC: '1' };
+  const runs = planVerification(map, ['risu'], { env }).runs;
+  assert.deepEqual(
+    runs.map(({ name, files, limitations }) => ({ name, files, diagnostic: Boolean(limitations) })),
+    [
+      {
+        name: 'risu',
+        files: ['tests/risu-import-browser.spec.ts', 'tests/narrative-browser.spec.ts'],
+        diagnostic: false,
+      },
+      {
+        name: 'risu-private-diagnostic',
+        files: ['tests/risu-native-samples-browser.spec.ts'],
+        diagnostic: true,
+      },
+    ]
+  );
+  assert.match(runs[1].limitations[0], /SAMPLE_DIAGNOSTIC=1.*not an acceptance receipt/);
+});
+
+test('a runner drops only harness options it does not accept and passes the rest on to reject', () => {
   const [, selfHost] = planVerification(map, ['reader', 'self-host'], { env: {} }).runs;
   assert.deepEqual(
     runOptions(selfHost, ['--visual', '--workers', '2', '--grep', 'SH01', '--shard', '1/3']),
     { kept: ['--grep', 'SH01'], dropped: ['--visual', '--workers', '2', '--shard', '1/3'] }
   );
+  assert.deepEqual(runOptions(selfHost, ['--grepp', 'SH01']), {
+    kept: ['--grepp', 'SH01'],
+    dropped: [],
+  });
+  assert.deepEqual(runOptions(selfHost, ['--workers', '--grep', 'SH01']), {
+    kept: ['--grep', 'SH01'],
+    dropped: ['--workers'],
+  });
   const [gallery] = planVerification(map, ['gallery'], { env: {} }).runs;
   assert.deepEqual(runOptions(gallery, ['--visual']), { kept: ['--visual'], dropped: [] });
   assert.deepEqual(privateMaterialEnv(map), ['SAMPLE_ROOT', 'DEMO_DIR']);

@@ -61,6 +61,7 @@ const launchOptions = {
   providerFixture: (value) => typeof value === 'boolean',
   privateMaterials: (value) => typeof value === 'boolean',
   privateMaterialsEnv: (value) => typeof value === 'string' && environmentName.test(value),
+  diagnosticEnv: (value) => typeof value === 'string' && environmentName.test(value),
   requiredEnv: (value) =>
     Array.isArray(value) &&
     value.every((name) => typeof name === 'string' && environmentName.test(name)),

@@ -6,6 +6,7 @@ import {
   assertJobResults,
   assertPartition,
   summarizeVitest,
+  summarizeDistVitest,
   summarizeBrowser,
   browserCases,
 } from './ci-summary.mjs';
@@ -201,6 +202,64 @@ test('main and manual runs accept only four complete full-scope shards', () => {
     }
     const { inventories, reports } = pullRequestFixture([]);
     assert.throws(() => summarizeVitest(inventories, reports, sha, { event }));
+  }
+});
+
+test('compiled-server Vitest evidence must be a passing full run of a non-empty selection', () => {
+  const distFixture = () => {
+    const files = ['tests/server.test.ts', 'tests/background-work.test.ts'];
+    return {
+      inventory: {
+        commit: sha,
+        shard: '1/1',
+        allFiles: files,
+        files,
+        selection: { dist: 'only', scope: 'full' },
+      },
+      report: {
+        ...passingReport(files[0]),
+        numPassedTests: 2,
+        numTotalTests: 2,
+        testResults: files.flatMap((file) => passingReport(file).testResults),
+      },
+    };
+  };
+  const { inventory, report } = distFixture();
+  assert.deepEqual(summarizeDistVitest(inventory, report, sha), {
+    files: 2,
+    passed: 2,
+    skipped: 0,
+  });
+  for (const damage of [
+    (fixture) => {
+      fixture.inventory = undefined;
+    },
+    (fixture) => {
+      fixture.report = undefined;
+    },
+    ({ inventory }) => {
+      inventory.allFiles = [];
+      inventory.files = [];
+    },
+    ({ inventory }) => {
+      inventory.commit = 'b'.repeat(40);
+    },
+    ({ inventory }) => {
+      inventory.selection.dist = 'exclude';
+    },
+    ({ inventory }) => {
+      inventory.selection.scope = 'impact';
+    },
+    ({ report }) => {
+      report.testResults.pop();
+    },
+    ({ report }) => {
+      report.numFailedTests = 1;
+    },
+  ]) {
+    const fixture = distFixture();
+    damage(fixture);
+    assert.throws(() => summarizeDistVitest(fixture.inventory, fixture.report, sha));
   }
 });
 

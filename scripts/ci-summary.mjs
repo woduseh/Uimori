@@ -123,6 +123,41 @@ export function vitestShardCount(event) {
   return event === 'pull_request' ? 1 : vitestShards;
 }
 
+function passedFiles(report, label) {
+  if (
+    report.success !== true ||
+    report.numFailedTests ||
+    report.numFailedTestSuites ||
+    !report.testResults?.length
+  )
+    throw new Error(`${label} did not pass`);
+  if (
+    !['numPassedTests', 'numPendingTests', 'numTotalTests'].every(
+      (key) => Number.isInteger(report[key]) && report[key] >= 0
+    ) ||
+    !report.numTotalTests
+  )
+    throw new Error(`${label} has no complete test counts`);
+  return report.testResults.map((result) => testFile(result.name));
+}
+
+export function summarizeDistVitest(inventory, report, expectedSha) {
+  if (
+    !inventory ||
+    inventory.shard !== '1/1' ||
+    inventory.commit !== expectedSha ||
+    inventory.selection?.dist !== 'only' ||
+    inventory.selection?.scope !== 'full' ||
+    !inventory.allFiles?.length
+  )
+    throw new Error('Compiled-server Vitest evidence is missing, stale or not a full run');
+  if (!report) throw new Error('Missing compiled-server Vitest report');
+  const files = assertPartition(inventory.allFiles, [
+    passedFiles(report, 'Compiled-server Vitest run'),
+  ]);
+  return { files, passed: report.numPassedTests, skipped: report.numPendingTests };
+}
+
 export function summarizeVitest(inventories, reports, expectedSha, { event } = {}) {
   const pullRequest = event === 'pull_request';
   const total = vitestShardCount(event);
@@ -149,23 +184,7 @@ export function summarizeVitest(inventories, reports, expectedSha, { event } = {
     };
   if (reports.length !== total || reports.some((report) => !report))
     throw new Error('Missing Vitest shard report');
-  const parts = reports.map((report, i) => {
-    if (
-      report.success !== true ||
-      report.numFailedTests ||
-      report.numFailedTestSuites ||
-      !report.testResults?.length
-    )
-      throw new Error(`Vitest shard ${i + 1} did not pass`);
-    if (
-      !['numPassedTests', 'numPendingTests', 'numTotalTests'].every(
-        (key) => Number.isInteger(report[key]) && report[key] >= 0
-      ) ||
-      !report.numTotalTests
-    )
-      throw new Error(`Vitest shard ${i + 1} has no complete test counts`);
-    return report.testResults.map((result) => testFile(result.name));
-  });
+  const parts = reports.map((report, i) => passedFiles(report, `Vitest shard ${i + 1}`));
   const files = assertPartition(expected, parts);
   return {
     status: 'PASS',
@@ -211,12 +230,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         inventories.push(await load(`vitest-${i}-inventory.json`));
         reports.push(await loadIfPresent(`vitest-${i}.json`));
       }
-      const summary = summarizeVitest(
-        inventories,
-        reports,
-        process.env.GITHUB_SHA ?? inventories[0].commit,
-        { event }
-      );
+      const commit = process.env.GITHUB_SHA ?? inventories[0].commit;
+      const summary = {
+        ...summarizeVitest(inventories, reports, commit, { event }),
+        dist: summarizeDistVitest(
+          await loadIfPresent('vitest-dist-1-inventory.json'),
+          await loadIfPresent('vitest-dist-1.json'),
+          commit
+        ),
+      };
       await writeFile(
         path.join(directory, 'summary.json'),
         JSON.stringify(summary, null, 2) + '\n'

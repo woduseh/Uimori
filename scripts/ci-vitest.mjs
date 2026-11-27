@@ -32,11 +32,14 @@ export function selectTests(allFiles, { dist = 'include', impact } = {}) {
   const affected = impact?.fullRequired.length
     ? undefined
     : impact && new Set(impact.affectedTests);
-  return allFiles.filter(
+  const selected = allFiles.filter(
     (file) =>
       (!affected || affected.has(file)) &&
       (dist === 'include' || distTests.includes(file) === (dist === 'only'))
   );
+  if (!impact && !selected.length)
+    throw new Error(`ci-vitest: a full run (dist ${dist}) selected no test files`);
+  return selected;
 }
 
 export function shardTests(files, { index, total }) {

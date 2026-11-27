@@ -378,7 +378,11 @@
         { "file": "tests/risu-native-frame-browser.spec.ts" },
         {
           "file": "tests/risu-native-samples-browser.spec.ts",
-          "launch": { "privateMaterials": true, "requiredEnv": ["UIMORI_RISU_SAMPLE_ROOT"] }
+          "launch": {
+            "privateMaterials": true,
+            "requiredEnv": ["UIMORI_RISU_SAMPLE_ROOT"],
+            "diagnosticEnv": "UIMORI_RISU_SAMPLE_DIAGNOSTIC"
+          }
         }
       ]
     },

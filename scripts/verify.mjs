@@ -30,6 +30,7 @@ const runnerScripts = {
   'self-host': { script: 'scripts/verify-self-host.mjs', options: ['--grep'] },
 };
 const valueOptions = new Set(['--grep', '--workers', '--shard']);
+const harnessOptions = new Set([...valueOptions, '--visual']);
 const browserInput =
   /^(?:web|core|server|runner)\/|^tests\/(?:fixtures\/|[^/]+\.spec\.ts$)|^playwright\.config\.ts$/u;
 const minimumTimeout = 900_000;
@@ -86,6 +87,8 @@ function launchOf(map, entry, env) {
       launch.privateMaterials === true ||
       Boolean(launch.privateMaterialsEnv && env[launch.privateMaterialsEnv]),
     missingEnv: (launch.requiredEnv ?? []).filter((name) => !env[name]),
+    diagnostic:
+      launch.diagnosticEnv && env[launch.diagnosticEnv] === '1' ? launch.diagnosticEnv : '',
   };
 }
 
@@ -97,7 +100,12 @@ function launchRuns(map, entries, { name, scope, grep, env, skipped }) {
       skipped.push({ file: entry.file, missingEnv: launch.missingEnv });
       continue;
     }
-    const key = JSON.stringify([launch.runner, launch.privateMaterials, launch.providerFixture]);
+    const key = JSON.stringify([
+      launch.runner,
+      launch.privateMaterials,
+      launch.providerFixture,
+      launch.diagnostic,
+    ]);
     if (!groups.has(key)) groups.set(key, { launch, files: [] });
     groups.get(key).files.push(entry.file);
   }
@@ -105,10 +113,17 @@ function launchRuns(map, entries, { name, scope, grep, env, skipped }) {
     launch.runner === 'browser-harness'
       ? {
           kind: 'harness',
-          name: launch.privateMaterials ? `${name}-private` : name,
+          name: `${name}${launch.privateMaterials ? '-private' : ''}${launch.diagnostic ? '-diagnostic' : ''}`,
           scope,
           files,
           ...(grep ? { grep } : {}),
+          ...(launch.diagnostic
+            ? {
+                limitations: [
+                  `${launch.diagnostic}=1 lets these specs accept partial results, so this run diagnoses and is not an acceptance receipt.`,
+                ],
+              }
+            : {}),
           providerFixture: launch.providerFixture,
           privateMaterials: launch.privateMaterials,
           timeout: Math.max(minimumTimeout, files.length * perFileTimeout),
@@ -132,8 +147,11 @@ export function runOptions(run, options) {
   const kept = [];
   const dropped = [];
   for (let index = 0; index < options.length; index++) {
-    const width = valueOptions.has(options[index]) ? 2 : 1;
-    (run.options.includes(options[index]) ? kept : dropped).push(
+    const option = options[index];
+    const value = options[index + 1];
+    const width =
+      valueOptions.has(option) && value !== undefined && !value.startsWith('--') ? 2 : 1;
+    (harnessOptions.has(option) && !run.options.includes(option) ? dropped : kept).push(
       ...options.slice(index, index + width)
     );
     index += width - 1;

@@ -43,6 +43,12 @@ test('the dist modes split the collection into compiled-server tests and the res
   ]);
 });
 
+test('a full run that selects nothing fails instead of passing empty', () => {
+  const withoutDist = collected.filter((file) => !distTests.includes(file));
+  assert.throws(() => selectTests(withoutDist, { dist: 'only' }), /selected no test files/);
+  assert.throws(() => selectTests([]), /selected no test files/);
+});
+
 test('an impact run keeps only affected tests, and full-required changes escalate to everything', () => {
   const impact = { fullRequired: [], affectedTests: ['tests/c.test.ts', 'tests/server.test.ts'] };
   assert.deepEqual(selectTests(collected, { dist: 'exclude', impact }), ['tests/c.test.ts']);
