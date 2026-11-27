@@ -247,7 +247,7 @@ test('helper theme discovery omits styles while exact reads and guarded selectio
   for (const entry of catalog.themes)
     expect(Object.keys(entry).sort()).toEqual(['description', 'id', 'revision', 'title']);
   expect(catalog.palettes).toEqual(
-    before.palettes?.map(({ colors: _colors, ...metadata }) => metadata)
+    before.palettes.map(({ colors: _colors, ...metadata }) => metadata)
   );
   expect(catalog.preferences).toEqual(before.preferences);
   expect(themeCatalog(store)).toEqual(before);
@@ -776,7 +776,11 @@ describe('Independent layout and palette choices', () => {
   });
 
   test('missing and unavailable palette selections fall through without changing the layout', () => {
-    const base = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
+    const base = {
+      themes: BUILTIN_THEMES,
+      palettes: BUILTIN_PALETTES,
+      preferences: defaultThemePreferences(),
+    };
     base.preferences.defaultThemeId = 'builtin:letter';
     base.preferences.defaultPaletteId = 'cream';
     base.preferences.botPalettes = { bot: 'midnight' };

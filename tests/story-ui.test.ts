@@ -1,6 +1,7 @@
 import { A2uiGenerator, CatalogConfig, ExpressFormatFactory } from '@a2ui/agent';
 import { describe, expect, it } from 'vitest';
 import { storyUiCatalog } from '../core/story-ui-catalog.js';
+import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { compileReadingMarkdown } from '../core/reading-markdown.js';
 import { parseStoryUi, projectStoryUiText, validateStoryUiAction } from '../core/story-ui.js';
 import { resolveStoryUiPresentation, resolveStoryUiStyle } from '../core/story-ui-style.js';
@@ -234,6 +235,7 @@ ${expression}
     };
     const catalog: ThemeCatalog = {
       themes: [botTheme, chatTheme],
+      palettes: BUILTIN_PALETTES,
       preferences: { ...defaultThemePreferences(), botStoryUiThemes: { bot: botTheme.id } },
     };
     const [segment] = parseStoryUi(

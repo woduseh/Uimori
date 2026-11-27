@@ -76,7 +76,7 @@ test('custom palettes persist independently, select with CAS, and deletion resto
   deletePalette(store, first.id, 2);
   expect(invalidations).toEqual(['themes', 'themes', 'themes', 'themes', 'themes']);
   expect(resolvePaletteId(themeCatalog(store), {})).toBe('theme');
-  expect(themeCatalog(store).palettes?.some((p) => p.id === copy.id)).toBe(true);
+  expect(themeCatalog(store).palettes.some((p) => p.id === copy.id)).toBe(true);
   expect(() => savePalette(store, model, 'forest', 1)).toThrow();
 });
 

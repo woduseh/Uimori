@@ -19,6 +19,7 @@ import {
   type ThemeCatalog,
   type ThemeScope,
 } from '../core/themes.js';
+import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { appearanceEndpoints, type AppearanceTarget } from '#contracts';
 import { callEndpoint } from './api.js';
 import { updateMessageTheme } from './theme-message-style.js';
@@ -29,7 +30,11 @@ import { storageKeys } from './storage-keys.js';
 import { presentationFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 
-const initial: ThemeCatalog = { themes: BUILTIN_THEMES, preferences: defaultThemePreferences() };
+const initial: ThemeCatalog = {
+  themes: BUILTIN_THEMES,
+  palettes: BUILTIN_PALETTES,
+  preferences: defaultThemePreferences(),
+};
 type ThemeState = {
   catalog: ThemeCatalog;
   active: Theme;

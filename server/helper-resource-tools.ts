@@ -485,7 +485,7 @@ export function invokeResourceTool(
         description,
         ...(storyUi ? { storyUi: { baseStyle: storyUi.baseStyle } } : {}),
       })),
-      palettes: catalog.palettes?.map((palette) => ({
+      palettes: catalog.palettes.map((palette) => ({
         id: palette.id,
         ...('revision' in palette ? { revision: palette.revision } : {}),
         title: palette.title,

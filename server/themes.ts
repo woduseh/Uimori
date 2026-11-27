@@ -46,9 +46,7 @@ export function themePreferences(store: Store): ThemePreferences {
   const row = store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get(preferenceKey);
   return row ? normalizeThemePreferences(JSON.parse(String(row.value))) : defaultThemePreferences();
 }
-export function themeCatalog(
-  store: Store
-): ThemeCatalog & { palettes: NonNullable<ThemeCatalog['palettes']> } {
+export function themeCatalog(store: Store): ThemeCatalog {
   return {
     themes: [...BUILTIN_THEMES, ...store.product.all('theme')],
     palettes: paletteCatalog(store),

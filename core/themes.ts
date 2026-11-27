@@ -9,7 +9,6 @@ import {
   classicFrameTheme,
 } from './narrative-themes.js';
 import {
-  BUILTIN_PALETTES,
   DEFAULT_PALETTE_COLORS,
   THEME_PALETTE_ID,
   isPaletteId,
@@ -54,7 +53,7 @@ export type ThemePreferences = {
 };
 export type ThemeCatalog = {
   themes: Theme[];
-  palettes?: (Palette | ThemePalette)[];
+  palettes: (Palette | ThemePalette)[];
   preferences: ThemePreferences;
 };
 export type ThemeScope = { botId?: string; chatId?: string };
@@ -162,7 +161,7 @@ export function resolvePaletteId(catalog: ThemeCatalog, scope: ThemeScope): stri
   ]) {
     if (
       isPaletteId(id) ||
-      (typeof id === 'string' && catalog.palettes?.some((palette) => palette.id === id))
+      (typeof id === 'string' && catalog.palettes.some((palette) => palette.id === id))
     )
       return id;
   }
@@ -184,9 +183,7 @@ export function resolveTheme(catalog: ThemeCatalog, scope: ThemeScope): Theme {
       break;
     }
   }
-  const palette = (catalog.palettes ?? BUILTIN_PALETTES).find(
-    (item) => item.id === resolvePaletteId(catalog, scope)
-  );
+  const palette = catalog.palettes.find((item) => item.id === resolvePaletteId(catalog, scope));
   return palette
     ? {
         ...selected,

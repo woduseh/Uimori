@@ -36,7 +36,7 @@ import {
   type Theme,
   type ThemeDefinition,
 } from '../core/themes.js';
-import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
+import { THEME_PALETTE_ID } from '../core/theme-palettes.js';
 import { appearanceEndpoints } from '#contracts';
 import { api, ApiError, callEndpoint, saveDownload } from './api.js';
 import { errorDescriptor } from './api-errors.js';
@@ -181,15 +181,13 @@ export function ThemeSettings({
     scope === 'global' ? {} : scope === 'bot' ? { botId: state.scope.botId } : state.scope;
   const activePaletteId = resolvePaletteId(state.catalog, state.scope);
   const activePaletteTitle =
-    paletteTitle(
-      (state.catalog.palettes ?? BUILTIN_PALETTES).find((palette) => palette.id === activePaletteId)
-    ) || t('visualpanels.originalLayoutColors');
+    paletteTitle(state.catalog.palettes.find((palette) => palette.id === activePaletteId)) ||
+    t('visualpanels.originalLayoutColors');
   const resolvedLayout = resolveTheme(state.catalog, editingScope);
   const editedPaletteId = resolvePaletteId(state.catalog, editingScope);
   const editedPaletteTitle =
-    paletteTitle(
-      (state.catalog.palettes ?? BUILTIN_PALETTES).find((palette) => palette.id === editedPaletteId)
-    ) || t('visualpanels.originalLayoutColors');
+    paletteTitle(state.catalog.palettes.find((palette) => palette.id === editedPaletteId)) ||
+    t('visualpanels.originalLayoutColors');
   const activeLayout =
     state.catalog.themes.find((theme) => theme.id === resolvedLayout.id) ??
     getBuiltinTheme(resolvedLayout.id);
@@ -204,7 +202,7 @@ export function ThemeSettings({
       ? t('visualpanels.currentBotDefault')
       : t('visualpanels.workspaceDefault');
   const originalColors = activeLayout?.colors;
-  const libraryPalettes = state.catalog.palettes ?? BUILTIN_PALETTES;
+  const libraryPalettes = state.catalog.palettes;
   const palettes = [
     {
       id: THEME_PALETTE_ID,
