@@ -262,10 +262,10 @@ export function fontRoutes(app: FastifyInstance, store: Store) {
   app.get('/api/fonts', () => fontCatalog(store));
   app.get('/api/font-preferences', () => fontPreferences(store));
   app.put('/api/font-preferences', (request) => selectFonts(store, request.body));
-  app.post('/api/fonts', { bodyLimit: Math.ceil((MAX_FONT_BYTES * 4) / 3) + 10000 }, (request) => {
+  app.post('/api/fonts', { bodyLimit: Math.ceil(MAX_FONT_BYTES / 3) * 4 + 10000 }, (request) => {
     const body = record(request.body);
     fields(body, ['title', 'data']);
-    const data = text(body.data, 'font data', Math.ceil((MAX_FONT_BYTES * 4) / 3));
+    const data = text(body.data, 'font data', Math.ceil(MAX_FONT_BYTES / 3) * 4);
     return registerFont(store, {
       title: body.title,
       bytes: Buffer.from(data, 'base64'),

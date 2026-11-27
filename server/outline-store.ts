@@ -627,13 +627,13 @@ export class OutlineStore {
   private assertLevelChange(chatId: string, node: OutlineNode, next: OutlineLevel) {
     const parent = node.parentId === null ? null : this.node(node.parentId);
     if (!outlineParentAllowed(parent?.level ?? null, next))
-      throw new HelperToolError(400, 'OUTLINE_LEVEL_INVALID', 'Choose a level below the parent.');
+      throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
     const children = this.db
       .prepare('SELECT level FROM outline_nodes WHERE chat_id=? AND parent_id=?')
       .all(chatId, node.id)
       .map((row) => row.level as OutlineLevel);
     if (children.some((child) => !outlineParentAllowed(next, child)))
-      throw new HelperToolError(400, 'OUTLINE_LEVEL_INVALID', 'Choose a level above every child.');
+      throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
     if (!outlineWritable(next) && node.progress.state === 'scheduled')
       throw new AppError(409, 'OUTLINE_LEVEL_SCHEDULED');
   }
@@ -730,11 +730,7 @@ export class OutlineStore {
             if (parent.chatId !== chatId)
               throw new HelperToolError(400, 'OUTLINE_PARENT_INVALID', 'Use a node of this chat.');
             if (!outlineParentAllowed(parent.level, operation.level))
-              throw new HelperToolError(
-                400,
-                'OUTLINE_PARENT_INVALID',
-                'The parent must be a higher level; intermediate levels may be skipped.'
-              );
+              throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
             this.assertIdle(parent);
           }
           const id = randomUUID();
@@ -790,14 +786,9 @@ export class OutlineStore {
           const parentId = operation.parentId === undefined ? node.parentId : operation.parentId;
           if (parentId !== null) {
             const parent = siblings.find((item) => item.id === parentId);
-            if (!parent || !outlineParentAllowed(parent.level, node.level))
-              throw new HelperToolError(
-                400,
-                'OUTLINE_PARENT_INVALID',
-                'The parent must be a higher-level node of this chat.'
-              );
-            if (parentId === node.id || descendants.some((i) => i.id === parentId))
-              throw new HelperToolError(400, 'OUTLINE_MOVE_CYCLE');
+            if (!parent) throw new AppError(404, 'OUTLINE_NODE_NOT_FOUND');
+            if (!outlineParentAllowed(parent.level, node.level))
+              throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
             this.assertIdle(parent);
           }
           this.db
@@ -871,11 +862,6 @@ export class OutlineStore {
     const key = text(body.idempotencyKey, 'command key', 120);
     return this.store.transaction(() => {
       const node = this.node(id);
-      if (!outlineWritable(node.level))
-        throw new HttpError(
-          400,
-          `Invalid outline node: ${node.level} is not a writing unit; choose an episode or beat`
-        );
       const prior = this.db
         .prepare('SELECT id FROM scene_commands WHERE chat_id=? AND request_key=?')
         .get(node.chatId, key) as Row | undefined;
@@ -898,6 +884,11 @@ export class OutlineStore {
           text(body.expectedPlanHash, 'plan hash', 64) !== this.planHash(node.id))
       )
         throw new AppError(409, 'OUTLINE_PLAN_CHANGED');
+      if (!outlineWritable(node.level))
+        throw new HttpError(
+          400,
+          `Invalid outline node: ${node.level} is not a writing unit; choose an episode or beat`
+        );
       if (node.progress.state === 'writing') throw new AppError(409, 'OUTLINE_WRITING_IN_PROGRESS');
       if (node.progress.state === 'scheduled' && node.progress.commandId) {
         const command = this.store.story.command(node.progress.commandId);

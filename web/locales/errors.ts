@@ -245,6 +245,12 @@ export const messages = {
     ja: '一緒に参照する構成は{limit, number}個まで連結できます。',
     zh: '最多可关联{limit, number}个参考大纲。',
   },
+  'errors.OUTLINE_HIERARCHY_INVALID': {
+    ko: '플롯 구조가 바뀌어 이 위치나 수준에 둘 수 없어요. 최신 플롯을 확인해 주세요.',
+    en: 'The outline structure changed, so this item cannot go at that position or level. Review the latest outline.',
+    ja: '構成が変わったため、この位置やレベルには置けません。最新の構成を確認してください。',
+    zh: '大纲结构已更改，无法放在该位置或层级。请查看最新大纲。',
+  },
   'errors.OUTLINE_SELECTION_STALE': {
     ko: '선택한 플롯이 변경됐어요. 다시 선택해 주세요.',
     en: 'The selected outline changed. Select it again.',

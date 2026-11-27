@@ -2,8 +2,7 @@ import { t, useI18n, translateMessage, message as uiMessage, messageRef } from '
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
 import { useWindowViewport } from './window-viewport.js';
-import { readErrorWire } from '#contracts';
-import { apiErrorDisplay } from './api-errors.js';
+import { throwApiError } from './api.js';
 
 export type PackagePresentation = {
   sourceRevision: string;
@@ -72,10 +71,7 @@ export function usePackagePresentation(
           `/api/chats/${encodeURIComponent(source.chatId)}/sources/${encodeURIComponent(source.id)}/presentation?${query}`,
           { signal: controller.signal }
         );
-        if (!response.ok) {
-          const wire = readErrorWire(await response.json().catch(() => null));
-          throw new Error(apiErrorDisplay(wire, response.status, 'GET'));
-        }
+        if (!response.ok) await throwApiError(response, 'GET');
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)
           throw new Error(uiMessage('library.theOriginalSnapshotDiffersFromThePresentation'));

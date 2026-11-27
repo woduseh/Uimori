@@ -112,10 +112,6 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
     throw new HttpError(400, 'Invalid scope: story UI themes are set per bot');
   const rawId = dimension === 'palette' ? b.paletteId : b.themeId;
   const selectedId = rawId === null ? null : text(rawId, dimension + ' ID', 100);
-  if (selectedId !== null) {
-    if (dimension === 'theme') readTheme(store, selectedId);
-    else if (dimension === 'palette' && !isPaletteId(selectedId)) readPalette(store, selectedId);
-  }
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   if (scope === 'bot') {
     const content = store.product.get<{ kind: string }>('content', targetId);
@@ -126,6 +122,10 @@ export function selectTheme(store: Store, input: unknown): ThemePreferences {
   return store.transaction(() => {
     const p = themePreferences(store);
     if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    if (selectedId !== null) {
+      if (dimension === 'theme') readTheme(store, selectedId);
+      else if (dimension === 'palette' && !isPaletteId(selectedId)) readPalette(store, selectedId);
+    }
     if (dimension === 'storyUi') {
       if (selectedId !== null && !readTheme(store, selectedId).storyUi)
         throw new HelperToolError(400, 'THEME_STORY_UI_MISSING', 'Choose a theme with storyUi.');

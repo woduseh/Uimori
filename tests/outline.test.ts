@@ -295,6 +295,49 @@ describe('hierarchical composition', () => {
     expect(error.message).toContain('not a writing unit');
   });
 
+  test('editor actions made stale by another writer get recoverable outline codes', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '동시 편집 검사');
+    compose(store, chat.id);
+    const apply = (operations: unknown[]) =>
+      store.outline.apply(chat.id, { idempotencyKey: randomUUID(), operations }, 'user');
+    const main = find(store, chat.id, '이름 없는 사서');
+    apply([
+      { op: 'create', parentId: main.id, level: 'arc', title: '빈 사건', intent: '' },
+      { op: 'create', parentId: main.id, level: 'episode', title: '외전', intent: '' },
+    ]);
+    const spareArc = find(store, chat.id, '빈 사건');
+    apply([{ op: 'remove', id: spareArc.id, expectedRevision: spareArc.revision }]);
+    const second = find(store, chat.id, '2화 장부의 첫 장');
+    const moved = failure(() =>
+      apply([
+        {
+          op: 'move',
+          id: second.id,
+          expectedRevision: second.revision,
+          parentId: spareArc.id,
+          position: 0,
+        },
+      ])
+    );
+    expect([moved.statusCode, moved.message]).toEqual([404, 'OUTLINE_NODE_NOT_FOUND']);
+    const third = find(store, chat.id, '3화 관장의 방문');
+    apply([{ op: 'create', parentId: third.id, level: 'beat', title: '노크', intent: '' }]);
+    const lowered = failure(() =>
+      apply([{ op: 'update', id: third.id, expectedRevision: third.revision, level: 'beat' }])
+    );
+    expect([lowered.statusCode, lowered.message]).toEqual([400, 'OUTLINE_HIERARCHY_INVALID']);
+    const preview = find(store, chat.id, '외전');
+    apply([{ op: 'update', id: preview.id, expectedRevision: preview.revision, level: 'arc' }]);
+    const stale = failure(() =>
+      store.outline.sceneCommand(preview.id, {
+        idempotencyKey: randomUUID(),
+        expectedRevision: preview.revision,
+      })
+    );
+    expect([stale.statusCode, stale.message]).toEqual([409, 'OUTLINE_PLAN_CHANGED']);
+  });
+
   test('duplicate refs, late mixed-operation errors, and oversized batches reject the whole batch', async () => {
     const store = await database();
     const chat = createFixtureChat(store, '배치 원자성 검사');

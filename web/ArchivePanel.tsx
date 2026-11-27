@@ -3,6 +3,7 @@ import { BackupSettings } from './BackupSettings.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackupFileImport } from './BackupFileImport.js';
 import { DownloadIcon } from './ui-icons.js';
+import { throwApiError } from './api.js';
 import {
   useSettingsSaveHandler,
   type SettingsSaveHandler,
@@ -70,7 +71,9 @@ export function ArchivePanel({
                 try {
                   const response = await fetch('/api/backup');
                   if (!response.ok)
-                    throw new Error(retainedMessage('transfer.d010', { v0: response.status }));
+                    await throwApiError(response, 'GET', {
+                      emptyMessage: retainedMessage('transfer.d010', { v0: response.status }),
+                    });
                   const url = URL.createObjectURL(await response.blob());
                   const link = document.createElement('a');
                   link.href = url;

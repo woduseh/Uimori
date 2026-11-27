@@ -94,6 +94,7 @@ export type AppErrorParams = {
   THEME_ASSET_MISSING: { name: string };
   OUTLINE_NODE_NOT_FOUND: undefined;
   OUTLINE_RELATED_TOO_MANY: { limit: number };
+  OUTLINE_HIERARCHY_INVALID: undefined;
   OUTLINE_SELECTION_STALE: undefined;
   OUTLINE_REVIEW_SOURCE_MISSING: undefined;
   OUTLINE_NODE_WRITING: undefined;
@@ -207,6 +208,7 @@ const takesParams = {
   THEME_ASSET_MISSING: true,
   OUTLINE_NODE_NOT_FOUND: false,
   OUTLINE_RELATED_TOO_MANY: true,
+  OUTLINE_HIERARCHY_INVALID: false,
   OUTLINE_SELECTION_STALE: false,
   OUTLINE_REVIEW_SOURCE_MISSING: false,
   OUTLINE_NODE_WRITING: false,

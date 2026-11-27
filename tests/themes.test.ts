@@ -141,7 +141,11 @@ test('chat overrides bot overrides global; deleting a theme removes only its app
   choose('chat', c.id, chat.id);
   const scope = { botId: bot.id, chatId: chat.id };
   expect(resolveTheme(themeCatalog(store), scope).id).toBe(c.id);
+  const shown = themePreferences(store).revision;
   deleteTheme(store, c.id, c.revision);
+  expect(() =>
+    selectTheme(store, { scope: 'global', themeId: c.id, expectedRevision: shown })
+  ).toThrow('REVISION_CONFLICT');
   expect(resolveTheme(themeCatalog(store), scope).id).toBe(b.id);
   choose('bot', null, bot.id);
   expect(resolveTheme(themeCatalog(store), scope).id).toBe(a.id);
