@@ -80,9 +80,10 @@ export async function readRequestDraft(
     }
   }
   if (!saved) return {};
+  const unreadable = !state && sessionStorage.getItem(stateKey(key)) !== null;
   if (
-    state &&
-    (state.token !== saved.token || saved.text !== (sessionStorage.getItem(key) ?? ''))
+    (state && state.token !== saved.token) ||
+    ((state || unreadable) && saved.text !== (sessionStorage.getItem(key) ?? ''))
   ) {
     return saved.images.length ? { conflict: saved } : {};
   }

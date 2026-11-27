@@ -36,3 +36,25 @@ test('a corrupt draft state left in the tab still saves and restores the request
 
   expect(await drafts.readRequestDraft('chat-1')).toEqual({ saved: draft });
 });
+
+test('a corrupt draft state does not let an older stored draft replace newer tab text', async () => {
+  const drafts = await import('../web/request-image-draft.js');
+  const older: RequestDraft = {
+    token: 'old',
+    text: '이전 요청',
+    images: [{ id: 'i1' } as unknown as RequestDraft['images'][number]],
+  };
+  state.disk.set(await drafts.requestDraftKey('chat-1'), older);
+  state.session.set('chat-1', '최신 요청');
+  state.session.set(storageKeys.requestState('chat-1'), '{"token":"new",');
+
+  expect(await drafts.readRequestDraft('chat-1')).toEqual({ conflict: older });
+});
+
+test('a stored draft still restores in a tab that has no draft state yet', async () => {
+  const drafts = await import('../web/request-image-draft.js');
+  const draft: RequestDraft = { token: 'a', text: '다음 장면 요청', images: [] };
+  state.disk.set(await drafts.requestDraftKey('chat-1'), draft);
+
+  expect(await drafts.readRequestDraft('chat-1')).toEqual({ saved: draft });
+});
