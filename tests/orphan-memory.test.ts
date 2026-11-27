@@ -114,7 +114,7 @@ test('a stale reviewed head hash, memory revision, or cross-chat ID cannot modif
   f.store.editSource(f.source.id, { expectedRevision: 0, text: '첫 번째 수정 원문.' });
   const before = command(f, 'reanchor');
   f.store.editSource(f.source.id, { expectedRevision: 1, text: '다시 바뀐 원문.' });
-  expect(() => f.memory.apply(f.chatId, before)).toThrow('Memory changed');
+  expect(() => f.memory.apply(f.chatId, before)).toThrow('REVISION_CONFLICT');
   const staleRevision = command(f, 'reanchor');
   f.store.story.notes.write(f.chatId, {
     text: '새 메모',
@@ -123,10 +123,10 @@ test('a stale reviewed head hash, memory revision, or cross-chat ID cannot modif
     expectedHeadRevision: f.source.id,
     idempotencyKey: 'new-note',
   });
-  expect(() => f.memory.apply(f.chatId, staleRevision)).toThrow('Memory changed');
+  expect(() => f.memory.apply(f.chatId, staleRevision)).toThrow('REVISION_CONFLICT');
   expect(() =>
     f.memory.apply(f.chatId, { ...command(f, 'retire'), entryId: 'another-chat-note' })
-  ).toThrow('no longer orphaned');
+  ).toThrow('REVISION_CONFLICT');
   expect(f.store.db.prepare('SELECT COUNT(*) AS count FROM author_notes').get()?.count).toBe(2);
 });
 

@@ -18,7 +18,8 @@ import { AssetEditor } from './AssetEditor.js';
 import { IllustrationReferencesEditor } from './IllustrationReferences.js';
 import { SettingsEditor } from './RuntimeSettings.js';
 import { ChatVariables } from './ChatVariables.js';
-import { api } from './api.js';
+import { chatSettingsEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
@@ -307,11 +308,7 @@ export function ChatSettingsPanel({
     const hasDraft =
       readOptionalStorage('session', storageKeys.chatVariableDraft(state.selected)) !== null;
     void Promise.allSettled([
-      api<{
-        values: Record<string, string>;
-        defaults: Record<string, string>;
-        variableDefaultsError?: string;
-      }>(`/chats/${encodeURIComponent(state.selected)}/variables`),
+      callEndpoint(chatSettingsEndpoints.readVariables, { chatId: state.selected }),
     ]).then(([variableResult]) => {
       if (!current) return;
       const variables = variableResult.status === 'fulfilled' ? variableResult.value : null;

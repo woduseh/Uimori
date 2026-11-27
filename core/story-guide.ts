@@ -1,3 +1,4 @@
+import { STORY_GUIDE_LIMITS } from '#contracts';
 export type StoryGuideConfig = {
   enabled: boolean;
   work: string;
@@ -28,7 +29,7 @@ export type StoryGuideSnapshot = Pick<StoryGuideState, 'revision' | 'config'> & 
   brief?: StoryGuideBrief;
   error?: string;
 };
-export const STORY_GUIDE_LIMITS = { work: 500, reference: 20_000, position: 2_000 } as const;
+export { STORY_GUIDE_LIMITS };
 export const defaultStoryGuideConfig = (): StoryGuideConfig => ({
   enabled: false,
   work: '',

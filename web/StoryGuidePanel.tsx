@@ -8,7 +8,8 @@ import {
   type StoryGuideConfig,
   type StoryGuideDetail,
 } from '../core/story-guide.js';
-import { api, ApiError } from './api.js';
+import { chatSettingsEndpoints as endpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { SelectionCheckbox, Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
 import { Prose, safeProseLink } from './Prose.js';
@@ -64,7 +65,6 @@ function StoryGuideEditor({
   const alive = useRef(true);
   const loadSequence = useRef(0);
   const readRequest = useRef<AbortController | null>(null);
-  const base = `/chats/${encodeURIComponent(chatId)}`;
 
   useEffect(() => {
     alive.current = true;
@@ -96,12 +96,11 @@ function StoryGuideEditor({
     const controller = new AbortController();
     readRequest.current = controller;
     try {
-      const value = await api<StoryGuideDetail>(
-        `${base}/story-guide`,
-        undefined,
-        'GET',
+      const value = (await callEndpoint(
+        endpoints.readStoryGuide,
+        { chatId },
         controller.signal
-      );
+      )) as StoryGuideDetail;
       if (!alive.current || controller.signal.aborted || sequence !== loadSequence.current) return;
       setLoaded(value);
       setSettingsOpen((open) => open ?? value.revision === 0);
@@ -134,11 +133,11 @@ function StoryGuideEditor({
     setError(null);
     setNotice(null);
     try {
-      const value = await api<StoryGuideDetail>(
-        `${base}/story-guide`,
-        { expectedRevision: draftRevision, config: draft },
-        'PUT'
-      );
+      const value = (await callEndpoint(endpoints.updateStoryGuide, {
+        chatId,
+        expectedRevision: draftRevision,
+        config: draft,
+      })) as StoryGuideDetail;
       if (!alive.current) return false;
       loadSequence.current++;
       setLoaded(value);
@@ -345,7 +344,9 @@ function StoryGuideEditor({
           reviewed.current = null;
         }}
         readSaved={async () => {
-          const value = await api<StoryGuideDetail>(`${base}/story-guide`);
+          const value = (await callEndpoint(endpoints.readStoryGuide, {
+            chatId,
+          })) as StoryGuideDetail;
           reviewed.current = value;
           return () => [
             {

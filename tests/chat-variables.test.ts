@@ -90,7 +90,7 @@ test('explicit equal-value writes advance revision and stale ABA commands fail',
       revision + 1
     );
   expect(() => writeChatVariables(store, chat.id, command({ score: '3' }, 1))).toThrow(
-    'CHAT_VARIABLE_REVISION_CONFLICT'
+    'REVISION_CONFLICT'
   );
   expect(store.db.prepare('SELECT count(*) AS n FROM chat_variable_journal').get()!.n).toBe(4);
 });
@@ -122,7 +122,7 @@ test('CAS uses latest source edit hash and validates source chat ownership', () 
   const source = append(store, chat.id);
   const input = { ...command(), expectedSourceHash: source.hash };
   const edited = store.editSource(source.id, { expectedRevision: 0, text: 'Edited source' });
-  expect(() => writeChatVariables(store, chat.id, input)).toThrow('CHAT_VARIABLE_SOURCE_CONFLICT');
+  expect(() => writeChatVariables(store, chat.id, input)).toThrow('REVISION_CONFLICT');
   expect(
     writeChatVariables(store, chat.id, { ...input, expectedSourceHash: edited.hash }).revision
   ).toBe(1);
@@ -167,7 +167,7 @@ test('host adoption requires a transaction and rolls state, receipt and event ba
   ).toBe(1);
 });
 
-test('invalid maps and malformed commands leave no write receipts', () => {
+test('invalid maps leave no write receipts', () => {
   const { store, chat } = fixture();
   for (const values of [
     JSON.parse('{"__proto__":"bad"}'),
@@ -175,11 +175,5 @@ test('invalid maps and malformed commands leave no write receipts', () => {
     { score: 'x'.repeat(200001) },
   ])
     expect(() => writeChatVariables(store, chat.id, command(values))).toThrow();
-  for (const change of [
-    { expectedRevision: -1 },
-    { expectedSourceHash: '' },
-    { idempotencyKey: '' },
-  ])
-    expect(() => writeChatVariables(store, chat.id, { ...command(), ...change })).toThrow();
   expect(store.db.prepare('SELECT * FROM chat_variable_journal').all()).toEqual([]);
 });

@@ -31,3 +31,6 @@ export * from './domains/transfer/transfer-limits.js';
 export * from './domains/transfer/endpoints.js';
 export type * from './domains/transfer/operations.js';
 export * from './endpoint-registry.js';
+export * from './domains/chat-settings/limits.js';
+export * from './domains/chat-settings/endpoints.js';
+export type * from './domains/chat-settings/operations.js';

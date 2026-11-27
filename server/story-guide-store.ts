@@ -1,4 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { isDeepStrictEqual } from 'node:util';
+import type { StoryGuideUpdate } from '#contracts';
 import {
   defaultStoryGuideConfig,
   normalizeStoryGuideConfig,
@@ -6,7 +8,6 @@ import {
   type StoryGuideState,
 } from '../core/story-guide.js';
 import type { RunSnapshot } from '../core/types.js';
-import { fields, number, record } from './request-validation.js';
 import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
 
@@ -39,15 +40,12 @@ export class StoryGuideStore {
       : { revision: 0, config: defaultStoryGuideConfig(), brief: null };
   }
 
-  update(chatId: string, value: unknown): StoryGuideState {
-    const body = record(value);
-    fields(body, ['expectedRevision', 'config']);
-    const expectedRevision = number(body.expectedRevision, 'story guide revision', 0);
-    const config = normalizeStoryGuideConfig(body.config);
+  update(chatId: string, { expectedRevision, config }: StoryGuideUpdate): StoryGuideState {
     return this.store.transaction(() => {
+      this.store.writableChat(chatId);
       const current = this.get(chatId);
       if (current.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
-      if (JSON.stringify(current.config) === JSON.stringify(config)) return current;
+      if (isDeepStrictEqual(current.config, config)) return current;
       this.store.db
         .prepare(`INSERT INTO chat_story_guides(chat_id,revision,config,brief) VALUES(?,?,?,NULL)
           ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,config=excluded.config`)

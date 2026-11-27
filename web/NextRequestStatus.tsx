@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookText, ListTree, SlidersHorizontal, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
-import { api } from './api.js';
+import { chatSettingsEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { formatUiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { OUTLINE_REFRESH_EVENT } from './outline-helper.js';
-import type { ChatOptionState } from '../core/chat-options.js';
 import type { OutlineFocus } from '../core/outline.js';
-import type { StoryGuideDetail } from '../core/story-guide.js';
 
 type NextRequestState = {
   focus: OutlineFocus;
@@ -46,8 +45,8 @@ export function NextRequestStatus({
     const current = ++generation.current;
     const [focus, options, guide] = await Promise.allSettled([
       api<OutlineFocus>(`${base}/outline/focus`),
-      api<ChatOptionState>(`${base}/options`),
-      api<StoryGuideDetail>(`${base}/story-guide`),
+      callEndpoint(chatSettingsEndpoints.readOptions, { chatId }),
+      callEndpoint(chatSettingsEndpoints.readStoryGuide, { chatId }),
     ]);
     if (current !== generation.current) return;
     setState((old) => ({
@@ -56,7 +55,7 @@ export function NextRequestStatus({
         options.status === 'fulfilled' ? options.value.pending.length > 0 : old.pendingOptions,
       storyGuide: guide.status === 'fulfilled' ? guide.value.config.enabled : old.storyGuide,
     }));
-  }, [base]);
+  }, [base, chatId]);
   useEffect(() => {
     const refresh = () => void load();
     for (const event of [OUTLINE_REFRESH_EVENT, 'chat-options-changed', 'focus'])

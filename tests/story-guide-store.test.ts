@@ -131,6 +131,17 @@ test('config CAS preserves newer edits and prior advice while reserved runs keep
   expect(store.run(run.id).snapshot.storyGuide).toEqual({ revision: 1, config });
 });
 
+test('saving the same settings in another key order keeps the revision', () => {
+  const { store } = database();
+  const chat = createFixtureChat(store, 'Reordered settings');
+  store.storyGuide.update(chat.id, { expectedRevision: 0, config });
+  const reordered = Object.fromEntries(Object.entries(config).reverse()) as StoryGuideConfig;
+  expect(
+    store.storyGuide.update(chat.id, { expectedRevision: 1, config: reordered }).revision
+  ).toBe(1);
+  expect(store.storyGuide.get(chat.id).revision).toBe(1);
+});
+
 test('settings saved before web search default off without changing authored references or revisions', () => {
   const { store } = database();
   const chat = createFixtureChat(store, 'Legacy reference settings');
@@ -143,13 +154,6 @@ test('settings saved before web search default off without changing authored ref
     config: { ...legacy, webSearch: false },
     brief: null,
   });
-  expect(() =>
-    store.storyGuide.update(chat.id, {
-      expectedRevision: 7,
-      config: { ...config, webSearch: 'yes' },
-    })
-  ).toThrow('Invalid story guide settings');
-  expect(store.storyGuide.get(chat.id).revision).toBe(7);
 });
 
 test('only the current writer can publish advice; manual and cancelled late replies cannot replace it', () => {

@@ -1,4 +1,5 @@
 import { appearanceOperations } from './domains/appearance/operations.js';
+import { chatSettingsOperations } from './domains/chat-settings/operations.js';
 import { deletionOperations } from './domains/deletion/operations.js';
 import { libraryOperations } from './domains/library/operations.js';
 import { personalWorkspaceOperations } from './domains/personal-workspace/operations.js';
@@ -12,6 +13,7 @@ import { translationOperations } from './domains/translation/operations.js';
 
 export const allOperations = {
   appearance: appearanceOperations,
+  'chat-settings': chatSettingsOperations,
   deletion: deletionOperations,
   library: libraryOperations,
   'personal-workspace': personalWorkspaceOperations,
