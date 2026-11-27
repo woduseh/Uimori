@@ -89,6 +89,7 @@ async function streamingWriter(request: APIRequestContext) {
   await body(
     await request.post('/api/themes/selection', {
       data: {
+        dimension: 'theme',
         themeId: 'builtin:forest',
         targetId: chat.id,
         scope: 'chat',

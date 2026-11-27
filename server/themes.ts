@@ -116,68 +116,69 @@ export function removeThemeScope(store: Store, scope: 'bot' | 'chat', id: string
     }
   if (changed) writePreferences(store, p);
 }
-function assertSelectionTarget(store: Store, scope: SelectThemeRequest['scope'], targetId: string) {
-  assertAppearanceTargetLive(store, scope, targetId);
-  if (scope === 'bot') {
-    const content = store.product.get<{ kind: string }>('content', targetId);
-    if (content.kind !== 'bot') throw new HttpError(400, 'Invalid target ID: expected a bot');
-  }
-  if (scope === 'chat') store.chat(targetId);
+function assertSelectionTarget(store: Store, input: SelectThemeRequest | SelectThemeBackground) {
+  if (input.scope === 'global') return;
+  assertAppearanceTargetLive(store, input.scope, input.targetId);
+  if (
+    input.scope === 'bot' &&
+    store.product.get<{ kind: string }>('content', input.targetId).kind !== 'bot'
+  )
+    throw new HttpError(400, 'Invalid target ID: expected a bot');
+}
+function scopedMap(
+  p: ThemePreferences,
+  scope: 'bot' | 'chat',
+  dimension: 'theme' | 'palette'
+): Record<string, string> {
+  if (dimension === 'theme') return scope === 'bot' ? p.botThemes : p.chatThemes;
+  return scope === 'bot' ? (p.botPalettes ??= {}) : (p.chatPalettes ??= {});
+}
+function setChoice<T>(map: Record<string, T>, targetId: string, value: T | null) {
+  if (value === null) delete map[targetId];
+  else map[targetId] = value;
 }
 export function selectTheme(store: Store, input: SelectThemeRequest): ThemePreferences {
-  const { scope, expectedRevision } = input;
-  const dimension = input.dimension ?? 'theme';
-  const selectedId = (dimension === 'palette' ? input.paletteId : input.themeId) ?? null;
-  const targetId = input.targetId ?? '';
   return store.transaction(() => {
     const p = themePreferences(store);
-    assertRevision(p.revision, expectedRevision);
-    assertSelectionTarget(store, scope, targetId);
-    if (selectedId !== null) {
-      if (dimension === 'theme') readTheme(store, selectedId);
-      else if (dimension === 'palette' && !isPaletteId(selectedId)) readPalette(store, selectedId);
+    assertRevision(p.revision, input.expectedRevision);
+    assertSelectionTarget(store, input);
+    if (input.dimension === 'palette') {
+      const { paletteId } = input;
+      if (paletteId !== null && !isPaletteId(paletteId)) readPalette(store, paletteId);
+      if (input.scope === 'global') p.defaultPaletteId = paletteId ?? THEME_PALETTE_ID;
+      else setChoice(scopedMap(p, input.scope, 'palette'), input.targetId, paletteId);
+      return writePreferences(store, p);
     }
-    if (dimension === 'storyUi') {
-      if (selectedId !== null && !readTheme(store, selectedId).storyUi)
-        throw new AppError(400, 'THEME_STORY_UI_MISSING');
-      const map = (p.botStoryUiThemes ??= {});
-      if (selectedId !== null) map[targetId] = selectedId;
-      else delete map[targetId];
-    } else if (dimension === 'palette') {
-      if (scope === 'global') p.defaultPaletteId = selectedId ?? THEME_PALETTE_ID;
-      else {
-        const map = scope === 'bot' ? (p.botPalettes ??= {}) : (p.chatPalettes ??= {});
-        if (selectedId !== null) map[targetId] = selectedId;
-        else delete map[targetId];
-      }
-    } else if (scope === 'global') p.defaultThemeId = selectedId ?? DEFAULT_THEME_ID;
-    else {
-      const map = scope === 'bot' ? p.botThemes : p.chatThemes;
-      if (selectedId) map[targetId] = selectedId;
-      else delete map[targetId];
-    }
+    const theme = input.themeId === null ? null : readTheme(store, input.themeId);
+    if (input.dimension === 'storyUi') {
+      if (theme && !theme.storyUi) throw new AppError(400, 'THEME_STORY_UI_MISSING');
+      setChoice((p.botStoryUiThemes ??= {}), input.targetId, input.themeId);
+    } else if (input.scope === 'global') p.defaultThemeId = input.themeId ?? DEFAULT_THEME_ID;
+    else setChoice(scopedMap(p, input.scope, 'theme'), input.targetId, input.themeId);
     return writePreferences(store, p);
   });
 }
 export function selectThemeBackground(
   store: Store,
-  { scope, targetId = '', background, expectedRevision }: SelectThemeBackground
+  input: SelectThemeBackground
 ): ThemePreferences {
+  const { background } = input;
   return store.transaction(() => {
     const p = themePreferences(store);
-    assertRevision(p.revision, expectedRevision);
-    assertSelectionTarget(store, scope, targetId);
+    assertRevision(p.revision, input.expectedRevision);
+    assertSelectionTarget(store, input);
     if (
       background?.imageHash &&
       !store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(background.imageHash)
     )
       throw new AppError(400, 'IMAGE_NOT_FOUND');
-    if (scope === 'global') p.defaultBackground = background ?? { ...defaultThemeBackground };
-    else {
-      const map = scope === 'bot' ? (p.botBackgrounds ??= {}) : (p.chatBackgrounds ??= {});
-      if (background) map[targetId] = background;
-      else delete map[targetId];
-    }
+    if (input.scope === 'global') p.defaultBackground = background ?? { ...defaultThemeBackground };
+    else
+      setChoice(
+        input.scope === 'bot' ? (p.botBackgrounds ??= {}) : (p.chatBackgrounds ??= {}),
+        input.targetId,
+        background
+      );
     return writePreferences(store, p);
   });
 }

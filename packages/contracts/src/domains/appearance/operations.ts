@@ -117,41 +117,39 @@ export const themeCatalog = z.strictObject({
 });
 
 const selectionId = nonBlank(100);
-const selectionScope = {
-  scope: z.enum(['global', 'bot', 'chat']),
-  targetId: selectionId.optional(),
+const globalChoice = { scope: z.literal('global'), expectedRevision: revision };
+const targetChoice = {
+  scope: z.enum(['bot', 'chat']),
+  targetId: selectionId,
   expectedRevision: revision,
 };
-const scopedTarget = (input: { scope: string; targetId?: string }) =>
-  (input.scope === 'global') === (input.targetId === undefined);
-const scopedTargetMessage = {
-  message: 'A bot or chat choice names its target; a global choice names none',
-  path: ['targetId'],
-};
-export const selectThemeInput = z
-  .strictObject({
-    ...selectionScope,
-    dimension: z.enum(['theme', 'palette', 'storyUi']).default('theme'),
-    themeId: selectionId.nullable().optional(),
-    paletteId: selectionId.nullable().optional(),
-  })
-  .refine(scopedTarget, scopedTargetMessage)
-  .refine(
-    (input) =>
-      input.dimension === 'palette'
-        ? input.paletteId !== undefined && input.themeId === undefined
-        : input.themeId !== undefined && input.paletteId === undefined,
-    { message: 'Send paletteId for a palette choice and themeId otherwise', path: ['dimension'] }
-  )
-  .refine((input) => input.dimension !== 'storyUi' || input.scope === 'bot', {
-    message: 'Story UI themes are chosen per bot',
-    path: ['scope'],
-  });
-export type SelectThemeRequest = z.input<typeof selectThemeInput>;
-export const selectThemeBackgroundInput = z
-  .strictObject({ ...selectionScope, background: themeBackground.nullable() })
-  .refine(scopedTarget, scopedTargetMessage);
+const themeChoice = { dimension: z.literal('theme'), themeId: selectionId.nullable() };
+const paletteChoice = { dimension: z.literal('palette'), paletteId: selectionId.nullable() };
+export const selectThemeInput = z.discriminatedUnion('dimension', [
+  z.discriminatedUnion('scope', [
+    z.strictObject({ ...themeChoice, ...globalChoice }),
+    z.strictObject({ ...themeChoice, ...targetChoice }),
+  ]),
+  z.discriminatedUnion('scope', [
+    z.strictObject({ ...paletteChoice, ...globalChoice }),
+    z.strictObject({ ...paletteChoice, ...targetChoice }),
+  ]),
+  z.strictObject({
+    dimension: z.literal('storyUi'),
+    scope: z.literal('bot'),
+    targetId: selectionId,
+    themeId: selectionId.nullable(),
+    expectedRevision: revision,
+  }),
+]);
+export type SelectThemeRequest = z.infer<typeof selectThemeInput>;
+const background = { background: themeBackground.nullable() };
+export const selectThemeBackgroundInput = z.discriminatedUnion('scope', [
+  z.strictObject({ ...globalChoice, ...background }),
+  z.strictObject({ ...targetChoice, ...background }),
+]);
 export type SelectThemeBackground = z.infer<typeof selectThemeBackgroundInput>;
+export type AppearanceTarget = { scope: 'global' } | { scope: 'bot' | 'chat'; targetId: string };
 
 const resourceId = nonBlank(100);
 export const storedThemeAsset = z.strictObject({

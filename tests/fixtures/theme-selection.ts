@@ -14,7 +14,7 @@ export async function restoreGlobalThemeSelection(
   baseline: ThemePreferences
 ) {
   for (const selection of [
-    { themeId: baseline.defaultThemeId },
+    { dimension: 'theme', themeId: baseline.defaultThemeId },
     { dimension: 'palette', paletteId: baseline.defaultPaletteId ?? null },
   ]) {
     const { preferences } = await themeCatalog(request);

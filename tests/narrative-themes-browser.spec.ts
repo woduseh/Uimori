@@ -25,7 +25,7 @@ async function select(
     data: {
       ...choice,
       scope: 'themeId' in choice ? 'chat' : 'global',
-      ...('paletteId' in choice ? { dimension: 'palette' } : {}),
+      dimension: 'paletteId' in choice ? 'palette' : 'theme',
       expectedRevision: catalog.preferences.revision,
     },
   });

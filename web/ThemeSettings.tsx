@@ -40,7 +40,7 @@ import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
 import { appearanceEndpoints } from '#contracts';
 import { api, ApiError, callEndpoint, saveDownload } from './api.js';
 import { errorDescriptor } from './api-errors.js';
-import { useThemes } from './ThemeContext.js';
+import { appearanceTarget, useThemes } from './ThemeContext.js';
 import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -164,6 +164,7 @@ export function ThemeSettings({
       setScope('global');
   }, [scope, state.scope.botId, state.scope.chatId]);
   const p = state.catalog.preferences;
+  const target = appearanceTarget(scope, state.scope);
   const selectedId =
     scope === 'global'
       ? p.defaultThemeId
@@ -291,16 +292,11 @@ export function ThemeSettings({
     return saved;
   }
   useSettingsSaveHandler(onSaveHandlerChange, save);
-  function choose(themeId: string | null, targetScope = scope) {
+  function choose(themeId: string | null) {
     void action(async () => {
       await callEndpoint(appearanceEndpoints.selectTheme, {
-        scope: targetScope,
-        targetId:
-          targetScope === 'bot'
-            ? state.scope.botId
-            : targetScope === 'chat'
-              ? state.scope.chatId
-              : undefined,
+        dimension: 'theme',
+        ...target,
         themeId,
         expectedRevision: p.revision,
       });
@@ -308,7 +304,7 @@ export function ThemeSettings({
       state.setDisabled(false);
       await state.refresh();
       setNotice(
-        targetScope === 'global' &&
+        target.scope === 'global' &&
           ((state.scope.chatId && p.chatThemes[state.scope.chatId]) ||
             (state.scope.botId && p.botThemes[state.scope.botId]))
           ? uiMessage('visualpanels.defaultLayoutChangedThisChatUsesIts')
@@ -320,9 +316,7 @@ export function ThemeSettings({
     void action(async () => {
       await callEndpoint(appearanceEndpoints.selectTheme, {
         dimension: 'palette',
-        scope,
-        targetId:
-          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined,
+        ...target,
         paletteId,
         expectedRevision: p.revision,
       });
@@ -330,7 +324,7 @@ export function ThemeSettings({
       state.setDisabled(false);
       await state.refresh();
       setNotice(
-        scope === 'global' &&
+        target.scope === 'global' &&
           ((state.scope.chatId && p.chatPalettes?.[state.scope.chatId]) ||
             (state.scope.botId && p.botPalettes?.[state.scope.botId]))
           ? uiMessage('visualpanels.defaultPaletteChangedThisChatUsesIts')
@@ -338,12 +332,12 @@ export function ThemeSettings({
       );
     });
   }
-  function chooseStoryUi(themeId: string | null) {
+  function chooseStoryUi(botId: string, themeId: string | null) {
     void action(async () => {
       await callEndpoint(appearanceEndpoints.selectTheme, {
         dimension: 'storyUi',
         scope: 'bot',
-        targetId: storyUiBotId,
+        targetId: botId,
         themeId,
         expectedRevision: p.revision,
       });
@@ -785,7 +779,7 @@ export function ThemeSettings({
                 aria-label={t('storyUi.botDefault')}
                 value={p.botStoryUiThemes?.[storyUiBotId] ?? ''}
                 disabled={busy || state.loading}
-                onChange={(event) => chooseStoryUi(event.target.value || null)}
+                onChange={(event) => chooseStoryUi(storyUiBotId, event.target.value || null)}
               >
                 <option value="">{t('storyUi.modelStyle')}</option>
                 {p.botStoryUiThemes?.[storyUiBotId] &&
@@ -809,12 +803,9 @@ export function ThemeSettings({
         )}
         <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
         <ThemeBackgroundSettings
-          key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
-          scope={scope}
+          key={target.scope === 'global' ? 'global' : `${target.scope}:${target.targetId}`}
+          target={target}
           disabled={busy || paletteDirty}
-          targetId={
-            scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
-          }
           onDirtyChange={setBackgroundDirty}
           onSaveHandlerChange={registerBackgroundSave}
         />

@@ -9,7 +9,12 @@ import {
   defaultThemeBackground,
   type ThemeBackground,
 } from '../core/theme-background.js';
-import { type SelectThemeBackground, themeBackground } from '#contracts/operations';
+import {
+  appearanceOperations,
+  type SelectThemeBackground,
+  themeBackground,
+} from '#contracts/operations';
+import { parseInput } from '../server/endpoint.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import { pruneUnusedData } from '../server/unused-data.js';
 const owned: { directory: string; store: Store }[] = [];
@@ -46,12 +51,15 @@ test('background scopes are independent; explicit clear blocks inheritance; pref
     background: ThemeBackground | null,
     targetId?: string
   ) =>
-    selectThemeBackground(store, {
-      scope,
-      targetId,
-      background,
-      expectedRevision: themePreferences(store).revision,
-    });
+    selectThemeBackground(
+      store,
+      parseInput(appearanceOperations.selectThemeBackground.input, {
+        scope,
+        ...(targetId && { targetId }),
+        background,
+        expectedRevision: themePreferences(store).revision,
+      })
+    );
   choose('global', image);
   choose('bot', { ...image, blur: 12 }, bot.id);
   choose('chat', { ...defaultThemeBackground }, chat.id);
@@ -60,6 +68,7 @@ test('background scopes are independent; explicit clear blocks inheritance; pref
   choose('chat', null, chat.id);
   expect(resolveThemeBackground(themePreferences(store), scope).blur).toBe(12);
   selectTheme(store, {
+    dimension: 'theme',
     scope: 'global',
     themeId: 'builtin:letter',
     expectedRevision: themePreferences(store).revision,

@@ -8,7 +8,7 @@ import {
   resolveThemeBackground,
   type ThemeBackground,
 } from '../core/theme-background.js';
-import { appearanceEndpoints } from '#contracts';
+import { appearanceEndpoints, type AppearanceTarget } from '#contracts';
 import { ApiError, callEndpoint } from './api.js';
 import { useThemes } from './ThemeContext.js';
 import { uploadPackageImage } from './package-image-upload.js';
@@ -19,15 +19,13 @@ import { SaveButton } from './SaveButton.js';
 import { ResetIcon, UndoIcon } from './ui-icons.js';
 
 export function ThemeBackgroundSettings({
-  scope,
+  target,
   disabled = false,
-  targetId,
   onDirtyChange,
   onSaveHandlerChange,
 }: {
-  scope: 'global' | 'bot' | 'chat';
+  target: AppearanceTarget;
   disabled?: boolean;
-  targetId?: string;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange: SettingsSaveRegistration;
 }) {
@@ -35,14 +33,16 @@ export function ThemeBackgroundSettings({
   const state = useThemes();
   const p = state.catalog.preferences;
   const selected =
-    scope === 'global'
+    target.scope === 'global'
       ? p.defaultBackground
-      : scope === 'bot'
-        ? p.botBackgrounds?.[targetId ?? '']
-        : p.chatBackgrounds?.[targetId ?? ''];
+      : (target.scope === 'bot' ? p.botBackgrounds : p.chatBackgrounds)?.[target.targetId];
   const inherited = resolveThemeBackground(
     p,
-    scope === 'global' ? {} : scope === 'bot' ? { botId: targetId } : state.scope
+    target.scope === 'global'
+      ? {}
+      : target.scope === 'bot'
+        ? { botId: target.targetId }
+        : state.scope
   );
   const [draft, setDraft] = useState<ThemeBackground>(selected ?? inherited);
   const [operation, setOperation] = useState<'save' | 'upload' | null>(null);
@@ -54,7 +54,7 @@ export function ThemeBackgroundSettings({
   const locked = useRef(false);
   const [baseline, setBaseline] = useState(JSON.stringify(selected ?? inherited));
   const dirty = JSON.stringify(draft) !== baseline;
-  const inheriting = scope !== 'global' && !selected;
+  const inheriting = target.scope !== 'global' && !selected;
   useEffect(() => {
     if (!dirty && !busy) {
       setDraft(selected ?? inherited);
@@ -80,8 +80,7 @@ export function ThemeBackgroundSettings({
     setNotice('');
     try {
       await callEndpoint(appearanceEndpoints.selectThemeBackground, {
-        scope,
-        targetId,
+        ...target,
         background,
         expectedRevision: p.revision,
       });
@@ -131,7 +130,7 @@ export function ThemeBackgroundSettings({
           <h3 id="theme-background-heading">{t('settings.outerBackground')}</h3>
           <small role="status">{dirty && t('shared.unsaved')}</small>
         </div>
-        {scope !== 'global' && (
+        {target.scope !== 'global' && (
           <button
             disabled={disabled || busy || state.loading || !selected}
             onClick={() => void saveValue(null)}

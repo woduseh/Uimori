@@ -119,7 +119,7 @@ test('themes, choices and undo persist across SQLite restart without a schema mi
     title: 'Custom',
     revision: 3,
   });
-  selectTheme(store, { scope: 'global', themeId: b.id, expectedRevision: 0 });
+  selectTheme(store, { dimension: 'theme', scope: 'global', themeId: b.id, expectedRevision: 0 });
   expect(store.db.prepare('PRAGMA user_version').get()?.user_version).toBe(DATABASE_SCHEMA_VERSION);
   store.close();
   const reopened = new Store(store.path);
@@ -137,12 +137,16 @@ test('chat overrides bot overrides global; deleting a theme removes only its app
   const b = save(store, 'Bot');
   const c = save(store, 'Chat');
   const choose = (scope: SelectThemeRequest['scope'], themeId: string | null, targetId?: string) =>
-    selectTheme(store, {
-      scope,
-      themeId,
-      targetId,
-      expectedRevision: themePreferences(store).revision,
-    });
+    selectTheme(
+      store,
+      parseInput(appearanceOperations.selectTheme.input, {
+        dimension: 'theme',
+        scope,
+        themeId,
+        ...(targetId && { targetId }),
+        expectedRevision: themePreferences(store).revision,
+      })
+    );
   choose('global', a.id);
   choose('bot', b.id, bot.id);
   choose('chat', c.id, chat.id);
@@ -151,7 +155,12 @@ test('chat overrides bot overrides global; deleting a theme removes only its app
   const shown = themePreferences(store).revision;
   deleteTheme(store, c.id, c.revision);
   expect(() =>
-    selectTheme(store, { scope: 'global', themeId: c.id, expectedRevision: shown })
+    selectTheme(store, {
+      dimension: 'theme',
+      scope: 'global',
+      themeId: c.id,
+      expectedRevision: shown,
+    })
   ).toThrow('REVISION_CONFLICT');
   expect(resolveTheme(themeCatalog(store), scope).id).toBe(b.id);
   choose('bot', null, bot.id);
@@ -173,9 +182,19 @@ test('built-ins cannot be edited or deleted; stale preference writes fail', () =
     })
   ).toThrow();
   expect(() => deleteTheme(store, DEFAULT_THEME_ID, 1)).toThrow();
-  selectTheme(store, { scope: 'global', themeId: 'builtin:letter', expectedRevision: 0 });
+  selectTheme(store, {
+    dimension: 'theme',
+    scope: 'global',
+    themeId: 'builtin:letter',
+    expectedRevision: 0,
+  });
   expect(() =>
-    selectTheme(store, { scope: 'global', themeId: DEFAULT_THEME_ID, expectedRevision: 0 })
+    selectTheme(store, {
+      dimension: 'theme',
+      scope: 'global',
+      themeId: DEFAULT_THEME_ID,
+      expectedRevision: 0,
+    })
   ).toThrow();
   expect(
     resolveTheme(
@@ -299,7 +318,7 @@ test('HTTP API revalidates the catalog, saves, exports, selects, validates and d
   const selected = await app.inject({
     method: 'POST',
     url: '/api/themes/selection',
-    payload: { scope: 'global', themeId: theme.id, expectedRevision: 0 },
+    payload: { dimension: 'theme', scope: 'global', themeId: theme.id, expectedRevision: 0 },
   });
   expect(selected.statusCode, selected.body).toBe(200);
   const invalid = await app.inject({
@@ -395,7 +414,13 @@ test('a stale tab gets a revision conflict or a catalogued code for themes and p
     {
       method: 'POST',
       url: '/api/themes/selection',
-      payload: { scope: 'chat', targetId: 'deleted-chat', themeId: null, expectedRevision: shown },
+      payload: {
+        dimension: 'theme',
+        scope: 'chat',
+        targetId: 'deleted-chat',
+        themeId: null,
+        expectedRevision: shown,
+      },
     },
     {
       method: 'POST',
@@ -429,7 +454,13 @@ test('deleting a bot or chat drops only its appearance choices; a stale tab cann
     ['bot', bot.id],
     ['chat', chat.id],
   ] as const) {
-    selectTheme(store, { scope, targetId, themeId: theme.id, expectedRevision: current() });
+    selectTheme(store, {
+      dimension: 'theme',
+      scope,
+      targetId,
+      themeId: theme.id,
+      expectedRevision: current(),
+    });
     selectTheme(store, {
       scope,
       targetId,
@@ -449,7 +480,13 @@ test('deleting a bot or chat drops only its appearance choices; a stale tab cann
   const refused = (scope: 'bot' | 'chat', targetId: string) => {
     const before = themePreferences(store);
     expect(() =>
-      selectTheme(store, { scope, targetId, themeId: theme.id, expectedRevision: current() })
+      selectTheme(store, {
+        dimension: 'theme',
+        scope,
+        targetId,
+        themeId: theme.id,
+        expectedRevision: current(),
+      })
     ).toThrow('REVISION_CONFLICT');
     expect(() =>
       selectThemeBackground(store, { scope, targetId, background, expectedRevision: current() })
@@ -547,6 +584,7 @@ test('portable story UI themes use their own bot selection and the shared revisi
   expect(boardFile.storyUi).toEqual(boarded.storyUi);
 
   selectTheme(app.store, {
+    dimension: 'theme',
     scope: 'bot',
     targetId: bot.id,
     themeId: 'builtin:letter',
@@ -611,13 +649,16 @@ describe('Independent layout and palette choices', () => {
     scope: SelectThemeRequest['scope'] = 'global',
     targetId?: string
   ) {
-    return selectTheme(store, {
-      dimension,
-      [dimension === 'theme' ? 'themeId' : 'paletteId']: id,
-      scope,
-      targetId,
-      expectedRevision: themePreferences(store).revision,
-    });
+    return selectTheme(
+      store,
+      parseInput(appearanceOperations.selectTheme.input, {
+        dimension,
+        [dimension === 'theme' ? 'themeId' : 'paletteId']: id,
+        scope,
+        ...(targetId && { targetId }),
+        expectedRevision: themePreferences(store).revision,
+      })
+    );
   }
 
   test('default and named palettes supply complete, valid light and dark tokens', () => {
@@ -787,6 +828,7 @@ describe('Independent layout and palette choices', () => {
       { dimension: 'palette', paletteId: 123 },
       { dimension: 'palette' },
       { paletteId: 'cream' },
+      { themeId: DEFAULT_THEME_ID },
       { dimension: 'palette', paletteId: 'cream', themeId: DEFAULT_THEME_ID },
       { dimension: 'theme', themeId: DEFAULT_THEME_ID, paletteId: null },
       { dimension: 'other', paletteId: 'cream' },
@@ -807,9 +849,22 @@ describe('Independent layout and palette choices', () => {
       ).toThrow();
       expect(themePreferences(store).revision).toBe(0);
     }
+    const mistyped: SelectThemeRequest[] = [
+      // @ts-expect-error a story UI theme is chosen per bot
+      { dimension: 'storyUi', scope: 'chat', targetId: 'c', themeId: null, expectedRevision: 0 },
+      // @ts-expect-error a global choice names no target
+      { dimension: 'theme', scope: 'global', targetId: 'b', themeId: null, expectedRevision: 0 },
+      // @ts-expect-error a bot choice names its target
+      { dimension: 'theme', scope: 'bot', themeId: null, expectedRevision: 0 },
+      // @ts-expect-error a palette choice sends paletteId
+      { dimension: 'palette', scope: 'global', themeId: null, expectedRevision: 0 },
+    ];
+    for (const input of mistyped)
+      expect(() => parseInput(appearanceOperations.selectTheme.input, input)).toThrow();
     choose(store, 'palette', 'cream');
     expect(() =>
       selectTheme(store, {
+        dimension: 'theme',
         scope: 'global',
         themeId: 'builtin:letter',
         expectedRevision: 0,

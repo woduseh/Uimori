@@ -19,7 +19,7 @@ import {
   type ThemeCatalog,
   type ThemeScope,
 } from '../core/themes.js';
-import { appearanceEndpoints } from '#contracts';
+import { appearanceEndpoints, type AppearanceTarget } from '#contracts';
 import { callEndpoint } from './api.js';
 import { updateMessageTheme } from './theme-message-style.js';
 import { applyThemeAssets } from './theme-assets.js';
@@ -44,6 +44,13 @@ type ThemeState = {
   setDisabled: (value: boolean) => void;
 };
 export const ThemeContext = createContext<ThemeState | null>(null);
+export function appearanceTarget(
+  scope: AppearanceTarget['scope'],
+  { botId, chatId }: ThemeScope
+): AppearanceTarget {
+  const targetId = scope === 'bot' ? botId : scope === 'chat' ? chatId : undefined;
+  return scope !== 'global' && targetId ? { scope, targetId } : { scope: 'global' };
+}
 export function useThemes(): ThemeState {
   const state = useContext(ThemeContext);
   if (!state) throw new Error('ThemeProvider is missing');

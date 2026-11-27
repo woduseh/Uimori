@@ -149,11 +149,10 @@ export function applyHelperPresentationMutation(
   args: Record<string, unknown>,
   bytes?: Uint8Array
 ): unknown {
-  if (name !== 'theme.select' || args.dimension !== 'storyUi')
-    return invokePresentationTool(store, name, args, bytes);
-
+  if (name !== 'theme.select') return invokePresentationTool(store, name, args, bytes);
   const input = parseInput(appearanceOperations.selectTheme.input, args);
-  const botId = input.targetId ?? '';
+  if (input.dimension !== 'storyUi') return selectTheme(store, input);
+  const botId = input.targetId;
   const before = themePreferences(store).botStoryUiThemes?.[botId] ?? null;
   const result = selectTheme(store, input);
   const after = result.botStoryUiThemes?.[botId] ?? null;

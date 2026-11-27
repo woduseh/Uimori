@@ -313,6 +313,7 @@ test('P09 copying a scene creates an independent chat and keeps each tab draft',
   const catalog = await (await request.get('/api/themes')).json();
   const selectedTheme = await request.post('/api/themes/selection', {
     data: {
+      dimension: 'theme',
       scope: 'chat',
       targetId: chat.id,
       themeId: 'builtin:classic-frame',

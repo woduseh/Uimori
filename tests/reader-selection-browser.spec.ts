@@ -58,6 +58,7 @@ async function seed(
   const catalog = await (await request.get('/api/themes')).json();
   const selection = await request.post('/api/themes/selection', {
     data: {
+      dimension: 'theme',
       themeId: options.theme ?? 'builtin:forest',
       targetId: chat.id,
       scope: 'chat',
