@@ -768,12 +768,6 @@ export const messages = {
     ja: 'エラーメッセージを閉じる',
     zh: '关闭错误消息',
   },
-  'shared.historyOmitted': {
-    ko: '대화 이력 일부가 프롬프트에 포함되지 않았어요. 대화 범위 블록과 현재 입력 블록의 포함 조건을 확인해 주세요.',
-    en: 'Part of the conversation history was omitted from the prompt. Check the inclusion conditions for the conversation range and current input blocks.',
-    ja: '会話履歴の一部がプロンプトに含まれていません。会話範囲ブロックと現在の入力ブロックの包含条件を確認してください。',
-    zh: '提示词中未包含部分对话历史。请检查对话范围块和当前输入块的包含条件。',
-  },
   'shared.errorCode': {
     ko: '오류 코드: {code}',
     en: 'Error code: {code}',
