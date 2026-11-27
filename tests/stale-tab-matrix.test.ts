@@ -388,7 +388,7 @@ const matrix: Record<string, Entry> = {
         arrange: () => {
           const item = palette();
           deletePalette(store(), item.id, item.revision);
-          return { input: { id: item.id, model: paletteModel, expectedRevision: item.revision } };
+          return { input: { id: item.id, model: {}, expectedRevision: item.revision } };
         },
         answer: conflict,
         targetRevision: true,

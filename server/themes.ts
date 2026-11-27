@@ -224,13 +224,16 @@ export function savePalette(
 ): Palette {
   if (id && isPaletteId(id))
     throw new HelperToolError(400, 'PALETTE_BUILTIN_READONLY', 'Save a copy without an ID.');
-  let model: ReturnType<typeof validatePalette>;
-  try {
-    model = validatePalette(value);
-  } catch (error) {
-    throw asAppError(error);
-  }
-  const saved = store.product.save('palette', model, id, expectedRevision) as Palette;
+  const saved = store.transaction(() => {
+    if (id) store.product.editable('palette', id, expectedRevision);
+    let model: ReturnType<typeof validatePalette>;
+    try {
+      model = validatePalette(value);
+    } catch (error) {
+      throw asAppError(error);
+    }
+    return store.product.saveInTransaction('palette', model, id, expectedRevision) as Palette;
+  });
   store.invalidated('themes');
   return saved;
 }
