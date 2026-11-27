@@ -2,6 +2,8 @@ import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
 import { downloadArchive } from '../web/archive-download.js';
 import { loadLocale, setLocale, translateMessage, UI_LOCALES } from '../web/i18n.js';
+import { errorDescriptor } from '../web/api-errors.js';
+import { emptyTheme, validateTheme } from '../core/themes.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
@@ -65,6 +67,19 @@ test('a coded error renders its message from params in the current locale', asyn
   expect(shown(result)).toContain('1,234자');
   setLocale('en');
   expect(shown(result)).toContain('1,234 characters');
+});
+
+test('a local validator error renders its catalogued message with a localized field label', () => {
+  let caught: unknown;
+  try {
+    validateTheme({ ...emptyTheme('Long'), appCss: 'x'.repeat(1_000_001) });
+  } catch (error) {
+    caught = error;
+  }
+  const descriptor = errorDescriptor(caught);
+  expect(translateMessage(descriptor)).toBe('앱 CSS: 최대 1,000,000자의 문자열을 입력해 주세요.');
+  setLocale('en');
+  expect(translateMessage(descriptor)).toBe('App CSS: Enter text of up to 1,000,000 characters.');
 });
 
 test('missing-translation scene labels render in the language shown, including after a switch', async () => {

@@ -38,6 +38,7 @@ import {
 } from '../core/themes.js';
 import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
 import { api, ApiError, saveDownload } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import { useThemes } from './ThemeContext.js';
 import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
@@ -226,7 +227,7 @@ export function ThemeSettings({
         await state.refresh();
         if (saveAttempt) setSaveConflict(true);
       }
-      setError((cause as Error).message);
+      setError(errorDescriptor(cause));
     } finally {
       locked.current = false;
       setOperation(null);
@@ -1057,7 +1058,7 @@ export function ThemeSettings({
                       setPreview(t);
                       setError('');
                     } catch (cause) {
-                      setError((cause as Error).message);
+                      setError(errorDescriptor(cause));
                     }
                   }}
                 >

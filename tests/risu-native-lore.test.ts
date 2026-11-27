@@ -153,7 +153,9 @@ test('conditional native positions use frozen lore selection and pinned budgets 
     )
   ).toBe(false);
   snapshot.profile!.loreContext = { ...DEFAULT_LORE_CONTEXT, maxPinnedTokens: 2 };
-  expect(() => compileSnapshotPrompt(snapshot)).toThrow('LORE_PINNED_BUDGET_EXCEEDED');
+  expect(() => compileSnapshotPrompt(snapshot)).toThrow(
+    expect.objectContaining({ code: 'LORE_PINNED_BUDGET_EXCEEDED' })
+  );
 });
 
 test('other native placement directives remain reported instead of pretending to support them', async () => {

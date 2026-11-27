@@ -33,7 +33,8 @@ import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
-import { AppError, errorWire, storedModelRequired } from './app-errors.js';
+import { AppError, errorWire, storedModelRequired, validationAppError } from './app-errors.js';
+import { ValidationError } from '../core/validation-error.js';
 import { checkEndpointOutputs } from './endpoint.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
@@ -959,20 +960,22 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   app.setErrorHandler((error, request, reply) => {
     const coreError =
-      error instanceof NativeTransferError
-        ? new AppError(
-            400,
-            error.code === 'NATIVE_TRANSFER_FORMAT' ||
-              error.code === 'NATIVE_TRANSFER_MODULE_BINDINGS'
-              ? error.code
-              : 'NATIVE_TRANSFER_FILE_INVALID'
-          )
-        : (error instanceof RisuContentError || error instanceof PackageStartError) &&
-            error.message === 'PACKAGE_START_TEXT_TOO_LONG'
-          ? new AppError(400, 'PACKAGE_START_TEXT_TOO_LONG', { limit: SOURCE_TEXT_MAX_CHARS })
-          : error instanceof ChatTranscriptError
-            ? new AppError(400, transcriptErrorCode(error.message))
-            : undefined;
+      error instanceof ValidationError
+        ? validationAppError(error)
+        : error instanceof NativeTransferError
+          ? new AppError(
+              400,
+              error.code === 'NATIVE_TRANSFER_FORMAT' ||
+                error.code === 'NATIVE_TRANSFER_MODULE_BINDINGS'
+                ? error.code
+                : 'NATIVE_TRANSFER_FILE_INVALID'
+            )
+          : (error instanceof RisuContentError || error instanceof PackageStartError) &&
+              error.message === 'PACKAGE_START_TEXT_TOO_LONG'
+            ? new AppError(400, 'PACKAGE_START_TEXT_TOO_LONG', { limit: SOURCE_TEXT_MAX_CHARS })
+            : error instanceof ChatTranscriptError
+              ? new AppError(400, transcriptErrorCode(error.message))
+              : undefined;
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =

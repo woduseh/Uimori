@@ -103,7 +103,9 @@ test('pinned budget fails explicitly without silently dropping content', () => {
     maxRetainedEntries: 2,
     maxPinnedTokens: 2,
   };
-  expect(() => buildMainInput(s)).toThrow('LORE_PINNED_BUDGET_EXCEEDED');
+  expect(() => buildMainInput(s)).toThrow(
+    expect.objectContaining({ statusCode: 409, code: 'LORE_PINNED_BUDGET_EXCEEDED' })
+  );
 });
 test('four native wire codecs deliver pinned bodies once and preserve fixed prefix across turns', async () => {
   const s = fixture();

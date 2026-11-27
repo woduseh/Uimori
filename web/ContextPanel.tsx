@@ -299,7 +299,13 @@ export function ContextPanel({
               <div className="context-summary">
                 {!detail.usable && (
                   <NoticeBanner>
-                    {t('settings.flow22', { v0: detail.invalidReason ?? t('settings.m280') })}
+                    {t('settings.flow22', {
+                      v0: t(
+                        detail.invalidReason === 'CONTEXT_INPUTS_CHANGED'
+                          ? 'settings.contextInputsChanged'
+                          : 'settings.m280'
+                      ),
+                    })}
                   </NoticeBanner>
                 )}
                 <small>

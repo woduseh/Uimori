@@ -1,6 +1,7 @@
 import { RISU_ASSET_MAX } from './risu-limits.js';
 import type { PackageImage } from './package-images.js';
 import type { RisuContent } from './risu-content.js';
+import { ValidationError } from './validation-error.js';
 
 const records = (value: unknown): Record<string, unknown>[] =>
   Array.isArray(value)
@@ -44,7 +45,11 @@ export function addNativeRisuImage(value: RisuContent, uploaded: PackageImage): 
     (value.images?.length ?? 0) >= RISU_ASSET_MAX ||
     value.images?.some((image) => image.id === uploaded.id)
   )
-    throw new Error('이미지 개수 또는 식별자를 확인해 주세요.');
+    throw new ValidationError(
+      400,
+      'RISU_ASSET_ADD_INVALID',
+      `The package already has ${RISU_ASSET_MAX} images or an image with ID ${uploaded.id}.`
+    );
   const next = structuredClone(value),
     native = next.nativeRisu;
   const names = new Set(
@@ -87,7 +92,11 @@ export function replaceNativeRisuImage(
   uploaded: PackageImage
 ): RisuContent {
   if (!value.images?.some((image) => image.id === imageId))
-    throw new Error('교체할 이미지가 변경됐어요. 다시 선택해 주세요.');
+    throw new ValidationError(
+      409,
+      'RISU_ASSET_REPLACE_STALE',
+      `Image ${imageId} is no longer in the package; choose the image to replace again.`
+    );
   return {
     ...value,
     images: value.images.map((image) =>
@@ -106,16 +115,20 @@ export function removeNativeRisuImage(value: RisuContent, imageId: string): Risu
     Array.isArray(native.module?.assets) &&
     native.module.assets.some((entry) => Array.isArray(entry) && entry[0] === 'main');
   if (moduleNames.has('main') && native.module?.icon && moduleHadMainAsset)
-    throw new Error(
-      '모듈 대표 이미지와 같은 이름의 에셋이 있어요. 모듈 원문에서 해당 항목을 먼저 확인해 주세요.'
+    throw new ValidationError(
+      400,
+      'RISU_ASSET_MODULE_ICON_CONFLICT',
+      'The module has both an icon and an asset named main; resolve that entry in the module source first.'
     );
   if (native.module && Array.isArray(native.module.assets)) {
     for (const name of moduleNames)
       if (
         native.module.assets.filter((entry) => Array.isArray(entry) && entry[0] === name).length > 1
       )
-        throw new Error(
-          '모듈에 같은 이름의 에셋이 여러 개 있어요. 모듈 원문에서 해당 항목을 먼저 확인해 주세요.'
+        throw new ValidationError(
+          400,
+          'RISU_ASSET_MODULE_DUPLICATE',
+          `The module has several assets named ${name}; resolve them in the module source first.`
         );
     native.module.assets = native.module.assets.filter(
       (entry) => !Array.isArray(entry) || !moduleNames.has(entry[0])

@@ -130,6 +130,17 @@ test('uploaded assets are served, saved, exported with their bytes and re-import
   expect(() => parseThemeFile({ ...exported, files: [] })).toThrow();
 });
 
+test('an invalid theme save answers with the catalogued validator code and params', async () => {
+  const { app } = await server();
+  const hash = 'c'.repeat(64);
+  const duplicate = await saveTheme(app, [
+    { name: 'paper', kind: 'image', hash },
+    { name: 'paper', kind: 'image', hash },
+  ]);
+  expect(duplicate.statusCode).toBe(400);
+  expect(duplicate.json()).toEqual({ code: 'THEME_ASSET_DUPLICATE', params: { name: 'paper' } });
+});
+
 test('theme saves, undo replacement and deletion release only bytes no theme still owns', async () => {
   const { app } = await server();
   const shared = await upload(app, 'font', minimalTtf());

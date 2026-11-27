@@ -7,6 +7,7 @@ import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
+import { errorDescriptor } from './api-errors.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -345,7 +346,7 @@ export function RisuNativeFields({
       setDraft(null);
       setError('');
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(errorDescriptor(caught));
     }
   }
   const description = string(standalone ? native.module?.description : native.card.description);

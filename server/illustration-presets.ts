@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
-import { AppError, HelperToolError } from './app-errors.js';
+import { AppError, HelperToolError, validationAppError } from './app-errors.js';
+import { ValidationError } from '../core/validation-error.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
@@ -75,6 +76,7 @@ export function saveIllustrationPreset(
   try {
     model = validateIllustrationPreset(value);
   } catch (error) {
+    if (error instanceof ValidationError) throw validationAppError(error);
     throw new HelperToolError(400, 'ILLUSTRATION_PRESET_INVALID', (error as Error).message);
   }
   const saved = store.product.save(

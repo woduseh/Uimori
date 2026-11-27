@@ -25,6 +25,9 @@ import type { Library } from '../core/product.js';
 import type { IllustrationSettingsView } from '../core/illustration.js';
 import { isModelSelectable } from './model-selection.js';
 import { api, ApiError, saveDownload } from './api.js';
+import { errorDescriptor } from './api-errors.js';
+import { IllustrationError } from '../core/illustration-errors.js';
+import { ValidationError } from '../core/validation-error.js';
 import { Dialog } from './Dialog.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -47,10 +50,16 @@ const localizedDefinition = (preset: IllustrationPreset): IllustrationPresetDefi
   ...illustrationPresetDefinition(preset),
   ...illustrationPresetText(preset),
 });
-const messageOf = (error: unknown) => {
-  const message = (error as Error).message;
-  return /^COMFYUI_/u.test(message) ? illustrationErrorDescriptor(message) : message;
-};
+const messageOf = (error: unknown) =>
+  error instanceof IllustrationError
+    ? illustrationErrorDescriptor(error.code)
+    : errorDescriptor(error);
+const isWorkflowError = (error: unknown) =>
+  error instanceof IllustrationError
+    ? error.code.startsWith('COMFYUI_WORKFLOW_')
+    : error instanceof ValidationError &&
+      error.code === 'ILLUSTRATION_PRESET_FIELD_TOO_LONG' &&
+      (error.params as { field: string }).field === 'comfyui.workflow';
 export function IllustrationPresetSettings({
   library,
   environment,
@@ -162,7 +171,7 @@ export function IllustrationPresetSettings({
     } catch (cause) {
       const message = messageOf(cause);
       setError(message);
-      if (cause instanceof Error && /^COMFYUI_WORKFLOW_|^ComfyUI 워크플로:/u.test(cause.message)) {
+      if (isWorkflowError(cause)) {
         setWorkflowError(message);
         requestAnimationFrame(() => {
           editor.current?.querySelector<HTMLTextAreaElement>('[data-workflow-editor]')?.focus();

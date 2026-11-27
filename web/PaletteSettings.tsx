@@ -11,6 +11,7 @@ import {
 import { useThemes } from './ThemeContext.js';
 import { paletteText } from './builtin-labels.js';
 import { api, ApiError } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
@@ -42,7 +43,7 @@ export function usePaletteLibrary() {
     try {
       await work();
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(errorDescriptor(cause));
       if (cause instanceof ApiError && cause.status === 409) {
         setConflict(true);
         await state.refresh();
@@ -181,7 +182,7 @@ export function PaletteEditor({
           colors: validatePalette(draft.model).colors,
         });
     } catch (cause) {
-      library.setError((cause as Error).message);
+      library.setError(errorDescriptor(cause));
     }
   }
   return (

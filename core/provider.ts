@@ -30,6 +30,7 @@ import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
 import { packageImages } from './package-images.js';
 import { candidateTerms, createCandidateSearch } from './candidate-search.js';
+import { ValidationError } from './validation-error.js';
 
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 const MAIN_READ_FAMILIES: readonly ReadFamily[] = ['knowledge', 'skills', 'story'];
@@ -343,11 +344,10 @@ export function buildMainInput(
       0
     );
     if (used > policy.maxPinnedTokens)
-      throw Object.assign(
-        new Error(
-          'LORE_PINNED_BUDGET_EXCEEDED: 고정 자료가 설정한 토큰 한도를 초과했어요. 자료를 줄이거나 고정 자료 한도를 조정해 주세요.'
-        ),
-        { statusCode: 409 }
+      throw new ValidationError(
+        409,
+        'LORE_PINNED_BUDGET_EXCEEDED',
+        `Pinned sources use ${used} tokens, over the pinned-source limit of ${policy.maxPinnedTokens}; unpin sources or raise the limit.`
       );
     input.facts = input.pinnedSources
       .filter((item) => item.kind !== 'skill')

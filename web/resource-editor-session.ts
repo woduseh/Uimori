@@ -1,5 +1,6 @@
 import { message } from './i18n.js';
 import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import {
   editableResource,
   type ResourceKind,
@@ -372,7 +373,7 @@ export class ResourceEditorSession {
     try {
       prepared = previousCreation?.model ?? this.prepared(this.state.local.model);
     } catch (error) {
-      this.emit({ error: (error as Error).message });
+      this.emit({ error: errorDescriptor(error) });
       throw error;
     }
     if (creating && !previousCreation)
@@ -454,7 +455,7 @@ export class ResourceEditorSession {
         if (persisted) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
       }
       this.emit({
-        error: (error as Error).message,
+        error: errorDescriptor(error),
         creationPending: !!this.pendingCreation,
         conflict: this.state.conflict || (error instanceof ApiError && error.status === 409),
       });

@@ -5,7 +5,7 @@ import { isStoryUiThemeSetting } from '../core/story-ui-style.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
-import { AppError, HelperToolError } from './app-errors.js';
+import { AppError, asAppError, HelperToolError } from './app-errors.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
@@ -80,7 +80,7 @@ export function saveTheme(
   try {
     model = validateTheme(value);
   } catch (error) {
-    throw new HelperToolError(400, 'THEME_INVALID', (error as Error).message);
+    throw asAppError(error);
   }
   assertThemeAssetsStored(store.db, model.assets);
   const saved = store.product.save('theme', model, id, expectedRevision) as Theme;
@@ -161,8 +161,8 @@ export function selectThemeBackground(store: Store, input: unknown): ThemePrefer
   let background: ReturnType<typeof validateThemeBackground> | null;
   try {
     background = b.background === null ? null : validateThemeBackground(b.background);
-  } catch {
-    throw new HttpError(400, 'Invalid theme background');
+  } catch (error) {
+    throw asAppError(error);
   }
   const expected = number(b.expectedRevision, 'revision', 0);
   return store.transaction(() => {
@@ -231,7 +231,7 @@ export function savePalette(
   try {
     model = validatePalette(value);
   } catch (error) {
-    throw new HelperToolError(400, 'PALETTE_INVALID', (error as Error).message);
+    throw asAppError(error);
   }
   const saved = store.product.save('palette', model, id, expectedRevision) as Palette;
   store.invalidated('themes');

@@ -5,6 +5,7 @@ import { validatePackageModules, type PackageModuleRef } from './package-feature
 import { validateTemplateVariableDefaults } from './template-variables.js';
 import { assertRisuContentSource, type RisuContentSource } from './risu-native.js';
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
+import { ValidationError } from './validation-error.js';
 
 export const CONTENT_ROLES = ['bot', 'persona', 'module'] as const;
 export type ContentRole = (typeof CONTENT_ROLES)[number];
@@ -231,7 +232,7 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
     if (p.starts !== undefined) validatePackageStarts(p.starts);
     if (p.modules !== undefined) validatePackageModules(p.modules);
   } catch (error) {
-    if (error instanceof RisuContentError) throw error;
+    if (error instanceof RisuContentError || error instanceof ValidationError) throw error;
     fail(error instanceof Error ? error.message : 'PACKAGE_FEATURE_INVALID');
   }
   if (p.loreActivation !== undefined) {

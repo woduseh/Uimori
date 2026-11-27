@@ -258,7 +258,9 @@ test('v1 preset files infer their generator and v2 files keep the explicit choic
     const file = illustrationPresetFile({ ...legacy, generator: 'codex' });
     expect(file.version).toBe(2);
     expect(parseIllustrationPresetFile(file).generator).toBe('codex');
-    expect(() => parseIllustrationPresetFile({ ...file, preset: legacy })).toThrow('생성기');
+    expect(() => parseIllustrationPresetFile({ ...file, preset: legacy })).toThrow(
+      expect.objectContaining({ code: 'ILLUSTRATION_PRESET_GENERATOR_REQUIRED' })
+    );
     expect(() =>
       parseIllustrationPresetFile({ ...file, preset: { ...legacy, generator: 'unknown' } })
     ).toThrow();

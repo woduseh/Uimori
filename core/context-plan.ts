@@ -55,5 +55,5 @@ export type ContextDetail = {
   checkpoint: ContextCheckpoint | null;
   jobs: Omit<ContextJob, 'snapshot'>[];
   usable: boolean;
-  invalidReason: string | null;
+  invalidReason: 'CONTEXT_INPUTS_CHANGED' | null;
 };

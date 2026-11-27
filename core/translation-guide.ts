@@ -1,3 +1,5 @@
+import { ValidationError } from './validation-error.js';
+
 export type TranslationGuide = {
   instructions: string;
   terms: { source: string; target: string; note?: string }[];
@@ -42,42 +44,59 @@ export function withTranslationGuide(
 }
 export function validateTranslationGuide(value: unknown): TranslationGuide {
   const guide = object(value);
-  const fail = (message: string): never => {
-    throw new Error(message);
-  };
+  const {
+    instructions: instructionsLimit,
+    terms: termsLimit,
+    term: termLimit,
+    note: noteLimit,
+  } = TRANSLATION_GUIDE_LIMITS;
   if (
     !value ||
     Array.isArray(value) ||
     Object.keys(guide).some((key) => !['instructions', 'terms'].includes(key))
   )
-    fail('번역 지침은 instructions와 terms로 구성된 객체여야 해요.');
-  if (
-    typeof guide.instructions !== 'string' ||
-    guide.instructions.length > TRANSLATION_GUIDE_LIMITS.instructions
-  )
-    fail(`번역 지침은 ${TRANSLATION_GUIDE_LIMITS.instructions}자 이내로 작성해 주세요.`);
-  if (!Array.isArray(guide.terms) || guide.terms.length > TRANSLATION_GUIDE_LIMITS.terms)
-    fail(`번역 표기는 ${TRANSLATION_GUIDE_LIMITS.terms}개 이내의 목록이어야 해요.`);
+    throw new ValidationError(
+      400,
+      'TRANSLATION_GUIDE_INVALID',
+      'translationGuide: expected an object with only instructions and terms.'
+    );
+  if (typeof guide.instructions !== 'string' || guide.instructions.length > instructionsLimit)
+    throw new ValidationError(
+      400,
+      'TRANSLATION_GUIDE_INSTRUCTIONS_TOO_LONG',
+      `translationGuide.instructions: expected a string of at most ${instructionsLimit} characters.`,
+      { limit: instructionsLimit }
+    );
+  if (!Array.isArray(guide.terms) || guide.terms.length > termsLimit)
+    throw new ValidationError(
+      400,
+      'TRANSLATION_GUIDE_TERMS_TOO_MANY',
+      `translationGuide.terms: expected an array of at most ${termsLimit} items.`,
+      { limit: termsLimit }
+    );
   for (const [index, value] of (guide.terms as unknown[]).entries()) {
     const term = object(value);
     if (
       Object.keys(term).some((key) => !['source', 'target', 'note'].includes(key)) ||
       typeof term.source !== 'string' ||
       !term.source.trim() ||
-      term.source.length > TRANSLATION_GUIDE_LIMITS.term ||
+      term.source.length > termLimit ||
       typeof term.target !== 'string' ||
       !term.target.trim() ||
-      term.target.length > TRANSLATION_GUIDE_LIMITS.term
+      term.target.length > termLimit
     )
-      fail(
-        `표기 ${index + 1}: 원문과 사용할 표기를 각각 ${TRANSLATION_GUIDE_LIMITS.term}자 이내로 입력해 주세요.`
+      throw new ValidationError(
+        400,
+        'TRANSLATION_GUIDE_TERM_INVALID',
+        `translationGuide.terms[${index}]: expected only source, target and note, with non-empty source and target of at most ${termLimit} characters each.`,
+        { term: index + 1, limit: termLimit }
       );
-    if (
-      term.note !== undefined &&
-      (typeof term.note !== 'string' || term.note.length > TRANSLATION_GUIDE_LIMITS.note)
-    )
-      fail(
-        `표기 ${index + 1}: 조건과 설명은 ${TRANSLATION_GUIDE_LIMITS.note}자 이내로 작성해 주세요.`
+    if (term.note !== undefined && (typeof term.note !== 'string' || term.note.length > noteLimit))
+      throw new ValidationError(
+        400,
+        'TRANSLATION_GUIDE_NOTE_TOO_LONG',
+        `translationGuide.terms[${index}].note: expected a string of at most ${noteLimit} characters.`,
+        { term: index + 1, limit: noteLimit }
       );
   }
   return structuredClone(guide) as TranslationGuide;

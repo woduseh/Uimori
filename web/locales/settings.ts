@@ -1697,6 +1697,12 @@ export const messages = {
     ja: '最初に読んだ原文{v0}、Run {v1}',
     zh: '首次读取原文{v0}，Run {v1}',
   },
+  'settings.contextInputsChanged': {
+    ko: '원문, 메모 또는 작문 설정이 바뀌어 다음 입력에 이 요약을 사용하지 않아요.',
+    en: 'The source, notes, or writing settings changed, so this summary is not used for the next input.',
+    ja: '原文、メモ、または作文設定が変わったため、次の入力ではこの要約を使用しません。',
+    zh: '原文、笔记或写作设置已更改，下次输入将不使用此摘要。',
+  },
   'settings.flow22': {
     ko: '이전 요약을 보존하고 있어요. {v0}',
     en: 'The previous summary is preserved. {v0}',

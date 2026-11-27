@@ -97,18 +97,22 @@ function resolved(store: Store, sourceId: string, jobId: string) {
 
 test('guide validates authored text, rejects unfinished rows and preserves unrelated extensions', () => {
   expect(validateTranslationGuide(guide)).toEqual(guide);
+  const firstTermInvalid = expect.objectContaining({
+    code: 'TRANSLATION_GUIDE_TERM_INVALID',
+    params: { term: 1, limit: 300 },
+  });
   expect(() =>
     validateTranslationGuide({ instructions: '', terms: [{ source: 'Rose', target: '' }] })
-  ).toThrow('표기 1');
+  ).toThrow(firstTermInvalid);
   expect(() =>
     validateTranslationGuide({
       instructions: '',
       terms: [{ source: 'Rose', target: '로즈', regex: true }],
     })
-  ).toThrow('표기 1');
+  ).toThrow(firstTermInvalid);
   expect(() =>
     validateTranslationGuide({ instructions: '', terms: [], chatOverrides: {} })
-  ).toThrow('객체');
+  ).toThrow(expect.objectContaining({ code: 'TRANSLATION_GUIDE_INVALID' }));
   const original = {
     name: 'Bot',
     extensions: { risuai: { defaultVariables: 'x=1' }, uimori: { other: true } },
@@ -143,7 +147,16 @@ test('ordinary and helper saves use one native field, validate atomically and su
   });
   expect(() =>
     save(store, saved, { instructions: 'Invalid', terms: [{ source: '', target: '미라' }] })
-  ).toThrow('표기 1');
+  ).toThrow(
+    expect.objectContaining({
+      statusCode: 400,
+      code: 'TRANSLATION_GUIDE_TERM_INVALID',
+      params: { term: 1, limit: 300 },
+      message: expect.stringMatching(
+        /^TRANSLATION_GUIDE_TERM_INVALID: translationGuide\.terms\[0\]/u
+      ),
+    })
+  );
   expect(store.product.get<Content>('content', original.id).revision).toBe(result.revision);
   expect(() => save(store, original, guide)).toThrow('REVISION_CONFLICT');
   const restored = undoResource(store, 'content', original.id, result.revision).saved as Content;

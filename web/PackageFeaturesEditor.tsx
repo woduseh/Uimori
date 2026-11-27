@@ -9,6 +9,7 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { IconButton } from './IconButton.js';
 import { api, libraryChangedKey } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
 import { helperDataFrame } from './live-frames.js';
@@ -150,7 +151,7 @@ export function PackageFeaturesEditor({
       setError('');
       return true;
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(errorDescriptor(caught));
       return false;
     }
   }

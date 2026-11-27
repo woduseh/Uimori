@@ -47,7 +47,7 @@ import {
 } from './helper-confirmations.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
-import { AppError, HelperToolError } from './app-errors.js';
+import { AppError, asAppError, HelperToolError } from './app-errors.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
 import {
   HELPER_SETTINGS_TOOLS,
@@ -537,10 +537,11 @@ function smallerHelperRead(
   };
 }
 
-function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
+function helperToolError(thrown: unknown, readOnly: boolean, toolName: string) {
+  const error = asAppError(thrown);
   const shell = error instanceof HelperShellExecutionError ? error : undefined;
   const batch = error instanceof HelperResourceBatchError ? error : undefined;
-  const cause = batch?.cause ?? error;
+  const cause = asAppError(batch?.cause ?? error);
   const patch = cause instanceof HelperResourcePatchError ? cause : undefined;
   const message = error instanceof Error ? error.message : 'HELPER_TOOL_FAILED';
   const status =

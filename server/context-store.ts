@@ -243,10 +243,7 @@ export class ContextStore {
       headRevision: chat.headRevision,
       checkpoint,
       usable,
-      invalidReason:
-        checkpoint && !usable
-          ? '원문, 메모 또는 작문 설정이 바뀌어 다음 입력에 이 요약을 사용하지 않아요.'
-          : null,
+      invalidReason: checkpoint && !usable ? ('CONTEXT_INPUTS_CHANGED' as const) : null,
     };
   }
   detail(chatId: string) {

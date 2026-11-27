@@ -13,6 +13,7 @@ import {
   unmappedNativeAssetCount,
 } from '../core/risu-native-assets.js';
 import { uploadPackageImage } from './package-image-upload.js';
+import { errorDescriptor } from './api-errors.js';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -123,7 +124,8 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           if (!current()) return;
           failures.push({
             file: file.name,
-            message: cause instanceof Error ? cause.message : uiMessage('native.text_6d75f11c59'),
+            message:
+              cause instanceof Error ? errorDescriptor(cause) : uiMessage('native.text_6d75f11c59'),
           });
         }
       }
@@ -468,7 +470,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               } catch (cause) {
                 setRemoving('');
                 setError(
-                  cause instanceof Error ? cause.message : uiMessage('native.text_949e1ae936')
+                  cause instanceof Error
+                    ? errorDescriptor(cause)
+                    : uiMessage('native.text_949e1ae936')
                 );
               }
             }}

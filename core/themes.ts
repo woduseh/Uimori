@@ -1,5 +1,6 @@
 import type { ThemeBackground } from './theme-background.js';
 import { isStoryUiStyle, type StoryUiStyle } from './story-ui-style.js';
+import { ValidationError } from './validation-error.js';
 import {
   cinematicTheme,
   letterTheme,
@@ -221,57 +222,79 @@ export function resolveTheme(catalog: ThemeCatalog, scope: ThemeScope): Theme {
       }
     : selected;
 }
-function object(value: unknown, label: string): Record<string, unknown> {
+function object(value: unknown, field: string, path = field): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error(`${label}: 객체가 필요해요.`);
+    throw new ValidationError(400, 'THEME_OBJECT_REQUIRED', `${path}: expected an object.`, {
+      field,
+    });
   return value as Record<string, unknown>;
 }
-function string(value: unknown, label: string, limit: number, fallback = ''): string {
+function string(value: unknown, field: string, limit: number, fallback = ''): string {
   if (value === undefined) return fallback;
   if (typeof value !== 'string' || value.length > limit)
-    throw new Error(`${label}: 최대 ${limit.toLocaleString()}자의 문자열을 입력해 주세요.`);
+    throw new ValidationError(
+      400,
+      'THEME_FIELD_TOO_LONG',
+      `${field}: expected a string of at most ${limit} characters.`,
+      { field, limit }
+    );
   return value;
 }
 export function validateTheme(value: unknown): ThemeDefinition {
-  const v = object(value, '테마');
-  const title = string(v.title, '테마 이름', 100).trim();
-  if (!title) throw new Error('테마 이름을 입력해 주세요.');
-  const colorInput = v.colors === undefined ? {} : object(v.colors, '색상');
+  const v = object(value, 'theme');
+  const title = string(v.title, 'title', 100).trim();
+  if (!title) throw new ValidationError(400, 'THEME_TITLE_REQUIRED', 'title: enter a name.');
+  const colorInput = v.colors === undefined ? {} : object(v.colors, 'colors');
   const colors: ThemeDefinition['colors'] = { light: {}, dark: {} };
   for (const mode of ['light', 'dark'] as const) {
-    const entries = colorInput[mode] === undefined ? {} : object(colorInput[mode], '색상');
+    const entries =
+      colorInput[mode] === undefined ? {} : object(colorInput[mode], 'colors', `colors.${mode}`);
     for (const [key, color] of Object.entries(entries)) {
       if (!THEME_COLOR_KEYS.includes(key as ThemeColorKey))
-        throw new Error(`지원하지 않는 색상 변수: ${key}`);
+        throw new ValidationError(
+          400,
+          'THEME_COLOR_UNSUPPORTED',
+          `colors.${mode}.${key}: unsupported color variable; use one of ${THEME_COLOR_KEYS.join(', ')}.`,
+          { key }
+        );
       if (typeof color !== 'string' || !/^#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i.test(color))
-        throw new Error(`${key}: #RRGGBB 형식의 색상을 입력해 주세요.`);
+        throw new ValidationError(
+          400,
+          'THEME_COLOR_INVALID',
+          `colors.${mode}.${key}: expected a hex color such as #RRGGBB.`,
+          { key }
+        );
       colors[mode][key as ThemeColorKey] = color;
     }
   }
   let storyUi: ThemeDefinition['storyUi'];
   if (v.storyUi !== undefined) {
-    const definition = object(v.storyUi, '이야기 UI 테마');
+    const definition = object(v.storyUi, 'storyUi');
     if (!isStoryUiStyle(definition.baseStyle))
-      throw new Error('이야기 UI 테마의 기본 스타일을 선택해 주세요.');
+      throw new ValidationError(
+        400,
+        'THEME_STORY_UI_STYLE_REQUIRED',
+        'storyUi.baseStyle: choose a supported story UI style.'
+      );
     const boardCss =
       definition.boardCss === undefined
         ? ''
-        : string(definition.boardCss, '현황 패널 CSS', 1_000_000);
+        : string(definition.boardCss, 'storyUi.boardCss', 1_000_000);
     storyUi = {
       baseStyle: definition.baseStyle,
-      css: string(definition.css, '이야기 UI CSS', 1_000_000),
+      css: string(definition.css, 'storyUi.css', 1_000_000),
       ...(boardCss && { boardCss }),
     };
   }
   const assets = validateThemeAssets(v.assets);
   return {
     title,
-    description: string(v.description, '설명', 2000),
+    description: string(v.description, 'description', 2000),
     colors,
-    appCss: string(v.appCss, '앱 CSS', 1_000_000),
-    messageCss: string(v.messageCss, '본문 CSS', 1_000_000),
-    templateHtml: string(v.templateHtml, '레이아웃 HTML', 100_000),
-    templateCss: string(v.templateCss, '레이아웃 CSS', 1_000_000),
+    appCss: string(v.appCss, 'appCss', 1_000_000),
+    messageCss: string(v.messageCss, 'messageCss', 1_000_000),
+    templateHtml: string(v.templateHtml, 'templateHtml', 100_000),
+    templateCss: string(v.templateCss, 'templateCss', 1_000_000),
     ...(storyUi && { storyUi }),
     ...(assets.length && { assets }),
   };
@@ -279,21 +302,44 @@ export function validateTheme(value: unknown): ThemeDefinition {
 function validateThemeAssets(value: unknown): ThemeAsset[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > MAX_THEME_ASSETS)
-    throw new Error(`자료 파일은 최대 ${MAX_THEME_ASSETS}개까지 넣을 수 있어요.`);
+    throw new ValidationError(
+      400,
+      'THEME_ASSETS_TOO_MANY',
+      `assets: expected an array of at most ${MAX_THEME_ASSETS} items.`,
+      { limit: MAX_THEME_ASSETS }
+    );
   const names = new Set<string>();
-  return value.map((item) => {
-    const asset = object(item, '자료 파일');
+  return value.map((item, index) => {
+    const asset = object(item, 'assets', `assets[${index}]`);
     const name = asset.name;
     if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,31}$/u.test(name))
-      throw new Error(
-        '자료 파일 이름은 영문 소문자로 시작하는 32자 이하 영문·숫자·하이픈이어야 해요.'
+      throw new ValidationError(
+        400,
+        'THEME_ASSET_NAME_INVALID',
+        `assets[${index}].name: expected 1-32 lowercase letters, digits or hyphens, starting with a letter.`
       );
     if (asset.kind !== 'font' && asset.kind !== 'image')
-      throw new Error(`${name}: 글꼴 또는 이미지 자료만 넣을 수 있어요.`);
+      throw new ValidationError(
+        400,
+        'THEME_ASSET_KIND_INVALID',
+        `assets[${index}].kind: expected font or image.`,
+        { name }
+      );
     if (typeof asset.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(asset.hash))
-      throw new Error(`${name}: 자료 파일 해시를 확인해 주세요.`);
+      throw new ValidationError(
+        400,
+        'THEME_ASSET_HASH_INVALID',
+        `assets[${index}].hash: expected a lowercase SHA-256 hex digest.`,
+        { name }
+      );
     const key = `${asset.kind}:${name}`;
-    if (names.has(key)) throw new Error(`${name}: 같은 이름의 자료 파일이 이미 있어요.`);
+    if (names.has(key))
+      throw new ValidationError(
+        400,
+        'THEME_ASSET_DUPLICATE',
+        `assets[${index}].name: another ${asset.kind} asset is already named ${name}.`,
+        { name }
+      );
     names.add(key);
     return { name, kind: asset.kind, hash: asset.hash };
   });
@@ -302,25 +348,38 @@ export function parseThemeFile(value: unknown): {
   theme: ThemeDefinition;
   files: ThemeAssetFile[];
 } {
-  const file = object(value, '테마 파일');
+  const file = object(value, 'file');
   if (file.format !== THEME_FILE_FORMAT || (file.version !== 1 && file.version !== 2))
-    throw new Error('Uimori 테마 파일이 아니에요. Risu 테마의 자동 변환은 지원하지 않아요.');
+    throw new ValidationError(
+      400,
+      'THEME_FILE_UNSUPPORTED',
+      `Expected format "${THEME_FILE_FORMAT}" with version 1 or 2; Risu themes are not converted.`
+    );
   const theme = validateTheme(file.theme);
   const files = file.version === 2 && Array.isArray(file.files) ? file.files : [];
-  const parsed = files.map((item): ThemeAssetFile => {
-    const entry = object(item, '자료 파일');
+  const parsed = files.map((item, index): ThemeAssetFile => {
+    const entry = object(item, 'files', `files[${index}]`);
     if (
       typeof entry.hash !== 'string' ||
       (entry.kind !== 'font' && entry.kind !== 'image') ||
       typeof entry.mime !== 'string' ||
       typeof entry.data !== 'string'
     )
-      throw new Error('테마 파일의 자료 파일 형식을 확인해 주세요.');
+      throw new ValidationError(
+        400,
+        'THEME_FILE_ASSET_INVALID',
+        `files[${index}]: expected hash, kind (font or image), mime and data strings.`
+      );
     return { hash: entry.hash, kind: entry.kind, mime: entry.mime, data: entry.data };
   });
   for (const asset of theme.assets ?? [])
     if (!parsed.some((entry) => entry.hash === asset.hash && entry.kind === asset.kind))
-      throw new Error(`${asset.name}: 테마 파일에 이 자료 파일이 들어 있지 않아요.`);
+      throw new ValidationError(
+        400,
+        'THEME_FILE_ASSET_MISSING',
+        `files: no ${asset.kind} file with the hash of asset ${asset.name}.`,
+        { name: asset.name }
+      );
   return { theme, files: parsed };
 }
 export function themeFile(theme: ThemeDefinition, files: ThemeAssetFile[] = []) {

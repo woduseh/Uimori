@@ -6,6 +6,7 @@ import {
   type ErrorWire,
   isAppErrorCode,
 } from '#contracts';
+import { ValidationError } from '../core/validation-error.js';
 import { HttpError } from './request-validation.js';
 
 export class AppError<C extends AppErrorCode = AppErrorCode> extends HttpError {
@@ -38,6 +39,16 @@ export function appErrorFrom(statusCode: number, code: AppErrorCode, params?: un
     params?: unknown
   ) => AppError;
   return new create(statusCode, code, params);
+}
+
+export function validationAppError(error: ValidationError): AppError {
+  const appError = appErrorFrom(error.statusCode, error.code, error.params);
+  appError.message = `${error.code}: ${error.message}`;
+  return appError;
+}
+
+export function asAppError<T>(error: T): T | AppError {
+  return error instanceof ValidationError ? validationAppError(error) : error;
 }
 
 export function assertRevision(actual: number, expected: number): void {

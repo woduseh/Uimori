@@ -91,7 +91,8 @@ import {
 } from './package-features.js';
 import { decodeImage } from './package-images.js';
 import { validateLoreContextPolicy } from '../core/lore-context.js';
-import { AppError } from './app-errors.js';
+import { AppError, validationAppError } from './app-errors.js';
+import { ValidationError } from '../core/validation-error.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -329,6 +330,7 @@ export class ProductStore {
       try {
         assertRisuContentSource(raw.nativeRisu);
       } catch (error) {
+        if (error instanceof ValidationError) throw validationAppError(error);
         throw new HttpError(
           400,
           error instanceof Error ? error.message : 'PACKAGE_NATIVE_RISU_INVALID'

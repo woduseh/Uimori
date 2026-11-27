@@ -129,7 +129,7 @@ export function findKoreanServerErrors(source, file = 'server/input.ts') {
             : null;
       if (typeof text === 'string' && hangul.test(text))
         found.push(
-          `${file}:${inner.loc.start.line}: Korean text in a server error; throw an AppError with a catalog code (packages/contracts) and give it a message in web/locales so the web renders it in the reader's language`
+          `${file}:${inner.loc.start.line}: Korean text in a thrown error; give it a catalog code (packages/contracts) and a message in web/locales, then throw an AppError from server/ or a ValidationError with English model-facing text from core/, so the web renders it in the reader's language`
         );
     });
   });
@@ -269,7 +269,7 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
       source: readFileSync(path, 'utf8'),
     }));
   for (const { file, source } of sources)
-    if (file.startsWith('server/')) errors.push(...findKoreanServerErrors(source, file));
+    if (/^(?:server|core)\//u.test(file)) errors.push(...findKoreanServerErrors(source, file));
   const unused = findUnusedMessages(catalog, sources);
   for (const key of unused)
     errors.push(

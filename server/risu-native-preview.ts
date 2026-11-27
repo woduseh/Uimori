@@ -8,6 +8,8 @@ import { declaredToggleVariables } from '../core/risu-effective-controls.js';
 import type { Content } from '../core/product.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { ValidationError } from '../core/validation-error.js';
+import { validationAppError } from './app-errors.js';
 import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { executeRisuNative } from './risu-native-runtime.js';
@@ -140,6 +142,7 @@ export async function nativeRisuDraftPreview(
   try {
     assertRisuContentSource(input.nativeRisu);
   } catch (error) {
+    if (error instanceof ValidationError) throw validationAppError(error);
     throw new HttpError(
       400,
       error instanceof Error ? error.message : 'PACKAGE_NATIVE_RISU_INVALID'

@@ -4,6 +4,7 @@ import {
   isAppErrorCode,
   type ReceivedErrorWire,
 } from '#contracts';
+import { ValidationError } from '../core/validation-error.js';
 import { message, messageRef, translateMessage, type MessageValues } from './i18n.js';
 
 const storyUiErrors: Record<string, string> = {
@@ -216,7 +217,71 @@ export const appErrorMessages = {
   REQUEST_FILE_CHANGED: 'errors.REQUEST_FILE_CHANGED',
   REQUEST_FILE_MISSING: 'errors.REQUEST_FILE_MISSING',
   REQUEST_FILES_TOO_LARGE: 'errors.REQUEST_FILES_TOO_LARGE',
+  ILLUSTRATION_PRESET_OBJECT_REQUIRED: 'errors.ILLUSTRATION_PRESET_OBJECT_REQUIRED',
+  ILLUSTRATION_PRESET_FIELD_TOO_LONG: 'errors.FIELD_TOO_LONG',
+  ILLUSTRATION_PRESET_TITLE_REQUIRED: 'errors.ILLUSTRATION_PRESET_TITLE_REQUIRED',
+  ILLUSTRATION_PRESET_GENERATOR_INVALID: 'errors.ILLUSTRATION_PRESET_GENERATOR_INVALID',
+  ILLUSTRATION_PRESET_GENERATOR_REQUIRED: 'errors.ILLUSTRATION_PRESET_GENERATOR_REQUIRED',
+  ILLUSTRATION_PRESET_FILE_UNSUPPORTED: 'errors.ILLUSTRATION_PRESET_FILE_UNSUPPORTED',
+  THEME_OBJECT_REQUIRED: 'errors.THEME_OBJECT_REQUIRED',
+  THEME_FIELD_TOO_LONG: 'errors.FIELD_TOO_LONG',
+  THEME_TITLE_REQUIRED: 'errors.THEME_TITLE_REQUIRED',
+  THEME_COLOR_UNSUPPORTED: 'errors.THEME_COLOR_UNSUPPORTED',
+  THEME_COLOR_INVALID: 'errors.THEME_COLOR_INVALID',
+  THEME_STORY_UI_STYLE_REQUIRED: 'errors.THEME_STORY_UI_STYLE_REQUIRED',
+  THEME_ASSETS_TOO_MANY: 'errors.THEME_ASSETS_TOO_MANY',
+  THEME_ASSET_NAME_INVALID: 'errors.THEME_ASSET_NAME_INVALID',
+  THEME_ASSET_KIND_INVALID: 'errors.THEME_ASSET_KIND_INVALID',
+  THEME_ASSET_HASH_INVALID: 'errors.THEME_ASSET_HASH_INVALID',
+  THEME_ASSET_DUPLICATE: 'errors.THEME_ASSET_DUPLICATE',
+  THEME_FILE_UNSUPPORTED: 'errors.THEME_FILE_UNSUPPORTED',
+  THEME_FILE_ASSET_INVALID: 'errors.THEME_FILE_ASSET_INVALID',
+  THEME_FILE_ASSET_MISSING: 'errors.THEME_FILE_ASSET_MISSING',
+  THEME_BACKGROUND_INVALID: 'errors.THEME_BACKGROUND_INVALID',
+  THEME_BACKGROUND_RANGE_INVALID: 'errors.THEME_BACKGROUND_RANGE_INVALID',
+  PALETTE_FILE_INVALID: 'errors.PALETTE_FILE_INVALID',
+  PALETTE_FILE_UNSUPPORTED: 'errors.PALETTE_FILE_UNSUPPORTED',
+  RISU_ASSET_ADD_INVALID: 'errors.RISU_ASSET_ADD_INVALID',
+  RISU_ASSET_REPLACE_STALE: 'errors.RISU_ASSET_REPLACE_STALE',
+  RISU_ASSET_MODULE_ICON_CONFLICT: 'errors.RISU_ASSET_MODULE_ICON_CONFLICT',
+  RISU_ASSET_MODULE_DUPLICATE: 'errors.RISU_ASSET_MODULE_DUPLICATE',
+  TRANSLATION_GUIDE_INVALID: 'errors.TRANSLATION_GUIDE_INVALID',
+  TRANSLATION_GUIDE_INSTRUCTIONS_TOO_LONG: 'errors.TRANSLATION_GUIDE_INSTRUCTIONS_TOO_LONG',
+  TRANSLATION_GUIDE_TERMS_TOO_MANY: 'errors.TRANSLATION_GUIDE_TERMS_TOO_MANY',
+  TRANSLATION_GUIDE_TERM_INVALID: 'errors.TRANSLATION_GUIDE_TERM_INVALID',
+  TRANSLATION_GUIDE_NOTE_TOO_LONG: 'errors.TRANSLATION_GUIDE_NOTE_TOO_LONG',
+  LORE_PINNED_BUDGET_EXCEEDED: 'errors.LORE_PINNED_BUDGET_EXCEEDED',
 } satisfies Record<AppErrorCode, string>;
+
+const themeFields: Record<string, string> = {
+  theme: 'errors.field.theme',
+  file: 'visualpanels.themeFile',
+  title: 'visualpanels.themeName',
+  description: 'palettes.description',
+  colors: 'errors.field.colors',
+  storyUi: 'errors.field.storyUiTheme',
+  'storyUi.css': 'storyUi.customCss',
+  'storyUi.boardCss': 'storyUi.boardCss',
+  appCss: 'visualpanels.appCss',
+  messageCss: 'visualpanels.bodyCss',
+  templateHtml: 'visualpanels.layoutHtml',
+  templateCss: 'visualpanels.layoutCss',
+  assets: 'themeAssets.title',
+  files: 'themeAssets.title',
+};
+const illustrationPresetFields: Record<string, string> = {
+  title: 'visualpanels.presetName',
+  description: 'palettes.description',
+  styleGuidance: 'visualpanels.illustrationInstructions',
+  'comfyui.workflow': 'errors.field.comfyuiWorkflow',
+  'comfyui.negativeGuidance': 'errors.field.negativeGuidance',
+  'novelai.negativeGuidance': 'errors.field.negativeGuidance',
+};
+const fieldLabels: Partial<Record<AppErrorCode, Record<string, string>>> = {
+  ILLUSTRATION_PRESET_FIELD_TOO_LONG: illustrationPresetFields,
+  THEME_OBJECT_REQUIRED: themeFields,
+  THEME_FIELD_TOO_LONG: themeFields,
+};
 
 const MIB = 1024 * 1024;
 
@@ -243,7 +308,22 @@ function messageValues(
   );
   if (code === 'MANUSCRIPT_TRANSLATION_MISSING')
     values.scenes = messageRef(sceneList(params.scenes, params.total));
+  const label = typeof params.field === 'string' ? fieldLabels[code]?.[params.field] : undefined;
+  if (label) values.field = messageRef(message(label));
   return values;
+}
+
+export function appErrorDescriptor(
+  code: AppErrorCode,
+  params?: ReceivedErrorWire['params']
+): string {
+  return message(appErrorMessages[code], messageValues(code, params));
+}
+
+export function errorDescriptor(error: unknown): string {
+  return error instanceof ValidationError
+    ? appErrorDescriptor(error.code, error.params as ReceivedErrorWire['params'])
+    : (error as Error).message;
 }
 
 function appErrorCode(wire: ReceivedErrorWire): AppErrorCode | null {
@@ -268,10 +348,7 @@ export function apiErrorMessage(
   if (code)
     return {
       code,
-      message: message(
-        appErrorMessages[code],
-        messageValues(code, code === wire.code ? wire.params : undefined)
-      ),
+      message: appErrorDescriptor(code, code === wire.code ? wire.params : undefined),
     };
   const { error } = wire;
   if (typeof error === 'string') {

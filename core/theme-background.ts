@@ -1,4 +1,5 @@
 import type { ThemePreferences, ThemeScope } from './themes.js';
+import { ValidationError } from './validation-error.js';
 
 export type ThemeBackground = {
   imageHash: string | null;
@@ -14,7 +15,7 @@ export const defaultThemeBackground: ThemeBackground = {
 };
 export function validateThemeBackground(value: unknown): ThemeBackground {
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('배경 설정을 확인해 주세요.');
+    throw new ValidationError(400, 'THEME_BACKGROUND_INVALID', 'Expected a background object.');
   const b = value as Record<string, unknown>;
   if (
     Object.keys(b).some(
@@ -32,7 +33,11 @@ export function validateThemeBackground(value: unknown): ThemeBackground {
     Number(b.darkOverlay) < 0 ||
     Number(b.darkOverlay) > 100
   )
-    throw new Error('배경 이미지와 흐림과 덮개 범위를 확인해 주세요.');
+    throw new ValidationError(
+      400,
+      'THEME_BACKGROUND_RANGE_INVALID',
+      'Expected only imageHash (null or a SHA-256 hex digest), blur (integer 0-30), lightOverlay and darkOverlay (integers 0-100).'
+    );
   return {
     imageHash: b.imageHash as string | null,
     blur: Number(b.blur),

@@ -1,5 +1,6 @@
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import { parseComfyWorkflow } from './illustration-workflow.js';
+import { ValidationError } from './validation-error.js';
 
 export type IllustrationPresetGenerator = 'codex' | 'comfyui' | 'novelai';
 export type IllustrationPresetDefinition = {
@@ -77,38 +78,60 @@ export function illustrationPresetStamp(preset: IllustrationPreset): Illustratio
 }
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('삽화 프리셋 객체가 필요해요.');
+    throw new ValidationError(
+      400,
+      'ILLUSTRATION_PRESET_OBJECT_REQUIRED',
+      'Expected an illustration preset object.'
+    );
   return value as Record<string, unknown>;
 }
-function string(value: unknown, label: string, limit: number): string {
+function string(value: unknown, field: string, limit: number): string {
   if (value === undefined) return '';
   if (typeof value !== 'string' || value.length > limit)
-    throw new Error(`${label}: 최대 ${limit.toLocaleString()}자의 문자열을 입력해 주세요.`);
+    throw new ValidationError(
+      400,
+      'ILLUSTRATION_PRESET_FIELD_TOO_LONG',
+      `${field}: expected a string of at most ${limit} characters.`,
+      { field, limit }
+    );
   return value;
 }
 export function validateIllustrationPreset(value: unknown): IllustrationPresetDefinition {
   const v = object(value);
-  const title = string(v.title, '프리셋 이름', 100).trim();
-  if (!title) throw new Error('프리셋 이름을 입력해 주세요.');
+  const title = string(v.title, 'title', 100).trim();
+  if (!title)
+    throw new ValidationError(400, 'ILLUSTRATION_PRESET_TITLE_REQUIRED', 'title: enter a name.');
   const comfyui = v.comfyui === undefined ? {} : object(v.comfyui);
-  const workflow = string(comfyui.workflow, 'ComfyUI 워크플로', ILLUSTRATION_WORKFLOW_MAX_CHARS);
+  const workflow = string(comfyui.workflow, 'comfyui.workflow', ILLUSTRATION_WORKFLOW_MAX_CHARS);
   if (workflow.trim()) parseComfyWorkflow(workflow);
   const novelai = v.novelai === undefined ? {} : object(v.novelai);
   const generator =
     v.generator === undefined ? (workflow.trim() ? 'comfyui' : 'codex') : v.generator;
   if (generator !== 'codex' && generator !== 'comfyui' && generator !== 'novelai')
-    throw new Error('삽화 생성기는 Codex, ComfyUI 또는 NovelAI를 선택해 주세요.');
+    throw new ValidationError(
+      400,
+      'ILLUSTRATION_PRESET_GENERATOR_INVALID',
+      'generator: expected codex, comfyui or novelai.'
+    );
   return {
     title,
     generator,
-    description: string(v.description, '설명', 2000),
-    styleGuidance: string(v.styleGuidance, '그림 지침', SOURCE_TEXT_MAX_CHARS),
+    description: string(v.description, 'description', 2000),
+    styleGuidance: string(v.styleGuidance, 'styleGuidance', SOURCE_TEXT_MAX_CHARS),
     comfyui: {
       workflow,
-      negativeGuidance: string(comfyui.negativeGuidance, '제외 지침', SOURCE_TEXT_MAX_CHARS),
+      negativeGuidance: string(
+        comfyui.negativeGuidance,
+        'comfyui.negativeGuidance',
+        SOURCE_TEXT_MAX_CHARS
+      ),
     },
     novelai: {
-      negativeGuidance: string(novelai.negativeGuidance, '제외 지침', SOURCE_TEXT_MAX_CHARS),
+      negativeGuidance: string(
+        novelai.negativeGuidance,
+        'novelai.negativeGuidance',
+        SOURCE_TEXT_MAX_CHARS
+      ),
     },
   };
 }
@@ -132,10 +155,18 @@ export function parseIllustrationPresetFile(value: unknown): IllustrationPresetD
     ![1, 2].includes(Number(file.version)) ||
     typeof file.version !== 'number'
   )
-    throw new Error('Uimori 삽화 프리셋 v1 또는 v2 파일이 아니에요.');
+    throw new ValidationError(
+      400,
+      'ILLUSTRATION_PRESET_FILE_UNSUPPORTED',
+      `Expected format "${ILLUSTRATION_PRESET_FORMAT}" with version 1 or 2.`
+    );
   const preset = object(file.preset);
   if (file.version === 2 && preset.generator === undefined)
-    throw new Error('삽화 프리셋의 생성기가 필요해요.');
+    throw new ValidationError(
+      400,
+      'ILLUSTRATION_PRESET_GENERATOR_REQUIRED',
+      'preset.generator: a version 2 file needs codex, comfyui or novelai.'
+    );
   return validateIllustrationPreset(
     file.version === 1 ? { ...preset, generator: undefined } : preset
   );
