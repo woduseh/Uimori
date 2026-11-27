@@ -584,11 +584,9 @@ export class ProductStore {
   }
   modelSnapshot(id: string, role?: string, authorize = true): ModelSnapshot {
     try {
-      this.assertAvailable('model', id);
-      const { displayOrder: _displayOrder, ...model } = this.get<ModelPreset>('model', id);
+      const { displayOrder: _displayOrder, ...model } = this.available<ModelPreset>('model', id);
       if (authorize && model.enabled === false) throw new HttpError(403, 'Model disabled');
-      this.assertAvailable('connection', model.connectionId);
-      const { displayOrder: _connectionOrder, ...connection } = this.get<Connection>(
+      const { displayOrder: _connectionOrder, ...connection } = this.available<Connection>(
         'connection',
         model.connectionId
       );
@@ -663,8 +661,7 @@ export class ProductStore {
         pinned?.mainPromptPresetId &&
         pinned.mainPromptPresetId !== prior.pinned?.mainPromptPresetId
       ) {
-        this.assertAvailable('prompt-preset', pinned.mainPromptPresetId);
-        const preset = this.get<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
+        const preset = this.available<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
         if (preset.role !== 'main') throw new AppError(400, 'PINNED_PROMPT_NOT_MAIN');
       }
       if (pinned?.mainModel?.id !== prior.pinned?.mainModel?.id)

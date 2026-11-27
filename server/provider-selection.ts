@@ -12,10 +12,8 @@ export function assertModelSelection(
   let latest: ModelPreset;
   let connection: Connection;
   try {
-    store.assertAvailable('model', next.id);
-    latest = store.get<ModelPreset>('model', next.id);
-    store.assertAvailable('connection', latest.connectionId);
-    connection = store.get<Connection>('connection', latest.connectionId);
+    latest = store.available<ModelPreset>('model', next.id);
+    connection = store.available<Connection>('connection', latest.connectionId);
   } catch (error) {
     if (error instanceof HttpError && error.statusCode === 404)
       throw new AppError(400, 'MODEL_SELECTION_UNAVAILABLE');
