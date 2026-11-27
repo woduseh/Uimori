@@ -83,7 +83,7 @@ async function post(
     payload: { expectedRevision: model.revision, idempotencyKey: key, ...extra },
   });
   expect(response.statusCode, response.body).toBe(status);
-  if (status !== 401) expect(response.headers['cache-control']).toBe('no-store');
+  expect(response.headers['cache-control']).toBe('no-store');
   return response.json() as ProviderConnectionTest;
 }
 async function terminal(app: App, id: string, cookie?: string) {

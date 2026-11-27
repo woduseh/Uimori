@@ -6,6 +6,7 @@ import { z } from 'zod/v4';
 import { afterEach, expect, test, vi } from 'vitest';
 import { defineEndpoint, defineOperation, endpointRequest, type OperationInput } from '#contracts';
 import * as operations from '#contracts/operations';
+import { AppError } from '../server/app-errors.js';
 import { checkEndpointOutputs, NOT_MODIFIED, registerEndpoint } from '../server/endpoint.js';
 import { matchesEntityTag, revalidatePrivateJson } from '../server/private-etag.js';
 
@@ -242,9 +243,12 @@ function strippingObjects(root: unknown, name: string): string[] {
   return found;
 }
 
-test('a no-store endpoint marks its response before input parsing, so a refusal is not cached either', async () => {
+test('a no-store endpoint marks every answer it gives, including refusals before its handler runs', async () => {
   const app = Fastify();
   const handler = vi.fn(() => ({ id: 'a', note: 'b' }));
+  app.addHook('preHandler', async (request) => {
+    if (request.headers['x-refuse'] === '1') throw new AppError(403, 'REVISION_CONFLICT');
+  });
   registerEndpoint(
     app,
     defineEndpoint<typeof echo>()({
@@ -252,18 +256,22 @@ test('a no-store endpoint marks its response before input parsing, so a refusal 
       method: 'PUT',
       path: '/private/:id',
       cache: 'no-store',
+      bodyLimit: 64,
     }),
     echo,
     handler
   );
   cleanup.push(() => app.close());
-  for (const [payload, status] of [
-    [{ note: 'kept' }, 200],
-    [{ note: 1 }, 400],
+  for (const [request, status] of [
+    [{ payload: { note: 'kept' } }, 200],
+    [{ payload: { note: 1 } }, 400],
+    [{ payload: { note: 'x' }, headers: { 'x-refuse': '1' } }, 403],
+    [{ payload: { note: 'x'.repeat(100) } }, 413],
+    [{ payload: '{"note":', headers: { 'content-type': 'application/json' } }, 400],
   ] as const) {
-    const response = await app.inject({ method: 'PUT', url: '/api/private/a', payload });
-    expect(response.statusCode).toBe(status);
-    expect(response.headers['cache-control']).toBe('no-store');
+    const response = await app.inject({ method: 'PUT', url: '/api/private/a', ...request });
+    expect(response.statusCode, JSON.stringify(request)).toBe(status);
+    expect(response.headers['cache-control'], JSON.stringify(request)).toBe('no-store');
   }
   expect(handler).toHaveBeenCalledTimes(1);
 });

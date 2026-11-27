@@ -48,8 +48,15 @@ export function registerEndpoint<Op extends Operation>(
     url: endpointUrl(endpoint),
     config: { admission: endpoint.admission, cache: endpoint.cache },
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
+    ...(endpoint.cache === 'no-store'
+      ? {
+          onSend: async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
+            reply.header('Cache-Control', 'no-store');
+            return payload;
+          },
+        }
+      : {}),
     handler: async (request, reply) => {
-      if (endpoint.cache === 'no-store') reply.header('Cache-Control', 'no-store');
       const output = await handler(
         parseInput<Op['input']>(operation.input, endpointInput(endpoint, request)),
         request,
