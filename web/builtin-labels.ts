@@ -5,6 +5,7 @@ import type { BuiltinThemeId } from '../core/themes.js';
 import type { BuiltinPaletteId } from '../core/theme-palettes.js';
 import { DEFAULT_ILLUSTRATION_PRESET_ID } from '../core/illustration-presets.js';
 import { t } from './i18n.js';
+import type { MessageKey } from './locales/index.js';
 
 const providerLabels: Record<ProviderProtocol, () => string> = {
   'codex-app-server-v1': () => t('providers.m603'),
@@ -17,7 +18,7 @@ const providerLabels: Record<ProviderProtocol, () => string> = {
   'deepseek-chat-v1': () => t('providers.m628'),
   'openai-chat-v1': () => t('providers.m632'),
 };
-const providerLimitationKeys: Record<ProviderProtocol, readonly string[]> = {
+const providerLimitationKeys: Record<ProviderProtocol, readonly MessageKey[]> = {
   'codex-app-server-v1': ['providers.m604', 'providers.m605', 'providers.m606', 'providers.m607'],
   'fixture-sse-v1': ['providers.m609', 'providers.m610'],
   'vertex-gemini-v1': ['providers.m612', 'providers.m613', 'providers.m614'],
@@ -49,7 +50,7 @@ const tokenizerLabels: Record<TokenizerProfileId, () => string> = {
 };
 export const tokenizerLabel = (id: TokenizerProfileId): string => tokenizerLabels[id]();
 
-const usageKindKeys: Record<UsageKind, string> = {
+const usageKindKeys: Record<UsageKind, MessageKey> = {
   writing: 'visualpanels.usageWriting',
   translation: 'visualpanels.translation',
   'input-translation': 'visualpanels.usageInputTranslation',
@@ -74,7 +75,8 @@ export const usageKindLabel = (kind: string): string =>
   );
 
 type BuiltinText = { title: string; description: string };
-const themeKeys: Record<BuiltinThemeId, BuiltinText> = {
+type BuiltinKeys = { title: MessageKey; description: MessageKey };
+const themeKeys: Record<BuiltinThemeId, BuiltinKeys> = {
   'builtin:forest': {
     title: 'visualpanels.layoutDefault',
     description: 'visualpanels.layoutDefaultDescription',
@@ -96,7 +98,7 @@ const themeKeys: Record<BuiltinThemeId, BuiltinText> = {
     description: 'visualpanels.layoutClassicFrameDescription',
   },
 };
-const paletteKeys: Record<BuiltinPaletteId, BuiltinText> = {
+const paletteKeys: Record<BuiltinPaletteId, BuiltinKeys> = {
   forest: {
     title: 'visualpanels.paletteForest',
     description: 'visualpanels.paletteForestDescription',
@@ -118,7 +120,7 @@ const paletteKeys: Record<BuiltinPaletteId, BuiltinText> = {
 };
 
 type Labeled = { id: string; title: string; description?: string };
-const builtinText = (keys: Record<string, BuiltinText>, item: Labeled): BuiltinText =>
+const builtinText = (keys: Record<string, BuiltinKeys>, item: Labeled): BuiltinText =>
   Object.hasOwn(keys, item.id)
     ? { title: t(keys[item.id].title), description: t(keys[item.id].description) }
     : { title: item.title, description: item.description ?? '' };

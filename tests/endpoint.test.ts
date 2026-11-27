@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { z } from 'zod/v4';
 import { afterEach, expect, test } from 'vitest';
-import { defineEndpoint, defineOperation, endpointRequest } from '#contracts';
+import { defineEndpoint, defineOperation, endpointRequest, type OperationInput } from '#contracts';
 import * as operations from '#contracts/operations';
 import { checkEndpointOutputs, registerEndpoint } from '../server/endpoint.js';
 
@@ -117,14 +117,31 @@ test('test mode refuses a handler result that breaks the output schema or adds a
 test('query helpers refuse the empty and wordy strings that coercion would turn into 0 and true', () => {
   expect(queryInt().safeParse('3').data).toBe(3);
   expect(queryInt().safeParse(3).data).toBe(3);
-  for (const value of ['', ' ', '3.5', '1e3', 'abc'])
+  for (const value of ['', ' ', '3.5', '1e3', 'abc', '-0', '01'])
     expect(queryInt().safeParse(value).success, value).toBe(false);
+  expect(queryInt().safeParse('-12').data).toBe(-12);
   expect(queryInt(z.int().min(1)).safeParse('0').success).toBe(false);
   expect(queryBoolean.safeParse('false').data).toBe(false);
   expect(queryBoolean.safeParse('true').data).toBe(true);
   expect(queryBoolean.safeParse(false).data).toBe(false);
   for (const value of ['', '0', 'no', 'False'])
     expect(queryBoolean.safeParse(value).success, value).toBe(false);
+});
+
+test('a web caller passes query numbers and booleans as values, not as their wire text', () => {
+  const flagged = defineOperation(
+    'test.flagged',
+    z.strictObject({ count: queryInt(), on: queryBoolean }),
+    z.strictObject({})
+  );
+  const typed: OperationInput<typeof flagged>[] = [
+    { count: 3, on: true },
+    // @ts-expect-error the server parses '3' from the query string; the web passes a number
+    { count: '3', on: true },
+    // @ts-expect-error the server parses 'true' from the query string; the web passes a boolean
+    { count: 3, on: 'true' },
+  ];
+  expect(typed).toHaveLength(3);
 });
 
 test('an endpoint path parameter must name a required string or number input key', () => {
@@ -154,15 +171,22 @@ function strippingObjects(root: unknown, name: string): string[] {
       return;
     }
     seen.add(value);
-    const def = (value as { _zod?: { def?: Record<string, unknown> } })._zod?.def;
+    const internals = (value as { _zod?: { def?: Record<string, unknown>; innerType?: unknown } })
+      ._zod;
+    const def = internals?.def;
     if (!def) {
       for (const [key, child] of Object.entries(value)) visit(child, `${path}.${key}`);
+      return;
+    }
+    if (def.type === 'lazy') {
+      visit(internals.innerType, path);
       return;
     }
     if (def.type === 'object') {
       if (def.catchall === undefined) found.push(path);
       for (const [key, child] of Object.entries(def.shape as object))
         visit(child, `${path}.${key}`);
+      visit(def.catchall, `${path}.*`);
     }
     for (const [key, child] of Object.entries(def))
       if (key !== 'shape' && key !== 'catchall') visit(child, path);
@@ -173,12 +197,19 @@ function strippingObjects(root: unknown, name: string): string[] {
 
 test('contract object schemas refuse unknown keys unless they opt into z.looseObject', () => {
   expect(strippingObjects(operations, 'operations')).toEqual([]);
+  const tree: z.ZodType = z.lazy(() => z.strictObject({ kids: z.array(tree) }));
   expect(
     strippingObjects(
-      { strip: z.strictObject({ nested: z.array(z.object({})) }), loose: z.looseObject({}) },
+      {
+        strip: z.strictObject({ nested: z.array(z.object({})) }),
+        loose: z.looseObject({}),
+        lazy: z.lazy(() => z.object({})),
+        tree,
+        catchall: z.strictObject({}).catchall(z.object({})),
+      },
       'sample'
     )
-  ).toEqual(['sample.strip.nested']);
+  ).toEqual(['sample.strip.nested', 'sample.lazy', 'sample.catchall.*']);
 });
 
 test('invalid input answers one INVALID_REQUEST code on the app error wire and reaches no handler', async () => {
@@ -207,6 +238,7 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
       url: '/api/font-preferences',
       payload: { expectedRevision: 0, appFontId: '', readerFontId: null },
     },
+    { method: 'DELETE', url: '/api/fonts/%20%20%20' },
     {
       method: 'PUT',
       url: '/api/backups/settings',

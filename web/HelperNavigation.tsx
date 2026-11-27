@@ -24,6 +24,7 @@ import {
   helperNavigationOrder,
   helperNavigationStorageKey,
   helperSessionActivityAt,
+  helperSessionTitle,
   readHelperNavigationView,
 } from './helper-navigation-model.js';
 import './bot-navigation.css';
@@ -206,7 +207,6 @@ export function HelperNavigation(props: Props) {
       </div>
     );
   };
-  const sessionTitle = (session: HelperSession) => session.title || t('helpers.m176');
   const runningLabel = (session: HelperSession) => {
     const count = (session.activity?.running ?? 0) + (session.activity?.queued ?? 0);
     if (!count) return undefined;
@@ -247,11 +247,11 @@ export function HelperNavigation(props: Props) {
         <button
           type="button"
           className="chat-link"
-          title={sessionTitle(session)}
+          title={helperSessionTitle(session)}
           aria-current={selected ? 'page' : undefined}
           onClick={() => props.onSelect(session)}
         >
-          <strong>{sessionTitle(session)}</strong>
+          <strong>{helperSessionTitle(session)}</strong>
         </button>
         {status && (
           <span
@@ -328,7 +328,7 @@ export function HelperNavigation(props: Props) {
       >
         {Icon && section !== 'recent' && <Icon size={16} aria-hidden="true" className={tone} />}
         <span className="activity-nav-copy">
-          <strong>{sessionTitle(session)}</strong>
+          <strong>{helperSessionTitle(session)}</strong>
           <small className="activity-nav-detail">
             {(context || detail) && (
               <span className="ui-meta-row">
@@ -363,7 +363,7 @@ export function HelperNavigation(props: Props) {
         {section === 'unread' && props.onAcknowledge && (
           <IconButton
             className="activity-nav-confirm"
-            label={t('helperNavigation.acknowledge', { title: sessionTitle(session) })}
+            label={t('helperNavigation.acknowledge', { title: helperSessionTitle(session) })}
             title={t('helpers.m267')}
             icon={Check}
             size={16}

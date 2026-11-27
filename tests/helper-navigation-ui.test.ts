@@ -61,6 +61,16 @@ describe('helper navigation ownership and order', () => {
     const names = helperNavigationLists(sessions, projects, '', { sort: 'name', order: [] });
     expect(names.inProject('p1').map((item) => item.id)).toEqual(['one', 'two']);
   });
+  it('searches and name-sorts an untitled conversation by the name it is shown with', () => {
+    const untitled = [...sessions, session('blank', '', 'p1', '2026-10-29T01:00:00Z')];
+    const names = helperNavigationLists(untitled, projects, '', { sort: 'name', order: [] });
+    expect(names.inProject('p1').map((item) => item.id)).toEqual(['one', 'two', 'blank']);
+    const found = helperNavigationLists(untitled, projects, '새 도우미', {
+      sort: 'recent',
+      order: [],
+    });
+    expect(found.recent.map((item) => item.id)).toEqual(['blank']);
+  });
   it('reorders destination siblings and retains the remembered order elsewhere', () => {
     const current = ['project:p1', 'conversation:other', 'conversation:a', 'conversation:b'];
     expect(

@@ -1,8 +1,9 @@
 import { z } from 'zod/v4';
 import { defineOperation } from '../../endpoint.js';
 import { revision } from '../revision.js';
+import { nonBlank } from '../text.js';
 
-export const fontId = z.string().min(1).max(64);
+export const fontId = nonBlank(64);
 export const fontTitle = z.string().trim().min(1).max(200);
 
 export const fontAsset = z.strictObject({

@@ -1,6 +1,7 @@
 import { storyUiStyles, type StoryUiStyleSetting } from '../core/story-ui-style.js';
 import { t, useI18n } from './i18n.js';
 import { useThemes } from './ThemeContext.js';
+import { themeText } from './builtin-labels.js';
 
 export function StoryUiStyleSelect({
   value,
@@ -30,7 +31,7 @@ export function StoryUiStyleSelect({
       ))}
       {themes.map((theme) => (
         <option key={theme.id} value={`theme:${theme.id}`}>
-          {theme.title}
+          {themeText(theme).title}
         </option>
       ))}
     </select>

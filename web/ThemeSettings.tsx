@@ -799,7 +799,7 @@ export function ThemeSettings({
                   .filter((theme) => theme.storyUi)
                   .map((theme) => (
                     <option key={theme.id} value={theme.id}>
-                      {theme.title}
+                      {themeText(theme).title}
                     </option>
                   ))}
               </select>

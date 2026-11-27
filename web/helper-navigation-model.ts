@@ -2,6 +2,10 @@ import type { HelperProject, HelperScope } from '../core/helper.js';
 import type { HelperSession } from './useHelperSessions.js';
 import { readOptionalJson } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
+import { t } from './i18n.js';
+
+export const helperSessionTitle = (session: { title?: string } | null | undefined) =>
+  session?.title || t('helpers.m176');
 
 export type HelperNavigationView = {
   mode: 'projects' | 'activity';
@@ -53,7 +57,11 @@ export function helperNavigationLists(
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const query = search.trim().toLocaleLowerCase();
   const filtered = sessions.filter((session) =>
-    [session.title, session.chatTitle, projectById.get(session.projectId ?? '')?.title]
+    [
+      helperSessionTitle(session),
+      session.chatTitle,
+      projectById.get(session.projectId ?? '')?.title,
+    ]
       .filter(Boolean)
       .join(' ')
       .toLocaleLowerCase()
@@ -68,7 +76,7 @@ export function helperNavigationLists(
   const manual = (a: string, b: string) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity);
   const conversations = recent.toSorted((a, b) =>
     view.sort === 'name'
-      ? (a.title ?? '').localeCompare(b.title ?? '') || a.id.localeCompare(b.id)
+      ? helperSessionTitle(a).localeCompare(helperSessionTitle(b)) || a.id.localeCompare(b.id)
       : view.sort === 'manual'
         ? manual(`conversation:${a.id}`, `conversation:${b.id}`)
         : 0

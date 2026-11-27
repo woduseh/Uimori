@@ -118,7 +118,7 @@ describe('UI locale presentation boundary', () => {
     const shown = () => [
       ...BUILTIN_THEMES.flatMap((item) => Object.values(labels.themeText(item))),
       ...BUILTIN_PALETTES.flatMap((item) => Object.values(labels.paletteText(item))),
-      labels.illustrationPresetTitle(BUILTIN_ILLUSTRATION_PRESET),
+      ...Object.values(labels.illustrationPresetText(BUILTIN_ILLUSTRATION_PRESET)),
       ...PROVIDER_PROTOCOLS.flatMap((id) => [
         labels.providerLabel(id),
         ...labels.providerLimitations(id),
@@ -129,7 +129,10 @@ describe('UI locale presentation boundary', () => {
     expect(shown().join('\n')).toContain('시네마틱');
     for (const locale of ['en', 'ja', 'zh'] as const) {
       setLocale(locale);
-      for (const text of shown()) expect(text).not.toMatch(/[가-힣]/u);
+      for (const text of shown()) {
+        expect(text).not.toMatch(/[가-힣]/u);
+        expect(text).not.toMatch(/^[\w-]+(?:\.[\w-]+)+$/u);
+      }
     }
     expect(labels.usageKindLabel('retired-kind')).toBe(labels.usageKindLabel('unclassified'));
     expect(

@@ -36,7 +36,7 @@ import { messages as draftPreview } from './draft-preview.js';
 import { messages as taskTrace } from './task-trace.js';
 import { messages as editorHelper } from './editor-helper.js';
 import type { UiLocale } from '../../core/ui-locale.js';
-export const messages: Record<string, Record<UiLocale, string>> = {
+const entries = {
   ...common,
   ...errors,
   ...outside,
@@ -74,6 +74,8 @@ export const messages: Record<string, Record<UiLocale, string>> = {
   ...draftPreview,
   ...taskTrace,
   ...editorHelper,
-};
+} satisfies Record<string, Record<UiLocale, string>>;
+export type MessageKey = keyof typeof entries;
+export const messages: Record<string, Record<UiLocale, string>> = entries;
 export const catalog = (locale: UiLocale): Record<string, string> =>
   Object.fromEntries(Object.entries(messages).map(([key, entry]) => [key, entry[locale]]));

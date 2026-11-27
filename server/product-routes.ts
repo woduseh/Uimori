@@ -31,7 +31,6 @@ import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';
 import { managementImpact } from './provider-management.js';
-import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
 import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
@@ -160,7 +159,6 @@ export function productRoutes(
       throw new HttpError(400, 'Invalid library view');
     return product.library(request.query.view === 'summary');
   });
-  app.get('/api/provider-management/definitions', async () => PROVIDER_DEFINITIONS);
   app.get('/api/risu/cbs-functions', async () => nativeRisuCbsFunctionCatalog());
   app.post(
     '/api/provider-management/vertex-credentials/validate',
