@@ -9,7 +9,11 @@ import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
-import type { ProviderRequest, ProviderResult } from '../core/transport.js';
+import {
+  ProviderContractError,
+  type ProviderRequest,
+  type ProviderResult,
+} from '../core/transport.js';
 import { translationFixtureSlot } from './fixtures/translation-job.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
@@ -161,6 +165,18 @@ test('runtime HTTP routes enforce authentication and Origin and redact failures 
     expect(response.body).toContain('CODEX_UNAVAILABLE');
     expect(response.body).not.toContain('SYNTHETIC_SECRET');
     expect(response.body).not.toContain('auth.json');
+  }
+  for (const [failure, code] of [
+    ['CODEX_AUTH_BUSY', 'CODEX_AUTH_BUSY'],
+    ['CODEX_BUSY', 'CODEX_RUNTIME_BUSY'],
+  ] as const) {
+    login.mockRejectedValueOnce(new ProviderContractError(failure));
+    const response = await injectWithFixtureBot(app, {
+      ...routes[1],
+      headers: { host: '127.0.0.1', cookie },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ code });
   }
 });
 

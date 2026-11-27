@@ -76,10 +76,11 @@ export function ProviderConnectionForm({
       : connection.protocol === 'fixture-sse-v1'
         ? t('providers.m128')
         : t('providers.m129');
+  const savedConnection =
+    editingConnection && connections.find((item) => item.id === editingConnection.id);
+  const deletedConnection = !!editingConnection && !savedConnection;
   const staleConnection =
-    !!editingConnection &&
-    connections.find((item) => item.id === editingConnection.id)?.revision !==
-      editingConnection.revision;
+    !!savedConnection && savedConnection.revision !== editingConnection?.revision;
   const reloadButton = editingConnection && (
     <button
       type="button"
@@ -111,7 +112,11 @@ export function ProviderConnectionForm({
           )}
         </h3>
       )}
-      {conflict ? (
+      {deletedConnection ? (
+        <NoticeBanner tone="error" className="full">
+          {t('providers.connectionDeletedElsewhere')}
+        </NoticeBanner>
+      ) : conflict ? (
         <NoticeBanner tone="error" className="full" actions={reloadButton}>
           {t('providers.m138')}
         </NoticeBanner>

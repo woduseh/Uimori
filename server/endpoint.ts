@@ -49,6 +49,7 @@ export function registerEndpoint<Op extends Operation>(
     config: { admission: endpoint.admission, cache: endpoint.cache },
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
     handler: async (request, reply) => {
+      if (endpoint.cache === 'no-store') reply.header('Cache-Control', 'no-store');
       const output = await handler(
         parseInput<Op['input']>(operation.input, endpointInput(endpoint, request)),
         request,

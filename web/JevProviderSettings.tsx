@@ -7,13 +7,14 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-provider.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
-import { api, ApiError } from './api.js';
+import { providerEndpoints } from '#contracts';
+import { ApiError, callEndpoint, definiteRejection } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import { SaveButton } from './SaveButton.js';
 import { ToggleRow } from './ToggleRow.js';
 import './JevProviderSettings.css';
 
 type Attempt = { expectedRevision: number; idempotencyKey: string };
-const path = '/provider-management/jev';
 
 function testFailure(code: string | null): string {
   if (code === 'JEV_HTTP_401' || code === 'JEV_HTTP_403') return t('providers.m329');
@@ -105,7 +106,7 @@ export function JevProviderSettings({
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    void api<JevProviderStatus>(path, undefined, 'GET', controller.signal)
+    void callEndpoint(providerEndpoints.readJev, {}, controller.signal)
       .then((next) => {
         if (controller.signal.aborted) return;
         setStatus(next);
@@ -129,12 +130,7 @@ export function JevProviderSettings({
     if (!test || test.status !== 'running' || testError) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      void api<ProviderConnectionTest>(
-        `/provider-management/tests/${encodeURIComponent(test.id)}`,
-        undefined,
-        'GET',
-        controller.signal
-      )
+      void callEndpoint(providerEndpoints.readConnectionTest, { id: test.id }, controller.signal)
         .then((result) => {
           if (!controller.signal.aborted) acceptTest(result);
         })
@@ -156,11 +152,12 @@ export function JevProviderSettings({
     setError('');
     setMessage('');
     try {
-      const next = await api<JevProviderStatus>(
-        path,
-        { expectedRevision: status.revision, ...(remove ? {} : { apiKey }) },
-        remove ? 'DELETE' : 'PUT'
-      );
+      const next = remove
+        ? await callEndpoint(providerEndpoints.deleteJevKey, { expectedRevision: status.revision })
+        : await callEndpoint(providerEndpoints.saveJevKey, {
+            expectedRevision: status.revision,
+            apiKey,
+          });
       if (!alive.current) return false;
       setStatus(next);
       setApiKey('');
@@ -169,12 +166,12 @@ export function JevProviderSettings({
       return true;
     } catch (caught) {
       if (!alive.current) return false;
-      if (caught instanceof ApiError && caught.status === 409) {
+      if (caught instanceof ApiError && caught.code === 'REVISION_CONFLICT') {
         setConflict(true);
         setSaveConflict(true);
         setError(uiMessage('providers.m340'));
       } else {
-        setError(uiMessage('providers.m341'));
+        setError(definiteRejection(caught) ? errorDescriptor(caught) : uiMessage('providers.m341'));
       }
       return false;
     } finally {
@@ -193,21 +190,24 @@ export function JevProviderSettings({
     setOperation('settings');
     setMessage('');
     try {
-      const next = await api<JevProviderStatus>(
-        `${path}/settings`,
-        {
-          expectedRevision: status.settings.revision,
-          images: status.settings.images,
-          longContext: status.settings.longContext,
-          ...change,
-        },
-        'PUT'
-      );
+      const next = await callEndpoint(providerEndpoints.updateJevSettings, {
+        expectedRevision: status.settings.revision,
+        images: status.settings.images,
+        longContext: status.settings.longContext,
+        ...change,
+      });
       if (!alive.current) return;
       setStatus(next);
       setMessage(uiMessage('providers.jevSettingsSaved'));
-    } catch {
-      if (alive.current) setSettingsError(uiMessage('providers.jevSettingsFailed'));
+    } catch (caught) {
+      if (alive.current)
+        setSettingsError(
+          caught instanceof ApiError && caught.code === 'REVISION_CONFLICT'
+            ? uiMessage('providers.jevSettingsConflict')
+            : definiteRejection(caught)
+              ? errorDescriptor(caught)
+              : uiMessage('providers.jevSettingsFailed')
+        );
     } finally {
       lock.current = false;
       if (alive.current) setOperation(null);
@@ -230,18 +230,23 @@ export function JevProviderSettings({
     try {
       const result =
         test?.status === 'running'
-          ? await api<ProviderConnectionTest>(
-              `/provider-management/tests/${encodeURIComponent(test.id)}`
-            )
-          : await api<ProviderConnectionTest>(`${path}/test`, next);
+          ? await callEndpoint(providerEndpoints.readConnectionTest, { id: test.id })
+          : await callEndpoint(providerEndpoints.startJevTest, next);
       if (alive.current) acceptTest(result);
     } catch (caught) {
       if (!alive.current) return;
-      if (caught instanceof ApiError && caught.status >= 400 && caught.status < 500) {
+      if (definiteRejection(caught)) {
         attemptRef.current = null;
         setAttempt(null);
-        if (caught.status === 409) setConflict(true);
-        setError(caught.status === 409 ? uiMessage('providers.m342') : uiMessage('providers.m343'));
+        const revisionConflict = caught instanceof ApiError && caught.code === 'REVISION_CONFLICT';
+        if (revisionConflict) setConflict(true);
+        setError(
+          revisionConflict
+            ? uiMessage('providers.m342')
+            : caught instanceof ApiError && caught.code === 'CONNECTION_TEST_RUNNING'
+              ? errorDescriptor(caught)
+              : uiMessage('providers.m343')
+        );
       } else {
         setTestError(uiMessage('providers.m344'));
       }
@@ -262,7 +267,7 @@ export function JevProviderSettings({
         title={t('providers.m346')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
-          const value = await api<JevProviderStatus>(path);
+          const value = await callEndpoint(providerEndpoints.readJev);
           return () => [
             {
               label: t('providers.m347'),

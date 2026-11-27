@@ -1,27 +1,8 @@
 import type { ProviderHttpDiagnostic } from './provider-http-error.js';
+import type { ProviderRejection, RejectedOption } from '#contracts';
 
-export type RejectedOption =
-  | 'thinking'
-  | 'temperature'
-  | 'topP'
-  | 'maxOutputTokens'
-  | 'stopSequences'
-  | 'serviceTier'
-  | 'cache'
-  | 'structuredOutput'
-  | 'verbosity'
-  | 'reasoningMode'
-  | 'reasoningContext'
-  | 'model'
-  | 'tools'
-  | 'input';
-export type ProviderRejection = {
-  httpStatus: number;
-  providerCode?: string;
-  options: RejectedOption[];
-  unmappedFields?: string[];
-  message?: string;
-};
+export type { ProviderRejection, RejectedOption };
+
 const byField: Record<string, RejectedOption> = {
   effort: 'thinking',
   reasoning: 'thinking',

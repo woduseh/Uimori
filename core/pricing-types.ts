@@ -38,16 +38,4 @@ export type PricingSnapshot = {
   cacheTtl?: string;
   notes: string[];
 };
-export type PricingLine = {
-  kind: 'input' | 'cacheRead' | 'cacheWrite' | 'cacheWrite1h' | 'output';
-  tokens: number | null;
-  rate: number | null;
-  usd: number | null;
-};
-export type CostEstimate = {
-  status: 'estimated' | 'partial' | 'unavailable';
-  usd: number | null;
-  subtotalUsd: number;
-  lines: PricingLine[];
-  notes: string[];
-};
+export type { CostEstimate, PricingLine } from '#contracts';

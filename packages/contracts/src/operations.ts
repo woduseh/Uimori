@@ -6,5 +6,6 @@ export * from './domains/library/operations.js';
 export * from './domains/deletion/operations.js';
 export * from './domains/resource-editors/operations.js';
 export * from './domains/prompts/operations.js';
+export * from './domains/providers/operations.js';
 export * from './domains/query.js';
 export * from './domains/text.js';

@@ -26,7 +26,7 @@ export type Endpoint<Op extends Operation = Operation> = {
   readonly status?: number;
   readonly bodyLimit?: number;
   readonly admission?: 'always';
-  readonly cache?: 'revalidate';
+  readonly cache?: 'revalidate' | 'no-store';
   readonly invalidates?: readonly Invalidation[];
   readonly '~operation'?: Op;
 };

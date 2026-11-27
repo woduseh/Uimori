@@ -229,3 +229,20 @@ test('JEVUI03 an uncertain test resubmits the same idempotency key and the next 
   expect(submissions).toHaveLength(3);
   expect(submissions[2]?.idempotencyKey).not.toBe(submissions[1]?.idempotencyKey);
 });
+
+test('JEVUI04 judgment settings changed on another screen ask for a refresh instead of an unknown outcome', async ({
+  page,
+  request,
+}) => {
+  await saveKey(request);
+  await openJev(page);
+  const section = await openJevModel(page);
+  const { settings } = await connection(request);
+  const elsewhere = await request.put(`${endpoint}/settings`, {
+    data: { expectedRevision: settings.revision, images: false, longContext: true },
+  });
+  expect(elsewhere.ok(), await elsewhere.text()).toBe(true);
+  await section.getByLabel('이미지를 보고 선택').click();
+  await expect(section.getByRole('alert')).toContainText('다른 화면에서 판단 설정이 바뀌었어요.');
+  expect((await connection(request)).settings).toMatchObject({ images: false, longContext: true });
+});

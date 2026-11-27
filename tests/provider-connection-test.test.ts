@@ -83,6 +83,7 @@ async function post(
     payload: { expectedRevision: model.revision, idempotencyKey: key, ...extra },
   });
   expect(response.statusCode, response.body).toBe(status);
+  if (status !== 401) expect(response.headers['cache-control']).toBe('no-store');
   return response.json() as ProviderConnectionTest;
 }
 async function terminal(app: App, id: string, cookie?: string) {
@@ -274,7 +275,8 @@ describe('one-call provider connection diagnostics', () => {
   test('startup interrupts previously admitted work and repeated key returns it without replay', async () => {
     const { app, item, model } = await setup();
     const key = randomUUID();
-    const admitted = new ProviderConnectionTestStore(app.store).create(model.id, {
+    const admitted = new ProviderConnectionTestStore(app.store).create({
+      id: model.id,
       expectedRevision: model.revision,
       idempotencyKey: key,
     });
@@ -510,7 +512,9 @@ describe('one-call provider connection diagnostics', () => {
     const located = await post(app, model, randomUUID(), 202, { location: 'us' });
     const elsewhere = await post(app, model, randomUUID(), 202, { location: 'eu' });
     const ordinary = await post(app, model);
-    await post(app, model, randomUUID(), 409, { location: 'us' });
+    expect(await post(app, model, randomUUID(), 409, { location: 'us' })).toEqual({
+      code: 'CONNECTION_TEST_RUNNING',
+    });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
     release();
     expect(await terminal(app, elsewhere.id)).toMatchObject({

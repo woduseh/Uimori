@@ -1991,12 +1991,6 @@ export const messages = {
     ja: 'ログインページを開く',
     zh: '打开登录页面',
   },
-  'providers.m446': {
-    ko: '공식 로그인 주소를 확인하지 못했어요. 로그인을 취소하고 다시 시도해 주세요.',
-    en: 'Could not verify the official sign-in URL. Cancel sign-in and try again.',
-    ja: '公式ログインURLを確認できませんでした。ログインをキャンセルして再試行してください。',
-    zh: '无法确认官方登录地址。请取消登录后重试。',
-  },
   'providers.m447': {
     ko: '페이지에 코드를 입력해 주세요. 로그인 완료를 자동으로 확인해요.',
     en: 'Enter the code on the page. Sign-in completion is checked automatically.',
@@ -3112,5 +3106,23 @@ export const messages = {
     en: 'Use this location: {value0}',
     ja: 'このロケーションに変更: {value0}',
     zh: '改用此位置：{value0}',
+  },
+  'providers.jevSettingsConflict': {
+    ko: '다른 화면에서 판단 설정이 바뀌었어요. 연결을 새로고침한 뒤 다시 바꿔 주세요.',
+    en: 'Judgment settings changed on another screen. Refresh the connection and change them again.',
+    ja: '別の画面で判定設定が変わりました。接続を更新してから、もう一度変更してください。',
+    zh: '判断设置已在其他页面更改。请刷新连接后重新更改。',
+  },
+  'providers.connectionDeletedElsewhere': {
+    ko: '이 프로바이더는 다른 화면에서 삭제됐어요. 입력한 내용은 이 화면에 남아 있어요.',
+    en: 'This provider was deleted on another screen. What you entered stays on this screen.',
+    ja: 'このプロバイダーは別の画面で削除されました。入力した内容はこの画面に残っています。',
+    zh: '此提供商已在其他页面删除。已输入的内容仍保留在此页面。',
+  },
+  'providers.modelDeletedElsewhere': {
+    ko: '이 모델은 다른 화면에서 삭제됐어요. 입력한 내용은 이 화면에 남아 있어요.',
+    en: 'This model was deleted on another screen. What you entered stays on this screen.',
+    ja: 'このモデルは別の画面で削除されました。入力した内容はこの画面に残っています。',
+    zh: '此模型已在其他页面删除。已输入的内容仍保留在此页面。',
   },
 };

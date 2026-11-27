@@ -3,7 +3,9 @@ import { UiError, uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
-import { api, ApiError } from './api.js';
+import { providerEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import type { VertexAccountDraft } from './provider-editor-state.js';
 
 export function VertexCredentialUpload({
@@ -75,10 +77,9 @@ export function VertexCredentialUpload({
                 (serviceAccount as Record<string, unknown>).type !== 'service_account'
               )
                 throw new UiError(uiMessage('providers.m402'));
-              const value = await api<{ projectId: string; clientEmail: string }>(
-                '/provider-management/vertex-credentials/validate',
-                { serviceAccount }
-              );
+              const value = await callEndpoint(providerEndpoints.validateVertexCredential, {
+                serviceAccount,
+              });
               if (current !== epoch.current) return;
               onRegistered({ ...value, serviceAccount });
             } catch (caught) {
@@ -86,9 +87,7 @@ export function VertexCredentialUpload({
                 setError(
                   caught instanceof ApiError && caught.status === 400
                     ? descriptor('providers.m403')
-                    : caught instanceof Error
-                      ? caught.message
-                      : descriptor('providers.m404')
+                    : errorDescriptor(caught, 'providers.m404')
                 );
             } finally {
               if (current === epoch.current) {

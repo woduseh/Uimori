@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Fastify from 'fastify';
 import { z } from 'zod/v4';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { defineEndpoint, defineOperation, endpointRequest, type OperationInput } from '#contracts';
 import * as operations from '#contracts/operations';
 import { checkEndpointOutputs, NOT_MODIFIED, registerEndpoint } from '../server/endpoint.js';
@@ -241,6 +241,32 @@ function strippingObjects(root: unknown, name: string): string[] {
   visit(root, name);
   return found;
 }
+
+test('a no-store endpoint marks its response before input parsing, so a refusal is not cached either', async () => {
+  const app = Fastify();
+  const handler = vi.fn(() => ({ id: 'a', note: 'b' }));
+  registerEndpoint(
+    app,
+    defineEndpoint<typeof echo>()({
+      operation: 'test.echo',
+      method: 'PUT',
+      path: '/private/:id',
+      cache: 'no-store',
+    }),
+    echo,
+    handler
+  );
+  cleanup.push(() => app.close());
+  for (const [payload, status] of [
+    [{ note: 'kept' }, 200],
+    [{ note: 1 }, 400],
+  ] as const) {
+    const response = await app.inject({ method: 'PUT', url: '/api/private/a', payload });
+    expect(response.statusCode).toBe(status);
+    expect(response.headers['cache-control']).toBe('no-store');
+  }
+  expect(handler).toHaveBeenCalledTimes(1);
+});
 
 test('contract object schemas refuse unknown keys unless they opt into z.looseObject', () => {
   expect(strippingObjects(operations, 'operations')).toEqual([]);

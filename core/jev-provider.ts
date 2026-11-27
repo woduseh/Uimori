@@ -1,22 +1,11 @@
-import type { ProviderConnectionTest } from './provider-connection-test.js';
+import type { JevProviderStatus, JevSettings } from '#contracts';
 
-export type JevSettings = { revision: number; images: boolean; longContext: boolean };
+export type { JevProviderStatus, JevSettings };
 
 export const DEFAULT_JEV_SETTINGS: JevSettings = {
   revision: 0,
   images: false,
   longContext: false,
-};
-
-export type JevProviderStatus = {
-  revision: number;
-  configured: boolean;
-  credentialSource: 'saved' | 'environment' | 'missing';
-  hasSavedKey: boolean;
-  modelId: string;
-  endpoint: string;
-  latestTest: ProviderConnectionTest | null;
-  settings: JevSettings;
 };
 
 export const JEV_PROVIDER_DEFINITION = Object.freeze({

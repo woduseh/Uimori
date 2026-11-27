@@ -58,6 +58,7 @@ async function save(app: App, expectedRevision: number, apiKey = savedKey, code 
     payload: { expectedRevision, apiKey },
   });
   expect(response.statusCode, response.body).toBe(code);
+  expect(response.headers['cache-control']).toBe('no-store');
   expect(response.body).not.toContain(savedKey);
   expect(response.body).not.toContain(envKey);
   return response.json() as Status;
@@ -132,6 +133,13 @@ describe('JEV connection settings and explicit diagnostics', () => {
     await reopened.ready();
     expect((await status(reopened)).settings).toEqual(saved.settings);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('an empty key is refused rather than deleting the saved key', async () => {
+    const { app } = await setup();
+    const saved = await save(app, (await status(app)).revision);
+    await save(app, saved.revision, '', 400);
+    expect(await status(app)).toEqual(saved);
   });
 
   test.each([
@@ -225,7 +233,13 @@ describe('JEV connection settings and explicit diagnostics', () => {
     const started = await start(app, saved.revision, key);
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(await start(app, saved.revision, key)).toEqual(started);
-    await start(app, saved.revision, randomUUID(), 409);
+    const running = await app.inject({
+      method: 'POST',
+      url: `${base}/test`,
+      payload: { expectedRevision: saved.revision, idempotencyKey: randomUUID() },
+    });
+    expect(running.statusCode).toBe(409);
+    expect(running.json()).toEqual({ code: 'CONNECTION_TEST_RUNNING' });
     release();
     const done = await terminal(app, started.id);
     expect(done).toMatchObject({

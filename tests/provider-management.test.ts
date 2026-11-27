@@ -110,7 +110,8 @@ test('a screen that still shows a deleted connection or model gets a revision co
     p.moveModel(m.id, { targetId: other.id, position: 'after', expectedOrder: [m.id, other.id] })
   ).toThrow('REVISION_CONFLICT');
   expect(() =>
-    new ProviderConnectionTestStore(s).create(m.id, {
+    new ProviderConnectionTestStore(s).create({
+      id: m.id,
       expectedRevision: m.revision,
       idempotencyKey: 'stale-test',
     })

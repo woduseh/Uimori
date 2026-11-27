@@ -7,8 +7,10 @@ import { ConfirmDialog } from './ConfirmDialog.js';
 import { TransientNotice } from './TransientNotice.js';
 import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
+import { providerEndpoints } from '#contracts';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
-import { api } from './api.js';
+import { ApiError, callEndpoint } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
 const runtimeErrors: Record<string, string> = {
@@ -118,7 +120,7 @@ export function CodexAgentSettings({
       if (!alive || current !== version.current) return;
       setChecking(true);
       try {
-        const result = await api<CodexRuntimeStatus>('/agent-runtimes/codex');
+        const result = await callEndpoint(providerEndpoints.readCodexRuntime);
         if (!alive || current !== version.current) return;
         setStatus(result);
         setError('');
@@ -139,7 +141,12 @@ export function CodexAgentSettings({
       if (timer) clearTimeout(timer);
     };
   }, [active]);
-  async function action(path: string, method = 'POST') {
+  async function action(
+    endpoint:
+      | typeof providerEndpoints.startCodexLogin
+      | typeof providerEndpoints.cancelCodexLogin
+      | typeof providerEndpoints.signOutCodex
+  ) {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
@@ -147,10 +154,15 @@ export function CodexAgentSettings({
     ++version.current;
     setChecking(false);
     try {
-      setStatus(await api<CodexRuntimeStatus>(path, {}, method));
+      setStatus(await callEndpoint(endpoint));
       refreshStatus();
-    } catch {
-      setError(uiMessage('providers.m420'));
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError &&
+          (caught.code === 'CODEX_AUTH_BUSY' || caught.code === 'CODEX_RUNTIME_BUSY')
+          ? errorDescriptor(caught)
+          : uiMessage('providers.m420')
+      );
     } finally {
       locked.current = false;
       setBusy(false);
@@ -176,21 +188,6 @@ export function CodexAgentSettings({
       {t('providers.m423')}
     </button>
   );
-  const verificationUrl = (() => {
-    try {
-      const url = new URL(status?.login?.verificationUrl ?? '');
-      return url.origin === 'https://auth.openai.com' &&
-        url.pathname === '/codex/device' &&
-        !url.username &&
-        !url.password &&
-        !url.search &&
-        !url.hash
-        ? url.href
-        : null;
-    } catch {
-      return null;
-    }
-  })();
   return (
     <section
       className={`codex-agent-settings${!status ? ' settings-loading-region' : ''}`}
@@ -246,13 +243,9 @@ export function CodexAgentSettings({
                   {translateMessage(copyError)}
                 </span>
               )}
-              {verificationUrl ? (
-                <a href={verificationUrl} target="_blank" rel="noopener noreferrer">
-                  {t('providers.m445')}
-                </a>
-              ) : (
-                <p className="error">{t('providers.m446')}</p>
-              )}
+              <a href={status.login.verificationUrl} target="_blank" rel="noopener noreferrer">
+                {t('providers.m445')}
+              </a>
               <small>{t('providers.m447')}</small>
             </div>
           )}
@@ -333,7 +326,7 @@ export function CodexAgentSettings({
                   type="button"
                   disabled={busy}
                   onClick={() => {
-                    void action('/agent-runtimes/codex/login');
+                    void action(providerEndpoints.startCodexLogin);
                   }}
                 >
                   {t('providers.m460')}
@@ -345,7 +338,7 @@ export function CodexAgentSettings({
                 className="secondary"
                 disabled={busy}
                 onClick={() => {
-                  void action('/agent-runtimes/codex/login/cancel');
+                  void action(providerEndpoints.cancelCodexLogin);
                 }}
               >
                 {t('providers.m461')}
@@ -370,7 +363,7 @@ export function CodexAgentSettings({
               onCancel={() => setDisconnecting(false)}
               onConfirm={() => {
                 setDisconnecting(false);
-                void action('/agent-runtimes/codex/session', 'DELETE');
+                void action(providerEndpoints.signOutCodex);
               }}
             />
           </div>

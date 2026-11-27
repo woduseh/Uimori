@@ -37,6 +37,9 @@ test('unavailable models retain only the role code and show the current selectio
   const other = await rejectedWith(409, { code: 'MODEL_UNAVAILABLE', params: { role: 'helper' } });
   expect(shown(other)).toContain('역할별 모델');
   expect(shown(other)).not.toContain('고정 모델');
+  const agent = await rejectedWith(409, { code: 'MODEL_UNAVAILABLE', params: { role: 'agent' } });
+  expect(shown(agent)).toContain('에이전트 협업');
+  expect(shown(agent)).not.toContain('역할별 모델');
 });
 
 test('only recognized revision errors are described as a concurrent save', async () => {

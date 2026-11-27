@@ -63,8 +63,9 @@ import type {
 } from '../core/product.js';
 import { PROVIDER_CHOICES, providerDefinition } from '../core/provider-definitions.js';
 import { providerLabel } from './builtin-labels.js';
-import { deletionEndpoints } from '#contracts';
-import { api, ApiError } from './api.js';
+import { deletionEndpoints, providerEndpoints } from '#contracts';
+import { api, ApiError, callEndpoint } from './api.js';
+import { errorDescriptor } from './api-errors.js';
 import {
   initialModel,
   modelDraft,
@@ -95,6 +96,14 @@ function vertexLocationOf(
   const connection = connections.find((candidate) => candidate.id === connectionId);
   if (connection?.protocol !== 'vertex-gemini-v1') return undefined;
   return parseVertexEndpoint(connection.endpoint)?.location;
+}
+async function savedOrDeleted<T>(read: Promise<T>): Promise<T | null> {
+  try {
+    return await read;
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.code === 'LIBRARY_ITEM_DELETED') return null;
+    throw caught;
+  }
 }
 export type ProviderDetailRequest = { kind: 'model'; id: string } | { kind: 'providers' };
 type ProviderScreen = 'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev';
@@ -211,7 +220,7 @@ export function ConnectionEditor({
   useEffect(() => {
     void jevListRefresh;
     const controller = new AbortController();
-    void api<JevProviderStatus>('/provider-management/jev', undefined, 'GET', controller.signal)
+    void callEndpoint(providerEndpoints.readJev, {}, controller.signal)
       .then((status) => {
         if (!controller.signal.aborted) {
           setJevStatus(status);
@@ -365,7 +374,7 @@ export function ConnectionEditor({
       try {
         await reload();
       } catch (caught) {
-        const detail = caught instanceof Error ? caught.message : descriptor('providers.m7');
+        const detail = errorDescriptor(caught, 'providers.m7');
         const warning = descriptor('providers.m534', { value0: messageRef(detail) });
         setMessage('');
         setRefreshWarning(warning);
@@ -373,7 +382,7 @@ export function ConnectionEditor({
       }
       return true;
     } catch (caught) {
-      const detail = caught instanceof Error ? caught.message : descriptor('providers.m8');
+      const detail = errorDescriptor(caught, 'providers.m8');
       setError(detail);
       onError(detail);
       if (caught instanceof ApiError && caught.status === 409 && scope !== 'status') {
@@ -900,7 +909,11 @@ export function ConnectionEditor({
         onClose={() => setSaveConflict(null)}
         readSaved={async () => {
           if (saveConflict === 'connection' && editingConnection) {
-            const value = await api<Connection>(`/connections/${editingConnection.id}`);
+            const value = await savedOrDeleted(
+              api<Connection>(`/connections/${editingConnection.id}`)
+            );
+            if (!value)
+              return () => ({ content: <p>{t('providers.connectionDeletedElsewhere')}</p> });
             return () => [
               { label: t('providers.m43'), value: value.title },
               {
@@ -915,7 +928,10 @@ export function ConnectionEditor({
             ];
           }
           if (saveConflict === 'model' && editingModel) {
-            const value = await api<ModelPreset>(`/model-presets/${editingModel.id}`);
+            const value = await savedOrDeleted(
+              api<ModelPreset>(`/model-presets/${editingModel.id}`)
+            );
+            if (!value) return () => ({ content: <p>{t('providers.modelDeletedElsewhere')}</p> });
             return () => [
               { label: t('providers.m49'), value: value.title },
               { label: t('providers.m50'), value: value.modelId },

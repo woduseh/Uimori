@@ -1,10 +1,12 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n, translateMessage } from './i18n.js';
+import { formatUiMessage, UiError, type UiMessage, uiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
+import { providerEndpoints } from '#contracts';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Activity as TestIcon, Globe as LocationIcon } from 'lucide-react';
 import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
-import { api } from './api.js';
+import { callEndpoint } from './api.js';
 import { ProviderRejectionNotice, rejectionMessage } from './provider-rejection.js';
 import { vertexLocationOptions } from '../core/vertex-location.js';
 import { vertexLocationLabel } from './vertex-location-label.js';
@@ -16,7 +18,7 @@ type TestDisplay = {
   pending: boolean;
   idempotencyKey: string;
   result?: ProviderConnectionTest;
-  error?: string;
+  error?: UiMessage;
   cancelled?: boolean;
 };
 export const testKey = (model: Pick<ModelPreset, 'id' | 'revision'>, location?: string) =>
@@ -80,20 +82,14 @@ export function useProviderModelTests() {
     const active = () => !controller.signal.aborted && controllers.current.get(key) === controller;
     try {
       result = result
-        ? await api<ProviderConnectionTest>(
-            `/provider-management/tests/${encodeURIComponent(result.id)}`,
-            undefined,
-            'GET',
+        ? await callEndpoint(
+            providerEndpoints.readConnectionTest,
+            { id: result.id },
             controller.signal
           )
-        : await api<ProviderConnectionTest>(
-            `/provider-management/models/${encodeURIComponent(model.id)}/test`,
-            {
-              expectedRevision: model.revision,
-              idempotencyKey,
-              ...(location === undefined ? {} : { location }),
-            },
-            'POST',
+        : await callEndpoint(
+            providerEndpoints.startModelTest,
+            { id: model.id, expectedRevision: model.revision, idempotencyKey, location },
             controller.signal
           );
       while (active()) {
@@ -109,10 +105,9 @@ export function useProviderModelTests() {
         if (result.status !== 'running') return;
         await pause(controller.signal);
         if (!active()) return;
-        result = await api<ProviderConnectionTest>(
-          `/provider-management/tests/${encodeURIComponent(result.id)}`,
-          undefined,
-          'GET',
+        result = await callEndpoint(
+          providerEndpoints.readConnectionTest,
+          { id: result.id },
           controller.signal
         );
       }
@@ -122,7 +117,7 @@ export function useProviderModelTests() {
           pending: false,
           idempotencyKey,
           ...(result ? { result } : {}),
-          error: error instanceof Error ? error.message : descriptor('providers.m293'),
+          error: toUiMessage(error, 'providers.m293'),
         });
     } finally {
       if (controllers.current.get(key) === controller) controllers.current.delete(key);
@@ -409,7 +404,7 @@ export function ProviderModelTest({
             <p>{t('providers.m306')}</p>
             <details>
               <summary>{t('providers.m307')}</summary>
-              <p>{translateMessage(record.error)}</p>
+              <p>{formatUiMessage(record.error)}</p>
             </details>
           </div>
         ) : (

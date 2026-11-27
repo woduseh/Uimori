@@ -181,8 +181,8 @@ export async function compareVertexLocations(
     locations.map(async (location) => {
       try {
         const started = runner.start(
-          model.id,
           {
+            id: model.id,
             expectedRevision: model.revision,
             idempotencyKey: `helper-location:${key}:${location}`,
             location,

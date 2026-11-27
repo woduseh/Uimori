@@ -1,5 +1,9 @@
 import { uncertainAttemptResult } from './usage-accounting.js';
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
+import { providerEndpoints, type StartModelTest } from '#contracts';
+import { providerOperations } from '#contracts/operations';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { Connection, ModelGeneration, ModelPreset } from '../core/product.js';
@@ -47,8 +51,7 @@ type TestOptions = Pick<
 };
 export type ConnectionTestRunner = {
   start(
-    modelId: string,
-    body: unknown,
+    input: StartModelTest,
     stillAuthorized: () => void
   ): { view: ProviderConnectionTest; done: Promise<void> };
   get(id: string): ProviderConnectionTest;
@@ -91,12 +94,10 @@ export class ProviderConnectionTestStore {
     if (!row) throw new HttpError(404, 'Connection test not found');
     return JSON.parse(row.body) as ProviderConnectionTest;
   }
-  create(modelId: string, value: unknown): { view: ProviderConnectionTest; target?: Target } {
-    const body = record(value);
-    fields(body, ['expectedRevision', 'idempotencyKey', 'location']);
-    const expectedRevision = number(body.expectedRevision, 'expectedRevision');
-    const key = text(body.idempotencyKey, 'idempotencyKey', 200);
-    const location = body.location === undefined ? undefined : text(body.location, 'location', 40);
+  create({ id: modelId, expectedRevision, idempotencyKey: key, location }: StartModelTest): {
+    view: ProviderConnectionTest;
+    target?: Target;
+  } {
     const runningKey = location === undefined ? modelId : `${modelId}#${location}`;
     return this.store.transaction(() => {
       const prior = this.store.db
@@ -106,11 +107,11 @@ export class ProviderConnectionTestStore {
         .get(key) as TestRow | undefined;
       if (prior) {
         if (prior.model_id !== runningKey || prior.model_revision !== expectedRevision)
-          throw new HttpError(409, 'Connection test key reused with different model or revision');
+          throw new HttpError(409, 'CONNECTION_TEST_KEY_CONFLICT');
         return { view: this.get(prior.id) };
       }
       const model = this.store.product.editable<ModelPreset>('model', modelId, expectedRevision);
-      if (model.enabled === false) throw new HttpError(403, 'Connection test model disabled');
+      if (model.enabled === false) throw new AppError(403, 'CONNECTION_TEST_MODEL_DISABLED');
       const authority = this.store.product.get<Connection>('connection', model.connectionId);
       this.store.product.authorize(authority);
       if (
@@ -118,7 +119,7 @@ export class ProviderConnectionTestStore {
           .prepare("SELECT 1 FROM provider_connection_tests WHERE model_id=? AND status='running'")
           .get(runningKey)
       )
-        throw new HttpError(409, 'Connection test already running for this model');
+        throw new AppError(409, 'CONNECTION_TEST_RUNNING');
       let connection = authority;
       if (location !== undefined) {
         const endpoint =
@@ -229,11 +230,11 @@ export function createConnectionTestRunner(
   journal.recover();
   return {
     get: (id) => journal.get(id),
-    start(modelId, body, stillAuthorized) {
+    start(input, stillAuthorized) {
       if (options.signal.aborted) throw new HttpError(503, 'Server stopping');
-      const admission = journal.create(modelId, body);
+      const admission = journal.create(input);
       if (!admission.target) return { view: admission.view, done: Promise.resolve() };
-      const { model, connection, authority, request: input } = admission.target;
+      const { model, connection, authority, request } = admission.target;
       const id = admission.view.id;
       const done = (async () => {
         const started = performance.now();
@@ -261,7 +262,7 @@ export function createConnectionTestRunner(
         };
         try {
           authorize();
-          result = await executeProvider(transportConnection(connection), input, {
+          result = await executeProvider(transportConnection(connection), request, {
             signal,
             timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
             vertexRequestTier: options.vertexRequestTier,
@@ -291,7 +292,7 @@ export function createConnectionTestRunner(
           const output = result.text || result.refusal || '';
           const rejection = providerRejection(result.error?.diagnostic);
           journal.finish(id, {
-            estimatedCost: estimateCost(input.pricingSnapshot, result.usage),
+            estimatedCost: estimateCost(request.pricingSnapshot, result.usage),
             ...(rejection ? { rejection } : {}),
             status:
               result.status === 'tool_calls'
@@ -359,23 +360,21 @@ export function connectionTestRoutes(
   runner: ConnectionTestRunner,
   authenticated: (cookie?: string) => boolean
 ) {
-  app.post<{ Params: { id: string } }>(
-    '/api/provider-management/models/:id/test',
-    async (request, reply) => {
-      const { view } = runner.start(request.params.id, request.body, () => {
+  registerEndpoint(
+    app,
+    providerEndpoints.startModelTest,
+    providerOperations.startModelTest,
+    (input, request) =>
+      runner.start(input, () => {
         if (!authenticated(request.headers.cookie))
           throw new ProviderContractError('SESSION_NOT_AUTHORIZED');
-      });
-      reply.code(202).header('Cache-Control', 'no-store');
-      return view;
-    }
+      }).view
   );
-  app.get<{ Params: { id: string } }>(
-    '/api/provider-management/tests/:id',
-    async (request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      return runner.get(request.params.id);
-    }
+  registerEndpoint(
+    app,
+    providerEndpoints.readConnectionTest,
+    providerOperations.readConnectionTest,
+    ({ id }) => runner.get(id)
   );
 }
 

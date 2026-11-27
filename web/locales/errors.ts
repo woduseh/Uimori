@@ -930,10 +930,10 @@ export const messages = {
     zh: '正文文件格式无效。请检查文件内容。',
   },
   'errors.MODEL_UNAVAILABLE': {
-    ko: '{role, select, main {본문 모델이나 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델, 설정 > 역할별 모델, 프로바이더의 활성 상태와 인증을 확인해 주세요.} illustration {삽화 모델이나 연결을 사용할 수 없어요. 설정 > 삽화의 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.} other {선택한 모델이나 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.}}',
-    en: '{role, select, main {The writing model or provider is unavailable. Check the chat’s pinned model, Settings > Models by role, and whether the provider is enabled and signed in.} illustration {The illustration model or connection is unavailable. Check the models in Settings > Illustrations and whether the provider is enabled and signed in.} other {The selected model or provider is unavailable. Check Settings > Models by role and whether the provider is enabled and signed in.}}',
-    ja: '{role, select, main {本文モデルまたはプロバイダーを使用できません。チャット設定の固定モデル、設定 > 役割別モデル、プロバイダーの有効状態と認証を確認してください。} illustration {挿絵モデルまたは接続を使用できません。設定 > 挿絵のモデルと、プロバイダーの有効状態と認証を確認してください。} other {選択したモデルまたはプロバイダーを使用できません。設定 > 役割別モデルと、プロバイダーの有効状態と認証を確認してください。}}',
-    zh: '{role, select, main {正文模型或提供商不可用。请检查聊天设置中的固定模型、设置 > 按角色设置模型，以及提供商的启用状态与认证。} illustration {插图模型或连接不可用。请检查设置 > 插图中的模型，以及提供商的启用状态与认证。} other {所选模型或提供商不可用。请检查设置 > 按角色设置模型，以及提供商的启用状态与认证。}}',
+    ko: '{role, select, agent {에이전트 협업에 지정한 모델이나 프로바이더를 사용할 수 없어요. 본문 프롬프트의 에이전트 협업 설정에서 각 에이전트의 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.} main {본문 모델이나 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델, 설정 > 역할별 모델, 프로바이더의 활성 상태와 인증을 확인해 주세요.} illustration {삽화 모델이나 연결을 사용할 수 없어요. 설정 > 삽화의 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.} other {선택한 모델이나 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.}}',
+    en: '{role, select, agent {A model or provider chosen for agent collaboration is unavailable. Check each agent’s model in the main prompt’s Agent collaboration settings and whether the provider is enabled and signed in.} main {The writing model or provider is unavailable. Check the chat’s pinned model, Settings > Models by role, and whether the provider is enabled and signed in.} illustration {The illustration model or connection is unavailable. Check the models in Settings > Illustrations and whether the provider is enabled and signed in.} other {The selected model or provider is unavailable. Check Settings > Models by role and whether the provider is enabled and signed in.}}',
+    ja: '{role, select, agent {エージェント協業に指定したモデルまたはプロバイダーを使用できません。本文プロンプトのエージェント協業設定で各エージェントのモデルと、プロバイダーの有効状態と認証を確認してください。} main {本文モデルまたはプロバイダーを使用できません。チャット設定の固定モデル、設定 > 役割別モデル、プロバイダーの有効状態と認証を確認してください。} illustration {挿絵モデルまたは接続を使用できません。設定 > 挿絵のモデルと、プロバイダーの有効状態と認証を確認してください。} other {選択したモデルまたはプロバイダーを使用できません。設定 > 役割別モデルと、プロバイダーの有効状態と認証を確認してください。}}',
+    zh: '{role, select, agent {为智能体协作指定的模型或提供商不可用。请在正文提示词的智能体协作设置中检查各智能体的模型，以及提供商的启用状态与认证。} main {正文模型或提供商不可用。请检查聊天设置中的固定模型、设置 > 按角色设置模型，以及提供商的启用状态与认证。} illustration {插图模型或连接不可用。请检查设置 > 插图中的模型，以及提供商的启用状态与认证。} other {所选模型或提供商不可用。请检查设置 > 按角色设置模型，以及提供商的启用状态与认证。}}',
   },
   'errors.INVALID_REQUEST': {
     ko: '보낸 값이 올바르지 않아요. 입력을 확인해 주세요.',
@@ -1954,6 +1954,30 @@ export const messages = {
     en: 'The service account and the API URL belong to different projects.',
     ja: 'サービスアカウントとAPI URLのプロジェクトが異なります。',
     zh: '服务账号与 API 地址属于不同的项目。',
+  },
+  'errors.CODEX_AUTH_BUSY': {
+    ko: '다른 Codex 로그인 작업이 진행 중이에요. 끝난 뒤 상태를 다시 확인해 주세요.',
+    en: 'Another Codex sign-in action is in progress. Check the status again once it finishes.',
+    ja: '別のCodexログイン処理が進行中です。終わってから状態を再確認してください。',
+    zh: '另一个 Codex 登录操作正在进行。完成后请重新检查状态。',
+  },
+  'errors.CODEX_RUNTIME_BUSY': {
+    ko: 'Codex가 다른 작업을 처리하고 있어요. 작업이 끝난 뒤 다시 시도해 주세요.',
+    en: 'Codex is busy with other work. Try again after it finishes.',
+    ja: 'Codexが別の処理を実行中です。終わってから再試行してください。',
+    zh: 'Codex 正在处理其他工作。完成后请重试。',
+  },
+  'errors.CONNECTION_TEST_RUNNING': {
+    ko: '이 연결의 응답 테스트가 이미 진행 중이에요. 결과가 나온 뒤 다시 시도해 주세요.',
+    en: 'A response test for this connection is already running. Try again once it finishes.',
+    ja: 'この接続の応答テストはすでに実行中です。結果が出てから再試行してください。',
+    zh: '此连接的响应测试已在进行。结果出来后请重试。',
+  },
+  'errors.CONNECTION_TEST_MODEL_DISABLED': {
+    ko: '비활성화된 모델은 테스트할 수 없어요. 먼저 모델을 활성화해 주세요.',
+    en: 'A disabled model cannot be tested. Enable the model first.',
+    ja: '無効なモデルはテストできません。先にモデルを有効にしてください。',
+    zh: '无法测试已停用的模型。请先启用该模型。',
   },
   'errors.SCENE_COMMAND_RUN_ACTIVE': {
     ko: '진행 중인 원문 생성을 먼저 취소해 주세요.',

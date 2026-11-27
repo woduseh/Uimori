@@ -267,6 +267,42 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   expect(observed.legacyReads).toEqual([]);
 });
 
+test('PMUI15 a model deleted on another screen keeps the draft and says so instead of offering a reload', async ({
+  page,
+  request,
+}) => {
+  const title = 'PMUI15 ' + Date.now(),
+    observed = observe(page);
+  const connection = await api<Connection>(request, '/connections', connectionInput(title));
+  const model = await api<ModelPreset>(
+    request,
+    '/model-presets',
+    modelInput(connection, title + ' model')
+  );
+  await settings(page);
+  await openProviderModel(page, model.title);
+  const form = page.getByRole('form', { name: '모델 편집 양식' });
+  const name = form.getByLabel('모델 프리셋 이름', { exact: true });
+  await name.fill(model.title + ' 내 초안');
+  const deleted = await request.fetch(`/api/model-presets/${model.id}`, {
+    method: 'DELETE',
+    data: { expectedRevision: model.revision },
+  });
+  expect(deleted.ok(), await deleted.text()).toBeTruthy();
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  const dialog = page.getByRole('alertdialog', { name: '저장본 확인' });
+  await expect(dialog).toContainText('이 모델은 다른 화면에서 삭제됐어요.');
+  await expect(dialog.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(form.getByRole('alert')).toContainText('이 모델은 다른 화면에서 삭제됐어요.');
+  await expect(name).toHaveValue(model.title + ' 내 초안');
+  await expect(
+    form.getByRole('button', { name: '최신 모델 설정 불러오기', exact: true })
+  ).toHaveCount(0);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+});
+
 test('PMUI07 quick setup selects a cached catalog model and keeps drafts across workspace pages', async ({
   page,
   request,
@@ -683,6 +719,35 @@ test('PMUI14 an uncertain response test reuses its key until an explicit new tes
   await button.click();
   await expect.poll(() => keys.length).toBe(3);
   expect(keys[2]).not.toBe(keys[1]);
+});
+
+test('PMUI16 a busy Codex sign-in names why it was refused instead of a generic failure', async ({
+  page,
+}) => {
+  await page.route('**/api/agent-runtimes/codex**', async (route) => {
+    if (route.request().method() === 'POST')
+      await route.fulfill({ status: 409, json: { code: 'CODEX_AUTH_BUSY' } });
+    else
+      await route.fulfill({
+        json: {
+          available: true,
+          authenticated: false,
+          authMode: null,
+          error: null,
+          login: null,
+          planType: null,
+          limits: [],
+        },
+      });
+  });
+  const observed = observe(page);
+  await settings(page);
+  await selectSettingsSection(page, 'Codex 연결');
+  const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
+  await panel.getByRole('button', { name: 'ChatGPT로 로그인', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('다른 Codex 로그인 작업이 진행 중이에요.');
+  await expect(panel).not.toContainText('Codex 인증 작업을 완료하지 못했어요.');
+  expect(observed.errors).toEqual([]);
 });
 
 test('PMUI10 Codex subscription login preserves drafts and saves a connection and model without generation', async ({

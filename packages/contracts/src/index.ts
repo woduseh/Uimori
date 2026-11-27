@@ -22,3 +22,5 @@ export * from './domains/resource-editors/endpoints.js';
 export type * from './domains/resource-editors/operations.js';
 export * from './domains/prompts/endpoints.js';
 export type * from './domains/prompts/operations.js';
+export * from './domains/providers/endpoints.js';
+export type * from './domains/providers/operations.js';

@@ -56,9 +56,9 @@ export function ProviderModelForm({
     modelConnections.find((connection) => connection.id === model.connectionRef),
     !hidden
   );
-  const staleModel =
-    !!editingModel &&
-    models.find((item) => item.id === editingModel.id)?.revision !== editingModel.revision;
+  const savedModel = editingModel && models.find((item) => item.id === editingModel.id);
+  const deletedModel = !!editingModel && !savedModel;
+  const staleModel = !!savedModel && savedModel.revision !== editingModel?.revision;
   const reloadButton = editingModel && (
     <button
       type="button"
@@ -91,7 +91,11 @@ export function ProviderModelForm({
           )}
         </h3>
       )}
-      {conflict ? (
+      {deletedModel ? (
+        <NoticeBanner tone="error" className="full">
+          {t('providers.modelDeletedElsewhere')}
+        </NoticeBanner>
+      ) : conflict ? (
         <NoticeBanner tone="error" className="full" actions={reloadButton}>
           {t('providers.m282')}
         </NoticeBanner>

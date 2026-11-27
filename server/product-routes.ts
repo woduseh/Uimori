@@ -13,7 +13,9 @@ import {
   vertexPublisherModelEntry,
 } from '../core/provider-catalog.js';
 import { readProviderBody } from '../core/provider-fetch.js';
-import type { MaintenanceStatus } from '#contracts';
+import { type MaintenanceStatus, providerEndpoints } from '#contracts';
+import { providerOperations } from '#contracts/operations';
+import { registerEndpoint } from './endpoint.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
@@ -160,16 +162,11 @@ export function productRoutes(
     return product.library(request.query.view === 'summary');
   });
   app.get('/api/risu/cbs-functions', async () => nativeRisuCbsFunctionCatalog());
-  app.post(
-    '/api/provider-management/vertex-credentials/validate',
-    { bodyLimit: 70 * 1024 },
-    async (request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      const b = record(request.body);
-      fields(b, ['serviceAccount']);
-      if (!options.credentials) throw new HttpError(503, 'Service account storage unavailable');
-      return inspectVertexAccount(b.serviceAccount);
-    }
+  registerEndpoint(
+    app,
+    providerEndpoints.validateVertexCredential,
+    providerOperations.validateVertexCredential,
+    ({ serviceAccount }) => inspectVertexAccount(serviceAccount)
   );
   app.get<{ Params: { kind: string; id: string } }>(
     '/api/provider-management/:kind/:id/impact',
