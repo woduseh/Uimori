@@ -53,6 +53,23 @@ const summarize = ({ runs, skipped }) => ({
   skipped,
 });
 
+test('many domains get a short run name so Windows browser profiles stay under MAX_PATH', () => {
+  const names = ['personal-workspace', 'chat-generation', 'loading-and-sync', 'resource-editors'];
+  const wide = {
+    ...map,
+    domains: Object.fromEntries(
+      names.map((name) => [
+        name,
+        { title: name, sources: [], specs: [{ file: `tests/${name}.spec.ts` }] },
+      ])
+    ),
+  };
+  assert.deepEqual(
+    planVerification(wide, names, { env: {} }).runs.map(({ name }) => name),
+    ['4-domains']
+  );
+});
+
 test('domains merge into one run per launch and skip specs whose required environment is missing', () => {
   assert.deepEqual(summarize(planVerification(map, ['reader', 'risu', 'self-host'], { env: {} })), {
     runs: [

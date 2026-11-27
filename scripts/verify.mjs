@@ -146,6 +146,11 @@ export function runOptions(run, options) {
   return { kept, dropped };
 }
 
+const runName = (domains) => {
+  const joined = domains.join('-');
+  return joined.length <= 32 ? joined : `${domains.length}-domains`;
+};
+
 export function planVerification(map, requested, { env = process.env, label } = {}) {
   const names = verificationNames(map);
   const unknown = requested.filter((name) => !names.has(name));
@@ -165,7 +170,7 @@ export function planVerification(map, requested, { env = process.env, label } = 
     map,
     domains.flatMap((name) => map.domains[name].specs),
     {
-      name: label ?? domains.join('-'),
+      name: label ?? runName(domains),
       scope: domains.map((name) => map.domains[name].title).join('; '),
       env,
       skipped,
