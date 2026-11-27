@@ -3,7 +3,8 @@ import type { UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Asset } from '../core/product.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { SaveButton } from './SaveButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
 
@@ -65,15 +66,13 @@ export function AssetMetadataEditor({
           setBusy(true);
           setError(null);
           try {
-            const saved = await api<Asset>(
-              `/chats/${asset.chatId}/assets/${asset.id}`,
-              {
-                expectedRevision: draft.revision,
-                title: draft.title,
-                description: draft.description,
-              },
-              'PATCH'
-            );
+            const saved = (await callEndpoint(chatEndpoints.updateAsset, {
+              chatId: asset.chatId,
+              assetId: asset.id,
+              expectedRevision: draft.revision,
+              title: draft.title,
+              description: draft.description,
+            })) as Asset;
             accepted.current = saved;
             setDraft(saved);
             await onSaved();

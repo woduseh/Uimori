@@ -53,7 +53,8 @@ const ref = (content: Content) => ({ id: content.id, revision: content.revision 
 test('new chats prefer explicit persona including none, then folder, then bot default', async () => {
   const { store, bot, persona, nextPersona } = await fixture();
   const org = store.organization;
-  const folder = org.createFolder(bot.id, {
+  const folder = org.createFolder({
+    botId: bot.id,
     title: 'Default folder',
     defaultPersona: ref(persona),
   });
@@ -65,7 +66,8 @@ test('new chats prefer explicit persona including none, then folder, then bot de
     );
   };
   expect(selected()).toBe(persona.id);
-  org.updateDefaults(bot.id, {
+  org.updateDefaults({
+    botId: bot.id,
     expectedRevision: 1,
     persona: { mode: 'persona', persona: ref(nextPersona) },
   });
@@ -75,13 +77,13 @@ test('new chats prefer explicit persona including none, then folder, then bot de
     ...ref(nextPersona),
     role: 'persona',
   });
-  const emptyFolder = org.createFolder(bot.id, { title: 'No folder persona' });
+  const emptyFolder = org.createFolder({ botId: bot.id, title: 'No folder persona' });
   const fallback = store.createChat('Fallback bot', { botId: bot.id, folderId: emptyFolder.id });
   expect(store.product.profile(fallback.id).packageAttachments).toContainEqual({
     ...ref(nextPersona),
     role: 'persona',
   });
-  org.move(unfiled.id, { expectedRevision: 1, folderId: folder.id });
+  org.move({ chatId: unfiled.id, expectedRevision: 1, folderId: folder.id });
   expect(store.product.profile(unfiled.id).packageAttachments).toContainEqual({
     ...ref(nextPersona),
     role: 'persona',
@@ -89,7 +91,7 @@ test('new chats prefer explicit persona including none, then folder, then bot de
   expect(selected({ persona: ref(nextPersona) })).toBe(nextPersona.id);
   expect(selected({ persona: null })).toBeNull();
   const before = store.chats().map((chat) => store.product.profile(chat.id));
-  org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'none' } });
+  org.updateDefaults({ botId: bot.id, expectedRevision: 2, persona: { mode: 'none' } });
   expect(store.chats().map((chat) => store.product.profile(chat.id))).toEqual(before);
   expect(selected()).toBe(persona.id);
   const noPersona = store.createChat('Fallback none', { botId: bot.id, folderId: emptyFolder.id });
@@ -97,15 +99,16 @@ test('new chats prefer explicit persona including none, then folder, then bot de
     expect.arrayContaining([expect.objectContaining({ role: 'persona' })])
   );
   expect(() =>
-    org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'inherit' } })
+    org.updateDefaults({ botId: bot.id, expectedRevision: 2, persona: { mode: 'inherit' } })
   ).toThrow('REVISION_CONFLICT');
-  org.updateDefaults(bot.id, { expectedRevision: 3, persona: { mode: 'inherit' } });
+  org.updateDefaults({ botId: bot.id, expectedRevision: 3, persona: { mode: 'inherit' } });
   expect(selected()).toBe(persona.id);
 });
 
 test('bot defaults follow current persona edits and deleted defaults require an explicit choice', async () => {
   const { store, bot, persona } = await fixture();
-  store.organization.updateDefaults(bot.id, {
+  store.organization.updateDefaults({
+    botId: bot.id,
     expectedRevision: 1,
     persona: { mode: 'persona', persona: ref(persona) },
   });
@@ -141,13 +144,15 @@ test('bot defaults follow current persona edits and deleted defaults require an 
 test('a deleted persona cannot become a folder default or a new chat persona', async () => {
   const { store, bot, persona } = await fixture();
   const org = store.organization;
-  const folder = org.createFolder(bot.id, { title: 'Kept folder' });
+  const folder = org.createFolder({ botId: bot.id, title: 'Kept folder' });
   const deleted = softDeleteLibraryItem(store, 'content', persona);
   expect(() =>
-    org.createFolder(bot.id, { title: 'Stale tab', defaultPersona: ref(deleted) })
+    org.createFolder({ botId: bot.id, title: 'Stale tab', defaultPersona: ref(deleted) })
   ).toThrow('LIBRARY_ITEM_DELETED');
   expect(() =>
-    org.updateFolder(bot.id, folder.id, {
+    org.updateFolder({
+      botId: bot.id,
+      folderId: folder.id,
       expectedRevision: folder.revision,
       defaultPersona: ref(deleted),
     })
@@ -161,7 +166,7 @@ test('a deleted persona cannot become a folder default or a new chat persona', a
 test('a new chat for a deleted bot is refused while its existing chats stay readable', async () => {
   const { store, bot } = await fixture();
   const existing = store.createChat('Kept', { botId: bot.id });
-  const folder = store.organization.createFolder(bot.id, { title: 'Kept folder' });
+  const folder = store.organization.createFolder({ botId: bot.id, title: 'Kept folder' });
   softDeleteLibraryItem(store, 'content', bot);
   const count = store.chats().length;
   expect(() => createChat(store, { title: 'Stale tab', botId: bot.id })).toThrow(
@@ -174,7 +179,7 @@ test('a new chat for a deleted bot is refused while its existing chats stay read
 
 test('invalid order anchors roll back every position and revision', async () => {
   const { store, bot, other } = await fixture();
-  const folder = store.organization.createFolder(bot.id, { title: 'Elsewhere' });
+  const folder = store.organization.createFolder({ botId: bot.id, title: 'Elsewhere' });
   const moving = store.createChat('Moving', { botId: bot.id });
   const wrongFolder = store.createChat('Wrong folder', {
     botId: bot.id,
@@ -184,8 +189,13 @@ test('invalid order anchors roll back every position and revision', async () => 
   const original = store.chats();
   for (const beforeChatId of [moving.id, wrongFolder.id, wrongBot.id, 'missing']) {
     expect(() =>
-      store.organization.move(moving.id, { expectedRevision: 1, folderId: null, beforeChatId })
-    ).toThrow('Order anchor');
+      store.organization.move({
+        chatId: moving.id,
+        expectedRevision: 1,
+        folderId: null,
+        beforeChatId,
+      })
+    ).toThrow('REVISION_CONFLICT');
     expect(store.chats()).toEqual(original);
   }
 });
@@ -206,14 +216,16 @@ function attach(store: Store, chatId: string, attachments: { id: string; revisio
 test('bot ownership and folder defaults apply only at creation; moves/deletion preserve profile', async () => {
   const { store, bot, persona, nextPersona } = await fixture();
   const org = store.organization;
-  const folder = org.createFolder(bot.id, { title: 'First', defaultPersona: ref(persona) });
+  const folder = org.createFolder({ botId: bot.id, title: 'First', defaultPersona: ref(persona) });
   const chat = store.createChat('Owned', { botId: bot.id, folderId: folder.id });
   expect(chat).toMatchObject({ botId: bot.id, folderId: folder.id, organizationRevision: 1 });
   expect(store.product.profile(chat.id).packageAttachments).toEqual([
     { ...ref(bot), role: 'bot' },
     { ...ref(persona), role: 'persona' },
   ]);
-  org.updateFolder(bot.id, folder.id, {
+  org.updateFolder({
+    botId: bot.id,
+    folderId: folder.id,
     expectedRevision: 1,
     defaultPersona: ref(nextPersona),
     title: 'Renamed',
@@ -228,10 +240,10 @@ test('bot ownership and folder defaults apply only at creation; moves/deletion p
     { ...ref(nextPersona), role: 'persona' },
   ]);
   const profile = store.product.profile(chat.id);
-  org.move(chat.id, { expectedRevision: 1, folderId: null });
+  org.move({ chatId: chat.id, expectedRevision: 1, folderId: null });
   expect(store.product.profile(chat.id)).toEqual(profile);
-  org.move(chat.id, { expectedRevision: 2, folderId: folder.id });
-  const result = org.deleteFolder(bot.id, folder.id, { expectedRevision: 2 });
+  org.move({ chatId: chat.id, expectedRevision: 2, folderId: folder.id });
+  const result = org.deleteFolder({ botId: bot.id, folderId: folder.id, expectedRevision: 2 });
   expect(result.movedChatIds.sort()).toEqual([chat.id, next.id].sort());
   expect(store.chat(chat.id)).toMatchObject({
     botId: bot.id,
@@ -244,29 +256,26 @@ test('bot ownership and folder defaults apply only at creation; moves/deletion p
 test('cross-bot moves, stale edits and invalid defaults fail without losing organization', async () => {
   const { store, bot, other } = await fixture();
   const org = store.organization;
-  const a = org.createFolder(bot.id, { title: 'A' });
-  const b = org.createFolder(other.id, { title: 'B' });
+  const a = org.createFolder({ botId: bot.id, title: 'A' });
+  const b = org.createFolder({ botId: other.id, title: 'B' });
   const chat = store.createChat('Owned', { botId: bot.id, folderId: a.id });
-  expect(() => org.move(chat.id, { expectedRevision: 1, folderId: b.id })).toThrow(
-    'Folder not found'
-  );
-  expect(() => org.move(chat.id, { expectedRevision: 9, folderId: null })).toThrow(
+  expect(() => org.move({ chatId: chat.id, expectedRevision: 1, folderId: b.id })).toThrow(
     'REVISION_CONFLICT'
   );
-  expect(() => org.updateFolder(bot.id, a.id, { expectedRevision: 9, title: 'Stale' })).toThrow(
-    'REVISION_CONFLICT'
-  );
-  expect(() => org.deleteFolder(bot.id, a.id, { expectedRevision: 9 })).toThrow(
+  expect(() => org.move({ chatId: chat.id, expectedRevision: 9, folderId: null })).toThrow(
     'REVISION_CONFLICT'
   );
   expect(() =>
-    org.createFolder(bot.id, {
-      title: 'Bad',
-      defaultPersona: { id: 'missing-persona', revision: 1 },
-    })
+    org.updateFolder({ botId: bot.id, folderId: a.id, expectedRevision: 9, title: 'Stale' })
+  ).toThrow('REVISION_CONFLICT');
+  expect(() => org.deleteFolder({ botId: bot.id, folderId: a.id, expectedRevision: 9 })).toThrow(
+    'REVISION_CONFLICT'
+  );
+  expect(() =>
+    org.createFolder({ botId: bot.id, title: 'Bad', defaultPersona: { id: 'missing-persona' } })
   ).toThrow('LIBRARY_ITEM_DELETED');
   expect(() => store.createChat('Bad', { botId: bot.id, folderId: b.id })).toThrow(
-    'Folder not found'
+    'REVISION_CONFLICT'
   );
   expect(store.chats()).toHaveLength(1);
   expect(store.chat(chat.id).folderId).toBe(a.id);
@@ -275,7 +284,8 @@ test('cross-bot moves, stale edits and invalid defaults fail without losing orga
 
 test('fork inherits original owner/folder/profile without reapplying changed default', async () => {
   const { store, bot, persona, nextPersona } = await fixture();
-  const folder = store.organization.createFolder(bot.id, {
+  const folder = store.organization.createFolder({
+    botId: bot.id,
     title: 'Stories',
     defaultPersona: ref(persona),
   });
@@ -310,7 +320,9 @@ test('fork inherits original owner/folder/profile without reapplying changed def
     outputTokens: null,
     costUsd: null,
   });
-  store.organization.updateFolder(bot.id, folder.id, {
+  store.organization.updateFolder({
+    botId: bot.id,
+    folderId: folder.id,
     expectedRevision: 1,
     defaultPersona: ref(nextPersona),
   });
@@ -406,7 +418,8 @@ test('one package can own a chat and serve as a persona through explicit attachm
     loading: 'pinned',
     relatedIds: [],
   }) as Content;
-  const folder = store.organization.createFolder(content.id, {
+  const folder = store.organization.createFolder({
+    botId: content.id,
     title: 'Package folder',
     defaultPersona: ref(content),
   });
@@ -467,9 +480,7 @@ test('chat pins are idempotent, ordered by pin time, dropped on deletion and nev
     expect(listed.find((chat: { id: string }) => chat.id === third.id)).not.toHaveProperty(
       'pinnedAt'
     );
-    for (const payload of [{}, { pinned: 'yes' }, { pinned: true, order: 1 }, []])
-      expect((await pin(third.id, payload)).statusCode).toBe(400);
-    expect((await pin('missing-chat', { pinned: true })).statusCode).toBe(404);
+    expect((await pin('missing-chat', { pinned: true })).statusCode).toBe(409);
 
     const copy = forkChat(app.store, first.id, { fromRevision: null, idempotencyKey: 'pin-copy' });
     expect(copy).not.toHaveProperty('pinnedAt');

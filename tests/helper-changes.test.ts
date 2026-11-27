@@ -359,7 +359,7 @@ test('scene, chat, conversation and resource deletion leave no edited text in th
   });
   f.workspace.finish(again.id, 'changes-fixture', 1, 'completed', '', null);
   expect(f.rows()).toContain(marker);
-  deleteChat(f.store, f.chat.id, {});
+  deleteChat(f.store, f.chat.id);
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes').get()).toEqual({ n: 0 });
 });
 
@@ -522,7 +522,7 @@ test.each(['expired', 'chat deleted', 'conversation deleted'] as const)(
         undefined,
         Date.now() + (HELPER_CHANGE_RETENTION.days + 1) * 86_400_000
       );
-    else if (removal === 'chat deleted') deleteChat(f.store, f.chat.id, {});
+    else if (removal === 'chat deleted') deleteChat(f.store, f.chat.id);
     else
       f.workspace.delete(f.conversation.id, f.workspace.deletionImpact(f.conversation.id).request);
     flushPendingImageCleanup(f.store.db);

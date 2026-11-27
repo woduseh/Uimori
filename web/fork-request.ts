@@ -1,5 +1,6 @@
 import type { Chat } from '../core/types.js';
-import { api, ApiError, definiteRejection } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { ApiError, callEndpoint, definiteRejection } from './api.js';
 import { getLocale } from './i18n.js';
 import { storageKeys } from './storage-keys.js';
 
@@ -17,11 +18,12 @@ export async function requestChatFork(chatId: string, sourceId: string | null): 
   };
   let next: Chat;
   try {
-    next = await api<Chat>(`/chats/${chatId}/fork`, {
+    next = (await callEndpoint(chatEndpoints.forkChat, {
+      chatId,
       fromRevision: sourceId,
       titleLocale: getLocale(),
       idempotencyKey,
-    });
+    })) as Chat;
   } catch (error) {
     if (
       (error instanceof ApiError && error.status === 410 && error.code === 'CHAT_COPY_REMOVED') ||

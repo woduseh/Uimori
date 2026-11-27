@@ -297,7 +297,7 @@ export type LibraryConnection = Omit<Connection, 'catalog'> & {
   catalog?: Connection['catalog'];
   catalogCount?: number;
 };
-export const CHAT_AUTHOR_NOTE_MAX_CHARS = 32_000;
+export { CHAT_AUTHOR_NOTE_MAX_CHARS } from '#contracts';
 export const defaultProfile = (chatId: string): ChatProfile => ({
   chatId,
   revision: 1,

@@ -241,7 +241,7 @@ test('forks and portable backups copy preferences only; legacy backups stay disa
     importChatBackup(target, { backup: malformed, idempotencyKey: randomUUID() })
   ).rejects.toThrow('Invalid story guide settings');
   expect(target.db.prepare('SELECT count(*) AS n FROM chats').get()!.n).toBe(before);
-  deleteChat(store, copied.id, {});
+  deleteChat(store, copied.id);
   expect(store.db.prepare('SELECT 1 FROM chat_story_guides WHERE chat_id=?').get(copied.id)).toBe(
     undefined
   );

@@ -5,7 +5,8 @@ import {
   MAX_MAIN_MODEL_CALLS,
   type ChatGenerationDefaults as Defaults,
 } from '../core/chat-settings.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { t, useI18n } from './i18n.js';
 import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
@@ -29,7 +30,7 @@ export function ChatGenerationDefaults() {
   const saves = useRef(Promise.resolve());
   const retryRead = useRetryableEffect(() => {
     let active = true;
-    void api<Defaults>('/chat-generation-defaults')
+    void callEndpoint(chatEndpoints.readGenerationDefaults)
       .then((next) => {
         if (!active) return;
         confirmed.current = requested.current = next;
@@ -60,18 +61,14 @@ export function ChatGenerationDefaults() {
     const base = confirmed.current;
     if (!base || requested.current !== target) return;
     try {
-      const saved = await api<Defaults>(
-        '/chat-generation-defaults',
-        {
-          expectedRevision: base.revision,
-          maxCalls: target.maxCalls,
-          storyUi: target.storyUi,
-          storyUiStyle: target.storyUiStyle,
-          autoRefusalRetryEnabled: target.autoRefusalRetryEnabled,
-          autoRefusalMaxRetries: target.autoRefusalMaxRetries,
-        },
-        'PUT'
-      );
+      const saved = await callEndpoint(chatEndpoints.updateGenerationDefaults, {
+        expectedRevision: base.revision,
+        maxCalls: target.maxCalls,
+        storyUi: target.storyUi,
+        storyUiStyle: target.storyUiStyle,
+        autoRefusalRetryEnabled: target.autoRefusalRetryEnabled,
+        autoRefusalMaxRetries: target.autoRefusalMaxRetries,
+      });
       confirmed.current = saved;
       if (requested.current === target) {
         requested.current = saved;

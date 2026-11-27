@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
-import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
+import { deleteChat } from '../server/chat-deletion.js';
 import { readChatVariables } from '../server/chat-variables.js';
 
 const owned: { directory: string; store?: Store }[] = [];
@@ -70,9 +70,7 @@ test('active runs and outstanding provider attempts block deletion until both be
   const store = await fixture(),
     chat = createFixtureChat(store, 'Busy');
   const pending = (await run(store, chat.id, false)).run;
-  expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
-    'CHAT_DELETE_WORK_ACTIVE'
-  );
+  expect(() => deleteChat(store, chat.id)).toThrow('CHAT_DELETE_WORK_ACTIVE');
   store.finishRun(pending.id, 'cancelled', 'Synthetic cancellation');
   store.db
     .prepare(
@@ -85,11 +83,9 @@ test('active runs and outstanding provider attempts block deletion until both be
       "INSERT INTO anthropic_batches VALUES('attempt',?,0,'batch-delete','attempt','request','ended',NULL,?,?)"
     )
     .run(pending.id, time, time);
-  expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
-    'CHAT_DELETE_PROVIDER_ACTIVE'
-  );
+  expect(() => deleteChat(store, chat.id)).toThrow('CHAT_DELETE_PROVIDER_ACTIVE');
   store.db.prepare("UPDATE attempts SET status='cancelled'").run();
-  deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request);
+  deleteChat(store, chat.id);
   expect(store.chats()).toEqual([]);
   expect(store.db.prepare('SELECT count(*) AS count FROM anthropic_batches').get()).toEqual({
     count: 0,

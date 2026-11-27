@@ -9,7 +9,8 @@ import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { SaveButton } from './SaveButton.js';
 import { CloseIcon, EditIcon, PinIcon } from './ui-icons.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { forgetChatStorage } from './storage-keys.js';
 
 type ChatActions = {
@@ -45,7 +46,7 @@ export function ChatActionMenu({
     if (pinning) return;
     setPinning(true);
     try {
-      await api(`/chats/${encodeURIComponent(chat.id)}/pin`, { pinned: !chat.pinnedAt }, 'PUT');
+      await callEndpoint(chatEndpoints.pinChat, { chatId: chat.id, pinned: !chat.pinnedAt });
       if (menu) menu.open = false;
       await onChatsChanged();
     } catch (reason) {
@@ -82,8 +83,8 @@ export function ChatActionMenu({
       </div>
       <div className="action-menu-group">
         <DeleteButton
-          path={`/chats/${encodeURIComponent(chat.id)}`}
-          preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
+          endpoint={chatEndpoints.deleteChat}
+          params={{ chatId: chat.id }}
           title={chat.title}
           label={uiMessage('transfer.m240')}
           confirmLabel={uiMessage('shared.deletePermanently')}

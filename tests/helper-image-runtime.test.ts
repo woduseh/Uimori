@@ -346,7 +346,7 @@ test('illustration image tools use the current chat or the explicitly selected c
     actor: 'Mira',
     outfit: '',
     location: '',
-    allowedUse: 'both',
+    allowedUse: 'both' as const,
   };
   const local = f.store.product.createAsset(chat.id, asset);
   const foreign = f.store.product.createAsset(other.id, asset);

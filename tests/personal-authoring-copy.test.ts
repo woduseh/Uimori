@@ -150,7 +150,7 @@ test('independent chat copies and portable restores keep authored plans and scop
   expect(readerDetail(store, chat.id, {}).reader.navigation[0].label).toBe('Reconciliation');
   expect(readerDetail(store, copy.id, {}).reader.navigation[0].label).toBe('Winter reunion');
   const copiedSource = store.chat(copy.id).headRevision!;
-  deleteChat(store, copy.id, {});
+  deleteChat(store, copy.id);
   expect(
     store.db
       .prepare('SELECT value FROM app_metadata WHERE key=?')

@@ -250,7 +250,7 @@ test('activity acknowledgements and chat deletion invalidate once per real chang
   acknowledgeActivities(live.store, live.chat.id, [key]);
   expect(invalidations()).toEqual([['activity', 1]]);
 
-  deleteChat(live.store, live.chat.id, {});
+  deleteChat(live.store, live.chat.id);
   expect(invalidations()).toEqual([
     ['activity', 1],
     ['activity', 2],

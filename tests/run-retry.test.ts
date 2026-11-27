@@ -532,7 +532,7 @@ test('reader dismissal survives reopening without modifying execution data, and 
     false
   );
   store.finishRun(retry.id, 'cancelled', 'Run cancelled');
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(
     store.db
       .prepare('SELECT 1 FROM app_metadata WHERE key=?')

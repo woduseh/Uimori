@@ -1,4 +1,5 @@
 import { appearanceEndpoints } from './domains/appearance/endpoints.js';
+import { chatEndpoints } from './domains/chat/endpoints.js';
 import { chatSettingsEndpoints } from './domains/chat-settings/endpoints.js';
 import { deletionEndpoints } from './domains/deletion/endpoints.js';
 import { libraryEndpoints } from './domains/library/endpoints.js';
@@ -13,6 +14,7 @@ import { translationEndpoints } from './domains/translation/endpoints.js';
 
 export const allEndpoints = {
   appearance: appearanceEndpoints,
+  chat: chatEndpoints,
   'chat-settings': chatSettingsEndpoints,
   deletion: deletionEndpoints,
   library: libraryEndpoints,

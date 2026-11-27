@@ -261,7 +261,7 @@ test('invalid selection and absent helper model never send a provider call', asy
 test('a source another tab deleted answers the revision conflict and never spends a call', async () => {
   const f = await setup();
   const send = mockSend();
-  deleteChat(f.store, f.chat.id, {});
+  deleteChat(f.store, f.chat.id);
   const response = await f.post({ ...f.payload, end: f.payload.start });
   expect(response.statusCode).toBe(409);
   expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });

@@ -1,9 +1,8 @@
 import { isStoryUiStyleSetting, type StoryUiStyleSetting } from './story-ui-style.js';
 import type { Settings } from './types.js';
+import { MAX_AUTO_REFUSAL_RETRIES, MAX_MAIN_MODEL_CALLS } from '#contracts';
 export type { AutoTranslationDefaults } from '#contracts';
-
-export const MAX_MAIN_MODEL_CALLS = 128;
-export const MAX_AUTO_REFUSAL_RETRIES = 5;
+export { MAX_AUTO_REFUSAL_RETRIES, MAX_MAIN_MODEL_CALLS };
 
 export type ChatGenerationDefaults = {
   revision: number;

@@ -6,7 +6,8 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
 import type { BotDefaults, BotPersonaDefault } from '../core/bot-defaults.js';
 import type { Content, Library } from '../core/product.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { ContentPicker } from './ContentPicker.js';
 import { Dialog } from './Dialog.js';
 import { refValue } from './content-ref.js';
@@ -29,11 +30,11 @@ export function BotDefaultPersona({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<UiMessage | null>(null);
   const lock = useRef(false);
-  const path = `/bots/${encodeURIComponent(bot.id)}/defaults`;
+  const botId = bot.id;
   const retryLoad = useRetryableEffect(() => {
     let alive = true;
     setError(null);
-    void api<BotDefaults>(path)
+    void callEndpoint(chatEndpoints.readBotDefaults, { botId })
       .then((value) => {
         if (!alive) return;
         setSaved(value);
@@ -46,7 +47,7 @@ export function BotDefaultPersona({
     return () => {
       alive = false;
     };
-  }, [path]);
+  }, [botId]);
   const selected = library.contents.find((item) => item.id === personaId);
   async function save() {
     if (!saved || lock.current || (mode === 'persona' && !selected)) return;
@@ -54,17 +55,14 @@ export function BotDefaultPersona({
     setBusy(true);
     setError(null);
     try {
-      await api<BotDefaults>(
-        path,
-        {
-          expectedRevision: saved.revision,
-          persona:
-            mode === 'persona' && selected
-              ? { mode, persona: { id: selected.id, revision: selected.revision } }
-              : { mode },
-        },
-        'PATCH'
-      );
+      await callEndpoint(chatEndpoints.updateBotDefaults, {
+        botId,
+        expectedRevision: saved.revision,
+        persona:
+          mode === 'persona' && selected
+            ? { mode, persona: { id: selected.id } }
+            : { mode: mode === 'none' ? 'none' : 'inherit' },
+      });
       onClose();
     } catch (cause) {
       setError(toUiMessage(cause));

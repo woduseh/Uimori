@@ -228,7 +228,7 @@ test('settlement, retry, independent copies, JSON and binary backups retain both
   const retried = store.retryRun(run.id, 'image-retry', undefined, 'Look again', 'copy').run;
   expect(retried.snapshot.requestImages).toEqual(prepared.images);
   store.finishRun(retried.id, 'cancelled', 'Test cancelled');
-  deleteChat(store, retried.chatId, {});
+  deleteChat(store, retried.chatId);
   const json = legacyChatBackupFixture(store, chat.id),
     archive = await collect(exportChatBackupArchive(store, chat.id));
   expect(json.resources.images.map((image) => image.hash)).toEqual(
@@ -254,9 +254,9 @@ test('settlement, retry, independent copies, JSON and binary backups retain both
     for (const hash of [prepared.images[0].hash, prepared.images[0].input.hash])
       expect(readImage(target.db, hash).bytes).toEqual(readImage(store.db, hash).bytes);
   }
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   pruneUnusedData(store.db, null);
   expect(readRequestImage(store, prepared.images[0]).width).toBe(2048);
-  deleteChat(store, copy.id, {});
+  deleteChat(store, copy.id);
   expect(store.db.prepare('SELECT count(*) AS n FROM image_blobs').get()!.n).toBe(0);
 });

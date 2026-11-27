@@ -107,7 +107,6 @@ test('HTTP accepts an image over 2MiB and stores one WebP BLOB used by chat asse
     outfit: '',
     location: '',
     allowedUse: 'inline',
-    mime: 'image/png',
     base64: png.toString('base64'),
   });
   expect(asset.mime).toBe('image/webp');

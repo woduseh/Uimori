@@ -7,6 +7,7 @@ import * as contracts from '#contracts';
 import { allOperations } from '#contracts/operations';
 import * as operations from '#contracts/operations';
 import { appearanceCases } from './stale-tab/appearance.js';
+import { chatCases } from './stale-tab/chat.js';
 import { chatSettingsCases } from './stale-tab/chat-settings.js';
 import { deletionCases } from './stale-tab/deletion.js';
 import {
@@ -31,6 +32,7 @@ import { translationCases } from './stale-tab/translation.js';
 
 const domainFiles: DomainCases[] = [
   appearanceCases,
+  chatCases,
   chatSettingsCases,
   deletionCases,
   libraryCases,

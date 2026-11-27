@@ -1,6 +1,7 @@
 import { tryParseJson } from './json.js';
 import type { ChatProfile } from '../core/product.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { validateContentAttachment } from '../core/risu-content.js';
 import { validatePackageStartRef, type PackageStartRef } from '../core/package-start.js';
 import { UiError, uiMessage } from './ui-message.js';
@@ -129,7 +130,7 @@ async function applyPendingStoryProfile(chatId: string) {
   }
   const base = intent.profileBaseRevision;
   if (base === undefined) throw new PendingStoryProfileConflict(raw);
-  const current = await api<ChatProfile>(`/chats/${chatId}/profile`);
+  const current = (await callEndpoint(chatEndpoints.readProfile, { chatId })) as ChatProfile;
   if (sessionStorage.getItem(key) !== raw)
     throw new UiError(uiMessage('main.pendingProfileChanged'));
   const sameAttachments =
@@ -141,15 +142,12 @@ async function applyPendingStoryProfile(chatId: string) {
     if (current.revision < base || !sameAttachments) throw new PendingStoryProfileConflict(raw);
     saved = current;
   } else {
-    saved = await api<ChatProfile>(
-      `/chats/${chatId}/profile`,
-      {
-        image: current.image,
-        ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
-        expectedRevision: base,
-      },
-      'PUT'
-    );
+    saved = (await callEndpoint(chatEndpoints.updateProfile, {
+      chatId,
+      image: current.image,
+      ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
+      expectedRevision: base,
+    })) as ChatProfile;
     if (sessionStorage.getItem(key) !== raw)
       throw new UiError(uiMessage('main.pendingProfileChanged'));
   }

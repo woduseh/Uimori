@@ -16,10 +16,9 @@ type Target<E extends Endpoint> =
       endpoint: E;
       params: Omit<EndpointInput<E>, 'expectedRevision'>;
       path?: never;
-      preparePath?: never;
       body?: never;
     }
-  | { path: string; preparePath?: string; body?: Record<string, unknown>; endpoint?: never };
+  | { path: string; body?: Record<string, unknown>; endpoint?: never };
 type Props<E extends Endpoint> = Target<E> & {
   revision?: number;
   title: Title;
@@ -41,7 +40,6 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
     endpoint?: Endpoint;
     params?: Record<string, unknown>;
     path?: string;
-    preparePath?: string;
     body?: Record<string, unknown>;
   };
   const {
@@ -70,27 +68,15 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
     setError(shown);
     onError?.(shown);
   }
-  async function open() {
+  function open() {
     if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
     setError(null);
-    try {
-      const { endpoint, params, path, preparePath } = request;
-      const revisionBody = revision === undefined ? {} : { expectedRevision: revision };
-      const body = preparePath
-        ? (await api<{ request: Record<string, unknown> }>(preparePath)).request
-        : (request.body ?? revisionBody);
-      const send = endpoint
-        ? () => sendDelete(endpoint, { ...params, ...body })
-        : () => api(path!, body, 'DELETE');
-      setTarget({ title, send, onDeleted });
-    } catch (caught) {
-      fail(caught);
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
+    const { endpoint, params, path } = request;
+    const body = request.body ?? (revision === undefined ? {} : { expectedRevision: revision });
+    const send = endpoint
+      ? () => sendDelete(endpoint, { ...params, ...body })
+      : () => api(path!, body, 'DELETE');
+    setTarget({ title, send, onDeleted });
   }
   async function remove() {
     if (!target || lock.current) return;
@@ -120,7 +106,7 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
         aria-haspopup="dialog"
         title={iconOnly ? formatUiMessage(label) : undefined}
         disabled={disabled || busy}
-        onClick={() => void open()}
+        onClick={open}
       >
         <DeleteIcon size={iconOnly ? 14 : 18} aria-hidden="true" />
         {!iconOnly && <span>{formatUiMessage(label)}</span>}

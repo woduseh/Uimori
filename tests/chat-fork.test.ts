@@ -8,7 +8,7 @@ import { forkChat } from '../server/chat-fork.js';
 import { Store } from '../server/store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { readChatVariables } from '../server/chat-variables.js';
-import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
+import { deleteChat } from '../server/chat-deletion.js';
 
 const owned: { directory: string; store?: Store }[] = [];
 beforeEach(() => {
@@ -83,7 +83,7 @@ describe('independent stored-story fork without generation', () => {
     const original = source(store, chat.id, 'Original scene.');
     const command = { fromRevision: original.id, idempotencyKey: 'deleted-copy' };
     const copy = forkChat(store, chat.id, command);
-    deleteChat(store, copy.id, chatDeletionImpact(store, copy.id).request);
+    deleteChat(store, copy.id);
     expect(() => forkChat(store, chat.id, command)).toThrowError(
       expect.objectContaining({ statusCode: 410, message: 'CHAT_COPY_REMOVED' })
     );
@@ -107,7 +107,7 @@ describe('independent stored-story fork without generation', () => {
     expect(() => forkChat(store, chat.id, command)).toThrowError(
       expect.objectContaining({ statusCode: 409, message: 'CHAT_COPY_RECEIPT_UNVERIFIED' })
     );
-    deleteChat(store, copy.id, chatDeletionImpact(store, copy.id).request);
+    deleteChat(store, copy.id);
     expect(() => forkChat(store, chat.id, command)).toThrowError(
       expect.objectContaining({ statusCode: 409, message: 'CHAT_COPY_RECEIPT_UNVERIFIED' })
     );
@@ -120,9 +120,10 @@ describe('independent stored-story fork without generation', () => {
     const command = { fromRevision: original.id, idempotencyKey: 'copy-folder-replay' };
     const copy = forkChat(store, chat.id, command);
     const botId = store.organization.metadata(chat.id)!.botId;
-    const folder = store.organization.createFolder(botId, { title: 'My copied stories' });
-    const moved = store.organization.move(copy.id, {
-      expectedRevision: copy.organizationRevision,
+    const folder = store.organization.createFolder({ botId: botId, title: 'My copied stories' });
+    const moved = store.organization.move({
+      chatId: copy.id,
+      expectedRevision: copy.organizationRevision!,
       folderId: folder.id,
     });
     store.editSource(original.id, { expectedRevision: 0, text: 'After editing.' });

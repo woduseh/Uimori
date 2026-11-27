@@ -277,7 +277,7 @@ test('scene and chat deletion remove previews another conversation recorded for 
     helperDone,
   ]);
   expect(previews()[2]).toContain('Private note before chat deletion');
-  deleteChat(f.store, f.chatId, {});
+  deleteChat(f.store, f.chatId);
   expect(previews()[2]).toBe('[arguments removed after chat deletion]');
 });
 

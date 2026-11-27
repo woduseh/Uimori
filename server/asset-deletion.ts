@@ -1,34 +1,13 @@
 import { pruneUnusedData } from './unused-data.js';
-import { fields, record } from './request-validation.js';
-import type { FastifyInstance } from 'fastify';
+import type { ChatAssetTarget } from '#contracts';
 import type { Store } from './store.js';
-import { AppError } from './app-errors.js';
 
-export function deleteChatAsset(store: Store, chatId: string, assetId: string, value: unknown) {
-  fields(record(value), []);
+export function deleteChatAsset(store: Store, { chatId, assetId }: ChatAssetTarget) {
   return store.transaction(() => {
-    store.chat(chatId);
-    const row = store.db.prepare('SELECT chat_id FROM assets WHERE id=?').get(assetId);
-    if (!row || row.chat_id !== chatId) throw new AppError(404, 'IMAGE_NOT_FOUND');
-    if (store.product.isHidden('asset', assetId)) throw new AppError(404, 'IMAGE_NOT_FOUND');
+    store.product.writableAsset(chatId, assetId);
     store.db.prepare("INSERT INTO library_hidden(kind,id) VALUES('asset',?)").run(assetId);
     store.event(chatId, 'asset.deleted', assetId);
     pruneUnusedData(store.db);
-    return { deleted: true, id: assetId };
+    return { deleted: true as const, id: assetId };
   });
-}
-
-export function assetDeletionRoutes(
-  app: FastifyInstance,
-  store: Store,
-  publish: (chatId: string) => void
-) {
-  app.delete<{ Params: { chatId: string; id: string } }>(
-    '/api/chats/:chatId/assets/:id',
-    async (request) => {
-      const result = deleteChatAsset(store, request.params.chatId, request.params.id, request.body);
-      publish(request.params.chatId);
-      return result;
-    }
-  );
 }

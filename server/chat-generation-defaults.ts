@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import type { DatabaseSync } from 'node:sqlite';
+import { chatEndpoints, type UpdateChatGenerationDefaults } from '#contracts';
+import { chatOperations } from '#contracts/operations';
 import {
   DEFAULT_CHAT_GENERATION_DEFAULTS,
-  normalizeChatSettings,
   type ChatGenerationDefaults,
 } from '../core/chat-settings.js';
-import { fields, HttpError, number, record } from './request-validation.js';
 import type { Store } from './store.js';
 import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 
 const KEY = 'chat-generation-defaults';
 
@@ -18,32 +19,20 @@ export function chatGenerationDefaults(db: DatabaseSync): ChatGenerationDefaults
     : { ...DEFAULT_CHAT_GENERATION_DEFAULTS };
 }
 
-export function saveChatGenerationDefaults(store: Store, input: unknown): ChatGenerationDefaults {
-  const body = record(input);
-  fields(body, [
-    'expectedRevision',
-    'maxCalls',
-    'storyUi',
-    'storyUiStyle',
-    'autoRefusalRetryEnabled',
-    'autoRefusalMaxRetries',
-  ]);
-  const expected = number(body.expectedRevision, 'revision', 0);
-  const { maxCalls, storyUi, storyUiStyle, autoRefusalRetryEnabled, autoRefusalMaxRetries } =
-    normalizeChatSettings(body);
-  if (storyUi === undefined || storyUiStyle === undefined)
-    throw new HttpError(400, 'Invalid new chat defaults');
-
+export function saveChatGenerationDefaults(
+  store: Store,
+  { expectedRevision, ...values }: UpdateChatGenerationDefaults
+): ChatGenerationDefaults {
   return store.transaction(() => {
     const previous = chatGenerationDefaults(store.db);
-    if (previous.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    if (previous.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const next: ChatGenerationDefaults = {
       revision: previous.revision + 1,
-      maxCalls,
-      storyUi,
-      storyUiStyle,
-      autoRefusalRetryEnabled: autoRefusalRetryEnabled ?? previous.autoRefusalRetryEnabled,
-      autoRefusalMaxRetries: autoRefusalMaxRetries ?? previous.autoRefusalMaxRetries,
+      maxCalls: values.maxCalls,
+      storyUi: values.storyUi,
+      storyUiStyle: values.storyUiStyle,
+      autoRefusalRetryEnabled: values.autoRefusalRetryEnabled ?? previous.autoRefusalRetryEnabled,
+      autoRefusalMaxRetries: values.autoRefusalMaxRetries ?? previous.autoRefusalMaxRetries,
     };
     store.db
       .prepare(
@@ -55,8 +44,16 @@ export function saveChatGenerationDefaults(store: Store, input: unknown): ChatGe
 }
 
 export function chatGenerationDefaultRoutes(app: FastifyInstance, store: Store) {
-  app.get('/api/chat-generation-defaults', () => chatGenerationDefaults(store.db));
-  app.put('/api/chat-generation-defaults', (request) =>
-    saveChatGenerationDefaults(store, request.body)
+  registerEndpoint(
+    app,
+    chatEndpoints.readGenerationDefaults,
+    chatOperations.readGenerationDefaults,
+    () => chatGenerationDefaults(store.db)
+  );
+  registerEndpoint(
+    app,
+    chatEndpoints.updateGenerationDefaults,
+    chatOperations.updateGenerationDefaults,
+    (input) => saveChatGenerationDefaults(store, input)
   );
 }

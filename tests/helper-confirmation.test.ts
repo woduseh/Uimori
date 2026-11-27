@@ -362,7 +362,7 @@ test('deleting a chat removes the arguments of a call another conversation held 
   );
   expect(result).toMatchObject({ code: 'CONFIRMATION_REQUIRED' });
   expect(storedArguments(f.store())).toEqual({ held: [task.id], granted: [] });
-  deleteChat(f.store(), f.chat.id, {});
+  deleteChat(f.store(), f.chat.id);
   expect(storedArguments(f.store())).toEqual({ held: [], granted: [] });
   expect(JSON.stringify(workspace.events(library.id))).not.toContain('비밀 장면 요청');
 });

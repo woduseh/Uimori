@@ -43,6 +43,7 @@ import { choice, fields, HttpError, number, record, text } from './request-valid
 import type { Store } from './store.js';
 import { USAGE_BREAKDOWNS, usageReport } from './usage-report.js';
 import {
+  chatOperations,
   personalWorkspaceOperations,
   promptOperations,
   translationOperations,
@@ -880,11 +881,14 @@ export function invokeHelperSettingsTool(
     >;
     const current = chatGenerationDefaults(store.db);
     const { revision: _revision, ...values } = current;
-    const updated = saveChatGenerationDefaults(store, {
-      ...values,
-      [key]: args.value,
-      expectedRevision,
-    });
+    const updated = saveChatGenerationDefaults(
+      store,
+      parseInput(chatOperations.updateGenerationDefaults.input, {
+        ...values,
+        [key]: args.value,
+        expectedRevision,
+      })
+    );
     return { setting, revision: updated.revision, value: updated[key] };
   }
   if (setting.startsWith('global.')) {

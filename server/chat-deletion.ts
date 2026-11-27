@@ -3,6 +3,9 @@ import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { removeThemeScope } from './themes.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { fields, record } from './request-validation.js';
+import { chatEndpoints } from '#contracts';
+import { chatOperations } from '#contracts/operations';
+import { registerEndpoint } from './endpoint.js';
 import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
 import { CHAT_PIN_PREFIX } from './chat-organization.js';
 import type { FastifyInstance } from 'fastify';
@@ -45,13 +48,6 @@ const chatTables = [
   'runs',
 ];
 
-export function chatDeletionImpact(store: Store, chatId: string) {
-  store.chat(chatId);
-  return {
-    request: {},
-  };
-}
-
 export function assertChatIdleForDeletion(store: Store, chatId: string) {
   if (
     store.db
@@ -91,11 +87,9 @@ function removeRunArtifacts(store: Store, runIds: string[], sourceIds: string[],
   for (const table of ['job_results']) removeIds(store, table, 'job_id', jobIds);
 }
 
-export function deleteChat(store: Store, chatId: string, value: unknown) {
-  const body = record(value);
-  fields(body, []);
+export function deleteChat(store: Store, chatId: string) {
   const result = store.transaction(() => {
-    store.chat(chatId);
+    store.writableChat(chatId);
     assertChatIdleForDeletion(store, chatId);
     const imageCandidates = new Set<string>();
     for (const sql of [
@@ -160,7 +154,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
     pruneUnusedHelperFiles(store.db);
-    return { deleted: true };
+    return { deleted: true as const };
   });
   store.invalidated('activity');
   store.invalidated('helper-list');
@@ -187,12 +181,9 @@ export function chatDeletionRoutes(
   store: Store,
   onChatDeleted?: (chatId: string) => void
 ) {
-  app.get<{ Params: { id: string } }>('/api/chats/:id/deletion-impact', async (request) =>
-    chatDeletionImpact(store, request.params.id)
-  );
-  app.delete<{ Params: { id: string } }>('/api/chats/:id', async (request) => {
-    const result = deleteChat(store, request.params.id, request.body);
-    onChatDeleted?.(request.params.id);
+  registerEndpoint(app, chatEndpoints.deleteChat, chatOperations.deleteChat, ({ chatId }) => {
+    const result = deleteChat(store, chatId);
+    onChatDeleted?.(chatId);
     return result;
   });
 }

@@ -238,7 +238,7 @@ async function quickChatFixture(request: APIRequestContext, greetings: number) {
       await request.patch(`/api/bots/${bot.id}/defaults`, {
         data: {
           expectedRevision: 1,
-          persona: { mode: 'persona', persona: { id: persona.id, revision: persona.revision } },
+          persona: { mode: 'persona', persona: { id: persona.id } },
         },
       })
     ).ok()

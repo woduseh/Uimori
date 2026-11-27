@@ -3,8 +3,10 @@ import type { Content, ContentRef } from '../core/product.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { chatOperations } from '#contracts/operations';
 import { AppError, HelperToolError } from './app-errors.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { parseInput } from './endpoint.js';
+import { fields, HttpError, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const id: Json = { type: 'string', minLength: 1, maxLength: 100 };
@@ -67,16 +69,26 @@ export const HELPER_CHAT_ORGANIZATION_TOOLS: ProviderTool[] = [
   },
 ];
 
-function assertRevision(current: number, expected: unknown) {
-  if (current !== number(expected, 'revision')) throw new AppError(409, 'REVISION_CONFLICT');
+function named<T>(target: string | null, run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    if (target && error instanceof AppError && error.code === 'LIBRARY_ITEM_DELETED')
+      throw new HelperToolError(404, 'LIBRARY_ITEM_DELETED', `${target} no longer exists.`);
+    throw error;
+  }
 }
 
-function personaRef(store: Store, value: unknown): ContentRef {
-  const personaId = text(value, 'persona ID', 100);
-  const persona = store.product.available<Content>('content', personaId);
-  if (persona.kind !== 'persona')
-    throw new HelperToolError(400, 'NOT_A_PERSONA', `${personaId} is a ${persona.kind}.`);
-  return { id: persona.id, revision: persona.revision };
+function personaChoice(store: Store, value: unknown) {
+  const id = text(value, 'persona ID', 100);
+  const saved = store.db
+    .prepare(
+      "SELECT json_extract(body,'$.kind') AS kind FROM versions WHERE kind='content' AND id=?"
+    )
+    .get(id) as { kind: string } | undefined;
+  if (saved && saved.kind !== 'persona')
+    throw new HelperToolError(400, 'NOT_A_PERSONA', `${id} is a ${saved.kind}.`);
+  return { id };
 }
 
 function personaView(store: Store, ref: ContentRef | null) {
@@ -90,12 +102,20 @@ function personaView(store: Store, ref: ContentRef | null) {
   return { id: ref.id, title };
 }
 
+function ownedChat(store: Store, botId: string, chatId: string) {
+  const owner = store.organization.metadata(chatId)?.botId;
+  if (owner === undefined)
+    throw new HelperToolError(404, 'LIBRARY_ITEM_DELETED', `chat ${chatId} no longer exists.`);
+  if (owner !== botId)
+    throw new HelperToolError(409, 'CHAT_OF_ANOTHER_BOT', 'The chat belongs to another bot.');
+}
+
 export function readHelperChatOrganization(store: Store, value: unknown) {
   const args = record(value);
   fields(args, ['action', 'botId']);
   const botId = text(args.botId, 'bot ID', 100);
   const organization = store.organization;
-  const bot = organization.bot(botId);
+  const bot = named(`bot ${botId}`, () => organization.bot(botId));
   const defaults = organization.defaults(botId);
   const chatIds = (
     store.db
@@ -145,7 +165,7 @@ export function applyHelperChatOrganization(
   const args = record(value);
   const botId = text(args.botId, 'bot ID', 100);
   const organization = store.organization;
-  const bot = organization.bot(botId);
+  const bot = named(`bot ${botId}`, () => organization.bot(botId));
   const report = (revision: number) =>
     recordHelperTaskResult(workspace, task, {
       receiptId,
@@ -158,52 +178,61 @@ export function applyHelperChatOrganization(
       ? {}
       : {
           defaultPersona:
-            args.defaultPersona === null ? null : personaRef(store, args.defaultPersona),
+            args.defaultPersona === null ? null : personaChoice(store, args.defaultPersona),
         };
+  const persona = (id: unknown) => (typeof id === 'string' ? `persona ${id}` : null);
+  const title = args.title === undefined ? {} : { title: args.title };
   switch (args.action) {
     case 'create-folder': {
       fields(args, ['action', 'botId', 'title', 'defaultPersona']);
-      const folder = organization.createFolder(botId, { title: args.title, ...defaultPersona() });
+      const input = parseInput(chatOperations.createFolder.input, {
+        botId,
+        ...title,
+        ...defaultPersona(),
+      });
+      const folder = named(persona(args.defaultPersona), () => organization.createFolder(input));
       report(folder.revision);
       return { changedChatIds: [], folder };
     }
     case 'update-folder': {
       fields(args, ['action', 'botId', 'folderId', 'expectedRevision', 'title', 'defaultPersona']);
-      const folderId = text(args.folderId, 'folder ID', 100);
-      const folder = store.transaction(() => {
-        assertRevision(organization.folder(botId, folderId).revision, args.expectedRevision);
-        return organization.updateFolder(botId, folderId, {
-          expectedRevision: args.expectedRevision,
-          ...(args.title === undefined ? {} : { title: args.title }),
-          ...defaultPersona(),
-        });
+      const input = parseInput(chatOperations.updateFolder.input, {
+        botId,
+        folderId: args.folderId,
+        expectedRevision: args.expectedRevision,
+        ...title,
+        ...defaultPersona(),
       });
+      const folder = named(persona(args.defaultPersona), () => organization.updateFolder(input));
       report(folder.revision);
       return { changedChatIds: [], folder };
     }
     case 'delete-folder': {
       fields(args, ['action', 'botId', 'folderId', 'expectedRevision']);
-      const folderId = text(args.folderId, 'folder ID', 100);
-      const result = organization.deleteFolder(botId, folderId, {
+      const input = parseInput(chatOperations.deleteFolder.input, {
+        botId,
+        folderId: args.folderId,
         expectedRevision: args.expectedRevision,
       });
-      report(number(args.expectedRevision, 'folder revision'));
+      const result = organization.deleteFolder(input);
+      report(input.expectedRevision);
       return {
         changedChatIds: result.movedChatIds,
-        deleted: folderId,
+        deleted: input.folderId,
         movedChatIds: result.movedChatIds,
       };
     }
     case 'move': {
       fields(args, ['action', 'botId', 'chatId', 'expectedRevision', 'folderId', 'beforeChatId']);
-      const chatId = text(args.chatId, 'chat ID', 100);
-      if (organization.metadata(chatId)?.botId !== botId)
-        throw new HelperToolError(409, 'CHAT_OF_ANOTHER_BOT', 'The chat belongs to another bot.');
-      organization.move(chatId, {
+      const input = parseInput(chatOperations.moveChat.input, {
+        chatId: args.chatId,
         expectedRevision: args.expectedRevision,
         folderId: args.folderId === undefined ? null : args.folderId,
         ...(args.beforeChatId === undefined ? {} : { beforeChatId: args.beforeChatId }),
       });
+      const { chatId } = input;
+      ownedChat(store, botId, chatId);
+      organization.move(input);
       const moved = organization.metadata(chatId)!;
       recordHelperTaskResult(workspace, task, {
         receiptId,
@@ -227,11 +256,14 @@ export function applyHelperChatOrganization(
     }
     case 'pin': {
       fields(args, ['action', 'botId', 'chatId', 'pinned']);
-      const chatId = text(args.chatId, 'chat ID', 100);
-      if (organization.metadata(chatId)?.botId !== botId)
-        throw new HelperToolError(409, 'CHAT_OF_ANOTHER_BOT', 'The chat belongs to another bot.');
+      const input = parseInput(chatOperations.pinChat.input, {
+        chatId: args.chatId,
+        pinned: args.pinned,
+      });
+      const { chatId } = input;
+      ownedChat(store, botId, chatId);
       const before = !!store.chat(chatId).pinnedAt;
-      const chat = organization.pin(chatId, { pinned: args.pinned });
+      const chat = organization.pin(input);
       recordHelperTaskResult(workspace, task, {
         receiptId,
         operation: 'chat.organize',
@@ -245,17 +277,16 @@ export function applyHelperChatOrganization(
     }
     case 'set-default-persona': {
       fields(args, ['action', 'botId', 'expectedRevision', 'persona']);
-      const persona = text(args.persona, 'persona', 100);
-      const defaults = store.transaction(() => {
-        assertRevision(organization.defaults(botId).revision, args.expectedRevision);
-        return organization.updateDefaults(botId, {
-          expectedRevision: args.expectedRevision,
-          persona:
-            persona === 'inherit' || persona === 'none'
-              ? { mode: persona }
-              : { mode: 'persona', persona: personaRef(store, persona) },
-        });
+      const choice = text(args.persona, 'persona', 100);
+      const input = parseInput(chatOperations.updateBotDefaults.input, {
+        botId,
+        expectedRevision: args.expectedRevision,
+        persona:
+          choice === 'inherit' || choice === 'none'
+            ? { mode: choice }
+            : { mode: 'persona', persona: personaChoice(store, choice) },
       });
+      const defaults = named(persona(choice), () => organization.updateDefaults(input));
       report(defaults.revision);
       return { changedChatIds: [], defaults };
     }

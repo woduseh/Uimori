@@ -152,7 +152,7 @@ const assetBody = {
   actor: '',
   outfit: '',
   location: '',
-  allowedUse: 'both',
+  allowedUse: 'both' as const,
 };
 
 describe('M1 product data with actual file SQLite', () => {

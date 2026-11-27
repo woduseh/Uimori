@@ -1,3 +1,4 @@
+import { profileChange } from './fixtures/model-workspace.js';
 import { observeExecutions, observedExecution } from './fixtures/execution-observer.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -294,12 +295,15 @@ test('reading an explicit null global routes object rejects corruption without m
 
 function pin(store: Store, chatId: string, pinned: unknown, expectedRevision?: number) {
   const prior = store.product.profile(chatId);
-  return store.product.updateProfile(chatId, {
-    expectedRevision: expectedRevision ?? prior.revision,
-    packageAttachments: prior.packageAttachments,
-    image: prior.image,
-    ...(pinned === undefined ? {} : { pinned }),
-  });
+  return store.product.updateProfile(
+    chatId,
+    profileChange(chatId, {
+      expectedRevision: expectedRevision ?? prior.revision,
+      packageAttachments: prior.packageAttachments,
+      image: prior.image,
+      ...(pinned === undefined ? {} : { pinned }),
+    })
+  );
 }
 function mainPreset(store: Store, title: string) {
   const program = createDefaultRisuPrompt(title);

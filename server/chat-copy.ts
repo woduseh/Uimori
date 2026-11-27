@@ -73,7 +73,6 @@ export function captureChatCopy(
       settings: chat.settings,
       profile: {
         image: profile.image,
-        imageTranslation: profile.imageTranslation,
         loreContext: profile.loreContext,
         pinned: profile.pinned,
         authorNote: profile.authorNote,

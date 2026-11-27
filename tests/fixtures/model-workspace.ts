@@ -1,4 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
+import { chatOperations } from '#contracts/operations';
+import { parseInput } from '../../server/endpoint.js';
 import type { ProductStore } from '../../server/product-store.js';
 import { modelWorkspace, updateModelWorkspace } from '../../server/prompt-workspace.js';
 import type { Store } from '../../server/store.js';
@@ -30,5 +32,13 @@ export function updateTestProfile(
         translationPolicy: current.translationPolicy,
       });
   }
-  return product.updateProfile(chatId, profile);
+  return product.updateProfile(chatId, profileChange(chatId, profile));
+}
+
+export function profileChange(chatId: string, value: Record<string, unknown>) {
+  const { chatId: _chatId, ...change } = parseInput(chatOperations.updateProfile.input, {
+    ...value,
+    chatId,
+  });
+  return change;
 }

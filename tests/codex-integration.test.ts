@@ -315,7 +315,6 @@ test('app routes every agent role through Codex and keeps source results and rec
       expectedRevision: profile.revision,
 
       image: true,
-      imageTranslation: false,
     },
     'PUT'
   );

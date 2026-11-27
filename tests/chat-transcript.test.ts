@@ -258,9 +258,10 @@ describe('chat transcript export and import', () => {
       loading: 'pinned',
       relatedIds: [],
     }) as Content;
-    store.organization.updateDefaults(bot.id, {
+    store.organization.updateDefaults({
+      botId: bot.id,
       expectedRevision: 1,
-      persona: { mode: 'persona', persona: { id: persona.id, revision: persona.revision } },
+      persona: { mode: 'persona', persona: { id: persona.id } },
     });
     deleteLibraryItem(store, 'content', persona.id, { expectedRevision: persona.revision });
 

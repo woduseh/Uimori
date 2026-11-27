@@ -30,7 +30,8 @@ import {
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
 import type { ChatFolder } from '../core/product.js';
-import { api } from './api.js';
+import { chatEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { BotDefaultPersona } from './BotDefaultPersona.js';
@@ -175,7 +176,7 @@ export function BotBranch(
     if (!botId) return;
     let alive = true;
     setLoading(true);
-    void api<ChatFolder[]>(`/bots/${encodeURIComponent(botId)}/folders`)
+    void callEndpoint(chatEndpoints.listFolders, { botId })
       .then((value) => {
         if (alive && epoch.current === version) setFolders(value);
       })
@@ -200,7 +201,7 @@ export function BotBranch(
       await action();
       await onChatsChanged();
       if (owner === currentBot.current && version === epoch.current) {
-        const value = await api<ChatFolder[]>(`/bots/${encodeURIComponent(owner)}/folders`);
+        const value = await callEndpoint(chatEndpoints.listFolders, { botId: owner });
         if (owner === currentBot.current && version === epoch.current) setFolders(value);
       }
     } catch (reason) {
@@ -208,7 +209,7 @@ export function BotBranch(
       onError(message);
       if (owner === currentBot.current) setError(message);
       try {
-        const value = await api<ChatFolder[]>(`/bots/${encodeURIComponent(owner)}/folders`);
+        const value = await callEndpoint(chatEndpoints.listFolders, { botId: owner });
         if (owner === currentBot.current && version === epoch.current) setFolders(value);
         await onChatsChanged();
       } catch {}
@@ -249,15 +250,12 @@ export function BotBranch(
   function moveChat(chat: Chat, folderId: string | null, beforeId: string | null = null) {
     if (beforeId === chat.id) return;
     void perform(() =>
-      api(
-        `/chats/${encodeURIComponent(chat.id)}/organization`,
-        {
-          expectedRevision: chat.organizationRevision,
-          folderId,
-          beforeChatId: beforeId,
-        },
-        'PATCH'
-      )
+      callEndpoint(chatEndpoints.moveChat, {
+        chatId: chat.id,
+        expectedRevision: chat.organizationRevision!,
+        folderId,
+        beforeChatId: beforeId,
+      })
     );
   }
   function over(event: DragEvent, folderId: string | null, beforeId: string | null) {
@@ -663,7 +661,7 @@ export function BotBranch(
             const title = newTitle.trim();
             if (title)
               void perform(async () => {
-                await api(`/bots/${encodeURIComponent(botId)}/folders`, { title });
+                await callEndpoint(chatEndpoints.createFolder, { botId, title });
                 if (currentBot.current === botId) {
                   setNewTitle('');
                   setCreating(false);
@@ -699,21 +697,21 @@ export function BotBranch(
             onSave={async (value) => {
               let saved: ChatFolder | null = null;
               await perform(async () => {
-                saved = await api<ChatFolder>(
-                  `/bots/${encodeURIComponent(botId)}/folders/${settingsFolder.id}`,
-                  value,
-                  'PATCH'
-                );
+                saved = await callEndpoint(chatEndpoints.updateFolder, {
+                  botId,
+                  folderId: settingsFolder.id,
+                  ...value,
+                });
               });
               return saved;
             }}
             onRemove={() =>
               perform(() =>
-                api(
-                  `/bots/${encodeURIComponent(botId)}/folders/${settingsFolder.id}`,
-                  { expectedRevision: settingsFolder.revision },
-                  'DELETE'
-                )
+                callEndpoint(chatEndpoints.deleteFolder, {
+                  botId,
+                  folderId: settingsFolder.id,
+                  expectedRevision: settingsFolder.revision,
+                })
               )
             }
           />
@@ -757,7 +755,7 @@ function FolderSettings({
   onSave: (value: {
     expectedRevision: number;
     title: string;
-    defaultPersona: { id: string; revision: number } | null;
+    defaultPersona: { id: string } | null;
   }) => Promise<ChatFolder | null>;
   onRemove: () => Promise<void>;
 }) {
@@ -829,9 +827,9 @@ function FolderSettings({
             expectedRevision: base.revision,
             title,
             defaultPersona: selected
-              ? { id: selected.id, revision: selected.revision }
-              : persona
-                ? base.defaultPersona
+              ? { id: selected.id }
+              : persona && base.defaultPersona
+                ? { id: base.defaultPersona.id }
                 : null,
           });
           if (saved) {

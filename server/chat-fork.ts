@@ -1,9 +1,13 @@
 import { captureChatCopy, restoreChatCopy } from './chat-copy.js';
 import { createHash } from 'node:crypto';
-import { chatTitle, fields, HttpError, record, text } from './request-validation.js';
+import type { FastifyInstance } from 'fastify';
+import { chatEndpoints, type ForkChat } from '#contracts';
+import { chatOperations } from '#contracts/operations';
+import { HttpError } from './request-validation.js';
 import type { Chat, Store } from './store.js';
 import { AppError } from './app-errors.js';
 import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
+import { registerEndpoint } from './endpoint.js';
 
 const COPY_LABELS: Record<UiLocale, string> = { ko: '사본', en: 'copy', ja: 'コピー', zh: '副本' };
 const COPY_SUFFIX_RUNS = new RegExp(
@@ -28,12 +32,17 @@ function numberedCopyTitle(store: Store, title: string, locale: UiLocale): strin
   return `${base} (${label} ${last + 1})`;
 }
 
-export function forkChat(store: Store, chatId: string, value: unknown): Chat {
-  const body = record(value);
-  fields(body, ['fromRevision', 'title', 'titleLocale', 'idempotencyKey']);
-  const sourceId = body.fromRevision === null ? null : text(body.fromRevision, 'source ID', 100);
-  const requestKey = text(body.idempotencyKey, 'copy request', 100);
-  const requestedTitle = body.title === undefined ? null : chatTitle(body.title);
+export function forkChat(
+  store: Store,
+  chatId: string,
+  {
+    fromRevision: sourceId,
+    title,
+    titleLocale,
+    idempotencyKey: requestKey,
+  }: Omit<ForkChat, 'chatId'>
+): Chat {
+  const requestedTitle = title ?? null;
   const command = createHash('sha256')
     .update(JSON.stringify({ chatId, sourceId, title: requestedTitle }))
     .digest('hex');
@@ -54,17 +63,18 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
         throw new AppError(410, 'CHAT_COPY_REMOVED');
       return store.chat(saved.chatId);
     }
-    const original = store.chat(chatId);
+    const original = store.writableChat(chatId);
     const title =
-      requestedTitle ?? numberedCopyTitle(store, original.title, supportedLocale(body.titleLocale));
+      requestedTitle ?? numberedCopyTitle(store, original.title, supportedLocale(titleLocale));
     const copy = captureChatCopy(store, chatId, sourceId);
     const restored = restoreChatCopy(store, copy, `copy:${requestKey}`, title);
     store.db
       .prepare("UPDATE import_operations SET result=json_set(result,'$.forkCommand',?) WHERE key=?")
       .run(command, receiptKey);
     if (restored.folderId !== original.folderId)
-      store.organization.move(restored.id, {
-        expectedRevision: restored.organizationRevision,
+      store.organization.move({
+        chatId: restored.id,
+        expectedRevision: restored.organizationRevision!,
         folderId: original.folderId ?? null,
       });
     store.event(
@@ -74,4 +84,21 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
     );
     return store.chat(restored.id);
   });
+}
+
+export function chatForkRoutes(
+  app: FastifyInstance,
+  store: Store,
+  publish: (chatId: string) => void
+) {
+  registerEndpoint(
+    app,
+    chatEndpoints.forkChat,
+    chatOperations.forkChat,
+    ({ chatId, ...change }) => {
+      const chat = forkChat(store, chatId, change);
+      publish(chat.id);
+      return chat;
+    }
+  );
 }

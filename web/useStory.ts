@@ -55,16 +55,10 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, RunReceipt } from '../core/types.js';
-import type {
-  ChatProfile,
-  Content,
-  CurrentPrompt,
-  Library,
-  PromptPreset,
-} from '../core/product.js';
+import type { Content, CurrentPrompt, Library, PromptPreset } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
-import { chatSettingsEndpoints, promptEndpoints, readerEndpoints } from '#contracts';
+import { chatEndpoints, chatSettingsEndpoints, promptEndpoints, readerEndpoints } from '#contracts';
 import {
   api,
   apiBinary,
@@ -196,7 +190,7 @@ function clearCommand(key: string, id: string) {
 async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
   const chat = `/chats/${encodeURIComponent(chatId)}`;
   const [profile, options, workspace] = await Promise.all([
-    api<ChatProfile>(`${chat}/profile`),
+    callEndpoint(chatEndpoints.readProfile, { chatId }),
     callEndpoint(chatSettingsEndpoints.readOptions, { chatId }),
     callEndpoint(promptEndpoints.readModelWorkspace),
   ]);
@@ -1621,18 +1615,13 @@ export function useStory() {
           throw new UiError(uiMessage('main.modelPickerInvalid'));
         if ((profile.pinned?.mainModel?.id ?? '') === value) return true;
         modelWriteAttempted = true;
-        await api(
-          `/chats/${chatId}/profile`,
-          {
-            expectedRevision: profile.revision,
-            image: profile.image,
-            pinned: {
-              ...profile.pinned,
-              mainModel: model ? { id: model.id } : undefined,
-            },
-          },
-          'PUT'
-        );
+        const { mainModel: _mainModel, ...pinned } = profile.pinned ?? {};
+        await callEndpoint(chatEndpoints.updateProfile, {
+          chatId,
+          expectedRevision: profile.revision,
+          image: profile.image,
+          pinned: model ? { ...pinned, mainModel: { id: model.id } } : pinned,
+        });
         if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
         try {
           const refreshed = await refresh(chatId);
@@ -1697,18 +1686,15 @@ export function useStory() {
         const existing = profile.packageAttachments ?? [];
         if (existing.some((item) => item.id === module.id && item.role === 'module'))
           throw new UiError(uiMessage('main.story20'));
-        await api(
-          `/chats/${chatId}/profile`,
-          {
-            expectedRevision: profile.revision,
-            image: profile.image,
-            packageAttachments: [
-              ...existing,
-              { id: module.id, revision: module.revision, role: 'module' },
-            ],
-          },
-          'PUT'
-        );
+        await callEndpoint(chatEndpoints.updateProfile, {
+          chatId,
+          expectedRevision: profile.revision,
+          image: profile.image,
+          packageAttachments: [
+            ...existing,
+            { id: module.id, revision: module.revision, role: 'module' },
+          ],
+        });
       } else {
         let contents = [...library.contents, ...archivedContents];
         const persona = contents.find(
@@ -1721,18 +1707,17 @@ export function useStory() {
             ? [...(profile.packageAttachments ?? [])]
                 .filter((r) => r.role !== 'persona')
                 .concat(
-                  persona ? [{ id: persona.id, revision: persona.revision, role: 'persona' }] : []
+                  persona
+                    ? [{ id: persona.id, revision: persona.revision, role: 'persona' as const }]
+                    : []
                 )
             : profile.packageAttachments;
-        await api(
-          `/chats/${chatId}/profile`,
-          {
-            expectedRevision: profile.revision,
-            image: profile.image,
-            packageAttachments,
-          },
-          'PUT'
-        );
+        await callEndpoint(chatEndpoints.updateProfile, {
+          chatId,
+          expectedRevision: profile.revision,
+          image: profile.image,
+          packageAttachments,
+        });
       }
       if (navigation.current.chat === chatId) setNotice(completion);
       await refresh(chatId);

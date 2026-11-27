@@ -171,7 +171,7 @@ export function deleteHelperChat(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_conversations WHERE chat_id=?').get(chatId)
       ?.n ?? 0
   );
-  deleteChat(store, chatId, {});
+  deleteChat(store, chatId);
   recordHelperTaskResult(workspace, task, {
     receiptId,
     operation: 'chat.delete',
