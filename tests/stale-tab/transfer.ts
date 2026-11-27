@@ -116,6 +116,17 @@ export const transferCases = domainCases('transfer', {
         answer: conflict,
         targetRevision: true,
       },
+      {
+        when: 'a chat another tab deleted and a malformed scene bound',
+        arrange: () => {
+          const { chatId, sourceId } = deletedChat();
+          return {
+            input: { id: chatId, mode: 'source', expectedHeadRevision: sourceId, fromScene: '1' },
+          };
+        },
+        answer: conflict,
+        targetRevision: true,
+      },
     ],
   },
 });

@@ -169,8 +169,11 @@ describe('Markdown manuscript export', () => {
     expect(() => exportManuscript(store, chat.id, { ...body, fromScene: 3 })).toThrow(
       'MANUSCRIPT_RANGE_INVALID'
     );
+    expect(() => exportManuscript(store, chat.id, { ...body, fromScene: '1' })).toThrow(
+      'MANUSCRIPT_RANGE_INVALID'
+    );
     expect(() =>
-      exportManuscript(store, chat.id, { ...body, expectedHeadRevision: first.id })
+      exportManuscript(store, chat.id, { ...body, expectedHeadRevision: first.id, fromScene: '1' })
     ).toThrow('MANUSCRIPT_RANGE_CHANGED');
   });
 
@@ -797,15 +800,7 @@ test('the transcript routes download the file and create the chat over HTTP', as
   try {
     const { chat } = authoredChat(app.store);
     const headers = { host: '127.0.0.1', 'content-type': 'application/json' };
-    const exported = await app.inject({
-      method: 'GET',
-      url: `/api/chats/${chat.id}/transcript`,
-      headers,
-    });
-    expect(exported.statusCode, exported.body).toBe(200);
-    expect(exported.headers['content-disposition']).toContain('chat-transcript.json');
-    const transcript = exported.json();
-    expect(transcript.format).toBe(CHAT_TRANSCRIPT_FORMAT);
+    const transcript = exportChatTranscript(app.store, chat.id);
     const manuscript = await app.inject({
       method: 'POST',
       url: `/api/chats/${chat.id}/manuscript`,

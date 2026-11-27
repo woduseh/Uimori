@@ -54,11 +54,14 @@ export function exportManuscript(
     throw new AppError(409, 'MANUSCRIPT_RANGE_CHANGED');
   const scenes = manuscriptScenes(store, chatId, chat.headRevision);
   if (!scenes.length) throw new AppError(400, 'MANUSCRIPT_EMPTY');
-  for (const bound of [fromScene, toScene])
-    if (bound !== undefined && (!Number.isSafeInteger(bound) || bound < 0 || bound > 1e9))
+  const bound = (value: unknown, fallback: number) => {
+    if (value === undefined) return fallback;
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 1e9)
       throw new AppError(400, 'MANUSCRIPT_RANGE_INVALID');
-  const from = fromScene ?? scenes[0].number;
-  const to = toScene ?? scenes.at(-1)!.number;
+    return value;
+  };
+  const from = bound(fromScene, scenes[0].number);
+  const to = bound(toScene, scenes.at(-1)!.number);
   if (
     from > to ||
     !scenes.some((scene) => scene.number === from) ||
