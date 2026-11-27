@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { messages } from '../web/locales/settings.js';
 import {
   AgentCollaborationError,
   createAgentCollaboration,
@@ -142,3 +143,24 @@ test('a template created with a label keeps that title and description and the r
   expect(agent.instructions).toBe(createAgentDefinition('lore', 'lore').instructions);
   expect(() => validateAgentCollaboration({ ...config(), agents: [agent] })).not.toThrow();
 });
+
+test.each(['character', 'lore', 'custom'] as const)(
+  'the %s template name and description in every language are the agent text, not the picker button text',
+  (kind) => {
+    const key = kind[0]!.toUpperCase() + kind.slice(1);
+    const title = messages[`settings.agent${key}Title` as keyof typeof messages];
+    const description = messages[`settings.agent${key}Description` as keyof typeof messages];
+    const defaults = createAgentDefinition(kind, 'agent');
+    expect(title.ko).toBe(defaults.title);
+    expect(description.ko).toBe(defaults.description);
+    const picker = {
+      character: [messages['settings.m113'], messages['settings.m114']],
+      lore: [messages['settings.m115'], messages['settings.m116']],
+      custom: [messages['settings.m117'], messages['settings.m118']],
+    }[kind];
+    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
+      expect(title[locale]).not.toBe(picker[0]![locale]);
+      expect(description[locale]).not.toBe(picker[1]![locale]);
+    }
+  }
+);
