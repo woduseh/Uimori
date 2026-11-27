@@ -11,6 +11,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": ["node", "vite/client"],
+    "paths": { "#contracts": ["./packages/contracts/src/index.ts"] },
     "noEmit": true
   },
   "include": ["core", "packages", "server", "web", "tests", "*.config.ts"]
