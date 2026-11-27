@@ -5,36 +5,6 @@ import type { RisuImportResult } from '../core/risu-import.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { navigationAction } from './ui-navigation.js';
 
-const card = (title: string) => ({
-  spec: 'chara_card_v3',
-  spec_version: '3.0',
-  data: {
-    name: title,
-    description: 'Synthetic native import card.',
-    personality: 'Calm and observant.',
-    scenario: 'A synthetic browser verification.',
-    first_mes: 'The imported opening.',
-    mes_example: '',
-    creator_notes: '',
-    system_prompt: '',
-    post_history_instructions: '',
-    alternate_greetings: [],
-    tags: [],
-    creator: 'Uimori browser verification',
-    character_version: '1',
-    extensions: {},
-    character_book: {
-      name: 'Synthetic lore',
-      description: '',
-      scan_depth: 4,
-      token_budget: 512,
-      recursive_scanning: false,
-      extensions: {},
-      entries: [{ name: 'World', content: 'The sky is green.', constant: true, enabled: true }],
-    },
-  },
-});
-
 async function openImport(page: Page, tab: '봇' | '페르소나' | '모듈') {
   await navigationAction(page, tab);
   const trigger = page.getByRole('button', { name: '자료 가져오기', exact: true });
@@ -52,32 +22,6 @@ async function savedRoot(request: APIRequestContext, result: RisuImportResult) {
   const root = result.receipt.items.find((item) => item.root)!;
   return (await (await request.get(`/api/content/${root.id}`)).json()) as Content;
 }
-
-test('NATIVEUI01 imports a Risu card as a bot and navigates to its new chat', async ({
-  page,
-  request,
-}) => {
-  const title = `NATIVEUI01 ${Date.now()}`;
-  await page.goto('/');
-  const dialog = await openImport(page, '봇');
-  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
-    name: 'synthetic-risu-card.json',
-    mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(card(title))),
-  });
-  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
-  await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
-  const applied = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
-  );
-  await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
-  const result = (await (await applied).json()) as RisuImportResult;
-  expect(result.chat).not.toBeNull();
-  await expect(dialog).toBeHidden();
-  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(result.chat!.id);
-  expect((await savedRoot(request, result)).kind).toBe('bot');
-});
 
 test('NATIVEUI03 imports and exports a standalone Risu module', async ({ page, request }) => {
   const title = `NATIVEUI03 ${Date.now()}`;

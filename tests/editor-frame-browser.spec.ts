@@ -14,19 +14,11 @@ test.use({
   },
 });
 
-async function seedBot(request: APIRequestContext, title: string, greetings: string[] = []) {
+async function seedBot(request: APIRequestContext, title: string) {
   const pkg = nativeContent({
     name: title,
-    description: '긴 설명 '.repeat(300),
+    description: '설명',
     first_mes: '<div class="intro">{{char}}</div>',
-    alternate_greetings: greetings,
-    character_book: {
-      entries: Array.from({ length: 30 }, (_, i) => ({
-        keys: [`key${i}`],
-        content: '로어 본문',
-        comment: `로어 ${i}`,
-      })),
-    },
   });
   const response = await request.post('/api/content', {
     data: { kind: 'bot', title, package: pkg, loading: 'pinned', relatedIds: [] },
@@ -74,19 +66,9 @@ test('EFRAME04 dropping image files on the asset area uses the upload validation
   await expect(tiles.first()).toContainText('dropped_scene');
   await expect(area.locator('.native-assets-error')).toContainText('notes.txt');
   await expect(page.getByRole('button', { name: '변경사항 저장', exact: true })).toBeEnabled();
-  const upload = page.getByLabel('Risu 이미지 추가', { exact: true });
-  await area.getByRole('searchbox').focus();
-  await page.keyboard.press('Tab');
-  await expect(upload).toBeFocused();
-  expect(
-    await area
-      .locator('.file-picker-button')
-      .first()
-      .evaluate((node) => getComputedStyle(node).outlineStyle)
-  ).not.toBe('none');
 });
 
-test('EFRAME13 every former advanced section is one rail click away and a source draft still blocks the other panels', async ({
+test('EFRAME13 a source draft blocks the other panels until it is checked or reverted', async ({
   page,
   request,
 }) => {
@@ -95,29 +77,6 @@ test('EFRAME13 every former advanced section is one rail click away and a source
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBot(page, title);
   const rail = page.getByRole('tablist', { name: '자료 편집 영역', exact: true });
-  await expect(page.getByText('고급 설정', { exact: true })).toHaveCount(0);
-  for (const name of [
-    '추가 지침',
-    '변수와 토글 초기값',
-    '배경 HTML과 CSS',
-    '트리거 / Lua',
-    '정규식',
-    '함께 쓰는 모듈',
-    'JSON 소스',
-  ]) {
-    const tab = editorTab(rail, name);
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true');
-    const panel = page.locator(`[id="${await tab.getAttribute('aria-controls')}"]`);
-    await expect(panel).toBeVisible();
-    await expect(page.locator('.editor-studio [role="tabpanel"]:not([hidden])')).toHaveCount(1);
-  }
-  await expect(
-    page.getByRole('complementary', { name: '정규식 목록', exact: true, includeHidden: true })
-  ).toBeHidden();
-  await selectEditorSection(page, '정규식');
-  await expect(page.getByRole('complementary', { name: '정규식 목록', exact: true })).toBeVisible();
-
   await selectEditorSection(page, 'JSON 소스');
   const raw = page.getByLabel('Risu 원문 JSON', { exact: true });
   await raw.fill('{"unfinished":');

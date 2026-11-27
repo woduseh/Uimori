@@ -6,7 +6,7 @@ for (const width of [390]) {
   test(`RISULUACOMPAT ${width}px authored form reaches Lua and survives reload`, async ({
     page,
     request,
-  }, info) => {
+  }) => {
     await page.setViewportSize({ width, height: 900 });
     const title = `폼 호환 ${crypto.randomUUID()}`;
     const opening = `<section style="max-width:32rem;padding:12px">
@@ -130,7 +130,6 @@ end`,
     const contentId = imported.receipt.items.find((item) => item.root)!.id;
     const content = await (await request.get(`/api/content/${contentId}`)).json();
     expect(content.package.nativeRisu.card.first_mes).toBe(opening);
-    await page.screenshot({ path: info.outputPath(`risu-lua-form-${width}.png`) });
   });
 }
 

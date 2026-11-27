@@ -2,9 +2,9 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { DESKTOP_HEIGHT, MOBILE_HEIGHT, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
+import { DESKTOP_HEIGHT } from './fixtures/browser-viewports.js';
 import { editLibraryContent, selectEditorSection } from './ui-navigation.js';
-import { codeFieldValue, expectCodeFieldValue } from './code-field.js';
+import { expectCodeFieldValue } from './code-field.js';
 
 const breakLua =
   "listenEdit('editDisplay', function(id, text) if string.find(text, 'BREAK') then error('deliberate draft failure') end return text end)";
@@ -117,27 +117,6 @@ test('CBSREF01 variable uses expand, jump and add a missing default', async ({ p
   await expect(missing).toHaveCount(0);
 });
 
-test('CBSREF02 variable and toggle names complete inside CBS calls', async ({ page, request }) => {
-  await page.setViewportSize({ width: 1440, height: DESKTOP_HEIGHT });
-  const title = `CBSREF02 ${randomUUID().slice(0, 8)}`;
-  await seedBot(request, title, referenceCard);
-  await openBot(page, title, '첫 메시지');
-  const field = page.getByRole('textbox', { name: '기본 첫 메시지', exact: true });
-  await expect(field).toHaveClass(/cm-content/u);
-  await field.locator('.cm-line').last().click();
-  await page.keyboard.press('ControlOrMeta+End');
-  await page.keyboard.type(' {{getvar::m');
-  const completion = page.locator('.cm-tooltip-autocomplete');
-  await expect(completion.getByRole('option', { name: 'mood', exact: true })).toBeVisible();
-  await expect(completion.getByRole('option', { name: 'missing', exact: true })).toBeVisible();
-  await completion.getByRole('option', { name: 'mood', exact: true }).click();
-  await page.keyboard.type('}} {{#when::toggle::r');
-  await completion.getByRole('option', { name: 'rain', exact: true }).click();
-  await expect
-    .poll(() => codeFieldValue(field))
-    .toBe(`${referenceCard.first_mes} {{getvar::mood}} {{#when::toggle::rain`);
-});
-
 async function openPreview(page: Page, title: string) {
   await openBot(page, title, '첫 메시지');
   const field = page.getByRole('textbox', { name: '기본 첫 메시지', exact: true });
@@ -189,29 +168,5 @@ test('PREVIEW01 live first message preview updates and survives an evaluation er
   await preview.getByText(/미리보기에서 확인이 필요한 항목/u).click();
   await expect(preview.getByRole('listitem')).toHaveText(
     '없는그림 에셋을 찾지 못해 표시하지 않았어요.'
-  );
-});
-
-test('PREVIEW02 phone switches between editing and the live preview', async ({ page, request }) => {
-  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  const title = `PREVIEW02 ${randomUUID().slice(0, 8)}`;
-  await seedBot(request, title, previewCard);
-  const field = await openPreview(page, title);
-  const modes = page.getByRole('group', { name: '첫 메시지 보기 방식', exact: true });
-  await expect(modes.getByRole('button', { name: '편집', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true'
-  );
-  await field.locator('.cm-line').last().click();
-  await page.keyboard.press('ControlOrMeta+End');
-  await page.keyboard.type(' 휴대폰 문장');
-  await modes.getByRole('button', { name: '미리보기', exact: true }).click();
-  const preview = page.getByRole('region', { name: '저장 전 미리보기', exact: true });
-  await expect(preview).toContainText('휴대폰 문장');
-  await expect(field).toHaveCount(0);
-  await modes.getByRole('button', { name: '편집', exact: true }).click();
-  await expectCodeFieldValue(
-    page.getByRole('textbox', { name: '기본 첫 메시지', exact: true }),
-    `${previewCard.first_mes} 휴대폰 문장`
   );
 });

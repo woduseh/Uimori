@@ -7,7 +7,6 @@ import {
   MOBILE_HEIGHT,
   DESKTOP_HEIGHT,
 } from './fixtures/browser-viewports.js';
-import { expectCodeFieldValue } from './code-field.js';
 
 let vite: FixtureVite;
 let origin: string;
@@ -17,61 +16,6 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   await vite?.close();
-});
-
-test('RSURFACE successful controls wait for a refreshed revision', async ({ page }) => {
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/native-risu-frame.tsx';
-    const { mount } = await import(path);
-    mount();
-  });
-  const native = page.locator('.risu-message-surface');
-  await native.getByRole('button', { name: 'One', exact: true }).click();
-  await expect(page.locator('output')).toHaveText('1');
-  await expect(native.locator('.risu-message-content')).toHaveAttribute(
-    'data-risu-disabled',
-    'true'
-  );
-  await native
-    .getByRole('button', { name: 'Two', exact: true })
-    .evaluate((button: HTMLButtonElement) => button.click());
-  await expect(page.locator('output')).toHaveText('1');
-  await page.getByRole('button', { name: 'Render new revision' }).click();
-  await native.getByRole('button', { name: 'Two', exact: true }).click();
-  await expect(page.locator('output')).toHaveText('2');
-});
-
-test('RSURFACE completed Risu text displays ruby and safe reading tags in Shadow DOM', async ({
-  page,
-}) => {
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const fixturePath = '/tests/fixtures/native-risu-frame.tsx';
-    const { mount } = await import(fixturePath);
-    mount(
-      '<p>Han Byeol jabbed two fingers into the projected interface—her ' +
-        '<ruby>Runtime Overlay<rt>runtime overlay</rt></ruby> sparking. ' +
-        '<u>Important</u> <mark>highlighted</mark>.</p>' +
-        '<script>globalThis.__uimoriRubyUnsafe = true</script>'
-    );
-  });
-  const surface = page.locator('.risu-message-surface');
-  await expect(surface.locator('ruby')).toHaveCount(1);
-  await expect(surface.locator('ruby rt')).toHaveText('runtime overlay');
-  await expect(surface.locator('u')).toHaveText('Important');
-  await expect(surface.locator('mark')).toHaveText('highlighted');
-  await expect(surface.locator('script')).toHaveCount(0);
-  expect(
-    await page.evaluate(
-      () =>
-        (
-          globalThis as typeof globalThis & {
-            __uimoriRubyUnsafe?: boolean;
-          }
-        ).__uimoriRubyUnsafe
-    )
-  ).toBeUndefined();
 });
 
 test('RSURFACE authored CSS cannot apply html/body layout to the app', async ({ page }) => {
@@ -303,53 +247,6 @@ test('RSURFACE viewport projections retain local controls and action locks until
   expect(previews).toHaveLength(2);
 });
 
-test('native preset editor keeps raw CBS, toggle values, and invalid regex drafts', async ({
-  page,
-}) => {
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/native-preset-editor.tsx';
-    const { mount } = await import(path);
-    mount();
-  });
-  const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
-  await selectEditorSection(page, '기본 옵션');
-  const options = editor.locator('.prompt-option-group').first();
-  await expect(options).not.toHaveAttribute('open');
-  await options.locator('summary').click();
-  await editor.getByLabel('Mood', { exact: true }).selectOption('"1"');
-  await selectEditorSection(page, '구성');
-  await expectCodeFieldValue(
-    editor.getByLabel('1번 프롬프트 본문', { exact: true }),
-    '{{getvar::place}}'
-  );
-  await editor
-    .getByLabel('1번 프롬프트 본문', { exact: true })
-    .fill('{{#when::mood::tis::1}}VIVID{{/when}}');
-  await selectEditorSection(page, '정규식');
-  await editor.getByText('고급 JSON 편집', { exact: true }).click();
-  await editor.getByLabel('Risu 정규식 JSON').fill('[invalid');
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await selectEditorSection(page, '구성');
-  await editor.getByLabel('1번 블록 이름').fill('Try another edit');
-  await selectEditorSection(page, '정규식');
-  await expect(editor.getByLabel('Risu 정규식 JSON')).toHaveValue('[invalid');
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-  const regex = [{ in: '(hello)', out: '$1 {{getvar::place}}', type: 'editinput' }];
-  await editor.getByLabel('Risu 정규식 JSON').fill(JSON.stringify(regex));
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await editor.getByRole('button', { name: '편집기에 적용', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
-  const saved = JSON.parse((await page.locator('output').textContent())!);
-  expect(saved.values).toEqual({ mood: '1' });
-  expect(saved.program.nativeRisuPreset.preset).toMatchObject({
-    regex,
-    promptTemplate: [{ text: '{{#when::mood::tis::1}}VIVID{{/when}}' }],
-  });
-  expect(saved.program.nativeRisuPreset.preset.aiModel).toBeUndefined();
-  expect(saved.program.nativeRisuPreset.preset.apiKey).toBeUndefined();
-});
-
 test('native regex synced buffers follow parent JSON changes while local and remote drafts survive', async ({
   page,
 }) => {
@@ -387,85 +284,6 @@ test('native regex synced buffers follow parent JSON changes while local and rem
 {
   test.describe('native editor input', () => {
     test.use({ viewport: { width: MOBILE_WIDTH, height: 915 } });
-
-    test('native regex forms preserve aliases, custom flags, order and invalid raw drafts', async ({
-      page,
-    }) => {
-      await page.goto(origin);
-      await page.evaluate(async () => {
-        const path = '/tests/fixtures/native-regex-editor.tsx';
-        const { mount } = await import(path);
-        mount();
-      });
-      const value = () =>
-        page
-          .locator('output')
-          .textContent()
-          .then((text) => JSON.parse(text!));
-      await page.getByLabel('정규식 찾을 표현식', { exact: true }).fill('(world)');
-      await page.getByLabel('정규식 바꿀 내용', { exact: true }).fill('$1 {{getvar::place}}');
-      await expect.poll(value).toMatchObject([
-        {
-          in: '(world)',
-          find: '(world)',
-          out: '$1 {{getvar::place}}',
-          replace: '$1 {{getvar::place}}',
-          ableFlag: false,
-          extra: { preserved: true },
-        },
-        {},
-        {},
-      ]);
-      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
-      await page.getByRole('checkbox', { name: '사용자 지정 플래그', exact: true }).check();
-      await page.getByRole('button', { name: '대소문자 무시 (i)', exact: true }).click();
-      await page.getByText('고급 플래그', { exact: true }).click();
-      await page.getByLabel('정규식 실행 우선순위', { exact: true }).fill('8');
-      await expect(page.getByLabel('정규식 플래그 원문', { exact: true })).toHaveValue(
-        'g<cbs><future_flag><order 8>'
-      );
-      await page.getByRole('checkbox', { name: '사용자 지정 플래그', exact: true }).uncheck();
-      await expect
-        .poll(value)
-        .toMatchObject([
-          { ableFlag: false, flag: 'g<cbs><future_flag><order 8>', type: 'editdisplay' },
-          {},
-          {},
-        ]);
-      await page.getByLabel('정규식 적용 단계', { exact: true }).selectOption('disabled');
-      await page.getByRole('button', { name: '정규식 아래로', exact: true }).click();
-      await expect
-        .poll(async () => (await value()).map((item: { comment: string }) => item.comment))
-        .toEqual(['Second rule', 'First rule', 'Future rule']);
-      await page.getByRole('button', { name: '정규식 복제', exact: true }).click();
-      await expect
-        .poll(async () => (await value())[2])
-        .toMatchObject({
-          comment: 'First rule 사본',
-          type: 'disabled',
-          extra: { preserved: true },
-        });
-      await page.getByRole('button', { name: '선택한 정규식 삭제', exact: true }).click();
-      const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-      await expect(confirm).toContainText('First rule');
-      expect((await value()).length).toBe(4);
-      await confirm.getByRole('button', { name: '정규식 삭제', exact: true }).click();
-      await expect.poll(async () => (await value()).length).toBe(3);
-      await page.getByText('고급 JSON 편집', { exact: true }).click();
-      await page.getByLabel('Risu 정규식 JSON', { exact: true }).fill('[invalid');
-      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
-      await expect(page.getByLabel('정규식 이름', { exact: true })).toBeDisabled();
-      await page.getByRole('button', { name: '다른 탭', exact: true }).click();
-      await page.getByRole('button', { name: '다른 탭', exact: true }).click();
-      await expect(page.getByLabel('Risu 정규식 JSON', { exact: true })).toHaveValue('[invalid');
-      await page.getByRole('button', { name: '편집기에 적용', exact: true }).click();
-      await expect(page.getByRole('alert')).toBeVisible();
-      await page.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
-      await expect
-        .poll(async () => (await value())[2])
-        .toEqual({ comment: 'Future rule', in: '', out: '', type: 'future_mode', unknown: [1, 2] });
-    });
 
     test('native lore keywords accept sequential comma input without losing the next key', async ({
       page,

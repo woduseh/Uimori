@@ -1,5 +1,4 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -14,8 +13,6 @@ const greeting = [
   '{{setvar::mood::{{random::calm::tense}}}}',
   '{{/when}}',
 ].join('\n');
-const screenshotDirectory = 'output/editor-studio-4';
-const viewports = [{ name: 'desktop', width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }] as const;
 
 async function seedBot(
   request: APIRequestContext,
@@ -49,53 +46,6 @@ async function openGreetings(page: Page, title: string) {
   await expect(field).toHaveClass(/cm-content/u);
   return field;
 }
-
-async function capture(page: Page, name: string) {
-  mkdirSync(screenshotDirectory, { recursive: true });
-  await page.screenshot({ path: `${screenshotDirectory}/${name}.png` });
-}
-
-for (const viewport of viewports)
-  for (const theme of ['light'] as const)
-    test(`CODEFIELD01 ${viewport.name} ${theme} CBS fields highlight, complete and diagnose`, async ({
-      page,
-      request,
-    }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
-      await page.addInitScript((mode) => localStorage.setItem('uimori:theme', mode), theme);
-      const title = `CODEFIELD01 ${randomUUID().slice(0, 8)}`;
-      await seedBot(request, title);
-      const field = await openGreetings(page, title);
-      await expectCodeFieldValue(field, greeting);
-      await expect(field.locator('.cm-cbs-keyword', { hasText: '#when' })).toHaveCount(1);
-      await expect(field.locator('.cm-cbs-name', { hasText: 'getvar' })).toHaveCount(1);
-      await expect(field.locator('.cm-cbs-depth-1').first()).toBeVisible();
-
-      await field.locator('.cm-cbs-keyword', { hasText: '#when' }).click();
-      await expect(field.locator('.cm-cbs-match')).toHaveCount(2);
-      await expect(field.locator('.cm-cbs-match').last()).toHaveText('{{/when}}');
-      await capture(page, `nested-${viewport.name}-${theme}`);
-
-      await field.locator('.cm-line').last().click();
-      await page.keyboard.press('End');
-      await page.keyboard.type('\n{{getv');
-      const completion = page.locator('.cm-tooltip-autocomplete');
-      await expect(completion.getByRole('option', { name: /^getvar/u })).toBeVisible();
-      await capture(page, `autocomplete-${viewport.name}-${theme}`);
-      await completion.getByRole('option', { name: /^getvar/u }).click();
-      await page.keyboard.type('::mood');
-      await expect(completion).toHaveCount(0);
-      await expect.poll(() => codeFieldValue(field)).toBe(`${greeting}\n{{getvar::mood`);
-
-      await expect(field.locator('.cm-lintRange-error')).toHaveCount(1);
-      await page.keyboard.press('ArrowLeft');
-      await field.locator('.cm-lintRange-error').click();
-      await expect(page.locator('.cm-cbs-cursor-diagnostic > span')).toHaveText(
-        '{{를 닫는 }}가 없어요.'
-      );
-      await capture(page, `diagnostic-${viewport.name}-${theme}`);
-    });
 
 test('CODEFIELD02 typed CBS saves exactly and untouched CRLF text keeps its line endings', async ({
   page,

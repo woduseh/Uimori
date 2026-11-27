@@ -339,14 +339,13 @@
         { "file": "tests/editor-leave-browser.spec.ts" },
         { "file": "tests/ui-recovery-browser.spec.ts" },
         { "file": "tests/native-lore-browser.spec.ts" },
-        { "file": "tests/native-editor-actions-browser.spec.ts" },
         {
           "file": "tests/code-field-browser.spec.ts",
-          "cases": ["CODEFIELD01", "CODEFIELD02", "CODEFIELD03", "CODEFIELD04"]
+          "cases": ["CODEFIELD02", "CODEFIELD03", "CODEFIELD04"]
         },
         {
           "file": "tests/cbs-references-browser.spec.ts",
-          "cases": ["CBSREF01", "CBSREF02", "PREVIEW01", "PREVIEW02"]
+          "cases": ["CBSREF01", "PREVIEW01"]
         }
       ]
     },

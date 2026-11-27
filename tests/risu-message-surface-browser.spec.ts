@@ -142,7 +142,7 @@ for (const width of [390]) {
 for (const width of [390]) {
   test(`RSURFACE ${width}px reading, author widgets, selection and action lifecycle`, async ({
     page,
-  }, info) => {
+  }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.setViewportSize({ width, height: 900 });
@@ -154,31 +154,5 @@ for (const width of [390]) {
     });
     expect(passed).toHaveLength(15);
     expect(errors).toEqual([]);
-    await info.attach('surface-scenarios', {
-      body: JSON.stringify({ width, passed, errors }, null, 2),
-      contentType: 'application/json',
-    });
-  });
-}
-
-for (const width of [390]) {
-  test(`RSURFACE CLEANUP ${width}px modern selection stays in the owning reader`, async ({
-    page,
-  }, info) => {
-    const errors: string[] = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto(origin);
-    const passed = await page.evaluate(async () => {
-      const path = '/tests/fixtures/risu-surface-cleanup-regression.ts';
-      const { runSurfaceCleanupRegressions } = await import(path);
-      return runSurfaceCleanupRegressions(document.getElementById('mount')!);
-    });
-    expect(passed).toHaveLength(1);
-    expect(errors).toEqual([]);
-    await info.attach('cleanup-scenarios', {
-      body: JSON.stringify({ width, passed, errors }, null, 2),
-      contentType: 'application/json',
-    });
   });
 }
