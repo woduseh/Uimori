@@ -199,7 +199,9 @@ for (const viewport of viewports) {
       await raw.fill(duplicateKey);
       await definitions.getByRole('button', { name: '소스 적용', exact: true }).click();
       await expect(
-        editor.getByRole('alert').filter({ hasText: 'RISU_NATIVE_PRESET_TOGGLE_KEY' })
+        editor
+          .getByRole('alert')
+          .filter({ hasText: '토글 키가 겹치거나, 120자를 넘거나, 제어 문자를 포함하고 있어요.' })
       ).toBeVisible();
       await expect(raw).toHaveValue(duplicateKey);
       await raw.fill(declarations);

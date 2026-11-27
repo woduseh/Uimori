@@ -1,4 +1,5 @@
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
+import { ValidationError } from './validation-error.js';
 
 export type PackageStart = {
   id: string;
@@ -66,7 +67,13 @@ export function validatePackageStarts(value: unknown): PackageStart[] {
         (typeof item.description !== 'string' || item.description.length > 2000))
     )
       fail('PACKAGE_START_INVALID_TEXT');
-    if ((item.text as string).length > SOURCE_TEXT_MAX_CHARS) fail('PACKAGE_START_TEXT_TOO_LONG');
+    if ((item.text as string).length > SOURCE_TEXT_MAX_CHARS)
+      throw new ValidationError(
+        400,
+        'PACKAGE_START_TEXT_TOO_LONG',
+        'starts[].text: expected at most ' + SOURCE_TEXT_MAX_CHARS + ' characters.',
+        { limit: SOURCE_TEXT_MAX_CHARS }
+      );
   }
   return structuredClone(value) as PackageStart[];
 }

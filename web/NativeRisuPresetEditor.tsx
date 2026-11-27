@@ -12,7 +12,13 @@ import {
   nativeRisuPresetSource,
   nativeRisuToggleItems,
 } from '../core/risu-native-preset.js';
-import { validateRisuPrompt, type RisuPrompt, type PromptValue } from '../core/risu-prompt.js';
+import {
+  RisuPromptError,
+  validateRisuPrompt,
+  type RisuPrompt,
+  type PromptValue,
+} from '../core/risu-prompt.js';
+import { errorDescriptor } from './api-errors.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { NativeRisuRegexEditor } from './NativeRisuRegexEditor.js';
 import { StudioPanel, useStudioItem } from './EditorStudio.js';
@@ -59,6 +65,15 @@ type Section = PresetSection;
 let regexJumpEpoch = 0;
 type BlockDropTarget = { index: number; position: 'before' | 'after' };
 
+export function checkedPresetProgram(program: unknown): RisuPrompt {
+  try {
+    return validateRisuPrompt(program);
+  } catch (cause) {
+    if (cause instanceof RisuPromptError)
+      throw new Error(uiMessage('native.presetProgramInvalid', { code: cause.code }), { cause });
+    throw cause;
+  }
+}
 export function NativeRisuPresetEditor({
   program,
   onChange,
@@ -149,7 +164,7 @@ export function NativeRisuPresetEditor({
     const input = { ...model.program.nativeRisuPreset.preset, ...patch };
     return {
       ...model,
-      program: validateRisuPrompt({
+      program: checkedPresetProgram({
         ...model.program,
         ...createNativeRisuPresetProgram(nativeRisuPresetSource(input)),
       }),
@@ -198,7 +213,7 @@ export function NativeRisuPresetEditor({
       setError('');
       if (part) mark(part, false);
     } catch (caught) {
-      setError((caught as Error).message);
+      setError(errorDescriptor(caught));
       if (part) mark(part, true);
     }
   }

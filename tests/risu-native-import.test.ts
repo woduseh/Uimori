@@ -424,9 +424,9 @@ test('native envelope validation rejects invalid source, non-JSON values and unr
   const pkg = file.contents[0].source.package!;
   expect(() =>
     validateRisuContent({ ...pkg, nativeRisu: { ...pkg.nativeRisu, sourceHash: 'invalid' } })
-  ).toThrow('PACKAGE_NATIVE_RISU_INVALID');
+  ).toThrow(expect.objectContaining({ code: 'PACKAGE_NATIVE_RISU_INVALID' }));
   expect(() => validateRisuContentSource({ ...pkg.nativeRisu, card: { fn: () => 1 } })).toThrow(
-    'PACKAGE_NATIVE_RISU_JSON'
+    expect.objectContaining({ code: 'PACKAGE_NATIVE_RISU_JSON' })
   );
   expect(() =>
     validateRisuContent({

@@ -26,8 +26,6 @@ import { inputTranslationRoutes } from './input-translation.js';
 import { storyGuideRoutes } from './story-guide-routes.js';
 import { selectionRevisionRoutes } from './selection-revision.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
-import { PackageStartError } from '../core/package-start.js';
-import { RisuContentError } from '../core/risu-content.js';
 import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
@@ -970,12 +968,9 @@ export async function createApp(options: AppOptions): Promise<App> {
                 ? error.code
                 : 'NATIVE_TRANSFER_FILE_INVALID'
             )
-          : (error instanceof RisuContentError || error instanceof PackageStartError) &&
-              error.message === 'PACKAGE_START_TEXT_TOO_LONG'
-            ? new AppError(400, 'PACKAGE_START_TEXT_TOO_LONG', { limit: SOURCE_TEXT_MAX_CHARS })
-            : error instanceof ChatTranscriptError
-              ? new AppError(400, transcriptErrorCode(error.message))
-              : undefined;
+          : error instanceof ChatTranscriptError
+            ? new AppError(400, transcriptErrorCode(error.message))
+            : undefined;
     const statusCode =
       error && typeof error === 'object' && 'statusCode' in error ? error.statusCode : undefined;
     const code =

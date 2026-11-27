@@ -319,7 +319,7 @@ test('code.preview renders saved and replacement first messages with toggle valu
     package: nativeContent(invalidToggles),
   }) as Content;
   expect(await call(store, 'code.preview', { id: invalid.id })).toMatchObject({
-    failure: 'RISU_NATIVE_PRESET_TOGGLE_KEY',
+    failure: expect.stringMatching(/^RISU_NATIVE_PRESET_TOGGLE_KEY: Toggle key "same"/u),
   });
   const fancy = await call(store, 'code.preview', { id: bot.id, toggles: { style: '1' } });
   expect(fancy.html).toContain('fancy');

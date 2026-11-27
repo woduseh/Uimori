@@ -9,7 +9,7 @@ import type { Content } from '../core/product.js';
 import type { RisuContent } from '../core/risu-content.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { ValidationError } from '../core/validation-error.js';
-import { validationAppError } from './app-errors.js';
+import { asAppError, validationAppError } from './app-errors.js';
 import type { Store } from './store.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { executeRisuNative } from './risu-native-runtime.js';
@@ -91,7 +91,8 @@ async function renderStart(
     return { ...rendered, issues: [...new Set([...edited.warnings, ...rendered.issues])] };
   } catch (error) {
     if (error instanceof HttpError || signal?.aborted) throw error;
-    const message = error instanceof Error ? error.message : String(error);
+    const cause = asAppError(error);
+    const message = cause instanceof Error ? cause.message : String(cause);
     return { failure: message.slice(0, EVALUATION_MESSAGE_MAX_CHARS) };
   }
 }

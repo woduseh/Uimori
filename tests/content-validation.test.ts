@@ -127,7 +127,7 @@ test('native byte budgets bound source data without counting its derived lore tw
   const remainingBytes = 8 * 1024 * 1024 - Buffer.byteLength(JSON.stringify(input.nativeRisu));
   input.nativeRisu.card.extra = 'x'.repeat(remainingBytes);
   expect(() => compileContentAttachment(input, attachment, context)).toThrow(
-    'PACKAGE_NATIVE_RISU_LIMIT'
+    expect.objectContaining({ code: 'PACKAGE_NATIVE_RISU_LIMIT' })
   );
 });
 
@@ -154,5 +154,7 @@ test('native source validation rejects malformed structure, non-JSON values and 
     [{ card: { value: Number.NaN } }, 'PACKAGE_NATIVE_RISU_JSON'],
     [{ card: nested }, 'PACKAGE_NATIVE_RISU_LIMIT'],
   ] as const)
-    expect(() => validateRisuContentSource({ ...valid, ...changes })).toThrow(error);
+    expect(() => validateRisuContentSource({ ...valid, ...changes })).toThrow(
+      expect.objectContaining({ code: error })
+    );
 });

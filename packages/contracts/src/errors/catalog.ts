@@ -237,6 +237,13 @@ export type AppErrorParams = {
   TRANSLATION_GUIDE_TERM_INVALID: { term: number; limit: number };
   TRANSLATION_GUIDE_NOTE_TOO_LONG: { term: number; limit: number };
   LORE_PINNED_BUDGET_EXCEEDED: undefined;
+  PACKAGE_NATIVE_RISU_INVALID: undefined;
+  PACKAGE_NATIVE_RISU_ASSET: undefined;
+  PACKAGE_NATIVE_RISU_LIMIT: undefined;
+  PACKAGE_NATIVE_RISU_JSON: undefined;
+  ILLUSTRATION_PROFILES_INVALID: undefined;
+  RISU_NATIVE_PRESET_INVALID: undefined;
+  RISU_NATIVE_PRESET_TOGGLE_KEY: undefined;
 };
 
 export type AppErrorCode = keyof AppErrorParams;
@@ -484,6 +491,13 @@ const takesParams = {
   TRANSLATION_GUIDE_TERM_INVALID: true,
   TRANSLATION_GUIDE_NOTE_TOO_LONG: true,
   LORE_PINNED_BUDGET_EXCEEDED: false,
+  PACKAGE_NATIVE_RISU_INVALID: false,
+  PACKAGE_NATIVE_RISU_ASSET: false,
+  PACKAGE_NATIVE_RISU_LIMIT: false,
+  PACKAGE_NATIVE_RISU_JSON: false,
+  ILLUSTRATION_PROFILES_INVALID: false,
+  RISU_NATIVE_PRESET_INVALID: false,
+  RISU_NATIVE_PRESET_TOGGLE_KEY: false,
 } satisfies { [C in AppErrorCode]: AppErrorParams[C] extends undefined ? false : true };
 
 export const APP_ERROR_CODES = Object.keys(takesParams) as AppErrorCode[];

@@ -3,6 +3,7 @@ import {
   validateIllustrationAppearanceProfiles,
 } from './illustration-profiles.js';
 import { RISU_ASSET_MAX } from './risu-limits.js';
+import { ValidationError } from './validation-error.js';
 import { translationGuideValue, validateTranslationGuide } from './translation-guide.js';
 import {
   stripDeprecatedRisuCardFields,
@@ -190,6 +191,12 @@ function assetNames(
     ]),
   ];
 }
+const nativeLimit = () =>
+  new ValidationError(
+    400,
+    'PACKAGE_NATIVE_RISU_LIMIT',
+    'nativeRisu: at most 250000 values, 100 levels of nesting and 8 MiB.'
+  );
 export function assertRisuContentSource(value: unknown): asserts value is RisuContentSource {
   const source = object(value);
   if (
@@ -207,7 +214,11 @@ export function assertRisuContentSource(value: unknown): asserts value is RisuCo
     !Array.isArray(source.assets) ||
     source.assets.length > RISU_ASSET_MAX
   )
-    throw new Error('PACKAGE_NATIVE_RISU_INVALID');
+    throw new ValidationError(
+      400,
+      'PACKAGE_NATIVE_RISU_INVALID',
+      `nativeRisu: expected version 1, a card object, an optional module object, a 64-character hex sourceHash and at most ${RISU_ASSET_MAX} assets.`
+    );
   for (const document of [source.card, source.module]) {
     if (!document) continue;
     const guide = translationGuideValue(document as Record<string, unknown>);
@@ -226,21 +237,30 @@ export function assertRisuContentSource(value: unknown): asserts value is RisuCo
       typeof a.imageId !== 'string' ||
       !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/u.test(a.imageId)
     )
-      throw new Error('PACKAGE_NATIVE_RISU_ASSET');
+      throw new ValidationError(
+        400,
+        'PACKAGE_NATIVE_RISU_ASSET',
+        'nativeRisu.assets: each asset holds only name, uri and imageId within their limits.'
+      );
   }
   const pending: { value: unknown; depth: number }[] = [{ value: source, depth: 0 }];
   let count = 0;
   while (pending.length) {
     const next = pending.pop()!;
-    if (++count > 250_000 || next.depth > 100) throw new Error('PACKAGE_NATIVE_RISU_LIMIT');
+    if (++count > 250_000 || next.depth > 100) throw nativeLimit();
     if (next.value === null || ['string', 'boolean'].includes(typeof next.value)) continue;
     if (typeof next.value === 'number' && Number.isFinite(next.value)) continue;
-    if (typeof next.value !== 'object') throw new Error('PACKAGE_NATIVE_RISU_JSON');
+    if (typeof next.value !== 'object')
+      throw new ValidationError(
+        400,
+        'PACKAGE_NATIVE_RISU_JSON',
+        'nativeRisu: only null, strings, booleans, finite numbers, arrays and objects are allowed.'
+      );
     for (const item of Object.values(next.value))
       pending.push({ value: item, depth: next.depth + 1 });
   }
   if (new TextEncoder().encode(JSON.stringify(source)).byteLength > 8 * 1024 * 1024)
-    throw new Error('PACKAGE_NATIVE_RISU_LIMIT');
+    throw nativeLimit();
 }
 
 export function validateRisuContentSource(value: unknown): RisuContentSource {

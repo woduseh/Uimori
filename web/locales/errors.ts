@@ -2155,6 +2155,48 @@ export const messages = {
     ja: '表記{term}: 原文と使用する表記をそれぞれ{limit, number}文字以内で入力してください。',
     zh: '译名{term}：请分别输入原文和要使用的译名，各不超过{limit, number}个字符。',
   },
+  'errors.PACKAGE_NATIVE_RISU_INVALID': {
+    ko: 'Risu 원본 데이터의 구조가 올바르지 않아요. 카드나 모듈은 JSON 객체여야 해요.',
+    en: 'The Risu source data has an invalid structure. A card or module must be a JSON object.',
+    ja: 'Risuの元データの構造が正しくありません。カードやモジュールはJSONオブジェクトである必要があります。',
+    zh: 'Risu 源数据的结构不正确。卡片或模块必须是 JSON 对象。',
+  },
+  'errors.PACKAGE_NATIVE_RISU_ASSET': {
+    ko: 'Risu 원본의 에셋 항목을 확인해 주세요. 이름, 주소와 이미지 ID가 필요해요.',
+    en: 'Check the asset entries in the Risu source. Each needs a name, a URI and an image ID.',
+    ja: 'Risuの元データのアセット項目を確認してください。名前、URI、画像IDが必要です。',
+    zh: '请检查 Risu 源数据中的资源条目。每项都需要名称、URI 和图片 ID。',
+  },
+  'errors.PACKAGE_NATIVE_RISU_LIMIT': {
+    ko: 'Risu 원본 데이터가 너무 크거나 너무 깊게 중첩되어 있어요.',
+    en: 'The Risu source data is too large or nested too deeply.',
+    ja: 'Risuの元データが大きすぎるか、入れ子が深すぎます。',
+    zh: 'Risu 源数据过大或嵌套过深。',
+  },
+  'errors.PACKAGE_NATIVE_RISU_JSON': {
+    ko: 'Risu 원본에는 JSON으로 저장할 수 있는 값만 넣을 수 있어요.',
+    en: 'The Risu source can hold only values that JSON can store.',
+    ja: 'Risuの元データにはJSONで保存できる値だけを入れられます。',
+    zh: 'Risu 源数据只能包含可以用 JSON 保存的值。',
+  },
+  'errors.ILLUSTRATION_PROFILES_INVALID': {
+    ko: '삽화 외형 프로필을 확인해 주세요. 프로필마다 고유한 ID, 이름과 외형 설명이 필요해요.',
+    en: 'Check the illustration appearance profiles. Each needs a unique ID, a name and an appearance.',
+    ja: '挿絵の外見プロフィールを確認してください。各プロフィールに固有のID、名前、外見の説明が必要です。',
+    zh: '请检查插图外貌档案。每个档案都需要唯一的 ID、名称和外貌描述。',
+  },
+  'errors.RISU_NATIVE_PRESET_INVALID': {
+    ko: 'Risu 프리셋 원본의 구조가 올바르지 않아요.',
+    en: 'The Risu preset source has an invalid structure.',
+    ja: 'Risuプリセットの元データの構造が正しくありません。',
+    zh: 'Risu 预设源数据的结构不正确。',
+  },
+  'errors.RISU_NATIVE_PRESET_TOGGLE_KEY': {
+    ko: '토글 키가 겹치거나, 120자를 넘거나, 제어 문자를 포함하고 있어요.',
+    en: 'A toggle key is repeated, longer than 120 characters or contains a control character.',
+    ja: 'トグルのキーが重複しているか、120文字を超えているか、制御文字を含んでいます。',
+    zh: '开关键重复、超过 120 个字符或包含控制字符。',
+  },
   'errors.LORE_PINNED_BUDGET_EXCEEDED': {
     ko: '고정 자료가 설정한 토큰 한도를 초과했어요. 자료를 줄이거나 고정 자료 한도를 조정해 주세요.',
     en: 'Pinned sources exceed the token limit you set. Reduce the sources or adjust the pinned-source limit.',

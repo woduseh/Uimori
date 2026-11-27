@@ -1,6 +1,7 @@
 import type { PromptControl, RisuPrompt } from './risu-prompt.js';
 import { stripDeprecatedRisuPresetFields } from './risu-deprecated-fields.js';
 import { nativeChatMlMessages } from './risu-native-messages.js';
+import { ValidationError } from './validation-error.js';
 
 export type NativeRisuPreset = { version: 1; preset: Record<string, unknown> };
 export type NativeRisuPresetExecution = {
@@ -56,6 +57,12 @@ export function nativeRisuPresetSource(value: unknown): NativeRisuPreset {
   stripDeprecatedRisuPresetFields(preset);
   return validateNativeRisuPreset({ version: 1, preset });
 }
+const presetInvalid = () =>
+  new ValidationError(
+    400,
+    'RISU_NATIVE_PRESET_INVALID',
+    'nativeRisuPreset: expected version 1 with known preset fields, a promptTemplate array of objects and regex lists of at most 2000 items.'
+  );
 export function validateNativeRisuPreset(value: unknown): NativeRisuPreset {
   const item = object(value),
     preset = object(item.preset);
@@ -66,14 +73,14 @@ export function validateNativeRisuPreset(value: unknown): NativeRisuPreset {
     !Array.isArray(preset.promptTemplate) ||
     Object.keys(object(preset.promptSettings)).some((key) => !settingKeys.has(key))
   )
-    throw new Error('RISU_NATIVE_PRESET_INVALID');
+    throw presetInvalid();
   if (
     preset.promptTemplate.some((item) => !item || typeof item !== 'object' || Array.isArray(item))
   )
-    throw new Error('RISU_NATIVE_PRESET_INVALID');
+    throw presetInvalid();
   for (const key of ['regex', 'presetRegex'])
     if (preset[key] !== undefined && (!Array.isArray(preset[key]) || preset[key].length > 2000))
-      throw new Error('RISU_NATIVE_PRESET_INVALID');
+      throw presetInvalid();
   return structuredClone(value) as NativeRisuPreset;
 }
 
@@ -102,7 +109,11 @@ export function nativeRisuToggleItems(declaration: string): NativeRisuToggleItem
     }
     if (!key || !label) continue;
     if (key.length > 120 || /\p{Cc}/u.test(key) || seen.has(key))
-      throw new Error('RISU_NATIVE_PRESET_TOGGLE_KEY');
+      throw new ValidationError(
+        400,
+        'RISU_NATIVE_PRESET_TOGGLE_KEY',
+        `Toggle key "${key.slice(0, 120)}" is repeated, longer than 120 characters or contains a control character.`
+      );
     seen.add(key);
     const text = type === 'text' || type === 'textarea';
     const control: PromptControl = {

@@ -93,7 +93,12 @@ test('greeting text at the stored message limit is preserved and oversized text 
     mode: 'authored',
     text: 'a'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
   };
-  expect(() => validatePackageStarts([start])).toThrow('PACKAGE_START_TEXT_TOO_LONG');
+  expect(() => validatePackageStarts([start])).toThrow(
+    expect.objectContaining({
+      code: 'PACKAGE_START_TEXT_TOO_LONG',
+      params: { limit: SOURCE_TEXT_MAX_CHARS },
+    })
+  );
   expect(() => validatePackageStarts([{ ...start, text: null }])).toThrow(
     'PACKAGE_START_INVALID_TEXT'
   );

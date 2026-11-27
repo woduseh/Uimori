@@ -18,9 +18,10 @@ import {
 } from '../core/risu-prompt.js';
 import type { Content } from '../core/product.js';
 import { RisuContentError } from '../core/risu-content.js';
+import { ValidationError } from '../core/validation-error.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
-import { HelperToolError } from './app-errors.js';
+import { asAppError, HelperToolError } from './app-errors.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readPreviousResource, readResource, saveResource } from './resource-service.js';
 import {
@@ -965,9 +966,10 @@ export function patchHelperResource(
   } catch (error) {
     if (
       (error instanceof HttpError && error.statusCode === 400) ||
-      error instanceof RisuContentError
+      error instanceof RisuContentError ||
+      error instanceof ValidationError
     )
-      validationFailure(error);
+      validationFailure(asAppError(error));
     throw error;
   }
   return {

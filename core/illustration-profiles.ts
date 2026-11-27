@@ -1,4 +1,5 @@
 import type { IllustrationCharacterProfile } from './illustration.js';
+import { ValidationError } from './validation-error.js';
 
 export type IllustrationAppearanceProfile = Pick<
   IllustrationCharacterProfile,
@@ -31,11 +32,13 @@ export function withIllustrationAppearanceProfiles(
     },
   };
 }
+const profilesInvalid = (detail: string) =>
+  new ValidationError(400, 'ILLUSTRATION_PROFILES_INVALID', `illustrationProfiles: ${detail}`);
 export function validateIllustrationAppearanceProfiles(
   value: unknown
 ): IllustrationAppearanceProfile[] {
   if (!Array.isArray(value) || value.length > 32)
-    throw new Error('Invalid illustration appearance profiles');
+    throw profilesInvalid('expected an array of at most 32 profiles.');
   const ids = new Set<string>();
   for (const entry of value) {
     const item = object(entry);
@@ -57,7 +60,9 @@ export function validateIllustrationAppearanceProfiles(
         (typeof item.referenceImageId !== 'string' ||
           !/^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/u.test(item.referenceImageId)))
     )
-      throw new Error('Invalid illustration appearance profile');
+      throw profilesInvalid(
+        'each profile holds a unique id, a name, an appearance and an optional referenceImageId within their limits.'
+      );
     ids.add(item.id);
   }
   return structuredClone(value) as IllustrationAppearanceProfile[];
