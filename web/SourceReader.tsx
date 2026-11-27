@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
 import { UiError, uiMessage, type UiMessage, formatUiMessage } from './ui-message.js';
 import type { RequestImage } from '../core/request-images.js';
@@ -1321,7 +1321,7 @@ function SourceReaderContent({
           />
           {presentation?.error && (
             <p className="error" role="alert">
-              {translateMessage(presentation.error)}
+              {formatUiMessage(presentation.error)}
             </p>
           )}
           <PackagePresentationIssues data={presentation?.data} />

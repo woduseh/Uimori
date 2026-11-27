@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
 import { downloadArchive } from '../web/archive-download.js';
-import { loadLocale, setLocale, translateMessage, UI_LOCALES } from '../web/i18n.js';
-import { formatUiMessage } from '../web/ui-message.js';
+import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
+import { formatUiMessage, uiMessage } from '../web/ui-message.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
@@ -22,11 +22,7 @@ async function rejectedWith(status: number, body: unknown, method = 'POST') {
   return result as ApiError;
 }
 
-const shown = (error: ApiError) => {
-  const text = formatUiMessage(error.uiMessage);
-  expect(translateMessage(error.message)).toBe(text);
-  return text;
-};
+const shown = (error: ApiError) => formatUiMessage(error.uiMessage);
 
 test('unavailable models retain only the role code and show the current selection paths', async () => {
   const result = await rejectedWith(409, { code: 'MODEL_UNAVAILABLE', params: { role: 'main' } });
@@ -93,14 +89,17 @@ test('missing-translation scene labels render in the language shown, including a
 test('a catalogued code still arriving as a legacy error string uses the catalog message', async () => {
   const legacy = await rejected(422, 'INPUT_TRANSLATION_REFUSED');
   const coded = await rejectedWith(422, { code: 'INPUT_TRANSLATION_REFUSED' });
-  expect(legacy).toMatchObject({ code: 'INPUT_TRANSLATION_REFUSED', message: coded.message });
+  expect(legacy.code).toBe('INPUT_TRANSLATION_REFUSED');
+  expect(legacy.uiMessage).toEqual(coded.uiMessage);
   setLocale('en');
   expect(shown(legacy)).toBe('The translation model refused to translate this input.');
 });
 
 test('a legacy error string naming a code that needs params falls back instead of formatting', async () => {
   const result = await rejected(422, 'INPUT_TRANSLATION_TOO_LONG');
-  expect(result).toMatchObject({ status: 422, message: expect.any(String) });
+  expect(result.status).toBe(422);
+  expect(result.code).toBeNull();
+  expect(shown(result)).toBe(formatUiMessage(uiMessage('errors.requestFailed', { status: 422 })));
 });
 
 test('archive downloads show coded errors and keep their own fallback for an empty body', async () => {
@@ -117,7 +116,9 @@ test('archive downloads show coded errors and keep their own fallback for an emp
   expect(cycle.code).toBe('RESOURCE_BUNDLE_MODULE_CYCLE');
   expect(shown(cycle)).toBe('모듈 연결에 순환이 있어요.');
   const uncoded = await download(JSON.stringify({ error: 'Request failed' }), 500);
-  expect(uncoded.message).toBe((await rejectedWith(500, { error: 'Request failed' })).message);
+  expect(uncoded.uiMessage).toEqual(
+    (await rejectedWith(500, { error: 'Request failed' })).uiMessage
+  );
   const empty = await download('', 500);
   expect(empty.code).toBeNull();
   expect(shown(empty)).toBe('백업 파일을 받지 못했어요.');

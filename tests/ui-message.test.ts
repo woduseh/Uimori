@@ -3,19 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { emptyTheme, validateTheme } from '../core/themes.js';
 import { api, ApiError } from '../web/api.js';
-import { errorDescriptor, toUiMessage } from '../web/api-errors.js';
+import { toUiMessage } from '../web/api-errors.js';
 import { DismissibleError } from '../web/DismissibleError.js';
-import { loadLocale, message, setLocale, t, translateMessage, UI_LOCALES } from '../web/i18n.js';
+import { loadLocale, setLocale, t, UI_LOCALES } from '../web/i18n.js';
 import { LoadingState } from '../web/LoadingState.js';
 import { NoticeBanner } from '../web/NoticeBanner.js';
-import {
-  formatUiMessage,
-  legacyMessageString,
-  legacyUiMessage,
-  UiError,
-  uiMessage,
-  uiText,
-} from '../web/ui-message.js';
+import { formatUiMessage, UiError, uiMessage, uiText } from '../web/ui-message.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
@@ -24,20 +17,21 @@ afterEach(() => {
   setLocale('ko');
 });
 
+const hangul = /[가-힣]/u;
+
 test("an error's own text never becomes the shown message", () => {
   const unexpected = uiMessage('errors.unexpected');
   for (const cause of [
     new TypeError('Failed to fetch'),
     new Error('The model refused: content policy'),
-    new Error('\u001fui:{"key":"no.such.key"}\u001e'),
-    new Error(`${message('shared.loadFailed')} trailing English`),
+    new Error('shared.loadFailed'),
     'raw text',
     null,
     { message: 'not an error' },
   ])
     expect(toUiMessage(cause)).toEqual(unexpected);
   expect(toUiMessage(new Error('x'), 'shared.loadFailed')).toEqual(uiMessage('shared.loadFailed'));
-  const shown = translateMessage(errorDescriptor(new TypeError('Failed to fetch')));
+  const shown = formatUiMessage(toUiMessage(new TypeError('Failed to fetch')));
   expect(shown).toBe(t('errors.unexpected'));
   expect(shown).not.toContain('Failed to fetch');
 });
@@ -54,7 +48,6 @@ test('thrown UI, API and core validation errors keep their catalog message acros
   expect(rejected).toBeInstanceOf(ApiError);
   const fromApi = toUiMessage(rejected);
   expect(fromApi).toBe((rejected as ApiError).uiMessage);
-  expect(translateMessage((rejected as ApiError).message)).toBe(formatUiMessage(fromApi));
   let invalid: unknown;
   try {
     validateTheme({ ...emptyTheme('Long'), appCss: 'x'.repeat(1_000_001) });
@@ -69,30 +62,21 @@ test('thrown UI, API and core validation errors keep their catalog message acros
   expect(formatUiMessage(fromCore)).toBe('App CSS: Enter text of up to 1,000,000 characters.');
 });
 
-test('only a UiError carries its catalog message; a descriptor in a plain Error does not', () => {
+test("a UiError's own message is a diagnostic in no interface language", () => {
   const scene = uiMessage('errors.scene', { scene: 3 });
-  expect(toUiMessage(new Error(message('errors.scene', { scene: 3 })))).toEqual(
-    uiMessage('errors.unexpected')
-  );
   const listed = uiMessage('shared.deleteQuestion', {
     title: [scene, uiText(', '), uiMessage('errors.firstMessage'), uiText(', …')],
   });
-  for (const value of [
-    scene,
-    uiMessage('shared.deleteQuestion', { title: uiText('Alice') }),
-    uiMessage('shared.deleteQuestion', { title: scene }),
-    listed,
-  ]) {
+  for (const value of [scene, uiMessage('shared.deleteQuestion', { title: scene }), listed]) {
     const error = new UiError(value);
     expect(toUiMessage(error)).toBe(value);
-    for (const locale of ['ko', 'en'] as const) {
-      setLocale(locale);
-      expect(translateMessage(error.message)).toBe(formatUiMessage(value));
-    }
+    expect(error.message).toContain(value.kind === 'key' ? value.key : '');
+    expect(error.message).not.toMatch(hangul);
+    expect(error.message).not.toBe(formatUiMessage(value, 'en'));
   }
 });
 
-test('nested and listed values format in the language being shown', () => {
+test('nested and listed values format in the language being shown, and raw text stays verbatim', () => {
   const listed = uiMessage('shared.deleteQuestion', {
     title: [
       uiMessage('errors.firstMessage'),
@@ -100,17 +84,21 @@ test('nested and listed values format in the language being shown', () => {
       uiMessage('errors.scene', { scene: 2 }),
     ],
   });
-  const korean = formatUiMessage(listed);
-  expect(korean).toContain('첫 메시지, 장면 2');
-  expect(translateMessage(legacyMessageString(listed))).toBe(korean);
+  const manuscript = uiMessage('helpers.modelRefreshFailed', {
+    error: [uiText('사용자 원고 · '), uiMessage('shared.loadFailed')],
+  });
+  expect(formatUiMessage(listed)).toContain('첫 메시지, 장면 2');
   setLocale('en');
   expect(formatUiMessage(listed)).toContain('First message, Scene 2');
-  expect(formatUiMessage(uiText('\u001fui:{"key":"shared.loadFailed"}\u001e'))).toBe(
-    '\u001fui:{"key":"shared.loadFailed"}\u001e'
+  expect(formatUiMessage(manuscript)).toBe(
+    'The assistant model changed, but settings could not be refreshed: 사용자 원고 · Could not load.'
+  );
+  expect(formatUiMessage(uiText('The model refused: 원고를 거절했어요'))).toBe(
+    'The model refused: 원고를 거절했어요'
   );
 });
 
-test('shared components render a UiMessage and a legacy descriptor in the language being shown', () => {
+test('shared components render a UiMessage in the language being shown', () => {
   const failed = uiMessage('shared.loadFailed');
   const banner = { tone: 'error' as const, label: failed, children: failed };
   const render = () =>
@@ -119,10 +107,7 @@ test('shared components render a UiMessage and a legacy descriptor in the langua
         'div',
         null,
         createElement(NoticeBanner, banner),
-        createElement(LoadingState, {
-          error: failed,
-          errorLabel: legacyUiMessage(message('shared.loadFailed'))!,
-        }),
+        createElement(LoadingState, { error: failed, errorLabel: failed }),
         createElement(DismissibleError, { error: failed, onDismiss: () => {} })
       )
     );
@@ -132,29 +117,15 @@ test('shared components render a UiMessage and a legacy descriptor in the langua
   const english = render();
   expect(english.split('Could not load.').length - 1).toBe(5);
   expect(english).not.toContain('불러오지 못했어요');
-  expect(english).not.toContain('\u001f');
 });
 
-test('a legacy string keeps one identity across a language switch and renders in the language shown', () => {
-  const descriptor = message('shared.deleteQuestion', { title: 'Alice' });
-  const korean = legacyUiMessage(descriptor)!;
-  expect(formatUiMessage(korean)).toBe(t('shared.deleteQuestion', { title: 'Alice' }));
-  setLocale('en');
-  const english = legacyUiMessage(descriptor)!;
-  expect(JSON.stringify(english)).toBe(JSON.stringify(korean));
-  expect(formatUiMessage(korean)).toBe(t('shared.deleteQuestion', { title: 'Alice' }));
-  expect(formatUiMessage(korean)).not.toContain('\u001f');
-});
-
-test('an empty legacy string shows no error or notice', () => {
-  expect(legacyUiMessage('')).toBeNull();
-  expect(legacyUiMessage(undefined)).toBeNull();
+test('no error or notice shows when there is none', () => {
   const markup = renderToStaticMarkup(
     createElement(
       'div',
       null,
-      createElement(LoadingState, { loading: false, error: legacyUiMessage('') }),
-      createElement(DismissibleError, { error: legacyUiMessage(''), onDismiss: () => {} })
+      createElement(LoadingState, { loading: false, error: null }),
+      createElement(DismissibleError, { error: null, onDismiss: () => {} })
     )
   );
   expect(markup).toBe('<div></div>');

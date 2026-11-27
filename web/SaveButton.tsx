@@ -1,4 +1,4 @@
-import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import type { ComponentPropsWithRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { RunningIcon, SaveIcon } from './ui-icons.js';
@@ -13,7 +13,7 @@ type Props = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & 
 
 export function SaveButton({
   label,
-  text = legacyDescriptor('shared.save'),
+  text,
   icon: Icon = SaveIcon,
   className = '',
   type = 'submit',
@@ -23,8 +23,9 @@ export function SaveButton({
 }: Props) {
   useI18n();
   const busy = ariaBusy === true || ariaBusy === 'true';
-  const pendingText = text
-    ? text === legacyDescriptor('shared.save') || text === t('shared.save')
+  const shown = text ?? t('shared.save');
+  const pendingText = shown
+    ? text === undefined || text === t('shared.save')
       ? t('shared.saving')
       : t('shared.working')
     : '';
@@ -33,12 +34,12 @@ export function SaveButton({
       {...props}
       type={type}
       className={`settings-save-button ${className}`}
-      aria-label={translateMessage(label)}
-      title={translateMessage(label)}
+      aria-label={label}
+      title={label}
       disabled={disabled || busy}
       aria-busy={ariaBusy}
     >
-      {text ? (
+      {shown ? (
         <span className="settings-save-label" data-pending-label={pendingText}>
           <span className="settings-save-content">
             {busy ? (
@@ -46,7 +47,7 @@ export function SaveButton({
             ) : (
               <Icon size={18} aria-hidden="true" />
             )}
-            <span>{busy ? pendingText : translateMessage(text)}</span>
+            <span>{busy ? pendingText : shown}</span>
           </span>
         </span>
       ) : busy ? (

@@ -8,18 +8,5 @@
       "count": 2,
       "reason": "ProviderRejection.message is the provider's own diagnostic, stored in attempts.response and provider_connection_tests.body and shown verbatim under its details."
     }
-  },
-  "debt": {
-    "web/DraftDiscardActions.tsx": 1,
-    "web/SaveConflictDialog.tsx": 1
-  },
-  "legacyDescriptors": [
-    "web/DraftDiscardActions.tsx",
-    "web/IconButton.tsx",
-    "web/PackagePresentation.tsx",
-    "web/SaveButton.tsx",
-    "web/SaveConflictDialog.tsx",
-    "web/SourceReader.tsx",
-    "web/api-errors.ts"
-  ]
+  }
 }

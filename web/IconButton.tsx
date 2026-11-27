@@ -1,4 +1,4 @@
-import { translateMessage, useI18n } from './i18n.js';
+import { useI18n } from './i18n.js';
 import { useId, type ComponentPropsWithRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import './ui-controls.css';
@@ -23,14 +23,14 @@ export function IconButton({
 }: Props) {
   useI18n();
   const tooltipId = useId();
-  const tooltip = title ? translateMessage(title) : '';
+  const tooltip = title ?? '';
   return (
     <button
       {...props}
       {...(tooltip ? { interestfor: tooltipId } : {})}
       type={type}
       className={`icon-button ui-icon-button${text ? ' ui-icon-text-button' : ''} ${className}`}
-      aria-label={translateMessage(label)}
+      aria-label={label}
     >
       <Icon size={size} aria-hidden="true" />
       {text && <span className="ui-icon-button-text">{text}</span>}

@@ -1,4 +1,6 @@
-import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import { CloseIcon, EditIcon, SaveIcon } from './ui-icons.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -9,8 +11,8 @@ export function DraftDiscardActions({
   onDiscard,
   onSave,
   onSavingChange,
-  discardLabel = legacyDescriptor('shared.discardLeave'),
-  saveLabel = legacyDescriptor('shared.saveLeave'),
+  discardLabel,
+  saveLabel,
   disabled = false,
   open = true,
 }: {
@@ -26,10 +28,10 @@ export function DraftDiscardActions({
   useI18n();
   const continueButton = useRef<HTMLButtonElement>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   useEffect(() => {
     if (!open) return;
-    setError('');
+    setError(null);
     const frame = requestAnimationFrame(() => continueButton.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [open]);
@@ -43,7 +45,7 @@ export function DraftDiscardActions({
           onClick={onDiscard}
         >
           <CloseIcon size={18} aria-hidden="true" />
-          {translateMessage(discardLabel)}
+          {discardLabel ?? t('shared.discardLeave')}
         </button>
         <button
           type="button"
@@ -63,11 +65,11 @@ export function DraftDiscardActions({
             onClick={async () => {
               setSaving(true);
               onSavingChange?.(true);
-              setError('');
+              setError(null);
               try {
-                if (!(await onSave())) setError(legacyDescriptor('shared.saveFailure'));
+                if (!(await onSave())) setError(uiMessage('shared.saveFailure'));
               } catch (caught) {
-                setError((caught as Error).message);
+                setError(toUiMessage(caught, 'shared.saveFailure'));
               } finally {
                 setSaving(false);
                 onSavingChange?.(false);
@@ -75,11 +77,11 @@ export function DraftDiscardActions({
             }}
           >
             <SaveIcon size={18} aria-hidden="true" />
-            {saving ? t('shared.saving') : translateMessage(saveLabel)}
+            {saving ? t('shared.saving') : (saveLabel ?? t('shared.saveLeave'))}
           </button>
         )}
       </div>
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </>
   );
 }

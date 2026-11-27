@@ -1,4 +1,3 @@
-import { tryParseJson } from './json.js';
 import { useSyncExternalStore } from 'react';
 import { IntlMessageFormat } from 'intl-messageformat';
 import ko from './locales/ko.js';
@@ -7,8 +6,7 @@ import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
 import { storageKeys } from './storage-keys.js';
 export { supportedLocale, UI_LOCALES, type UiLocale } from '../core/ui-locale.js';
-export type MessageReference = { readonly uiMessage: string };
-export type MessageValues = Record<string, string | number | boolean | Date | MessageReference>;
+export type MessageValues = Record<string, string | number | boolean | Date>;
 const UI_LANGUAGE_KEY = storageKeys.uiLanguage;
 export const localeChangedEvent = 'uimori:ui-language-changed';
 const intlLocales = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
@@ -76,96 +74,16 @@ export function formatMessage(key: string, locale: UiLocale, values?: MessageVal
     formatter = new IntlMessageFormat(pattern, intlLocales[locale], undefined, { ignoreTag: true });
     cache.set(identity, formatter);
   }
-  const resolved =
-    values &&
-    Object.fromEntries(
-      Object.entries(values).map(([name, value]) => [
-        name,
-        typeof value === 'object' && value !== null && !(value instanceof Date)
-          ? decodeMessages(value.uiMessage, locale)
-          : value,
-      ])
-    );
-  return String(formatter.format(resolved));
+  return String(formatter.format(values));
 }
 export function t(key: string, values?: MessageValues): string {
   return formatMessage(key, current, values);
-}
-const messagePrefix = '\u001fui:';
-const messageEnd = '\u001e';
-export function message(key: string, values?: MessageValues): string {
-  return (
-    messagePrefix +
-    JSON.stringify({
-      key,
-      values:
-        values &&
-        Object.fromEntries(
-          Object.entries(values).map(([name, value]) => [
-            name,
-            value instanceof Date ? { uiDate: value.getTime() } : value,
-          ])
-        ),
-    }) +
-    messageEnd
-  );
-}
-export function messageRef(value: string): MessageReference {
-  return { uiMessage: value };
-}
-function decodeDescriptor(json: string, locale: UiLocale): string | null {
-  try {
-    const descriptor = tryParseJson(json, null) as {
-      key: string;
-      values?: Record<string, string | number | boolean | MessageReference | { uiDate: number }>;
-    } | null;
-    if (!descriptor || typeof descriptor.key !== 'string' || !Object.hasOwn(ko, descriptor.key))
-      return null;
-    const values =
-      descriptor.values &&
-      Object.fromEntries(
-        Object.entries(descriptor.values).map(([name, item]) => [
-          name,
-          typeof item === 'object' && item !== null && 'uiDate' in item
-            ? new Date(item.uiDate)
-            : item,
-        ])
-      );
-    return formatMessage(descriptor.key, locale, values);
-  } catch {
-    return null;
-  }
-}
-function decodeMessages(value: string, locale: UiLocale = current): string {
-  let decoded = '';
-  let index = 0;
-  for (;;) {
-    const start = value.indexOf(messagePrefix, index);
-    if (start < 0) return decoded + value.slice(index);
-    const next = value.indexOf(messagePrefix, start + messagePrefix.length);
-    const end = value.indexOf(messageEnd, start);
-    const text =
-      end < 0 || (next >= 0 && next < end)
-        ? null
-        : decodeDescriptor(value.slice(start + messagePrefix.length, end), locale);
-    if (text === null) {
-      const resume = next < 0 ? value.length : next;
-      decoded += value.slice(index, resume);
-      index = resume;
-      continue;
-    }
-    decoded += value.slice(index, start) + text;
-    index = end + 1;
-  }
 }
 export function translateStoredCode<Code extends string>(
   value: string,
   keys: Record<Code, string>
 ): string {
   return Object.hasOwn(keys, value) ? t(keys[value as Code]) : value;
-}
-export function translateMessage(value: string, locale: UiLocale = current): string {
-  return value.includes(messagePrefix) ? decodeMessages(value, locale) : value;
 }
 const numberFormats = new Map<string, Intl.NumberFormat>();
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
