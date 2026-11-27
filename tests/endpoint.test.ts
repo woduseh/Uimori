@@ -162,6 +162,41 @@ test('an endpoint marked cache revalidate gets a private ETag without a route li
   expect((await app.inject('/api/echo/x?note=n')).headers.etag).toBeUndefined();
 });
 
+test('a preferMinimal endpoint checks its output only when the request asks for the minimal answer', async () => {
+  const app = Fastify();
+  checkEndpointOutputs(app);
+  const full = (input: z.output<typeof echo.input>) => ({ ...input, snapshot: 'full' });
+  registerEndpoint(
+    app,
+    defineEndpoint<typeof echo>()({
+      operation: 'test.echo',
+      method: 'POST',
+      path: '/admit/:id',
+      preferMinimal: true,
+    }),
+    echo,
+    (input, request) => (request.headers.prefer === 'return=minimal' ? input : full(input)) as never
+  );
+  registerEndpoint(app, endpoints.write, echo, (input) => full(input) as never);
+  cleanup.push(() => app.close());
+  const admit = (prefer?: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/admit/x',
+      payload: { note: 'n' },
+      ...(prefer ? { headers: { prefer } } : {}),
+    });
+  expect((await admit('return=minimal')).json()).toEqual({ id: 'x', note: 'n' });
+  expect((await admit()).json()).toEqual({ id: 'x', note: 'n', snapshot: 'full' });
+  const unflagged = await app.inject({
+    method: 'PUT',
+    url: '/api/echo/x',
+    payload: { note: 'n' },
+    headers: { prefer: 'return=minimal' },
+  });
+  expect(unflagged.statusCode).toBe(500);
+});
+
 test('query helpers refuse the empty and wordy strings that coercion would turn into 0 and true', () => {
   expect(queryInt().safeParse('3').data).toBe(3);
   expect(queryInt().safeParse(3).data).toBe(3);

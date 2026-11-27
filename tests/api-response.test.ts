@@ -125,3 +125,15 @@ test('a typed endpoint tells other tabs about the changes its tag names, and a r
   expect(b.setItem).toHaveBeenCalledTimes(1);
   expect(b.workspace).not.toHaveBeenCalled();
 });
+
+test('a typed endpoint flagged preferMinimal asks for the minimal answer, and others do not', async () => {
+  browser();
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async () => new Response(JSON.stringify({ id: 'r1' })));
+  const admission = { operation: 'test.run', method: 'POST', path: '/runs/:id/retry' } as const;
+  await callEndpoint({ ...admission, preferMinimal: true }, { id: 'r1' } as never);
+  await callEndpoint(admission, { id: 'r1' } as never);
+  const sent = fetch.mock.calls.map(([, init]) => new Headers(init?.headers).get('prefer'));
+  expect(sent).toEqual(['return=minimal', null]);
+});

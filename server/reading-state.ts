@@ -89,8 +89,7 @@ export function saveReadingPosition(
   { clientId, expectedRevision, target: requested }: Omit<SaveReadingPosition, 'chatId'>
 ): ReadingPosition {
   return store.transaction(() => {
-    if (!store.db.prepare('SELECT 1 FROM chats WHERE id=?').get(chatId))
-      throw new AppError(409, 'REVISION_CONFLICT');
+    store.writableChat(chatId);
     const old = readingPositions(store, chatId, clientId).own;
     assertRevision(old?.revision ?? 0, expectedRevision);
     const target = resolveReaderTarget(store, chatId, requested);
@@ -130,8 +129,7 @@ export function addBookmark(
   { id, target: requested, title, note, quote }: Omit<AddBookmark, 'chatId'>
 ): Bookmark {
   return store.transaction(() => {
-    if (!store.db.prepare('SELECT 1 FROM chats WHERE id=?').get(chatId))
-      throw new AppError(409, 'REVISION_CONFLICT');
+    store.writableChat(chatId);
     const target = resolveReaderTarget(store, chatId, requested);
     const old = store.db.prepare('SELECT * FROM bookmarks WHERE id=?').get(id);
     if (old) {

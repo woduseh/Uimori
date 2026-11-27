@@ -60,6 +60,7 @@ export const promptEndpoints = {
     operation: 'prompts.readLoreContextDefaults',
     method: 'GET',
     path: '/lore-context-defaults',
+    cache: 'no-store',
   }),
   updateLoreContextDefaults: defineEndpoint<typeof operations.updateLoreContextDefaults>()({
     operation: 'prompts.updateLoreContextDefaults',

@@ -317,10 +317,9 @@ export class PushService {
 export function pushRoutes(app: FastifyInstance, service: PushService) {
   const endpoints = personalWorkspaceEndpoints;
   const operations = personalWorkspaceOperations;
-  registerEndpoint(app, endpoints.readPush, operations.readPush, ({ clientId }, request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    return service.info(clientId, request.headers.cookie);
-  });
+  registerEndpoint(app, endpoints.readPush, operations.readPush, ({ clientId }, request) =>
+    service.info(clientId, request.headers.cookie)
+  );
   registerEndpoint(app, endpoints.preparePush, operations.preparePush, ({ clientId }, request) =>
     service.prepare(clientId, request.headers.cookie)
   );

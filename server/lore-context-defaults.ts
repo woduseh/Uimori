@@ -59,10 +59,7 @@ export function loreContextDefaultRoutes(app: FastifyInstance, store: Store) {
     app,
     promptEndpoints.readLoreContextDefaults,
     promptOperations.readLoreContextDefaults,
-    (_input, _request, reply) => {
-      reply.header('Cache-Control', 'no-store');
-      return loreContextDefaults(store);
-    }
+    () => loreContextDefaults(store)
   );
   registerEndpoint(
     app,

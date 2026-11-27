@@ -80,6 +80,8 @@ export async function throwApiError(
 const runAdmission =
   /^(?:\/runs\/[^/]+\/(?:retry|rejudge|candidate|cancel)|\/chats\/[^/]+\/(?:runs|story-ui\/actions)|\/scene-commands\/[^/]+\/run)$/u;
 
+const minimal = { Prefer: 'return=minimal' };
+
 async function requestJson<T>(
   path: string,
   body: unknown,
@@ -130,7 +132,7 @@ export async function api<T>(
     body,
     method,
     signal,
-    runAdmission.test(path) ? { Prefer: 'return=minimal' } : {}
+    runAdmission.test(path) ? minimal : {}
   );
   if (body !== undefined) announceChanges(legacyInvalidation(path));
   return result;
@@ -143,7 +145,13 @@ export async function callEndpoint<E extends Endpoint>(
     : [input: EndpointInput<E>, signal?: AbortSignal]
 ): Promise<EndpointOutput<E>> {
   const { path, body } = endpointRequest(endpoint, input as Record<string, unknown> | undefined);
-  const result = await requestJson<EndpointOutput<E>>(path, body, endpoint.method, signal);
+  const result = await requestJson<EndpointOutput<E>>(
+    path,
+    body,
+    endpoint.method,
+    signal,
+    endpoint.preferMinimal ? minimal : {}
+  );
   if (endpoint.invalidates) announceChanges(endpoint.invalidates);
   return result;
 }
