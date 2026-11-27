@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Bookmark } from '../core/reading-state.js';
+import type { ChatDetail } from '../core/types.js';
 import { MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 
@@ -49,7 +50,9 @@ test(`BMCONF03 bookmark deletion cancellation and stale revision preserve the ma
   request,
 }) => {
   const { chat, bookmark } = await seedBookmark(request, width);
-  const before = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
+  const manuscript = async () =>
+    ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail).sources;
+  const before = await manuscript();
   await page.setViewportSize({ width, height: 900 });
   const { list } = await openBookmarks(page, chat.id);
   const refresh = list.getByRole('button', { name: '책갈피 다시 불러오기', exact: true });
@@ -80,6 +83,5 @@ test(`BMCONF03 bookmark deletion cancellation and stale revision preserve the ma
   await expect(confirmation).not.toBeVisible();
   await expect(list.getByRole('button', { name: latest.title, exact: true })).toHaveCount(0);
   expect(await savedBookmarks(request, chat.id)).toEqual([]);
-  const after = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
-  expect(after.entries).toEqual(before.entries);
+  expect(await manuscript()).toEqual(before);
 });

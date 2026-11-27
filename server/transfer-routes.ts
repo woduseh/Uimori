@@ -7,7 +7,7 @@ import {
   importChatBackup,
   importChatBackupArchiveRequest,
 } from './chat-backup.js';
-import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
+import { importChatTranscript } from './chat-transcript.js';
 import { databaseBackupStream } from './database-backup.js';
 import { noStore, parseInput, registerEndpoint } from './endpoint.js';
 import { exportManuscript, manuscriptExportMetadata } from './manuscript-export.js';
@@ -77,12 +77,6 @@ export function transferRoutes(
       .type('application/zip')
       .header('Content-Disposition', 'attachment; filename="chat-backup.uimori"')
       .send(exportChatBackupArchive(store, id));
-  });
-  app.get('/api/chats/:id/transcript', { onSend: noStore }, (request, reply) => {
-    const { id } = parseInput(transferRawInputs.chatDownload, request.params);
-    return reply
-      .header('Content-Disposition', 'attachment; filename="chat-transcript.json"')
-      .send(exportChatTranscript(store, id));
   });
   app.get('/api/backup', { onSend: noStore }, async (_request, reply) =>
     reply

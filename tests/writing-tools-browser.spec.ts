@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/browser-test.js';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { postFixtureChat } from './fixtures/chat.js';
+import { fixtureTranscript, postFixtureChat } from './fixtures/chat.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { openChatMenu } from './ui-navigation.js';
 
@@ -16,7 +16,7 @@ for (const width of [412]) {
     });
     expect(created.ok(), await created.text()).toBe(true);
     const empty = await created.json();
-    const transcript = await (await request.get(`/api/chats/${empty.id}/transcript`)).json();
+    const transcript = await fixtureTranscript(request, empty);
     transcript.entries = [
       {
         request: 'PRIVATE REQUEST ONE',
