@@ -17,6 +17,12 @@ import { HttpError } from './request-validation.js';
 import { pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 import { AppError, assertRevision } from './app-errors.js';
 import type { CloneResource } from '#contracts';
+import { promptOperations } from '#contracts/operations';
+import { parseInput } from './endpoint.js';
+
+const promptWorkspaceModel = promptOperations.updateWorkspace.input.omit({
+  expectedRevision: true,
+});
 
 type CreationReceipt = { kind: ResourceKind; id: string; organizationRevision?: number };
 
@@ -105,7 +111,10 @@ export function saveResource(
         : edit.kind === 'theme'
           ? saveTheme(store, edit.model, id ?? undefined, edit.expectedRevision)
           : edit.kind === 'prompt-workspace'
-            ? updatePromptWorkspace(store, { ...edit.model, expectedRevision: previous!.revision })
+            ? updatePromptWorkspace(store, {
+                ...parseInput(promptWorkspaceModel, edit.model),
+                expectedRevision: previous!.revision,
+              })
             : edit.kind === 'content'
               ? (store.product.content(input, id ?? undefined) as SavedResource)
               : (store.product.promptPreset(input, id ?? undefined) as SavedResource);

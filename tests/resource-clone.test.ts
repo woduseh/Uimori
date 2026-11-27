@@ -395,3 +395,24 @@ test('a stale editor reads a deleted resource as deleted and its save answers a 
   }
   expect(rows(store)).toEqual(before);
 });
+
+test('a prompt workspace save refuses fields the workspace does not have, without saving', async () => {
+  const { store, app } = fixture();
+  const workspace = promptWorkspace(store);
+  const model = editableResource('prompt-workspace', workspace);
+  for (const extra of [{ mian: model.main }, { expectedRevision: workspace.revision + 5 }]) {
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/api/resources/save',
+      payload: {
+        kind: 'prompt-workspace',
+        id: 'current',
+        expectedRevision: workspace.revision,
+        model: { ...model, ...extra },
+      },
+    });
+    expect(saved.statusCode, Object.keys(extra)[0]).toBe(400);
+    expect(saved.json().message, Object.keys(extra)[0]).toMatch(/^INVALID_REQUEST/);
+  }
+  expect(promptWorkspace(store).revision).toBe(workspace.revision);
+});
