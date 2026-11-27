@@ -7,15 +7,7 @@ import { api, callEndpoint } from './api.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { toUiMessage } from './api-errors.js';
-import {
-  displayMessage,
-  formatUiMessage,
-  isUiMessage,
-  legacyMessageString,
-  uiMessage,
-  type DisplayMessage,
-  type UiMessage,
-} from './ui-message.js';
+import { formatUiMessage, isUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import './deletion.css';
 
 type Title = string | MessageReference | UiMessage;
@@ -31,13 +23,13 @@ type Target<E extends Endpoint> =
 type Props<E extends Endpoint> = Target<E> & {
   revision?: number;
   title: Title;
-  label?: DisplayMessage;
-  confirmLabel?: DisplayMessage;
-  description?: DisplayMessage;
+  label?: UiMessage;
+  confirmLabel?: UiMessage;
+  description?: UiMessage | null;
   disabled?: boolean;
   iconOnly?: boolean;
   onDeleted: () => Promise<void> | void;
-  onError?: (message: string) => void;
+  onError?: (error: UiMessage) => void;
 };
 const sendDelete = callEndpoint as (
   endpoint: Endpoint,
@@ -76,7 +68,7 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
   function fail(caught: unknown) {
     const shown = toUiMessage(caught);
     setError(shown);
-    onError?.(legacyMessageString(shown));
+    onError?.(shown);
   }
   async function open() {
     if (lock.current) return;
@@ -123,15 +115,15 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
         className={`secondary delete-button ${iconOnly ? 'icon-only' : ''}`}
         aria-label={t('shared.deleteAccessible', {
           title: titleValue(title),
-          action: displayMessage(label),
+          action: formatUiMessage(label),
         })}
         aria-haspopup="dialog"
-        title={iconOnly ? displayMessage(label) : undefined}
+        title={iconOnly ? formatUiMessage(label) : undefined}
         disabled={disabled || busy}
         onClick={() => void open()}
       >
         <DeleteIcon size={iconOnly ? 14 : 18} aria-hidden="true" />
-        {!iconOnly && <span>{displayMessage(label)}</span>}
+        {!iconOnly && <span>{formatUiMessage(label)}</span>}
       </button>
       {!target && error && (
         <span className="error" role="alert">
@@ -149,7 +141,7 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
         }}
       >
         <p>{t('shared.deleteQuestion', { title: target ? titleValue(target.title) : '' })}</p>
-        {description && <p className="muted">{displayMessage(description)}</p>}
+        {description && <p className="muted">{formatUiMessage(description)}</p>}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
@@ -167,7 +159,7 @@ export function DeleteButton<E extends Endpoint>(props: Props<E>) {
             disabled={busy}
             onClick={() => void remove()}
           >
-            {busy ? t('shared.deleting') : displayMessage(confirmLabel ?? label)}
+            {busy ? t('shared.deleting') : formatUiMessage(confirmLabel ?? label)}
           </button>
         </div>
       </Dialog>

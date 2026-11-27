@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { validRevisionRange } from '../core/selection-revision.js';
@@ -142,7 +143,10 @@ export function SelectionRevision(props: Props) {
             <NoticeBanner tone="error">{translateMessage(revision.error)}</NoticeBanner>
           )}
           {busy && (
-            <LoadingState presentation="inline" label={t('reader.refiningTheSelectedPassage')} />
+            <LoadingState
+              presentation="inline"
+              label={uiMessage('reader.refiningTheSelectedPassage')}
+            />
           )}
           <div className="form-actions">
             {busy ? (

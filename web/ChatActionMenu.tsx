@@ -1,4 +1,6 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Copy, LoaderCircle, PinOff } from 'lucide-react';
 import type { Chat } from '../core/types.js';
@@ -16,7 +18,7 @@ type ChatActions = {
   onCopyChat?: (chatId: string) => void;
   copying?: boolean;
   onChatsChanged: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 };
 
 export function ChatActionMenu({
@@ -47,7 +49,7 @@ export function ChatActionMenu({
       if (menu) menu.open = false;
       await onChatsChanged();
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : retainedMessage('recent.pinFailed'));
+      onError(toUiMessage(reason, 'recent.pinFailed'));
     } finally {
       setPinning(false);
     }
@@ -83,10 +85,10 @@ export function ChatActionMenu({
           path={`/chats/${encodeURIComponent(chat.id)}`}
           preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
           title={chat.title}
-          label={t('transfer.m240')}
-          confirmLabel={t('shared.deletePermanently')}
+          label={uiMessage('transfer.m240')}
+          confirmLabel={uiMessage('shared.deletePermanently')}
           disabled={disabled}
-          description={t('transfer.m241')}
+          description={uiMessage('transfer.m241')}
           onError={onError}
           onDeleted={() => {
             forgetChatStorage(chat.id);

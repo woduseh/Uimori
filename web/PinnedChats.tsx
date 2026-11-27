@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { t, useI18n } from './i18n.js';
+import { type UiMessage } from './ui-message.js';
 import { ActivitySection } from './ActivitySection.js';
 import { ChatActionMenu, ChatTitleDialog } from './ChatActionMenu.js';
 import { ContentAvatar } from './ContentAvatar.js';
@@ -30,7 +31,7 @@ export function PinnedChats({
   onCopyChat?: (chatId: string) => void;
   copyingChats?: string[];
   onChatsChanged: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null);

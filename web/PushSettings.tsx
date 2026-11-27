@@ -228,7 +228,7 @@ export function PushSettings() {
         )}
       </div>
       {supported && !info && !error && (
-        <LoadingState presentation="placeholder" label={t('outside.loadingPush')} />
+        <LoadingState presentation="placeholder" label={uiMessage('outside.loadingPush')} />
       )}
       {!supported && <p className="muted">{t('outside.unsupportedPush')}</p>}
       {info && !info.available && <p className="muted">{t('outside.pushUnavailable')}</p>}

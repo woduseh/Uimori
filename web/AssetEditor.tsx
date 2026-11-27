@@ -1,5 +1,6 @@
 import { t, useI18n, message as descriptor, messageRef } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
+import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { AssetMetadataEditor } from './AssetMetadataEditor.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -38,7 +39,7 @@ export function AssetEditor({
   chatId: string;
   assets: Asset[];
   refresh: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   expanded?: boolean;
@@ -69,13 +70,13 @@ export function AssetEditor({
   async function save() {
     if (uploadLock.current) return false;
     if (!file || !value.title.trim()) {
-      onError(descriptor('library.checkTheImageFileAndName'));
+      onError(uiMessage('library.checkTheImageFileAndName'));
       return false;
     }
     uploadLock.current = true;
     setBusy(true);
     setMessage('');
-    onError('');
+    onError(null);
     try {
       if (
         !PACKAGE_IMAGE_MIMES.includes(file.type as (typeof PACKAGE_IMAGE_MIMES)[number]) ||
@@ -97,14 +98,16 @@ export function AssetEditor({
         await refresh();
       } catch (error) {
         onError(
-          descriptor('library.theImageWasRegisteredButTheList', {
-            v0: messageRef((error as Error).message),
-          })
+          legacyUiMessage(
+            descriptor('library.theImageWasRegisteredButTheList', {
+              v0: messageRef((error as Error).message),
+            })
+          )
         );
       }
       return true;
     } catch (error) {
-      onError((error as Error).message);
+      onError(toUiMessage(error));
       return false;
     } finally {
       uploadLock.current = false;
@@ -143,8 +146,8 @@ export function AssetEditor({
                   <DeleteButton
                     path={`/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(asset.id)}`}
                     title={asset.title}
-                    label={t('library.deleteImage')}
-                    description={t('library.removeFromTheUploadedImageListFiles')}
+                    label={uiMessage('library.deleteImage')}
+                    description={uiMessage('library.removeFromTheUploadedImageListFiles')}
                     disabled={busy}
                     onDeleted={async () => {
                       setMessage(descriptor('library.imageDeleted', { title: asset.title }));
@@ -255,7 +258,7 @@ export function AssetEditor({
             </select>
           </label>
           <div className="form-actions full settings-save-actions">
-            <TransientNotice content={message} />
+            <TransientNotice content={legacyUiMessage(message)} />
             <SaveButton
               icon={ImageAddIcon}
               label={t('library.registerImage')}

@@ -6,7 +6,7 @@ import {
   messageRef,
   message as descriptor,
 } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ProviderConnectionForm } from './ProviderConnectionForm.js';
@@ -122,7 +122,7 @@ export function ConnectionEditor({
 }: {
   library: Library;
   reload: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   detailRequest?: ProviderDetailRequest | null;
@@ -333,7 +333,7 @@ export function ConnectionEditor({
     if (editingConnection?.id === item.id && screen === 'connection') navigate('connections');
     dispatchDraft({ type: 'connection.deleted', id: item.id });
     setError('');
-    onError('');
+    onError(null);
     setMessage(descriptor('providers.m532', { value0: item.title }));
     await reload();
   }
@@ -342,7 +342,7 @@ export function ConnectionEditor({
     dispatchDraft({ type: 'model.deleted', id: item.id });
     setConflict(null);
     setError('');
-    onError('');
+    onError(null);
     setMessage(descriptor('providers.m533', { value0: item.title }));
     await reload();
   }
@@ -352,8 +352,8 @@ export function ConnectionEditor({
       params={{ id: item.id }}
       revision={item.revision}
       title={item.title}
-      label={t('providers.m3')}
-      description={t('providers.m4')}
+      label={uiMessage('providers.m3')}
+      description={uiMessage('providers.m4')}
       disabled={busy}
       onDeleted={() => deletedConnection(item)}
       onError={onError}
@@ -365,9 +365,9 @@ export function ConnectionEditor({
       params={{ id: item.id }}
       revision={item.revision}
       title={item.title}
-      label={t('providers.m5')}
+      label={uiMessage('providers.m5')}
       iconOnly={iconOnly}
-      description={t('providers.m6')}
+      description={uiMessage('providers.m6')}
       disabled={busy}
       onDeleted={() => deletedModel(item)}
       onError={onError}
@@ -383,7 +383,7 @@ export function ConnectionEditor({
     operationLock.current = true;
     setOperation(saveAttempt && scope !== 'status' ? `${scope}-save` : 'other');
     setError('');
-    onError('');
+    onError(null);
     setMessage('');
     setRefreshWarning('');
     try {
@@ -395,13 +395,13 @@ export function ConnectionEditor({
         const warning = descriptor('providers.m534', { value0: messageRef(detail) });
         setMessage('');
         setRefreshWarning(warning);
-        onError(warning);
+        onError(legacyUiMessage(warning));
       }
       return true;
     } catch (caught) {
       const detail = errorDescriptor(caught, 'providers.m8');
       setError(detail);
-      onError(detail);
+      onError(legacyUiMessage(detail));
       if (caught instanceof ApiError && caught.code === 'REVISION_CONFLICT' && scope !== 'status') {
         setConflict(scope);
         if (saveAttempt) setSaveConflict(scope);
@@ -424,7 +424,7 @@ export function ConnectionEditor({
     };
     dispatchDraft({ type: 'connection.open', value: next, editing: copy ? undefined : item, copy });
     setError('');
-    onError('');
+    onError(null);
     returnItem.current = { screen: 'connections', id: item.id };
     navigate('connection');
   }
@@ -701,7 +701,7 @@ export function ConnectionEditor({
     };
     dispatchDraft({ type: 'connection.open', value: next });
     setError('');
-    onError('');
+    onError(null);
     navigate('connection');
   }
   function newModel(approved = false) {
@@ -762,7 +762,7 @@ export function ConnectionEditor({
       setScreen('model');
       setModelSection('advanced');
       setError(optionError);
-      onError(optionError);
+      onError(legacyUiMessage(optionError));
       requestAnimationFrame(() =>
         modelForm.current
           ?.querySelector<HTMLElement>('[data-model-section="generation"]')
@@ -1535,7 +1535,7 @@ export function ConnectionEditor({
         />
       </SettingsDetail>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
       {refreshWarning && <NoticeBanner>{translateMessage(refreshWarning)}</NoticeBanner>}
     </section>
   );

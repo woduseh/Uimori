@@ -1,4 +1,5 @@
 import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -80,8 +81,8 @@ export function LoreContextDefaultsEditor({
         <LoadingState
           presentation="region"
           loading={!error}
-          error={translateMessage(error)}
-          label={t('settings.m199')}
+          error={legacyUiMessage(error)}
+          label={uiMessage('settings.m199')}
           onRetry={() => void load()}
         />
       </section>
@@ -111,7 +112,7 @@ export function LoreContextDefaultsEditor({
           }
         />
       </fieldset>
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </section>
   );

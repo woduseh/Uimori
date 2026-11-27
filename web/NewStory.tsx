@@ -1,5 +1,5 @@
 import { getLocale, t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, formatUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
@@ -446,7 +446,7 @@ export function NewStory({
   if (!showForm)
     return (
       <div className="new-story new-story-quick">
-        <LoadingState presentation="inline" label={t('transfer.quickStartLoading')} />
+        <LoadingState presentation="inline" label={uiMessage('transfer.quickStartLoading')} />
         {!busy && (
           <button type="button" className="ghost" onClick={() => setConfigure(true)}>
             {t('transfer.configureNewChat')}
@@ -504,7 +504,7 @@ export function NewStory({
           disabled={locked}
         />
         {!defaultsReady && !defaultsError && (
-          <LoadingState presentation="inline" label={t('transfer.m328')} />
+          <LoadingState presentation="inline" label={uiMessage('transfer.m328')} />
         )}
         {defaultsError && (
           <NoticeBanner
@@ -523,9 +523,9 @@ export function NewStory({
             <LoadingState
               presentation="inline"
               loading={refreshingWorkspace || !workspaceError}
-              error={refreshingWorkspace ? '' : translateMessage(workspaceError)}
-              errorLabel={t('transfer.m330')}
-              label={t('transfer.m331')}
+              error={refreshingWorkspace ? null : workspaceError}
+              errorLabel={uiMessage('transfer.m330')}
+              label={uiMessage('transfer.m331')}
               onRetry={() => void reloadWorkspace()}
             />
           ) : (
@@ -562,7 +562,7 @@ export function NewStory({
                 </button>
               )}
               {refreshingWorkspace && (
-                <LoadingState presentation="inline" label={t('transfer.m337')} />
+                <LoadingState presentation="inline" label={uiMessage('transfer.m337')} />
               )}
               {workspaceError && !refreshingWorkspace && (
                 <NoticeBanner
@@ -577,14 +577,14 @@ export function NewStory({
                     </button>
                   }
                 >
-                  {t('transfer.m339')} {translateMessage(workspaceError)}
+                  {t('transfer.m339')} {formatUiMessage(workspaceError)}
                 </NoticeBanner>
               )}
             </>
           )}
         </div>
         {!packagesReady && !packageError && (
-          <LoadingState presentation="inline" label={t('transfer.m340')} />
+          <LoadingState presentation="inline" label={uiMessage('transfer.m340')} />
         )}
         {packageError && (
           <NoticeBanner

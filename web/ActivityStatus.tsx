@@ -1,5 +1,6 @@
 import { parseOwnJson } from './json.js';
-import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderActivity } from '../core/types.js';
 import type { RequestActivity } from './useStory.js';
@@ -95,7 +96,7 @@ export function ActivityStatus({
   onDetails,
   recoveryRequestId,
   recoveryBusy = false,
-  recoveryError = '',
+  recoveryError = null,
   onRecoverRequest,
   scope,
   seenRunIds = [],
@@ -107,7 +108,7 @@ export function ActivityStatus({
   onDetails: () => void;
   recoveryRequestId?: string;
   recoveryBusy?: boolean;
-  recoveryError?: string;
+  recoveryError?: UiMessage | null;
   onRecoverRequest: (requestId: string) => void;
   scope: string;
   seenRunIds?: string[];
@@ -384,7 +385,7 @@ export function ActivityStatus({
         persistenceError={persistenceError}
         recoveryRequestId={recoveryRequestId}
         recoveryBusy={recoveryBusy}
-        recoveryError={translateMessage(recoveryError)}
+        recoveryError={recoveryError}
         onRecoverRequest={onRecoverRequest}
         onLater={(notice) => {
           if (notice.kind !== 'request' || notice.status !== 'uncertain') return;

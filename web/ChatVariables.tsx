@@ -1,5 +1,6 @@
 import { tryParseJson } from './json.js';
 import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -262,7 +263,9 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
 
   return (
     <section className="chat-variables" aria-label={t('chatsettings.m164')}>
-      {loading && <LoadingState presentation="placeholder" label={t('chatsettings.m170')} />}
+      {loading && (
+        <LoadingState presentation="placeholder" label={uiMessage('chatsettings.m170')} />
+      )}
       {view?.pending && <p role="status">{t('chatsettings.m171')}</p>}
       {view?.variableDefaultsError && (
         <p role="alert" className="error">
@@ -293,7 +296,7 @@ export function ChatVariables({ chatId, active = true, refreshKey, onChange }: P
         </div>
       )}
       {hasUncertainSave && <p role="status">{t('chatsettings.m175')}</p>}
-      <TransientNotice content={notice} />
+      <TransientNotice content={legacyUiMessage(notice)} />
       {error && (
         <NoticeBanner
           tone="error"

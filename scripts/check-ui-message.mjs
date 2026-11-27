@@ -1,6 +1,6 @@
 import { parse } from '@babel/parser';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -199,35 +199,139 @@ function sourceFiles(directory) {
     });
 }
 
+export const legacyDescriptorApis = {
+  'web/i18n.js': ['message', 'messageRef', 'translateMessage'],
+  'web/api-errors.js': ['errorDescriptor'],
+  'web/ui-message.js': ['legacyMessageString'],
+};
+const legacyModules = new Set(['web/i18n.ts', 'web/ui-message.ts']);
+export const legacyWrapperRemedy =
+  'keep the state, prop or callback argument as a UiMessage (uiMessage(key), toUiMessage(caught)) instead of wrapping a string in legacyUiMessage';
+export const legacyDescriptorRemedy =
+  'build a UiMessage with uiMessage(key, values) or toUiMessage(caught) instead of a descriptor string';
+
+function importedNames(tree, file) {
+  const names = new Map();
+  for (const node of tree.program.body) {
+    if (node.type !== 'ImportDeclaration' || !node.source.value.startsWith('.')) continue;
+    const module = posix.join(posix.dirname(file), node.source.value);
+    for (const specifier of node.specifiers)
+      if (specifier.type === 'ImportSpecifier')
+        names.set(specifier.local.name, {
+          module,
+          imported: specifier.imported.name ?? specifier.imported.value,
+        });
+  }
+  return names;
+}
+
+function legacyUses(tree, file) {
+  const names = importedNames(tree, file);
+  const apis = [...names.values()]
+    .filter(({ module, imported }) => legacyDescriptorApis[module]?.includes(imported))
+    .map(({ imported }) => imported)
+    .sort();
+  const wrapper = [...names].find(
+    ([, { module, imported }]) => module === 'web/ui-message.js' && imported === 'legacyUiMessage'
+  )?.[0];
+  let wrappers = 0;
+  if (wrapper)
+    walk(tree, (node) => {
+      if (node.type === 'CallExpression' && node.callee.type === 'Identifier')
+        if (node.callee.name === wrapper) wrappers++;
+    });
+  return { apis, wrappers };
+}
+
+export function legacyMessageUses(source, file = 'web/input.tsx') {
+  return legacyUses(parseSource(source, file), file);
+}
+
 export function readAllowlist(directory = root) {
   const path = resolve(directory, allowlistPath);
-  if (!existsSync(path)) return { permanent: {}, debt: {} };
-  const { permanent = {}, debt = {}, ...rest } = JSON.parse(readFileSync(path, 'utf8'));
+  const empty = { permanent: {}, debt: {}, legacyWrappers: {}, legacyDescriptors: [] };
+  if (!existsSync(path)) return empty;
+  const {
+    permanent = {},
+    debt = {},
+    legacyWrappers = {},
+    legacyDescriptors = [],
+    ...rest
+  } = JSON.parse(readFileSync(path, 'utf8'));
   if (Object.keys(rest).length)
-    throw new Error(`${allowlistPath}: only "permanent" and "debt" sections are allowed`);
+    throw new Error(
+      `${allowlistPath}: only "permanent", "debt", "legacyWrappers" and "legacyDescriptors" sections are allowed`
+    );
   for (const [file, entry] of Object.entries(permanent))
     if (!Number.isInteger(entry?.count) || entry.count < 1 || !entry.reason?.trim())
       throw new Error(`${allowlistPath}: permanent "${file}" needs a positive count and a reason`);
-  for (const [file, count] of Object.entries(debt))
-    if (!Number.isInteger(count) || count < 1)
-      throw new Error(`${allowlistPath}: debt "${file}" needs a positive whole count`);
-  return { permanent, debt };
+  for (const [section, counts] of [
+    ['debt', debt],
+    ['legacyWrappers', legacyWrappers],
+  ])
+    for (const [file, count] of Object.entries(counts))
+      if (!Number.isInteger(count) || count < 1)
+        throw new Error(`${allowlistPath}: ${section} "${file}" needs a positive whole count`);
+  if (
+    !Array.isArray(legacyDescriptors) ||
+    legacyDescriptors.some((file) => typeof file !== 'string')
+  )
+    throw new Error(`${allowlistPath}: legacyDescriptors is a list of files`);
+  return { permanent, debt, legacyWrappers, legacyDescriptors };
 }
 
 function scanSources(directory) {
   const counts = new Map();
+  const wrappers = new Map();
+  const descriptors = new Map();
   const plain = [];
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
     const tree = parseSource(readFileSync(path, 'utf8'), file);
     if (file !== jsonParseFile)
       for (const line of jsonParseLines(tree)) plain.push(`${file}:${line}: ${jsonParseRemedy}`);
+    if (!legacyModules.has(file)) {
+      const uses = legacyUses(tree, file);
+      if (uses.wrappers) wrappers.set(file, uses.wrappers);
+      if (uses.apis.length) descriptors.set(file, uses.apis);
+    }
     if (exemptFiles.has(file)) continue;
     for (const line of plainErrorLines(tree)) plain.push(`${file}:${line}: ${plainErrorRemedy}`);
     const lines = errorTextLines(tree);
     if (lines.length) counts.set(file, lines);
   }
-  return { counts, plain };
+  return { counts, wrappers, descriptors, plain };
+}
+
+function legacyErrors({ legacyWrappers = {}, legacyDescriptors = [] }, { wrappers, descriptors }) {
+  const errors = [];
+  const shrink = '(node scripts/check-ui-message.mjs --shrink)';
+  for (const file of new Set([...wrappers.keys(), ...Object.keys(legacyWrappers)])) {
+    const found = wrappers.get(file) ?? 0;
+    const allowed = legacyWrappers[file] ?? 0;
+    if (found > allowed)
+      errors.push(
+        `${file}: ${found} legacyUiMessage calls, ${allowed ? `${allowlistPath} allows ${allowed}` : 'none allowed'}; ${legacyWrapperRemedy}`
+      );
+    else if (found < allowed)
+      errors.push(
+        found
+          ? `${allowlistPath}: ${file} now has ${found} legacyUiMessage calls; lower legacyWrappers from ${allowed} to ${found} ${shrink}`
+          : `${allowlistPath}: ${file} has no legacyUiMessage calls; remove its legacyWrappers entry ${shrink}`
+      );
+  }
+  const listed = new Set(legacyDescriptors);
+  for (const [file, apis] of descriptors)
+    if (!listed.has(file))
+      errors.push(
+        `${file}: uses the legacy descriptor API (${apis.join(', ')}) but is not in legacyDescriptors; ${legacyDescriptorRemedy}`
+      );
+  for (const file of listed)
+    if (!descriptors.has(file))
+      errors.push(
+        `${allowlistPath}: ${file} no longer uses a legacy descriptor API; remove it from legacyDescriptors ${shrink}`
+      );
+  return errors;
 }
 
 export function scanUiMessages(directory = root) {
@@ -236,8 +340,9 @@ export function scanUiMessages(directory = root) {
 
 export function uiMessageErrors(directory = root, allowlist = readAllowlist(directory)) {
   const { permanent, debt } = allowlist;
-  const { counts, plain } = scanSources(directory);
-  const errors = [...plain];
+  const scan = scanSources(directory);
+  const { counts, plain } = scan;
+  const errors = [...plain, ...legacyErrors(allowlist, scan)];
   for (const [file, lines] of counts) {
     const allowed = (permanent[file]?.count ?? 0) + (debt[file] ?? 0);
     if (lines.length > allowed)
@@ -264,22 +369,32 @@ export function uiMessageErrors(directory = root, allowlist = readAllowlist(dire
 }
 
 export function shrinkAllowlist(directory = root, allowlist = readAllowlist(directory)) {
-  const { permanent, debt } = allowlist;
-  const counts = scanUiMessages(directory);
+  const { permanent, debt, legacyWrappers = {}, legacyDescriptors = [] } = allowlist;
+  const { counts, wrappers, descriptors } = scanSources(directory);
+  const sorted = (entries) =>
+    Object.fromEntries(
+      entries.filter(([, count]) => count > 0).sort(([left], [right]) => (left < right ? -1 : 1))
+    );
+  const keptWrappers = sorted(
+    Object.entries(legacyWrappers).map(([file, allowed]) => [
+      file,
+      Math.min(allowed, wrappers.get(file) ?? 0),
+    ])
+  );
+  const keptDescriptors = legacyDescriptors.filter((file) => descriptors.has(file)).sort();
   const next = {
     permanent,
-    debt: Object.fromEntries(
-      Object.entries(debt)
-        .map(([file, owed]) => [
-          file,
-          Math.min(
-            owed,
-            Math.max(0, (counts.get(file)?.length ?? 0) - (permanent[file]?.count ?? 0))
-          ),
-        ])
-        .filter(([, count]) => count > 0)
-        .sort(([left], [right]) => (left < right ? -1 : 1))
+    debt: sorted(
+      Object.entries(debt).map(([file, owed]) => [
+        file,
+        Math.min(
+          owed,
+          Math.max(0, (counts.get(file)?.length ?? 0) - (permanent[file]?.count ?? 0))
+        ),
+      ])
     ),
+    ...(Object.keys(keptWrappers).length ? { legacyWrappers: keptWrappers } : {}),
+    ...(keptDescriptors.length ? { legacyDescriptors: keptDescriptors } : {}),
   };
   writeFileSync(resolve(directory, allowlistPath), `${JSON.stringify(next, null, 2)}\n`);
   return next;
@@ -292,10 +407,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(`${errors.join('\n')}\n\n${remedy}`);
     process.exitCode = 1;
   } else {
-    const { permanent, debt } = readAllowlist();
+    const { permanent, debt, legacyWrappers, legacyDescriptors } = readAllowlist();
     const owed = Object.values(debt).reduce((sum, count) => sum + count, 0);
+    const wrapped = Object.values(legacyWrappers).reduce((sum, count) => sum + count, 0);
     console.log(
-      `UI messages PASS (${owed} unconverted error-text reads in ${Object.keys(debt).length} files; ${Object.keys(permanent).length} permanent exceptions)`
+      `UI messages PASS (${owed} unconverted error-text reads in ${Object.keys(debt).length} files; ${Object.keys(permanent).length} permanent exceptions; ${wrapped} legacyUiMessage calls in ${Object.keys(legacyWrappers).length} files; ${legacyDescriptors.length} files on legacy descriptors)`
     );
   }
 }

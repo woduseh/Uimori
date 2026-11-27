@@ -1,4 +1,6 @@
 import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -49,7 +51,7 @@ export function IllustrationReferencesEditor({
   refreshKey: string | number;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -119,9 +121,9 @@ export function IllustrationReferencesEditor({
         <LoadingState
           presentation="placeholder"
           loading={!loadError}
-          error={translateMessage(loadError)}
-          label={t('visuals.m029')}
-          errorLabel={t('visuals.m030')}
+          error={legacyUiMessage(loadError)}
+          label={uiMessage('visuals.m029')}
+          errorLabel={uiMessage('visuals.m030')}
           onRetry={() => void refresh()}
         />
       </section>
@@ -161,12 +163,12 @@ export function IllustrationReferencesEditor({
       return false;
     }
     if (chatProfiles.some((item) => !item.name.trim() || !item.appearance.trim())) {
-      onError(legacyDescriptor('visuals.profileRequired'));
+      onError(uiMessage('visuals.profileRequired'));
       return false;
     }
     const names = chatProfiles.map((item) => illustrationProfileNameKey(item.name));
     if (new Set(names).size !== names.length) {
-      onError(legacyDescriptor('visuals.duplicateCharacterName'));
+      onError(uiMessage('visuals.duplicateCharacterName'));
       return false;
     }
     lock.current = true;
@@ -201,7 +203,7 @@ export function IllustrationReferencesEditor({
       if (error instanceof ApiError && error.status === 409) {
         setConflict(true);
         setReviewConflict(true);
-      } else onError((error as Error).message);
+      } else onError(toUiMessage(error));
       return false;
     } finally {
       lock.current = false;
@@ -460,7 +462,7 @@ export function IllustrationReferencesEditor({
           />
         </div>
       )}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
       <SaveConflictDialog
         open={reviewConflict}
         title={t('visuals.reviewReferences')}

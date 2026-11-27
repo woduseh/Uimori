@@ -1,12 +1,12 @@
 import { useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { RunningIcon } from './ui-icons.js';
-import { displayMessage, uiMessage, type DisplayMessage } from './ui-message.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import './loading-state.css';
 import './activity-status.css';
 
 export function LoadingState({
-  error = '',
+  error = null,
   loading = !error,
   label = uiMessage('shared.loading'),
   errorLabel = uiMessage('shared.loadFailed'),
@@ -15,11 +15,11 @@ export function LoadingState({
   presentation = 'region',
 }: {
   loading?: boolean;
-  error?: DisplayMessage | null;
-  label?: DisplayMessage;
-  errorLabel?: DisplayMessage;
+  error?: UiMessage | null;
+  label?: UiMessage;
+  errorLabel?: UiMessage;
   onRetry?: () => void;
-  retryLabel?: DisplayMessage;
+  retryLabel?: UiMessage;
   presentation?: 'region' | 'placeholder' | 'inline';
 }) {
   useI18n();
@@ -37,12 +37,12 @@ export function LoadingState({
       {error ? (
         <>
           <div role="alert">
-            <p>{displayMessage(errorLabel)}</p>
-            <p className="muted">{displayMessage(error)}</p>
+            <p>{formatUiMessage(errorLabel)}</p>
+            <p className="muted">{formatUiMessage(error)}</p>
           </div>
           {onRetry && (
             <button type="button" className="secondary" disabled={loading} onClick={onRetry}>
-              {displayMessage(retryLabel)}
+              {formatUiMessage(retryLabel)}
             </button>
           )}
         </>
@@ -53,7 +53,7 @@ export function LoadingState({
             className="activity-spinner"
             aria-hidden="true"
           />
-          <p>{displayMessage(label)}</p>
+          <p>{formatUiMessage(label)}</p>
         </div>
       ) : null}
     </div>

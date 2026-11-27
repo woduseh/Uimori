@@ -1,5 +1,5 @@
 import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
@@ -46,7 +46,7 @@ export function AuthorNotesEditor({
   revision: number;
   onSave: (command: AuthorNoteCommand) => Promise<void>;
   onRefresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   disabled?: boolean;
@@ -105,7 +105,7 @@ export function AuthorNotesEditor({
       if (!alive.current) return;
       const text = descriptor('library.couldNotRefreshNotesYourInputAnd');
       setError(text);
-      onError(text);
+      onError(legacyUiMessage(text));
     }
   }
   async function save(value: NoteDraft, retired = false) {
@@ -149,7 +149,7 @@ export function AuthorNotesEditor({
       const text =
         caught instanceof Error ? caught.message : descriptor('library.couldNotSaveTheNote');
       setError(text);
-      onError(text);
+      onError(legacyUiMessage(text));
       if (caught instanceof ApiError && caught.status === 409) {
         setConflictOpen(true);
         await refresh();
@@ -178,7 +178,7 @@ export function AuthorNotesEditor({
           {translateMessage(error)}
         </p>
       )}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
       {notes.length > 0 && (
         <ul className="story-records">
           {notes.map((note) => (

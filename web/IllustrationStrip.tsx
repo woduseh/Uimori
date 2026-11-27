@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage, message as legacyDescriptor, messageRef } from './i18n.js';
+import { t, useI18n, message as legacyDescriptor, messageRef } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage, legacyUiMessage, formatUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { readingScrollport } from './theme-body-scroll.js';
 import { cutsFor, type Cut } from './illustration-progress.js';
@@ -24,7 +26,7 @@ import './activity-status.css';
 import { readOptionalStorage } from './optional-storage.js';
 import { removeRecentStorage, storageKeys, writeRecentStorage } from './storage-keys.js';
 
-type Actions = { refresh: () => Promise<void>; onError: (message: string) => void };
+type Actions = { refresh: () => Promise<void>; onError: (error: UiMessage | null) => void };
 const collapseKey = storageKeys.illustrationCollapsed;
 function savedCollapse(id: string): boolean | undefined {
   const value = readOptionalStorage('local', collapseKey(id));
@@ -209,7 +211,7 @@ function useIllustrationAction({ refresh, onError }: Actions) {
     body: unknown = {},
     method = 'POST',
     onAccepted?: () => void,
-    onRejected?: (message: string) => void
+    onRejected?: (error: UiMessage | null) => void
   ) => {
     if (locked.current) return;
     locked.current = true;
@@ -221,7 +223,7 @@ function useIllustrationAction({ refresh, onError }: Actions) {
       onAccepted?.();
       await refresh();
     } catch (cause) {
-      (accepted ? onError : (onRejected ?? onError))((cause as Error).message);
+      (accepted ? onError : (onRejected ?? onError))(toUiMessage(cause));
       await refresh().catch(() => undefined);
     } finally {
       locked.current = false;
@@ -321,8 +323,8 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
         <DeleteButton
           path={`/illustrations/${job.id}`}
           title={messageRef(legacyDescriptor('visuals.m118'))}
-          label={t('visuals.m119')}
-          description={t('visuals.m120')}
+          label={uiMessage('visuals.m119')}
+          description={uiMessage('visuals.m120')}
           iconOnly
           onDeleted={refresh}
           onError={onError}
@@ -395,11 +397,11 @@ function IllustrationCard({
   const active = illustrationActive(job);
   const [redrawOpen, setRedrawOpen] = useState(false);
   const [changeRequest, setChangeRequest] = useState('');
-  const [redrawError, setRedrawError] = useState('');
+  const [redrawError, setRedrawError] = useState<UiMessage | null>(null);
   const redrawOpener = useRef<HTMLElement | null>(null);
   const openRedraw = (opener: HTMLElement) => {
     redrawOpener.current = opener;
-    setRedrawError('');
+    setRedrawError(null);
     setRedrawOpen(true);
   };
   const { busy, act } = useIllustrationAction({ refresh, onError });
@@ -517,8 +519,8 @@ function IllustrationCard({
                     picture?.images[0]?.caption ||
                     messageRef(legacyDescriptor('visuals.m131'))
                   }
-                  label={t('visuals.m132')}
-                  description={t('visuals.m133')}
+                  label={uiMessage('visuals.m132')}
+                  description={uiMessage('visuals.m133')}
                   disabled={busy}
                   onDeleted={refresh}
                   onError={onError}
@@ -593,7 +595,7 @@ function IllustrationCard({
         </label>
         {redrawError && (
           <p className="error" role="alert">
-            {translateMessage(redrawError)}
+            {formatUiMessage(redrawError)}
           </p>
         )}
         <div className="form-actions">
@@ -635,7 +637,7 @@ function IllustrationCard({
           <LoadingState
             presentation="inline"
             loading={false}
-            error={translateMessage(detailError)}
+            error={legacyUiMessage(detailError)}
           />
         ) : detail ? (
           <div className="illustration-diagnostic">
@@ -728,7 +730,7 @@ function IllustrationCard({
             {!detail.diagnostic && <p>{t('visuals.m161')}</p>}
           </div>
         ) : (
-          <LoadingState presentation="inline" label={t('visuals.m162')} />
+          <LoadingState presentation="inline" label={uiMessage('visuals.m162')} />
         )}
       </Dialog>
     </article>

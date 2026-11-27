@@ -1,5 +1,6 @@
 import { SettingsSearch, hasSettingsSearch } from './SettingsSearch.js';
-import { t, useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, formatUiMessage, type UiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import { readSettingsLocation, rememberSettingsLocation } from './settings-location.js';
@@ -137,7 +138,7 @@ export function ChatSettingsPanel({
   const [discard, setDiscard] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
   const [savingPage, setSavingPage] = useState(false);
-  const [saveNotice, setSaveNotice] = useState('');
+  const [saveNotice, setSaveNotice] = useState<UiMessage | null>(null);
   const savingPageRef = useRef(false);
   const saveGroup = useSettingsSaveGroup(saveSections);
   const discardGroup = useSettingsSaveGroup(generationSections);
@@ -248,10 +249,10 @@ export function ChatSettingsPanel({
       if (!form.reportValidity()) return;
     savingPageRef.current = true;
     setSavingPage(true);
-    setSaveNotice('');
+    setSaveNotice(null);
     try {
       if (await saveGroup.save({ profile: profileDirty, runtime: runtimeDirty }))
-        setSaveNotice(legacyDescriptor('library.chatSettingsSaved'));
+        setSaveNotice(uiMessage('library.chatSettingsSaved'));
       else
         requestAnimationFrame(() => {
           root.current
@@ -584,7 +585,7 @@ export function ChatSettingsPanel({
       </section>
       {state.error && (
         <p role="alert" className="error">
-          {translateMessage(state.error)}
+          {formatUiMessage(state.error)}
         </p>
       )}
       <TransientNotice content={saveNotice} />

@@ -1,4 +1,5 @@
 import { t, translateMessage, useI18n, getLocale, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -134,8 +135,8 @@ export function ModelWorkspaceEditor({
       <LoadingState
         presentation="region"
         loading={!error}
-        error={translateMessage(error)}
-        label={t('settings.m0')}
+        error={error}
+        label={uiMessage('settings.m0')}
         onRetry={() => void refresh()}
       />
     );
@@ -917,8 +918,8 @@ export function ModelWorkspaceEditor({
       />
       {conflict && dirty && <NoticeBanner tone="error">{t('settings.m75')}</NoticeBanner>}
       {saveError && <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>}
-      <TransientNotice content={message} />
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      <TransientNotice content={legacyUiMessage(message)} />
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {!confirmReload && reloadError && (
         <NoticeBanner tone="error">{translateMessage(reloadError)}</NoticeBanner>
       )}

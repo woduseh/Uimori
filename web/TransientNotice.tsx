@@ -10,20 +10,19 @@ import {
   type ReactNode,
 } from 'react';
 import { CheckIcon } from './ui-icons.js';
-import { displayMessage, type DisplayMessage } from './ui-message.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
 import './notices.css';
 
-type Notice = { id: string; content: DisplayMessage; identity: string };
-const NoticeContext = createContext<(id: string, content: DisplayMessage) => void>(() => {});
-const identityOf = (content: DisplayMessage) =>
-  typeof content === 'string' ? content : JSON.stringify(content);
+type Notice = { id: string; content: UiMessage; identity: string };
+const NoticeContext = createContext<(id: string, content: UiMessage) => void>(() => {});
+const identityOf = (content: UiMessage) => JSON.stringify(content);
 
 export function TransientNoticeProvider({ children }: { children: ReactNode }) {
   useI18n();
   const [notices, setNotices] = useState<Notice[]>([]);
   const host = useRef<HTMLDivElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const show = useCallback((id: string, content: DisplayMessage) => {
+  const show = useCallback((id: string, content: UiMessage) => {
     const notice = { id, content, identity: identityOf(content) };
     clearTimeout(timers.current.get(notice.identity));
     setNotices((old) => {
@@ -60,7 +59,7 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
         {notices.map((notice) => (
           <div className="transient-notice" role="status" key={notice.identity}>
             <CheckIcon size={18} aria-hidden="true" />
-            <span>{displayMessage(notice.content)}</span>
+            <span>{formatUiMessage(notice.content)}</span>
           </div>
         ))}
       </div>
@@ -71,10 +70,10 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
 export function useTransientNotice() {
   const id = useId();
   const show = useContext(NoticeContext);
-  return useCallback((content: DisplayMessage) => show(id, content), [id, show]);
+  return useCallback((content: UiMessage) => show(id, content), [id, show]);
 }
 
-export function TransientNotice({ content }: { content: DisplayMessage | null | undefined }) {
+export function TransientNotice({ content }: { content: UiMessage | null | undefined }) {
   useI18n();
   const id = useId();
   const show = useContext(NoticeContext);

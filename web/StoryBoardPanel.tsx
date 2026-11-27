@@ -4,6 +4,7 @@ import type { StoryUiStyleSetting } from '../core/story-ui-style.js';
 import type { Job, Source } from '../core/types.js';
 import { api } from './api.js';
 import { t, useI18n } from './i18n.js';
+import { legacyUiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { StoryUi } from './LazyStoryUi.js';
@@ -173,7 +174,7 @@ export function StoryBoardPanel({
             actionNote={t('storyUi.boardAction')}
           />
         ) : board.loading || board.error ? (
-          <LoadingState loading={board.loading} error={board.error} />
+          <LoadingState loading={board.loading} error={legacyUiMessage(board.error)} />
         ) : (
           <p className="story-board-empty">{t('storyUi.boardEmpty')}</p>
         )}

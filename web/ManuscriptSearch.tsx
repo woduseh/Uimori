@@ -1,4 +1,5 @@
 import { t, useI18n } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import type { UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
@@ -267,7 +268,7 @@ export function ManuscriptSearchPanel({
           {t('transfer.m227')}
         </p>
       )}
-      {busy && <LoadingState presentation="inline" label={t('transfer.m230')} />}
+      {busy && <LoadingState presentation="inline" label={uiMessage('transfer.m230')} />}
       {error && (
         <NoticeBanner
           tone="error"

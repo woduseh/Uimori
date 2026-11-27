@@ -323,30 +323,6 @@ export const messages = {
     ja: 'バージョン ビルド 著作権',
     zh: '版本 构建 版权',
   },
-  'chatsettings.m46': {
-    ko: '역할별 모델 설정을',
-    en: 'Models by role settings',
-    ja: '役割別モデル設定',
-    zh: '按角色设置模型',
-  },
-  'chatsettings.m47': {
-    ko: '기본 프롬프트를',
-    en: 'Default prompt',
-    ja: '既定のプロンプト',
-    zh: '默认提示词',
-  },
-  'chatsettings.m48': {
-    ko: '프로바이더 목록을',
-    en: 'Provider list',
-    ja: 'プロバイダー一覧',
-    zh: '提供商列表',
-  },
-  'chatsettings.m49': {
-    ko: '삽화 설정을',
-    en: 'Illustration settings',
-    ja: '挿絵設定',
-    zh: '插图设置',
-  },
   'chatsettings.m50': {
     ko: '설정',
     en: 'Settings',

@@ -1,4 +1,6 @@
 import { t, useI18n, message as legacyDescriptor, messageRef } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Library } from '../core/product.js';
 import type {
@@ -49,7 +51,7 @@ const sendLibraryWrite = callEndpoint as (
 export function useLibraryOrganization(
   library: Library | null,
   reload: () => Promise<void>,
-  onError: (error: string) => void
+  onError: (error: UiMessage | null) => void
 ) {
   useI18n();
   const [organization, setOrganization] = useState<LibraryOrganization | null>(
@@ -74,7 +76,7 @@ export function useLibraryOrganization(
           if (alive && request === loadVersion.current) setOrganization(value);
         })
         .catch((error: Error) => {
-          if (alive && request === loadVersion.current) errorHandler.current(error.message);
+          if (alive && request === loadVersion.current) errorHandler.current(toUiMessage(error));
         });
     return () => {
       alive = false;
@@ -96,14 +98,16 @@ export function useLibraryOrganization(
         await reload();
       } catch (error) {
         onError(
-          legacyDescriptor('library.changesWereSavedButTheListCould', {
-            v0: messageRef((error as Error).message),
-          })
+          legacyUiMessage(
+            legacyDescriptor('library.changesWereSavedButTheListCould', {
+              v0: messageRef((error as Error).message),
+            })
+          )
         );
       }
       return true;
     } catch (error) {
-      onError((error as Error).message);
+      onError(toUiMessage(error));
       try {
         const refresh = ++loadVersion.current;
         const latest = await callEndpoint(libraryEndpoints.readOrganization);
@@ -183,7 +187,7 @@ export function useLibraryFolderEditor({
   category: LibraryCategory;
   organizer: LibraryOrganizer;
   reload: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   covers?: Record<string, string[]>;
 }) {
   useI18n();
@@ -226,8 +230,8 @@ export function useLibraryFolderEditor({
             params={{ id: folder.id }}
             revision={organization?.revision}
             title={folder.title}
-            label={t('library.deleteFolder')}
-            description={t('library.resourcesInThisFolderWillMoveTo')}
+            label={uiMessage('library.deleteFolder')}
+            description={uiMessage('library.resourcesInThisFolderWillMoveTo')}
             disabled={busy}
             onError={(message) => {
               onError(message);

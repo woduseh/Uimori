@@ -5,6 +5,7 @@ import {
   useI18n,
   message as legacyDescriptor,
 } from './i18n.js';
+import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -66,7 +67,7 @@ export function ContextPanel({
   refreshKey?: unknown;
   onRefreshStory: () => Promise<void>;
   onChanged: () => void;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
@@ -136,7 +137,7 @@ export function ContextPanel({
   function report(caught: unknown) {
     const text = caught instanceof Error ? caught.message : legacyDescriptor('settings.m273');
     setError(text);
-    onError(text);
+    onError(legacyUiMessage(text));
   }
   async function load() {
     const generation = scope.current.generation;
@@ -287,13 +288,13 @@ export function ContextPanel({
             {translateMessage(error)}
           </NoticeBanner>
         )}
-        <TransientNotice content={message} />
+        <TransientNotice content={legacyUiMessage(message)} />
         {!detail ? (
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={translateMessage(error)}
-            label={t('settings.m278')}
+            error={legacyUiMessage(error)}
+            label={uiMessage('settings.m278')}
             onRetry={() => {
               setError('');
               void refreshAll();
@@ -353,7 +354,7 @@ export function ContextPanel({
                 }}
               />
             )}
-            {!current && <LoadingState presentation="inline" label={t('settings.m283')} />}
+            {!current && <LoadingState presentation="inline" label={uiMessage('settings.m283')} />}
             <details className="context-priorities">
               <summary>{t('settings.m284')}</summary>
               <label>
@@ -423,8 +424,11 @@ export function ContextPanel({
               <LoadingState
                 presentation="inline"
                 key={working.id}
-                label={t('settings.m295', {
-                  v0: working.status === 'queued' ? t('settings.m296') : t('settings.m297'),
+                label={uiMessage('settings.m295', {
+                  v0:
+                    working.status === 'queued'
+                      ? uiMessage('settings.m296')
+                      : uiMessage('settings.m297'),
                 })}
               />
             ) : (

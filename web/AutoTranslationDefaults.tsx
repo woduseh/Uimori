@@ -1,4 +1,5 @@
 import { t, translateMessage, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { useState } from 'react';
 import type { AutoTranslationDefaults as Defaults } from '../core/chat-settings.js';
 import {
@@ -69,9 +70,9 @@ export function AutoTranslationDefaults() {
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={!defaults ? error : ''}
-        label={t('settings.m99')}
-        errorLabel={t('settings.m100')}
+        error={!defaults ? legacyUiMessage(error) : null}
+        label={uiMessage('settings.m99')}
+        errorLabel={uiMessage('settings.m100')}
         onRetry={() => {
           setLoading(true);
           retry();

@@ -11,6 +11,7 @@ import {
 import type { Attempt } from '../core/product.js';
 import { AttemptDetail } from './AttemptInspector.js';
 import { formatNumber, t, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoadingState } from './LoadingState.js';
@@ -534,8 +535,8 @@ export function TraceLoading({ error, retry }: { error: string; retry: () => voi
     <LoadingState
       presentation="inline"
       loading={!error}
-      error={error}
-      label={t('shared.loadingDetails')}
+      error={legacyUiMessage(error)}
+      label={uiMessage('shared.loadingDetails')}
       onRetry={retry}
     />
   );

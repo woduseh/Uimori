@@ -1,4 +1,5 @@
-import { t, translateMessage, useI18n } from './i18n.js';
+import { useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { Component, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
 
@@ -19,7 +20,7 @@ export class PanelErrorBoundary extends Component<
 }
 
 export function deferredPanel<Props extends object>(
-  label: string,
+  label: UiMessage,
   loader: () => Promise<{ default: ComponentType<Props> }>,
   wrapFallback?: (content: ReactNode, props: Props) => ReactNode
 ) {
@@ -33,8 +34,8 @@ export function deferredPanel<Props extends object>(
           <LoadingState
             presentation="region"
             loading={false}
-            error={t('shared.panelFailureHelp')}
-            errorLabel={t('shared.panelFailure')}
+            error={uiMessage('shared.panelFailureHelp')}
+            errorLabel={uiMessage('shared.panelFailure')}
           />
         )}
       >
@@ -42,7 +43,7 @@ export function deferredPanel<Props extends object>(
           fallback={wrap(
             <LoadingState
               presentation="region"
-              label={t('shared.panelLoading', { label: translateMessage(label) })}
+              label={uiMessage('shared.panelLoading', { label })}
             />
           )}
         >

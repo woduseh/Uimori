@@ -24,11 +24,12 @@ import {
 } from './shortcut-bindings.js';
 import { useTransientNotice } from './TransientNotice.js';
 import { storageKeys } from './storage-keys.js';
+import type { UiMessage } from './ui-message.js';
 
 type Registration = {
   run: () => unknown;
   ready?: () => boolean;
-  confirmNotice?: string;
+  confirmNotice?: UiMessage;
   scope?: RefObject<Element | null>;
 };
 type Entry = { current: Registration };

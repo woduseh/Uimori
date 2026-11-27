@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -200,8 +201,8 @@ export function HelperArtifactCard({
         <LoadingState
           presentation="placeholder"
           loading={!readError}
-          error={translateMessage(readError)}
-          label={t('helpers.m142')}
+          error={legacyUiMessage(readError)}
+          label={uiMessage('helpers.m142')}
           onRetry={retry}
         />
       )}
@@ -239,7 +240,7 @@ export function HelperArtifactCard({
         </NoticeBanner>
       )}
       {copyError && <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>}
-      <TransientNotice content={message} />
+      <TransientNotice content={legacyUiMessage(message)} />
     </section>
   );
 }

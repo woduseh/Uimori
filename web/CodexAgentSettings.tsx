@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, formatDate, message as legacyDescriptor } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { CheckIcon, CopyIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -197,8 +198,8 @@ export function CodexAgentSettings({
         <LoadingState
           presentation="region"
           loading={!error}
-          error={translateMessage(error)}
-          label={t('providers.m424')}
+          error={legacyUiMessage(error)}
+          label={uiMessage('providers.m424')}
           onRetry={recheck}
         />
       ) : (
@@ -357,7 +358,7 @@ export function CodexAgentSettings({
             <ConfirmDialog
               open={disconnecting}
               title={t('providers.codexDisconnectTitle')}
-              message={t('providers.codexDisconnectMessage')}
+              body={t('providers.codexDisconnectMessage')}
               action={t('providers.m462')}
               busy={busy}
               onCancel={() => setDisconnecting(false)}
@@ -374,7 +375,7 @@ export function CodexAgentSettings({
           {translateMessage(error)}
         </NoticeBanner>
       )}
-      <TransientNotice content={copied ? legacyDescriptor('providers.loginCodeCopied') : ''} />
+      <TransientNotice content={copied ? uiMessage('providers.loginCodeCopied') : null} />
     </section>
   );
 }

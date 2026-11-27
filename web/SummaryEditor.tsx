@@ -93,7 +93,7 @@ export function SummaryEditor({
       <ConfirmDialog
         open={discardOpen}
         title={t('reader.cancelEditing')}
-        message={t('reader.discardTheUnsavedTextEdits')}
+        body={t('reader.discardTheUnsavedTextEdits')}
         action={t('reader.discardEditsAndClose')}
         onCancel={() => setDiscardOpen(false)}
         onConfirm={() => {

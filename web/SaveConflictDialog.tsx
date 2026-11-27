@@ -1,4 +1,5 @@
 import { t, translateMessage, useI18n, message as legacyDescriptor } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
@@ -83,7 +84,9 @@ export function SaveConflictDialog({
             : savedReview.content}
         </section>
       )}
-      {loading && <LoadingState presentation="placeholder" label={t('shared.reviewLoading')} />}
+      {loading && (
+        <LoadingState presentation="placeholder" label={uiMessage('shared.reviewLoading')} />
+      )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </>
   );

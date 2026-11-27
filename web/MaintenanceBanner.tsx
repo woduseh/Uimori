@@ -1,4 +1,5 @@
 import { useI18n } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { useEffect, useState } from 'react';
 import { type MaintenanceStatus, selfHostEndpoints } from '#contracts';
 import { callEndpoint, knownMaintenance, maintenanceChangedEvent } from './api.js';
@@ -36,7 +37,7 @@ export function MaintenanceBanner() {
   }, []);
   if (!state || state.status !== 'closed') return null;
   return (
-    <NoticeBanner label={t('outside.maintenanceLabel')} className="maintenance-banner">
+    <NoticeBanner label={uiMessage('outside.maintenanceLabel')} className="maintenance-banner">
       <strong>{t('outside.maintenanceTitle')}</strong> {t('outside.maintenancePaused')}
       <details>
         <summary>{t('outside.details')}</summary>

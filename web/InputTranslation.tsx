@@ -1,4 +1,5 @@
 import { useI18n, translateMessage } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { Check, Languages, Square, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { INPUT_TRANSLATION_LANGUAGES } from '../core/input-translation.js';
@@ -170,7 +171,7 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
       aria-label={t('prompts.uiInputTranslationStatus')}
     >
       {translation.busy && (
-        <LoadingState presentation="placeholder" label={t('prompts.uiTranslatingInput')} />
+        <LoadingState presentation="placeholder" label={uiMessage('prompts.uiTranslatingInput')} />
       )}
       {translation.original !== null && (
         <div className="input-translation-original">

@@ -1,9 +1,10 @@
 import type { PromptWorkspace } from '../core/product.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 
-type Snapshot = Readonly<{ workspace: PromptWorkspace | null; error: string }>;
+type Snapshot = Readonly<{ workspace: PromptWorkspace | null; error: UiMessage | null }>;
 type Session = { requested: number; controller: AbortController; flight?: Promise<void> };
-const empty: Snapshot = { workspace: null, error: '' };
+const empty: Snapshot = { workspace: null, error: null };
 
 export function createPromptWorkspaceStore(options: {
   load: (signal: AbortSignal) => Promise<PromptWorkspace>;
@@ -23,11 +24,11 @@ export function createPromptWorkspaceStore(options: {
         const requested = owner.requested;
         let next: Snapshot;
         try {
-          next = { workspace: await options.load(owner.controller.signal), error: '' };
+          next = { workspace: await options.load(owner.controller.signal), error: null };
         } catch (caught) {
           next = {
             workspace: snapshot.workspace,
-            error: errorDescriptor(caught),
+            error: toUiMessage(caught),
           };
         }
         if (session !== owner) return;

@@ -1,5 +1,5 @@
 import { t, useI18n, formatNumber, formatDate } from './i18n.js';
-import { formatUiMessage, type UiMessage } from './ui-message.js';
+import { formatUiMessage, type UiMessage, uiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
@@ -272,13 +272,13 @@ export function UsagePanel({
         <LoadingState
           loading={busy}
           error={error}
-          label={t('visualpanels.loadingUsage')}
-          errorLabel={t('visualpanels.couldNotLoadUsage')}
+          label={uiMessage('visualpanels.loadingUsage')}
+          errorLabel={uiMessage('visualpanels.couldNotLoadUsage')}
           onRetry={retry}
         />
       )}
       {current && busy && (
-        <LoadingState presentation="inline" label={t('visualpanels.refreshingUsage')} />
+        <LoadingState presentation="inline" label={uiMessage('visualpanels.refreshingUsage')} />
       )}
       {current && error && (
         <NoticeBanner

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -270,8 +271,8 @@ export function PreviousVersionAction<K extends string>({
     previous.status === 'loading' || previous.status === 'failed' ? (
       <LoadingState
         presentation="inline"
-        label={t('shared.loadingPrevious')}
-        error={previous.status === 'failed' ? previous.error : ''}
+        label={uiMessage('shared.loadingPrevious')}
+        error={previous.status === 'failed' ? legacyUiMessage(previous.error) : null}
         onRetry={load}
       />
     ) : previous.status === 'none' ? (

@@ -6,7 +6,14 @@ import {
   message as descriptor,
   messageRef,
 } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
+import {
+  UiError,
+  uiMessage,
+  type UiMessage,
+  legacyUiMessage,
+  formatUiMessage,
+} from './ui-message.js';
 import type { RequestImage } from '../core/request-images.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createImageOwnerDisplayText } from '../core/image-placement.js';
@@ -124,7 +131,7 @@ type ReaderProps = {
   assets: Asset[];
   imageOwner?: boolean;
   refresh: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   onNativeNotice?: (messages: string[]) => void;
   onFork: (sourceId: string) => Promise<void>;
   onDeleteScene?: (chatId: string, sourceId: string) => void;
@@ -398,7 +405,7 @@ function SourceReaderContent({
         }
       }
     } catch (error) {
-      onError((error as Error).message);
+      onError(toUiMessage(error));
       throw error;
     }
   };
@@ -575,9 +582,7 @@ function SourceReaderContent({
       await refresh();
       return true;
     } catch (error) {
-      onError(
-        error instanceof Error ? error.message : descriptor('reader.couldNotUpdateTheRecord')
-      );
+      onError(toUiMessage(error, 'reader.couldNotUpdateTheRecord'));
       return false;
     }
   };
@@ -599,11 +604,11 @@ function SourceReaderContent({
     setDetailsOpen(true);
   };
   const [pending, setPending] = useState('');
-  const [actionError, setActionError] = useState('');
+  const [actionError, setActionError] = useState<UiMessage | null>(null);
   const [actionErrorSource, setActionErrorSource] = useState('');
-  const reportActionError = (message: string) => {
+  const reportActionError = (error: UiMessage | null) => {
     setActionErrorSource('');
-    setActionError(message);
+    setActionError(error);
   };
   const translationLoading = pending === 'translation' || !!(translation && activeJob(translation));
   const [streamingTranslationJob, setStreamingTranslationJob] = useState('');
@@ -870,16 +875,14 @@ function SourceReaderContent({
     if (requestPending.current) return;
     requestPending.current = true;
     setPending(name);
-    setActionError('');
+    setActionError(null);
     setActionErrorSource('');
     try {
       await operation();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : descriptor('reader.couldNotCompleteTheRequest');
       if (mounted.current) {
         setActionErrorSource(name);
-        setActionError(message);
+        setActionError(toUiMessage(error, 'reader.couldNotCompleteTheRequest'));
       }
     } finally {
       requestPending.current = false;
@@ -1072,7 +1075,7 @@ function SourceReaderContent({
         throw new UiError(uiMessage('reader.copyingIsUnavailableInThisBrowser'));
       await navigator.clipboard.writeText(text);
       if (!mounted.current) return;
-      if (from === 'menu') showNotice(descriptor('reader.textCopiedNotice'));
+      if (from === 'menu') showNotice(uiMessage('reader.textCopiedNotice'));
       else setCopied(true);
     });
   return (
@@ -1166,13 +1169,16 @@ function SourceReaderContent({
             {validTranslation && translationLoading && mode === 'translation' && (
               <LoadingState
                 presentation="inline"
-                label={t('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
+                label={uiMessage('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
               />
             )}
             {hasPackages && !presentation ? (
-              <LoadingState presentation="placeholder" label={t('reader.preparingTheBotView')} />
+              <LoadingState
+                presentation="placeholder"
+                label={uiMessage('reader.preparingTheBotView')}
+              />
             ) : storyUiLoading ? (
-              <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />
+              <LoadingState presentation="placeholder" label={uiMessage('reader.loadingResult')} />
             ) : nativeDisplay ? (
               <div
                 data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
@@ -1290,7 +1296,7 @@ function SourceReaderContent({
                   {translationStreaming ? null : translationLoading ? (
                     <LoadingState
                       presentation="placeholder"
-                      label={t('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
+                      label={uiMessage('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
                     />
                   ) : (
                     <p>
@@ -1795,7 +1801,7 @@ function SourceReaderContent({
             )}
             {actionError && (
               <p className="error" role="alert">
-                {translateMessage(actionError)}
+                {formatUiMessage(actionError)}
               </p>
             )}
           </Dialog>
@@ -1840,7 +1846,7 @@ function SourceReaderContent({
             </label>
             {actionError && (
               <p className="error" role="alert">
-                {translateMessage(actionError)}
+                {formatUiMessage(actionError)}
               </p>
             )}
             <div className="form-actions">
@@ -1916,7 +1922,7 @@ function SourceReaderContent({
         </div>
         {actionError && (
           <p className="error source-action-error" role="alert">
-            {translateMessage(actionError)}
+            {formatUiMessage(actionError)}
             {onModelSettings &&
               (actionErrorSource === 'retry' || actionErrorSource === 'translation') && (
                 <button type="button" className="secondary" onClick={onModelSettings}>
@@ -2145,7 +2151,7 @@ function TextEditor({
       <ConfirmDialog
         open={discardOpen}
         title={t('reader.cancelEditing')}
-        message={t('reader.discardTheUnsavedTextEdits')}
+        body={t('reader.discardTheUnsavedTextEdits')}
         action={t('reader.discardEditsAndClose')}
         onCancel={() => {
           setDiscardOpen(false);
@@ -2208,7 +2214,7 @@ export function JobActions({
 }: {
   job: Job;
   refresh: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   compact?: boolean;
 }) {
   useI18n();
@@ -2217,7 +2223,7 @@ export function JobActions({
   const perform = async (operation: 'retry' | 'cancel' | 'rejudge') => {
     setPending(true);
     setError('');
-    onError('');
+    onError(null);
     try {
       await api(`/jobs/${job.id}/${operation}`, {});
       await refresh();
@@ -2226,11 +2232,13 @@ export function JobActions({
         error instanceof Error ? error.message : descriptor('reader.couldNotCompleteTheRequest');
       setError(message);
       onError(
-        descriptor('reader.jobFailure', {
-          kind: job.kind,
-          mode: job.imageTarget?.mode ?? 'original',
-          error: messageRef(message),
-        })
+        legacyUiMessage(
+          descriptor('reader.jobFailure', {
+            kind: job.kind,
+            mode: job.imageTarget?.mode ?? 'original',
+            error: messageRef(message),
+          })
+        )
       );
     } finally {
       setPending(false);
@@ -2306,7 +2314,7 @@ export function JobCard({
 }: {
   job: Job;
   refresh: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   hideText?: boolean;
 }) {
   useI18n();

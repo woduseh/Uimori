@@ -5,7 +5,8 @@ import { callEndpoint } from './api.js';
 import { ChatModelPicker } from './ChatModelPicker.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
-import { message, t, translateMessage, useI18n } from './i18n.js';
+import { message, t, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useRetryableEffect } from './useRetryableEffect.js';
 import { errorDescriptor } from './api-errors.js';
@@ -130,8 +131,8 @@ export function HelperModelPicker({
         disabled={!current || needsRead}
         loading={reading}
         pending={pending}
-        error={writeError || readError}
-        errorLabel={writeError ? t('helpers.modelCheckAgain') : undefined}
+        error={legacyUiMessage(writeError || readError)}
+        errorLabel={writeError ? uiMessage('helpers.modelCheckAgain') : undefined}
         onRetry={() => {
           retryRead();
           void shared.refresh();
@@ -149,10 +150,10 @@ export function HelperModelPicker({
             </button>
           }
         >
-          {t('helpers.modelRefreshFailed', { error: translateMessage(shared.error) })}
+          {shared.error && uiMessage('helpers.modelRefreshFailed', { error: shared.error })}
         </NoticeBanner>
       )}
-      <TransientNotice content={notice} />
+      <TransientNotice content={legacyUiMessage(notice)} />
     </>
   );
 }

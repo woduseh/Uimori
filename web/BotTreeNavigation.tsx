@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, formatNumber, message as retainedMessage } from './i18n.js';
+import { uiMessage, legacyUiMessage, type UiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { memo, useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
@@ -83,7 +84,7 @@ export function NavigationQuickActions({
 export const BotNavigation = memo(function BotNavigation(
   props: Props & {
     onLibraryChanged: () => Promise<void>;
-    libraryError?: string;
+    libraryError?: UiMessage | null;
     onSearch: () => void;
     onNewChat: () => void;
     onNewHelper?: () => void;
@@ -269,7 +270,7 @@ export const BotNavigation = memo(function BotNavigation(
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m282');
       setError(message);
-      onError(message);
+      onError(legacyUiMessage(message));
       await onLibraryChanged().catch(() => {});
       return false;
     } finally {
@@ -762,8 +763,8 @@ export const BotNavigation = memo(function BotNavigation(
                     <LoadingState
                       presentation="inline"
                       loading={!props.libraryError}
-                      error={props.libraryError ? translateMessage(props.libraryError) : undefined}
-                      label={t('transfer.m303')}
+                      error={props.libraryError}
+                      label={uiMessage('transfer.m303')}
                       onRetry={() => void onLibraryChanged().catch(() => {})}
                     />
                   ))}
@@ -780,7 +781,7 @@ export const BotNavigation = memo(function BotNavigation(
       <ConfirmDialog
         open={removingFolder !== null}
         title={t('transfer.deleteFolderTitle', { name: removingFolder?.title ?? '' })}
-        message={t('transfer.deleteBotFolderMessage')}
+        body={t('transfer.deleteBotFolderMessage')}
         action={t('transfer.m300')}
         busy={busy}
         onCancel={() => setRemovingFolder(null)}

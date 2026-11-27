@@ -1,4 +1,5 @@
 import { t, useI18n } from './i18n.js';
+import { type UiMessage } from './ui-message.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
 import { SceneInspector } from './SceneInspector.js';
@@ -35,7 +36,7 @@ type Props = {
   connected: boolean;
   revision: number;
   refresh: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onInspect?: (runId: string) => void;
   leading?: ReactNode;
   badges?: ReactNode;

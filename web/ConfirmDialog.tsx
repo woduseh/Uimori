@@ -7,7 +7,7 @@ import './deletion.css';
 export function ConfirmDialog({
   open,
   title,
-  message,
+  body,
   action,
   busy = false,
   disabled = false,
@@ -17,7 +17,7 @@ export function ConfirmDialog({
 }: {
   open: boolean;
   title: string;
-  message: string;
+  body: string;
   action: string;
   busy?: boolean;
   disabled?: boolean;
@@ -37,7 +37,7 @@ export function ConfirmDialog({
         if (!busy) onCancel();
       }}
     >
-      <p>{message}</p>
+      <p>{body}</p>
       {children}
       <div className="form-actions">
         <button type="button" className="secondary" disabled={busy} onClick={onCancel}>

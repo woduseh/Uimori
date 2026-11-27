@@ -1,4 +1,5 @@
 import { t, useI18n } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ResponseDisplayMode } from './presentation-settings.js';
 import type { ResponseStreamPage, ResponseTaskKind } from '../core/response-stream.js';
@@ -54,7 +55,9 @@ function StreamingHelperText({ text, finished }: { text: string; finished: boole
   return (
     <HelperMessageProse text={complete}>
       <PendingParagraph text={composing ? pending.slice(0, last.start) : pending} />
-      {composing && <LoadingState presentation="placeholder" label={t('storyUi.composing')} />}
+      {composing && (
+        <LoadingState presentation="placeholder" label={uiMessage('storyUi.composing')} />
+      )}
     </HelperMessageProse>
   );
 }
@@ -66,7 +69,8 @@ export function StreamingStoryText({
   finished = false,
 }: StreamingStoryProps & { finished?: boolean }) {
   const parts = useStoryUiSegments(text);
-  if (!parts) return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
+  if (!parts)
+    return <LoadingState presentation="placeholder" label={uiMessage('reader.loadingResult')} />;
   return (
     <>
       {parts.map((part, index) =>
@@ -132,9 +136,11 @@ export function ResponseDisplay({ mode, ...props }: ResponseProps & { mode: Resp
   useI18n();
   if (mode === 'stream') return <StreamingResponse {...props} />;
   if (active(props.taskStatus))
-    return <LoadingState presentation="placeholder" label={t('reader.waitingForAResponse')} />;
+    return (
+      <LoadingState presentation="placeholder" label={uiMessage('reader.waitingForAResponse')} />
+    );
   if (props.taskStatus === 'completed')
-    return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
+    return <LoadingState presentation="placeholder" label={uiMessage('reader.loadingResult')} />;
   return (
     <PartialResponse key={props.taskId}>
       <StreamingResponse {...props} settled />
@@ -387,15 +393,15 @@ export function StreamingResponse({
           presentation="placeholder"
           label={
             settled || (!active(taskStatus) && taskStatus !== 'completed')
-              ? t('reader.loadingPartialResponse')
+              ? uiMessage('reader.loadingPartialResponse')
               : taskStatus === 'completed'
-                ? t('reader.loadingResult')
-                : t('reader.waitingForAResponse')
+                ? uiMessage('reader.loadingResult')
+                : uiMessage('reader.waitingForAResponse')
           }
         />
       );
     if (!settled && status === 'completed')
-      return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
+      return <LoadingState presentation="placeholder" label={uiMessage('reader.loadingResult')} />;
     return settled ? <small role="status">{t('reader.noPartialResponseToShow')}</small> : null;
   }
   const shownParts = taskKind === 'translation' ? parts.slice(-1) : parts;

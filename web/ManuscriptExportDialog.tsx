@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { useRef, useState } from 'react';
 import type {
@@ -173,8 +174,8 @@ export function ManuscriptExportDialog({
         <LoadingState
           presentation="inline"
           loading={!error}
-          error={translateMessage(error)}
-          label={t('transfer.m204')}
+          error={legacyUiMessage(error)}
+          label={uiMessage('transfer.m204')}
           onRetry={retryRead}
         />
       )}

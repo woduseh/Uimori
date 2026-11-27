@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import {
   useCallback,
   useEffect,
@@ -787,7 +788,9 @@ export function HelperSessionBar(props: Props) {
         }}
       >
         <p>{t('helpers.m326', { title: helperSessionTitle(deleting) })}</p>
-        {!impact && !readError && <LoadingState presentation="inline" label={t('helpers.m188')} />}
+        {!impact && !readError && (
+          <LoadingState presentation="inline" label={uiMessage('helpers.m188')} />
+        )}
         {impact && !impact.canDelete && (
           <p role="status">
             {t('helpers.m328', {

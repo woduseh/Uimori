@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import type { PromptWorkspace } from '../core/product.js';
 import { createPromptWorkspaceStore } from '../web/prompt-workspace-store.js';
-import { legacyMessageString, UiError, uiMessage } from '../web/ui-message.js';
+import { UiError, uiMessage } from '../web/ui-message.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -56,7 +56,7 @@ test('multiple consumers share one initial request, answer and listener lifecycl
   third();
   expect(f.stop).toHaveBeenCalledTimes(1);
   expect(f.reads[0].signal.aborted).toBe(true);
-  expect(f.store.getSnapshot()).toEqual({ workspace: null, error: '' });
+  expect(f.store.getSnapshot()).toEqual({ workspace: null, error: null });
 });
 
 test('invalidation during a failing read discards the old answer and coalesces a trailing read', async () => {
@@ -72,10 +72,10 @@ test('invalidation during a failing read discards the old answer and coalesces a
   await Promise.resolve();
   expect(f.reads).toHaveLength(2);
   expect(notify).not.toHaveBeenCalled();
-  expect(f.store.getSnapshot()).toEqual({ workspace: null, error: '' });
+  expect(f.store.getSnapshot()).toEqual({ workspace: null, error: null });
   f.reads[1].resolve(workspace(2));
   await done;
-  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: '' });
+  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: null });
   expect(notify).toHaveBeenCalledTimes(1);
   unsubscribe();
 });
@@ -93,12 +93,12 @@ test('latest failure keeps the last value and recovery clears its error', async 
   const failure = uiMessage('shared.loadFailed');
   f.reads[1].reject(new UiError(failure));
   await done;
-  expect(f.store.getSnapshot()).toEqual({ workspace: value, error: legacyMessageString(failure) });
+  expect(f.store.getSnapshot()).toEqual({ workspace: value, error: failure });
   done = f.store.refresh();
   await Promise.resolve();
   f.reads[2].resolve(workspace(3));
   await done;
-  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(3), error: '' });
+  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(3), error: null });
   unsubscribe();
 });
 
@@ -120,6 +120,6 @@ test('last unsubscribe rejects a late success even after another session mounts'
   expect(notify).not.toHaveBeenCalled();
   f.reads[1].resolve(workspace(2));
   await current;
-  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: '' });
+  expect(f.store.getSnapshot()).toEqual({ workspace: workspace(2), error: null });
   second();
 });

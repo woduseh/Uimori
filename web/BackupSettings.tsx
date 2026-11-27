@@ -310,7 +310,7 @@ export function BackupSettings({
           </>
         )}
         {!status && !error && (
-          <LoadingState presentation="placeholder" label={t('transfer.m173')} />
+          <LoadingState presentation="placeholder" label={uiMessage('transfer.m173')} />
         )}
         <TransientNotice content={notice} />
         <Dialog

@@ -1,4 +1,5 @@
 import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useState } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { RunningIcon } from './ui-icons.js';
@@ -10,23 +11,24 @@ export function ReaderLoadingState({
   onRetry,
 }: {
   loading: boolean;
-  error: string;
+  error: UiMessage | null;
   onRetry: () => void;
 }) {
   useI18n();
   const [visible, setVisible] = useState(false);
   const [slow, setSlow] = useState(false);
+  const failed = !!error;
   useEffect(() => {
     setVisible(false);
     setSlow(false);
-    if (!loading || error) return;
+    if (!loading || failed) return;
     const show = setTimeout(() => setVisible(true), 200);
     const delayed = setTimeout(() => setSlow(true), 3000);
     return () => {
       clearTimeout(show);
       clearTimeout(delayed);
     };
-  }, [loading, error]);
+  }, [loading, failed]);
 
   if (error)
     return (
@@ -41,9 +43,9 @@ export function ReaderLoadingState({
           presentation="placeholder"
           loading={loading}
           error={error}
-          errorLabel={t('reader.couldNotLoadTheText')}
+          errorLabel={uiMessage('reader.couldNotLoadTheText')}
           onRetry={onRetry}
-          retryLabel={t('reader.reloadText')}
+          retryLabel={uiMessage('reader.reloadText')}
         />
       </div>
     );

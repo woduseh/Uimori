@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage, formatDate, formatNumber } from './i18n.js';
+import { type UiMessage } from './ui-message.js';
 import { activityStatusLabel } from './ActivityStatus.js';
 import { Check } from 'lucide-react';
 import { DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
@@ -27,7 +28,7 @@ type Props = {
   onCopyChat?: (chatId: string) => void;
   copyingChats?: string[];
   onChatsChanged: () => Promise<void>;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
   onAcknowledge: (items: ActivityFeedItem[]) => void;
   onInspect: (item: ActivityFeedItem) => void;
   onRetry: () => void;

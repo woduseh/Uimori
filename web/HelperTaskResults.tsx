@@ -33,6 +33,7 @@ import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { ContextBar, ContextLegend, ContextTable } from './ContextBreakdown.js';
 import { helperInputBreakdown } from './HelperContextUsage.js';
 import { formatNumber, t, useI18n } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { DropdownIcon } from './ui-icons.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -689,9 +690,13 @@ export function HelperTaskResults({
       <LoadingState
         presentation="inline"
         loading={reading && shown}
-        error={failed ? t(data ? 'helperResults.refreshFailed' : 'helperResults.loadFailed') : ''}
-        errorLabel={t('helperResults.title')}
-        label={t('helperResults.loading')}
+        error={
+          failed
+            ? uiMessage(data ? 'helperResults.refreshFailed' : 'helperResults.loadFailed')
+            : null
+        }
+        errorLabel={uiMessage('helperResults.title')}
+        label={uiMessage('helperResults.loading')}
         onRetry={retry}
       />
     </section>

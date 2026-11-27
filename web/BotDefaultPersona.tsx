@@ -1,4 +1,5 @@
 import { t, useI18n, translateMessage } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -91,9 +92,9 @@ export function BotDefaultPersona({
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={translateMessage(error)}
-            errorLabel={t('library.couldNotLoadTheDefaultPersona')}
-            label={t('library.loadingDefaults')}
+            error={legacyUiMessage(error)}
+            errorLabel={uiMessage('library.couldNotLoadTheDefaultPersona')}
+            label={uiMessage('library.loadingDefaults')}
             onRetry={retryLoad}
           />
         )}

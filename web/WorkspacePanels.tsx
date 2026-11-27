@@ -3,7 +3,9 @@ import {
   matchesSettingsSearch as matchesSearch,
 } from './SettingsSearch.js';
 import { LanguageSelect } from './LanguageSelect.js';
-import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import { uiMessage, formatUiMessage, type UiMessage, type MessageKey } from './ui-message.js';
 import { PushSettings } from './PushSettings.js';
 import { AutoTranslationDefaults } from './AutoTranslationDefaults.js';
 import { ChatGenerationDefaults } from './ChatGenerationDefaults.js';
@@ -97,13 +99,13 @@ export function TasksPanel({
   const [jobs, setJobs] = useState<
     Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>[] | null
   >(null);
-  const [jobsError, setJobsError] = useState('');
+  const [jobsError, setJobsError] = useState<UiMessage | null>(null);
   const [filter, setFilter] = useState<TaskHistoryFilter>('all');
   const [runList, setRunList] = useState<{
     chatId: string;
     runs: ReaderRun[] | null;
     loading: boolean;
-    error: string;
+    error: UiMessage | null;
   } | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Full summaries are fetched only while this panel is mounted and on chat/event changes.
   const retryRuns = useRetryableEffect(() => {
@@ -114,11 +116,11 @@ export function TasksPanel({
       chatId,
       runs: old?.chatId === chatId ? old.runs : null,
       loading: true,
-      error: '',
+      error: null,
     }));
     void api<ReaderRun[]>(`/chats/${chatId}/reader-runs`)
       .then((runs) => {
-        if (alive) setRunList({ chatId, runs, loading: false, error: '' });
+        if (alive) setRunList({ chatId, runs, loading: false, error: null });
       })
       .catch((error) => {
         if (alive)
@@ -126,7 +128,7 @@ export function TasksPanel({
             chatId,
             runs: old?.chatId === chatId ? old.runs : null,
             loading: false,
-            error: error.message,
+            error: toUiMessage(error),
           }));
       });
     return () => {
@@ -137,7 +139,7 @@ export function TasksPanel({
   useEffect(() => {
     let alive = true;
     setJobs(null);
-    setJobsError('');
+    setJobsError(null);
     if (detail)
       void api<Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>[]>(
         `/chats/${detail.chat.id}/jobs`
@@ -146,7 +148,7 @@ export function TasksPanel({
           if (alive) setJobs(value);
         })
         .catch((error) => {
-          if (alive) setJobsError(error.message);
+          if (alive) setJobsError(toUiMessage(error));
         });
     return () => {
       alive = false;
@@ -176,11 +178,11 @@ export function TasksPanel({
   async function perform(key: string, operation: () => Promise<unknown>) {
     if (pending.includes(key)) return;
     setPending((old) => [...old, key]);
-    state.setError('');
+    state.setError(null);
     try {
       await operation();
     } catch (error) {
-      state.setError((error as Error).message);
+      state.setError(toUiMessage(error));
     } finally {
       setPending((old) => old.filter((item) => item !== key));
     }
@@ -211,10 +213,10 @@ export function TasksPanel({
         presentation={allRuns ? 'inline' : 'placeholder'}
         loading={!listed || listed.loading}
         error={listed?.error}
-        label={t('chatsettings.m5')}
-        errorLabel={t('chatsettings.m6')}
+        label={uiMessage('chatsettings.m5')}
+        errorLabel={uiMessage('chatsettings.m6')}
         onRetry={retryRuns}
-        retryLabel={t('chatsettings.m7')}
+        retryLabel={uiMessage('chatsettings.m7')}
       />
       {allRuns && !listed?.loading && !listed?.error && !scoped.length && (
         <p className="muted">{inspectedRun ? t('chatsettings.m8') : t('chatsettings.m9')}</p>
@@ -331,9 +333,9 @@ export function TasksPanel({
       <LoadingState
         presentation="inline"
         loading={!jobs && !jobsError}
-        error={translateMessage(jobsError)}
-        label={t('chatsettings.m13')}
-        errorLabel={t('chatsettings.m14')}
+        error={jobsError}
+        label={uiMessage('chatsettings.m13')}
+        errorLabel={uiMessage('chatsettings.m14')}
       />
       {allRuns && (
         <ChatUsage key={detail.chat.id} chatId={detail.chat.id} revision={detail.reader.cursor} />
@@ -387,14 +389,19 @@ const appSaveSections = [
   'themes',
 ] as const;
 
-function getLibrarySettingsSubjects(): Record<string, string> {
-  return {
-    models: t('chatsettings.m46'),
-    prompts: t('chatsettings.m47'),
-    connections: t('chatsettings.m48'),
-    illustrations: t('chatsettings.m49'),
+const librarySettingsSubjects: Partial<Record<string, { loading: MessageKey; error: MessageKey }>> =
+  {
+    models: { loading: 'chatsettings.modelsLoading', error: 'chatsettings.modelsError' },
+    prompts: { loading: 'chatsettings.promptsLoading', error: 'chatsettings.promptsError' },
+    connections: {
+      loading: 'chatsettings.connectionsLoading',
+      error: 'chatsettings.connectionsError',
+    },
+    illustrations: {
+      loading: 'chatsettings.illustrationsLoading',
+      error: 'chatsettings.illustrationsError',
+    },
   };
-}
 
 export function AppSettingsPanel({
   initialTab,
@@ -427,7 +434,6 @@ export function AppSettingsPanel({
   const sessionRequired = useContext(SessionRequiredContext);
   const settingsCategories = getSettingsCategories(sessionRequired);
   const settingsGroupLabels = getSettingsGroupLabels();
-  const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
   const shortcutsEnabled = useShortcutsEnabled();
   const shortcutBindings = useShortcutBindings();
@@ -464,7 +470,7 @@ export function AppSettingsPanel({
   const [discarding, setDiscarding] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
   const saveGroup = useSettingsSaveGroup(appSaveSections);
-  const [discardError, setDiscardError] = useState('');
+  const [discardError, setDiscardError] = useState<UiMessage | null>(null);
   const dirty =
     connectionDirty ||
     archiveDirty ||
@@ -784,305 +790,308 @@ export function AppSettingsPanel({
           )}
         </div>
         <div className="settings-pages" hidden={!showingDetail}>
-          {settingsCategories.map(({ key }) => (
-            <section
-              className="settings-page"
-              data-settings-section={key}
-              role="tabpanel"
-              id={`${id}-${key}-panel`}
-              aria-labelledby={`${id}-${key}-tab`}
-              hidden={active !== key || !showingDetail}
-              tabIndex={0}
-              key={key}
-            >
-              {visited.includes(key) && (
-                <>
-                  {key === 'themes' && (
-                    <ThemeSettings
-                      storyUiThemeTarget={storyUiThemeTarget}
-                      active={active === 'themes' && showingDetail}
-                      onDirtyChange={setThemeDirty}
-                      onSaveHandlerChange={saveGroup.registrations.themes}
-                    />
-                  )}
-                  {key === 'about' && <AppAbout />}
-                  {librarySettingsSubjects[key] && !state.library && (
-                    <LoadingState
-                      presentation="region"
-                      loading={!state.libraryError}
-                      error={state.libraryError}
-                      label={t(`chatsettings.${key}Loading`)}
-                      errorLabel={t(`chatsettings.${key}Error`)}
-                      onRetry={() => void state.retryLibrary().catch(() => {})}
-                    />
-                  )}
-                  {key === 'general' && (
-                    <SettingsDetail
-                      open={shortcutDetail}
-                      location={[t('chatsettings.m15'), t('shortcuts.customize')]}
-                      onBack={() => setShortcutDetail(false)}
-                    >
-                      {shortcutDetail && <ShortcutSettings />}
-                    </SettingsDetail>
-                  )}
-                  {key === 'general' && (
-                    <section
-                      id={`${id}-general-display`}
-                      tabIndex={-1}
-                      className="settings-section settings-group"
-                      hidden={shortcutDetail}
-                    >
-                      <h3>{t('chatsettings.m16')}</h3>
-                      <div className="settings-group-body">
-                        <LanguageSelect />
-                        <label className="settings-row">
-                          <span className="settings-row-copy">
-                            <strong>{t('chatsettings.m59')}</strong>
-                          </span>
-                          <select
-                            aria-label={t('chatsettings.m60')}
-                            value={theme}
-                            onChange={(event) =>
-                              setTheme(event.target.value as 'system' | 'dark' | 'light')
-                            }
-                          >
-                            <option value="system">{t('chatsettings.m61')}</option>
-                            <option value="dark">{t('chatsettings.m62')}</option>
-                            <option value="light">{t('chatsettings.m63')}</option>
-                          </select>
-                        </label>
-                        <label className="settings-row">
-                          <span className="settings-row-copy">
-                            <strong>{t('settings.sendKey')}</strong>
-                            <small>
-                              {t('settings.newlineKey')}{' '}
-                              <kbd>{enterSend ? 'Shift + Enter' : 'Enter'}</kbd>
-                            </small>
-                          </span>
-                          <span className="settings-row-control">
+          {settingsCategories.map(({ key }) => {
+            const subject = librarySettingsSubjects[key];
+            return (
+              <section
+                className="settings-page"
+                data-settings-section={key}
+                role="tabpanel"
+                id={`${id}-${key}-panel`}
+                aria-labelledby={`${id}-${key}-tab`}
+                hidden={active !== key || !showingDetail}
+                tabIndex={0}
+                key={key}
+              >
+                {visited.includes(key) && (
+                  <>
+                    {key === 'themes' && (
+                      <ThemeSettings
+                        storyUiThemeTarget={storyUiThemeTarget}
+                        active={active === 'themes' && showingDetail}
+                        onDirtyChange={setThemeDirty}
+                        onSaveHandlerChange={saveGroup.registrations.themes}
+                      />
+                    )}
+                    {key === 'about' && <AppAbout />}
+                    {subject && !state.library && (
+                      <LoadingState
+                        presentation="region"
+                        loading={!state.libraryError}
+                        error={state.libraryError}
+                        label={uiMessage(subject.loading)}
+                        errorLabel={uiMessage(subject.error)}
+                        onRetry={() => void state.retryLibrary().catch(() => {})}
+                      />
+                    )}
+                    {key === 'general' && (
+                      <SettingsDetail
+                        open={shortcutDetail}
+                        location={[t('chatsettings.m15'), t('shortcuts.customize')]}
+                        onBack={() => setShortcutDetail(false)}
+                      >
+                        {shortcutDetail && <ShortcutSettings />}
+                      </SettingsDetail>
+                    )}
+                    {key === 'general' && (
+                      <section
+                        id={`${id}-general-display`}
+                        tabIndex={-1}
+                        className="settings-section settings-group"
+                        hidden={shortcutDetail}
+                      >
+                        <h3>{t('chatsettings.m16')}</h3>
+                        <div className="settings-group-body">
+                          <LanguageSelect />
+                          <label className="settings-row">
+                            <span className="settings-row-copy">
+                              <strong>{t('chatsettings.m59')}</strong>
+                            </span>
                             <select
-                              aria-label={t('settings.sendKey')}
-                              value={enterSend ? 'enter' : 'modifier'}
-                              onChange={(event) => setEnterSend(event.target.value === 'enter')}
+                              aria-label={t('chatsettings.m60')}
+                              value={theme}
+                              onChange={(event) =>
+                                setTheme(event.target.value as 'system' | 'dark' | 'light')
+                              }
                             >
-                              <option value="enter">Enter</option>
-                              <option value="modifier">Ctrl / Cmd + Enter</option>
+                              <option value="system">{t('chatsettings.m61')}</option>
+                              <option value="dark">{t('chatsettings.m62')}</option>
+                              <option value="light">{t('chatsettings.m63')}</option>
                             </select>
-                          </span>
-                        </label>
-                        <label className="settings-row settings-row-toggle">
-                          <span className="settings-row-copy">
-                            <strong>{t('shortcuts.setting')}</strong>
-                            <small>
-                              {t('shortcuts.settingHint', {
-                                key: safeModeKey,
-                              })}
-                            </small>
-                          </span>
-                          <span className="settings-row-control">
-                            <Switch
-                              aria-label={t('shortcuts.setting')}
-                              checked={shortcutsEnabled}
-                              onChange={(event) => setShortcutsEnabled(event.target.checked)}
-                            />
-                          </span>
-                        </label>
-                        <div className="settings-row">
-                          <span className="settings-row-copy">
-                            <strong>{t('shortcuts.customize')}</strong>
-                            <small>{t('shortcuts.customizeHint')}</small>
-                          </span>
-                          <span className="settings-row-control">
-                            {customShortcutCount > 0 && (
-                              <small className="muted">
-                                {t('shortcuts.customCount', { count: customShortcutCount })}
+                          </label>
+                          <label className="settings-row">
+                            <span className="settings-row-copy">
+                              <strong>{t('settings.sendKey')}</strong>
+                              <small>
+                                {t('settings.newlineKey')}{' '}
+                                <kbd>{enterSend ? 'Shift + Enter' : 'Enter'}</kbd>
                               </small>
-                            )}
+                            </span>
+                            <span className="settings-row-control">
+                              <select
+                                aria-label={t('settings.sendKey')}
+                                value={enterSend ? 'enter' : 'modifier'}
+                                onChange={(event) => setEnterSend(event.target.value === 'enter')}
+                              >
+                                <option value="enter">Enter</option>
+                                <option value="modifier">Ctrl / Cmd + Enter</option>
+                              </select>
+                            </span>
+                          </label>
+                          <label className="settings-row settings-row-toggle">
+                            <span className="settings-row-copy">
+                              <strong>{t('shortcuts.setting')}</strong>
+                              <small>
+                                {t('shortcuts.settingHint', {
+                                  key: safeModeKey,
+                                })}
+                              </small>
+                            </span>
+                            <span className="settings-row-control">
+                              <Switch
+                                aria-label={t('shortcuts.setting')}
+                                checked={shortcutsEnabled}
+                                onChange={(event) => setShortcutsEnabled(event.target.checked)}
+                              />
+                            </span>
+                          </label>
+                          <div className="settings-row">
+                            <span className="settings-row-copy">
+                              <strong>{t('shortcuts.customize')}</strong>
+                              <small>{t('shortcuts.customizeHint')}</small>
+                            </span>
+                            <span className="settings-row-control">
+                              {customShortcutCount > 0 && (
+                                <small className="muted">
+                                  {t('shortcuts.customCount', { count: customShortcutCount })}
+                                </small>
+                              )}
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => setShortcutDetail(true)}
+                              >
+                                {t('shortcuts.change')}
+                              </button>
+                            </span>
+                          </div>
+                        </div>
+                        {compact ? (
+                          <details className="settings-desktop-panels">
+                            <summary>{t('settings.desktopPanels')}</summary>
+                            {desktopPanelRows}
+                          </details>
+                        ) : (
+                          <div className="settings-desktop-panels">
+                            <h4>{t('settings.desktopPanels')}</h4>
+                            {desktopPanelRows}
+                          </div>
+                        )}
+                      </section>
+                    )}
+                    {key === 'general' && (
+                      <section
+                        id={`${id}-general-generation`}
+                        tabIndex={-1}
+                        className="settings-section settings-group"
+                        hidden={shortcutDetail}
+                      >
+                        <h3>{t('chatsettings.m18')}</h3>
+                        <AutoTranslationDefaults />
+                        <ChatGenerationDefaults />
+                      </section>
+                    )}
+                    {key === 'general' && (
+                      <section
+                        id={`${id}-general-reading`}
+                        tabIndex={-1}
+                        className="settings-section"
+                        hidden={shortcutDetail}
+                      >
+                        <h3>{t('chatsettings.readingSettings')}</h3>
+                        {readingSettings}
+                      </section>
+                    )}
+                    {key === 'general' && (
+                      <section
+                        id={`${id}-general-services`}
+                        tabIndex={-1}
+                        className="settings-section settings-services"
+                        aria-label={t('chatsettings.m21')}
+                        hidden={shortcutDetail}
+                      >
+                        <h3>{t('chatsettings.m21')}</h3>
+                        <InstallApp />
+                        <PushSettings />
+                      </section>
+                    )}
+                    {key === 'usage' && (
+                      <UsagePanel
+                        connections={state.library?.connections}
+                        active={active === 'usage' && showingDetail}
+                      />
+                    )}
+                    {key === 'models' && state.library && (
+                      <ModelWorkspaceEditor
+                        library={state.library}
+                        onDirtyChange={setModelDirty}
+                        onSaveHandlerChange={saveGroup.registrations.model}
+                        onManage={() => select('connections')}
+                        onEditModel={(modelId) => {
+                          setProviderDetail({ kind: 'model', id: modelId });
+                          select('connections');
+                        }}
+                      />
+                    )}
+                    {key === 'prompts' && state.library && (
+                      <PromptWorkspaceEditor
+                        library={state.library}
+                        reload={state.loadLibrary}
+                        onDirtyChange={setPromptDirty}
+                        onSaveHandlerChange={saveGroup.registrations.prompt}
+                        onEditPrompt={onEditPrompt}
+                        navigationDisabled={dirty}
+                      />
+                    )}
+                    {key === 'connections' && (
+                      <div data-testid="connection-settings">
+                        {state.library && (
+                          <ConnectionEditor
+                            library={state.library}
+                            reload={state.loadLibrary}
+                            onError={state.setError}
+                            onDirtyChange={setConnectionDirty}
+                            onSaveHandlerChange={saveGroup.registrations.connection}
+                            detailRequest={providerDetail}
+                            onDetailRequestHandled={() => setProviderDetail(null)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {key === 'agents' && (
+                      <CodexAgentSettings
+                        active={active === 'agents' && showingDetail}
+                        onOpenModels={() => select('connections')}
+                      />
+                    )}
+                    {key === 'lore' && (
+                      <LoreContextDefaultsEditor
+                        onDirtyChange={setLoreDirty}
+                        onSaveHandlerChange={saveGroup.registrations.lore}
+                      />
+                    )}
+                    {key === 'illustrations' && state.library && (
+                      <IllustrationSettingsEditor
+                        library={state.library}
+                        scope={{
+                          chatId:
+                            state.destination === 'story' ? state.selected || undefined : undefined,
+                          botId:
+                            state.destination === 'story'
+                              ? state.chats.find((chat) => chat.id === state.selected)?.botId
+                              : undefined,
+                        }}
+                        onDirtyChange={setIllustrationDirty}
+                        onSaveHandlerChange={saveGroup.registrations.illustration}
+                      />
+                    )}
+                    {key === 'data' && (
+                      <>
+                        <ArchivePanel
+                          expanded
+                          onImported={async () => {
+                            await Promise.all([state.loadChats(), state.loadLibrary()]);
+                            if (state.selected) await state.refresh(state.selected);
+                          }}
+                          onError={state.setError}
+                          onDirtyChange={setArchiveDirty}
+                          onSaveHandlerChange={saveGroup.registrations.archive}
+                        />
+                      </>
+                    )}
+                    {key === 'general' && sessionRequired && (
+                      <section
+                        id={`${id}-general-session`}
+                        tabIndex={-1}
+                        className="settings-section"
+                        hidden={shortcutDetail}
+                      >
+                        <h3>{t('chatsettings.m76')}</h3>
+                        <div className="settings-row">
+                          <div className="settings-row-copy">
+                            <span>{t('chatsettings.m77')}</span>
+                          </div>
+                          <div className="settings-row-control">
                             <button
                               type="button"
                               className="secondary"
-                              onClick={() => setShortcutDetail(true)}
+                              disabled={signingOut}
+                              onClick={() => {
+                                setSigningOut(true);
+                                void api('/session', {}, 'DELETE')
+                                  .then(() => location.reload())
+                                  .catch((error) => {
+                                    state.setError(toUiMessage(error));
+                                    setSigningOut(false);
+                                  });
+                              }}
                             >
-                              {t('shortcuts.change')}
+                              {t('chatsettings.m23')}
                             </button>
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                      {compact ? (
-                        <details className="settings-desktop-panels">
-                          <summary>{t('settings.desktopPanels')}</summary>
-                          {desktopPanelRows}
-                        </details>
-                      ) : (
-                        <div className="settings-desktop-panels">
-                          <h4>{t('settings.desktopPanels')}</h4>
-                          {desktopPanelRows}
-                        </div>
-                      )}
-                    </section>
-                  )}
-                  {key === 'general' && (
-                    <section
-                      id={`${id}-general-generation`}
-                      tabIndex={-1}
-                      className="settings-section settings-group"
-                      hidden={shortcutDetail}
-                    >
-                      <h3>{t('chatsettings.m18')}</h3>
-                      <AutoTranslationDefaults />
-                      <ChatGenerationDefaults />
-                    </section>
-                  )}
-                  {key === 'general' && (
-                    <section
-                      id={`${id}-general-reading`}
-                      tabIndex={-1}
-                      className="settings-section"
-                      hidden={shortcutDetail}
-                    >
-                      <h3>{t('chatsettings.readingSettings')}</h3>
-                      {readingSettings}
-                    </section>
-                  )}
-                  {key === 'general' && (
-                    <section
-                      id={`${id}-general-services`}
-                      tabIndex={-1}
-                      className="settings-section settings-services"
-                      aria-label={t('chatsettings.m21')}
-                      hidden={shortcutDetail}
-                    >
-                      <h3>{t('chatsettings.m21')}</h3>
-                      <InstallApp />
-                      <PushSettings />
-                    </section>
-                  )}
-                  {key === 'usage' && (
-                    <UsagePanel
-                      connections={state.library?.connections}
-                      active={active === 'usage' && showingDetail}
-                    />
-                  )}
-                  {key === 'models' && state.library && (
-                    <ModelWorkspaceEditor
-                      library={state.library}
-                      onDirtyChange={setModelDirty}
-                      onSaveHandlerChange={saveGroup.registrations.model}
-                      onManage={() => select('connections')}
-                      onEditModel={(modelId) => {
-                        setProviderDetail({ kind: 'model', id: modelId });
-                        select('connections');
-                      }}
-                    />
-                  )}
-                  {key === 'prompts' && state.library && (
-                    <PromptWorkspaceEditor
-                      library={state.library}
-                      reload={state.loadLibrary}
-                      onDirtyChange={setPromptDirty}
-                      onSaveHandlerChange={saveGroup.registrations.prompt}
-                      onEditPrompt={onEditPrompt}
-                      navigationDisabled={dirty}
-                    />
-                  )}
-                  {key === 'connections' && (
-                    <div data-testid="connection-settings">
-                      {state.library && (
-                        <ConnectionEditor
-                          library={state.library}
-                          reload={state.loadLibrary}
-                          onError={state.setError}
-                          onDirtyChange={setConnectionDirty}
-                          onSaveHandlerChange={saveGroup.registrations.connection}
-                          detailRequest={providerDetail}
-                          onDetailRequestHandled={() => setProviderDetail(null)}
-                        />
-                      )}
-                    </div>
-                  )}
-                  {key === 'agents' && (
-                    <CodexAgentSettings
-                      active={active === 'agents' && showingDetail}
-                      onOpenModels={() => select('connections')}
-                    />
-                  )}
-                  {key === 'lore' && (
-                    <LoreContextDefaultsEditor
-                      onDirtyChange={setLoreDirty}
-                      onSaveHandlerChange={saveGroup.registrations.lore}
-                    />
-                  )}
-                  {key === 'illustrations' && state.library && (
-                    <IllustrationSettingsEditor
-                      library={state.library}
-                      scope={{
-                        chatId:
-                          state.destination === 'story' ? state.selected || undefined : undefined,
-                        botId:
-                          state.destination === 'story'
-                            ? state.chats.find((chat) => chat.id === state.selected)?.botId
-                            : undefined,
-                      }}
-                      onDirtyChange={setIllustrationDirty}
-                      onSaveHandlerChange={saveGroup.registrations.illustration}
-                    />
-                  )}
-                  {key === 'data' && (
-                    <>
-                      <ArchivePanel
-                        expanded
-                        onImported={async () => {
-                          await Promise.all([state.loadChats(), state.loadLibrary()]);
-                          if (state.selected) await state.refresh(state.selected);
-                        }}
-                        onError={state.setError}
-                        onDirtyChange={setArchiveDirty}
-                        onSaveHandlerChange={saveGroup.registrations.archive}
-                      />
-                    </>
-                  )}
-                  {key === 'general' && sessionRequired && (
-                    <section
-                      id={`${id}-general-session`}
-                      tabIndex={-1}
-                      className="settings-section"
-                      hidden={shortcutDetail}
-                    >
-                      <h3>{t('chatsettings.m76')}</h3>
-                      <div className="settings-row">
-                        <div className="settings-row-copy">
-                          <span>{t('chatsettings.m77')}</span>
-                        </div>
-                        <div className="settings-row-control">
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={signingOut}
-                            onClick={() => {
-                              setSigningOut(true);
-                              void api('/session', {}, 'DELETE')
-                                .then(() => location.reload())
-                                .catch((error) => {
-                                  state.setError(error.message);
-                                  setSigningOut(false);
-                                });
-                            }}
-                          >
-                            {t('chatsettings.m23')}
-                          </button>
-                        </div>
-                      </div>
-                    </section>
-                  )}
-                </>
-              )}
-            </section>
-          ))}
+                      </section>
+                    )}
+                  </>
+                )}
+              </section>
+            );
+          })}
         </div>
       </section>
       {state.error && (
         <p className="error" role="alert">
-          {translateMessage(state.error)}
+          {formatUiMessage(state.error)}
         </p>
       )}
       <Dialog
@@ -1098,7 +1107,7 @@ export function AppSettingsPanel({
         {promptDirty && <ResourceEditorLeaveWarning />}
         {discardError && (
           <p role="alert" className="error">
-            {translateMessage(discardError)}
+            {formatUiMessage(discardError)}
           </p>
         )}
         <DraftDiscardActions
@@ -1126,13 +1135,13 @@ export function AppSettingsPanel({
           onContinue={() => setDiscard(false)}
           onDiscard={async () => {
             setDiscarding(true);
-            setDiscardError('');
+            setDiscardError(null);
             try {
               if (promptDirty) await discardActiveEditor('prompt-workspace:current');
               setDiscard(false);
               closeHistory();
             } catch (error) {
-              setDiscardError((error as Error).message);
+              setDiscardError(toUiMessage(error));
             } finally {
               setDiscarding(false);
             }

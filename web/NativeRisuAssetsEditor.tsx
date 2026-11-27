@@ -1,4 +1,5 @@
 import { useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { ImageMetadataFields } from './ImageMetadataFields.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ActionMenu } from './ActionMenu.js';
@@ -303,7 +304,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           {t('native.imagesMissing', { count: missing })}
         </p>
       )}
-      {busy && <LoadingState presentation="inline" label={t('native.text_d504143bb7')} />}
+      {busy && <LoadingState presentation="inline" label={uiMessage('native.text_d504143bb7')} />}
       {notice && (
         <NoticeBanner>
           {t(notice.key, notice.count === undefined ? {} : { count: notice.count })}

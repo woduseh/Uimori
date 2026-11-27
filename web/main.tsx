@@ -1,5 +1,12 @@
-import { t, message as descriptor, useI18n, translateMessage, loadInitialLocale } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n, loadInitialLocale } from './i18n.js';
+import { toUiMessage } from './api-errors.js';
+import {
+  formatUiMessage,
+  sameUiMessage,
+  UiError,
+  uiMessage,
+  type UiMessage,
+} from './ui-message.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
 import { downloadArchive } from './archive-download.js';
@@ -178,13 +185,13 @@ import './product.css';
 import './sidebar.css';
 import './side-panel.css';
 
-function workspaceFallback(title: string, navigation: ReactNode, content: ReactNode) {
+function workspaceFallback(title: UiMessage, navigation: ReactNode, content: ReactNode) {
   return (
     <>
       <header className="workspace-header">
         {navigation}
         <div className="header-title">
-          <h1>{translateMessage(title)}</h1>
+          <h1>{formatUiMessage(title)}</h1>
         </div>
       </header>
       <div className="workspace-fallback-body">{content}</div>
@@ -193,21 +200,21 @@ function workspaceFallback(title: string, navigation: ReactNode, content: ReactN
 }
 const noSources: import('../core/types.js').Source[] = [];
 const LibraryPanel = deferredPanel(
-  descriptor('main.m001'),
+  uiMessage('main.m001'),
   async () => ({
     default: (await import('./LibraryPanel.js')).LibraryPanel,
   }),
-  (content, props) => workspaceFallback(descriptor('main.m001'), props.headerLeading, content)
+  (content, props) => workspaceFallback(uiMessage('main.m001'), props.headerLeading, content)
 );
 const PromptLibrary = deferredPanel(
-  descriptor('transfer.m286'),
+  uiMessage('transfer.m286'),
   async () => ({
     default: (await import('./PromptLibrary.js')).PromptLibrary,
   }),
-  (content, props) => workspaceFallback(descriptor('transfer.m286'), props.headerLeading, content)
+  (content, props) => workspaceFallback(uiMessage('transfer.m286'), props.headerLeading, content)
 );
 const ChatSettingsPanel = deferredPanel(
-  descriptor('main.m003'),
+  uiMessage('main.m003'),
   async () => ({
     default: (await import('./ChatSettingsPanel.js')).ChatSettingsPanel,
   }),
@@ -217,11 +224,11 @@ const ChatSettingsPanel = deferredPanel(
     </Dialog>
   )
 );
-const NewStory = deferredPanel(descriptor('transfer.m246'), async () => ({
+const NewStory = deferredPanel(uiMessage('transfer.m246'), async () => ({
   default: (await import('./NewStory.js')).NewStory,
 }));
 const AppSettingsPanel = deferredPanel(
-  descriptor('main.m005'),
+  uiMessage('main.m005'),
   async () => ({
     default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
   }),
@@ -233,20 +240,20 @@ const AppSettingsPanel = deferredPanel(
 );
 
 const HelperPanel = deferredPanel(
-  descriptor('visualpanels.helper'),
+  uiMessage('visualpanels.helper'),
   async () => ({
     default: (await import('./HelperPanel.js')).HelperPanel,
   }),
   (content, props) => (props.open ? <aside className="helper-panel">{content}</aside> : null)
 );
-const TasksPanel = deferredPanel(descriptor('main.m006'), async () => ({
+const TasksPanel = deferredPanel(uiMessage('main.m006'), async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
-const OutlinePanel = deferredPanel(descriptor('prompts.uiStoryOutline'), async () => ({
+const OutlinePanel = deferredPanel(uiMessage('prompts.uiStoryOutline'), async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 const BotChatImportDialog = deferredPanel<ComponentProps<typeof BotChatImportDialogPanel>>(
-  descriptor('transfer.m106'),
+  uiMessage('transfer.m106'),
   async () => ({ default: (await import('./BotChatImportDialog.js')).BotChatImportDialog }),
   (content, props) => (
     <Dialog open title={t('transfer.m106')} onClose={props.onClose}>
@@ -255,7 +262,7 @@ const BotChatImportDialog = deferredPanel<ComponentProps<typeof BotChatImportDia
   )
 );
 const RequestPreviewDialog = deferredPanel<ComponentProps<typeof RequestPreviewDialogPanel>>(
-  descriptor('reader.nextRequestPreview'),
+  uiMessage('reader.nextRequestPreview'),
   async () => ({ default: (await import('./RequestPreviewDialog.js')).RequestPreviewDialog }),
   (content, props) => (
     <Dialog open={props.open} title={t('reader.nextRequestPreview')} onClose={props.onClose}>
@@ -264,7 +271,7 @@ const RequestPreviewDialog = deferredPanel<ComponentProps<typeof RequestPreviewD
   )
 );
 const ManuscriptExportDialog = deferredPanel<ComponentProps<typeof ManuscriptExportDialogPanel>>(
-  descriptor('transfer.m192'),
+  uiMessage('transfer.m192'),
   async () => ({ default: (await import('./ManuscriptExportDialog.js')).ManuscriptExportDialog }),
   (content, props) => (
     <Dialog open={props.open} title={t('transfer.m192')} onClose={props.onClose}>
@@ -273,7 +280,7 @@ const ManuscriptExportDialog = deferredPanel<ComponentProps<typeof ManuscriptExp
   )
 );
 const ChatContextDialog = deferredPanel<ComponentProps<typeof ChatContextDialogPanel>>(
-  descriptor('settings.m104'),
+  uiMessage('settings.m104'),
   async () => ({ default: (await import('./ChatContextDialog.js')).ChatContextDialog }),
   (content, props) => (
     <Dialog
@@ -495,7 +502,7 @@ function App() {
     kind: 'profile' | 'admission';
   } | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [profileSaveError, setProfileSaveError] = useState('');
+  const [profileSaveError, setProfileSaveError] = useState<UiMessage | null>(null);
   const [profileConflict, setProfileConflict] = useState<{
     chatId: string;
     savedIntent: string;
@@ -518,7 +525,7 @@ function App() {
     if (s.active && !s.pendingProfile && !s.hasPendingRequest && !checkingEditedRequest)
       return s.queueRequest();
     if (s.pendingProfile || s.hasPendingRequest) {
-      setProfileSaveError('');
+      setProfileSaveError(null);
       setProfileConflict(null);
       setRequestDecision({ scope: s.viewKey, kind: s.pendingProfile ? 'profile' : 'admission' });
       return false;
@@ -584,11 +591,11 @@ function App() {
   useEffect(() => {
     if (previousErrorScope.current !== errorScope) {
       previousErrorScope.current = errorScope;
-      s.setError('');
+      s.setError(null);
     }
   }, [errorScope, s.setError]);
   useEffect(
-    () => watchPresentationWriteFailure(() => s.setError(descriptor('main.settingNotStored'))),
+    () => watchPresentationWriteFailure(() => s.setError(uiMessage('main.settingNotStored'))),
     [s.setError]
   );
   const [newKey, setNewKey] = useState(0);
@@ -771,7 +778,7 @@ function App() {
   const [importBot, setImportBot] = useState<Content | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<null | (() => void)>(null);
   const [discardingNavigation, setDiscardingNavigation] = useState(false);
-  const [navigationDiscardError, setNavigationDiscardError] = useState('');
+  const [navigationDiscardError, setNavigationDiscardError] = useState<UiMessage | null>(null);
   const currentPrompt = s.currentPrompt;
   const pinned = s.detail?.profile?.pinned;
   const promptAvailable = !pinned?.mainPromptPresetId || !!currentPrompt;
@@ -876,7 +883,7 @@ function App() {
           : t('main.m019')
       }
       onClick={() => {
-        s.setError('');
+        s.setError(null);
         setPanel('model');
       }}
     >
@@ -1169,7 +1176,7 @@ function App() {
         target.kind === 'chat' ||
         (target.kind === 'settings' && target.setting?.startsWith('chat.')))
     )
-      setPendingNavigation(() => () => void go().catch((error) => s.setError(error.message)));
+      setPendingNavigation(() => () => void go().catch((error) => s.setError(error)));
     else await go();
   }
   async function openHelperChange(change: HelperChange) {
@@ -1310,7 +1317,7 @@ function App() {
     try {
       snapshot = captureActiveEditorContext();
     } catch (cause) {
-      s.setError(cause instanceof Error ? cause.message : descriptor('helpers.m015'));
+      s.setError(toUiMessage(cause, 'helpers.m015'));
       return;
     }
     if (!snapshot) return;
@@ -1477,7 +1484,7 @@ function App() {
         },
       }));
     const openResource = (target: HelperTaskResultTarget) => () =>
-      void openHelperResult(target).catch((error) => s.setError(error.message));
+      void openHelperResult(target).catch((error) => s.setError(error));
     const resourceKinds = {
       bot: { label: t('library.bot'), icon: BotIcon },
       persona: { label: t('library.persona'), icon: PersonaIcon },
@@ -1535,7 +1542,7 @@ function App() {
       !!s.active &&
       !s.hasPendingRequest &&
       !s.cancelling,
-    confirmNotice: descriptor('shortcuts.cancelGenerationAgain', {
+    confirmNotice: uiMessage('shortcuts.cancelGenerationAgain', {
       key: stopShortcutLabel,
     }),
   });
@@ -1967,7 +1974,7 @@ function App() {
                           void downloadArchive(
                             `/chats/${chatId}/backup-archive`,
                             `${title.replace(/[\\/:*?"<>|]/g, '_')}.chat.uimori`
-                          ).catch((error: Error) => s.setError(error.message));
+                          ).catch((error: Error) => s.setError(error));
                         }}
                       >
                         <DatabaseBackup size={18} aria-hidden="true" />
@@ -1984,9 +1991,9 @@ function App() {
                           path={`/chats/${encodeURIComponent(s.selected)}`}
                           preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
                           title={s.detail.chat.title}
-                          label={t('main.m072')}
-                          confirmLabel={t('shared.deletePermanently')}
-                          description={t('main.m073')}
+                          label={uiMessage('main.m072')}
+                          confirmLabel={uiMessage('shared.deletePermanently')}
+                          description={uiMessage('main.m073')}
                           disabled={!!s.active}
                           onError={s.setError}
                           onDeleted={() => {
@@ -2004,7 +2011,7 @@ function App() {
         )}
         {pendingNotification && (
           <NoticeBanner
-            label={t('main.m074')}
+            label={uiMessage('main.m074')}
             actions={
               <>
                 <button
@@ -2058,14 +2065,14 @@ function App() {
                 />
               ) : (
                 workspaceFallback(
-                  t('main.m002'),
+                  uiMessage('main.m002'),
                   navigationControls,
                   <LoadingState
                     presentation="region"
                     loading={!s.libraryError}
                     error={s.libraryError}
-                    label={t('main.m078')}
-                    errorLabel={t('main.m079')}
+                    label={uiMessage('main.m078')}
+                    errorLabel={uiMessage('main.m079')}
                     onRetry={() => void s.retryLibrary().catch(() => {})}
                   />
                 )
@@ -2095,15 +2102,15 @@ function App() {
               />
             )}
             <DismissibleError
-              error={!s.library && s.error === s.libraryError ? '' : s.error}
-              onDismiss={() => s.setError('')}
+              error={!s.library && sameUiMessage(s.error, s.libraryError) ? null : s.error}
+              onDismiss={() => s.setError(null)}
             />
           </div>
         ) : (
           <>
             {s.readingSync.other && (
               <NoticeBanner
-                label={t('main.m080')}
+                label={uiMessage('main.m080')}
                 actions={
                   <>
                     <button
@@ -2256,7 +2263,7 @@ function App() {
                                     }
                                   : undefined
                               }
-                              onStartChanged={() => s.setNotice(descriptor('main.m093'))}
+                              onStartChanged={() => s.setNotice(uiMessage('main.m093'))}
                               hasPackages={
                                 !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
                               }
@@ -2513,7 +2520,7 @@ function App() {
                     <button
                       className="secondary"
                       onClick={() => {
-                        setProfileSaveError('');
+                        setProfileSaveError(null);
                         setProfileConflict(null);
                         setRequestDecision({ scope: s.viewKey, kind: 'profile' });
                       }}
@@ -2522,7 +2529,7 @@ function App() {
                     </button>
                   </NoticeBanner>
                 )}
-                <DismissibleError error={s.error} onDismiss={() => s.setError('')} />
+                <DismissibleError error={s.error} onDismiss={() => s.setError(null)} />
                 {/^MODEL_(?:REQUIRED|UNAVAILABLE)(?::|$)/u.test(s.errorCode ?? '') && (
                   <button
                     type="button"
@@ -3205,9 +3212,7 @@ function App() {
         {currentRequestDecision === 'profile' ? (
           <>
             <p>{t('main.m135')}</p>
-            {profileSaveError && (
-              <NoticeBanner tone="error">{translateMessage(profileSaveError)}</NoticeBanner>
-            )}
+            {profileSaveError && <NoticeBanner tone="error">{profileSaveError}</NoticeBanner>}
             <div className="form-actions">
               <button
                 className="secondary"
@@ -3228,7 +3233,7 @@ function App() {
                       setRequestDecision(null);
                       void s.refresh(profileConflict.chatId).catch(s.setError);
                     } catch (error) {
-                      setProfileSaveError((error as Error).message);
+                      setProfileSaveError(toUiMessage(error));
                     }
                   }}
                 >
@@ -3240,7 +3245,7 @@ function App() {
                 onClick={() => {
                   const chatId = s.selected;
                   setProfileSaving(true);
-                  setProfileSaveError('');
+                  setProfileSaveError(null);
                   setProfileConflict(null);
                   void (async () => {
                     try {
@@ -3248,7 +3253,7 @@ function App() {
                       await s.refresh(chatId);
                       setRequestDecision(null);
                     } catch (error) {
-                      setProfileSaveError((error as Error).message);
+                      setProfileSaveError(toUiMessage(error));
                       if (error instanceof PendingStoryProfileConflict)
                         setProfileConflict({ chatId, savedIntent: error.savedIntent });
                     } finally {
@@ -3265,7 +3270,7 @@ function App() {
           <>
             <p>{t('main.m138')}</p>
             {s.requestActivity?.confirmationBlocked && <p>{t('main.pendingRequestUnconfirmed')}</p>}
-            {s.error && <NoticeBanner tone="error">{translateMessage(s.error)}</NoticeBanner>}
+            {s.error && <NoticeBanner tone="error">{s.error}</NoticeBanner>}
             <div className="form-actions">
               <button className="secondary" onClick={() => setRequestDecision(null)}>
                 {t('main.m136')}
@@ -3304,7 +3309,7 @@ function App() {
         <ResourceEditorLeaveWarning />
         {navigationDiscardError && (
           <p role="alert" className="error">
-            {translateMessage(navigationDiscardError)}
+            {formatUiMessage(navigationDiscardError)}
           </p>
         )}
         <DraftDiscardActions
@@ -3327,7 +3332,7 @@ function App() {
           }}
           onDiscard={async () => {
             setDiscardingNavigation(true);
-            setNavigationDiscardError('');
+            setNavigationDiscardError(null);
             try {
               await discardActiveEditor();
               const go = pendingNavigation;
@@ -3335,7 +3340,7 @@ function App() {
               setLibraryDirty(false);
               go?.();
             } catch (error) {
-              setNavigationDiscardError((error as Error).message);
+              setNavigationDiscardError(toUiMessage(error));
             } finally {
               setDiscardingNavigation(false);
             }
@@ -3482,7 +3487,7 @@ function App() {
             >
               {t('main.m145')}
             </button>
-            <DismissibleError error={s.error} onDismiss={() => s.setError('')} />
+            <DismissibleError error={s.error} onDismiss={() => s.setError(null)} />
           </>
         )}
       </Dialog>
@@ -3523,7 +3528,7 @@ function App() {
             s.profileDirty || optionsDirty || optionsBusy || s.pendingProfile || s.hasPendingRequest
           }
           pending={s.quickBusy}
-          error={translateMessage(s.error)}
+          error={s.error}
           onSelect={(modelId) => {
             const scope = s.viewKey;
             void s.quickChange('model', modelId ?? '').then((saved) => {

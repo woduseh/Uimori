@@ -253,7 +253,7 @@ export function RequestMessage({
           <ConfirmDialog
             open={discardOpen}
             title={t('reader.cancelRequestEditing')}
-            message={t('reader.discardTheUnsavedTextEdits')}
+            body={t('reader.discardTheUnsavedTextEdits')}
             action={t('reader.discardEditsAndClose')}
             onCancel={() => {
               setDiscardOpen(false);

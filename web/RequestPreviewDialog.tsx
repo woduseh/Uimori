@@ -1,5 +1,6 @@
 import { parseOwnJson } from './json.js';
 import { t, useI18n, translateMessage, formatNumber, message as legacyDescriptor } from './i18n.js';
+import { uiMessage } from './ui-message.js';
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { RequestImagePreview } from '../core/request-images.js';
@@ -154,7 +155,10 @@ export function RequestPreviewDialog({
           {error ? (
             <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>
           ) : !preview ? (
-            <LoadingState presentation="placeholder" label={t('reader.checkingTheNextRequest')} />
+            <LoadingState
+              presentation="placeholder"
+              label={uiMessage('reader.checkingTheNextRequest')}
+            />
           ) : preview.snapshot.stale ? (
             <NoticeBanner>
               {t('reader.contextOrSettingsChangedDuringTheCheckCheckAgain')}

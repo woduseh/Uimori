@@ -20,7 +20,7 @@ export function ArchivePanel({
   expanded = false,
 }: {
   onImported: () => Promise<void>;
-  onError: (error: string) => void;
+  onError: (error: UiMessage | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   expanded?: boolean;
@@ -66,7 +66,7 @@ export function ArchivePanel({
               onClick={async () => {
                 setBusy(true);
                 setError(null);
-                onError('');
+                onError(null);
                 try {
                   const response = await fetch('/api/backup');
                   if (!response.ok)

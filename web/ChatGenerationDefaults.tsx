@@ -8,6 +8,7 @@ import {
 import { api } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { message as legacyDescriptor, t, translateMessage, useI18n } from './i18n.js';
+import { uiMessage, legacyUiMessage } from './ui-message.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
@@ -117,9 +118,9 @@ export function ChatGenerationDefaults() {
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={!defaults ? error : ''}
-        label={t('settings.newChatDefaultsLoading')}
-        errorLabel={t('settings.newChatDefaultsLoadFailed')}
+        error={!defaults ? legacyUiMessage(error) : null}
+        label={uiMessage('settings.newChatDefaultsLoading')}
+        errorLabel={uiMessage('settings.newChatDefaultsLoadFailed')}
         onRetry={retry}
       />
       {defaults && (
