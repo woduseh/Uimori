@@ -46,18 +46,22 @@ async function scene(text: string, options: { accessToken?: string } = {}) {
   });
   owned.push({ app, path });
   const bot = app.store.product.content(fixtureBotInput());
-  const chat = importChatTranscript(app.store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Presentation cache',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [{ request: 'First scene', text, translation: null }],
+  const chat = importChatTranscript(
+    app.store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Presentation cache',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [{ request: 'First scene', text, translation: null }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const url = `/api/chats/${chat.id}/sources/${chat.headRevision}/presentation`;
   return {
     app,

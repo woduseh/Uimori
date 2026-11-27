@@ -70,18 +70,24 @@ async function api(
 }
 function story(store: Store, text = 'A scene', bot?: Content) {
   bot ??= store.product.content(fixtureBotInput('Story bot', 'Friendly')) as Content;
-  return importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Story',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [{ kind: 'author-note', author: 'user', text: 'Remember the blue key.', atIndex: 0 }],
-      entries: [{ request: 'Write the first scene', text, translation: '장면 번역' }],
+  return importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Story',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [
+          { kind: 'author-note', author: 'user', text: 'Remember the blue key.', atIndex: 0 },
+        ],
+        entries: [{ request: 'Write the first scene', text, translation: '장면 번역' }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
 }
 
 test('HTTP accepts an image over 2MiB and stores one WebP BLOB used by chat assets', async () => {

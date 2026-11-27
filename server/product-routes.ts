@@ -80,7 +80,7 @@ export function productRoutes(
     exportManuscript(store, request.params.id, request.body)
   );
   app.post('/api/chats/import-transcript', { bodyLimit: 64 * 1024 * 1024 }, async (request) => {
-    const result = importChatTranscript(store, request.body);
+    const result = importChatTranscript(store, request.body, 'library');
     if (result.created) options.publish(result.chat.id);
     return result;
   });

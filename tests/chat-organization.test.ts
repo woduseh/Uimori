@@ -10,6 +10,7 @@ import type { Content } from '../core/product.js';
 import { createApp } from '../server/app.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
+import { createChat } from '../server/chat-creation.js';
 
 const owned: { directory: string; store?: Store }[] = [];
 afterEach(async () => {
@@ -155,6 +156,20 @@ test('a deleted persona cannot become a folder default or a new chat persona', a
   expect(() => store.createChat('Stale tab', { botId: bot.id, persona: ref(deleted) })).toThrow(
     'LIBRARY_ITEM_DELETED'
   );
+});
+
+test('a new chat for a deleted bot is refused while its existing chats stay readable', async () => {
+  const { store, bot } = await fixture();
+  const existing = store.createChat('Kept', { botId: bot.id });
+  const folder = store.organization.createFolder(bot.id, { title: 'Kept folder' });
+  softDeleteLibraryItem(store, 'content', bot);
+  const count = store.chats().length;
+  expect(() => createChat(store, { title: 'Stale tab', botId: bot.id })).toThrow(
+    'LIBRARY_ITEM_DELETED'
+  );
+  expect(store.chats()).toHaveLength(count);
+  expect(store.organization.folders(bot.id)).toEqual([folder]);
+  expect(store.chat(existing.id).id).toBe(existing.id);
 });
 
 test('invalid order anchors roll back every position and revision', async () => {

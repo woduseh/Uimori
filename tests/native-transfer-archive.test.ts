@@ -28,6 +28,7 @@ import {
 } from '../server/chat-backup.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
 import { restoreIllustrations } from '../server/illustration-copy.js';
 import type { Content } from '../core/product.js';
@@ -210,7 +211,11 @@ test('chat archive restores authored resources without execution and recovers re
       translation: null,
     },
   ];
-  const chat = importChatTranscript(source, { transcript, idempotencyKey: 'source-chat' }).chat;
+  const chat = importChatTranscript(
+    source,
+    { transcript, idempotencyKey: 'source-chat' },
+    'library'
+  ).chat;
   const originalSettings = {
     maxCalls: 128,
     storyUi: true,
@@ -464,4 +469,45 @@ test('an explicit v1 JSON backup still restores without a JSON output endpoint',
   ]);
   expect((await importChatBackup(target, command)).created).toBe(false);
   expect(target.chats()).toHaveLength(1);
+});
+
+test('a chat backup carries the deleted library items its chat holds and restores them live', async () => {
+  const source = database();
+  const chat = createFixtureChat(source, 'Held items');
+  const glossary = source.product.content({
+    kind: 'module',
+    title: 'Held glossary',
+    description: 'Synthetic test data',
+    text: 'terms',
+    loading: 'pinned',
+    relatedIds: [],
+  }) as Content;
+  const profile = source.product.profile(chat.id);
+  source.product.updateProfile(chat.id, {
+    expectedRevision: profile.revision,
+    image: profile.image,
+    packageAttachments: [
+      ...profile.packageAttachments!,
+      { id: glossary.id, revision: glossary.revision, role: 'module' },
+    ],
+  });
+  const bot = source.product.stored<Content>(
+    'content',
+    profile.packageAttachments!.find((item) => item.role === 'bot')!.id
+  );
+  softDeleteLibraryItem(source, 'content', bot);
+  softDeleteLibraryItem(source, 'content', glossary);
+
+  const archive = await bytes(exportChatBackupArchive(source, chat.id));
+  const target = database();
+  const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
+  const restored = importChatBackupArchiveRequest(target, {
+    preparedId: preview.preparedId,
+    digest: preview.digest,
+    idempotencyKey: 'held-items-archive',
+  }).chat;
+  const attachments = target.product.profile(restored.id).packageAttachments!;
+  expect(attachments.map((item) => item.role)).toEqual(['bot', 'module']);
+  expect(attachments.every((item) => target.product.isLive('content', item.id))).toBe(true);
+  expect(target.product.stored<Content>('content', attachments[1].id).title).toBe('Held glossary');
 });

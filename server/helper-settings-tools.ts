@@ -345,7 +345,10 @@ export function applyHelperSettingsMutation(
   args: Record<string, unknown>,
   chatId?: string
 ): unknown {
-  if (name.startsWith('model.pricing.') && args.judgment !== undefined) {
+  if (
+    name.startsWith('model.pricing.') &&
+    (args.judgment !== undefined || args.judgmentTarget !== undefined)
+  ) {
     const read = () =>
       invokeHelperSettingsTool(store, 'model.pricing.read', {
         judgment: true,

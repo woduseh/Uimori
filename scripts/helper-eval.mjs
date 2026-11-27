@@ -339,7 +339,7 @@ async function main() {
           if (tasks.at(-1).status !== 'completed') break;
         }
         const after = snapshot(store);
-        const saved = store.product.get('content', bot.id);
+        const saved = store.product.stored('content', bot.id);
         const expected = structuredClone(bot);
         expected.revision++;
         expected.title = expected.package.title = expected.package.identity.name = 'Mira';

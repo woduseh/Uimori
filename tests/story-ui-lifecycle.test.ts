@@ -67,7 +67,11 @@ test('real run commit freezes UI and preserves it through copy, export/import an
   expect(projectStoryUiText(source.text)).not.toContain('createSurface');
 
   const transcript = exportChatTranscript(store, chat.id);
-  const restored = importChatTranscript(store, { idempotencyKey: randomUUID(), transcript }).chat;
+  const restored = importChatTranscript(
+    store,
+    { idempotencyKey: randomUUID(), transcript },
+    'library'
+  ).chat;
   expect(store.source(restored.headRevision!).text).toBe(source.text);
   const copied = forkChat(store, chat.id, {
     fromRevision: source.id,

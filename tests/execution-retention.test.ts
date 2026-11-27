@@ -36,21 +36,25 @@ describe('Completed execution payload retention', () => {
     owned.push(owner);
     const store = owner.store;
     const bot = store.product.content(fixtureBotInput());
-    const chat = importChatTranscript(store, {
-      idempotencyKey: randomUUID(),
-      transcript: {
-        format: 'uimori-chat-transcript',
-        version: 2,
-        title: 'Audit fixture',
-        exportedAt: new Date().toISOString(),
-        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-        notes: [],
-        entries: [
-          { request: 'First', text: 'First scene.', translation: '첫 장면.' },
-          { request: 'Second', text: 'Second scene.', translation: '둘째 장면.' },
-        ],
+    const chat = importChatTranscript(
+      store,
+      {
+        idempotencyKey: randomUUID(),
+        transcript: {
+          format: 'uimori-chat-transcript',
+          version: 2,
+          title: 'Audit fixture',
+          exportedAt: new Date().toISOString(),
+          packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+          notes: [],
+          entries: [
+            { request: 'First', text: 'First scene.', translation: '첫 장면.' },
+            { request: 'Second', text: 'Second scene.', translation: '둘째 장면.' },
+          ],
+        },
       },
-    }).chat;
+      'library'
+    ).chat;
     const sources = store.history(chat.headRevision).map((item) => store.source(item.revision));
     return { owner, store, chat, sources };
   }

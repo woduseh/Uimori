@@ -247,10 +247,14 @@ describe('authored scene context without replaying prior runs', () => {
       requestEnabled: false,
       sceneEnabled: false,
     });
-    const restored = importChatTranscript(store, {
-      transcript,
-      idempotencyKey: randomUUID(),
-    }).chat;
+    const restored = importChatTranscript(
+      store,
+      {
+        transcript,
+        idempotencyKey: randomUUID(),
+      },
+      'library'
+    ).chat;
     expect(current(store, restored.id).history[0].sceneContext).toMatchObject({
       requestText: 'Edited A',
       requestEnabled: false,

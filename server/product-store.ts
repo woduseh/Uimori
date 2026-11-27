@@ -101,6 +101,8 @@ export const modelRef = (v: unknown): ModelRef => {
   fields(b, ['id']);
   return { id: text(b.id, 'model', 100) };
 };
+export type ReferenceSource = 'library' | 'preserve';
+
 function validatePinnedProfile(value: unknown): NonNullable<ChatProfile['pinned']> {
   const pinned = record(value);
   fields(pinned, ['mainPromptPresetId', 'mainModel']);
@@ -200,6 +202,9 @@ export class ProductStore {
   available<T>(kind: string, id: string): T {
     this.assertAvailable(kind, id);
     return this.stored<T>(kind, id);
+  }
+  reference<T>(source: ReferenceSource, kind: string, id: string): T {
+    return source === 'library' ? this.available<T>(kind, id) : this.stored<T>(kind, id);
   }
   writable<T>(kind: string, id: string): T {
     if (!this.isLive(kind, id)) throw new AppError(409, 'REVISION_CONFLICT');
@@ -627,7 +632,11 @@ export class ProductStore {
       | undefined;
     return currentProfile(this, r ? parse(r.body) : defaultProfile(chatId));
   }
-  updateProfile(chatId: string, value: unknown): ChatProfile {
+  updateProfile(
+    chatId: string,
+    value: unknown,
+    held?: Pick<ChatProfile, 'pinned' | 'packageAttachments'>
+  ): ChatProfile {
     const b = record(value);
     fields(b, [
       'expectedRevision',
@@ -656,19 +665,20 @@ export class ProductStore {
         b.authorNote === undefined
           ? (prior.authorNote ?? '')
           : text(b.authorNote, 'author note', CHAT_AUTHOR_NOTE_MAX_CHARS, true);
+      const baseline = held ?? prior;
       if (
         pinned?.mainPromptPresetId &&
-        pinned.mainPromptPresetId !== prior.pinned?.mainPromptPresetId
+        pinned.mainPromptPresetId !== baseline.pinned?.mainPromptPresetId
       ) {
         const preset = this.available<PromptPreset>('prompt-preset', pinned.mainPromptPresetId);
         if (preset.role !== 'main') throw new AppError(400, 'PINNED_PROMPT_NOT_MAIN');
       }
-      if (pinned?.mainModel?.id !== prior.pinned?.mainModel?.id)
+      if (pinned?.mainModel?.id !== baseline.pinned?.mainModel?.id)
         assertModelSelection(this, pinned?.mainModel ?? null);
       const packageAttachments =
         b.packageAttachments === undefined
           ? prior.packageAttachments
-          : packageRefs(this, b.packageAttachments).map((r) => ({
+          : packageRefs(this, b.packageAttachments, baseline.packageAttachments ?? []).map((r) => ({
               ...r,
               ...currentRef(this, 'content', r),
             }));
@@ -1256,7 +1266,11 @@ function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile 
     }));
   return result;
 }
-function packageRefs(product: ProductStore, value: unknown): ContentAttachment[] {
+function packageRefs(
+  product: ProductStore,
+  value: unknown,
+  held: readonly ContentAttachment[]
+): ContentAttachment[] {
   if (!Array.isArray(value) || value.length > 100)
     throw new HttpError(400, 'Invalid package attachments');
   const refs = value.map(validateContentAttachment);
@@ -1266,8 +1280,12 @@ function packageRefs(product: ProductStore, value: unknown): ContentAttachment[]
     refs.filter((r) => r.role === 'persona').length > 1
   )
     throw new HttpError(400, 'Duplicate package or primary role');
-  for (const r of refs)
-    if (!product.stored<Content>('content', r.id).package)
-      throw new HttpError(400, 'Content is not a package');
+  for (const r of refs) {
+    const kept = held.some((h) => h.id === r.id && h.role === r.role);
+    const content = kept
+      ? product.stored<Content>('content', r.id)
+      : product.available<Content>('content', r.id);
+    if (!content.package) throw new HttpError(400, 'Content is not a package');
+  }
   return refs;
 }

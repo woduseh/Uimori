@@ -12,6 +12,7 @@ import { Store } from '../server/store.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { invokeHelperModelParameterTool } from '../server/helper-model-parameter-tools.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { forgetHelperSceneChanges, readHelperChanges } from '../server/helper-changes.js';
 import { listBookmarks } from '../server/reading-state.js';
@@ -44,18 +45,22 @@ function fixture() {
   const store = new Store(join(directory, 'story.sqlite'));
   owned.push({ store, directory });
   const bot = store.product.content(fixtureBotInput('Harbor keeper')) as Content;
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Harbor story',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [{ request: 'Arrive.', text: 'The harbor bell rang once.', translation: null }],
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Harbor story',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [{ request: 'Arrive.', text: 'The harbor bell rang once.', translation: null }],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const model = selectFixtureModels(store) as ModelPreset;
   return { store, chat: store.chat(chat.id), model };
 }
@@ -583,6 +588,33 @@ test('chat.organize files a chat into a folder, sets the default persona and unf
   expect(store.organization.folders(botId)).toEqual([]);
   expect(store.chats().map((item) => item.id)).toContain(chat.id);
   expect(changed).toHaveBeenCalledWith(chat.id);
+});
+
+test('chat.organize checks the folder and defaults revisions before the persona it names', async () => {
+  const { store, chat } = fixture();
+  const persona = libraryContent(store, 'persona', 'Reader');
+  const botId = store.organization.metadata(chat.id)!.botId;
+  const folder = store.organization.createFolder(botId, { title: 'Harbor arc' });
+  const defaults = store.organization.defaults(botId);
+  softDeleteLibraryItem(store, 'content', persona);
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('folder', 'chat.organize', {
+      action: 'update-folder',
+      botId,
+      folderId: folder.id,
+      expectedRevision: folder.revision + 1,
+      defaultPersona: persona.id,
+    }),
+    helperCall('defaults', 'chat.organize', {
+      action: 'set-default-persona',
+      botId,
+      expectedRevision: defaults.revision + 1,
+      persona: persona.id,
+    }),
+    helperDone,
+  ]);
+  expect(run.finished('folder')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  expect(run.finished('defaults')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
 });
 
 test('model.parameters.update tells a stale or deleted target to refresh before checking changes', () => {

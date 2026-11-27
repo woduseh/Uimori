@@ -81,22 +81,26 @@ async function fixture(withModel = true) {
     },
   };
   const bot = store.product.content(input);
-  const chat = importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Preview transcript',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: Array.from({ length: 4 }, (_, index) => ({
-        request: `Authored request ${index}`,
-        text: `PRIVATE_HISTORY_${index}: ` + '비 오는 항구에서 미라는 기다려요. '.repeat(100),
-        translation: null,
-      })),
+  const chat = importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Preview transcript',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: Array.from({ length: 4 }, (_, index) => ({
+          request: `Authored request ${index}`,
+          text: `PRIVATE_HISTORY_${index}: ` + '비 오는 항구에서 미라는 기다려요. '.repeat(100),
+          translation: null,
+        })),
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
   const connection = store.product.connection({
     title: 'Preview fixture connection',
     protocol: 'fixture-sse-v1',

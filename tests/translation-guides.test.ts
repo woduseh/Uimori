@@ -68,24 +68,28 @@ function save(store: Store, bot: Content, value: TranslationGuide): Content {
     .saved as Content;
 }
 function story(store: Store, bot: Content) {
-  return importChatTranscript(store, {
-    idempotencyKey: randomUUID(),
-    transcript: {
-      format: 'uimori-chat-transcript',
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      title: 'Old scene',
-      packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
-      notes: [],
-      entries: [
-        {
-          request: 'Read a scene.',
-          text: 'Rose quietly held a rose.',
-          translation: '로즈는 조용히 장미를 들고 있었다.',
-        },
-      ],
+  return importChatTranscript(
+    store,
+    {
+      idempotencyKey: randomUUID(),
+      transcript: {
+        format: 'uimori-chat-transcript',
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        title: 'Old scene',
+        packageAttachments: [{ id: bot.id, revision: bot.revision, role: 'bot' }],
+        notes: [],
+        entries: [
+          {
+            request: 'Read a scene.',
+            text: 'Rose quietly held a rose.',
+            translation: '로즈는 조용히 장미를 들고 있었다.',
+          },
+        ],
+      },
     },
-  }).chat;
+    'library'
+  ).chat;
 }
 function resolved(store: Store, sourceId: string, jobId: string) {
   const source = store.source(sourceId);

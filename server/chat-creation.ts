@@ -22,8 +22,10 @@ export function createChat(
       revision: number(ref.revision, 'persona revision'),
     };
   }
+  const botId = body.botId === undefined ? undefined : text(body.botId, 'bot ID', 100);
+  if (botId !== undefined) store.product.assertAvailable('content', botId);
   const chat = store.createChat(chatTitle(body.title), {
-    ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
+    ...(botId === undefined ? {} : { botId }),
     ...(body.folderId === undefined
       ? {}
       : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),

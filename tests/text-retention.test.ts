@@ -311,24 +311,28 @@ describe('Image references across copies and editing', () => {
       store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)
     ).toBeTruthy();
     const current = store.product.stored<Content>('content', bot.id);
-    const chat = importChatTranscript(store, {
-      idempotencyKey: randomUUID(),
-      transcript: {
-        format: 'uimori-chat-transcript',
-        version: 2,
-        title: 'Inline',
-        exportedAt: new Date().toISOString(),
-        packageAttachments: [{ id: bot.id, revision: current.revision, role: 'bot' }],
-        notes: [],
-        entries: [
-          {
-            request: 'Show image',
-            text: `![illustration](/api/package-image-blobs/${image.hash})`,
-            translation: null,
-          },
-        ],
+    const chat = importChatTranscript(
+      store,
+      {
+        idempotencyKey: randomUUID(),
+        transcript: {
+          format: 'uimori-chat-transcript',
+          version: 2,
+          title: 'Inline',
+          exportedAt: new Date().toISOString(),
+          packageAttachments: [{ id: bot.id, revision: current.revision, role: 'bot' }],
+          notes: [],
+          entries: [
+            {
+              request: 'Show image',
+              text: `![illustration](/api/package-image-blobs/${image.hash})`,
+              translation: null,
+            },
+          ],
+        },
       },
-    }).chat;
+      'library'
+    ).chat;
     const copy = forkChat(store, chat.id, {
       fromRevision: chat.headRevision,
       idempotencyKey: randomUUID(),

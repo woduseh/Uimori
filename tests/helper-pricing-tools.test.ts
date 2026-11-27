@@ -9,6 +9,7 @@ import type { WireRecord } from '../core/transport.js';
 import { invokeHelperSettingsTool as call } from '../server/helper-settings-tools.js';
 import { describeHelperTools } from '../server/helper-app-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import {
   helperCall,
   helperDone,
@@ -464,6 +465,45 @@ test('a helper pricing update for a model that is gone answers a revision confli
       helperDone,
     ]);
     expect(run.finished('missing')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+
+test('a judgment price update checks the role settings revision before its target connection', () => {
+  const { store, connection } = fixture();
+  const { revision } = call(store, 'model.pricing.read', { judgment: true }) as {
+    revision: number;
+  };
+  softDeleteLibraryItem(store, 'connection', connection);
+  expect(() =>
+    call(store, 'model.pricing.update', {
+      judgment: true,
+      judgmentTarget: {
+        provider: 'openai-compatible',
+        modelId: 'synthetic/decisions',
+        connectionId: connection.id,
+      },
+      expectedRevision: revision + 1,
+      pricing: jevPricing,
+    })
+  ).toThrow('REVISION_CONFLICT');
+});
+
+test('a helper judgment price update without judgment:true is refused as a pricing target', async () => {
+  const { store } = fixture();
+  selectFixtureModels(store);
+  const chat = createFixtureChat(store, 'Judgment target only');
+  try {
+    const run = await runScriptedChatHelper(store, chat.id, [
+      helperCall('target', 'model.pricing.update', {
+        judgmentTarget: jevTarget,
+        expectedRevision: 1,
+        pricing: jevPricing,
+      }),
+      helperDone,
+    ]);
+    expect(run.finished('target')).toMatchObject({ errorCode: 'PRICING_TARGET_INVALID' });
   } finally {
     vi.restoreAllMocks();
   }
