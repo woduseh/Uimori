@@ -1,7 +1,7 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { createHash } from 'node:crypto';
 import { contextBudgetForModel, validateContextBudget } from '../core/context-budget.js';
-import type { ContextPlan } from '../core/context-plan.js';
+import { type ContextPlan, MODEL_REQUIRED_PATTERN } from '../core/context-plan.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { CONTEXT_COMPACTION_TRIGGER_RATIO } from '../core/context-compaction.js';
 import { CONTEXT_SUMMARY_SEMANTICS, contextSummaryPolicy } from '../core/context-summary-policy.js';
@@ -29,6 +29,7 @@ import type { MainHooks } from './model-runner.js';
 import { modelAuthorNotes } from '../core/notes.js';
 import { resetCompactedLore } from '../core/lore-context.js';
 import { projectStoryUiText } from '../core/story-ui.js';
+import { storedModelRequired } from './app-errors.js';
 
 export type ContextCompactionHooks = MainHooks & {
   onProgress: (plan: ContextPlan) => void | Promise<void>;
@@ -50,6 +51,16 @@ export class ContextCompactionError extends Error {
     this.plan = plan;
     this.name = 'ContextCompactionError';
   }
+}
+
+const STORED_CODE = /^[A-Z][A-Z0-9_]{0,79}$/u;
+export function contextFailureCode(error: unknown): string {
+  const required = storedModelRequired(error);
+  if (required) return required;
+  const message = error instanceof Error ? error.message : '';
+  if (STORED_CODE.test(message) || MODEL_REQUIRED_PATTERN.test(message)) return message;
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && STORED_CODE.test(code) ? code : 'CONTEXT_COMPACTION_FAILED';
 }
 
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
@@ -552,11 +563,7 @@ export async function prepareInputContext(
     };
   } catch (error) {
     plan.status = 'failed';
-    plan.error = hooks.signal.aborted
-      ? 'CANCELLED'
-      : error instanceof Error
-        ? error.message
-        : 'CONTEXT_COMPACTION_FAILED';
+    plan.error = hooks.signal.aborted ? 'CANCELLED' : contextFailureCode(error);
     plan.summaryCalls = usage.modelCalls;
     plan.estimatedInputTokens = Number.isFinite(estimate) ? estimate : null;
     try {

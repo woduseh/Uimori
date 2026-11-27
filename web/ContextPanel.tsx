@@ -1,4 +1,4 @@
-import { t, translateStoredCode, useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { formatUiMessage, uiMessage, type MessageKey, type UiMessage } from './ui-message.js';
 import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
@@ -8,13 +8,8 @@ import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/cont
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { SummaryEditor } from './SummaryEditor.js';
 import { useEffect, useRef, useState } from 'react';
-import {
-  CONTEXT_JOB_CANCELLED,
-  CONTEXT_JOB_INTERRUPTED,
-  CONTEXT_JOB_SCENE_DELETED,
-  type ContextDetail,
-  type ContextJob as StoredContextJob,
-} from '../core/context-plan.js';
+import type { ContextDetail, ContextJob as StoredContextJob } from '../core/context-plan.js';
+import { contextErrorMessage } from './context-error.js';
 import type { AuthorNote } from '../core/notes.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
@@ -25,11 +20,6 @@ import './context.css';
 
 type ContextJob = Omit<StoredContextJob, 'snapshot'>;
 type SummaryDraft = { text: string; revision: number; headRevision: string | null };
-const jobErrors = {
-  [CONTEXT_JOB_SCENE_DELETED]: 'settings.contextJobSceneDeleted',
-  [CONTEXT_JOB_CANCELLED]: 'settings.contextJobCancelled',
-  [CONTEXT_JOB_INTERRUPTED]: 'settings.contextJobInterrupted',
-};
 const id = encodeURIComponent;
 const pending = (job: ContextJob) => job.status === 'queued' || job.status === 'running';
 const origins = () => ({
@@ -441,7 +431,7 @@ export function ContextPanel({
                   {latest.error && (
                     <details>
                       <summary>{t('settings.m303')}</summary>
-                      <p>{translateStoredCode(latest.error, jobErrors)}</p>
+                      <p>{formatUiMessage(contextErrorMessage(latest.error))}</p>
                     </details>
                   )}
                 </div>

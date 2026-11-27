@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { IntlMessageFormat } from 'intl-messageformat';
 import ko from './locales/ko.js';
+import type { MessageKey } from './locales/index.js';
 
 import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
@@ -81,7 +82,7 @@ export function t(key: string, values?: MessageValues): string {
 }
 export function translateStoredCode<Code extends string>(
   value: string,
-  keys: Record<Code, string>
+  keys: Record<Code, MessageKey>
 ): string {
   return Object.hasOwn(keys, value) ? t(keys[value as Code]) : value;
 }

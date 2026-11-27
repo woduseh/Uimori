@@ -9,6 +9,7 @@ import { registerEndpoint } from './endpoint.js';
 import { defaultProfile } from '../core/product.js';
 import { compileRisuPrompt, validateRisuPrompt } from '../core/risu-prompt.js';
 import { planNativeMessages } from '../core/provider-messages.js';
+import { ProviderContractError } from '../core/provider-errors.js';
 import { compileSnapshotPrompt } from './prompt-snapshot.js';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -245,7 +246,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
             };
           }
         } catch (caught) {
-          error = (caught as Error).message;
+          error = caught instanceof ProviderContractError ? caught.code : 'PROMPT_PREVIEW_FAILED';
         }
       return {
         compilation,

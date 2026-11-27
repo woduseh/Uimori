@@ -1,5 +1,7 @@
 import { t, useI18n, formatNumber } from './i18n.js';
 import type { ReaderRun } from '../core/types.js';
+import { contextErrorMessage } from './context-error.js';
+import { formatUiMessage } from './ui-message.js';
 import './context-summary.css';
 
 export function ContextSummaryStatus({ summary }: { summary: ReaderRun['contextSummary'] }) {
@@ -18,7 +20,11 @@ export function ContextSummaryStatus({ summary }: { summary: ReaderRun['contextS
       ) : summary.status === 'failed' ? (
         <>
           <strong>{t('settings.m317')}</strong>
-          <span>{summary.error || t('settings.m318')}</span>
+          <span>
+            {summary.error
+              ? formatUiMessage(contextErrorMessage(summary.error))
+              : t('settings.m318')}
+          </span>
         </>
       ) : (
         <span>
