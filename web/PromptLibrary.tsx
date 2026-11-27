@@ -1,6 +1,6 @@
-import { useI18n, message as descriptor, messageRef } from './i18n.js';
+import { useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -180,7 +180,7 @@ export function PromptLibrary({
   const editorHeading = useRef<HTMLHeadingElement>(null);
   const { workspace, refresh: refreshWorkspace } = usePromptWorkspace();
   const [applyingDefault, setApplyingDefault] = useState(false);
-  const [defaultNotice, setDefaultNotice] = useState('');
+  const [defaultNotice, setDefaultNotice] = useState<UiMessage | null>(null);
   const organization = organizer.organization ?? library?.organization ?? null;
   const placements = libraryPlacements(organization);
   const folderOf = (id: string) =>
@@ -299,14 +299,14 @@ export function PromptLibrary({
   async function applyAsDefault(item: PromptPresetSummary) {
     if (!workspace || applyingDefault) return;
     setApplyingDefault(true);
-    setDefaultNotice('');
+    setDefaultNotice(null);
     try {
       await callEndpoint(promptEndpoints.applyPreset, {
         expectedRevision: workspace.revision,
         role: item.role,
         presetId: item.id,
       });
-      setDefaultNotice(descriptor('prompts.defaultChanged', { role: item.role, name: item.title }));
+      setDefaultNotice(uiMessage('prompts.defaultChanged', { role: item.role, name: item.title }));
     } catch (error) {
       onError(toUiMessage(error));
       await refreshWorkspace().catch(() => {});
@@ -395,25 +395,24 @@ export function PromptLibrary({
         title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')}${t('shared.copySuffix')}`,
       });
       const copy = result.saved as PromptPreset;
-      const warnings: string[] = [];
+      const warnings: UiMessage[] = [];
       try {
         if (!(await placeCreated(copy, true, result.creationOrganizationRevision ?? null)))
-          warnings.push(descriptor('prompts.clonedPlacement', { error: '' }));
+          warnings.push(uiMessage('prompts.clonedPlacement', { error: '' }));
       } catch (error) {
-        warnings.push(
-          descriptor('prompts.clonedPlacement', { error: messageRef((error as Error).message) })
-        );
+        warnings.push(uiMessage('prompts.clonedPlacement', { error: toUiMessage(error) }));
       }
       try {
         await reload();
       } catch (error) {
-        warnings.push(
-          descriptor('prompts.clonedReload', {
-            error: messageRef((error as Error).message),
-          })
-        );
+        warnings.push(uiMessage('prompts.clonedReload', { error: toUiMessage(error) }));
       }
-      if (warnings.length) onError(legacyUiMessage(warnings.join('\n')));
+      if (warnings.length)
+        onError(
+          warnings.length === 1
+            ? warnings[0]
+            : uiMessage('library.cloneWarnings', { first: warnings[0], second: warnings[1] })
+        );
     } catch (error) {
       onError(toUiMessage(error));
     } finally {
@@ -435,22 +434,14 @@ export function PromptLibrary({
       });
       try {
         if (!(await placeCreated(created, true)))
-          onError(legacyUiMessage(descriptor('prompts.addedPlacement', { error: '' })));
+          onError(uiMessage('prompts.addedPlacement', { error: '' }));
       } catch (error) {
-        onError(
-          legacyUiMessage(
-            descriptor('prompts.addedPlacement', { error: messageRef((error as Error).message) })
-          )
-        );
+        onError(uiMessage('prompts.addedPlacement', { error: toUiMessage(error) }));
       }
       try {
         await reload();
       } catch (error) {
-        onError(
-          legacyUiMessage(
-            descriptor('prompts.addedReload', { error: messageRef((error as Error).message) })
-          )
-        );
+        onError(uiMessage('prompts.addedReload', { error: toUiMessage(error) }));
       }
       return created;
     } finally {
@@ -739,7 +730,7 @@ export function PromptLibrary({
         }}
       />
       {folderEditor.dialogs}
-      <TransientNotice content={legacyUiMessage(defaultNotice)} />
+      <TransientNotice content={defaultNotice} />
       {!library ? (
         <LoadingState presentation="region" label={uiMessage('prompts.uiLoadingPrompts')} />
       ) : editing ? (

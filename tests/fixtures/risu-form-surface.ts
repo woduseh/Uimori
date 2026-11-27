@@ -1,4 +1,4 @@
-import { translateMessage } from '../../web/i18n.js';
+import { formatUiMessage } from '../../web/ui-message.js';
 import { prepareRisuMessage } from '../../web/risu-message.js';
 import { mountRisuMessageSurface } from '../../web/risu-message-surface.js';
 
@@ -34,7 +34,7 @@ export function mount() {
     app.querySelector<HTMLElement>('.risu-message-surface')!,
     prepared,
     (next) => {
-      state.textContent = translateMessage(next.issue);
+      state.textContent = next.issue ? formatUiMessage(next.issue) : '';
     }
   );
   let revision = 0;

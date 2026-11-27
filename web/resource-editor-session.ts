@@ -1,7 +1,7 @@
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { resourceEditorEndpoints as endpoints } from '#contracts';
 import { ApiError, callEndpoint, definiteRejection, libraryChangedKey } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import {
   editableResource,
   type ResourceKind,
@@ -39,7 +39,7 @@ export type EditorState = {
   saving: boolean;
   creationPending: boolean;
   autosavePending: boolean;
-  error: string;
+  error: UiMessage | null;
   conflict: boolean;
   recovery: 'none' | 'pending' | 'saved' | 'failed';
   restoreVersion: number;
@@ -101,7 +101,7 @@ export class ResourceEditorSession {
       saving: false,
       creationPending: false,
       autosavePending: false,
-      error: '',
+      error: null,
       conflict: false,
       recovery: 'none',
       restoreVersion: 0,
@@ -133,7 +133,7 @@ export class ResourceEditorSession {
       creationPending: !!this.pendingCreation,
       autosavePending: false,
       conflict: false,
-      error: '',
+      error: null,
       recovery: 'none',
       restoreVersion: this.state.restoreVersion + 1,
     });
@@ -200,7 +200,7 @@ export class ResourceEditorSession {
       } catch (error) {
         if (!this.disposed && load === this.loadVersion) {
           this.opening = null;
-          this.emit({ error: (error as Error).message });
+          this.emit({ error: toUiMessage(error) });
         }
         throw error;
       }
@@ -378,7 +378,7 @@ export class ResourceEditorSession {
     try {
       prepared = previousCreation?.model ?? this.prepared(this.state.local.model);
     } catch (error) {
-      this.emit({ error: errorDescriptor(error) });
+      this.emit({ error: toUiMessage(error) });
       throw error;
     }
     if (creating && !previousCreation)
@@ -392,7 +392,7 @@ export class ResourceEditorSession {
     const generation = this.generation;
     const previousKey = this.editorKey;
     this.loadVersion++;
-    this.emit({ saving: true, creationPending: !!creation, error: '' });
+    this.emit({ saving: true, creationPending: !!creation, error: null });
     let admitted = false;
     let persisted = false;
     try {
@@ -460,7 +460,7 @@ export class ResourceEditorSession {
         if (persisted) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
       }
       this.emit({
-        error: errorDescriptor(error),
+        error: toUiMessage(error),
         creationPending: !!this.pendingCreation,
         conflict: this.state.conflict || (error instanceof ApiError && error.status === 409),
       });

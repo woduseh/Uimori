@@ -1,5 +1,4 @@
-import { message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 export const nativeToggleTypes = [
   'toggle',
   'select',
@@ -63,18 +62,18 @@ export function serializeNativeToggleDefinition(item: NativeToggleDefinition): s
   return `${item.key}=${item.label}=${item.type}`;
 }
 
-export function nativeToggleGroupWarnings(lines: NativeToggleLine[]): string[] {
-  const warnings: string[] = [];
+export function nativeToggleGroupWarnings(lines: NativeToggleLine[]): UiMessage[] {
+  const warnings: UiMessage[] = [];
   let open = false;
   for (const [index, line] of lines.entries()) {
     if (line.definition?.type === 'group') {
-      if (open) warnings.push(descriptor('native.nestedGroup', { line: index + 1 }));
+      if (open) warnings.push(uiMessage('native.nestedGroup', { line: index + 1 }));
       open = true;
     } else if (line.definition?.type === 'groupEnd') {
-      if (!open) warnings.push(descriptor('native.unmatchedGroup', { line: index + 1 }));
+      if (!open) warnings.push(uiMessage('native.unmatchedGroup', { line: index + 1 }));
       open = false;
     }
   }
-  if (open) warnings.push(descriptor('native.unclosedGroup'));
+  if (open) warnings.push(uiMessage('native.unclosedGroup'));
   return warnings;
 }

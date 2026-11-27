@@ -1,5 +1,6 @@
 import { useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { useState } from 'react';
 import type { Content } from '../core/product.js';
@@ -28,9 +29,12 @@ export function RisuStartPreview({
     css: string;
     issues: string[];
   } | null>(null);
-  const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null);
+  const [failure, setFailure] = useState<{
+    identity: string;
+    error: UiMessage;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
-  const error = failure?.identity === identity ? failure.message : '';
+  const error = failure?.identity === identity ? failure.error : null;
   const retryPreview = useRetryableEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -54,8 +58,8 @@ export function RisuStartPreview({
           setFailure(null);
         }
       })
-      .catch((caught: Error) => {
-        if (!controller.signal.aborted) setFailure({ identity, message: caught.message });
+      .catch((caught: unknown) => {
+        if (!controller.signal.aborted) setFailure({ identity, error: toUiMessage(caught) });
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -69,7 +73,7 @@ export function RisuStartPreview({
       <LoadingState
         presentation="placeholder"
         loading={loading}
-        error={legacyUiMessage(error)}
+        error={error}
         errorLabel={uiMessage('native.text_78102a76b6')}
         label={uiMessage('native.text_f7b0125b0b')}
         onRetry={() => {

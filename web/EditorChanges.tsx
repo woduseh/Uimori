@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatNumber, t, translateMessage, useI18n } from './i18n.js';
-import { uiMessage, legacyUiMessage } from './ui-message.js';
+import { formatNumber, t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -23,7 +24,7 @@ export type EditorChangeSave = {
   run: () => Promise<boolean>;
   label: string;
   disabled: boolean;
-  error: string;
+  error: UiMessage | null;
 };
 
 const sectionsKey = (sections: readonly ChangedSection<string>[]) =>
@@ -156,7 +157,7 @@ export function EditorChanges<K extends string>({
           attempted &&
           save.error && (
             <p className="error change-review-error" role="alert">
-              {translateMessage(save.error)}
+              {formatUiMessage(save.error)}
             </p>
           )
         }
@@ -197,7 +198,7 @@ const sameModel = (model: ResourceModel) => model;
 
 type PreviousVersion =
   | { status: 'loading' }
-  | { status: 'failed'; error: string }
+  | { status: 'failed'; error: UiMessage }
   | { status: 'none' }
   | { status: 'ready'; savedRevision: number; model: ResourceModel };
 
@@ -219,12 +220,12 @@ export function PreviousVersionAction<K extends string>({
   const [open, setOpen] = useState(false);
   const [previous, setPrevious] = useState<PreviousVersion>({ status: 'loading' });
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const request = useRef(0);
   const revision = state.document.baseRevision ?? 0;
   const load = useCallback(() => {
     const current = ++request.current;
-    setError('');
+    setError(null);
     if (revision <= 1) {
       setPrevious({ status: 'none' });
       return;
@@ -237,7 +238,7 @@ export function PreviousVersionAction<K extends string>({
       },
       (caught) => {
         if (request.current === current)
-          setPrevious({ status: 'failed', error: (caught as Error).message });
+          setPrevious({ status: 'failed', error: toUiMessage(caught) });
       }
     );
   }, [session, revision]);
@@ -272,7 +273,7 @@ export function PreviousVersionAction<K extends string>({
       <LoadingState
         presentation="inline"
         label={uiMessage('shared.loadingPrevious')}
-        error={previous.status === 'failed' ? legacyUiMessage(previous.error) : null}
+        error={previous.status === 'failed' ? previous.error : null}
         onRetry={load}
       />
     ) : previous.status === 'none' ? (
@@ -304,7 +305,7 @@ export function PreviousVersionAction<K extends string>({
         error={
           error && (
             <p className="error change-review-error" role="alert">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )
         }
@@ -321,12 +322,12 @@ export function PreviousVersionAction<K extends string>({
                 aria-busy={busy}
                 onClick={async () => {
                   setBusy(true);
-                  setError('');
+                  setError(null);
                   try {
                     await commands.restore();
                     setOpen(false);
                   } catch (caught) {
-                    setError((caught as Error).message);
+                    setError(toUiMessage(caught));
                   } finally {
                     setBusy(false);
                   }

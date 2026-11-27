@@ -3,12 +3,12 @@ import {
   readIllustrationAppearanceProfiles,
   withIllustrationAppearanceProfiles,
 } from '../core/illustration-profiles.js';
-import { useI18n, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
@@ -207,11 +207,11 @@ export function RisuNativeFields({
     }
   );
   const [part, setPart] = useState<SourcePart>('lore');
-  const [draft, setDraft] = useBufferedEditorState<{ part: SourcePart; text: string } | null>(
-    'package.native.source',
-    null
-  );
-  const [error, setError] = useState('');
+  const [draft, setDraft] = useBufferedEditorState<{
+    part: SourcePart;
+    text: string;
+  } | null>('package.native.source', null);
+  const [error, setError] = useState<UiMessage | null>(null);
   const [modulesDirty, setModulesDirty] = useState(false);
   const [regexDirty, setRegexDirty] = useState(false);
   const [triggersDirty, setTriggersDirty] = useState(false);
@@ -345,9 +345,9 @@ export function RisuNativeFields({
     try {
       update(normalizeRisuContentSource(editNativeSource(native, draft.part, draft.text)));
       setDraft(null);
-      setError('');
+      setError(null);
     } catch (caught) {
-      setError(errorDescriptor(caught));
+      setError(toUiMessage(caught));
     }
   }
   const description = string(standalone ? native.module?.description : native.card.description);
@@ -399,7 +399,7 @@ export function RisuNativeFields({
           disabled={!draft}
           onClick={() => {
             setDraft(null);
-            setError('');
+            setError(null);
           }}
         >
           {t('native.text_d688879ebd')}
@@ -420,7 +420,7 @@ export function RisuNativeFields({
         )}
         {error && (
           <p className="error" role="alert">
-            {translateMessage(error)}
+            {formatUiMessage(error)}
           </p>
         )}
         <fieldset disabled={!!draft} className="native-panel-fields">

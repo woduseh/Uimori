@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage, message as legacyDescriptor, messageRef } from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { useEffect, useRef, useState } from 'react';
 import { ListRestart } from 'lucide-react';
 import type { Content } from '../core/product.js';
@@ -47,11 +48,11 @@ export function PackageStartPicker({
 }) {
   useI18n();
   const [content, setContent] = useState<Content | null>(null);
-  const [readError, setReadError] = useState('');
+  const [readError, setReadError] = useState<UiMessage | null>(null);
   const [selected, setSelected] = useState(selection.startId);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const submitted = useRef<Command | null>(null);
   const submitting = useRef(false);
@@ -62,7 +63,7 @@ export function PackageStartPicker({
       reviewed.current = { source, selection };
       setSelected(selection.startId);
       setExpanded(false);
-      setError('');
+      setError(null);
     }
   }, [open]);
   const mounted = useRef(true);
@@ -75,7 +76,7 @@ export function PackageStartPicker({
   const retryRead = useRetryableEffect(() => {
     if (!open) return;
     const controller = new AbortController();
-    setReadError('');
+    setReadError(null);
     void api<Content>(
       '/revisions/content/' +
         encodeURIComponent(selection.packageId) +
@@ -88,8 +89,8 @@ export function PackageStartPicker({
       (value) => {
         if (!controller.signal.aborted) setContent(value);
       },
-      (cause: Error) => {
-        if (!controller.signal.aborted) setReadError(cause.message);
+      (cause: unknown) => {
+        if (!controller.signal.aborted) setReadError(toUiMessage(cause));
       }
     );
     return () => controller.abort();
@@ -99,7 +100,7 @@ export function PackageStartPicker({
     if (submitting.current || disabled) return;
     submitting.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     const captured = reviewed.current;
     const command = (submitted.current ??= {
       packageId: captured.selection.packageId,
@@ -132,23 +133,17 @@ export function PackageStartPicker({
           target?.focus({ preventScroll: true });
         });
       } catch (cause) {
-        onError(
-          legacyUiMessage(
-            legacyDescriptor('library.openingRefreshError', {
-              error: messageRef((cause as Error).message),
-            })
-          )
-        );
+        onError(uiMessage('library.openingRefreshError', { error: toUiMessage(cause) }));
       }
     } catch (cause) {
       if (!mounted.current) return;
       if (!uncertain && definiteRejection(cause)) {
         submitted.current = null;
         setUncertain(false);
-        setError((cause as Error).message);
+        setError(toUiMessage(cause));
       } else {
         setUncertain(true);
-        setError(legacyDescriptor('library.couldNotConfirmTheResultCheckThe'));
+        setError(uiMessage('library.couldNotConfirmTheResultCheckThe'));
       }
     } finally {
       submitting.current = false;
@@ -166,7 +161,7 @@ export function PackageStartPicker({
       {!content || readError ? (
         <LoadingState
           label={uiMessage('library.loadingOpenings')}
-          error={legacyUiMessage(readError)}
+          error={readError}
           errorLabel={uiMessage('library.couldNotLoadOpenings')}
           onRetry={retryRead}
         />
@@ -179,7 +174,7 @@ export function PackageStartPicker({
               disabled={busy || uncertain || disabled}
               onChange={(event) => {
                 setSelected(event.target.value);
-                setError('');
+                setError(null);
               }}
             >
               <option value="">{t('transfer.m342')}</option>
@@ -213,7 +208,7 @@ export function PackageStartPicker({
           )}
         </>
       )}
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <div className="form-actions">
         <button type="button" className="secondary" disabled={busy} onClick={onClose}>
           {t('library.cancel')}
