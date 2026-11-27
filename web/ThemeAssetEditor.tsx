@@ -7,7 +7,8 @@ import {
   type ThemeAssetKind,
 } from '../core/themes.js';
 import { IMAGE_INPUT_MAX_BYTES, MAX_FONT_BYTES } from '#contracts';
-import { appErrorDescriptor } from './api-errors.js';
+import { appErrorUiMessage } from './api-errors.js';
+import { legacyMessageString } from './ui-message.js';
 import { IconButton } from './IconButton.js';
 import { t, useI18n, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -55,7 +56,9 @@ export function ThemeAssetEditor({
     const maxBytes = kind === 'font' ? MAX_FONT_BYTES : IMAGE_INPUT_MAX_BYTES;
     if (file.size > maxBytes) {
       onError(
-        appErrorDescriptor(kind === 'font' ? 'FONT_TOO_LARGE' : 'IMAGE_TOO_LARGE', { maxBytes })
+        legacyMessageString(
+          appErrorUiMessage(kind === 'font' ? 'FONT_TOO_LARGE' : 'IMAGE_TOO_LARGE', { maxBytes })
+        )
       );
       return;
     }
