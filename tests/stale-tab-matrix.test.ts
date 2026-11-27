@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -10,7 +10,9 @@ import {
   endpointRequest,
   isAppErrorCode,
 } from '#contracts';
+import * as contracts from '#contracts';
 import { allOperations } from '#contracts/operations';
+import * as operations from '#contracts/operations';
 import type { Content, Connection, ModelPreset } from '../core/product.js';
 import { DEFAULT_PUSH_PREFERENCES } from '../core/push.js';
 import { emptyTheme } from '../core/themes.js';
@@ -1010,6 +1012,21 @@ test('every endpoint names an operation of its own domain and every operation is
       expect(served.has(operation.name), `${operation.name} has no endpoint`).toBe(true);
 });
 
+test('every endpoint and operation set the contracts export is in the registries', () => {
+  const exported = (suffix: string, from: Record<string, unknown>, registry: object) => {
+    const sets = Object.entries(from)
+      .filter(([name]) => name.endsWith(suffix) && name !== `all${suffix}`)
+      .map(([, value]) => value);
+    expect(new Set(Object.values(registry))).toEqual(new Set(sets));
+  };
+  exported('Endpoints', contracts, allEndpoints);
+  exported('Operations', operations, allOperations);
+  const domains = readdirSync(join(import.meta.dirname, '../packages/contracts/src/domains'), {
+    withFileTypes: true,
+  }).filter((entry) => entry.isDirectory());
+  expect(Object.keys(allEndpoints)).toHaveLength(domains.length);
+});
+
 test('the field walker reads through unions, refinements and nested objects', () => {
   const { appearance, library, resourceEditors, prompts } = allOperations;
   expect(revisionFields(appearance.selectTheme.input)).toEqual(['expectedRevision']);
@@ -1075,9 +1092,10 @@ test.each(probes)('$name with $when answers $answer.code', async (item) => {
   const { input, control } = await item.arrange();
   if (revisions.length && !item.targetRevision)
     expect(control, 'a target reached through a shared revision needs a control').toBeDefined();
-  const stale = Object.keys(input).filter(
-    (key) => revisions.includes(key) && typeof input[key] === 'number'
-  );
+  const sent = Object.keys(input).filter((key) => revisions.includes(key));
+  const stale = sent.filter((key) => typeof input[key] === 'number');
+  if (!same(item.answer, conflict) && revisions.length)
+    expect(stale, 'a numeric top-level revision to send one ahead').not.toEqual([]);
   if (!same(item.answer, conflict) && stale.length) {
     const bumped = Object.fromEntries(stale.map((key) => [key, Number(input[key]) + 1]));
     const first = await call(endpoint, { ...input, ...bumped });
@@ -1092,6 +1110,8 @@ test.each(probes)('$name with $when answers $answer.code', async (item) => {
     body: { code: item.answer.code },
   });
   if (control) {
+    for (const key of sent)
+      expect(control[key], `the control sends the same ${key}`).toEqual(input[key]);
     const live = await call(endpoint, control);
     expect(live.status, `the same revision with a live target: ${JSON.stringify(live.body)}`).toBe(
       200
