@@ -342,8 +342,8 @@ test('feature map domains need existing sources and case IDs, known launch optio
 test('every contracts domain folder needs a feature map domain that covers its files', () => {
   const folder = 'packages/contracts/src/domains';
   withDocumentation({}, (directory, write) => {
-    mkdirSync(join(directory, folder, 'library'), { recursive: true });
     mkdirSync(join(directory, folder, 'reader'), { recursive: true });
+    mkdirSync(join(directory, folder, 'library', 'v1.2'), { recursive: true });
     const map = (sources) =>
       featureMap({
         library: {
@@ -357,12 +357,13 @@ test('every contracts domain folder needs a feature map domain that covers its f
       [`${folder}/query.ts`]: '',
       [`${folder}/library/endpoints.ts`]: '',
       [`${folder}/library/operations.ts`]: '',
+      [`${folder}/library/v1.2/limits`]: '',
       [`${folder}/reader/endpoints.ts`]: '',
       'tests/library-browser.spec.ts': '',
       ...map(['server/app.ts', `${folder}/library/endpoints.ts`]),
     });
     assert.deepEqual(documentationErrors(directory), [
-      `tests/feature-map.json: ${folder}/library/operations.ts map to no domain; add "${folder}/library/**" to the sources of the domain whose specs cover it, usually the domain named library`,
+      `tests/feature-map.json: ${folder}/library/operations.ts, ${folder}/library/v1.2/limits map to no domain; add "${folder}/library/**" to the sources of the domain whose specs cover it, usually the domain named library`,
       `tests/feature-map.json: ${folder}/reader/endpoints.ts map to no domain; add "${folder}/reader/**" to the sources of the domain whose specs cover it, usually the domain named reader`,
     ]);
     write(map([`${folder}/library/**`, `${folder}/reader/**`]));

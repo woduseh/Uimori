@@ -1,4 +1,4 @@
-import { existsSync, globSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -217,15 +217,17 @@ function featureMapErrors(directory) {
       issues.push(`${featureMapPath}: ${spec} is not registered in any domain`);
   const contractDomains = resolve(directory, contractDomainsPath);
   if (existsSync(contractDomains))
-    for (const entry of readdirSync(contractDomains, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const folder = `${contractDomainsPath}/${entry.name}`;
-      const unmapped = globSync(`${folder}/**/*.*`, { cwd: directory })
+    for (const name of readdirSync(contractDomains, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()) {
+      const folder = `${contractDomainsPath}/${name}`;
+      const unmapped = globSync(`${folder}/**`, { cwd: directory })
         .map((path) => path.split(sep).join('/'))
-        .filter((path) => !mapped.has(path));
+        .filter((path) => statSync(resolve(directory, path)).isFile() && !mapped.has(path));
       if (unmapped.length)
         issues.push(
-          `${featureMapPath}: ${unmapped.sort().join(', ')} map to no domain; add "${folder}/**" to the sources of the domain whose specs cover it, usually the domain named ${entry.name}`
+          `${featureMapPath}: ${unmapped.sort().join(', ')} map to no domain; add "${folder}/**" to the sources of the domain whose specs cover it, usually the domain named ${name}`
         );
     }
   return { domains, issues };

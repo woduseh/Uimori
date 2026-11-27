@@ -158,9 +158,9 @@ test('the real feature map routes each kind of change to the browser run that co
     'packages/contracts/src/domains/resource-editors/endpoints.ts': ['resource-editors'],
     'packages/contracts/src/domains/library/operations.ts': ['library'],
     'server/builtin-prompts/pheme.json': ['prompts'],
-    'server/appearance-scope.ts': ['appearance'],
+    'server/appearance-scope.ts': ['appearance', 'illustration'],
     'web/ArchivePanel.tsx': ['personal-workspace'],
-    'runner/uimori.mjs': ['helper'],
+    'runner/uimori.mjs': [],
     'runner/runner.mjs': [],
     'packages/contracts/src/domains/self-host/endpoints.ts': [],
   };
