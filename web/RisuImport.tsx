@@ -1,12 +1,6 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  message as descriptor,
-  messageRef,
-} from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -68,7 +62,7 @@ function importFindingMessage(finding: RisuImportPreview['findings'][number]): s
         more: Number(match[2] ?? 0),
       });
   }
-  return translateMessage(finding.detail);
+  return finding.detail;
 }
 
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
@@ -100,8 +94,8 @@ export function RisuImport({
   const [createChat, setCreateChat] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [result, setResult] = useState<RisuImportResult | null>(null);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const submission = useRef<RisuImportApply | null>(null);
   const requestKey = useRef<string | null>(null);
   const unsupported = preview?.findings.some((finding) => finding.level === 'unsupported');
@@ -111,7 +105,7 @@ export function RisuImport({
   function selectionChanged() {
     submission.current = null;
     requestKey.current = null;
-    setError('');
+    setError(null);
   }
 
   async function prepare(file: File) {
@@ -121,8 +115,8 @@ export function RisuImport({
     const controller = new AbortController();
     preparation.current = controller;
     setPreparing(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       if (!/\.(charx|jpe?g|png|risum|json|zip)$/i.test(file.name))
         throw new UiError(uiMessage('transfer.m007'));
@@ -135,7 +129,7 @@ export function RisuImport({
         );
       if (file.size > RISU_IMPORT_MAX_BYTES)
         setNotice(
-          descriptor('transfer.d002', { v0: Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024) })
+          uiMessage('transfer.d002', { v0: Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024) })
         );
       const nextSource = await readSource(file, controller.signal);
       const nextPreview = await api<RisuImportPreview>(
@@ -159,13 +153,10 @@ export function RisuImport({
       submission.current = null;
       requestKey.current = null;
     } catch (cause) {
-      if (controller.signal.aborted) setNotice(descriptor('transfer.m009'));
+      if (controller.signal.aborted) setNotice(uiMessage('transfer.m009'));
       else
         setError(
-          descriptor('transfer.reviewError', {
-            error: messageRef((cause as Error).message),
-            retained: !!preview,
-          })
+          uiMessage('transfer.reviewError', { error: toUiMessage(cause), retained: !!preview })
         );
     } finally {
       preparation.current = null;
@@ -184,8 +175,8 @@ export function RisuImport({
     }
     active.current = true;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
         source,
@@ -202,7 +193,7 @@ export function RisuImport({
       setAllowPartial(false);
       selectionChanged();
     } catch (cause) {
-      setError(descriptor('transfer.d003', { v0: messageRef((cause as Error).message) }));
+      setError(uiMessage('transfer.d003', { v0: toUiMessage(cause) }));
     } finally {
       active.current = false;
       setBusy(false);
@@ -217,17 +208,17 @@ export function RisuImport({
         setOpen(false);
         onContinueChat(imported.chat.id);
       } else if (imported.chat) {
-        setNotice(descriptor('transfer.m011'));
+        setNotice(uiMessage('transfer.m011'));
       }
     } catch {
       setNotice(
         preview?.kind === 'module'
-          ? descriptor('transfer.m012')
+          ? uiMessage('transfer.m012')
           : preview?.kind === 'persona'
-            ? descriptor('transfer.m013')
+            ? uiMessage('transfer.m013')
             : imported.chat
-              ? descriptor('transfer.m014')
-              : descriptor('transfer.m015')
+              ? uiMessage('transfer.m014')
+              : uiMessage('transfer.m015')
       );
     }
   }
@@ -247,8 +238,8 @@ export function RisuImport({
     submission.current = payload;
     active.current = true;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       const imported = await api<RisuImportResult>('/risu-imports/apply', payload);
       setResult(imported);
@@ -258,7 +249,7 @@ export function RisuImport({
       const confirmedFailure = !uncertain && definiteRejection(cause);
       setUncertain(!confirmedFailure);
       if (confirmedFailure) submission.current = null;
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     } finally {
       active.current = false;
       setBusy(false);
@@ -269,7 +260,7 @@ export function RisuImport({
     if (active.current || !result) return;
     active.current = true;
     setBusy(true);
-    setNotice('');
+    setNotice(null);
     try {
       await refreshAndOpen(result);
     } finally {
@@ -286,8 +277,8 @@ export function RisuImport({
     setAllowPartial(false);
     setCreateChat(false);
     setResult(null);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     submission.current = null;
     requestKey.current = null;
   }
@@ -520,10 +511,10 @@ export function RisuImport({
               {t('transfer.m064')}
             </button>
           )}
-          {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
+          {notice && <NoticeBanner>{notice}</NoticeBanner>}
           {error && (
             <NoticeBanner className="error" tone="error">
-              {translateMessage(error)}
+              {error}
             </NoticeBanner>
           )}
         </section>

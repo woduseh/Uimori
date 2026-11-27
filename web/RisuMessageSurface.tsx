@@ -1,4 +1,5 @@
-import { useI18n, translateMessage } from './i18n.js';
+import { useI18n } from './i18n.js';
+import { formatUiMessage } from './ui-message.js';
 import { useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
@@ -41,7 +42,10 @@ export function RisuMessageSurface({
     revision: string;
     reading?: ReadabilitySettings;
   } | null>(null);
-  const [state, setState] = useState<RisuActionState>({ busy: false, issue: '' });
+  const [state, setState] = useState<RisuActionState>({
+    busy: false,
+    issue: null,
+  });
   useLayoutEffect(() => {
     if (!host.current) return;
     if (!mounted.current) {
@@ -77,7 +81,7 @@ export function RisuMessageSurface({
   );
   return (
     <div className="risu-message" aria-busy={state.busy}>
-      {state.issue && <p role="alert">{translateMessage(state.issue)}</p>}
+      {state.issue && <p role="alert">{formatUiMessage(state.issue)}</p>}
       <div ref={host} className="risu-message-surface">
         {renderStoryUi &&
           prepared.storyUiSlots.map((index) => (

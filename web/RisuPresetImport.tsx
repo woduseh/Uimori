@@ -1,12 +1,6 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  message as descriptor,
-  messageRef,
-} from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { readImportSource as readSource } from './import-source.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -47,7 +41,7 @@ function presetFindingMessage(finding: RisuPresetImportPreview['findings'][numbe
       break;
     }
   }
-  return translateMessage(finding.detail);
+  return finding.detail;
 }
 
 export function RisuPresetImport({
@@ -68,8 +62,8 @@ export function RisuPresetImport({
   const [allowPartial, setAllowPartial] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [result, setResult] = useState<RisuPresetImportResult | null>(null);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const submission = useRef<RisuPresetImportApply | null>(null);
   const requestKey = useRef<string | null>(null);
   const unsupported = preview?.findings.some((finding) => finding.level === 'unsupported');
@@ -79,8 +73,8 @@ export function RisuPresetImport({
     if (active.current || uncertain) return;
     active.current = true;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       if (!/\.(risup|risupreset|json|zip)$/i.test(file.name))
         throw new UiError(uiMessage('transfer.m065'));
@@ -98,10 +92,7 @@ export function RisuPresetImport({
       requestKey.current = null;
     } catch (cause) {
       setError(
-        descriptor('transfer.reviewError', {
-          error: messageRef((cause as Error).message),
-          retained: !!preview,
-        })
+        uiMessage('transfer.reviewError', { error: toUiMessage(cause), retained: !!preview })
       );
     } finally {
       active.current = false;
@@ -120,8 +111,8 @@ export function RisuPresetImport({
     submission.current = payload;
     active.current = true;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       const imported = await api<RisuPresetImportResult>('/risu-preset-imports/apply', payload);
       setResult(imported);
@@ -129,13 +120,13 @@ export function RisuPresetImport({
       try {
         await reload();
       } catch {
-        setNotice(descriptor('transfer.m067'));
+        setNotice(uiMessage('transfer.m067'));
       }
     } catch (cause) {
       const confirmedFailure = !uncertain && definiteRejection(cause);
       setUncertain(!confirmedFailure);
       if (confirmedFailure) submission.current = null;
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     } finally {
       active.current = false;
       setBusy(false);
@@ -156,8 +147,8 @@ export function RisuPresetImport({
               setSource(null);
               setPreview(null);
               setAllowPartial(false);
-              setError('');
-              setNotice('');
+              setError(null);
+              setNotice(null);
               submission.current = null;
               requestKey.current = null;
             }
@@ -242,7 +233,7 @@ export function RisuPresetImport({
                       setAllowPartial(event.target.checked);
                       submission.current = null;
                       requestKey.current = null;
-                      setError('');
+                      setError(null);
                     }}
                   />
                   <span>{t('transfer.m043')}</span>
@@ -274,10 +265,10 @@ export function RisuPresetImport({
             </>
           )}
           {busy && <LoadingState presentation="inline" label={uiMessage('transfer.m063')} />}
-          {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
+          {notice && <NoticeBanner>{notice}</NoticeBanner>}
           {error && (
             <NoticeBanner className="error" tone="error">
-              {translateMessage(error)}
+              {error}
             </NoticeBanner>
           )}
         </section>

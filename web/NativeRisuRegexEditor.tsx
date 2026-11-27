@@ -1,8 +1,8 @@
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useI18n, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { CodeField } from './CodeField.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { codeFieldName } from './code-field-reveal.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useMemo, useState } from 'react';
@@ -67,7 +67,7 @@ export function NativeRisuRegexEditor({
   const [raw, setRaw] = useBufferedEditorState(draftPath, formatted, {
     syncPristineInitial: true,
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const pending = raw !== formatted;
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
@@ -88,9 +88,9 @@ export function NativeRisuRegexEditor({
     try {
       onChange(next);
       setRaw(JSON.stringify(next, null, 2));
-      setError('');
+      setError(null);
     } catch (caught) {
-      setError(errorDescriptor(caught));
+      setError(toUiMessage(caught));
     }
   }
   return (
@@ -332,7 +332,7 @@ export function NativeRisuRegexEditor({
               try {
                 write(parseNativeRegexJson(raw));
               } catch (caught) {
-                setError(errorDescriptor(caught));
+                setError(toUiMessage(caught));
               }
             }}
           >
@@ -344,7 +344,7 @@ export function NativeRisuRegexEditor({
             disabled={disabled || !pending}
             onClick={() => {
               setRaw(JSON.stringify(value, null, 2));
-              setError('');
+              setError(null);
             }}
           >
             {t('native.text_d688879ebd')}
@@ -352,7 +352,7 @@ export function NativeRisuRegexEditor({
         </div>
         {error && (
           <p className="error" role="alert">
-            {translateMessage(error)}
+            {formatUiMessage(error)}
           </p>
         )}
       </details>

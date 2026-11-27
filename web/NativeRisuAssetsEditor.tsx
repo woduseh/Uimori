@@ -1,5 +1,5 @@
-import { useI18n, translateMessage, message as legacyDescriptor } from './i18n.js';
-import { uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { ImageMetadataFields } from './ImageMetadataFields.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ActionMenu } from './ActionMenu.js';
@@ -14,7 +14,7 @@ import {
   unmappedNativeAssetCount,
 } from '../core/risu-native-assets.js';
 import { uploadPackageImage } from './package-image-upload.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -53,10 +53,10 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const [query, setQuery] = useState(''),
     [selected, setSelected] = useState(''),
     [page, setPage] = useState(0);
-  const [uploadFailures, setUploadFailures] = useState<{ file: string; message: string }[]>([]);
+  const [uploadFailures, setUploadFailures] = useState<{ file: string; error: UiMessage }[]>([]);
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState<{ key: string; count?: number } | null>(null),
-    [error, setError] = useState(''),
+    [error, setError] = useState<UiMessage | null>(null),
     [removing, setRemoving] = useState(''),
     [dropActive, setDropActive] = useState(false),
     [area, setArea] = useState<HTMLElement | null>(null);
@@ -76,7 +76,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     setQuery('');
     setPage(0);
     setNotice(null);
-    setError('');
+    setError(null);
     setUploadFailures([]);
     setRemoving('');
     return () => {
@@ -93,7 +93,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   async function filesChosen(files: File[], replacing?: string) {
     if (!files.length || upload.current) return;
     if (!replacing && (latest.current.value.images?.length ?? 0) + files.length > 2000) {
-      setError(legacyDescriptor('native.text_1ec208bab4'));
+      setError(uiMessage('native.text_1ec208bab4'));
       return;
     }
     const token = ++generation.current,
@@ -101,14 +101,14 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       controller = new AbortController();
     upload.current = controller;
     setBusy(true);
-    setError('');
+    setError(null);
     setUploadFailures([]);
     setNotice(null);
     latest.current.onBusyChange?.(true);
     const current = () =>
       generation.current === token && latest.current.scope === owner && !controller.signal.aborted;
     let completed = 0;
-    const failures: { file: string; message: string }[] = [];
+    const failures: { file: string; error: UiMessage }[] = [];
     try {
       for (const file of files) {
         if (!current()) return;
@@ -125,10 +125,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           if (!current()) return;
           failures.push({
             file: file.name,
-            message:
-              cause instanceof Error
-                ? errorDescriptor(cause)
-                : legacyDescriptor('native.text_6d75f11c59'),
+            error: toUiMessage(cause, 'native.text_6d75f11c59'),
           });
         }
       }
@@ -153,7 +150,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     const chosen = withPortraitImage(latest.current.value, imageId);
     if (!chosen) return;
     change(chosen.value);
-    setError('');
+    setError(null);
     setNotice({
       key: chosen.widenedUse ? 'library.changedTheStoryImageToPortraitAnd' : 'native.portraitSet',
     });
@@ -167,11 +164,11 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     try {
       if (!navigator.clipboard) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(name);
-      setError('');
+      setError(null);
       setNotice({ key: 'native.referenceNameCopied' });
     } catch {
       setNotice(null);
-      setError(legacyDescriptor('helpers.m130'));
+      setError(uiMessage('helpers.m130'));
     }
   }
   const images = value.images ?? [],
@@ -312,13 +309,12 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       )}
       {(error || uploadFailures.length > 0) && (
         <NoticeBanner tone="error" className="native-assets-error">
-          {error && translateMessage(error)}
+          {error && formatUiMessage(error)}
           {uploadFailures.map((failure, index) => (
             <p key={index}>
-              {t('native.fileError', {
-                file: failure.file,
-                error: translateMessage(failure.message),
-              })}
+              {formatUiMessage(
+                uiMessage('native.fileError', { file: failure.file, error: failure.error })
+              )}
             </p>
           ))}
         </NoticeBanner>
@@ -468,15 +464,11 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 setSelected('');
                 setRemoving('');
                 setNotice({ key: 'native.text_00ea313249' });
-                setError('');
+                setError(null);
                 setUploadFailures([]);
               } catch (cause) {
                 setRemoving('');
-                setError(
-                  cause instanceof Error
-                    ? errorDescriptor(cause)
-                    : legacyDescriptor('native.text_949e1ae936')
-                );
+                setError(toUiMessage(cause, 'native.text_949e1ae936'));
               }
             }}
           >

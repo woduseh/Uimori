@@ -1,4 +1,5 @@
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, uiMessage, uiText, type UiMessage } from './ui-message.js';
 import { Switch, SelectionCheckbox } from './BooleanControls.js';
 import { useId, useState } from 'react';
 import { ExpandIcon, CloseIcon, EditIcon, SearchIcon } from './ui-icons.js';
@@ -33,19 +34,21 @@ const inRange = (value: number, min: number, max: number) =>
 export function agentCollaborationIssue(
   value: AgentCollaboration | undefined,
   controls: PromptControl[]
-): string {
-  if (!value?.enabled) return '';
-  if (value.enabled && !value.agents.length) return t('settings.m123');
-  if (value.agents.length > 6) return t('settings.m124');
-  if (!inRange(value.maxCalls, 1, 12)) return t('settings.m125');
-  if (value.sharedControls.length > 64) return t('settings.m126');
+): UiMessage | null {
+  if (!value?.enabled) return null;
+  if (value.enabled && !value.agents.length) return uiMessage('settings.m123');
+  if (value.agents.length > 6) return uiMessage('settings.m124');
+  if (!inRange(value.maxCalls, 1, 12)) return uiMessage('settings.m125');
+  if (value.sharedControls.length > 64) return uiMessage('settings.m126');
   if (value.sharedControls.some((id) => !controls.some((control) => control.id === id)))
-    return t('settings.m127');
+    return uiMessage('settings.m127');
   for (const [index, agent] of value.agents.entries()) {
-    const name = agent.title.trim() || t('settings.m128', { v0: index + 1 });
-    if (!agent.title.trim()) return t('settings.m129', { v0: name });
-    if (!agent.instructions.trim()) return t('settings.m130', { v0: name });
-    if (!inRange(agent.maxCalls, 1, 6)) return t('settings.m131', { v0: name });
+    const name = agent.title.trim()
+      ? uiText(agent.title.trim())
+      : uiMessage('settings.m128', { v0: index + 1 });
+    if (!agent.title.trim()) return uiMessage('settings.m129', { v0: name });
+    if (!agent.instructions.trim()) return uiMessage('settings.m130', { v0: name });
+    if (!inRange(agent.maxCalls, 1, 6)) return uiMessage('settings.m131', { v0: name });
   }
   try {
     validateAgentCollaboration(
@@ -53,9 +56,9 @@ export function agentCollaborationIssue(
       controls.map((control) => control.id)
     );
   } catch {
-    return t('settings.m132');
+    return uiMessage('settings.m132');
   }
-  return '';
+  return null;
 }
 
 type Props = {
@@ -148,7 +151,7 @@ export function AgentCollaborationEditor({
       </div>
       {!expanded && issue && (
         <p className="ac-validation" role="status">
-          {t('settings.flow3', { v0: translateMessage(issue) })}
+          {formatUiMessage(uiMessage('settings.flow3', { v0: issue }))}
         </p>
       )}
       <div id={`${id}-content`} hidden={!expanded || !collaboration.enabled}>
@@ -404,7 +407,7 @@ export function AgentCollaborationEditor({
               </label>
               {issue && (
                 <p className="ac-validation" role="status">
-                  {translateMessage(issue)}
+                  {formatUiMessage(issue)}
                 </p>
               )}
             </div>

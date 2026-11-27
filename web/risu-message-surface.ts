@@ -1,4 +1,4 @@
-import { message as legacyDescriptor } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { themeMessageSheet } from './theme-message-style.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { createReadingDecorator } from './reading-dom.js';
@@ -10,7 +10,7 @@ export type RisuAction = (
   name: string,
   payload?: { data?: Record<string, string | string[]>; triggerId?: string }
 ) => Promise<void> | Promise<undefined | { unchanged: true }>;
-export type RisuActionState = { busy: boolean; issue: string };
+export type RisuActionState = { busy: boolean; issue: UiMessage | null };
 const styles = new WeakMap<Document, CSSStyleSheet>();
 
 type CardControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLDetailsElement;
@@ -166,7 +166,7 @@ export function mountRisuMessageSurface(
     const current = generation;
     locked = true;
     setDisabled();
-    onState({ busy: true, issue: '' });
+    onState({ busy: true, issue: null });
     void Promise.resolve()
       .then(async () => {
         if (alive && current === generation) return await execute(kind, name, payload);
@@ -175,13 +175,13 @@ export function mountRisuMessageSurface(
         if (!result || !result.unchanged || !alive || current !== generation) return;
         locked = false;
         setDisabled();
-        onState({ busy: false, issue: '' });
+        onState({ busy: false, issue: null });
       })
       .catch(() => {
         if (!alive || current !== generation) return;
         locked = false;
         setDisabled();
-        onState({ busy: false, issue: legacyDescriptor('native.cardActionFailed') });
+        onState({ busy: false, issue: uiMessage('native.cardActionFailed') });
       });
   };
   const click = (event: Event) => {
@@ -214,7 +214,7 @@ export function mountRisuMessageSurface(
         if (!value.name) continue;
         onState({
           busy: false,
-          issue: legacyDescriptor('native.cardFormFileUnsupported'),
+          issue: uiMessage('native.cardFormFileUnsupported'),
         });
         return;
       }
@@ -270,7 +270,7 @@ export function mountRisuMessageSurface(
         revision = next.revision;
         generation++;
         locked = false;
-        onState({ busy: false, issue: '' });
+        onState({ busy: false, issue: null });
       }
       setDisabled();
     },

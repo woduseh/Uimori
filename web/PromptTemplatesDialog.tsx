@@ -1,5 +1,6 @@
-import { useI18n, translateMessage } from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -41,11 +42,11 @@ export function PromptTemplatesDialog({
 }) {
   const { t } = useI18n();
   const [templates, setTemplates] = useState<PromptTemplateSummary[] | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState<UiMessage | null>(null);
   const [adding, setAdding] = useState<PromptTemplateSummary | null>(null);
   const [failure, setFailure] = useState<{
     template: PromptTemplateSummary;
-    message: string;
+    error: UiMessage;
   } | null>(null);
   const lock = useRef(false);
   const current = useRef({ open, onAdded, onError });
@@ -54,14 +55,14 @@ export function PromptTemplatesDialog({
     if (!open) return;
     let active = true;
     setTemplates(null);
-    setLoadError('');
+    setLoadError(null);
     setFailure(null);
     void callEndpoint(promptEndpoints.listTemplates)
       .then((items) => {
         if (active) setTemplates(items);
       })
-      .catch((error: Error) => {
-        if (active) setLoadError(error.message);
+      .catch((error: unknown) => {
+        if (active) setLoadError(toUiMessage(error));
       });
     return () => {
       active = false;
@@ -76,9 +77,9 @@ export function PromptTemplatesDialog({
       const preset = await onAdd(template.id);
       if (preset && current.current.open) current.current.onAdded(preset);
     } catch (error) {
-      const message = (error as Error).message;
-      if (current.current.open) setFailure({ template, message });
-      else current.current.onError(legacyUiMessage(message));
+      const shown = toUiMessage(error);
+      if (current.current.open) setFailure({ template, error: shown });
+      else current.current.onError(shown);
     } finally {
       lock.current = false;
       setAdding(null);
@@ -96,7 +97,7 @@ export function PromptTemplatesDialog({
         <LoadingState
           presentation="placeholder"
           loading={!loadError}
-          error={legacyUiMessage(loadError)}
+          error={loadError}
           errorLabel={uiMessage('prompts.uiUnableToLoadBuiltInPrompts')}
           label={uiMessage('prompts.uiLoadingBuiltInPrompts')}
           onRetry={retryLoad}
@@ -148,7 +149,7 @@ export function PromptTemplatesDialog({
               </button>
             }
           >
-            {t('prompts.addFailed', { error: translateMessage(failure.message) })}
+            {uiMessage('prompts.addFailed', { error: failure.error })}
           </NoticeBanner>
         </div>
       )}

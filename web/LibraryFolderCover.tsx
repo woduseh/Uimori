@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { LibraryFolder } from '../core/library-organization.js';
 import { PACKAGE_IMAGE_MIMES, packageImageThumbnailUrl } from '../core/package-images.js';
 import { Dialog } from './Dialog.js';
-import { t, translateMessage, useI18n } from './i18n.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { uploadPackageImage } from './package-image-upload.js';
 import { CheckIcon, FolderIcon } from './ui-icons.js';
 import './library-folder-cover.css';
@@ -53,30 +55,30 @@ export function LibraryFolderCoverDialog({
 }) {
   useI18n();
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const upload = useRef<AbortController | null>(null);
   useEffect(() => () => upload.current?.abort(), []);
   function close() {
     upload.current?.abort();
     setUploading(false);
-    setError('');
+    setError(null);
     onClose();
   }
   async function apply(coverImageHash: string | null) {
-    setError('');
+    setError(null);
     if (await onApply(coverImageHash)) close();
   }
   async function uploadCover(file: File) {
     upload.current?.abort();
     const controller = new AbortController();
     upload.current = controller;
-    setError('');
+    setError(null);
     setUploading(true);
     try {
       const image = await uploadPackageImage(file, controller.signal, 'profile');
       await apply(image.blobHash);
     } catch (reason) {
-      if (!controller.signal.aborted) setError((reason as Error).message);
+      if (!controller.signal.aborted) setError(toUiMessage(reason, 'library.couldNotUpload'));
     } finally {
       if (upload.current === controller) setUploading(false);
     }
@@ -143,7 +145,7 @@ export function LibraryFolderCoverDialog({
           </div>
           {error && (
             <p className="error" role="alert">
-              {translateMessage(error)}
+              {formatUiMessage(error)}
             </p>
           )}
         </div>

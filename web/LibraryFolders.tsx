@@ -1,6 +1,6 @@
-import { t, useI18n, message as legacyDescriptor, messageRef } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Library } from '../core/product.js';
 import type {
@@ -97,13 +97,7 @@ export function useLibraryOrganization(
       try {
         await reload();
       } catch (error) {
-        onError(
-          legacyUiMessage(
-            legacyDescriptor('library.changesWereSavedButTheListCould', {
-              v0: messageRef((error as Error).message),
-            })
-          )
-        );
+        onError(uiMessage('library.changesWereSavedButTheListCould', { v0: toUiMessage(error) }));
       }
       return true;
     } catch (error) {

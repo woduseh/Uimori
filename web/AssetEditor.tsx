@@ -1,6 +1,6 @@
-import { t, useI18n, message as descriptor, messageRef } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
-import { UiError, uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { AssetMetadataEditor } from './AssetMetadataEditor.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -50,7 +50,7 @@ export function AssetEditor({
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadLock = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
   const hasUnsavedChanges =
@@ -75,7 +75,7 @@ export function AssetEditor({
     }
     uploadLock.current = true;
     setBusy(true);
-    setMessage('');
+    setNotice(null);
     onError(null);
     try {
       if (
@@ -93,17 +93,11 @@ export function AssetEditor({
       setFile(null);
       setValue({ ...emptyFields });
       if (fileInput.current) fileInput.current.value = '';
-      setMessage(descriptor('library.imageRegistered'));
+      setNotice(uiMessage('library.imageRegistered'));
       try {
         await refresh();
       } catch (error) {
-        onError(
-          legacyUiMessage(
-            descriptor('library.theImageWasRegisteredButTheList', {
-              v0: messageRef((error as Error).message),
-            })
-          )
-        );
+        onError(uiMessage('library.theImageWasRegisteredButTheList', { v0: toUiMessage(error) }));
       }
       return true;
     } catch (error) {
@@ -150,7 +144,7 @@ export function AssetEditor({
                     description={uiMessage('library.removeFromTheUploadedImageListFiles')}
                     disabled={busy}
                     onDeleted={async () => {
-                      setMessage(descriptor('library.imageDeleted', { title: asset.title }));
+                      setNotice(uiMessage('library.imageDeleted', { title: asset.title }));
                       await refresh();
                     }}
                     onError={onError}
@@ -258,7 +252,7 @@ export function AssetEditor({
             </select>
           </label>
           <div className="form-actions full settings-save-actions">
-            <TransientNotice content={legacyUiMessage(message)} />
+            <TransientNotice content={notice} />
             <SaveButton
               icon={ImageAddIcon}
               label={t('library.registerImage')}

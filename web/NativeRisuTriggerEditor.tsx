@@ -1,5 +1,6 @@
-import { useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { useI18n } from './i18n.js';
+import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -47,11 +48,11 @@ export function NativeRisuTriggerEditor({
     focused.current = focus.epoch;
     setSelected(focus.index);
   }, [focus]);
-  const [draft, setDraft] = useBufferedEditorState<{ index: number; text: string } | null>(
-    draftPath,
-    null
-  );
-  const [error, setError] = useState('');
+  const [draft, setDraft] = useBufferedEditorState<{
+    index: number;
+    text: string;
+  } | null>(draftPath, null);
+  const [error, setError] = useState<UiMessage | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
   const [removals, setRemovals] = useState(0);
   const pending = draft !== null;
@@ -118,7 +119,7 @@ export function NativeRisuTriggerEditor({
           onChange={(event) => {
             const text = event.target.value;
             setDraft(text === JSON.stringify(entry, null, 2) ? null : { index, text });
-            setError('');
+            setError(null);
           }}
         />
       </label>
@@ -134,11 +135,9 @@ export function NativeRisuTriggerEditor({
               if (!record(parsed)) throw new UiError(uiMessage('native.text_30b7bf9cb8'));
               replace(parsed);
               setDraft(null);
-              setError('');
+              setError(null);
             } catch (caught) {
-              setError(
-                caught instanceof Error ? caught.message : descriptor('native.text_b0acf3aee7')
-              );
+              setError(toUiMessage(caught, 'native.text_b0acf3aee7'));
             }
           }}
         >
@@ -150,7 +149,7 @@ export function NativeRisuTriggerEditor({
           disabled={disabled || !pending}
           onClick={() => {
             setDraft(null);
-            setError('');
+            setError(null);
           }}
         >
           {t('native.text_d688879ebd')}
@@ -158,7 +157,7 @@ export function NativeRisuTriggerEditor({
       </div>
       {error && (
         <p className="error" role="alert">
-          {translateMessage(error)}
+          {formatUiMessage(error)}
         </p>
       )}
     </div>

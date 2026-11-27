@@ -1,12 +1,6 @@
-import {
-  t,
-  useI18n,
-  translateMessage,
-  formatNumber,
-  message as legacyDescriptor,
-  messageRef,
-} from './i18n.js';
-import { uiMessage, type UiMessage, legacyUiMessage } from './ui-message.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Content, Library } from '../core/product.js';
@@ -46,7 +40,7 @@ export function ContentAttachments({
     viewKey = requestKey(profile.chatId, attachments);
   const [resolved, setResolved] = useState<{ key: string; value: ResolvedPackages } | null>(null),
     [busy, setBusy] = useState(false),
-    [loadError, setLoadError] = useState('');
+    [loadError, setLoadError] = useState<UiMessage | null>(null);
   const latest = useRef({ profile, onChange, onError, viewKey, library });
   latest.current = { profile, onChange, onError, viewKey, library };
   const version = useRef(0),
@@ -60,7 +54,7 @@ export function ContentAttachments({
   // biome-ignore lint/correctness/useExhaustiveDependencies: viewKey includes all attachments and the chat, so the read does not react to array identity.
   const retryResolve = useRetryableEffect(() => {
     const request = ++version.current;
-    setLoadError('');
+    setLoadError(null);
     if (cache.current?.key === viewKey) {
       setResolved(cache.current);
       setBusy(false);
@@ -75,11 +69,11 @@ export function ContentAttachments({
       })
       .catch((caught) => {
         if (version.current === request && latest.current.viewKey === viewKey) {
-          const message = legacyDescriptor('library.couldNotVerifyRequiredModulesCheckFor', {
-            v0: messageRef((caught as Error).message),
+          const message = uiMessage('library.couldNotVerifyRequiredModulesCheckFor', {
+            v0: toUiMessage(caught),
           });
           setLoadError(message);
-          latest.current.onError(legacyUiMessage(message));
+          latest.current.onError(message);
         }
       })
       .finally(() => {
@@ -102,7 +96,7 @@ export function ContentAttachments({
     changeVersion.current = request;
     setChanging(true);
     setBusy(true);
-    setLoadError('');
+    setLoadError(null);
     try {
       const value = await api<ResolvedPackages>('/packages/resolve', { attachments: next });
       if (version.current !== request || latest.current.viewKey !== initialKey) return;
@@ -116,11 +110,11 @@ export function ContentAttachments({
       });
     } catch (caught) {
       if (version.current === request && latest.current.viewKey === initialKey) {
-        const message = t('library.couldNotUpdateAttachmentsCheckForMissing', {
-          v0: messageRef((caught as Error).message),
+        const message = uiMessage('library.couldNotUpdateAttachmentsCheckForMissing', {
+          v0: toUiMessage(caught),
         });
         setLoadError(message);
-        latest.current.onError(legacyUiMessage(message));
+        latest.current.onError(message);
       }
     } finally {
       if (changeVersion.current === request) setChanging(false);
@@ -269,7 +263,7 @@ export function ContentAttachments({
       {loadError && (
         <div>
           <p className="error" role="alert">
-            {translateMessage(loadError)}
+            {formatUiMessage(loadError)}
           </p>
           <button
             type="button"
