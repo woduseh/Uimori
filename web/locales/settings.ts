@@ -695,6 +695,42 @@ export const messages = {
     ja: 'プロンプトまたは入力形式が変わったため、このオプションの解除は適用しません。',
     zh: '提示词或输入格式已更改，不应用此选项的取消设置。',
   },
+  'settings.agentCharacterTitle': {
+    ko: '인물 관점 협업자',
+    en: 'Character perspective agent',
+    ja: '人物視点の協力者',
+    zh: '人物视角协作者',
+  },
+  'settings.agentCharacterDescription': {
+    ko: '인물의 동기와 관계, 서로 다르게 알고 있는 정보를 살펴봐요.',
+    en: 'Looks at motives, relationships and the different things each character knows.',
+    ja: '人物の動機や関係、それぞれが異なって知っている情報を確認します。',
+    zh: '审视人物的动机、关系以及彼此掌握的不同信息。',
+  },
+  'settings.agentLoreTitle': {
+    ko: '설정 근거 협업자',
+    en: 'Lore evidence agent',
+    ja: '設定根拠の協力者',
+    zh: '设定依据协作者',
+  },
+  'settings.agentLoreDescription': {
+    ko: '출처가 있는 사실과 인물의 믿음, 아직 확인하지 못한 가정을 구분해요.',
+    en: 'Separates sourced facts, what characters believe and assumptions not yet verified.',
+    ja: '出典のある事実、人物の思い込み、未確認の仮定を区別します。',
+    zh: '区分有出处的事实、人物的信念和尚未确认的假设。',
+  },
+  'settings.agentCustomTitle': {
+    ko: '사용자 정의 협업자',
+    en: 'Custom agent',
+    ja: 'カスタム協力者',
+    zh: '自定义协作者',
+  },
+  'settings.agentCustomDescription': {
+    ko: '필요한 관점과 맡길 질문을 직접 정해요.',
+    en: 'Decide the perspective and the questions to hand over yourself.',
+    ja: '必要な視点と任せる質問を自分で決めます。',
+    zh: '自行决定所需视角和要交办的问题。',
+  },
   'settings.m113': {
     ko: '인물',
     en: 'Character',

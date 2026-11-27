@@ -22,6 +22,14 @@ const templates = () =>
     { kind: 'lore', title: t('settings.m115'), description: t('settings.m116') },
     { kind: 'custom', title: t('settings.m117'), description: t('settings.m118') },
   ] as const;
+const AGENT_LABEL_KEYS = {
+  character: {
+    title: 'settings.agentCharacterTitle',
+    description: 'settings.agentCharacterDescription',
+  },
+  lore: { title: 'settings.agentLoreTitle', description: 'settings.agentLoreDescription' },
+  custom: { title: 'settings.agentCustomTitle', description: 'settings.agentCustomDescription' },
+} as const;
 const toolScopes = (): { id: AgentDefinition['tools'][number]; label: string }[] => [
   { id: 'knowledge', label: t('settings.m119') },
   { id: 'skills', label: t('settings.m120') },
@@ -118,10 +126,9 @@ export function AgentCollaborationEditor({
   });
   const addAgent = (kind: ReturnType<typeof templates>[number]['kind']) => {
     if (collaboration.agents.length >= 6) return;
-    const { title, description } = templates().find((template) => template.kind === kind)!;
     const agent = createAgentDefinition(kind, `agent-${crypto.randomUUID()}`, {
-      title,
-      description,
+      title: t(AGENT_LABEL_KEYS[kind].title),
+      description: t(AGENT_LABEL_KEYS[kind].description),
     });
     update({ agents: [...collaboration.agents, agent] });
     setOpenAgents((current) => [...current, agent.id]);
