@@ -2,7 +2,8 @@ import type { ChatCopyState } from '../core/chat-backup.js';
 import type { Store } from './store.js';
 import { readImage } from './image-storage.js';
 import { illustrationReferences, updateIllustrationReferences } from './illustrations.js';
-import { fields, HttpError, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 type PortableReferences = NonNullable<ChatCopyState['illustrationReferences']>;
 
@@ -64,7 +65,7 @@ export function checkedPortableIllustrationReferences(value: unknown): PortableR
     !Array.isArray(body.images) ||
     body.images.length > 8
   )
-    throw new HttpError(400, '삽화 참고 정보가 올바르지 않아요.');
+    throw new AppError(400, 'CHAT_BACKUP_INVALID');
   const used = new Set<string>();
   for (const raw of body.references) used.add(text(record(raw).ref, 'reference', 300));
   for (const raw of body.characterProfiles) {
@@ -87,8 +88,7 @@ export function checkedPortableIllustrationReferences(value: unknown): PortableR
       'base64',
     ]);
     const ref = text(image.ref, 'reference', 300);
-    if (!used.has(ref) || seen.has(ref))
-      throw new HttpError(400, '삽화 참고 이미지가 올바르지 않아요.');
+    if (!used.has(ref) || seen.has(ref)) throw new AppError(400, 'CHAT_BACKUP_INVALID');
     seen.add(ref);
     text(image.title, 'image title', 200);
     text(image.description, 'image description', 2000, true);
@@ -98,7 +98,7 @@ export function checkedPortableIllustrationReferences(value: unknown): PortableR
     text(image.mime, 'image mime', 100);
     text(image.base64, 'image bytes', 90 * 1024 * 1024);
     if (!['profile', 'inline', 'both'].includes(image.allowedUse))
-      throw new HttpError(400, '삽화 참고 이미지 사용 범위가 올바르지 않아요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
   }
   return body as PortableReferences;
 }
@@ -116,7 +116,7 @@ export function restoreIllustrationReferences(
     const base64 = image.base64.startsWith('archive:')
       ? readBinary?.(image.base64).toString('base64')
       : image.base64;
-    if (!base64) throw new HttpError(400, '삽화 참고 이미지가 없어요.');
+    if (!base64) throw new AppError(400, 'CHAT_BACKUP_INVALID');
     const created = store.product.createAsset(chatId, { ...asset, base64 });
     remap.set(ref, created.id);
   }

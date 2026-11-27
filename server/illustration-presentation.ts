@@ -4,7 +4,7 @@ import type {
   IllustrationPresentation,
 } from '../core/illustration-storyboard.js';
 import type { IllustrationJobInput } from '../core/illustration.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 export const illustrationPresentationKey = (sourceId: string) =>
   `illustration-presentation:${sourceId}`;
@@ -127,11 +127,11 @@ export function changeIllustrationHero(
     const source = store.source(sourceId);
     const value = illustrationPresentation(store, sourceId, expectedHash);
     if (source.hash !== expectedHash || !value)
-      throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+      throw new AppError(409, 'ILLUSTRATION_SOURCE_CHANGED');
     if (value.revision !== expectedRevision)
-      throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
+      throw new AppError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
     if (targetId !== null && !value.targets[targetId])
-      throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      throw new AppError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
     value.heroTargetId = targetId;
     saveIllustrationPresentation(store, sourceId, value);
     return value;

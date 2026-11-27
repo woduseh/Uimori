@@ -25,7 +25,7 @@ import {
   type JudgmentTarget,
 } from './judgment.js';
 import { matchesJudgmentWire } from './judgment-wire.js';
-import { HttpError, record } from './request-validation.js';
+import { record } from './request-validation.js';
 import { prepareJevImage } from './jev-images.js';
 
 export const IMAGE_JUDGMENT_LIMITS = {
@@ -382,5 +382,5 @@ export function validateImageJudgmentWire(
       imageJudgmentInputHash(expected)
     )
   )
-    throw new HttpError(400, 'IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
+    throw new Error('IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
 }

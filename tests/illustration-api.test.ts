@@ -124,7 +124,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
       automatic: false,
     });
     await api(`/api/sources/${source.id}/illustrations`, {}, 'POST', 409).then((body) =>
-      expect(body.error).toBe('ILLUSTRATION_MODEL_REQUIRED')
+      expect(body.code).toBe('ILLUSTRATION_MODEL_REQUIRED')
     );
     const saved = await settings({ generator: 'fixture', maxPerSource: 1, maxAutoRetries: 0 });
     expect(saved.revision).toBe(2);
@@ -154,7 +154,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
         'ILLUSTRATION_PLAN_ACTIVE',
         'ILLUSTRATION_ACTIVE',
         'ILLUSTRATION_LIMIT_REACHED',
-      ]).toContain(body.error)
+      ]).toContain(body.code)
     );
     const done = await settle(queued.id);
     expect(done.status).toBe('completed');
@@ -179,14 +179,14 @@ describe('illustration API in test mode with the synthetic generator', () => {
       )
     ).toBe(true);
     await api(`/api/sources/${source.id}/illustrations`, {}, 'POST', 409).then((body) =>
-      expect(body.error).toBe('ILLUSTRATION_LIMIT_REACHED')
+      expect(body.code).toBe('ILLUSTRATION_LIMIT_REACHED')
     );
     await api(
       `/api/sources/${source.id}/illustrations`,
       { expectedSourceHash: 'f'.repeat(64) },
       'POST',
       409
-    ).then((body) => expect(body.error).toBe('ILLUSTRATION_SOURCE_CHANGED'));
+    ).then((body) => expect(body.code).toBe('ILLUSTRATION_SOURCE_CHANGED'));
     const detail = await api<Illustration & { input: unknown }>(`/api/illustrations/${done.id}`);
     expect(detail.input).toMatchObject({ generator: 'fixture', maxAutoRetries: 0 });
     await api(`/api/illustrations/${done.id}`, undefined, 'DELETE');
@@ -203,6 +203,16 @@ describe('illustration API in test mode with the synthetic generator', () => {
         'illustration-layout.updated',
       ])
     );
+  });
+  test('generator connection tests answer their failure as a result the settings screen reads', async () => {
+    const { api } = await setup();
+    expect(
+      await api('/api/illustration-settings/comfyui/test', { baseUrl: 'ftp://comfy.invalid' })
+    ).toEqual({ ok: false, code: 'COMFYUI_BASE_URL_INVALID' });
+    expect(await api('/api/illustration-settings/novelai/test', {})).toEqual({
+      ok: false,
+      code: 'NOVELAI_TOKEN_MISSING',
+    });
   });
   test('automatic generation reserves one illustration per completed response and never blocks the next response', async () => {
     const { api, chat, respond, settle, settings, illustrations } = await setup();

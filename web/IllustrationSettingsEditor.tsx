@@ -56,7 +56,7 @@ type TestResult =
       system: { os: string | null; comfyuiVersion: string | null };
       devices: { name: string; vramTotal: number | null }[];
     }
-  | { ok: false; code: string; nodeErrors?: unknown };
+  | { ok: false; code: string };
 
 function IllustrationEnvironmentEditor({
   library,
@@ -293,24 +293,14 @@ function IllustrationEnvironmentEditor({
     setTesting(true);
     setTest(null);
     try {
-      const result = await api<{
-        system: { os: string | null; comfyuiVersion: string | null };
-        devices: { name: string; vramTotal: number | null }[];
-      }>('/illustration-settings/comfyui/test', {
-        baseUrl: draft.comfyui.baseUrl,
-        authorizationEnv: draft.comfyui.authorizationEnv,
-      });
-      setTest({ ok: true, ...result });
-    } catch (error) {
-      const raw = error instanceof ApiError ? error.message : '';
-      let code = 'COMFYUI_UNREACHABLE';
-      try {
-        const parsed = JSON.parse(raw) as { code?: string };
-        if (typeof parsed.code === 'string') code = parsed.code;
-      } catch {
-        if (error instanceof ApiError && error.status === 400) code = 'COMFYUI_BASE_URL_INVALID';
-      }
-      setTest({ ok: false, code });
+      setTest(
+        await api<TestResult>('/illustration-settings/comfyui/test', {
+          baseUrl: draft.comfyui.baseUrl,
+          authorizationEnv: draft.comfyui.authorizationEnv,
+        })
+      );
+    } catch {
+      setTest({ ok: false, code: 'COMFYUI_UNREACHABLE' });
     } finally {
       setTesting(false);
     }
@@ -319,20 +309,14 @@ function IllustrationEnvironmentEditor({
     setNovelaiTesting(true);
     setNovelaiTest(null);
     try {
-      const result = await api<NovelAIAccount>(
-        '/illustration-settings/novelai/test',
-        typeof token === 'string' && token.trim() ? { token: token.trim() } : {}
+      setNovelaiTest(
+        await api<NovelAITestResult>(
+          '/illustration-settings/novelai/test',
+          typeof token === 'string' && token.trim() ? { token: token.trim() } : {}
+        )
       );
-      setNovelaiTest({ ok: true, ...result });
-    } catch (error) {
-      let code = 'NOVELAI_UNREACHABLE';
-      try {
-        const parsed = JSON.parse(error instanceof ApiError ? error.message : '') as {
-          code?: string;
-        };
-        if (typeof parsed.code === 'string') code = parsed.code;
-      } catch {}
-      setNovelaiTest({ ok: false, code });
+    } catch {
+      setNovelaiTest({ ok: false, code: 'NOVELAI_UNREACHABLE' });
     } finally {
       setNovelaiTesting(false);
     }

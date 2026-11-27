@@ -10,7 +10,7 @@ import {
 } from './illustration-presentation.js';
 import { successfulTranslation } from './translation-artifacts.js';
 import { storeImage } from './image-storage.js';
-import { HttpError } from './request-validation.js';
+import { AppError } from './app-errors.js';
 
 const hash = (text: string | Buffer) => createHash('sha256').update(text).digest('hex');
 const portableAnchor = (
@@ -127,7 +127,7 @@ export function restoreIllustrations(
       !history[image.entry] ||
       typeof image.title !== 'string'
     )
-      throw new HttpError(400, '삽화의 메시지 정보가 올바르지 않아요.');
+      throw new AppError(400, 'CHAT_BACKUP_INVALID');
     const key = `${image.entry}:${image.group ?? `legacy-${index}`}`;
     const list = groups.get(key) ?? [];
     list.push(image);

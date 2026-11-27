@@ -4,9 +4,15 @@ import {
   isAppErrorCode,
   type ReceivedErrorWire,
 } from '#contracts';
-import { t, registerMessage, formatMessage, getLocale, type MessageValues } from './i18n.js';
+import {
+  t,
+  registerMessage,
+  formatMessage,
+  getLocale,
+  type MessageValues,
+  type UiLocale,
+} from './i18n.js';
 import ko from './locales/ko.js';
-import { illustrationErrorMessage } from './illustration-labels.js';
 import { requestImageErrors } from './request-image-errors.js';
 import { requestFileErrors } from './request-file-errors.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -127,36 +133,85 @@ export const appErrorMessages = {
   OUTLINE_WRITING_IN_PROGRESS: 'errors.OUTLINE_WRITING_IN_PROGRESS',
   OUTLINE_WRITING_SCHEDULED: 'errors.OUTLINE_WRITING_SCHEDULED',
   OUTLINE_WRITING_CANCELLED: 'errors.OUTLINE_WRITING_CANCELLED',
+  MODEL_REQUIRED: 'errors.MODEL_REQUIRED',
+  MODEL_UNAVAILABLE: 'errors.MODEL_UNAVAILABLE',
+  MANUSCRIPT_TRANSLATION_MISSING: 'errors.MANUSCRIPT_TRANSLATION_MISSING',
+  ILLUSTRATION_NOT_FOUND: 'errors.ILLUSTRATION_NOT_FOUND',
+  ILLUSTRATION_GENERATOR_UNCONFIGURED: 'visuals.m176',
+  ILLUSTRATION_CODEX_CONTENT_BLOCKED: 'visuals.m177',
+  ILLUSTRATION_ACTIVE: 'visuals.m178',
+  ILLUSTRATION_PLAN_ACTIVE: 'visuals.m179',
+  ILLUSTRATION_TARGET_UNAVAILABLE: 'visuals.m182',
+  ILLUSTRATION_TARGET_CONFLICT: 'visuals.m183',
+  ILLUSTRATION_PRESENTATION_CHANGED: 'visuals.m184',
+  ILLUSTRATION_LIMIT_REACHED: 'visuals.m185',
+  ILLUSTRATION_MODEL_REQUIRED: 'visuals.m186',
+  ILLUSTRATION_MODEL_UNAVAILABLE: 'visuals.m187',
+  ILLUSTRATION_CODEX_CONNECTION_REQUIRED: 'visuals.m188',
+  ILLUSTRATION_PROMPT_MODEL_REQUIRED: 'visuals.m189',
+  ILLUSTRATION_SOURCE_CHANGED: 'visuals.m190',
+  ILLUSTRATION_NOT_RETRYABLE: 'visuals.m195',
+  ILLUSTRATION_RESERVATION_FAILED: 'visuals.m200',
+  ILLUSTRATION_CONNECTION_DISABLED: 'visuals.m205',
+  ILLUSTRATION_NOT_RECONCILABLE: 'visuals.m238',
+  ILLUSTRATION_REFERENCE_UNAVAILABLE: 'errors.ILLUSTRATION_REFERENCE_UNAVAILABLE',
+  ILLUSTRATION_REFERENCES_TOO_MANY: 'errors.ILLUSTRATION_REFERENCES_TOO_MANY',
+  COMFYUI_UNCONFIGURED: 'visuals.m223',
+  COMFYUI_WORKFLOW_MISSING: 'visuals.m224',
+  COMFYUI_WORKFLOW_INVALID: 'visuals.m225',
+  COMFYUI_BASE_URL_INVALID: 'visuals.m228',
+  COMFYUI_RESULT_UNAVAILABLE: 'visuals.m236',
+  NOVELAI_TOKEN_MISSING: 'visuals.novelaiTokenMissing',
 } satisfies Record<AppErrorCode, string>;
 
 const MIB = 1024 * 1024;
 
-function messageValues(params: ReceivedErrorWire['params']): MessageValues | undefined {
-  return (
-    params &&
-    Object.fromEntries(
-      Object.entries(params).map(([name, value]) => [
-        name,
-        name.endsWith('Bytes') && typeof value === 'number'
-          ? `${Math.round((value / MIB) * 10) / 10} MiB`
-          : value,
-      ])
-    )
+function sceneList(scenes: unknown, total: unknown, locale: UiLocale): string {
+  const numbers = String(scenes).split(',').map(Number);
+  const labels = numbers.map((scene) =>
+    scene === 0
+      ? formatMessage('errors.firstMessage', locale)
+      : formatMessage('errors.scene', locale, { scene })
   );
+  return `${labels.join(', ')}${typeof total === 'number' && total > numbers.length ? ', …' : ''}`;
 }
 
-function appErrorMessage(
-  wire: ReceivedErrorWire
-): { code: AppErrorCode; key: string; values?: MessageValues } | null {
-  if (isAppErrorCode(wire.code))
-    return {
-      code: wire.code,
-      key: appErrorMessages[wire.code],
-      values: messageValues(wire.params),
-    };
-  return isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error)
-    ? { code: wire.error, key: appErrorMessages[wire.error] }
-    : null;
+function messageValues(
+  code: AppErrorCode,
+  params: ReceivedErrorWire['params'],
+  locale: UiLocale
+): MessageValues | undefined {
+  if (!params) return undefined;
+  const values: MessageValues = Object.fromEntries(
+    Object.entries(params).map(([name, value]) => [
+      name,
+      name.endsWith('Bytes') && typeof value === 'number'
+        ? `${Math.round((value / MIB) * 10) / 10} MiB`
+        : value,
+    ])
+  );
+  if (code === 'MANUSCRIPT_TRANSLATION_MISSING')
+    values.scenes = sceneList(params.scenes, params.total, locale);
+  return values;
+}
+
+function appErrorMessage(wire: ReceivedErrorWire): {
+  code: AppErrorCode;
+  key: string;
+  values: (locale: UiLocale) => MessageValues | undefined;
+} | null {
+  const code = isAppErrorCode(wire.code)
+    ? wire.code
+    : isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error)
+      ? wire.error
+      : null;
+  if (!code) return null;
+  const params = code === wire.code ? wire.params : undefined;
+  return {
+    code,
+    key: appErrorMessages[code],
+    values: (locale) => messageValues(code, params, locale),
+  };
 }
 
 const messages: Record<string, string> = {
@@ -280,16 +335,6 @@ const revisionErrors = new Set([
   '초안이 변경됐어요. 현재 입력은 유지하고 변경 내용을 확인해 주세요.',
 ]);
 const nativeActionConflict = /^RISU_NATIVE_ACTION_(?:FAILED|CANCELLED|INTERRUPTED|RUNNING)$/u;
-const roles: Record<string, string> = {
-  main: '본문',
-  translation: '번역',
-  'translation-refusal': '번역 거절 판정',
-  status: '이전 보조 작업',
-  image: '이미지 배치',
-  context: '컨텍스트 압축',
-  helper: '도우미',
-  illustration: '삽화',
-};
 const unavailable =
   '선택한 모델 또는 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 설정 > 프로바이더와 모델에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
 
@@ -299,7 +344,7 @@ export function apiErrorDiagnostic(
   method: string
 ): ApiErrorDiagnostic {
   const app = appErrorMessage(wire);
-  if (app) return { code: app.code, message: formatMessage(app.key, 'ko', app.values) };
+  if (app) return { code: app.code, message: formatMessage(app.key, 'ko', app.values('ko')) };
   return legacyErrorDiagnostic(wire.error, status, method);
 }
 
@@ -311,28 +356,6 @@ function legacyErrorDiagnostic(error: unknown, status: number, method: string): 
       error === '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.'
     )
       return { code: 'HELPER_CONVERSATION_COPY_CHANGED', message: error };
-    const missing =
-      status === 409
-        ? /^MANUSCRIPT_TRANSLATION_MISSING:((?:0|[1-9]\d{0,9})(?:,(?:0|[1-9]\d{0,9})){0,19}):([1-9]\d{0,9})$/u.exec(
-            error
-          )
-        : null;
-    if (missing && missing[0] === error) {
-      const scenes = missing[1].split(',').map(Number);
-      const total = Number(missing[2]);
-      if (
-        total <= 1e9 &&
-        total >= scenes.length &&
-        scenes.every((scene, index) => scene <= 1e9 && (index === 0 || scene > scenes[index - 1]))
-      ) {
-        const labels = scenes.map((scene) => (scene === 0 ? '첫 메시지' : `장면 ${scene}`));
-        const remaining = total > scenes.length ? ` 외 ${total - scenes.length}개` : '';
-        return {
-          code: 'MANUSCRIPT_TRANSLATION_MISSING',
-          message: `저장된 유효 번역이 없는 장면: ${labels.join(', ')}${remaining}. 번역을 완료하거나 범위를 바꿔 주세요.`,
-        };
-      }
-    }
     const code =
       error === '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.'
         ? 'DRAFT_UNAPPLIED_FIELDS'
@@ -353,23 +376,6 @@ function legacyErrorDiagnostic(error: unknown, status: number, method: string): 
       };
     if (/^STORY_GUIDE_[A-Z0-9_]{1,100}$/.test(code))
       return { code, message: messages.STORY_GUIDE_FAILED };
-    if (/^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]{1,100}$/.test(code))
-      return { code, message: illustrationErrorMessage(code, 'ko') };
-    const required = /^MODEL_REQUIRED:([a-z-]+)$/.exec(code)?.[1];
-    if (required && Object.hasOwn(roles, required))
-      return {
-        code,
-        message: `설정 > 역할별 모델에서 ${roles[required]} 모델을 선택해 주세요.`,
-      };
-    const unavailableRole = /^MODEL_UNAVAILABLE:([a-z-]+):/.exec(code)?.[1];
-    if (unavailableRole && Object.hasOwn(roles, unavailableRole))
-      return {
-        code: `MODEL_UNAVAILABLE:${unavailableRole}`,
-        message:
-          unavailableRole === 'main'
-            ? '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델, 설정 > 역할별 모델, 프로바이더의 활성 상태와 인증을 확인해 주세요.'
-            : unavailable,
-      };
     if (settingErrors.has(code)) return { code: 'MODEL_UNAVAILABLE', message: unavailable };
     if (status === 409 && revisionErrors.has(code))
       return {
@@ -391,8 +397,9 @@ function legacyErrorDiagnostic(error: unknown, status: number, method: string): 
 export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method: string): string {
   const app = appErrorMessage(wire);
   if (app) {
-    registerMessage(formatMessage(app.key, 'ko', app.values), app.key, app.values);
-    return t(app.key, app.values);
+    const render = () => t(app.key, app.values(getLocale()));
+    registerMessage(formatMessage(app.key, 'ko', app.values('ko')), render);
+    return render();
   }
   const error = wire.error;
   const diagnostic = legacyErrorDiagnostic(error, status, method);
@@ -409,53 +416,17 @@ export function apiErrorDisplay(wire: ReceivedErrorWire, status: number, method:
     UPLOAD_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
     RISU_IMPORT_IMAGES_TOO_LARGE: RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024,
   };
+  if (code === 'MODEL_UNAVAILABLE') return display('errors.modelUnavailable');
   if (code && Object.hasOwn(ko, 'errors.' + code))
     return display(
       'errors.' + code,
       Object.hasOwn(limits, code) ? { limit: limits[code] } : undefined
     );
-  if (code === 'MANUSCRIPT_TRANSLATION_MISSING' && typeof error === 'string') {
-    const [, sceneNumbers, count] = error.split(':');
-    const scenes = sceneNumbers.split(',').map(Number);
-    const render = () => {
-      const locale = getLocale();
-      return formatMessage('errors.missingTranslations', locale, {
-        scenes: scenes
-          .map((scene) =>
-            scene === 0
-              ? formatMessage('errors.firstMessage', locale)
-              : formatMessage('errors.scene', locale, { scene })
-          )
-          .join(', '),
-        remaining: Number(count) - scenes.length,
-      });
-    };
-    const value = render();
-    registerMessage(diagnostic.message, render);
-    registerMessage(value, render);
-    return value;
-  }
-  const role = code?.startsWith('MODEL_REQUIRED:')
-    ? code.slice('MODEL_REQUIRED:'.length)
-    : undefined;
-  if (role)
-    return display('errors.modelRequired', {
-      role: role === 'translation-refusal' ? 'translationRefusal' : role,
-    });
-  if (code === 'MODEL_UNAVAILABLE:main') return display('errors.mainUnavailable');
-  if (code === 'MODEL_UNAVAILABLE' || code?.startsWith('MODEL_UNAVAILABLE:'))
-    return display('errors.modelUnavailable');
   if (code === 'REVISION_CONFLICT') return display('errors.revisionConflict');
   if (status === 409 && code && nativeActionConflict.test(code))
     return display('errors.conflict', { status });
   if (code?.startsWith('CHAT_TRANSCRIPT_') && Object.hasOwn(messages, code))
     return display('errors.transcriptInvalid');
-  if (code && /^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]{1,100}$/u.test(code)) {
-    const render = () => illustrationErrorMessage(code);
-    const value = render();
-    registerMessage(diagnostic.message, render);
-    return value;
-  }
   if (code) return diagnostic.message;
   if (status === 409 && method === 'DELETE' && typeof error === 'string' && error.length <= 4000)
     return diagnostic.message;

@@ -35,6 +35,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { AppError, isPlainAppErrorCode } from './app-errors.js';
 import type { Source, Store } from './store.js';
 import { assertModelSelection } from './provider-selection.js';
 import type { PackageImageBlob } from './package-images.js';
@@ -101,10 +102,6 @@ function modelRef(value: unknown, name: string): ModelRef | null {
 const boolean = (value: unknown, name: string): boolean => {
   if (typeof value !== 'boolean') throw new HttpError(400, `Invalid ${name}`);
   return value;
-};
-const httpFromIllustration = (error: unknown, status = 400): never => {
-  if (error instanceof IllustrationError) throw new HttpError(status, error.code);
-  throw error;
 };
 export function validateIllustrationSettings(
   value: unknown,
@@ -200,7 +197,9 @@ export function validateIllustrationSettings(
             try {
               return validateComfyBaseUrl(baseUrl);
             } catch (error) {
-              return httpFromIllustration(error);
+              if (error instanceof IllustrationError)
+                throw new AppError(400, 'COMFYUI_BASE_URL_INVALID');
+              throw error;
             }
           })()
         : '',
@@ -239,7 +238,7 @@ function assertCodexModel(store: Store, ref: ModelRef | null) {
   const model = store.product.get<ModelPreset>('model', ref.id);
   const connection = store.product.get<Connection>('connection', model.connectionId);
   if (connection.protocol !== 'codex-app-server-v1')
-    throw new HttpError(400, 'Codex 삽화 모델은 Codex 연결의 모델 프리셋이어야 해요.');
+    throw new AppError(400, 'ILLUSTRATION_CODEX_CONNECTION_REQUIRED');
 }
 export function updateIllustrationSettings(
   store: Store,
@@ -252,7 +251,7 @@ export function updateIllustrationSettings(
   return store.transaction(() => {
     const prior = illustrationSettings(store);
     if (prior.revision !== number(expectedRevision, 'illustration settings revision'))
-      throw new HttpError(409, '삽화 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const next = validateIllustrationSettings(rest, { revision: prior.revision + 1, testMode });
     assertModelSelection(store.product, next.codex.model, prior.codex.model);
     assertCodexModel(store, next.codex.model);
@@ -314,7 +313,7 @@ export function updateIllustrationReferences(
   return store.transaction(() => {
     const prior = illustrationReferences(store, chatId);
     if (prior.revision !== number(b.expectedRevision, 'reference revision', 0))
-      throw new HttpError(409, '삽화 참조 이미지가 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+      throw new AppError(409, 'REVISION_CONFLICT');
     const explicitOverrides = Object.hasOwn(b, 'chatCharacterProfiles');
     const rawProfiles = explicitOverrides
       ? b.chatCharacterProfiles
@@ -347,7 +346,7 @@ export function updateIllustrationReferences(
         previousRoles.get(item.ref) !== item.role &&
         !options.allowUnavailableReferences
       )
-        throw new HttpError(400, '이 채팅에서 사용할 수 없는 이미지 참조예요.');
+        throw new AppError(400, 'ILLUSTRATION_REFERENCE_UNAVAILABLE');
     const previous = new Map(prior.characterProfiles.map((item) => [item.id, item.referenceRef]));
     for (const item of characterProfiles)
       if (
@@ -356,7 +355,7 @@ export function updateIllustrationReferences(
         previous.get(item.id) !== item.referenceRef &&
         !options.allowUnavailableReferences
       )
-        throw new HttpError(400, '이 채팅에서 사용할 수 없는 인물 참고 이미지예요.');
+        throw new AppError(400, 'ILLUSTRATION_REFERENCE_UNAVAILABLE');
     const sharedProfiles = prior.defaultCharacterProfiles;
     const overrides = characterProfiles
       .filter(
@@ -386,7 +385,7 @@ export function updateIllustrationReferences(
     const effectiveProfiles = inheritIllustrationProfiles(sharedProfiles, overrides);
     const linked = new Set(effectiveProfiles.flatMap((item) => item.referenceRef ?? []));
     if (new Set([...references.map((item) => item.ref), ...linked]).size > 8)
-      throw new HttpError(400, '삽화 참고 이미지는 최대 8개까지 사용할 수 있어요.');
+      throw new AppError(400, 'ILLUSTRATION_REFERENCES_TOO_MANY', { limit: 8 });
     store.db
       .prepare(
         'INSERT INTO illustration_references(chat_id,revision,body) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,body=excluded.body'
@@ -475,7 +474,7 @@ export function illustrationJob(store: Store, id: string): IllustrationJobRow {
   const row = store.db.prepare('SELECT * FROM illustration_jobs WHERE id=?').get(id) as
     | Row
     | undefined;
-  if (!row) throw new HttpError(404, 'Illustration not found');
+  if (!row) throw new AppError(404, 'ILLUSTRATION_NOT_FOUND');
   return mapRow(row);
 }
 function images(store: Store, jobId: string): IllustrationImage[] {
@@ -674,7 +673,7 @@ function frozenInput(
 ): Omit<IllustrationJobInput, 'task'> {
   const preset = effectiveIllustrationPreset(store, source.chatId);
   if (settings.generator === 'fixture' && !options.testMode)
-    throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+    throw new AppError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
   const generator =
     options.testMode && settings.generator === 'fixture' ? 'fixture' : preset.generator;
   const characterProfiles = illustrationReferences(store, source.chatId).characterProfiles;
@@ -716,11 +715,11 @@ function frozenInput(
     ...(scopedNotes.length ? { sceneAppearanceNotes: scopedNotes } : {}),
   };
   if (generator === 'codex') {
-    if (!settings.codex.model) throw new HttpError(409, 'ILLUSTRATION_MODEL_REQUIRED');
-    if (!settings.codex.promptModel) throw new HttpError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
+    if (!settings.codex.model) throw new AppError(409, 'ILLUSTRATION_MODEL_REQUIRED');
+    if (!settings.codex.promptModel) throw new AppError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
     const model = store.product.modelSnapshot(settings.codex.model.id, 'illustration');
     if (model.connection.protocol !== 'codex-app-server-v1')
-      throw new HttpError(409, 'ILLUSTRATION_CODEX_CONNECTION_REQUIRED');
+      throw new AppError(409, 'ILLUSTRATION_CODEX_CONNECTION_REQUIRED');
     const promptModel = store.product.modelSnapshot(settings.codex.promptModel.id, 'illustration');
     return {
       ...base,
@@ -736,15 +735,16 @@ function frozenInput(
     };
   }
   if (generator === 'comfyui') {
-    if (!settings.comfyui.baseUrl) throw new HttpError(409, 'COMFYUI_UNCONFIGURED');
-    if (!preset.comfyui.workflow.trim()) throw new HttpError(409, 'COMFYUI_WORKFLOW_MISSING');
+    if (!settings.comfyui.baseUrl) throw new AppError(409, 'COMFYUI_UNCONFIGURED');
+    if (!preset.comfyui.workflow.trim()) throw new AppError(409, 'COMFYUI_WORKFLOW_MISSING');
     try {
       parseComfyWorkflow(preset.comfyui.workflow);
     } catch (error) {
-      httpFromIllustration(error, 409);
+      if (error instanceof IllustrationError) throw new AppError(409, 'COMFYUI_WORKFLOW_INVALID');
+      throw error;
     }
     if (!settings.comfyui.promptModel)
-      throw new HttpError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
+      throw new AppError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
     const promptModel = store.product.modelSnapshot(
       settings.comfyui.promptModel.id,
       'illustration'
@@ -765,9 +765,9 @@ function frozenInput(
   }
   if (generator === 'novelai') {
     if (!settings.novelai.promptModel)
-      throw new HttpError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
+      throw new AppError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
     if (!new CredentialStore(store.db).status(NOVELAI_CREDENTIAL_ID).configured)
-      throw new HttpError(409, 'NOVELAI_TOKEN_MISSING');
+      throw new AppError(409, 'NOVELAI_TOKEN_MISSING');
     const { promptModel, characterReference, ...render } = settings.novelai;
     const references =
       characterReference && novelAISupportsCharacterReference(render.model)
@@ -798,7 +798,7 @@ function frozenInput(
         delayMs: Math.max(0, Math.min(10_000, options.fixture?.delayMs ?? 0)),
       },
     };
-  throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+  throw new AppError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
 }
 export function reserveIllustrationPlan(
   store: Store,
@@ -816,7 +816,7 @@ export function reserveIllustrationPlan(
         .get(source.id, options.requestKey) as Row | undefined;
       if (previous) {
         const job = mapRow(previous);
-        if (job.sourceHash !== source.hash) throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+        if (job.sourceHash !== source.hash) throw new AppError(409, 'ILLUSTRATION_SOURCE_CHANGED');
         return job;
       }
     }
@@ -827,9 +827,9 @@ export function reserveIllustrationPlan(
         )
         .get(source.id, source.hash)
     )
-      throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
+      throw new AppError(409, 'ILLUSTRATION_PLAN_ACTIVE');
     const available = settings.maxPerSource - illustrationSlots(store, source.id).total;
-    if (available <= 0) throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+    if (available <= 0) throw new AppError(409, 'ILLUSTRATION_LIMIT_REACHED');
     const existingTargets = illustrationTargets(store, source).map(
       ({ startAnchor, endAnchor, focus }) => ({ startAnchor, endAnchor, focus })
     );
@@ -837,16 +837,15 @@ export function reserveIllustrationPlan(
     if (selectedMoments) {
       if (!selectedMoments.length)
         throw new HttpError(400, 'Select at least one illustration moment.');
-      if (selectedMoments.length > available)
-        throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+      if (selectedMoments.length > available) throw new AppError(409, 'ILLUSTRATION_LIMIT_REACHED');
       const positions = new Map(splitSource(source).map(({ anchor, index }) => [anchor, index]));
       const ends = new Set(existingTargets.map((target) => target.endAnchor));
       for (const moment of selectedMoments) {
         const start = positions.get(moment.startAnchor);
         const end = positions.get(moment.endAnchor);
         if (start === undefined || end === undefined || start > end)
-          throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
-        if (ends.has(moment.endAnchor)) throw new HttpError(409, 'ILLUSTRATION_TARGET_CONFLICT');
+          throw new AppError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+        if (ends.has(moment.endAnchor)) throw new AppError(409, 'ILLUSTRATION_TARGET_CONFLICT');
         ends.add(moment.endAnchor);
       }
       selectedMoments = [...selectedMoments].sort(
@@ -895,9 +894,9 @@ export function reserveSelectedIllustrations(
         )
         .get(source.id, source.hash)
     )
-      throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
+      throw new AppError(409, 'ILLUSTRATION_PLAN_ACTIVE');
     if (selectedMoments.length > settings.maxPerSource - illustrationSlots(store, source.id).total)
-      throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+      throw new AppError(409, 'ILLUSTRATION_LIMIT_REACHED');
     const blocks = splitSource(source);
     const indexes = new Map(blocks.map((block) => [block.anchor, block.index]));
     const used = new Set(illustrationTargets(store, source).map((target) => target.endAnchor));
@@ -905,8 +904,8 @@ export function reserveSelectedIllustrations(
       const start = indexes.get(moment.startAnchor),
         end = indexes.get(moment.endAnchor);
       if (start === undefined || end === undefined || start > end)
-        throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
-      if (used.has(moment.endAnchor)) throw new HttpError(409, 'ILLUSTRATION_TARGET_CONFLICT');
+        throw new AppError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      if (used.has(moment.endAnchor)) throw new AppError(409, 'ILLUSTRATION_TARGET_CONFLICT');
       used.add(moment.endAnchor);
     }
     const recipe = frozenInput(store, source, settings, options);
@@ -1150,10 +1149,10 @@ export function regenerateIllustration(
         (presented.displayedJobId === job.id || presented.latestRequestedJobId === job.id)
       )
     )
-      throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+      throw new AppError(409, 'ILLUSTRATION_SOURCE_CHANGED');
     const moment = presented?.placedTarget ?? job.input.target;
-    if (!moment) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
-    if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    if (!moment) throw new AppError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    if (ACTIVE.includes(job.status)) throw new AppError(409, 'ILLUSTRATION_ACTIVE');
     assertIllustrationSlot(store, source.id, {
       ...job,
       sourceHash: source.hash,
@@ -1176,7 +1175,7 @@ export function regenerateIllustration(
       const image = selectedImageId
         ? originals.find((item) => item.id === selectedImageId)
         : originals[0];
-      if (selectedImageId && !image) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      if (selectedImageId && !image) throw new AppError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
       const originalPrompt =
         image?.prompt || image?.revisedPrompt
           ? {
@@ -1212,10 +1211,9 @@ export function regenerateIllustration(
 }
 
 const reservationFailureCode = (error: unknown): string => {
-  if (error instanceof HttpError) {
-    if (error.message.startsWith('MODEL_UNAVAILABLE:')) return 'ILLUSTRATION_MODEL_UNAVAILABLE';
-    if (/^[A-Z][A-Z0-9_]*$/u.test(error.message)) return error.message;
-  }
+  if (error instanceof AppError && error.code === 'MODEL_UNAVAILABLE')
+    return 'ILLUSTRATION_MODEL_UNAVAILABLE';
+  if (error instanceof HttpError && /^[A-Z][A-Z0-9_]*$/u.test(error.message)) return error.message;
   return 'ILLUSTRATION_RESERVATION_FAILED';
 };
 export function scheduleAutomaticIllustration(store: Store, source: Source): void {
@@ -1427,12 +1425,20 @@ export function retryIllustration(store: Store, id: string): Illustration {
   return store.transaction(() => {
     const job = illustrationJob(store, id);
     if (!RETRYABLE_STATUSES.includes(job.status))
-      throw new HttpError(409, 'ILLUSTRATION_NOT_RETRYABLE');
-    if (job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED') throw new HttpError(409, job.error);
+      throw new AppError(409, 'ILLUSTRATION_NOT_RETRYABLE');
+    if (job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED')
+      throw new AppError(409, 'ILLUSTRATION_CODEX_CONTENT_BLOCKED');
     if (job.error === 'ILLUSTRATION_GENERATOR_UNCONFIGURED' || !job.input.generator)
-      throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+      throw new AppError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     if (!job.input.codex && !job.input.comfyui && !job.input.novelai && !job.input.fixture)
-      throw new HttpError(409, job.error ?? 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+      throw new AppError(
+        409,
+        job.error === null
+          ? 'ILLUSTRATION_GENERATOR_UNCONFIGURED'
+          : isPlainAppErrorCode(job.error)
+            ? job.error
+            : 'ILLUSTRATION_RESERVATION_FAILED'
+      );
     const placement = illustrationPresentation(store, job.sourceRevision);
     const target = job.input.target;
     const detached = target && placement?.detached?.[target.id];
@@ -1445,10 +1451,10 @@ export function retryIllustration(store: Store, id: string): Illustration {
         moved.focus !== target.focus ||
         moved.visualBrief !== target.visualBrief)
     )
-      throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
+      throw new AppError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     assertIllustrationSlot(store, job.sourceRevision, job);
-    if (job.input.comfyui?.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
+    if (job.input.comfyui?.disabled) throw new AppError(409, 'ILLUSTRATION_CONNECTION_DISABLED');
     if (
       job.input.generator === 'comfyui' &&
       job.diagnostic?.comfyui &&
@@ -1456,7 +1462,7 @@ export function retryIllustration(store: Store, id: string): Illustration {
       !['COMFYUI_EXECUTION_FAILED', 'COMFYUI_NO_IMAGE'].includes(job.error ?? '') &&
       (job.diagnostic.comfyui.promptId || job.diagnostic.comfyui.submission === 'uncertain')
     )
-      throw new HttpError(409, 'COMFYUI_RESULT_UNAVAILABLE');
+      throw new AppError(409, 'COMFYUI_RESULT_UNAVAILABLE');
     const diagnostic: IllustrationDiagnostic = {
       stage: 'preparation',
       attempts: job.diagnostic?.attempts ?? [],
@@ -1491,10 +1497,10 @@ export function claimIllustrationForReconcile(
     const job = illustrationJob(store, id);
     const promptId = job.diagnostic?.comfyui?.promptId;
     if (job.input.generator !== 'comfyui' || !job.input.comfyui || !promptId)
-      throw new HttpError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
+      throw new AppError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
     if (!RETRYABLE_STATUSES.includes(job.status))
-      throw new HttpError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
-    if (job.input.comfyui.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
+      throw new AppError(409, 'ILLUSTRATION_NOT_RECONCILABLE');
+    if (job.input.comfyui.disabled) throw new AppError(409, 'ILLUSTRATION_CONNECTION_DISABLED');
     assertNoActiveIllustrationTarget(store, job);
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     store.db
@@ -1519,7 +1525,7 @@ function assertNoActiveIllustrationTarget(store: Store, job: IllustrationJobRow)
     .prepare(`SELECT 1 FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status IN ('queued','running')
     AND id!=? AND ${target ? "json_extract(input,'$.target.id')=?" : "json_extract(input,'$.task')!='placement'"} LIMIT 1`)
     .get(job.sourceRevision, job.sourceHash, job.id, ...(target ? [target] : []));
-  if (collision) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+  if (collision) throw new AppError(409, 'ILLUSTRATION_ACTIVE');
 }
 function assertIllustrationSlot(store: Store, sourceId: string, job: IllustrationJobRow) {
   if (job.input.task === 'placement') return;
@@ -1531,12 +1537,12 @@ function assertIllustrationSlot(store: Store, sourceId: string, job: Illustratio
         )
         .get(sourceId, job.sourceHash, job.id)
     )
-      throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
+      throw new AppError(409, 'ILLUSTRATION_PLAN_ACTIVE');
     if (
       illustrationSlots(store, sourceId).total + (job.input.plan?.maxTargets ?? 1) >
       illustrationSettings(store).maxPerSource
     )
-      throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+      throw new AppError(409, 'ILLUSTRATION_LIMIT_REACHED');
     return;
   }
   assertNoActiveIllustrationTarget(store, job);
@@ -1552,7 +1558,7 @@ function assertIllustrationSlot(store: Store, sourceId: string, job: Illustratio
     !alreadyCounted &&
     illustrationSlots(store, sourceId).total >= illustrationSettings(store).maxPerSource
   )
-    throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+    throw new AppError(409, 'ILLUSTRATION_LIMIT_REACHED');
 }
 function deleteIllustrationAttempts(store: Store, jobs: Row[]) {
   for (const job of jobs) {
@@ -1588,7 +1594,7 @@ export function removeIllustration(
 ): { chatId: string; sourceRevision: string } {
   return store.transaction(() => {
     const job = illustrationJob(store, id);
-    if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    if (ACTIVE.includes(job.status)) throw new AppError(409, 'ILLUSTRATION_ACTIVE');
     const targetId = job.input.target?.id ?? job.id;
     const rows = store.db
       .prepare(
@@ -1596,7 +1602,7 @@ export function removeIllustration(
       )
       .all(job.sourceRevision, targetId) as Row[];
     if (rows.some((row) => ACTIVE.includes(row.status)))
-      throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+      throw new AppError(409, 'ILLUSTRATION_ACTIVE');
     deleteIllustrationAttempts(store, rows);
     for (const row of rows) {
       store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(row.id);
@@ -1654,18 +1660,17 @@ export function illustrationRoutes(
     const draft = b.token === undefined ? undefined : apiKey(b.token);
     reply.header('Cache-Control', 'no-store');
     try {
-      return await novelAISubscription({
-        signal: AbortSignal.timeout(10_000),
-        token: () => draft ?? new CredentialStore(store.db).get(NOVELAI_CREDENTIAL_ID),
-      });
+      return {
+        ok: true,
+        ...(await novelAISubscription({
+          signal: AbortSignal.timeout(10_000),
+          token: () => draft ?? new CredentialStore(store.db).get(NOVELAI_CREDENTIAL_ID),
+        })),
+      };
     } catch (error) {
-      if (error instanceof IllustrationError)
-        throw new HttpError(
-          error.code === 'NOVELAI_TOKEN_MISSING' ? 400 : 502,
-          JSON.stringify({ code: error.code, novelai: error.diagnostic.novelai ?? {} })
-        );
+      if (error instanceof IllustrationError) return { ok: false, code: error.code };
       if (error instanceof Error && error.name === 'TimeoutError')
-        throw new HttpError(502, JSON.stringify({ code: 'NOVELAI_UNREACHABLE', novelai: {} }));
+        return { ok: false, code: 'NOVELAI_UNREACHABLE' };
       throw error;
     }
   });
@@ -1674,18 +1679,21 @@ export function illustrationRoutes(
     fields(b, ['baseUrl', 'authorizationEnv']);
     const authorizationEnv = text(b.authorizationEnv ?? '', 'ComfyUI credential env', 128, true);
     reply.header('Cache-Control', 'no-store');
+    const baseUrl = text(b.baseUrl, 'ComfyUI address', 2000);
     try {
-      const baseUrl = validateComfyBaseUrl(text(b.baseUrl, 'ComfyUI address', 2000));
-      return await comfyUISystemStats(
-        { baseUrl, authorizationEnv },
-        { signal: AbortSignal.timeout(10_000), resolveCredential: hooks.resolveCredential }
-      );
+      return {
+        ok: true,
+        ...(await comfyUISystemStats(
+          { baseUrl: validateComfyBaseUrl(baseUrl), authorizationEnv },
+          { signal: AbortSignal.timeout(10_000), resolveCredential: hooks.resolveCredential }
+        )),
+      };
     } catch (error) {
       if (error instanceof IllustrationError)
-        throw new HttpError(
-          error.code === 'COMFYUI_BASE_URL_INVALID' ? 400 : 502,
-          JSON.stringify({ code: error.code, comfyui: error.diagnostic.comfyui ?? {} })
-        );
+        return {
+          ok: false,
+          code: error.code === 'ILLUSTRATION_CANCELLED' ? 'COMFYUI_UNREACHABLE' : error.code,
+        };
       throw error;
     }
   });
@@ -1723,7 +1731,7 @@ export function illustrationRoutes(
       b.expectedSourceHash !== undefined &&
       text(b.expectedSourceHash, 'source hash', 64) !== source.hash
     )
-      throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+      throw new AppError(409, 'ILLUSTRATION_SOURCE_CHANGED');
     let fixture: ReserveOptions['fixture'];
     if (b.fixture !== undefined) {
       if (!hooks.testMode) throw new HttpError(400, 'Unknown request field');
@@ -1775,9 +1783,9 @@ export function illustrationRoutes(
       fields(body, ['expectedSourceHash']);
       const source = store.source(request.params.id);
       if (source.hash !== body.expectedSourceHash)
-        throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+        throw new AppError(409, 'ILLUSTRATION_SOURCE_CHANGED');
       const job = scheduleIllustrationPlacement(store, source.id, true);
-      if (!job) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      if (!job) throw new AppError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
       hooks.publish(source.chatId);
       hooks.pump();
       return projectIllustration(store, job);

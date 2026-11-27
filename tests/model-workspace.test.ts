@@ -462,7 +462,9 @@ test('deleted or disabled pins block new main work while profile repair and glob
       "UPDATE provider_settings SET body=json_set(body,'$.enabled',json('false')) WHERE kind='model' AND id=?"
     )
     .run(local.id);
-  expect(() => store.product.snapshot(chat.id)).toThrow(/MODEL_UNAVAILABLE:main/);
+  expect(() => store.product.snapshot(chat.id)).toThrow(
+    expect.objectContaining({ code: 'MODEL_UNAVAILABLE', params: { role: 'main' } })
+  );
   expect(store.product.profile(chat.id).routes.main?.id).toBe(local.id);
   deleteLibraryItem(store, 'prompt-preset', preset.id, { expectedRevision: preset.revision });
   expect(() => store.product.snapshot(chat.id)).toThrow(/PINNED_PROMPT_UNAVAILABLE/);
@@ -475,7 +477,9 @@ test('deleted or disabled pins block new main work while profile repair and glob
   expect(pin(store, chat.id, undefined).pinned?.mainPromptPresetId).toBe(preset.id);
   deleteLibraryItem(store, 'model', local.id, { expectedRevision: local.revision });
   pin(store, chat.id, { mainModel: { id: local.id } });
-  expect(() => store.product.snapshot(chat.id)).toThrow(/MODEL_UNAVAILABLE:main/);
+  expect(() => store.product.snapshot(chat.id)).toThrow(
+    expect.objectContaining({ code: 'MODEL_UNAVAILABLE', params: { role: 'main' } })
+  );
   expect(readStoredRunSnapshot(store, first.run.id)).toEqual(first.completedSnapshot);
   expect(store.source(first.source.id)).toMatchObject(first.source);
   pin(store, chat.id, {});

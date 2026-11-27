@@ -49,7 +49,7 @@ test('outside test mode, generation, translation and candidate requests with no 
     },
   });
   expect(generation.statusCode).toBe(409);
-  expect(generation.json().error).toBe('MODEL_REQUIRED:main');
+  expect(generation.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'main' } });
   expect(store.db.prepare('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 0 });
   const { run } = store.createRun(
     chat.id,
@@ -86,7 +86,7 @@ test('outside test mode, generation, translation and candidate requests with no 
       payload: {},
     });
     expect(response.statusCode).toBe(409);
-    expect(response.json().error).toBe('MODEL_REQUIRED:translation');
+    expect(response.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'translation' } });
     expect(store.db.prepare('SELECT count(*) AS n FROM jobs').get()).toEqual(jobsBefore);
   }
   const response = await app.inject({
@@ -95,7 +95,48 @@ test('outside test mode, generation, translation and candidate requests with no 
     payload: { idempotencyKey: randomUUID() },
   });
   expect(response.statusCode).toBe(409);
-  expect(response.json().error).toBe('MODEL_REQUIRED:main');
+  expect(response.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'main' } });
   expect(store.db.prepare('SELECT count(*) AS n FROM runs').get()).toEqual({ n: 1 });
   expect(store.db.prepare('SELECT count(*) AS n FROM attempts').get()).toEqual({ n: 0 });
+});
+
+test('a queued translation that reaches the pump without a translation model stores the model requirement', async () => {
+  directory = await mkdtemp(join(tmpdir(), 'uimori-model-required-'));
+  const dbPath = join(directory, 'test.sqlite');
+  app = await createApp({ dbPath, buildId: 'test' });
+  const store = app.store;
+  const chat = createFixtureChat(store, 'Synthetic source');
+  const { run } = store.createRun(
+    chat.id,
+    {
+      request: 'Authored fixture',
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    (current) => ({
+      chatId: current.id,
+      parentRevision: null,
+      settingsRevision: current.settingsRevision,
+      settings: { ...current.settings },
+      request: 'Authored fixture',
+      history: [],
+      resources: [],
+      profile: store.product.snapshot(current.id),
+    })
+  );
+  await prepareNativeFixtureRun(store, run);
+  store.startRun(run.id);
+  const source = store.completeRun(run.id, 'Authored source', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
+  const job = store.requestTranslation(source.id);
+  await app.close();
+  app = await createApp({ dbPath, buildId: 'test' });
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  await expect.poll(() => app!.store.job(job.id).status).toBe('failed');
+  expect(app.store.job(job.id).error).toBe('MODEL_REQUIRED:translation');
 });

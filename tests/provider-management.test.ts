@@ -192,7 +192,12 @@ test('model metadata is server sourced and disabling blocks new selection while 
     }),
     m.id
   );
-  expect(() => p.snapshot(chat.id)).toThrow('Model disabled');
+  expect(() => p.snapshot(chat.id)).toThrow(
+    expect.objectContaining({
+      code: 'MODEL_UNAVAILABLE',
+      cause: expect.objectContaining({ message: 'Model disabled' }),
+    })
+  );
   expect(s.run(run.id).snapshot).toEqual(frozen);
   expect(s.run(run.id).snapshot.profile?.models.main).toMatchObject({ ...m, connection: cached });
   expect(s.run(run.id).snapshot.profile?.models.main?.pricingSnapshot).toMatchObject({

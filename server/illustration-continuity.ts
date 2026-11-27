@@ -4,6 +4,7 @@ import type { ChatCopyState } from '../core/chat-backup.js';
 import type { ProviderTool } from '../core/transport.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import { HelperToolError } from './app-errors.js';
 
 type RangeNote = { id: string; text: string; sourceIds: string[] };
 type State = { revision: number; notes: RangeNote[] };
@@ -97,7 +98,7 @@ export function readIllustrationContinuity(
   store.chat(chatId);
   const sourceId = args.sourceId === undefined ? undefined : text(args.sourceId, 'scene ID', 100);
   if (sourceId && store.sourceMetadata(sourceId).chatId !== chatId)
-    throw new HttpError(404, 'Scene not found in this chat');
+    throw new HelperToolError(404, 'SCENE_NOT_FOUND', 'The scene is not in this chat.');
   const state = load(store, chatId);
   const notes = sourceId
     ? state.notes.filter((note) => note.sourceIds.includes(sourceId))
@@ -119,11 +120,13 @@ export function saveIllustrationContinuity(
   fields(args, ['expectedRevision', 'edits']);
   const expected = number(args.expectedRevision, 'continuity revision', 0);
   const edits = args.edits;
-  if (!Array.isArray(edits) || !edits.length) throw new HttpError(400, 'Supply continuity edits');
+  if (!Array.isArray(edits) || !edits.length)
+    throw new HelperToolError(400, 'CONTINUITY_EDITS_REQUIRED', 'Supply continuity edits.');
   return store.transaction(() => {
     const head = store.chat(chatId).headRevision;
     const state = load(store, chatId);
-    if (state.revision !== expected) throw new HttpError(409, 'Illustration continuity changed');
+    if (state.revision !== expected)
+      throw new HelperToolError(409, 'REVISION_CONFLICT', 'Illustration continuity changed.');
     const current = new Map(state.notes.map((note) => [note.id, note]));
     const seen = new Set<string>();
     const changedNotes: { sourceId: string; title: string }[] = [];
@@ -141,11 +144,12 @@ export function saveIllustrationContinuity(
         edit.remove === true ? ['id', 'remove'] : ['id', 'fromSourceId', 'toSourceId', 'text']
       );
       const id = edit.id === undefined ? randomUUID() : text(edit.id, 'note ID', 100);
-      if (seen.has(id)) throw new HttpError(400, 'Duplicate continuity note ID');
+      if (seen.has(id))
+        throw new HelperToolError(400, 'CONTINUITY_NOTE_DUPLICATE', 'Each note ID appears once.');
       seen.add(id);
       const previous = current.get(id);
       if ((edit.id !== undefined || edit.remove === true) && !previous)
-        throw new HttpError(404, 'Unknown continuity note');
+        throw new HelperToolError(404, 'CONTINUITY_NOTE_NOT_FOUND', 'Read the notes again.');
       let note: RangeNote;
       if (edit.remove === true && previous) {
         note = previous;
@@ -171,7 +175,11 @@ export function saveIllustrationContinuity(
           const start = chain.indexOf(from),
             end = chain.indexOf(to);
           if (start < 0 || end < start)
-            throw new HttpError(400, 'Choose an ordered scene range in the current chat');
+            throw new HelperToolError(
+              400,
+              'CONTINUITY_RANGE_INVALID',
+              'Choose an ordered scene range in the current chat.'
+            );
           sourceIds = chain.slice(start, end + 1);
         }
         note = { id, text: content, sourceIds };

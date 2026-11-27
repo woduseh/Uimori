@@ -245,7 +245,7 @@ describe('illustration storage on the current schema', () => {
           },
         })
       ).message
-    ).toBe('COMFYUI_WORKFLOW_UI_FORMAT');
+    ).toBe('ILLUSTRATION_PRESET_INVALID: COMFYUI_WORKFLOW_UI_FORMAT');
     const valid = updateIllustrationSettings(store, { expectedRevision: 2, ...comfy }, true);
     expect(valid.comfyui.baseUrl).toBe('http://10.0.0.5:8188');
     expect(
@@ -283,7 +283,7 @@ describe('illustration storage on the current schema', () => {
           true
         )
       ).message
-    ).toContain('Codex 연결의 모델 프리셋');
+    ).toBe('ILLUSTRATION_CODEX_CONNECTION_REQUIRED');
     const codex = codexModel(store);
     const withCodex = updateIllustrationSettings(
       store,

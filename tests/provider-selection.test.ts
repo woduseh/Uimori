@@ -104,7 +104,12 @@ test('disabled models retain assigned IDs but block new assignments and new snap
   ) as ModelPreset;
   expect(() => assertModelSelection(s.product, ref(m))).toThrow('비활성');
   expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('비활성');
-  expect(() => s.product.snapshot(chat.id)).toThrow('Model disabled');
+  expect(() => s.product.snapshot(chat.id)).toThrow(
+    expect.objectContaining({
+      code: 'MODEL_UNAVAILABLE',
+      cause: expect.objectContaining({ message: 'Model disabled' }),
+    })
+  );
   expect(assign(s, chat.id, { main: ref(m) }).routes.main).toEqual(ref(m));
   expect(s.source(source.id)).toEqual(original);
   expect(readStoredRunSnapshot(s, run.id)).toEqual(snapshot);
@@ -151,7 +156,12 @@ test('ID-based selections follow current connections while protocol changes requ
   expect(isModelSelectable(m, [m], [disabled])).toBe(false);
   expect(() => assign(s, chat.id, { translation: ref(m) })).toThrow('연결');
   expect(assign(s, chat.id, { main: ref(m) }).routes.main).toEqual(ref(m));
-  expect(() => s.product.snapshot(chat.id)).toThrow('Connection disabled');
+  expect(() => s.product.snapshot(chat.id)).toThrow(
+    expect.objectContaining({
+      code: 'MODEL_UNAVAILABLE',
+      cause: expect.objectContaining({ message: expect.stringContaining('Connection disabled') }),
+    })
+  );
   const vertex = s.product.connection(
     connectionBody({
       protocol: 'vertex-gemini-v1',

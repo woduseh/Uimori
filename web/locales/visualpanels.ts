@@ -1013,29 +1013,11 @@ export const messages = {
     ja: '翻訳',
     zh: '翻译',
   },
-  'visualpanels.legacyAuxiliaryTask': {
-    ko: '이전 보조 작업',
-    en: 'Legacy auxiliary task',
-    ja: '以前の補助作業',
-    zh: '旧版辅助任务',
-  },
-  'visualpanels.imagePlacement': {
-    ko: '이미지 배치',
-    en: 'Image placement',
-    ja: '画像配置',
-    zh: '图片排布',
-  },
   'visualpanels.cardScript': {
     ko: '카드 스크립트',
     en: 'Card script',
     ja: 'カードスクリプト',
     zh: '角色卡脚本',
-  },
-  'visualpanels.contextCompression': {
-    ko: '컨텍스트 압축',
-    en: 'Context compression',
-    ja: 'コンテキスト圧縮',
-    zh: '上下文压缩',
   },
   'visualpanels.helper': {
     ko: '도우미',

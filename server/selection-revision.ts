@@ -27,6 +27,7 @@ import {
 import { uncertainAttemptResult } from './usage-accounting.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { shownTranslationChanged } from './source-editing.js';
 import type { Store } from './store.js';
 
@@ -95,7 +96,7 @@ export function selectionRevisionRoutes(app: FastifyInstance, store: Store, opti
       };
       checkSource();
       const selected = workspaceModelRef(promptWorkspace(store), 'helper');
-      if (!selected) throw new HttpError(409, 'MODEL_REQUIRED:helper');
+      if (!selected) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
       const model = store.product.modelSnapshot(selected.id, 'helper');
       const input: ProviderRequest = {
         role: 'helper',

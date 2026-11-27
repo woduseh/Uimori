@@ -1,3 +1,4 @@
+import { storedModelRequired } from './app-errors.js';
 import { Store } from './store.js';
 import { normalizeStoryUiOutput } from './story-ui.js';
 import { storyUiAssetResolver } from './story-ui-assets.js';
@@ -735,7 +736,8 @@ export function createRunExecutor({
               publish(run.chatId);
               return;
             }
-            const message = error instanceof Error ? error.message : '';
+            const message =
+              storedModelRequired(error) ?? (error instanceof Error ? error.message : '');
             const safeError =
               message === 'Model call budget exhausted' ||
               message === 'TOOL_RESULT_MISMATCH' ||

@@ -33,7 +33,7 @@ import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
-import { AppError, errorWire } from './app-errors.js';
+import { AppError, errorWire, storedModelRequired } from './app-errors.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -181,7 +181,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   const requestMetrics = requestMetricsRoutes(app);
   const store = new Store(options.dbPath);
   const requireModel = (target: unknown, role: string) => {
-    if (!options.testMode && !target) throw new HttpError(409, `MODEL_REQUIRED:${role}`);
+    if (!options.testMode && !target) throw new AppError(409, 'MODEL_REQUIRED', { role });
   };
   const requireRequestModel = (snapshot: RunSnapshot) => {
     const target = snapshot.profile?.models.main;
@@ -781,11 +781,10 @@ export async function createApp(options: AppOptions): Promise<App> {
             if (!stopping.signal.aborted) {
               const current = store.job(id);
               const message =
-                error instanceof Error &&
-                (error.message.startsWith('Injected failure:') ||
-                  error.message.startsWith('MODEL_REQUIRED:'))
+                storedModelRequired(error) ??
+                (error instanceof Error && error.message.startsWith('Injected failure:')
                   ? error.message
-                  : 'Auxiliary job failed';
+                  : 'Auxiliary job failed');
               if (current.status === 'queued') store.failQueuedJob(id, current.generation, message);
               else if (current.status === 'running')
                 store.failJob(id, current.generation, instanceId, message);

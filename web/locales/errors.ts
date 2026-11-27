@@ -305,6 +305,24 @@ export const messages = {
     ja: '構成の執筆予約がキャンセルされました。最新の構成を確認してからもう一度執筆してください。',
     zh: '大纲的撰写预约已取消。请查看最新大纲后重新撰写。',
   },
+  'errors.ILLUSTRATION_NOT_FOUND': {
+    ko: '삽화를 찾을 수 없어요. 다른 창이나 도우미가 삭제했을 수 있어요.',
+    en: 'The illustration was not found. Another window or the assistant may have deleted it.',
+    ja: '挿絵が見つかりません。別のウィンドウかアシスタントが削除した可能性があります。',
+    zh: '找不到该插图。可能已被其他窗口或助手删除。',
+  },
+  'errors.ILLUSTRATION_REFERENCE_UNAVAILABLE': {
+    ko: '이 채팅에서 사용할 수 없는 참고 이미지가 있어요. 삽화 참고를 다시 불러온 뒤 이미지를 다시 골라 주세요.',
+    en: 'A reference image is no longer available in this chat. Reload the illustration references and choose the images again.',
+    ja: 'このチャットで使えない参考画像があります。挿絵の参考を読み込み直してから画像を選び直してください。',
+    zh: '有参考图片已无法在此聊天中使用。请重新加载插图参考后重新选择图片。',
+  },
+  'errors.ILLUSTRATION_REFERENCES_TOO_MANY': {
+    ko: '삽화 참고 이미지는 인물 기본값에 연결된 이미지를 합쳐 최대 {limit, number}개까지 사용할 수 있어요.',
+    en: 'Illustrations can use up to {limit, number} reference images, including images linked to default characters.',
+    ja: '挿絵の参考画像は、人物の既定値に連結された画像を含めて最大{limit, number}枚まで使えます。',
+    zh: '插图最多可使用{limit, number}张参考图片，包括关联到默认人物的图片。',
+  },
   'errors.SEARCH_CURSOR_STALE': {
     ko: '검색 조건이 바뀌었어요. 처음부터 다시 검색해 주세요.',
     en: 'Search conditions changed. Search again from the beginning.',
@@ -959,11 +977,11 @@ export const messages = {
     ja: '本文ファイルの形式が正しくありません。内容を確認してください。',
     zh: '正文文件格式无效。请检查文件内容。',
   },
-  'errors.mainUnavailable': {
-    ko: '본문 모델이나 프로바이더를 사용할 수 없어요. 설정을 확인해 주세요.',
-    en: 'The writing model or provider is unavailable. Check your settings.',
-    ja: '本文モデルまたはプロバイダーを使用できません。設定を確認してください。',
-    zh: '正文模型或提供商不可用。请检查设置。',
+  'errors.MODEL_UNAVAILABLE': {
+    ko: '{role, select, main {본문 모델이나 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델, 설정 > 역할별 모델, 프로바이더의 활성 상태와 인증을 확인해 주세요.} illustration {삽화 모델이나 연결을 사용할 수 없어요. 설정 > 삽화의 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.} other {선택한 모델이나 프로바이더를 사용할 수 없어요. 설정 > 역할별 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.}}',
+    en: '{role, select, main {The writing model or provider is unavailable. Check the chat’s pinned model, Settings > Models by role, and whether the provider is enabled and signed in.} illustration {The illustration model or connection is unavailable. Check the models in Settings > Illustrations and whether the provider is enabled and signed in.} other {The selected model or provider is unavailable. Check Settings > Models by role and whether the provider is enabled and signed in.}}',
+    ja: '{role, select, main {本文モデルまたはプロバイダーを使用できません。チャット設定の固定モデル、設定 > 役割別モデル、プロバイダーの有効状態と認証を確認してください。} illustration {挿絵モデルまたは接続を使用できません。設定 > 挿絵のモデルと、プロバイダーの有効状態と認証を確認してください。} other {選択したモデルまたはプロバイダーを使用できません。設定 > 役割別モデルと、プロバイダーの有効状態と認証を確認してください。}}',
+    zh: '{role, select, main {正文模型或提供商不可用。请检查聊天设置中的固定模型、设置 > 按角色设置模型，以及提供商的启用状态与认证。} illustration {插图模型或连接不可用。请检查设置 > 插图中的模型，以及提供商的启用状态与认证。} other {所选模型或提供商不可用。请检查设置 > 按角色设置模型，以及提供商的启用状态与认证。}}',
   },
   'errors.modelUnavailable': {
     ko: '모델이나 프로바이더를 사용할 수 없어요. 설정을 확인해 주세요.',
@@ -995,11 +1013,11 @@ export const messages = {
     ja: '依頼を処理できません。({status})',
     zh: '无法处理请求。({status})',
   },
-  'errors.modelRequired': {
-    ko: '설정 > 역할별 모델에서 {role, select, main {본문} translation {번역} translationRefusal {번역 거절 판정} status {이전 보조 작업} image {이미지 배치} context {컨텍스트 압축} helper {도우미} illustration {삽화} other {모델}} 모델을 선택해 주세요.',
-    en: 'Select the {role, select, main {writing} translation {translation} translationRefusal {translation refusal judgment} status {legacy auxiliary} image {image placement} context {context compaction} helper {assistant} illustration {illustration} other {required}} model in Settings > Models by role.',
-    ja: '設定 > 役割別モデルで{role, select, main {本文} translation {翻訳} translationRefusal {翻訳拒否判定} status {旧補助作業} image {画像配置} context {コンテキスト圧縮} helper {アシスタント} illustration {挿絵} other {対象}}モデルを選んでください。',
-    zh: '请在设置 > 按角色设置模型中选择{role, select, main {正文} translation {翻译} translationRefusal {翻译拒绝判定} status {旧辅助任务} image {图片排布} context {上下文压缩} helper {助手} illustration {插图} other {所需}}模型。',
+  'errors.MODEL_REQUIRED': {
+    ko: '설정 > 역할별 모델에서 {role, select, main {본문} translation {번역} context {컨텍스트 압축} helper {도우미} other {필요한}} 모델을 선택해 주세요.',
+    en: 'Select the {role, select, main {writing} translation {translation} context {context compaction} helper {assistant} other {required}} model in Settings > Models by role.',
+    ja: '設定 > 役割別モデルで{role, select, main {本文} translation {翻訳} context {コンテキスト圧縮} helper {アシスタント} other {対象}}モデルを選んでください。',
+    zh: '请在设置 > 按角色设置模型中选择{role, select, main {正文} translation {翻译} context {上下文压缩} helper {助手} other {所需}}模型。',
   },
   'errors.firstMessage': {
     ko: '첫 메시지',
@@ -1013,11 +1031,11 @@ export const messages = {
     ja: 'シーン{scene, number}',
     zh: '场景{scene, number}',
   },
-  'errors.missingTranslations': {
-    ko: '저장된 유효 번역이 없는 장면: {scenes}{remaining, plural, =0 {} other { 외 #개}}. 번역을 완료하거나 범위를 바꿔 주세요.',
-    en: 'Scenes without a valid saved translation: {scenes}{remaining, plural, =0 {} one { and # more} other { and # more}}. Complete translation or change the range.',
-    ja: '有効な保存済み翻訳がないシーン：{scenes}{remaining, plural, =0 {} other {、ほか#件}}。翻訳を完了するか範囲を変更してください。',
-    zh: '无有效已存译文的场景：{scenes}{remaining, plural, =0 {} other {，另有#个}}。请完成翻译或更改范围。',
+  'errors.MANUSCRIPT_TRANSLATION_MISSING': {
+    ko: '저장된 유효 번역이 없는 장면이 {total, number}개 있어요: {scenes}. 번역을 완료하거나 범위를 바꿔 주세요.',
+    en: '{total, plural, one {# scene has} other {# scenes have}} no valid saved translation: {scenes}. Complete the translation or change the range.',
+    ja: '有効な保存済み翻訳がないシーンが{total, number}件あります：{scenes}。翻訳を完了するか範囲を変更してください。',
+    zh: '有{total, number}个场景没有有效的已存译文：{scenes}。请完成翻译或更改范围。',
   },
   'errors.auxiliaryModelRequired': {
     ko: '{role, select, main {본문} other {번역}} 모델이 지정되지 않았어요.',

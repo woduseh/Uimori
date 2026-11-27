@@ -598,7 +598,9 @@ export class ProductStore {
       });
     } catch (error) {
       if (role && error instanceof HttpError)
-        throw new HttpError(error.statusCode, `MODEL_UNAVAILABLE:${role}:${error.message}`);
+        throw Object.assign(new AppError(error.statusCode, 'MODEL_UNAVAILABLE', { role }), {
+          cause: error,
+        });
       throw error;
     }
   }

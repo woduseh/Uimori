@@ -149,7 +149,10 @@ describe('Markdown manuscript export', () => {
     const { chat, first, second } = authoredChat(store);
     const body = { mode: 'translation', expectedHeadRevision: second.id };
     expect(() => exportManuscript(store, chat.id, body)).toThrow(
-      'MANUSCRIPT_TRANSLATION_MISSING:2:1'
+      expect.objectContaining({
+        code: 'MANUSCRIPT_TRANSLATION_MISSING',
+        params: { scenes: '2', total: 1 },
+      })
     );
     expect(exportManuscript(store, chat.id, { ...body, fromScene: 1, toScene: 1 }).markdown).toBe(
       '첫 장면.\n'
@@ -162,7 +165,10 @@ describe('Markdown manuscript export', () => {
     expect(exportManuscript(store, chat.id, body).markdown).toBe('첫 장면.\n\n둘째 장면.\n');
     store.editSource(first.id, { expectedRevision: 0, text: 'Changed source.' });
     expect(() => exportManuscript(store, chat.id, body)).toThrow(
-      'MANUSCRIPT_TRANSLATION_MISSING:1:1'
+      expect.objectContaining({
+        code: 'MANUSCRIPT_TRANSLATION_MISSING',
+        params: { scenes: '1', total: 1 },
+      })
     );
     const current = store.sourceMetadata(first.id);
     editTranslation(store, first.id, {
@@ -602,7 +608,10 @@ test('the transcript routes download the file and create the chat over HTTP', as
       payload: { mode: 'translation', expectedHeadRevision: app.store.chat(chat.id).headRevision },
     });
     expect(manuscript.statusCode).toBe(409);
-    expect(manuscript.json().error).toBe('MANUSCRIPT_TRANSLATION_MISSING:2:1');
+    expect(manuscript.json()).toEqual({
+      code: 'MANUSCRIPT_TRANSLATION_MISSING',
+      params: { scenes: '2', total: 1 },
+    });
     const imported = await app.inject({
       method: 'POST',
       url: '/api/chats/import-transcript',

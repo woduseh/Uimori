@@ -96,10 +96,10 @@ export function exportManuscript(
     return result.text;
   });
   if (missing.length)
-    throw new HttpError(
-      409,
-      `MANUSCRIPT_TRANSLATION_MISSING:${missing.slice(0, 20).join(',')}:${missing.length}`
-    );
+    throw new AppError(409, 'MANUSCRIPT_TRANSLATION_MISSING', {
+      scenes: missing.slice(0, 20).join(','),
+      total: missing.length,
+    });
   const name =
     chat.title
       .replace(/[<>:"/\\|?*\p{Cc}]/gu, '_')

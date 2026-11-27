@@ -240,7 +240,7 @@ test('invalid selection and absent helper model never send a provider call', asy
   expect((await f.post({ ...f.payload, end: f.payload.start })).statusCode).toBe(400);
   const response = await f.post();
   expect(response.statusCode).toBe(409);
-  expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:helper' });
+  expect(response.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'helper' } });
   expect(send).not.toHaveBeenCalled();
   expect(validRevisionRange('A😀B', 1, 2)).toBe(false);
   expect(validRevisionRange('A😀B', 2, 3)).toBe(false);

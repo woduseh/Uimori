@@ -3,6 +3,7 @@ import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Store } from './store.js';
 import { fields, HttpError, number, record } from './request-validation.js';
+import { AppError } from './app-errors.js';
 import { isWrittenLanguage } from '../core/written-language.js';
 
 const KEY = 'auto-translation-defaults';
@@ -28,15 +29,13 @@ export function saveAutoTranslationDefaults(store: Store, value: unknown): AutoT
   const body = record(value);
   fields(body, ['expectedRevision', 'autoTranslate', 'translationLanguage']);
   const expected = number(body.expectedRevision, 'revision', 0);
-  if (typeof body.autoTranslate !== 'boolean')
-    throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
+  if (typeof body.autoTranslate !== 'boolean') throw new HttpError(400, 'Invalid autoTranslate');
   const language = body.translationLanguage;
   if (language !== undefined && language !== null && !isWrittenLanguage(language))
-    throw new HttpError(400, '자동 번역 기본값을 확인해 주세요.');
+    throw new HttpError(400, 'Invalid translation language');
   return store.transaction(() => {
     const previous = autoTranslationDefaults(store.db);
-    if (previous.revision !== expected)
-      throw new HttpError(409, '다른 창에서 자동 번역 기본값이 변경됐어요. 다시 불러와 주세요.');
+    if (previous.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     const next: AutoTranslationDefaults = {
       revision: previous.revision + 1,
       autoTranslate: body.autoTranslate as boolean,

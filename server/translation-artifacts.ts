@@ -1,7 +1,7 @@
 import type { Job, Source } from '../core/types.js';
 import { TRANSLATION_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Store } from './store.js';
-import { HttpError, fields, record, text } from './request-validation.js';
+import { fields, record, text } from './request-validation.js';
 
 export function successfulTranslation(
   store: Store,
@@ -27,8 +27,8 @@ export function validateTranslationArtifact(
     job.sourceHash !== source.hash ||
     typeof result.mock !== 'boolean'
   )
-    throw new HttpError(400, 'Translation dependency mismatch');
+    throw new Error('Translation dependency mismatch');
   if (result.manual !== undefined && (result.manual !== true || result.mock))
-    throw new HttpError(400, 'Invalid authored marker');
+    throw new Error('Invalid authored marker');
   text(result.text, 'translation', TRANSLATION_TEXT_MAX_CHARS);
 }

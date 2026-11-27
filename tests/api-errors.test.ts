@@ -22,10 +22,12 @@ async function rejectedWith(status: number, body: unknown, method = 'POST') {
 }
 
 test('unavailable models retain only the role code and show the current selection paths', async () => {
-  const result = await rejected(409, 'MODEL_UNAVAILABLE:main:private-model-and-credential');
-  expect(result.code).toBe('MODEL_UNAVAILABLE:main');
+  const result = await rejectedWith(409, { code: 'MODEL_UNAVAILABLE', params: { role: 'main' } });
+  expect(result.code).toBe('MODEL_UNAVAILABLE');
   expect(result.message).toContain('고정 모델');
-  expect(result.message).not.toContain('private-model');
+  const other = await rejectedWith(409, { code: 'MODEL_UNAVAILABLE', params: { role: 'helper' } });
+  expect(other.message).toContain('역할별 모델');
+  expect(other.message).not.toContain('고정 모델');
 });
 
 test('only recognized revision errors are described as a concurrent save', async () => {

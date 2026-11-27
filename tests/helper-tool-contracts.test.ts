@@ -990,7 +990,7 @@ test('helper proposals are read-only and mixed profile edits share one revision 
     if (round === 1) {
       expect(event(request, 'other').denied).toBe(true);
       expect(event(request, 'other').result).toMatchObject({
-        error: '이 채팅에서 사용할 수 없는 인물 참고 이미지예요.',
+        code: 'ILLUSTRATION_REFERENCE_UNAVAILABLE',
       });
       expect(event(request, 'duplicate').denied).toBe(true);
       expect(event(request, 'missing-image').denied).toBe(true);

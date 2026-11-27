@@ -2,7 +2,9 @@ import {
   type AppErrorCode,
   type AppErrorParams,
   type AppErrorParamsArgument,
+  appErrorTakesParams,
   type ErrorWire,
+  isAppErrorCode,
 } from '#contracts';
 import { HttpError } from './request-validation.js';
 
@@ -14,6 +16,19 @@ export class AppError<C extends AppErrorCode = AppErrorCode> extends HttpError {
     this.code = code;
     this.params = params[0] as AppErrorParams[C];
   }
+}
+
+export type PlainAppErrorCode = {
+  [C in AppErrorCode]: AppErrorParams[C] extends undefined ? C : never;
+}[AppErrorCode];
+
+export const isPlainAppErrorCode = (value: unknown): value is PlainAppErrorCode =>
+  isAppErrorCode(value) && !appErrorTakesParams(value);
+
+export function storedModelRequired(error: unknown): string | undefined {
+  return error instanceof AppError && error.code === 'MODEL_REQUIRED'
+    ? `MODEL_REQUIRED:${(error.params as AppErrorParams['MODEL_REQUIRED']).role}`
+    : undefined;
 }
 
 export class HelperToolError extends HttpError {

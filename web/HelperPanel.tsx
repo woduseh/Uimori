@@ -1341,7 +1341,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       }
       setModelRequired((old) => ({
         ...old,
-        [owner]: cause instanceof ApiError && cause.code?.startsWith('MODEL_REQUIRED:') === true,
+        [owner]: cause instanceof ApiError && cause.code === 'MODEL_REQUIRED',
       }));
       setErrors((old) => ({
         ...old,

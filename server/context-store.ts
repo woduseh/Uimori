@@ -285,7 +285,8 @@ export class ContextStore {
         return this.detail(chatId);
       }
       this.expected(chatId, body);
-      if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
+      if (!snapshot.profile?.models.main)
+        throw new AppError(409, 'MODEL_REQUIRED', { role: 'main' });
       let prepared = this.prepareRun(snapshot, scopeKey);
       const previous = this.previous(prepared);
       const summary = text(body.summary, 'summary', SOURCE_TEXT_MAX_CHARS);
@@ -327,7 +328,8 @@ export class ContextStore {
         return this.job(existing.id);
       }
       const { scopeKey } = this.expected(chatId, body);
-      if (!snapshot.profile?.models.main) throw new HttpError(409, 'MODEL_REQUIRED:main');
+      if (!snapshot.profile?.models.main)
+        throw new AppError(409, 'MODEL_REQUIRED', { role: 'main' });
       if (
         this.db
           .prepare("SELECT 1 FROM context_jobs WHERE chat_id=? AND status IN ('queued','running')")

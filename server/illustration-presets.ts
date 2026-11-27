@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { HttpError, choice, fields, number, record, text } from './request-validation.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
@@ -64,12 +65,17 @@ export function saveIllustrationPreset(
   id?: string,
   expectedRevision?: number
 ): IllustrationPreset {
-  if (id?.startsWith('builtin:')) throw new HttpError(400, '기본 프리셋은 복제해서 수정해 주세요.');
+  if (id?.startsWith('builtin:'))
+    throw new HelperToolError(
+      400,
+      'ILLUSTRATION_PRESET_BUILTIN_READONLY',
+      'Save a copy under a new ID.'
+    );
   let model: ReturnType<typeof validateIllustrationPreset>;
   try {
     model = validateIllustrationPreset(value);
   } catch (error) {
-    throw new HttpError(400, (error as Error).message);
+    throw new HelperToolError(400, 'ILLUSTRATION_PRESET_INVALID', (error as Error).message);
   }
   const saved = store.product.save(
     'illustration-preset',
@@ -83,9 +89,7 @@ export function saveIllustrationPreset(
 export function selectIllustrationPreset(store: Store, value: unknown) {
   const b = record(value);
   fields(b, ['scope', 'targetId', 'presetId', 'expectedRevision']);
-  const scope = text(b.scope, 'scope', 10);
-  if (!['global', 'bot', 'chat'].includes(scope))
-    throw new HttpError(400, '삽화 프리셋 적용 범위를 확인해 주세요.');
+  const scope = choice(b.scope, ['global', 'bot', 'chat'], 'scope');
   const presetId = b.presetId === null ? null : text(b.presetId, 'preset ID', 100);
   const targetId = scope === 'global' ? '' : text(b.targetId, 'target ID', 100);
   const expected = number(b.expectedRevision, 'revision', 0);
@@ -94,11 +98,7 @@ export function selectIllustrationPreset(store: Store, value: unknown) {
     if (scope === 'bot') store.organization.bot(targetId);
     if (scope === 'chat') store.chat(targetId);
     const p = illustrationPresetPreferences(store);
-    if (p.revision !== expected)
-      throw new HttpError(
-        409,
-        '다른 창에서 삽화 프리셋 선택을 바꿨어요. 다시 불러온 뒤 선택해 주세요.'
-      );
+    if (p.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
     if (scope === 'global') p.defaultPresetId = presetId ?? DEFAULT_ILLUSTRATION_PRESET_ID;
     else {
       const map = scope === 'bot' ? p.botPresets : p.chatPresets;
@@ -109,11 +109,15 @@ export function selectIllustrationPreset(store: Store, value: unknown) {
   });
 }
 export function deleteIllustrationPreset(store: Store, id: string, expectedRevision: number) {
-  if (id.startsWith('builtin:')) throw new HttpError(400, '기본 프리셋은 삭제할 수 없어요.');
+  if (id.startsWith('builtin:'))
+    throw new HelperToolError(
+      400,
+      'ILLUSTRATION_PRESET_BUILTIN_READONLY',
+      'Built-in presets stay.'
+    );
   return store.transaction(() => {
     const preset = readIllustrationPreset(store, id);
-    if (preset.revision !== expectedRevision)
-      throw new HttpError(409, '삽화 프리셋이 변경됐어요. 최신 저장본을 확인해 주세요.');
+    if (preset.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const p = illustrationPresetPreferences(store);
     if (p.defaultPresetId === id) p.defaultPresetId = DEFAULT_ILLUSTRATION_PRESET_ID;
     for (const map of [p.botPresets, p.chatPresets])

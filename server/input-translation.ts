@@ -40,11 +40,11 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
       fields(body, ['text', 'targetLanguage']);
       const draft = text(body.text, 'input translation text', REQUEST_TEXT_MAX_CHARS);
       const language = inputTranslationLanguage(body.targetLanguage);
-      if (!language) throw new HttpError(400, 'INPUT_TRANSLATION_LANGUAGE_INVALID');
+      if (!language) throw new AppError(400, 'INPUT_TRANSLATION_LANGUAGE_INVALID');
       const chatId = request.params.id;
       const chat = store.chat(chatId);
       const selected = workspaceModelRef(promptWorkspace(store), 'translation');
-      if (!selected) throw new HttpError(409, 'MODEL_REQUIRED:translation');
+      if (!selected) throw new AppError(409, 'MODEL_REQUIRED', { role: 'translation' });
       const model = store.product.modelSnapshot(selected.id, 'translation');
       const guide = currentBotTranslationGuide(store, chatId);
       const source = chat.headRevision ? store.source(chat.headRevision) : undefined;
@@ -82,7 +82,7 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
       const timeout = AbortSignal.timeout(timeoutMs);
       const signal = AbortSignal.any([options.signal, disconnected.signal, timeout]);
       const authorize = () => {
-        if (signal.aborted) throw new HttpError(408, 'INPUT_TRANSLATION_CANCELLED');
+        if (signal.aborted) throw new AppError(408, 'INPUT_TRANSLATION_CANCELLED');
         store.product.authorize(model.connection);
       };
       const work = (async () => {
@@ -105,12 +105,12 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
           });
           if (attemptId) store.product.finishAttempt(attemptId, result);
           finished = true;
-          if (timeout.aborted) throw new HttpError(504, 'INPUT_TRANSLATION_TIMEOUT');
+          if (timeout.aborted) throw new AppError(504, 'INPUT_TRANSLATION_TIMEOUT');
           authorize();
           if (result.status === 'refused' || result.refusal)
-            throw new HttpError(422, 'INPUT_TRANSLATION_REFUSED');
+            throw new AppError(422, 'INPUT_TRANSLATION_REFUSED');
           if (result.status !== 'completed' || result.toolCalls.length || !result.text.trim())
-            throw new HttpError(502, 'INPUT_TRANSLATION_FAILED');
+            throw new AppError(502, 'INPUT_TRANSLATION_FAILED');
           if (result.text.length > REQUEST_TEXT_MAX_CHARS)
             throw new AppError(422, 'INPUT_TRANSLATION_TOO_LONG', {
               limit: REQUEST_TEXT_MAX_CHARS,
@@ -134,7 +134,7 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
       } catch (error) {
         if (error instanceof HttpError) throw error;
         if (error instanceof ProviderContractError)
-          throw new HttpError(502, 'INPUT_TRANSLATION_FAILED');
+          throw new AppError(502, 'INPUT_TRANSLATION_FAILED');
         throw error;
       } finally {
         reply.raw.off('close', onClose);

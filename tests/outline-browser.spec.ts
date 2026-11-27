@@ -222,7 +222,10 @@ for (const width of WIDTHS) {
       await page.route('**/api/helper/conversations/*/messages', async (route) => {
         if (route.request().method() !== 'POST') return route.continue();
         messages.push(route.request().postDataJSON());
-        await route.fulfill({ status: 409, json: { error: 'MODEL_REQUIRED:helper' } });
+        await route.fulfill({
+          status: 409,
+          json: { code: 'MODEL_REQUIRED', params: { role: 'helper' } },
+        });
       });
       await panel.getByRole('button', { name: '상세화', exact: true }).click();
       const helper = page.locator('#helper-panel');

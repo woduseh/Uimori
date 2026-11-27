@@ -23,6 +23,10 @@ const parameterNames = {
   THEME_ASSET_MISSING: { name: true },
   OUTLINE_RELATED_TOO_MANY: { limit: true },
   OUTLINE_NODE_WRITTEN: { title: true },
+  MODEL_REQUIRED: { role: true },
+  MODEL_UNAVAILABLE: { role: true },
+  MANUSCRIPT_TRANSLATION_MISSING: { scenes: true, total: true },
+  ILLUSTRATION_REFERENCES_TOO_MANY: { limit: true },
 } satisfies { [C in ParameterizedCode]: Record<keyof AppErrorParams[C], true> };
 
 test('every catalogued code has a message in every locale whose arguments are its params', () => {

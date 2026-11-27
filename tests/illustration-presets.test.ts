@@ -134,7 +134,7 @@ test('chat, bot and global selection resolve one whole recipe; inherit and stale
   expect(effectiveIllustrationPreset(store, chat.id)).toEqual(bot);
   expect(() =>
     selectIllustrationPreset(store, { scope: 'global', presetId: global.id, expectedRevision: 0 })
-  ).toThrow('다른 창');
+  ).toThrow('REVISION_CONFLICT');
   expect(() => choose(store, 'missing')).toThrow();
   expect(() => choose(store, global.id, 'chat', 'missing')).toThrow();
   deleteIllustrationPreset(store, bot.id, bot.revision);

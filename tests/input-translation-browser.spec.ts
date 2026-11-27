@@ -197,7 +197,7 @@ test('ITRAN refused translation and rejected submission preserve the editable dr
   let rejectedTranslation = true;
   await page.route(endpoint, async (route) => {
     if (rejectedTranslation)
-      await route.fulfill({ status: 422, json: { error: 'INPUT_TRANSLATION_REFUSED' } });
+      await route.fulfill({ status: 422, json: { code: 'INPUT_TRANSLATION_REFUSED' } });
     else await answer(route);
   });
   await open(page, chat.id);

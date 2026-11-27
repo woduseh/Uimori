@@ -213,7 +213,7 @@ test('a maximum-size draft with no translation model returns the model requireme
   const send = mockSend();
   const response = await f.post({ ...payload, text: '\0'.repeat(REQUEST_TEXT_MAX_CHARS) });
   expect(response.statusCode, response.body).toBe(409);
-  expect(response.json()).toEqual({ error: 'MODEL_REQUIRED:translation' });
+  expect(response.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'translation' } });
   expect(send).not.toHaveBeenCalled();
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
@@ -237,12 +237,12 @@ test('does not apply, truncate or automatically retry an unusable result', async
   const f = await setup();
   const before = databaseState(f.app);
   const cases = [
-    [{ status: 'refused', refusal: 'No' }, 422, { error: 'INPUT_TRANSLATION_REFUSED' }],
-    [{ status: 'partial', text: 'Only half' }, 502, { error: 'INPUT_TRANSLATION_FAILED' }],
+    [{ status: 'refused', refusal: 'No' }, 422, { code: 'INPUT_TRANSLATION_REFUSED' }],
+    [{ status: 'partial', text: 'Only half' }, 502, { code: 'INPUT_TRANSLATION_FAILED' }],
     [
       { status: 'tool_calls', toolCalls: [{ id: '1', name: 'invented', arguments: {} }] },
       502,
-      { error: 'INPUT_TRANSLATION_FAILED' },
+      { code: 'INPUT_TRANSLATION_FAILED' },
     ],
     [
       { text: 'x'.repeat(REQUEST_TEXT_MAX_CHARS + 1) },

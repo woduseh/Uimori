@@ -1198,7 +1198,7 @@ export class HelperRuntime {
     if (this.compacting.has(conversationId)) throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
     const helperModel = workspaceModelRef(workspace, 'helper');
     const contextModel = workspaceModelRef(workspace, 'context');
-    if (!helperModel) throw new HttpError(409, 'MODEL_REQUIRED:helper');
+    if (!helperModel) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     const model = this.store.product.modelSnapshot(helperModel.id);
     if (model.evaluationTools)
       throw new HttpError(409, '도우미 모델에서는 평가 도구를 해제해 주세요.');
@@ -1400,7 +1400,7 @@ export class HelperRuntime {
     if (!this.deletionImpact(conversationId).canDelete)
       throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
     const model = this.summaryModel();
-    if (!model) throw new HttpError(409, 'MODEL_REQUIRED:helper');
+    if (!model) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     this.store.transaction(() => {
       const change = publishEditedHelperContext(
         this.store,
@@ -1434,12 +1434,12 @@ export class HelperRuntime {
       throw new HttpError(409, 'HELPER_COMPACTION_BUSY');
     const workspace = promptWorkspace(this.store);
     const helperModelRef = workspaceModelRef(workspace, 'helper');
-    if (!helperModelRef) throw new HttpError(409, 'MODEL_REQUIRED:helper');
+    if (!helperModelRef) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     const helperModel = this.store.product.modelSnapshot(helperModelRef.id);
     if (helperModel.connection.protocol === 'codex-app-server-v1')
       throw new HttpError(409, 'HELPER_COMPACTION_CODEX_NATIVE');
     const contextModelRef = workspaceModelRef(workspace, 'context');
-    if (!contextModelRef) throw new HttpError(409, 'MODEL_REQUIRED:context');
+    if (!contextModelRef) throw new AppError(409, 'MODEL_REQUIRED', { role: 'context' });
     const contextModel = this.store.product.modelSnapshot(contextModelRef.id, undefined, false);
     const history = helperHistory(this.store, conversationId);
     const base = helperContext(this.store, conversationId, history);

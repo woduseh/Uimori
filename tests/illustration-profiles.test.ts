@@ -223,7 +223,7 @@ test('legacy effective saves filter unchanged defaults while explicit image over
       references: others.map((item) => ({ ref: item.id, role: 'style' })),
       chatCharacterProfiles: current.chatCharacterProfiles,
     })
-  ).toThrow('삽화 참고 이미지는 최대 8개까지 사용할 수 있어요.');
+  ).toThrow('ILLUSTRATION_REFERENCES_TOO_MANY');
 
   expect(() =>
     updateIllustrationReferences(store, chat.id, {
@@ -231,7 +231,7 @@ test('legacy effective saves filter unchanged defaults while explicit image over
       references: [],
       chatCharacterProfiles: [{ ...initial.characterProfiles[0], referenceRef: 'missing' }],
     })
-  ).toThrow('이 채팅에서 사용할 수 없는 인물 참고 이미지예요.');
+  ).toThrow('ILLUSTRATION_REFERENCE_UNAVAILABLE');
 });
 
 test('helper edits only the requested inherited identity and reports its stable ID', () => {

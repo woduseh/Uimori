@@ -1406,7 +1406,11 @@ test('manual helper compaction enforces busy, codex-native, context-model and co
     contextModel: null,
   });
   expect(() => f.runtime.compactConversation(f.conversation.id)).toThrow(
-    expect.objectContaining({ statusCode: 409, message: 'MODEL_REQUIRED:context' })
+    expect.objectContaining({
+      statusCode: 409,
+      code: 'MODEL_REQUIRED',
+      params: { role: 'context' },
+    })
   );
 
   const nativeConnection = f.store.product.connection({
