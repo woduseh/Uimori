@@ -11,16 +11,26 @@ export function versionChanged(packageJsonAt, base, head = 'HEAD') {
   return JSON.parse(packageJsonAt(base)).version !== JSON.parse(packageJsonAt(head)).version;
 }
 
+function runsInChangedJob(entry) {
+  const launch = entry.launch ?? {};
+  return launch.runner !== 'self-host' && !(launch.requiredEnv ?? []).length;
+}
+
 export function browserSelection(map, files) {
-  const { domains } = selectChanged(map, files);
-  const specs = new Set(
-    domains.flatMap((name) => map.domains[name].specs.map((entry) => entry.file))
-  ).size;
+  const { domains, uncovered } = selectChanged(map, files);
+  const runnable = (name) => map.domains[name].specs.filter(runsInChangedJob);
+  const selected = domains.filter((name) => runnable(name).length);
+  const specs = new Set(selected.flatMap((name) => runnable(name).map((entry) => entry.file))).size;
   const total = Object.values(map.domains).reduce((sum, domain) => sum + domain.specs.length, 0);
   const cap = Math.ceil(total / browserShards);
-  return specs > cap
-    ? { domains: [], specs, cap, full: true }
-    : { domains, specs, cap, full: false };
+  const full = specs > cap || uncovered.length > 0;
+  return { domains: full ? [] : selected, specs, cap, uncovered, full };
+}
+
+export function selectionSummary(selection) {
+  if (selection.uncovered.length)
+    return `No feature-map domain covers ${selection.uncovered.join(', ')}; running the full browser shards`;
+  return `Changed browser specs: ${selection.specs} of cap ${selection.cap}; ${selection.full ? 'running the full browser shards' : `domains: ${selection.domains.join(' ') || 'none'}`}`;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -50,10 +60,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const selection = files
       ? browserSelection(readFeatureMap(), files)
       : { domains: [], full: true };
-    if (files)
-      console.log(
-        `Changed browser specs: ${selection.specs} of cap ${selection.cap}; ${selection.full ? 'running the full browser shards' : `domains: ${selection.domains.join(' ') || 'none'}`}`
-      );
+    if (files) console.log(selectionSummary(selection));
     fullBrowser = selection.full;
     browserDomains = selection.domains;
   }

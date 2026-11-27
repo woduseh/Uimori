@@ -55,7 +55,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - if: github.event_name != 'workflow_dispatch'
-        run: node -e "require('node:child_process').execFileSync('git', ['diff','--check',process.env.UIMORI_DIFF_BASE,'HEAD'], {stdio:'inherit'})"
+        run: |
+          if ! git cat-file -e "${UIMORI_DIFF_BASE}^{commit}" 2>/dev/null; then
+            echo "Diff base ${UIMORI_DIFF_BASE:-<none>} is not in this clone (a force push or a new branch); skipping git diff --check"
+            exit 0
+          fi
+          git diff --check "$UIMORI_DIFF_BASE" HEAD
         env:
           UIMORI_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       - run: node scripts/check-documentation.mjs

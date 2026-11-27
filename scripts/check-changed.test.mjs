@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -198,6 +206,38 @@ test('a hub change runs direct matches and 1-hop importers first, up to a stated
   });
   assert.equal(checkChanged.parseArguments(['--all'], {}).limit, Infinity);
   assert.equal(checkChanged.parseArguments([], { CI: 'true' }).limit, Infinity);
+});
+
+test('a test that names a module by its repository path is a direct test of that module', () => {
+  const sources = {
+    'tests/spawns.test.ts': "spawn(process.execPath, [resolve('runner/runner.mjs')]);",
+    'tests/unrelated.test.ts': "spawn(process.execPath, [resolve('runner/other.mjs')]);",
+  };
+  const checks = checkChanged.selectChecks(['runner/runner.mjs'], sources);
+  assert.deepEqual(checks.directTests, ['tests/spawns.test.ts']);
+  assert.ok(checks.vitest.includes('tests/spawns.test.ts'));
+
+  const testsDirectory = new URL('../tests/', import.meta.url);
+  const repositoryTests = Object.fromEntries(
+    readdirSync(testsDirectory)
+      .filter((name) => name.endsWith('.test.ts'))
+      .map((name) => [`tests/${name}`, readFileSync(new URL(name, testsDirectory), 'utf8')])
+  );
+  for (const [file, tests] of [
+    [
+      'runner/runner.mjs',
+      [
+        'tests/helper-runner.test.ts',
+        'tests/helper-shell-runtime.test.ts',
+        'tests/helper-shell.test.ts',
+        'tests/main-shell.test.ts',
+      ],
+    ],
+    ['runner/uimori.mjs', ['tests/helper-cli.test.ts', 'tests/helper-shell.test.ts']],
+  ]) {
+    const selected = checkChanged.selectChecks([file], repositoryTests).directTests;
+    for (const test of tests) assert.ok(selected.includes(test), `${file} selects ${test}`);
+  }
 });
 
 test('comments check only the changed files, and i18n runs for the runtime sources it scans', () => {

@@ -61,7 +61,7 @@ const classTable = {
     'windowsInsensitive',
   ],
   'web/help.md': ['markdownFile', 'i18nInput', 'browserInput', 'windowsInsensitive'],
-  'runner/runner.mjs': ['biomeFile', 'moduleFile', 'commentSource', 'browserInput'],
+  'runner/runner.mjs': ['biomeFile', 'moduleFile', 'commentSource'],
   'tests/server.test.ts': [
     'biomeFile',
     'typeScriptInput',
