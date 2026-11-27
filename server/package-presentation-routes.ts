@@ -18,7 +18,7 @@ import { latestImageJob } from './package-images.js';
 import { ByteBoundedCache } from './byte-bounded-cache.js';
 import { trackNativeRisuEntropy } from './risu-native-entropy.js';
 import type { NativeRisuCbsContext } from './risu-native-cbs.js';
-import { AppError } from './app-errors.js';
+import { withRisuFailureCode } from './risu-failure-code.js';
 
 type Viewport = NativeRisuCbsContext['viewport'];
 type Presentation = { key: string; compute: () => Promise<unknown> };
@@ -320,21 +320,4 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       }
     }
   );
-}
-
-async function withRisuFailureCode<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      ['RISU_NATIVE_TIMEOUT', 'RISU_NATIVE_CBS_TIMEOUT', 'RISU_LUA_PROGRAM_TIMEOUT'].includes(
-        error.message
-      )
-    )
-      throw new AppError(500, 'RISU_NATIVE_TIMEOUT');
-    if (error instanceof Error && /^RISU_[A-Z0-9_]{1,100}$/u.test(error.message))
-      throw new HttpError(500, error.message);
-    throw error;
-  }
 }

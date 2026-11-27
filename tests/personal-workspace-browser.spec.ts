@@ -215,3 +215,39 @@ test('PERSONAL binary resource backup downloads and imports through the archive 
   expect(content.title).toBe(title);
   expect(content.package.nativeRisu.card.description).toBe('Synthetic story source.');
 });
+
+test('PERSONAL an expired archive answered after an uncertain restore lets the file be chosen again', async ({
+  page,
+  request,
+}) => {
+  const bot = await createBot(request, `Uncertain archive ${randomUUID()}`);
+  const exported = await request.post('/api/native-transfers/export-archive', {
+    data: { items: [{ kind: 'content', id: bot.id }] },
+  });
+  expect(exported.ok(), await exported.text()).toBe(true);
+  const submissions: unknown[] = [];
+  await page.route('**/api/native-transfers/apply-archive', async (route) => {
+    submissions.push(route.request().postDataJSON());
+    if (submissions.length === 1)
+      await route.fulfill({ status: 503, json: { error: 'Synthetic lost response' } });
+    else await route.fulfill({ status: 410, json: { code: 'NATIVE_TRANSFER_EXPIRED' } });
+  });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '데이터 관리');
+  const file = page.getByLabel('백업 파일 선택', { exact: true });
+  await file.setInputFiles({
+    name: 'resource.uimori',
+    mimeType: 'application/zip',
+    buffer: await exported.body(),
+  });
+  await page.getByRole('button', { name: '새 자료로 가져오기', exact: true }).click();
+  const recheck = page.getByRole('button', { name: '같은 요청으로 다시 확인', exact: true });
+  await expect(recheck).toBeVisible();
+  await expect(file).toBeDisabled();
+  await recheck.click();
+  await expect(recheck).toHaveCount(0);
+  await expect(file).toBeEnabled();
+  expect(submissions).toHaveLength(2);
+  expect(submissions[1]).toEqual(submissions[0]);
+});

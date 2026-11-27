@@ -14,6 +14,12 @@ vi.mock('../server/package-presentation.js', async (original) => ({
     throw failure.error;
   },
 }));
+vi.mock('../server/risu-native-actions.js', async (original) => ({
+  ...(await original<typeof import('../server/risu-native-actions.js')>()),
+  applyNativeRisuAction: async () => {
+    throw failure.error;
+  },
+}));
 
 const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
@@ -24,7 +30,7 @@ afterEach(async () => {
   }
 });
 
-async function presentation(error: Error) {
+async function presentation(error: Error, action = false) {
   failure.error = error;
   const path = mkdtempSync(join(tmpdir(), 'uimori-presentation-errors-'));
   const app = await createApp({
@@ -51,10 +57,15 @@ async function presentation(error: Error) {
     'library'
   ).chat;
   const log = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  const response = await app.inject({
-    method: 'GET',
-    url: `/api/chats/${chat.id}/sources/${chat.headRevision}/presentation`,
-  });
+  const response = await app.inject(
+    action
+      ? {
+          method: 'POST',
+          url: `/api/chats/${chat.id}/sources/${chat.headRevision}/risu-action`,
+          payload: {},
+        }
+      : { method: 'GET', url: `/api/chats/${chat.id}/sources/${chat.headRevision}/presentation` }
+  );
   const lines = log.mock.calls.map(([line]) => String(line));
   log.mockRestore();
   return { response, lines };
@@ -67,4 +78,10 @@ test('a Risu stage failure reaches the reader as its code and is logged', async 
   expect(lines).toContain(
     'REQUEST_FAILED GET /api/chats/:id/sources/:sourceId/presentation RISU_NATIVE_TIMEOUT\n'
   );
+});
+
+test('a Risu script timeout in a user action reaches the reader as the timeout code', async () => {
+  const { response } = await presentation(new Error('RISU_LUA_PROGRAM_TIMEOUT'), true);
+  expect(response.statusCode).toBe(500);
+  expect(response.json()).toEqual({ code: 'RISU_NATIVE_TIMEOUT' });
 });

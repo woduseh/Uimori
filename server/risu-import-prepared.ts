@@ -133,9 +133,8 @@ export function findPreparedRisuImport(
 const bootstrap = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
 ${typeScriptSourceHooks}
-import(workerData.module).then(module => module.prepareRisuInWorker(workerData.input))
-.then(() => parentPort.postMessage({ok:true}))
-.catch(error => parentPort.postMessage({ok:false, code:typeof error?.code === 'string' ? error.code : String(error?.message), statusCode:error.statusCode || 400, params:error.params}));
+import(workerData.module).then(module => module.risuWorkerOutcome(workerData.input))
+.then(outcome => parentPort.postMessage(outcome));
 `;
 async function worker(input: unknown, signal?: AbortSignal) {
   return new Promise<void>((accept, reject) => {

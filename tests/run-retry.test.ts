@@ -1,4 +1,3 @@
-import { readImportReceipt, saveImportReceipt } from '../server/import-operations.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import type { ReaderRun, Source } from '../core/types.js';
@@ -455,10 +454,6 @@ test('successful request repeats with current settings in an independent chat an
       values: {},
     },
   });
-  for (let index = 0; index < 300; index++)
-    saveImportReceipt(store, `resource-${index}`, 'digest', { index });
-  expect(readImportReceipt(store, 'resource-0', 'digest')).toBeUndefined();
-  expect(readImportReceipt(store, 'resource-299', 'digest')).toEqual({ index: 299 });
   expect(store.retryRun(selected.run.id, 'repeat-once')).toEqual({
     created: false,
     run: retry.run,

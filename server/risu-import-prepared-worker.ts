@@ -14,9 +14,26 @@ import {
 import { HttpError } from './request-validation.js';
 import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
 import type { PreparedRisuImport } from './risu-import-prepared.js';
-import { AppError } from './app-errors.js';
+import { AppError, asAppError } from './app-errors.js';
 
-export async function prepareRisuInWorker(input: {
+export async function risuWorkerOutcome(input: Parameters<typeof prepareRisuInWorker>[0]) {
+  try {
+    await prepareRisuInWorker(input);
+    return { ok: true };
+  } catch (thrown) {
+    const error = asAppError(thrown);
+    if (error instanceof AppError)
+      return { ok: false, code: error.code, statusCode: error.statusCode, params: error.params };
+    const failure = error as { code?: unknown; message?: unknown; statusCode?: number };
+    return {
+      ok: false,
+      code: typeof failure?.code === 'string' ? failure.code : String(failure?.message),
+      statusCode: failure?.statusCode || 400,
+    };
+  }
+}
+
+async function prepareRisuInWorker(input: {
   path: string;
   name: string;
   kind?: RisuImportKind;

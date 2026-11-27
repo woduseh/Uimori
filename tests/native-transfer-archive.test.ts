@@ -164,6 +164,8 @@ test('12,288 logical assets export as one binary image and reimport preserves na
   expect(
     existsSync(join(uploadDirectory(target.path), 'native-prepared', preview.preparedId))
   ).toBe(false);
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(target, `unrelated-${index}`, 'digest', { index });
   const retry = await destination.inject({
     method: 'POST',
     url: '/api/native-transfers/apply-archive',

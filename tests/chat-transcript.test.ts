@@ -1,5 +1,4 @@
 import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
-import { saveImportReceipt } from '../server/import-operations.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -662,8 +661,6 @@ describe('chat transcript export and import', () => {
       { transcript, idempotencyKey: 'same-key' },
       'library'
     );
-    for (let index = 0; index < 300; index++)
-      saveImportReceipt(store, `resource-${index}`, 'digest', { index });
     const replay = importChatTranscript(
       store,
       { transcript, idempotencyKey: 'same-key' },

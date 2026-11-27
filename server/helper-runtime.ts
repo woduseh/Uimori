@@ -121,7 +121,6 @@ import { sourceHash } from '../core/source-history.js';
 import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { helperChatOrientation, seededHelperOperations } from './helper-orientation.js';
 import { usageReportDate } from './usage-report.js';
-import { RisuPromptError } from '../core/risu-prompt.js';
 import { readHelperChatLore } from './helper-lore-read.js';
 import { generationFromModel, helperGenerationFromModel } from '../core/model-capabilities.js';
 import { shellExecutionOptions } from '../core/main-shell.js';
@@ -545,8 +544,7 @@ function helperToolError(thrown: unknown, readOnly: boolean, toolName: string) {
   const cause = asAppError(batch?.cause ?? error);
   const patch = cause instanceof HelperResourcePatchError ? cause : undefined;
   const message = error instanceof Error ? error.message : 'HELPER_TOOL_FAILED';
-  const status =
-    error instanceof HttpError || error instanceof RisuPromptError ? error.statusCode : undefined;
+  const status = error instanceof HttpError ? error.statusCode : undefined;
   // SQLite uses ERR_SQLITE_ERROR for both user mistakes and authorization failures.
   const unknownSqlColumn =
     readOnly && toolName === 'db.query' && /^no such column: [^\r\n]+$/u.test(message);

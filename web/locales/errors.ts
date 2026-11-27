@@ -918,10 +918,10 @@ export const messages = {
     zh: 'Risu脚本更改了图片与原请求的关联。请检查脚本，确保保留带图片的用户消息的id和角色。',
   },
   'errors.RISU_NATIVE_TIMEOUT': {
-    ko: 'Risu 표시 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 표시 스크립트를 확인해 주세요.',
-    en: 'A Risu display script did not finish within the time limit. Check the display scripts of the card or module.',
-    ja: 'Risuの表示スクリプトが制限時間内に終わりませんでした。カードやモジュールの表示スクリプトを確認してください。',
-    zh: 'Risu显示脚本未在时限内完成。请检查角色卡或模块的显示脚本。',
+    ko: 'Risu 스크립트가 제한 시간 안에 끝나지 않았어요. 카드나 모듈의 스크립트를 확인해 주세요.',
+    en: 'A Risu script did not finish within the time limit. Check the scripts of the card or module.',
+    ja: 'Risuスクリプトが制限時間内に終わりませんでした。カードやモジュールのスクリプトを確認してください。',
+    zh: 'Risu脚本未在时限内完成。请检查角色卡或模块的脚本。',
   },
   'errors.CHAT_TRANSCRIPT_INVALID': {
     ko: '본문 파일의 형식이 올바르지 않아요. 파일 내용을 확인해 주세요.',
@@ -1769,12 +1769,6 @@ export const messages = {
     ja: '現在のチャットにその場面が見つかりませんでした。',
     zh: '在当前聊天中找不到该场景。',
   },
-  'errors.BOOKMARK_NOT_FOUND': {
-    ko: '책갈피를 찾지 못했어요.',
-    en: 'The bookmark was not found.',
-    ja: 'ブックマークが見つかりませんでした。',
-    zh: '找不到书签。',
-  },
   'errors.RUN_RETRY_AUTHORED_FIRST_MESSAGE': {
     ko: '작성된 첫 메시지는 생성 요청이 아니에요. 새 장면을 요청해 주세요.',
     en: 'A written first message is not a generation request. Request a new scene instead.',
@@ -2244,6 +2238,12 @@ export const messages = {
     en: 'The selected opening is no longer in the bot. Reload the bot and choose an opening again.',
     ja: '選択した開始文がボットに見つかりません。ボットを読み込み直して開始文を選び直してください。',
     zh: '在机器人中找不到所选的开场白。请重新加载机器人并重新选择开场白。',
+  },
+  'errors.AGENT_COLLABORATION_INVALID': {
+    ko: '협업 설정에 올바르지 않은 값이 있어요. 에이전트와 공유 옵션을 확인해 주세요.',
+    en: 'Invalid collaboration settings. Check agents and shared options.',
+    ja: '協業設定に無効な値があります。エージェントと共有オプションを確認してください。',
+    zh: '协作设置存在无效值，请检查智能体和共享选项。',
   },
   'errors.RISU_PROMPT_INVALID': {
     ko: '프롬프트 구성이 올바르지 않아요. 블록과 토글 정의를 확인해 주세요.',
