@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -12,12 +13,32 @@ import {
 } from './ui-navigation.js';
 import { expectCodeFieldValue } from './code-field.js';
 
-async function seedBot(request: APIRequestContext, title: string) {
+const SHOTS = 'output/change-review';
+const regexOut = [
+  '<div class="status">',
+  '  <span>{{getvar::mood}}</span>',
+  '  <span>장소: 항구</span>',
+  '  <span>시간: 저녁</span>',
+  '  <span>날씨: 맑음</span>',
+  '  <span>동행: 리아</span>',
+  '  <span>소지품: 우산</span>',
+  '  <span>목표: 등대</span>',
+  '  <span>기분: 차분함</span>',
+  '  <span>체력: 80</span>',
+  '</div>',
+].join('\n');
+
+async function seedBot(
+  request: APIRequestContext,
+  title: string,
+  card: Record<string, unknown> = {}
+) {
   const pkg = nativeContent({
     name: title,
     description: '처음 쓴 카드 설명',
     first_mes: '처음 인사',
     character_book: { entries: [{ keys: ['등대'], content: '등대 로어', comment: '등대' }] },
+    ...card,
   });
   const response = await request.post('/api/content', {
     data: { kind: 'bot', title, package: pkg, loading: 'pinned', relatedIds: [] },
@@ -25,6 +46,19 @@ async function seedBot(request: APIRequestContext, title: string) {
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()) as Content;
 }
+
+const loreEntries = (names: readonly string[]) =>
+  names.map((name, id) => ({ id, keys: [name], content: `${name} 로어`, comment: name }));
+const richCard = {
+  character_book: { entries: loreEntries(['등대', '항구', '숲']) },
+  extensions: {
+    risuai: {
+      customScripts: [
+        { comment: '상태창', in: '\\[status\\]', out: regexOut, type: 'editdisplay' },
+      ],
+    },
+  },
+};
 
 async function openBot(page: Page, title: string) {
   await page.goto('/');
@@ -37,6 +71,34 @@ async function capture(page: Page, name: string, colorScheme: 'light' | 'dark' =
   await page.emulateMedia({ colorScheme });
   await page.screenshot({ path: test.info().outputPath(`${name}.png`) });
   await page.emulateMedia({ colorScheme: 'light' });
+}
+
+async function shot(page: Page, name: string) {
+  mkdirSync(SHOTS, { recursive: true });
+  await page.screenshot({ path: `${SHOTS}/${name}.png` });
+}
+
+async function editLore(page: Page, name: string, content: string) {
+  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
+  await selectEditorSection(editor, '로어북');
+  const navigation = editor.getByRole('complementary', { name: '로어 목록', exact: true });
+  if (!(await navigation.isVisible()))
+    await editor.getByRole('button', { name: '로어 목록 보기', exact: true }).click();
+  await navigation.getByRole('button', { name, exact: true }).click();
+  await editor.getByLabel('로어 본문', { exact: true }).fill(content);
+}
+
+async function editRegexOut(page: Page, content: string) {
+  await selectEditorSection(page, '정규식');
+  await page.getByRole('textbox', { name: '정규식 바꿀 내용', exact: true }).fill(content);
+}
+
+async function fiveChanges(page: Page, title: string) {
+  await page.getByLabel('카드 설명', { exact: true }).fill('바닷가 마을의 등대지기 이야기');
+  await page.getByLabel('봇 이름', { exact: true }).fill(`${title} 개정`);
+  await editLore(page, '항구', '비가 그친 뒤 항구에 불이 하나둘 켜져요.');
+  await editLore(page, '숲', '숲 로어에 새 길잡이 등불을 더했어요.');
+  await editRegexOut(page, regexOut.replace('맑음', '흐림').replace('80', '65'));
 }
 
 const review = (page: Page) => page.getByRole('dialog', { name: '변경 검토', exact: true });
@@ -67,6 +129,7 @@ test('EDIT01 the header counts changed sections, the workspace shows every chang
   await chip.click();
   const sheet = review(page);
   await expect(sheet).toBeVisible();
+  await expect(sheet).toHaveCSS('transform', 'none');
   await expect(sheet.locator('.change-review-subject')).toHaveText(`${title} 수정`);
   await expect(rail(page).locator('.change-review-rail-section')).toHaveText([
     '기본 정보',
@@ -133,6 +196,7 @@ test('EDIT03 the previous-save comparison opens in the review workspace, restore
   await expect(greeting.locator('ins')).toHaveText('추가된 부분 두 번째');
   await expect(dialog.getByRole('button', { name: /되돌리기$/u })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: /위치로 이동$/u })).toHaveCount(0);
+  await shot(page, 'previous-save-1440-light');
   await dialog.getByRole('button', { name: '이전 저장본으로 복원', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expectCodeFieldValue(page.getByLabel('기본 첫 메시지', { exact: true }), '처음 인사');
@@ -160,4 +224,73 @@ test('EDIT03 the previous-save comparison opens in the review workspace, restore
   await expect(
     page.getByRole('button', { name: '이전 저장본과 비교', exact: true })
   ).toBeDisabled();
+});
+
+test('EDIT10 the footer saves like the header: a missing name keeps the review open, a valid save closes it', async ({
+  page,
+  request,
+}) => {
+  const title = `EDIT10 ${randomUUID().slice(0, 8)}`;
+  const seeded = await seedBot(request, title);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openBot(page, title);
+  const name = page.getByLabel('봇 이름', { exact: true });
+  await name.fill('');
+  await page.getByLabel('카드 설명', { exact: true }).fill('저장할 카드 설명');
+  await editorChanges(page).click();
+  const sheet = review(page);
+  const save = sheet.getByRole('button', { name: '변경사항 저장', exact: true });
+  await save.click();
+  await expect(sheet.getByRole('alert')).toHaveText('이름을 입력해 주세요.');
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await name.fill(`${title} 저장`);
+  await editorChanges(page).click();
+  await expect(sheet.getByRole('alert')).toHaveCount(0);
+  const saved = waitForContentSave(page);
+  await save.click();
+  await saved;
+  await expect(sheet).toBeHidden();
+  await expect(editorChanges(page)).toHaveCount(0);
+  const stored = await (await request.get(`/api/content/${seeded.id}`)).json();
+  expect(stored.revision).toBe(2);
+  expect(stored.title).toBe(`${title} 저장`);
+});
+
+test('EDIT12 reverting one item removes its card, offers undo once and leaves the other change', async ({
+  page,
+  request,
+}) => {
+  const title = `EDIT12 ${randomUUID().slice(0, 8)}`;
+  await seedBot(request, title, richCard);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openBot(page, title);
+  await fiveChanges(page, title);
+  const chip = editorChanges(page);
+  await chip.click();
+  const sheet = review(page);
+  const harbour = sheet.getByRole('heading', { name: '항구 / 로어 본문', exact: true });
+  await expect(harbour).toBeVisible();
+  await sheet.getByRole('button', { name: '항구 / 로어 본문 되돌리기', exact: true }).click();
+  await expect(harbour).toHaveCount(0);
+  const notice = sheet.locator('.change-review-undo');
+  await expect(notice).toContainText('항구 / 로어 본문 변경을 되돌렸어요.');
+  await expect(sheet.locator('.change-review-card')).toHaveCount(4);
+  await shot(page, 'after-revert-1440-dark-pending');
+  await notice.getByRole('button', { name: '되돌리기 취소', exact: true }).click();
+  await expect(harbour).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  await expect(sheet.locator('.change-review-card')).toHaveCount(5);
+  await sheet
+    .getByRole('button', { name: '상태창 / 바꿀 내용 (OUT) 되돌리기', exact: true })
+    .click();
+  await expect(chip).toHaveAccessibleName('바뀐 영역 2곳');
+  await page.keyboard.press('Escape');
+  await selectEditorSection(page, '정규식');
+  await expectCodeFieldValue(
+    page.getByRole('textbox', { name: '정규식 바꿀 내용', exact: true }),
+    regexOut
+  );
+  await expect(editorTab(page, '정규식').locator('.section-navigation-changed')).toHaveCount(0);
+  await expect(editorTab(page, '로어북').locator('.section-navigation-changed')).toHaveCount(1);
 });

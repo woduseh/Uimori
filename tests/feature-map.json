@@ -339,6 +339,7 @@
         { "file": "tests/editor-leave-browser.spec.ts" },
         { "file": "tests/ui-recovery-browser.spec.ts" },
         { "file": "tests/native-lore-browser.spec.ts" },
+        { "file": "tests/native-editor-actions-browser.spec.ts" },
         {
           "file": "tests/code-field-browser.spec.ts",
           "cases": ["CODEFIELD02", "CODEFIELD03", "CODEFIELD04"]

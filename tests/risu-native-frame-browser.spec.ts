@@ -285,6 +285,85 @@ test('native regex synced buffers follow parent JSON changes while local and rem
   test.describe('native editor input', () => {
     test.use({ viewport: { width: MOBILE_WIDTH, height: 915 } });
 
+    test('native regex forms preserve aliases, custom flags, order and invalid raw drafts', async ({
+      page,
+    }) => {
+      await page.goto(origin);
+      await page.evaluate(async () => {
+        const path = '/tests/fixtures/native-regex-editor.tsx';
+        const { mount } = await import(path);
+        mount();
+      });
+      const value = () =>
+        page
+          .locator('output')
+          .textContent()
+          .then((text) => JSON.parse(text!));
+      await page.getByLabel('정규식 찾을 표현식', { exact: true }).fill('(world)');
+      await page.getByLabel('정규식 바꿀 내용', { exact: true }).fill('$1 {{getvar::place}}');
+      await expect.poll(value).toMatchObject([
+        {
+          in: '(world)',
+          find: '(world)',
+          out: '$1 {{getvar::place}}',
+          replace: '$1 {{getvar::place}}',
+          ableFlag: false,
+          extra: { preserved: true },
+        },
+        {},
+        {},
+      ]);
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+      await page.getByRole('checkbox', { name: '사용자 지정 플래그', exact: true }).check();
+      await page.getByRole('button', { name: '대소문자 무시 (i)', exact: true }).click();
+      await page.getByText('고급 플래그', { exact: true }).click();
+      await page.getByLabel('정규식 실행 우선순위', { exact: true }).fill('8');
+      await expect(page.getByLabel('정규식 플래그 원문', { exact: true })).toHaveValue(
+        'g<cbs><future_flag><order 8>'
+      );
+      await page.getByRole('checkbox', { name: '사용자 지정 플래그', exact: true }).uncheck();
+      await expect
+        .poll(value)
+        .toMatchObject([
+          { ableFlag: false, flag: 'g<cbs><future_flag><order 8>', type: 'editdisplay' },
+          {},
+          {},
+        ]);
+      await page.getByLabel('정규식 적용 단계', { exact: true }).selectOption('disabled');
+      await page.getByRole('button', { name: '정규식 아래로', exact: true }).click();
+      await expect
+        .poll(async () => (await value()).map((item: { comment: string }) => item.comment))
+        .toEqual(['Second rule', 'First rule', 'Future rule']);
+      await page.getByRole('button', { name: '정규식 복제', exact: true }).click();
+      await expect
+        .poll(async () => (await value())[2])
+        .toMatchObject({
+          comment: 'First rule 사본',
+          type: 'disabled',
+          extra: { preserved: true },
+        });
+      await page.getByRole('button', { name: '선택한 정규식 삭제', exact: true }).click();
+      const confirm = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+      await expect(confirm).toContainText('First rule');
+      expect((await value()).length).toBe(4);
+      await confirm.getByRole('button', { name: '정규식 삭제', exact: true }).click();
+      await expect.poll(async () => (await value()).length).toBe(3);
+      await page.getByText('고급 JSON 편집', { exact: true }).click();
+      await page.getByLabel('Risu 정규식 JSON', { exact: true }).fill('[invalid');
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+      await expect(page.getByLabel('정규식 이름', { exact: true })).toBeDisabled();
+      await page.getByRole('button', { name: '다른 탭', exact: true }).click();
+      await page.getByRole('button', { name: '다른 탭', exact: true }).click();
+      await expect(page.getByLabel('Risu 정규식 JSON', { exact: true })).toHaveValue('[invalid');
+      await page.getByRole('button', { name: '편집기에 적용', exact: true }).click();
+      await expect(page.getByRole('alert')).toBeVisible();
+      await page.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+      await expect
+        .poll(async () => (await value())[2])
+        .toEqual({ comment: 'Future rule', in: '', out: '', type: 'future_mode', unknown: [1, 2] });
+    });
+
     test('native lore keywords accept sequential comma input without losing the next key', async ({
       page,
     }) => {
