@@ -1,5 +1,4 @@
 import { DatabaseSync, backup } from 'node:sqlite';
-import { createHash } from 'node:crypto';
 import {
   chmodSync,
   chownSync,
@@ -11,7 +10,6 @@ import {
   mkdirSync,
   openSync,
   readdirSync,
-  readFileSync,
   renameSync,
   rmSync,
   statfsSync,
@@ -66,13 +64,6 @@ export function inspectData(directory, { integrity = false, idle = true, columns
   }
 }
 
-function safeTree(path) {
-  const stat = lstatSync(path);
-  if (stat.isSymbolicLink() || (!stat.isFile() && !stat.isDirectory()))
-    throw new Error('Unsupported data file type');
-  if (stat.isDirectory()) for (const name of readdirSync(path)) safeTree(join(path, name));
-}
-
 function assertSeparate(source, destination) {
   const nested = (a, b) => {
     const path = relative(a, b);
@@ -89,36 +80,9 @@ function emptyDestination(source, destination) {
   source = resolve(source);
   destination = resolve(destination);
   assertSeparate(source, destination);
-  if (lstatSync(source).isSymbolicLink()) throw new Error('Symlink data directory refused');
   mkdirSync(destination, { recursive: true });
-  if (lstatSync(destination).isSymbolicLink()) throw new Error('Symlink data directory refused');
   if (readdirSync(destination).some((name) => name !== '.uimori-data'))
     throw new Error('Destination must be empty');
-}
-
-export function credentialDigest(directory) {
-  const hash = createHash('sha256');
-  function visit(file) {
-    const stat = lstatSync(file);
-    if (stat.isSymbolicLink()) throw new Error('Symlink credential refused');
-    if (stat.isDirectory()) for (const name of readdirSync(file).sort()) visit(join(file, name));
-    else if (stat.isFile()) {
-      hash.update(relative(directory, file).replaceAll('\\', '/') + '\0');
-      hash.update(readFileSync(file));
-      hash.update('\0');
-    } else throw new Error('Unsupported credential file type');
-  }
-  for (const name of credentials) {
-    const parts = name.split('/');
-    let file = directory;
-    for (const part of parts) {
-      file = join(file, part);
-      if (existsSync(file) && lstatSync(file).isSymbolicLink())
-        throw new Error('Symlink credential refused');
-    }
-    if (existsSync(file)) visit(file);
-  }
-  return { hash: hash.digest('hex') };
 }
 
 function copyWithOwnership(source, destination) {
@@ -134,49 +98,25 @@ function copyWithOwnership(source, destination) {
 
 export function copyStoppedData(source, destination) {
   emptyDestination(source, destination);
-  safeTree(source);
   for (const name of readdirSync(source))
     copyWithOwnership(join(source, name), join(destination, name));
   const database = inspectData(destination, { integrity: true });
   return { copied: true, integrity: database.integrity };
 }
 
-function sessionAuthority(directory) {
-  const db = new DatabaseSync(join(directory, database), { readOnly: true });
-  try {
-    if (
-      !db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='access_sessions'").get()
-    )
-      return null;
-    return JSON.stringify(
-      db.prepare('SELECT token_hash,authority_hash FROM access_sessions ORDER BY token_hash').all()
-    );
-  } finally {
-    db.close();
-  }
-}
-
 export function restoreData(source, destination) {
   inspectData(source, { integrity: true });
-  safeTree(source);
   assertSeparate(source, destination);
-  safeTree(destination);
-  if (sessionAuthority(source) !== sessionAuthority(destination))
-    throw new Error(
-      'Session authority changed after backup; rollback refused to preserve login/logout changes'
-    );
   for (const name of readdirSync(destination)) rmSync(join(destination, name), { recursive: true });
   return copyStoppedData(source, destination);
 }
 
 export function copyCredentials(source, destination) {
   emptyDestination(source, destination);
-  const before = credentialDigest(source);
   const copied = [];
   for (const name of credentials) {
     const file = join(source, name);
     if (!existsSync(file)) continue;
-    safeTree(file);
     mkdirSync(resolve(destination, name, '..'), { recursive: true });
     copyWithOwnership(file, join(destination, name));
     copied.push(name);
@@ -186,9 +126,7 @@ export function copyCredentials(source, destination) {
     if (existsSync(join(destination, `${database}.codex`)))
       chownSync(join(destination, `${database}.codex`), 1000, 1000);
   }
-  if (credentialDigest(destination).hash !== before.hash)
-    throw new Error('Credential copy mismatch');
-  return { copied, hash: before.hash, settingsRetained: false };
+  return { copied, settingsRetained: false };
 }
 
 export async function snapshotDatabase(source, destination) {
@@ -322,7 +260,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     backup: () => copyStoppedData(source, destination),
     restore: () => restoreData(source, destination),
     credentials: () => copyCredentials(source, destination),
-    'credential-digest': () => credentialDigest(source),
     snapshot: () => snapshotDatabase(source, destination),
     compact: () => compactDatabase(source),
     maintenance: () => dataMaintenance(source),

@@ -49,8 +49,6 @@ class Host(m.Runner):
             "Mounts": [{"Destination": "/data", "Type": "volume", "Name": self.live_volume}],
             "Config": {"Env": ["UIMORI_PUBLIC_ORIGIN=https://example.test"]}}
 
-    def routing(self): return {"stable": True}
-
     def compose(self, *args, **kwargs):
         self.events.append(("compose", args[0]))
         values = m.environment_values(self.env.read_text())
@@ -162,7 +160,6 @@ class RunnerInputs(unittest.TestCase):
         updated = m.update_environment(original, "sha256:new", "new-volume")
         self.assertIn(protected, updated)
         self.assertNotIn("UIMORI_IMAGE_TAG=", updated)
-        self.assertEqual(m.protected_environment(original), m.protected_environment(updated))
         self.assertEqual(m.environment_values(updated)["UIMORI_ACCESS_TOKEN"], "secret keep")
 
     def test_compatible_schema_allows_extra_columns_and_requires_every_candidate_column(self):
@@ -281,12 +278,11 @@ class OracleTransitions(unittest.TestCase):
                 self.assertEqual(host.live_image, "sha256:old")
                 self.assertEqual(host.summary["rollback"], "PASS")
                 self.assertFalse(host.closed)
-                checks = [index for index, event in enumerate(host.events) if event == ("data", "inspect")]
+                check = host.events.index(("data", "inspect"))
                 stops = [index for index, event in enumerate(host.events) if event == ("compose", "stop")]
                 restore = host.events.index(("data", "restore"))
-                self.assertLess(checks[0], stops[0])
-                self.assertLess(stops[1], checks[1])
-                self.assertLess(checks[1], restore)
+                self.assertLess(check, stops[0])
+                self.assertLess(stops[1], restore)
                 self.assertLess(restore, host.events.index(("healthy", "sha256:old")))
                 self.assertLess(host.events.index(("healthy", "sha256:old")), host.events.index(("control", "open")))
 
@@ -329,10 +325,10 @@ class OracleTransitions(unittest.TestCase):
             self.assertEqual(host.live_volume, "old")
             self.assertNotIn(("data", "restore"), host.events)
 
-    def test_foreign_or_open_gate_prevents_restore(self):
+    def test_open_gate_prevents_restore(self):
         with self.host(fault="smoke") as host:
             with self.assertRaises(RuntimeError): host.execute()
-            host.reason = "another operator"
+            host.closed = False
             with self.assertRaises(RuntimeError): host.rollback()
             self.assertNotIn(("data", "restore"), host.events)
 

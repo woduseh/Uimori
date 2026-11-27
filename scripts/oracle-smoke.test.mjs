@@ -154,7 +154,7 @@ test('smoke rejects non-HTTPS and non-origin inputs before issuing a request', a
   }
 });
 
-test('anonymous access must be denied before the single allowed POST', async () => {
+test('anonymous access must be denied before login', async () => {
   const fixture = fixtureRequest({ anonymousStatus: 200 });
   const summary = await runOracleSmoke({ origin, token, buildId, request: fixture.request });
   assert.equal(summary.status, 'FAIL');

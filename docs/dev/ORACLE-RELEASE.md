@@ -6,7 +6,7 @@ Oracle 운영 진입점은 `npm run release:oracle` 하나예요. 소스 검증�
 
 컨트롤러에는 Node `>=26.13.0 <27`, Git, 로그인된 GitHub CLI(`gh`, 저장소 Actions 읽기 권한), SSH/SCP가 필요해요. CI의 Node 기준은 `.nvmrc`, Oracle 이미지의 Node 기준은 Dockerfile에 명시돼 있어요. 로컬 Docker·Playwright·미리 만든 `dist`·운영 접속 토큰 사본은 배포 조건이 아니에요.
 
-Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. SSH 사용자는 `sudo -n docker`와 `sudo -n tailscale`을 비대화식으로 실행할 수 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
+Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. SSH 사용자는 `sudo -n docker`를 비대화식으로 실행할 수 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
 
 [예시 설정](../../deploy/oracle-release.example.json)을 ignored `.local/oracle-release.json`에 복사해요.
 
@@ -71,7 +71,7 @@ CI 확인 → Oracle preflight → pinned SHA 이미지 준비
 → 앱 정지 → DB·동반 파일·기존 환경 백업과 무결성 확인
 → 빈 공간이 많으면 DB 압축
 → 후보 이미지 전환 (쓰기 계속 닫힘)
-→ health·DB·외부 인증 파일·환경·라우팅 확인
+→ health·maintenance 닫힘·DB 무결성 확인
 → Oracle 호스트의 실제 HTTPS/API smoke
 → 쓰기 재개 요청 및 상태 확인 → PASS
 ```
@@ -84,9 +84,9 @@ CI 확인 → Oracle preflight → pinned SHA 이미지 준비
 
 control과 smoke는 작업 성공·실패에 관계없이 자신이 만든 임시 세션만 로그아웃해요. 기존 기기 세션은 유지해요. 로그아웃을 확인하지 못하면 `sessionCleanup.status=WARN`으로 남기고, 확인된 maintenance 변경이나 smoke 결과를 뒤집지 않아요. 도구가 정상 종료하면 배포 요약의 `sessionCleanupWarnings`에도 해당 작업과 진단을 기록해요. 작업이 실패해 도구도 실패 종료하면 원래 원인과 세션 정리 진단을 비공개 명령 오류 로그에 함께 남겨요.
 
-전환 전 실패는 기존 앱을 유지해요. 전환 후 **쓰기 재개 요청 전** 실패는 maintenance 소유권·닫힘·idle을 확인한 뒤 직전 이미지/DB/환경으로 롤백해요. 쓰기 재개 요청을 보내기 전에 `REOPENING`을 저장하므로 응답을 잃어도 DB를 과거 백업으로 자동 복원하지 않아요. 사용자가 새 앱에서 저장했을 가능성이 있는 상태를 덮어쓰지 않기 위해서예요. 이 경우 `REFUSED_AFTER_REOPEN` 또는 상태 불확실성을 보고하고 `--status`로 조사해요.
+전환 전 실패는 기존 앱을 유지해요. 전환 후 **쓰기 재개 요청 전** 실패는 maintenance가 닫혀 있고 진행 중인 작업이 없는지 확인한 뒤 직전 이미지/DB/환경으로 롤백해요. 후보 앱에서 쓰기가 열려 있으면 DB를 복원하지 않고 롤백을 실패로 남겨요. 쓰기 재개 요청을 보내기 전에 `REOPENING`을 저장하므로 응답을 잃어도 DB를 과거 백업으로 자동 복원하지 않아요. 사용자가 새 앱에서 저장했을 가능성이 있는 상태를 덮어쓰지 않기 위해서예요. 이 경우 `REFUSED_AFTER_REOPEN` 또는 상태 불확실성을 보고하고 `--status`로 조사해요.
 
-maintenance 중에도 로그인·로그아웃은 가능해요. 일반 업데이트의 DB 복원은 앱을 멈춘 뒤 백업과 현재 DB의 세션 권한을 비교하고, 달라졌으면 파일을 바꾸지 않고 거부해요. 로그아웃한 기기의 세션이나 Push 구독을 되살리거나 새 로그인을 지우지 않기 위해서예요. 이때 후보 데이터와 백업을 보존하며 앱은 중지 상태이므로, 기록의 세션 변경 오류를 확인하고 해당 권한 변경을 유지하는 복구가 필요해요. 제어·smoke가 만든 임시 세션을 정상 로그아웃해 세션 집합이 같다면 기존 롤백을 진행해요. `--fresh` 롤백은 별도 새 DB를 이전 볼륨으로 바꾸는 기존 계약을 따르므로 새 DB의 로그인 상태도 이전 볼륨에 합치지 않아요.
+maintenance 중에도 로그인·로그아웃은 가능해요. 일반 업데이트의 롤백은 배포 전 백업을 그대로 복원하므로 배포 중에 생기거나 사라진 로그인 세션과 Push 구독도 백업 시점으로 돌아가요. 쓰기가 닫혀 있던 동안이라 저장한 글은 달라지지 않아요. 배포 중에 로그아웃한 기기가 있으면 롤백 뒤 다시 로그아웃해요. `--fresh` 롤백은 별도 새 DB를 이전 볼륨으로 바꾸는 기존 계약을 따르므로 새 DB의 로그인 상태도 이전 볼륨에 합치지 않아요.
 
 `--status`는 container, checkout, lock, 실행 기록을 각각 조회해요. 일부 조회가 실패하면 확인된 정보는 유지하고 해당 필드는 `null`, 전체 `status`는 `WARN`, 원인은 `warnings`로 출력하며 종료 코드는 1이에요. 손상된 최신 실행 기록을 예전 성공 기록으로 대체하지 않아요. 지정한 run ID가 없는 정상 조회는 기존처럼 `release: null`이에요.
 

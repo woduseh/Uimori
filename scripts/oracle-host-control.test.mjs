@@ -59,7 +59,7 @@ test('host control deadlines bound stalled response bodies', async (t) => {
   );
 });
 
-test('real built app closes admission, keeps reads, preserves gate on restart and reopens only its own gate', async (t) => {
+test('real built app closes admission, keeps reads, preserves gate on restart and reopens it', async (t) => {
   const { createApp } = await import('../dist/server/app.js');
   const directory = await mkdtemp(join(tmpdir(), 'uimori-host-control-'));
   const origin = 'https://host-control.invalid';
@@ -103,10 +103,6 @@ test('real built app closes admission, keeps reads, preserves gate on restart an
   const closed = await action('close');
   assert.equal(closed.reason, owner);
   assert.equal((await action('close')).epoch, closed.epoch);
-  await assert.rejects(
-    controlMaintenance({ action: 'open', origin, token, owner: 'oracle:other', request }),
-    /another operator/
-  );
   assert.equal(sessions(), 1);
   await app.close();
   request = await boot();
@@ -132,16 +128,14 @@ test('real built app closes admission, keeps reads, preserves gate on restart an
   assert.equal(confirmed.sessionCleanup.status, 'WARN');
   assert.match(confirmed.sessionCleanup.error, /HTTP 503/u);
   assert.equal(sessions(), 2);
+  const changeRefused = (options) =>
+    options.pathname === '/api/maintenance' && options.method === 'POST'
+      ? Promise.resolve({ status: 500, body: {} })
+      : logoutUnavailable(options);
   await assert.rejects(
-    controlMaintenance({
-      action: 'open',
-      origin,
-      token,
-      owner: 'oracle:other',
-      request: logoutUnavailable,
-    }),
+    controlMaintenance({ action: 'open', origin, token, owner, request: changeRefused }),
     (error) => {
-      assert.match(error.message, /Maintenance belongs to another operator/u);
+      assert.match(error.message, /Host control \/api\/maintenance HTTP 500/u);
       assert.match(error.message, /temporary session cleanup/u);
       assert.equal(error.sessionCleanup.status, 'WARN');
       return true;

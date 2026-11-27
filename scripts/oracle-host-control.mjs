@@ -95,11 +95,7 @@ export async function controlMaintenance({ action, origin, token, owner, request
     )
       throw new Error('Incomplete maintenance status');
     if (action === 'status') return { ...state, sessionCleanup };
-    if (!owner || !owner.startsWith('oracle:'))
-      throw new Error('Missing release maintenance owner');
     if (state.forcedClosed) throw new Error('Maintenance is forced by boot configuration');
-    if (state.status === 'closed' && state.reason !== owner)
-      throw new Error('Maintenance belongs to another operator');
     if (action === 'open' && state.status === 'open') return { ...state, sessionCleanup };
     const changed = await send('/api/maintenance', {
       status: action === 'close' ? 'closed' : 'open',

@@ -1,7 +1,6 @@
 """Single-host deployment of an already compatible database or an explicitly fresh workspace."""
 import argparse
 import contextlib
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -70,10 +69,6 @@ def environment_values(text):
 def update_environment(text, image, volume):
     lines = [line for line in text.splitlines() if not re.match(r"\s*(?:" + "|".join(sorted(OWNED_ENV)) + r")=", line)]
     return "\n".join(lines + ["UIMORI_IMAGE=" + image, "UIMORI_DATA_VOLUME=" + volume]) + "\n"
-
-
-def protected_environment(text):
-    return hashlib.sha256("\n".join(line for line in text.splitlines() if not re.match(r"\s*(?:" + "|".join(sorted(OWNED_ENV)) + r")=", line)).encode()).hexdigest()
 
 
 CODEX_MINIMUM_VERSION = (0, 153, 0)
@@ -185,9 +180,6 @@ class Runner:
     def inspect(self):
         return json.loads(self.docker("inspect", "uimori-app-1"))[0]
 
-    def routing(self):
-        return json.loads(self.run("sudo", "-n", "tailscale", "serve", "status", "--json"))
-
     def verify_binding(self, app):
         if app["HostConfig"]["PortBindings"] != {"4310/tcp": [{"HostIp": "127.0.0.1", "HostPort": "4310"}]}:
             raise RuntimeError("Application must bind only 127.0.0.1:4310")
@@ -270,8 +262,6 @@ class Runner:
         deadline = time.monotonic() + 30
         state = self.control("close")
         for _ in range(30):
-            if state.get("status") != "closed" or state.get("reason") != self.owner:
-                raise RuntimeError("Maintenance ownership changed while draining")
             if not state.get("activeWork"):
                 self.data("inspect", self.old_volume)
                 self.summary["writes"] = "CLOSED"
@@ -294,9 +284,8 @@ class Runner:
         self.persist()
 
     def assert_closed_data(self, volume, image):
-        gate = self.data("maintenance", volume, image=image)
-        if gate.get("status") != "closed" or gate.get("reason") != self.owner:
-            raise RuntimeError("Cannot restore data after writes reopened or maintenance ownership changed")
+        if self.data("maintenance", volume, image=image).get("status") != "closed":
+            raise RuntimeError("Writes are open on the candidate; its data is not restored")
         self.data("inspect", volume, image=image)
 
     def execute(self):
@@ -326,13 +315,11 @@ class Runner:
             if live_env.get("UIMORI_PUBLIC_ORIGIN") != origin:
                 raise RuntimeError("Configured origin differs from running application")
             self.summary["publicOrigin"] = origin
-            self.old_routing = self.routing()
             self.private.mkdir(mode=0o700)
             (self.private / "environment").write_text(self.old_env)
             os.chmod(self.private / "environment", 0o600)
             self.summary.update(previousCommit=self.previous, previousImage=self.old_image, previousVolume=self.old_volume)
             self.data("inspect", self.old_volume)
-            self.old_credentials = self.data("credential-digest", self.old_volume)
             gate = self.control("status")
             if gate.get("status") != "open" or gate.get("forcedClosed"):
                 raise RuntimeError("Existing maintenance must be resolved before deployment")
@@ -386,8 +373,6 @@ class Runner:
                     raise RuntimeError(str(error) + " Existing database is incompatible with the candidate image. Preserve the existing volume and inspect the incompatibility before retrying; --fresh discards all app data/settings/API keys and retains only external login files.") from error
         with self.stage("ready-to-switch"):
             self.compose("config", "--quiet", cwd=self.candidate)
-            if self.env.read_text() != self.old_env or self.routing() != self.old_routing or self.inspect()["Image"] != self.old_image:
-                raise RuntimeError("Live environment changed during candidate verification")
             self.data("inspect", self.old_volume)
         if self.args.check_only:
             self.summary["status"] = "PASS"
@@ -428,10 +413,6 @@ class Runner:
             self.wait_healthy(self.image, self.volume_name)
             self.assert_closed_data(self.volume_name, self.image)
             self.summary["database"] = self.data("audit", self.volume_name, image=self.image)
-            if self.data("credential-digest", self.volume_name, image=self.image) != self.old_credentials:
-                raise RuntimeError("Stored credentials changed during deployment")
-            if protected_environment(self.env.read_text()) != protected_environment(self.old_env) or self.routing() != self.old_routing:
-                raise RuntimeError("Protected environment or Tailscale routing changed")
         with self.stage("https-smoke"):
             self.summary["smoke"] = self.control("smoke", self.image)
             if self.summary["smoke"].get("status") != "PASS":
@@ -452,11 +433,9 @@ class Runner:
         self.summary["rollback"] = "RUNNING"
         with self.stage("rollback"):
             if self.candidate_started:
-                # Do not overwrite work submitted by a user after the new app became available.
                 self.assert_closed_data(self.volume_name, self.image)
                 self.compose("stop", "app")
                 self.compose("stop", "shell-runner")
-                self.assert_closed_data(self.volume_name, self.image)
             if self.backed_up and self.candidate_started and not self.args.fresh:
                 self.data("restore", self.old_volume, ("bind", str(self.private / "data")))
             if self.checked_out:
@@ -467,8 +446,6 @@ class Runner:
             override.write_text(json.dumps({"services": {"app": {"image": self.old_image}}}))
             self.docker("compose", "--env-file", str(self.env), "-f", str(self.app / "compose.tailscale.yaml"), "-f", str(override), "up", "-d", "--no-build", "app")
             self.wait_healthy(self.old_image, self.old_volume)
-            if self.env.read_text() != self.old_env or self.routing() != self.old_routing:
-                raise RuntimeError("Rollback environment or routing verification failed")
             self.control("open")
             self.summary["writes"] = "OPEN"
             self.summary["rollback"] = "PASS"
