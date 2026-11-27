@@ -26,7 +26,10 @@ const engines = {
     title: 'Private local CHARX acceptance; needs UIMORI_RISU_SAMPLE_ROOT',
   },
 };
-const runnerScripts = { 'self-host': 'scripts/verify-self-host.mjs' };
+const runnerScripts = {
+  'self-host': { script: 'scripts/verify-self-host.mjs', options: ['--grep'] },
+};
+const valueOptions = new Set(['--grep', '--workers', '--shard']);
 const browserInput =
   /^(?:web|core|server|runner)\/|^tests\/(?:fixtures\/|[^/]+\.spec\.ts$)|^playwright\.config\.ts$/u;
 const minimumTimeout = 900_000;
@@ -110,8 +113,32 @@ function launchRuns(map, entries, { name, scope, grep, env, skipped }) {
           privateMaterials: launch.privateMaterials,
           timeout: Math.max(minimumTimeout, files.length * perFileTimeout),
         }
-      : { kind: 'script', name: launch.runner, script: runnerScripts[launch.runner] }
+      : { kind: 'script', name: launch.runner, ...runnerScripts[launch.runner] }
   );
+}
+
+export function privateMaterialEnv(map) {
+  const names = new Set();
+  const entries = Object.values(map.domains).flatMap((domain) => domain.specs);
+  for (const { launch = {} } of [map.defaults ?? {}, ...entries]) {
+    if (launch.privateMaterialsEnv) names.add(launch.privateMaterialsEnv);
+    if (launch.privateMaterials) for (const name of launch.requiredEnv ?? []) names.add(name);
+  }
+  return [...names];
+}
+
+export function runOptions(run, options) {
+  if (!run.options) return { kept: options, dropped: [] };
+  const kept = [];
+  const dropped = [];
+  for (let index = 0; index < options.length; index++) {
+    const width = valueOptions.has(options[index]) ? 2 : 1;
+    (run.options.includes(options[index]) ? kept : dropped).push(
+      ...options.slice(index, index + width)
+    );
+    index += width - 1;
+  }
+  return { kept, dropped };
 }
 
 export function planVerification(map, requested, { env = process.env, label } = {}) {
@@ -196,7 +223,11 @@ function runScript(script, args) {
 }
 
 async function execute(run, options) {
-  if (run.kind === 'script') return runScript(run.script, options);
+  if (run.kind === 'script') {
+    const { kept, dropped } = runOptions(run, options);
+    if (dropped.length) console.log(`${run.name} ignores ${dropped.join(' ')}`);
+    return runScript(run.script, kept);
+  }
   const { kind: _kind, ...configuration } = run;
   process.argv = [...process.argv.slice(0, 2), ...options];
   const { summary } = await runBrowserVerification(configuration);

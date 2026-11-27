@@ -213,6 +213,7 @@ test('inline npm commands and script-shaped names must name existing npm scripts
       'docs/dev/SPEC.md': [
         'Run `npm run verify -- reader`, `npm run check:i18n` or `npm run release:check -- --area <domain>`.',
         'Gone: `npm run verify:ui`, `verify:liquid-gallery` and `check:gone`.',
+        'Later or with arguments: `npm run check:i18n && npm run verify:late` and `verify:args -- --grep X`.',
         'Not scripts: `scene:ready`, `verify:*`, `npm run verify:<area>` and `a:b c`.',
       ].join('\n'),
       'docs/releases/v0.0.1.md': 'Historical: `npm run verify:ui`.',
@@ -223,6 +224,8 @@ test('inline npm commands and script-shaped names must name existing npm scripts
         `${spec}: \`npm run verify:ui\` (package.json has no script named verify:ui)`,
         `${spec}: \`verify:liquid-gallery\` (package.json has no script named verify:liquid-gallery)`,
         `${spec}: \`check:gone\` (package.json has no script named check:gone)`,
+        `${spec}: \`npm run check:i18n && npm run verify:late\` (package.json has no script named verify:late)`,
+        `${spec}: \`verify:args -- --grep X\` (package.json has no script named verify:args)`,
       ]);
     }
   );

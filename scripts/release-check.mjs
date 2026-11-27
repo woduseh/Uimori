@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { assertBuild, json, newId, root } from './lib.mjs';
-import { readFeatureMap, verificationNames } from './verify.mjs';
+import { privateMaterialEnv, readFeatureMap, verificationNames } from './verify.mjs';
 import {
   identityKey,
   isMain,
@@ -75,7 +75,14 @@ export async function runReleaseChecks(
   const sourceIdentity = dependencies.fingerprint ?? releaseFingerprint;
   const buildIdentity = dependencies.assertBuild ?? assertBuild;
   const execute = dependencies.execute ?? runExternal;
-  const checks = requiredChecks(area, full, dependencies.featureMap);
+  const featureMap = dependencies.featureMap ?? readFeatureMap();
+  const checks = requiredChecks(area, full, featureMap);
+  const syntheticEnv = Object.fromEntries(
+    ['UIMORI_VISUAL_REVIEW', 'UIMORI_BENCHMARK', ...privateMaterialEnv(featureMap)].map((name) => [
+      name,
+      undefined,
+    ])
+  );
   const identity = await sourceIdentity();
   const directory = path.join(
     dependencies.outputRoot ?? path.join(root, 'output/release/checks'),
@@ -139,7 +146,7 @@ export async function runReleaseChecks(
         timeoutMs: name === fullRegression ? 3_900_000 : 1_200_000,
         log: path.join(directory, `${name.replaceAll(/[^a-z0-9]+/gu, '-')}-${newId()}.log`),
         signal,
-        env: { UIMORI_VISUAL_REVIEW: undefined, UIMORI_BENCHMARK: undefined },
+        env: syntheticEnv,
       });
       const { output, ...record } = result;
       const unchanged = identityKey(await sourceIdentity()) === identityKey(identity);

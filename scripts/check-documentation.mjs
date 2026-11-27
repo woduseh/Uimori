@@ -314,13 +314,13 @@ export function documentationErrors(directory = root) {
     ? (JSON.parse(readFileSync(packageFile, 'utf8')).scripts ?? {})
     : {};
   const scriptNamespaces = new Set(Object.keys(scripts).map((name) => name.split(':')[0]));
-  const missingScript = (code) => {
-    const script =
-      /^npm\s+run(?:-script)?\s+([^\s-]\S*)/u.exec(code)?.[1] ??
-      (scriptNamespaces.has(scriptShaped.exec(code)?.[1]) ? code : undefined);
-    return script && !/<[^>]+>/u.test(script) && !Object.hasOwn(scripts, script)
-      ? script
-      : undefined;
+  const missingScripts = (code) => {
+    const named = [...code.matchAll(/\bnpm\s+run(?:-script)?\s+([^\s-]\S*)/gu)].map(
+      ([, script]) => script
+    );
+    const [first] = code.split(/\s+/u);
+    if (scriptNamespaces.has(scriptShaped.exec(first)?.[1])) named.push(first);
+    return named.filter((script) => !/<[^>]+>/u.test(script) && !Object.hasOwn(scripts, script));
   };
   for (const file of files) {
     const content = readFileSync(file, 'utf8');
@@ -349,14 +349,14 @@ export function documentationErrors(directory = root) {
     for (const [, code] of content.matchAll(/`([^`\n]+)`/gu)) {
       for (const path of missingSourcePaths(code))
         broken.push(`${file}: \`${path}\` (no file or directory matches this path)`);
-      const script = missingScript(code.trim());
-      if (script) broken.push(`${file}: \`${code}\` (package.json has no script named ${script})`);
+      for (const script of missingScripts(code.trim()))
+        broken.push(`${file}: \`${code}\` (package.json has no script named ${script})`);
     }
     for (const { line, fence } of markdownLines(content)) {
       const command = line.trim();
       if (!shellFence.test(fence ?? '') || !repositoryCommand.test(command)) continue;
-      const script = missingScript(command);
-      if (script) broken.push(`${file}: ${command} (package.json has no script named ${script})`);
+      for (const script of missingScripts(command))
+        broken.push(`${file}: ${command} (package.json has no script named ${script})`);
       for (const path of missingSourcePaths(command))
         broken.push(`${file}: ${command} (no file or directory matches ${path})`);
     }

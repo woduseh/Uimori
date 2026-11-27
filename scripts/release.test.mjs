@@ -36,7 +36,13 @@ const identity = {
 const build = { buildId: 'c'.repeat(64), sourceHash: 'c'.repeat(64), distHash: 'd'.repeat(64) };
 const commit = 'e'.repeat(40);
 const featureMap = {
-  domains: { reader: { title: 'Reader' }, 'self-host': { title: 'Self-host' } },
+  domains: {
+    reader: {
+      title: 'Reader',
+      specs: [{ file: 'tests/demo.spec.ts', launch: { privateMaterialsEnv: 'DEMO_DIR' } }],
+    },
+    'self-host': { title: 'Self-host', specs: [] },
+  },
   presets: { 'browser-smoke': { title: 'Smoke' } },
 };
 const fullRegression = 'verify -- all';
@@ -51,6 +57,7 @@ async function directory(t) {
 async function checksFixture(t) {
   const outputRoot = await directory(t);
   const calls = [];
+  const envs = [];
   let source = { ...identity },
     nextFailure,
     buildMissing = false;
@@ -67,6 +74,7 @@ async function checksFixture(t) {
     execute: async (_executable, args, options) => {
       const name = args.slice(args.indexOf('run') + 1).join(' ');
       calls.push(name);
+      envs.push(options.env);
       if (name === 'build') buildMissing = false;
       const override = nextFailure?.(name) ?? {};
       const output = `${name} ${override.code ? 'failed' : 'passed'}\n`;
@@ -86,6 +94,7 @@ async function checksFixture(t) {
   return {
     dependencies,
     calls,
+    envs,
     setFailure: (value) => {
       nextFailure = value;
     },
@@ -133,6 +142,15 @@ test('release options reject ambiguity and remote arguments are POSIX quoted', (
 
 test('the default release area exists in the real feature map', () => {
   assert.deepEqual(requiredChecks(), ['quality', 'build', 'verify -- browser-smoke']);
+});
+
+test('release checks unset every private-material variable the feature map declares', async (t) => {
+  const fixture = await checksFixture(t);
+  assert.equal((await fixture.run({ area: 'reader' })).status, 'PASS');
+  assert.deepEqual(fixture.calls, ['quality', 'build', 'verify -- reader']);
+  for (const env of fixture.envs)
+    for (const name of ['DEMO_DIR', 'UIMORI_VISUAL_REVIEW', 'UIMORI_BENCHMARK'])
+      assert.ok(Object.hasOwn(env, name) && env[name] === undefined, name);
 });
 
 test('release identity covers deploy and packaging changes but ignores evidence and CI scheduling', async (t) => {

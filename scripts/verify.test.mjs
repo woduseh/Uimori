@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseArguments, planVerification, selectChanged, verificationNames } from './verify.mjs';
+import {
+  parseArguments,
+  planVerification,
+  privateMaterialEnv,
+  runOptions,
+  selectChanged,
+  verificationNames,
+} from './verify.mjs';
 
 const map = {
   version: 1,
@@ -78,6 +85,17 @@ test('domains merge into one run per launch and skip specs whose required enviro
       skipped: [],
     }
   );
+});
+
+test('a runner gets only the options it accepts while engines keep every option', () => {
+  const [, selfHost] = planVerification(map, ['reader', 'self-host'], { env: {} }).runs;
+  assert.deepEqual(
+    runOptions(selfHost, ['--visual', '--workers', '2', '--grep', 'SH01', '--shard', '1/3']),
+    { kept: ['--grep', 'SH01'], dropped: ['--visual', '--workers', '2', '--shard', '1/3'] }
+  );
+  const [gallery] = planVerification(map, ['gallery'], { env: {} }).runs;
+  assert.deepEqual(runOptions(gallery, ['--visual']), { kept: ['--visual'], dropped: [] });
+  assert.deepEqual(privateMaterialEnv(map), ['SAMPLE_ROOT', 'DEMO_DIR']);
 });
 
 test('presets, engines and the full regression keep their own runs', () => {
