@@ -14,10 +14,10 @@ import {
   isAutoRefusalRetryCount,
   MAX_AUTO_REFUSAL_RETRIES,
   MAX_MAIN_MODEL_CALLS,
-  type AutoTranslationDefaults,
   type ChatGenerationDefaults,
 } from '../core/chat-settings.js';
-import { api } from './api.js';
+import { translationEndpoints } from '#contracts';
+import { api, callEndpoint } from './api.js';
 import { StoryUiStyleSelect } from './StoryUiStyleSelect.js';
 export function SettingsEditor({
   chat,
@@ -55,7 +55,7 @@ export function SettingsEditor({
   const [generationDefaults, setGenerationDefaults] = useState<ChatGenerationDefaults | null>(null);
   useEffect(() => {
     let active = true;
-    void api<AutoTranslationDefaults>('/auto-translation-defaults')
+    void callEndpoint(translationEndpoints.readAutoTranslationDefaults)
       .then((value) => {
         if (active) setGlobalAutoTranslate(value.autoTranslate);
       })

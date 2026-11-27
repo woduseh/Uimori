@@ -3,7 +3,8 @@ import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import { CalendarDays, Download } from 'lucide-react';
 import { USAGE_KIND_LABELS, type UsageReport, type UsageTotals } from '../core/usage-report.js';
-import { api } from './api.js';
+import { personalWorkspaceEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { UsageChart } from './UsageChart.js';
@@ -125,7 +126,11 @@ export function UsagePanel({
     if (!active) return;
     const controller = new AbortController();
     setBusy(true);
-    void api<UsageReport>(`/usage?${query}`, undefined, 'GET', controller.signal)
+    void callEndpoint(
+      personalWorkspaceEndpoints.readUsage,
+      { from: range.from, to: range.to },
+      controller.signal
+    )
       .then((value) => {
         if (!controller.signal.aborted) {
           setReport(value);
@@ -142,7 +147,7 @@ export function UsagePanel({
       controller.abort();
       setBusy(false);
     };
-  }, [active, query]);
+  }, [active, query, range.from, range.to]);
   function choose(kind: Exclude<typeof period, 'custom'>) {
     const next = usagePeriod(kind);
     setPeriod(kind);

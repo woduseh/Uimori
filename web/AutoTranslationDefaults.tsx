@@ -6,7 +6,8 @@ import {
   WRITTEN_LANGUAGES,
   type WrittenLanguage,
 } from '../core/written-language.js';
-import { api } from './api.js';
+import { translationEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -27,7 +28,7 @@ export function AutoTranslationDefaults() {
   const [saving, setSaving] = useState(false);
   const retry = useRetryableEffect(() => {
     let alive = true;
-    void api<Defaults>('/auto-translation-defaults')
+    void callEndpoint(translationEndpoints.readAutoTranslationDefaults)
       .then((value) => {
         if (alive) {
           setDefaults(value);
@@ -51,11 +52,10 @@ export function AutoTranslationDefaults() {
     setDefaults({ ...defaults, ...next });
     try {
       setDefaults(
-        await api<Defaults>(
-          '/auto-translation-defaults',
-          { expectedRevision: defaults.revision, ...next },
-          'PUT'
-        )
+        await callEndpoint(translationEndpoints.saveAutoTranslationDefaults, {
+          expectedRevision: defaults.revision,
+          ...next,
+        })
       );
     } catch (cause) {
       setDefaults(defaults);

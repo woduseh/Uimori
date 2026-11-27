@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#contracts": "./packages/contracts/src/index.js"
+    "#contracts": "./packages/contracts/src/index.js",
+    "#contracts/operations": "./packages/contracts/src/operations.js"
   },
   "engines": {
     "node": ">=26.13.0 <27"

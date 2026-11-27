@@ -1,4 +1,12 @@
-import { MAINTENANCE_CLOSED, type MaintenanceStatus, readErrorWire } from '#contracts';
+import {
+  type Endpoint,
+  type EndpointInput,
+  type EndpointOutput,
+  endpointRequest,
+  MAINTENANCE_CLOSED,
+  type MaintenanceStatus,
+  readErrorWire,
+} from '#contracts';
 import { apiErrorMessage } from './api-errors.js';
 import { t } from './i18n.js';
 import { writeOptionalStorage } from './optional-storage.js';
@@ -120,6 +128,16 @@ export async function api<T>(
   )
     announceLocalChange(promptWorkspaceChange, { echoed: !providerSettingsChanged });
   return result;
+}
+
+export function callEndpoint<E extends Endpoint>(
+  endpoint: E,
+  ...[input, signal]: Record<string, never> extends EndpointInput<E>
+    ? [input?: EndpointInput<E>, signal?: AbortSignal]
+    : [input: EndpointInput<E>, signal?: AbortSignal]
+): Promise<EndpointOutput<E>> {
+  const { path, body } = endpointRequest(endpoint, input as Record<string, unknown> | undefined);
+  return api<EndpointOutput<E>>(path, body, endpoint.method, signal);
 }
 
 export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSignal): Promise<T> {

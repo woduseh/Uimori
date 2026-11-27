@@ -34,6 +34,7 @@ import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
 import { AppError, errorWire, storedModelRequired } from './app-errors.js';
+import { checkEndpointOutputs } from './endpoint.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
@@ -187,6 +188,7 @@ function requestFailureLabel(error: unknown): string {
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
+  if (options.testMode) checkEndpointOutputs(app);
   await registerResponseCompression(app);
   revalidatePrivateJson(app);
   const requestMetrics = requestMetricsRoutes(app);

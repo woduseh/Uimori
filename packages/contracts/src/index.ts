@@ -1,2 +1,11 @@
 export * from './errors/index.js';
 export * from './maintenance.js';
+export * from './endpoint.js';
+export * from './domains/translation/written-language.js';
+export * from './domains/translation/endpoints.js';
+export type * from './domains/translation/operations.js';
+export * from './domains/appearance/endpoints.js';
+export type * from './domains/appearance/operations.js';
+export * from './domains/personal-workspace/usage-kinds.js';
+export * from './domains/personal-workspace/endpoints.js';
+export type * from './domains/personal-workspace/operations.js';

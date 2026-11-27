@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { api, ApiError } from './api.js';
-import { useFonts, type FontAsset, type FontCatalog, type FontPreferences } from './FontContext.js';
+import { appearanceEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
+import { useFonts, type FontAsset } from './FontContext.js';
 import { useThemes } from './ThemeContext.js';
 import { t, useI18n, message, translateMessage } from './i18n.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -82,10 +83,7 @@ export function FontSettings({
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file);
       });
-      await api<FontAsset>('/fonts', {
-        title: title.trim(),
-        data,
-      });
+      await callEndpoint(appearanceEndpoints.uploadFont, { title: title.trim(), data });
       setFile(null);
       setTitle('');
       if (input.current) input.current.value = '';
@@ -102,11 +100,11 @@ export function FontSettings({
     setPreviewTarget(target);
     const expectedRevision = state.catalog.preferences.revision;
     void operation(async () => {
-      const preferences = await api<FontPreferences>(
-        '/font-preferences',
-        { expectedRevision, appFontId, readerFontId },
-        'PUT'
-      );
+      const preferences = await callEndpoint(appearanceEndpoints.selectFonts, {
+        expectedRevision,
+        appFontId,
+        readerFontId,
+      });
       state.accept({ ...state.catalog!, preferences });
     }, message('fonts.saved'));
   }
@@ -316,11 +314,9 @@ export function FontSettings({
             onClick={() => {
               if (!deleting) return;
               void operation(async () => {
-                const next = await api<FontCatalog>(
-                  `/fonts/${encodeURIComponent(deleting.id)}`,
-                  {},
-                  'DELETE'
-                );
+                const next = await callEndpoint(appearanceEndpoints.deleteFont, {
+                  id: deleting.id,
+                });
                 state.accept(next);
                 setDeleting(null);
               }, message('fonts.deleted'));

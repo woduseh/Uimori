@@ -38,6 +38,8 @@ import { HelperToolError } from './app-errors.js';
 import { choice, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { USAGE_BREAKDOWNS, usageReport } from './usage-report.js';
+import { personalWorkspaceOperations, translationOperations } from '#contracts/operations';
+import { parseInput } from './endpoint.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { HelperTask, HelperTaskResultTarget } from '../core/helper.js';
 import type { HelperWorkspace } from './helper-workspace.js';
@@ -739,7 +741,7 @@ export function invokeHelperSettingsTool(
         : choice(args.breakdown, [...USAGE_BREAKDOWNS, 'all'], 'usage breakdown');
     return usageReport(
       store,
-      { from: args.from, to: args.to },
+      parseInput(personalWorkspaceOperations.readUsage.input, { from: args.from, to: args.to }),
       breakdown === 'all' ? USAGE_BREAKDOWNS : breakdown ? [breakdown] : []
     );
   }
@@ -828,12 +830,15 @@ export function invokeHelperSettingsTool(
   }
   if (autoTranslationSettings.includes(setting)) {
     const current = autoTranslationDefaults(store.db);
-    const updated = saveAutoTranslationDefaults(store, {
-      expectedRevision,
-      autoTranslate: setting === 'global.autoTranslate' ? args.value : current.autoTranslate,
-      translationLanguage:
-        setting === 'global.translationLanguage' ? args.value : current.translationLanguage,
-    });
+    const updated = saveAutoTranslationDefaults(
+      store,
+      parseInput(translationOperations.saveAutoTranslationDefaults.input, {
+        expectedRevision,
+        autoTranslate: setting === 'global.autoTranslate' ? args.value : current.autoTranslate,
+        translationLanguage:
+          setting === 'global.translationLanguage' ? args.value : current.translationLanguage,
+      })
+    );
     return {
       setting,
       revision: updated.revision,

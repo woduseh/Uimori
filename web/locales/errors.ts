@@ -929,6 +929,12 @@ export const messages = {
     ja: '{role, select, main {本文モデルまたはプロバイダーを使用できません。チャット設定の固定モデル、設定 > 役割別モデル、プロバイダーの有効状態と認証を確認してください。} illustration {挿絵モデルまたは接続を使用できません。設定 > 挿絵のモデルと、プロバイダーの有効状態と認証を確認してください。} other {選択したモデルまたはプロバイダーを使用できません。設定 > 役割別モデルと、プロバイダーの有効状態と認証を確認してください。}}',
     zh: '{role, select, main {正文模型或提供商不可用。请检查聊天设置中的固定模型、设置 > 按角色设置模型，以及提供商的启用状态与认证。} illustration {插图模型或连接不可用。请检查设置 > 插图中的模型，以及提供商的启用状态与认证。} other {所选模型或提供商不可用。请检查设置 > 按角色设置模型，以及提供商的启用状态与认证。}}',
   },
+  'errors.INVALID_REQUEST': {
+    ko: '보낸 값이 올바르지 않아요. 입력을 확인해 주세요.',
+    en: 'Some of the values sent are invalid. Check your input.',
+    ja: '送信した値が正しくありません。入力内容を確認してください。',
+    zh: '提交的值无效。请检查输入内容。',
+  },
   'errors.revisionConflict': {
     ko: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인해 주세요.',
     en: 'Another request was applied first. Review the latest content.',

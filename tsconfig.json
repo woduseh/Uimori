@@ -11,7 +11,10 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": ["node", "vite/client"],
-    "paths": { "#contracts": ["./packages/contracts/src/index.ts"] },
+    "paths": {
+      "#contracts": ["./packages/contracts/src/index.ts"],
+      "#contracts/operations": ["./packages/contracts/src/operations.ts"]
+    },
     "noEmit": true
   },
   "include": ["core", "packages", "server", "web", "tests", "*.config.ts"]

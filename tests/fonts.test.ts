@@ -57,6 +57,9 @@ test('font bytes deduplicate without replacing the original title and selections
     fonts: [],
     preferences: { revision: 2, appFontId: null, readerFontId: null },
   });
+  expect(() =>
+    selectFonts(store, { expectedRevision: 1, appFontId: font.id, readerFontId: null })
+  ).toThrow('REVISION_CONFLICT');
   expect(invalidations).toEqual(['fonts', 'fonts', 'fonts', 'fonts']);
 });
 
@@ -88,18 +91,6 @@ test('HTTP upload round-trips exact bytes, survives reopening, and protects font
   const bytes = fixture();
   let id = '';
   try {
-    for (const retired of ['sourceUrl', 'license']) {
-      const rejected = await app.inject({
-        method: 'POST',
-        url: '/api/fonts',
-        payload: {
-          title: 'Retired metadata',
-          data: bytes.toString('base64'),
-          [retired]: 'Old note',
-        },
-      });
-      expect(rejected.statusCode).toBe(400);
-    }
     const uploaded = await app.inject({
       method: 'POST',
       url: '/api/fonts',

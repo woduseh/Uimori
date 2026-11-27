@@ -13,8 +13,11 @@ import type {
 import { APP_VERSION } from './app-version.js';
 import { DATABASE_SCHEMA_VERSION } from './database-schema.js';
 import { createDatabaseSnapshot } from './database-backup.js';
-import { HttpError, fields, record } from './request-validation.js';
+import { personalWorkspaceEndpoints } from '#contracts';
+import { personalWorkspaceOperations, type UpdateBackupSettings } from '#contracts/operations';
+import { HttpError } from './request-validation.js';
 import { AppError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 
 const SETTINGS = 'scheduled-backup-settings';
@@ -140,35 +143,25 @@ export class BackupService {
   settings(): BackupSettings {
     return this.load<BackupSettings>(SETTINGS) ?? { ...defaults };
   }
-  update(value: unknown): BackupSettings {
-    const body = record(value);
-    fields(body, ['expectedRevision', 'enabled', 'hour', 'minute', 'retain']);
+  update({
+    expectedRevision,
+    enabled,
+    hour,
+    minute,
+    retain,
+  }: UpdateBackupSettings): BackupSettings {
     const current = this.settings();
-    if (body.expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
-    if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'Invalid backup enabled flag');
-    for (const [key, maximum, minimum] of [
-      ['hour', 23, 0],
-      ['minute', 59, 0],
-      ['retain', 30, 1],
-    ] as const) {
-      if (
-        !Number.isInteger(body[key]) ||
-        Number(body[key]) < minimum ||
-        Number(body[key]) > maximum
-      )
-        throw new HttpError(400, 'Invalid backup schedule');
-    }
-    const changedSchedule =
-      !current.enabled || current.hour !== body.hour || current.minute !== body.minute;
+    if (expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
+    const changedSchedule = !current.enabled || current.hour !== hour || current.minute !== minute;
     const next: BackupSettings = {
       revision: current.revision + 1,
-      enabled: body.enabled,
-      hour: Number(body.hour),
-      minute: Number(body.minute),
-      retain: Number(body.retain),
-      nextRunAt: body.enabled
+      enabled,
+      hour,
+      minute,
+      retain,
+      nextRunAt: enabled
         ? changedSchedule
-          ? nextBackupAt(new Date(), Number(body.hour), Number(body.minute))
+          ? nextBackupAt(new Date(), hour, minute)
           : current.nextRunAt
         : null,
     };
@@ -336,13 +329,27 @@ export class BackupService {
   }
 }
 export function backupRoutes(app: FastifyInstance, service: BackupService) {
-  app.get('/api/backups', () => service.status());
-  app.put('/api/backups/settings', (request) => service.update(request.body));
-  app.post('/api/backups', async (request, reply) => {
-    fields(record(request.body ?? {}), []);
-    service.start();
-    return reply.code(202).send({ status: 'running' });
-  });
+  registerEndpoint(
+    app,
+    personalWorkspaceEndpoints.readBackups,
+    personalWorkspaceOperations.readBackups,
+    () => service.status()
+  );
+  registerEndpoint(
+    app,
+    personalWorkspaceEndpoints.updateBackupSettings,
+    personalWorkspaceOperations.updateBackupSettings,
+    (input) => service.update(input)
+  );
+  registerEndpoint(
+    app,
+    personalWorkspaceEndpoints.startBackup,
+    personalWorkspaceOperations.startBackup,
+    () => {
+      service.start();
+      return { status: 'running' as const };
+    }
+  );
   app.get<{ Params: { id: string } }>('/api/backups/:id/download', async (request, reply) => {
     const stream = await service.download(request.params.id);
     return reply

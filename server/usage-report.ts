@@ -1,7 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import type { UsageReport, UsageTotals } from '../core/usage-report.js';
-import { fields, record, HttpError } from './request-validation.js';
+import { personalWorkspaceEndpoints } from '#contracts';
+import {
+  personalWorkspaceOperations,
+  type UsagePeriod,
+  type UsageReport,
+  type UsageTotals,
+  usageExportQuery,
+} from '#contracts/operations';
 import type { Store } from './store.js';
+import { parseInput, registerEndpoint } from './endpoint.js';
 
 const aggregates = `COUNT(*) AS calls,
   COALESCE(SUM(CASE WHEN input_tokens>=0 THEN input_tokens END),0) AS inputTokens,
@@ -26,42 +33,27 @@ export function usageReportDate(at: string) {
   } as const;
 }
 
-function period(value: unknown) {
-  const query = record(value);
-  fields(query, ['from', 'to', 'group']);
-  for (const key of ['from', 'to']) {
-    const date = query[key];
-    if (
-      typeof date !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-      !Number.isFinite(Date.parse(`${date}T00:00:00.000Z`)) ||
-      new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date
-    )
-      throw new HttpError(400, 'Invalid usage date');
-  }
-  const from = String(query.from),
-    to = String(query.to);
-  if (from > to) throw new HttpError(400, 'Usage start date is after the end date');
+function period({ from, to }: UsagePeriod) {
   const after = new Date(`${from}T00:00:00${usageOffset}`).toISOString();
   const until = new Date(Date.parse(`${to}T00:00:00${usageOffset}`) + 86400_000).toISOString();
-  return { from, to, after, until, group: query.group };
+  return { from, to, after, until };
 }
 export const USAGE_BREAKDOWNS = ['days', 'models', 'kinds'] as const;
 type Breakdown = (typeof USAGE_BREAKDOWNS)[number];
 type SelectedUsageReport = Omit<UsageReport, Breakdown> & Partial<Pick<UsageReport, Breakdown>>;
 
-export function usageReport(store: Store, value: unknown): UsageReport;
+export function usageReport(store: Store, range: UsagePeriod): UsageReport;
 export function usageReport(
   store: Store,
-  value: unknown,
+  range: UsagePeriod,
   breakdowns: readonly Breakdown[]
 ): SelectedUsageReport;
 export function usageReport(
   store: Store,
-  value: unknown,
+  range: UsagePeriod,
   breakdowns: readonly Breakdown[] = USAGE_BREAKDOWNS
 ): SelectedUsageReport {
-  const { from, to, after, until } = period(value);
+  const { from, to, after, until } = period(range);
   const predicate = 'is_synthetic=0 AND started_at>=? AND started_at<?';
   const db = store.db;
   return {
@@ -154,19 +146,24 @@ export function usageCsv(report: UsageReport, group: 'day' | 'model' | 'kind' = 
   return `\uFEFF${header.map(csvCell).join(',')}\r\n${rows.join('\r\n')}\r\n`;
 }
 export function usageRoutes(app: FastifyInstance, store: Store) {
-  app.get('/api/usage', (request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    return usageReport(store, request.query);
-  });
+  registerEndpoint(
+    app,
+    personalWorkspaceEndpoints.readUsage,
+    personalWorkspaceOperations.readUsage,
+    (range, _request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      return usageReport(store, range);
+    }
+  );
   app.get('/api/usage/export', (request, reply) => {
-    const { group, from, to } = period(request.query);
-    if (group !== undefined && !['day', 'model', 'kind'].includes(String(group)))
-      throw new HttpError(400, 'Invalid usage export group');
-    const report = usageReport(store, request.query);
+    const { group, ...range } = parseInput(usageExportQuery, request.query);
     return reply
       .type('text/csv; charset=utf-8')
       .header('Cache-Control', 'no-store')
-      .header('Content-Disposition', `attachment; filename="uimori-usage-${from}-${to}.csv"`)
-      .send(usageCsv(report, (group ?? 'day') as 'day' | 'model' | 'kind'));
+      .header(
+        'Content-Disposition',
+        `attachment; filename="uimori-usage-${range.from}-${range.to}.csv"`
+      )
+      .send(usageCsv(usageReport(store, range), group));
   });
 }

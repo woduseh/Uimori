@@ -150,8 +150,11 @@ test('reported values win over frozen estimates; partial, unknown, zero, failed 
   ).toThrow('Invalid usage breakdown');
   store.product.finishAttempt(reported, result(99));
   expect(usageReport(store, query)).toEqual(report);
-  expect(() => usageReport(store, { from: '2026-02-30', to: '2026-09-27' })).toThrow();
-  expect(() => usageReport(store, { from: '2026-09-28', to: '2026-09-27' })).toThrow();
+  for (const range of [
+    { from: '2026-02-30', to: '2026-09-27' },
+    { from: '2026-09-28', to: '2026-09-27' },
+  ])
+    expect(() => invokeHelperSettingsTool(store, 'usage.read', range)).toThrow('INVALID_REQUEST');
 });
 
 test('deleting a conversation keeps numerical usage but removes all payloads and ownership links', () => {

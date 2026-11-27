@@ -1,10 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import type { DatabaseSync } from 'node:sqlite';
+import { translationEndpoints } from '#contracts';
+import {
+  type AutoTranslationDefaults,
+  type SaveAutoTranslationDefaults,
+  translationOperations,
+} from '#contracts/operations';
 import type { Store } from './store.js';
-import { fields, HttpError, number, record } from './request-validation.js';
 import { AppError } from './app-errors.js';
-import { isWrittenLanguage } from '../core/written-language.js';
+import { registerEndpoint } from './endpoint.js';
 
 const KEY = 'auto-translation-defaults';
 
@@ -20,26 +24,33 @@ export function autoTranslationDefaults(db: DatabaseSync): AutoTranslationDefaul
 }
 
 export function autoTranslationDefaultRoutes(app: FastifyInstance, store: Store) {
-  app.get('/api/auto-translation-defaults', () => autoTranslationDefaults(store.db));
-  app.put('/api/auto-translation-defaults', (request) =>
-    saveAutoTranslationDefaults(store, request.body)
+  registerEndpoint(
+    app,
+    translationEndpoints.readAutoTranslationDefaults,
+    translationOperations.readAutoTranslationDefaults,
+    () => autoTranslationDefaults(store.db)
+  );
+  registerEndpoint(
+    app,
+    translationEndpoints.saveAutoTranslationDefaults,
+    translationOperations.saveAutoTranslationDefaults,
+    (input) => saveAutoTranslationDefaults(store, input)
   );
 }
-export function saveAutoTranslationDefaults(store: Store, value: unknown): AutoTranslationDefaults {
-  const body = record(value);
-  fields(body, ['expectedRevision', 'autoTranslate', 'translationLanguage']);
-  const expected = number(body.expectedRevision, 'revision', 0);
-  if (typeof body.autoTranslate !== 'boolean') throw new HttpError(400, 'Invalid autoTranslate');
-  const language = body.translationLanguage;
-  if (language !== undefined && language !== null && !isWrittenLanguage(language))
-    throw new HttpError(400, 'Invalid translation language');
+export function saveAutoTranslationDefaults(
+  store: Store,
+  input: SaveAutoTranslationDefaults
+): AutoTranslationDefaults {
   return store.transaction(() => {
     const previous = autoTranslationDefaults(store.db);
-    if (previous.revision !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+    if (previous.revision !== input.expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const next: AutoTranslationDefaults = {
       revision: previous.revision + 1,
-      autoTranslate: body.autoTranslate as boolean,
-      translationLanguage: language === undefined ? previous.translationLanguage : language,
+      autoTranslate: input.autoTranslate,
+      translationLanguage:
+        input.translationLanguage === undefined
+          ? previous.translationLanguage
+          : input.translationLanguage,
     };
     store.db
       .prepare(

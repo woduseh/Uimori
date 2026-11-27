@@ -3,6 +3,8 @@ import { lookup } from 'node:dns/promises';
 import { get } from 'node:https';
 import { isIP } from 'node:net';
 import type { FastifyInstance } from 'fastify';
+import { appearanceEndpoints } from '#contracts';
+import { appearanceOperations, type SelectFonts } from '#contracts/operations';
 import {
   MAX_FONT_BYTES,
   type FontAsset,
@@ -11,8 +13,8 @@ import {
   type FontPreferences,
 } from '../core/fonts.js';
 import type { Store } from './store.js';
-import { fields, number, record, text } from './request-validation.js';
 import { AppError, HelperToolError } from './app-errors.js';
+import { registerEndpoint } from './endpoint.js';
 
 const key = 'font-preferences';
 const MAX_STORED_FONTS = 100;
@@ -78,7 +80,7 @@ export function fontFileFormat(bytes: Buffer): FontFormat {
 }
 export function registerFont(store: Store, input: { title: string; bytes: Uint8Array }): FontAsset {
   initFonts(store);
-  const title = text(input.title, 'title', 200).trim();
+  const title = input.title.trim();
   const bytes = Buffer.from(input.bytes);
   const fontFormat = fontFileFormat(bytes);
   const id = createHash('sha256').update(bytes).digest('hex');
@@ -118,21 +120,15 @@ function writePreferences(store: Store, preferences: FontPreferences) {
   store.invalidated('fonts');
   return preferences;
 }
-export function selectFonts(store: Store, input: unknown): FontPreferences {
-  const body = record(input);
-  fields(body, ['expectedRevision', 'appFontId', 'readerFontId']);
-  const revision = number(body.expectedRevision, 'revision', 0);
-  const selected = (value: unknown) => {
-    if (value === null) return null;
-    const id = text(value, 'font ID', 64);
-    readFont(store, id);
-    return id;
-  };
-  const appFontId = selected(body.appFontId);
-  const readerFontId = selected(body.readerFontId);
+export function selectFonts(
+  store: Store,
+  { expectedRevision, appFontId, readerFontId }: SelectFonts
+): FontPreferences {
   return store.transaction(() => {
-    if (fontPreferences(store).revision !== revision) throw new AppError(409, 'REVISION_CONFLICT');
-    return writePreferences(store, { revision: revision + 1, appFontId, readerFontId });
+    if (fontPreferences(store).revision !== expectedRevision)
+      throw new AppError(409, 'REVISION_CONFLICT');
+    for (const id of [appFontId, readerFontId]) if (id !== null) readFont(store, id);
+    return writePreferences(store, { revision: expectedRevision + 1, appFontId, readerFontId });
   });
 }
 export function deleteFont(store: Store, id: string): FontCatalog {
@@ -257,20 +253,29 @@ export async function downloadFont(
 }
 export function fontRoutes(app: FastifyInstance, store: Store) {
   initFonts(store);
-  app.get('/api/fonts', () => fontCatalog(store));
-  app.get('/api/font-preferences', () => fontPreferences(store));
-  app.put('/api/font-preferences', (request) => selectFonts(store, request.body));
-  app.post('/api/fonts', { bodyLimit: Math.ceil(MAX_FONT_BYTES / 3) * 4 + 10000 }, (request) => {
-    const body = record(request.body);
-    fields(body, ['title', 'data']);
-    const data = text(body.data, 'font data', Math.ceil(MAX_FONT_BYTES / 3) * 4);
-    return registerFont(store, {
-      title: body.title,
-      bytes: Buffer.from(data, 'base64'),
-    });
-  });
-  app.delete<{ Params: { id: string } }>('/api/fonts/:id', (request) =>
-    deleteFont(store, request.params.id)
+  registerEndpoint(app, appearanceEndpoints.listFonts, appearanceOperations.listFonts, () =>
+    fontCatalog(store)
+  );
+  registerEndpoint(
+    app,
+    appearanceEndpoints.readFontPreferences,
+    appearanceOperations.readFontPreferences,
+    () => fontPreferences(store)
+  );
+  registerEndpoint(
+    app,
+    appearanceEndpoints.selectFonts,
+    appearanceOperations.selectFonts,
+    (input) => selectFonts(store, input)
+  );
+  registerEndpoint(
+    app,
+    appearanceEndpoints.uploadFont,
+    appearanceOperations.uploadFont,
+    ({ title, data }) => registerFont(store, { title, bytes: Buffer.from(data, 'base64') })
+  );
+  registerEndpoint(app, appearanceEndpoints.deleteFont, appearanceOperations.deleteFont, ({ id }) =>
+    deleteFont(store, id)
   );
   app.get<{ Params: { id: string } }>('/api/fonts/:id/file', (request, reply) => {
     const { asset, bytes } = readFont(store, request.params.id);

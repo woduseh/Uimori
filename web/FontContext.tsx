@@ -7,7 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { api } from './api.js';
+import { appearanceEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { useThemes } from './ThemeContext.js';
 
 import { fontFamily, type FontCatalog } from '../core/fonts.js';
@@ -47,7 +48,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     const current = ++epoch.current;
     try {
-      const next = await api<FontCatalog>('/fonts');
+      const next = await callEndpoint(appearanceEndpoints.listFonts);
       if (current === epoch.current) {
         setCatalog((old) => (old && JSON.stringify(old) === JSON.stringify(next) ? old : next));
         setError('');

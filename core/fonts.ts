@@ -1,21 +1,4 @@
-export const MAX_FONT_BYTES = 20 * 1024 * 1024;
+export { MAX_FONT_BYTES } from '#contracts';
+export type { FontAsset, FontCatalog, FontFormat, FontPreferences } from '#contracts';
 export const defaultAppFont = 'system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif';
-export type FontFormat = 'woff2' | 'woff' | 'ttf' | 'otf';
-export interface FontAsset {
-  id: string;
-  title: string;
-  format: FontFormat;
-  mimeType: string;
-  byteLength: number;
-  createdAt: string;
-}
-export interface FontPreferences {
-  revision: number;
-  appFontId: string | null;
-  readerFontId: string | null;
-}
-export interface FontCatalog {
-  fonts: FontAsset[];
-  preferences: FontPreferences;
-}
 export const fontFamily = (id: string) => `uimori-font-${id}`;

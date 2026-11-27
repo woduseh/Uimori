@@ -1,5 +1,6 @@
-export const WRITTEN_LANGUAGES = ['ko', 'en', 'ja', 'zh'] as const;
-export type WrittenLanguage = (typeof WRITTEN_LANGUAGES)[number];
+import { WRITTEN_LANGUAGES, type WrittenLanguage } from '#contracts';
+
+export { WRITTEN_LANGUAGES, type WrittenLanguage };
 
 export function isWrittenLanguage(value: unknown): value is WrittenLanguage {
   return WRITTEN_LANGUAGES.includes(value as WrittenLanguage);

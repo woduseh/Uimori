@@ -18,7 +18,8 @@ import type {
   BackupStatus,
   BackupStatusCode,
 } from '../core/backups.js';
-import { api } from './api.js';
+import { personalWorkspaceEndpoints } from '#contracts';
+import { callEndpoint } from './api.js';
 import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
 import { Dialog } from './Dialog.js';
@@ -76,7 +77,11 @@ export function BackupSettings({
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
       try {
-        const value = await api<BackupStatus>('/backups', undefined, 'GET', controller.signal);
+        const value = await callEndpoint(
+          personalWorkspaceEndpoints.readBackups,
+          {},
+          controller.signal
+        );
         if (controller.signal.aborted) return;
         setStatus(value);
         setDraft((old) => old ?? value.settings);
@@ -114,17 +119,13 @@ export function BackupSettings({
     setError('');
     setMessage('');
     try {
-      const saved = await api<Settings>(
-        '/backups/settings',
-        {
-          expectedRevision: draft.revision,
-          enabled: draft.enabled,
-          hour: draft.hour,
-          minute: draft.minute,
-          retain: draft.retain,
-        },
-        'PUT'
-      );
+      const saved = await callEndpoint(personalWorkspaceEndpoints.updateBackupSettings, {
+        expectedRevision: draft.revision,
+        enabled: draft.enabled,
+        hour: draft.hour,
+        minute: draft.minute,
+        retain: draft.retain,
+      });
       setDraft(saved);
       setDirty(false);
       setMessage(retainedMessage('transfer.m150'));
@@ -143,7 +144,7 @@ export function BackupSettings({
     setOperation('backup');
     setError('');
     try {
-      await api('/backups', {});
+      await callEndpoint(personalWorkspaceEndpoints.startBackup);
       refreshStatus();
     } catch (caught) {
       setError((caught as Error).message);

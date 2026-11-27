@@ -4,7 +4,9 @@ import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
+import { appearanceOperations } from '#contracts/operations';
 import { HelperToolError } from './app-errors.js';
+import { parseInput } from './endpoint.js';
 import { fields, record, text, number, HttpError } from './request-validation.js';
 import {
   fontCatalog,
@@ -230,11 +232,14 @@ export function invokePresentationTool(
   if (name === 'font.select') {
     fields(args, ['expectedRevision', 'appFontId', 'readerFontId']);
     const current = fontPreferences(store);
-    return selectFonts(store, {
-      expectedRevision: args.expectedRevision,
-      appFontId: args.appFontId === undefined ? current.appFontId : args.appFontId,
-      readerFontId: args.readerFontId === undefined ? current.readerFontId : args.readerFontId,
-    });
+    return selectFonts(
+      store,
+      parseInput(appearanceOperations.selectFonts.input, {
+        expectedRevision: args.expectedRevision,
+        appFontId: args.appFontId === undefined ? current.appFontId : args.appFontId,
+        readerFontId: args.readerFontId === undefined ? current.readerFontId : args.readerFontId,
+      })
+    );
   }
   if (name === 'font.delete') {
     fields(args, ['id']);
