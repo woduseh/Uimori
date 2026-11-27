@@ -124,7 +124,7 @@
 .task-history-notice > * {
   margin: 0;
 }
-.task-history-notice > p.error:lang(ko) {
+.task-history-notice > .error:lang(ko) {
   word-break: keep-all;
   overflow-wrap: anywhere;
 }

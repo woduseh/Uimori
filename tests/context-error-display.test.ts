@@ -66,6 +66,9 @@ test('a run that stopped on a context code shows its message once, beside the ma
   expect(timedOut.split('요약이 제시간에 끝나지 않았어요.')).toHaveLength(2);
   expect(runText('CONNECTION_NOT_AUTHORIZED')).toContain('모델 연결을 쓸 수 없어요.');
   expect(runText('CONTEXT_WINDOW_EXCEEDED')).toContain('모델의 컨텍스트 창이 가득 차서');
+  expect(runText('CONTEXT_TOOL_COMPACTION_FIXED_INPUT_TOO_LARGE')).toContain(
+    '입력 한도가 더 큰 컨텍스트 압축 모델을 선택해 주세요.'
+  );
 });
 
 test('an image the model cannot take, stored by compaction, is worded in the summary the run defers to', () => {

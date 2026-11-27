@@ -719,6 +719,9 @@ test('a context job failure folds to the generic code unless the web has a messa
     'CONTEXT_INPUT_MISSING'
   );
   expect(contextFailureCode(new Error('MODEL_REQUIRED:context'))).toBe('MODEL_REQUIRED:context');
+  expect(contextFailureCode(new AppError(403, 'PROVIDER_CONNECTION_UNAVAILABLE'))).toBe(
+    'CONNECTION_NOT_AUTHORIZED'
+  );
   expect(stderr).not.toHaveBeenCalled();
   expect(
     contextFailureCode(Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' }))
