@@ -1,5 +1,5 @@
-import { t, useI18n, translateMessage, message as descriptor } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { formatUiMessage, UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
@@ -40,7 +40,7 @@ import {
 import { THEME_PALETTE_ID } from '../core/theme-palettes.js';
 import { appearanceEndpoints, resourceEditorEndpoints } from '#contracts';
 import { ApiError, callEndpoint, saveDownload } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { appearanceTarget, useThemes } from './ThemeContext.js';
 import { parseJsonInput } from './json-input.js';
 import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
@@ -103,9 +103,9 @@ export function ThemeSettings({
   const [scope, setScope] = useState<'global' | 'bot' | 'chat'>('global');
   const [operation, setOperation] = useState<'save' | 'other' | null>(null);
   const busy = operation !== null;
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [importNotice, setImportNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
+  const [importNotice, setImportNotice] = useState<UiMessage | null>(null);
   const [deleting, setDeleting] = useState<Theme | null>(null);
   const deleteCancel = useRef<HTMLButtonElement>(null);
   const root = useRef<HTMLElement>(null);
@@ -145,7 +145,7 @@ export function ThemeSettings({
     setClosingDraft(false);
     setDraft(null);
     setPreview(null);
-    setError('');
+    setError(null);
   }
   const { setPreview } = state;
   useEffect(() => {
@@ -219,9 +219,9 @@ export function ThemeSettings({
     if (locked.current) return;
     locked.current = true;
     setOperation(saveAttempt ? 'save' : 'other');
-    setError('');
-    setNotice('');
-    setImportNotice('');
+    setError(null);
+    setNotice(null);
+    setImportNotice(null);
     try {
       await work();
     } catch (cause) {
@@ -229,7 +229,7 @@ export function ThemeSettings({
         await state.refresh();
         if (saveAttempt) setSaveConflict(true);
       }
-      setError(errorDescriptor(cause));
+      setError(toUiMessage(cause));
     } finally {
       locked.current = false;
       setOperation(null);
@@ -237,7 +237,7 @@ export function ThemeSettings({
   }
   function edit(theme?: Theme, copy = false, storyOnly = false) {
     if (dirty) {
-      setError(descriptor('visualpanels.saveOrCancelYourCurrentEditsBefore'));
+      setError(uiMessage('visualpanels.saveOrCancelYourCurrentEditsBefore'));
       return false;
     }
     if (management.current) management.current.open = true;
@@ -254,9 +254,9 @@ export function ThemeSettings({
       model,
     });
     setBaseline(theme && !isCopy ? JSON.stringify(model) : '');
-    setError('');
-    setNotice('');
-    setImportNotice('');
+    setError(null);
+    setNotice(null);
+    setImportNotice(null);
     setPreview(null);
     return true;
   }
@@ -287,7 +287,7 @@ export function ThemeSettings({
       setBaseline(JSON.stringify(themeDefinition(result.saved)));
       setPreview(null);
       await state.refresh();
-      setNotice(descriptor('visualpanels.themeSavedUseApplyToActivateIt'));
+      setNotice(uiMessage('visualpanels.themeSavedUseApplyToActivateIt'));
       saved = true;
     }, true);
     return saved;
@@ -308,8 +308,8 @@ export function ThemeSettings({
         target.scope === 'global' &&
           ((state.scope.chatId && p.chatThemes[state.scope.chatId]) ||
             (state.scope.botId && p.botThemes[state.scope.botId]))
-          ? descriptor('visualpanels.defaultLayoutChangedThisChatUsesIts')
-          : descriptor('visualpanels.layoutSelectionSaved')
+          ? uiMessage('visualpanels.defaultLayoutChangedThisChatUsesIts')
+          : uiMessage('visualpanels.layoutSelectionSaved')
       );
     });
   }
@@ -328,8 +328,8 @@ export function ThemeSettings({
         target.scope === 'global' &&
           ((state.scope.chatId && p.chatPalettes?.[state.scope.chatId]) ||
             (state.scope.botId && p.botPalettes?.[state.scope.botId]))
-          ? descriptor('visualpanels.defaultPaletteChangedThisChatUsesIts')
-          : descriptor('visualpanels.paletteSelectionSaved')
+          ? uiMessage('visualpanels.defaultPaletteChangedThisChatUsesIts')
+          : uiMessage('visualpanels.paletteSelectionSaved')
       );
     });
   }
@@ -343,12 +343,12 @@ export function ThemeSettings({
         expectedRevision: p.revision,
       });
       await state.refresh();
-      setNotice(descriptor('storyUi.botDefaultSaved'));
+      setNotice(uiMessage('storyUi.botDefaultSaved'));
     });
   }
   async function importFile(file: File) {
     if (dirty) {
-      setError(descriptor('visualpanels.saveOrCancelTheThemeYouAre'));
+      setError(uiMessage('visualpanels.saveOrCancelTheThemeYouAre'));
       return;
     }
     await action(async () => {
@@ -361,7 +361,7 @@ export function ThemeSettings({
       storyUiDraft.current = model.storyUi;
       setDraft({ id: null, model });
       setBaseline('');
-      setImportNotice(descriptor('visualpanels.importedAsANewThemeReviewAnd'));
+      setImportNotice(uiMessage('visualpanels.importedAsANewThemeReviewAnd'));
     });
   }
   const themeSample = (
@@ -419,10 +419,10 @@ export function ThemeSettings({
               </button>
             }
           >
-            {translateMessage(state.error)}
+            {state.error}
           </NoticeBanner>
         )}
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <TransientNotice content={notice} />
         <div className="theme-toolbar theme-control-bar">
           <label>
@@ -1051,9 +1051,9 @@ export function ThemeSettings({
                       themeTemplate(t.templateHtml);
                       state.setDisabled(false);
                       setPreview(t);
-                      setError('');
+                      setError(null);
                     } catch (cause) {
-                      setError(errorDescriptor(cause));
+                      setError(toUiMessage(cause));
                     }
                   }}
                 >
@@ -1088,7 +1088,7 @@ export function ThemeSettings({
               discardLabel={t('visualpanels.discardChangesAndClose')}
             />
           </Dialog>
-          {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
+          {importNotice && <p role="status">{formatUiMessage(importNotice)}</p>}
           <p className="theme-help">
             {t('visualpanels.themeRecoveryHelp', {
               shortcut: 'Ctrl/Cmd + .',
@@ -1122,7 +1122,7 @@ export function ThemeSettings({
         }}
       >
         <p>{t('visualpanels.deleteTheThemeBotsAndChatsUsing', { v0: deleting?.title ?? '' })}</p>
-        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"

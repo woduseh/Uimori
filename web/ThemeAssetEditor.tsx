@@ -7,10 +7,10 @@ import {
   type ThemeAssetKind,
 } from '../core/themes.js';
 import { IMAGE_INPUT_MAX_BYTES, MAX_FONT_BYTES } from '#contracts';
-import { appErrorUiMessage } from './api-errors.js';
-import { legacyMessageString } from './ui-message.js';
+import { appErrorUiMessage, toUiMessage } from './api-errors.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
 import { IconButton } from './IconButton.js';
-import { t, useI18n, message as uiMessage } from './i18n.js';
+import { t, useI18n } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { readImportSource } from './import-source.js';
 import { themeAssetUrl, themeFontFamily, uploadThemeAsset } from './theme-assets.js';
@@ -23,7 +23,7 @@ export function ThemeAssetEditor({
 }: {
   assets: ThemeAsset[];
   onChange: (assets: ThemeAsset[]) => void;
-  onError: (message: string) => void;
+  onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
   const [kind, setKind] = useState<ThemeAssetKind>('image');
@@ -31,12 +31,12 @@ export function ThemeAssetEditor({
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [inputKey, setInputKey] = useState(0);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   async function copy(variable: string) {
-    setNotice('');
+    setNotice(null);
     try {
       await navigator.clipboard.writeText(variable);
-      onError('');
+      onError(null);
       setNotice(uiMessage('themeAssets.copied'));
     } catch {
       onError(uiMessage('helpers.m130'));
@@ -56,9 +56,7 @@ export function ThemeAssetEditor({
     const maxBytes = kind === 'font' ? MAX_FONT_BYTES : IMAGE_INPUT_MAX_BYTES;
     if (file.size > maxBytes) {
       onError(
-        legacyMessageString(
-          appErrorUiMessage(kind === 'font' ? 'FONT_TOO_LARGE' : 'IMAGE_TOO_LARGE', { maxBytes })
-        )
+        appErrorUiMessage(kind === 'font' ? 'FONT_TOO_LARGE' : 'IMAGE_TOO_LARGE', { maxBytes })
       );
       return;
     }
@@ -70,9 +68,9 @@ export function ThemeAssetEditor({
       setName('');
       setFile(null);
       setInputKey((key) => key + 1);
-      onError('');
+      onError(null);
     } catch (cause) {
-      onError((cause as Error).message);
+      onError(toUiMessage(cause));
     } finally {
       setBusy(false);
     }

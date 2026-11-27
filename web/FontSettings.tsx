@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { appearanceEndpoints } from '#contracts';
-import { ApiError, callEndpoint } from './api.js';
+import { callEndpoint } from './api.js';
+import { toUiMessage } from './api-errors.js';
 import { useFonts, type FontAsset } from './FontContext.js';
 import { useThemes } from './ThemeContext.js';
-import { t, useI18n, message, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
@@ -38,24 +39,24 @@ export function FontSettings({
   const [deleting, setDeleting] = useState<FontAsset | null>(null);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const dirty = !!file || !!title;
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
-  async function operation(action: () => Promise<void>, success: string) {
+  async function operation(action: () => Promise<void>, success: UiMessage) {
     if (locked.current) return false;
     locked.current = true;
     setBusy(true);
-    setError('');
+    setError(null);
     try {
       await action();
       setNotice(success);
       return true;
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : message('fonts.failed'));
+      setError(toUiMessage(cause, 'fonts.failed'));
       void state.refresh();
       return false;
     } finally {
@@ -74,7 +75,7 @@ export function FontSettings({
     }
     if (file.size > MAX_FONT_BYTES) {
       if (management.current) management.current.open = true;
-      setError(message('fonts.tooLarge'));
+      setError(uiMessage('fonts.tooLarge'));
       return false;
     }
     return operation(async () => {
@@ -90,7 +91,7 @@ export function FontSettings({
       setTitle('');
       if (input.current) input.current.value = '';
       await state.refresh();
-    }, message('fonts.registered'));
+    }, uiMessage('fonts.registered'));
   }
   useSettingsSaveHandler(onSaveHandlerChange, upload);
   function select(
@@ -108,7 +109,7 @@ export function FontSettings({
         readerFontId,
       });
       state.accept({ ...state.catalog!, preferences });
-    }, message('fonts.saved'));
+    }, uiMessage('fonts.saved'));
   }
   const catalog = state.catalog;
   const hasFonts = !!catalog?.fonts.length;
@@ -131,7 +132,7 @@ export function FontSettings({
             </button>
           }
         >
-          {translateMessage(error || state.error)}
+          {error ?? state.error}
         </NoticeBanner>
       )}
       {state.runtimeError && (
@@ -321,7 +322,7 @@ export function FontSettings({
                 });
                 state.accept(next);
                 setDeleting(null);
-              }, message('fonts.deleted'));
+              }, uiMessage('fonts.deleted'));
             }}
           >
             {t('fonts.deleteTitle')}

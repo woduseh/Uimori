@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { appearanceEndpoints } from '#contracts';
 import { callEndpoint } from './api.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 import { useThemes } from './ThemeContext.js';
 
 import { fontFamily, type FontCatalog } from '../core/fonts.js';
@@ -23,7 +25,7 @@ import { watchLive } from './live-stream.js';
 type FontState = {
   catalog: FontCatalog | null;
   loading: boolean;
-  error: string;
+  error: UiMessage | null;
   runtimeError: boolean;
   appFamily: string | null;
   readerFamily: string | null;
@@ -40,7 +42,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
   const { disabled } = useThemes();
   const [catalog, setCatalog] = useState<FontCatalog | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [loaded, setLoaded] = useState<string[]>([]);
   const [runtimeError, setRuntimeError] = useState(false);
   const epoch = useRef(0);
@@ -51,10 +53,10 @@ export function FontProvider({ children }: { children: ReactNode }) {
       const next = await callEndpoint(appearanceEndpoints.listFonts);
       if (current === epoch.current) {
         setCatalog((old) => (old && JSON.stringify(old) === JSON.stringify(next) ? old : next));
-        setError('');
+        setError(null);
       }
     } catch (cause) {
-      if (current === epoch.current) setError((cause as Error).message);
+      if (current === epoch.current) setError(toUiMessage(cause));
     } finally {
       if (current === epoch.current) setLoading(false);
     }
@@ -62,7 +64,7 @@ export function FontProvider({ children }: { children: ReactNode }) {
   const accept = useCallback((next: FontCatalog) => {
     ++epoch.current;
     setCatalog(next);
-    setError('');
+    setError(null);
     setLoading(false);
   }, []);
   useEffect(() => {

@@ -1,5 +1,6 @@
-import { t, useI18n, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import DOMPurify from 'dompurify';
 import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_THEME_TEMPLATE, THEME_SLOTS } from '../core/themes.js';
@@ -56,7 +57,7 @@ export function ThemeFrame({
   const bodyLabel = t('visuals.m026');
   const theme = useContext(ThemeContext)?.active;
   const host = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [hasPortrait, setHasPortrait] = useState(false);
   const [hasRequestPersona, setHasRequestPersona] = useState(false);
   const html = theme?.templateHtml ?? '';
@@ -72,13 +73,13 @@ export function ThemeFrame({
       setHasPortrait(!!template.querySelector('slot[name="portrait"]'));
       setHasRequestPersona(!!template.querySelector('slot[name="request-persona"]'));
       root.replaceChildren(style, template);
-      setError('');
+      setError(null);
     } catch (cause) {
       style.textContent = ':host{display:block;min-width:0}slot{display:contents}';
       setHasPortrait(false);
       setHasRequestPersona(false);
       root.replaceChildren(style, themeTemplate(''));
-      setError((cause as Error).message);
+      setError(toUiMessage(cause));
     }
     const body = host.current.querySelector<HTMLElement>('[slot="body"]');
     if (body && root.querySelector('slot[name="body"][data-uimori-body-scroll]')) {
@@ -104,9 +105,7 @@ export function ThemeFrame({
   return (
     <>
       {error && (
-        <NoticeBanner tone="error">
-          {t('visuals.themeFallback', { error: translateMessage(error) })}
-        </NoticeBanner>
+        <NoticeBanner tone="error">{uiMessage('visuals.themeFallback', { error })}</NoticeBanner>
       )}
       <div
         ref={host}

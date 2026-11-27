@@ -1,4 +1,6 @@
-import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
+import { t, useI18n, formatNumber } from './i18n.js';
+import { uiMessage, type UiMessage } from './ui-message.js';
+import { toUiMessage } from './api-errors.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -47,8 +49,8 @@ export function ThemeBackgroundSettings({
   const [draft, setDraft] = useState<ThemeBackground>(selected ?? inherited);
   const [operation, setOperation] = useState<'save' | 'upload' | null>(null);
   const busy = operation !== null;
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const upload = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const locked = useRef(false);
@@ -76,8 +78,8 @@ export function ThemeBackgroundSettings({
     if (disabled || locked.current) return false;
     locked.current = true;
     setOperation('save');
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       await callEndpoint(appearanceEndpoints.selectThemeBackground, {
         ...target,
@@ -93,7 +95,7 @@ export function ThemeBackgroundSettings({
       return true;
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) await state.refresh();
-      if (alive.current) setError((cause as Error).message);
+      if (alive.current) setError(toUiMessage(cause));
       return false;
     } finally {
       locked.current = false;
@@ -109,14 +111,14 @@ export function ThemeBackgroundSettings({
     const controller = new AbortController();
     upload.current = controller;
     setOperation('upload');
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       const image = await uploadPackageImage(file, controller.signal, 'profile');
       if (alive.current && !controller.signal.aborted)
         setDraft((value) => ({ ...value, imageHash: image.blobHash }));
     } catch (cause) {
-      if (alive.current && !controller.signal.aborted) setError((cause as Error).message);
+      if (alive.current && !controller.signal.aborted) setError(toUiMessage(cause));
     } finally {
       if (upload.current === controller) upload.current = null;
       locked.current = false;
@@ -238,7 +240,7 @@ export function ThemeBackgroundSettings({
           />
         )}
       </div>
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <TransientNotice content={notice} />
     </section>
   );

@@ -22,6 +22,8 @@ import {
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { appearanceEndpoints, type AppearanceTarget } from '#contracts';
 import { callEndpoint } from './api.js';
+import { toUiMessage } from './api-errors.js';
+import type { UiMessage } from './ui-message.js';
 import { updateMessageTheme } from './theme-message-style.js';
 import { applyThemeAssets } from './theme-assets.js';
 import { readOptionalStorage, writeOptionalStorage } from './optional-storage.js';
@@ -40,7 +42,7 @@ type ThemeState = {
   active: Theme;
   scope: ThemeScope;
   loading: boolean;
-  error: string;
+  error: UiMessage | null;
   setScope: (scope: ThemeScope) => void;
   refresh: () => Promise<void>;
   preview: ThemeDefinition | null;
@@ -66,7 +68,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [scope, setScope] = useState<ThemeScope>({});
   const [preview, setPreview] = useState<ThemeDefinition | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
   const [disabled, setDisabledState] = useState(() => {
     if (new URLSearchParams(location.search).get('theme-safe') === '1') {
       writeOptionalStorage('session', storageKeys.themeDisabled, '1');
@@ -100,10 +102,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             ? previous
             : { themes, preferences, palettes: palettesUnchanged ? previous.palettes : palettes };
         });
-        setError('');
+        setError(null);
       }
     } catch (cause) {
-      if (alive.current && current === epoch.current) setError((cause as Error).message);
+      if (alive.current && current === epoch.current) setError(toUiMessage(cause));
     } finally {
       if (alive.current && current === epoch.current) setLoading(false);
     }

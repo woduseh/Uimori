@@ -1,7 +1,7 @@
 import { validatePalette, parsePaletteFile } from '../core/palette-files.js';
 import { useRef, useState } from 'react';
-import { t, useI18n, message, translateMessage } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { t, useI18n } from './i18n.js';
+import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { THEME_COLOR_KEYS, copyTitle, resolveTheme } from '../core/themes.js';
 import {
   BUILTIN_PALETTES,
@@ -14,7 +14,7 @@ import { parseJsonInput } from './json-input.js';
 import { paletteText } from './builtin-labels.js';
 import { appearanceEndpoints } from '#contracts';
 import { ApiError, callEndpoint } from './api.js';
-import { errorDescriptor } from './api-errors.js';
+import { toUiMessage } from './api-errors.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
@@ -30,8 +30,8 @@ export function usePaletteLibrary() {
   const state = useThemes();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState('');
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState<UiMessage | null>(null);
+  const [notice, setNotice] = useState<UiMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [deleting, setDeleting] = useState<Palette | null>(null);
@@ -41,12 +41,12 @@ export function usePaletteLibrary() {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
-    setError('');
-    setNotice('');
+    setError(null);
+    setNotice(null);
     try {
       await work();
     } catch (cause) {
-      setError(errorDescriptor(cause));
+      setError(toUiMessage(cause));
       if (cause instanceof ApiError && cause.status === 409) {
         setConflict(true);
         await state.refresh();
@@ -58,7 +58,7 @@ export function usePaletteLibrary() {
   }
   function edit(palette?: ThemePalette | Palette, copy = false) {
     if (dirty) {
-      setError(message('palettes.finishDraft'));
+      setError(uiMessage('palettes.finishDraft'));
       return;
     }
     const custom = palette && 'revision' in palette && !copy;
@@ -79,7 +79,7 @@ export function usePaletteLibrary() {
       model,
     });
     setBaseline(custom ? JSON.stringify(model) : '');
-    setError('');
+    setError(null);
     setConflict(false);
     state.setPreview(null);
   }
@@ -112,7 +112,7 @@ export function usePaletteLibrary() {
       setBaseline(JSON.stringify(clean));
       state.setPreview(null);
       saved = true;
-      setNotice(message('palettes.saved'));
+      setNotice(uiMessage('palettes.saved'));
       await state.refresh();
     });
     return saved;
@@ -137,7 +137,7 @@ export function usePaletteLibrary() {
     setDraft({ ...draft, id: null, revision: undefined });
     setBaseline('');
     setConflict(false);
-    setError('');
+    setError(null);
   }
   return {
     draft,
@@ -190,7 +190,7 @@ export function PaletteEditor({
           colors: validatePalette(draft.model).colors,
         });
     } catch (cause) {
-      library.setError(errorDescriptor(cause));
+      library.setError(toUiMessage(cause));
     }
   }
   return (
@@ -206,7 +206,7 @@ export function PaletteEditor({
             ) : undefined
           }
         >
-          {translateMessage(error)}
+          {error}
         </NoticeBanner>
       )}
       <TransientNotice content={library.notice} />
