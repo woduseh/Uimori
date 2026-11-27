@@ -1,5 +1,5 @@
 import { message as descriptor, useI18n } from './i18n.js';
-import { UiError, uiMessage } from './ui-message.js';
+import { UiError, uiMessage, type MessageKey } from './ui-message.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
 import {
@@ -90,6 +90,7 @@ import {
 } from './optional-storage.js';
 import { forgetMissingBots, forgetMissingChats, storageKeys } from './storage-keys.js';
 import { errorDescriptor } from './api-errors.js';
+import { caughtErrorState } from './caught-error.js';
 
 const lastWorkspaceKey = storageKeys.lastWorkspace;
 function semanticReaderTarget(search: string): ReaderTarget | null {
@@ -272,11 +273,11 @@ export function useStory() {
         const message = value(old.message);
         return { message, code: message ? old.code : null };
       }
-      return {
-        message: value instanceof Error ? errorDescriptor(value) : value,
-        code: value instanceof ApiError ? value.code : null,
-      };
+      return value instanceof Error ? caughtErrorState(value) : { message: value, code: null };
     });
+  }, []);
+  const setCaughtError = useCallback((cause: unknown, fallback?: MessageKey) => {
+    updateError(caughtErrorState(cause, fallback));
   }, []);
   const [notice, setNotice] = useState('');
   const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
@@ -594,7 +595,7 @@ export function useStory() {
       refresh: (incremental) => refresh(selected, incremental),
       cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
       onError: (error) => {
-        if (readerCache.current?.key === readerQuery.current.key) setError(errorDescriptor(error));
+        if (readerCache.current?.key === readerQuery.current.key) setCaughtError(error);
       },
       active: navigation.current.destination === 'story' && !document.hidden,
     });
@@ -645,7 +646,7 @@ export function useStory() {
       document.removeEventListener('visibilitychange', visibility);
       detach();
     };
-  }, [selected, refresh, loadChats, loadLibrary, setError]);
+  }, [selected, refresh, loadChats, loadLibrary, setError, setCaughtError]);
   useEffect(() => {
     readerSync.current?.setActive(destination === 'story' && !document.hidden);
   }, [destination]);
@@ -1168,7 +1169,7 @@ export function useStory() {
         }
         await loadChats();
       } catch (cause) {
-        if (current()) setError(cause instanceof Error ? cause : errorDescriptor(cause));
+        if (current()) setCaughtError(cause);
       }
     };
   };
@@ -1477,8 +1478,7 @@ export function useStory() {
       );
       if (!unresolved) clearCommand(commandKey, idempotencyKey);
       if (!unresolved && queued) queued.state = 'rejected';
-      if (currentView.current === sentView)
-        setError(error instanceof Error ? error : descriptor('main.story13'));
+      if (currentView.current === sentView) setCaughtError(error, 'main.story13');
     }
     try {
       await refresh(chat.id);
@@ -1518,7 +1518,7 @@ export function useStory() {
       }
     } catch (error) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(errorDescriptor(error, 'main.story15'));
+        setCaughtError(error, 'main.story15');
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);
@@ -1540,7 +1540,7 @@ export function useStory() {
         select(next.id);
       }
     } catch (error) {
-      if (navigation.current.epoch === epoch) setError(errorDescriptor(error, 'recent.copyFailed'));
+      if (navigation.current.epoch === epoch) setCaughtError(error, 'recent.copyFailed');
     } finally {
       forkLocks.current.delete(lock);
       setForking([...forkLocks.current]);
@@ -1731,13 +1731,9 @@ export function useStory() {
         navigation.current.chat === chatId &&
         (kind !== 'model' || navigation.current.epoch === epoch)
       )
-        setError(
-          kind === 'model' && modelWriteAttempted && !definiteRejection(error)
-            ? descriptor('main.modelPickerUnknown')
-            : error instanceof Error
-              ? error
-              : descriptor('main.story23')
-        );
+        if (kind === 'model' && modelWriteAttempted && !definiteRejection(error))
+          setError(descriptor('main.modelPickerUnknown'));
+        else setCaughtError(error, 'main.story23');
       await refresh(chatId).catch(() => undefined);
       return false;
     } finally {
@@ -1785,7 +1781,7 @@ export function useStory() {
       await refresh(chatId);
     } catch (caught) {
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(caught instanceof Error ? caught : descriptor('main.story24'));
+        setCaughtError(caught, 'main.story24');
     } finally {
       cancelLocks.current.delete(runId);
       setCancelling([...cancelLocks.current]);
