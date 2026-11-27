@@ -338,8 +338,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
           ...checks.biome,
         ])
       );
-    if (checks.typeScript)
-      statics.push(run('tsc', node, ['node_modules/typescript/bin/tsc', '--noEmit']));
+    if (checks.typeScript) {
+      const tsc = 'node_modules/typescript/bin/tsc';
+      statics.push(run('tsc', node, [tsc, '--noEmit']));
+      statics.push(run('tsc-server', node, [tsc, '-p', 'tsconfig.server.json', '--noEmit']));
+    }
     if (checks.comments === 'all' || checks.comments.length)
       statics.push(
         run('comments', node, [

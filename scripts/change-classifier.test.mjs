@@ -64,6 +64,7 @@ const classTable = {
   'runner/runner.mjs': ['biomeFile', 'moduleFile', 'commentSource', 'scriptImportInput'],
   'tests/server.test.ts': [
     'biomeFile',
+    'scriptImportInput',
     'typeScriptInput',
     'moduleFile',
     'commentSource',
@@ -71,6 +72,7 @@ const classTable = {
   ],
   'tests/helper/nested.test.ts': [
     'biomeFile',
+    'scriptImportInput',
     'typeScriptInput',
     'moduleFile',
     'commentSource',
@@ -78,13 +80,20 @@ const classTable = {
   ],
   'tests/chat-composer-browser.spec.ts': [
     'biomeFile',
+    'scriptImportInput',
     'typeScriptInput',
     'moduleFile',
     'commentSource',
     'browserInput',
     'windowsInsensitive',
   ],
-  'tests/nested/browser.spec.ts': ['biomeFile', 'typeScriptInput', 'moduleFile', 'commentSource'],
+  'tests/nested/browser.spec.ts': [
+    'biomeFile',
+    'typeScriptInput',
+    'moduleFile',
+    'commentSource',
+    'scriptImportInput',
+  ],
   'tests/fixtures/chat.json': ['biomeFile', 'browserInput'],
   'tests/feature-map.json': ['biomeFile'],
   'tests/build-runner.node.test.mjs': [
@@ -124,6 +133,7 @@ const classTable = {
   ],
   'scripts/helper-eval.ts': [
     'biomeFile',
+    'scriptImportInput',
     'typeScriptInput',
     'moduleFile',
     'commentSource',
@@ -132,6 +142,7 @@ const classTable = {
   ],
   'scripts/perf-ledger.test.ts': [
     'biomeFile',
+    'scriptImportInput',
     'typeScriptInput',
     'moduleFile',
     'commentSource',
@@ -202,8 +213,21 @@ const classTable = {
   'tsconfig.json': ['biomeFile', 'typeScriptInput', 'fullSuiteInput'],
   'tsconfig.web.json': ['biomeFile', 'typeScriptInput', 'fullSuiteInput'],
   'biome.json': ['biomeFile', 'fullSuiteInput'],
-  'vitest.config.ts': ['biomeFile', 'typeScriptInput', 'commentSource', 'fullSuiteInput'],
-  'playwright.config.ts': ['biomeFile', 'typeScriptInput', 'commentSource', 'browserInput'],
+  'vitest.config.ts': [
+    'biomeFile',
+    'typeScriptInput',
+    'commentSource',
+    'fullSuiteInput',
+    'scriptImportInput',
+  ],
+  'playwright.config.ts': [
+    'biomeFile',
+    'typeScriptInput',
+    'commentSource',
+    'browserInput',
+    'scriptImportInput',
+  ],
+  'fixtures/sample.mjs': ['biomeFile', 'commentSource'],
   'docs/READING.md': ['markdownFile', 'userGuide', 'windowsInsensitive'],
   'docs/sub/NESTED.md': ['markdownFile', 'windowsInsensitive'],
   'docs/dev/CHECKS.md': ['markdownFile', 'inertDocumentation', 'windowsInsensitive'],
