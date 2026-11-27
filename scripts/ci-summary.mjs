@@ -30,7 +30,13 @@ export function testFile(value) {
 
 export function assertJobResults(
   needs,
-  { docsOnly = false, fullBrowser = false, event, windowsSensitive = true } = {}
+  {
+    docsOnly = false,
+    fullBrowser = false,
+    changedBrowser = false,
+    event,
+    windowsSensitive = true,
+  } = {}
 ) {
   const pullRequest = event === 'pull_request';
   const ran = (condition) => (!docsOnly && condition ? 'success' : 'skipped');
@@ -42,6 +48,7 @@ export function assertJobResults(
     tooling: ran(!pullRequest || windowsSensitive),
     'linux-browser-core': ran(true),
     'browser-full': fullBrowser ? 'success' : 'skipped',
+    'browser-changed': changedBrowser ? 'success' : 'skipped',
   };
   for (const [job, result] of Object.entries(expected))
     if (needs[job]?.result !== result)
@@ -50,6 +57,7 @@ export function assertJobResults(
     status: 'PASS',
     coverage: docsOnly ? 'docs-only' : pullRequest ? 'impact' : 'full-required',
     fullBrowser,
+    changedBrowser,
   };
 }
 
@@ -210,6 +218,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           assertJobResults(JSON.parse(process.env.UIMORI_CI_NEEDS ?? '{}'), {
             docsOnly: process.env.UIMORI_DOCS_ONLY === 'true',
             fullBrowser: process.env.UIMORI_FULL_BROWSER === 'true',
+            changedBrowser: Boolean(process.env.UIMORI_BROWSER_DOMAINS),
             event: process.env.GITHUB_EVENT_NAME,
             windowsSensitive: process.env.UIMORI_WINDOWS_SENSITIVE !== 'false',
           })

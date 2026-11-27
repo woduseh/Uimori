@@ -48,7 +48,13 @@ function pullRequestFixture(files, scope = 'impact') {
     reports: [report || undefined],
   };
 }
-function jobFixture({ docs = false, full = false, pullRequest = false, windows = true } = {}) {
+function jobFixture({
+  docs = false,
+  full = false,
+  changed = false,
+  pullRequest = false,
+  windows = true,
+} = {}) {
   const ran = (condition) => (!docs && condition ? 'success' : 'skipped');
   return Object.fromEntries(
     Object.entries({
@@ -59,6 +65,7 @@ function jobFixture({ docs = false, full = false, pullRequest = false, windows =
       tooling: ran(!pullRequest || windows),
       'linux-browser-core': ran(true),
       'browser-full': full ? 'success' : 'skipped',
+      'browser-changed': changed ? 'success' : 'skipped',
     }).map(([job, result]) => [job, { result }])
   );
 }
@@ -131,6 +138,24 @@ test('pull requests require the impact job and Windows tooling only for Windows-
     assertJobResults(jobFixture({ docs: true, pullRequest: true }), { event, docsOnly: true })
       .coverage,
     'docs-only'
+  );
+});
+
+test('a pull request with changed browser domains requires their job, and no other run accepts it', () => {
+  const event = 'pull_request';
+  const options = { event, changedBrowser: true };
+  assert.equal(
+    assertJobResults(jobFixture({ pullRequest: true, changed: true }), options).changedBrowser,
+    true
+  );
+  for (const state of ['failure', 'cancelled', 'skipped', undefined]) {
+    const jobs = jobFixture({ pullRequest: true, changed: true });
+    jobs['browser-changed'].result = state;
+    assert.throws(() => assertJobResults(jobs, options), /browser-changed/);
+  }
+  assert.throws(
+    () => assertJobResults(jobFixture({ pullRequest: true, changed: true }), { event }),
+    /browser-changed: expected skipped/
   );
 });
 

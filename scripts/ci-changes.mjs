@@ -2,6 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { docsOnly, windowsSensitive } from './change-classifier.mjs';
+import { browserShards } from './ci-summary.mjs';
+import { readFeatureMap, selectChanged } from './feature-map.mjs';
 
 export { docsOnly, windowsSensitive };
 
@@ -9,21 +11,30 @@ export function versionChanged(packageJsonAt, base, head = 'HEAD') {
   return JSON.parse(packageJsonAt(base)).version !== JSON.parse(packageJsonAt(head)).version;
 }
 
+export function browserSelection(map, files) {
+  const { domains } = selectChanged(map, files);
+  const specs = new Set(
+    domains.flatMap((name) => map.domains[name].specs.map((entry) => entry.file))
+  ).size;
+  const total = Object.values(map.domains).reduce((sum, domain) => sum + domain.specs.length, 0);
+  const cap = Math.ceil(total / browserShards);
+  return specs > cap
+    ? { domains: [], specs, cap, full: true }
+    : { domains, specs, cap, full: false };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const event = process.env.GITHUB_EVENT_NAME;
   let docs = false;
   let windows = true;
-  let fullBrowser =
-    process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' &&
-    process.env.UIMORI_BROWSER_INPUT === 'true';
+  let files;
+  let fullBrowser = event === 'workflow_dispatch' && process.env.UIMORI_BROWSER_INPUT === 'true';
+  let browserDomains = [];
   const base = process.env.UIMORI_DIFF_BASE;
-  if (
-    process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' &&
-    /^[a-f0-9]{40}$/.test(base ?? '') &&
-    !/^0+$/.test(base)
-  ) {
+  if (event !== 'workflow_dispatch' && /^[a-f0-9]{40}$/.test(base ?? '') && !/^0+$/.test(base)) {
     const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
     try {
-      const files = git('diff', '--no-renames', '--name-only', '-z', base, 'HEAD')
+      files = git('diff', '--no-renames', '--name-only', '-z', base, 'HEAD')
         .split('\0')
         .filter(Boolean);
       docs = docsOnly(files);
@@ -35,7 +46,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       fullBrowser = !docs;
     }
   }
-  const result = `docs_only=${docs}\nfull_browser=${fullBrowser}\nwindows_sensitive=${windows}\n`;
+  if (event === 'pull_request' && !docs && !fullBrowser) {
+    const selection = files
+      ? browserSelection(readFeatureMap(), files)
+      : { domains: [], full: true };
+    if (files)
+      console.log(
+        `Changed browser specs: ${selection.specs} of cap ${selection.cap}; ${selection.full ? 'running the full browser shards' : `domains: ${selection.domains.join(' ') || 'none'}`}`
+      );
+    fullBrowser = selection.full;
+    browserDomains = selection.domains;
+  }
+  const result = `docs_only=${docs}\nfull_browser=${fullBrowser}\nwindows_sensitive=${windows}\nbrowser_domains=${browserDomains.join(' ')}\n`;
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, result);
   process.stdout.write(result);
 }
