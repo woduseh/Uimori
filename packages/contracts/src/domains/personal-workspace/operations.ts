@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { defineOperation } from '../../endpoint.js';
 import { revision } from '../revision.js';
 import { USAGE_KINDS } from './usage-kinds.js';
@@ -14,15 +14,15 @@ const usageRange = { from: calendarDate, to: calendarDate };
 const ordered = (range: { from: string; to: string }) => range.from <= range.to;
 const orderMessage = { message: 'Usage start date is after the end date', path: ['to'] };
 
-export const usagePeriod = z.object(usageRange).refine(ordered, orderMessage);
+export const usagePeriod = z.strictObject(usageRange).refine(ordered, orderMessage);
 export type UsagePeriod = z.infer<typeof usagePeriod>;
 export const usageExportQuery = z
-  .object({ ...usageRange, group: z.enum(['day', 'model', 'kind']).default('day') })
+  .strictObject({ ...usageRange, group: z.enum(['day', 'model', 'kind']).default('day') })
   .refine(ordered, orderMessage);
 
-const count = z.number().int().nonnegative();
+const count = z.int().nonnegative();
 const usd = z.number().nonnegative();
-export const usageTotals = z.object({
+export const usageTotals = z.strictObject({
   calls: count,
   inputTokens: count,
   outputTokens: count,
@@ -36,7 +36,7 @@ export const usageTotals = z.object({
   runningCalls: count,
 });
 export type UsageTotals = z.infer<typeof usageTotals>;
-export const usageReport = z.object({
+export const usageReport = z.strictObject({
   from: z.string(),
   to: z.string(),
   timeZone: z.literal('Asia/Seoul'),
@@ -49,27 +49,27 @@ export const usageReport = z.object({
 });
 export type UsageReport = z.infer<typeof usageReport>;
 
-export const backupSettings = z.object({
+export const backupSettings = z.strictObject({
   revision,
   enabled: z.boolean(),
-  hour: z.number().int(),
-  minute: z.number().int(),
-  retain: z.number().int(),
+  hour: z.int(),
+  minute: z.int(),
+  retain: z.int(),
   nextRunAt: z.string().nullable(),
 });
 export type BackupSettings = z.infer<typeof backupSettings>;
-export const backupManifest = z.object({
+export const backupManifest = z.strictObject({
   format: z.literal('uimori-snapshot-v1'),
   id: z.string(),
   createdAt: z.string(),
   appVersion: z.string(),
   buildId: z.string(),
-  schema: z.number().int(),
-  bytes: z.number().int().nonnegative(),
+  schema: z.int(),
+  bytes: z.int().nonnegative(),
   sha256: z.string(),
 });
 export type BackupManifest = z.infer<typeof backupManifest>;
-export const backupStatus = z.object({
+export const backupStatus = z.strictObject({
   settings: backupSettings,
   status: z.enum(['idle', 'running', 'failed']),
   lastSuccess: backupManifest.nullable(),
@@ -78,18 +78,18 @@ export const backupStatus = z.object({
   backups: z.array(backupManifest),
 });
 export type BackupStatus = z.infer<typeof backupStatus>;
-export const updateBackupSettingsInput = z.object({
+export const updateBackupSettingsInput = z.strictObject({
   expectedRevision: revision,
   enabled: z.boolean(),
-  hour: z.number().int().min(0).max(23),
-  minute: z.number().int().min(0).max(59),
-  retain: z.number().int().min(1).max(30),
+  hour: z.int().min(0).max(23),
+  minute: z.int().min(0).max(59),
+  retain: z.int().min(1).max(30),
 });
 export type UpdateBackupSettings = z.infer<typeof updateBackupSettingsInput>;
 
 export const personalWorkspaceOperations = {
   readUsage: defineOperation('personal-workspace.readUsage', usagePeriod, usageReport),
-  readBackups: defineOperation('personal-workspace.readBackups', z.object({}), backupStatus),
+  readBackups: defineOperation('personal-workspace.readBackups', z.strictObject({}), backupStatus),
   updateBackupSettings: defineOperation(
     'personal-workspace.updateBackupSettings',
     updateBackupSettingsInput,
@@ -97,7 +97,7 @@ export const personalWorkspaceOperations = {
   ),
   startBackup: defineOperation(
     'personal-workspace.startBackup',
-    z.object({}),
-    z.object({ status: z.literal('running') })
+    z.strictObject({}),
+    z.strictObject({ status: z.literal('running') })
   ),
 };

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { z } from 'zod';
+import type { z } from 'zod/v4';
 import { type Endpoint, endpointInput, type Operation } from '#contracts';
 import { AppError } from './app-errors.js';
 
@@ -9,12 +9,12 @@ export function checkEndpointOutputs(app: FastifyInstance): void {
   app.decorate(checkOutputs, true);
 }
 
-export function parseInput<S extends z.ZodTypeAny>(schema: S, value: unknown): z.output<S> {
+export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.output<S> {
   const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;
   const error = new AppError(400, 'INVALID_REQUEST');
   error.message = `INVALID_REQUEST: ${parsed.error.issues
-    .map((issue) => `${issue.path.join('.') || 'input'}: ${issue.message}`)
+    .map((issue) => `${issue.path.map(String).join('.') || 'input'}: ${issue.message}`)
     .join('; ')}`;
   throw error;
 }
@@ -36,7 +36,7 @@ export function registerEndpoint<Op extends Operation>(
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
     handler: async (request, reply) => {
       const output = await handler(
-        parseInput(operation.input, endpointInput(endpoint, request)),
+        parseInput<Op['input']>(operation.input, endpointInput(endpoint, request)),
         request,
         reply
       );

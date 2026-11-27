@@ -40,6 +40,10 @@ export function appErrorFrom(statusCode: number, code: AppErrorCode, params?: un
   return new create(statusCode, code, params);
 }
 
+export function assertRevision(actual: number, expected: number): void {
+  if (actual !== expected) throw new AppError(409, 'REVISION_CONFLICT');
+}
+
 export class HelperToolError extends HttpError {
   readonly code: string;
   constructor(statusCode: number, code: string, detail?: string) {

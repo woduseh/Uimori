@@ -91,6 +91,15 @@ test('HTTP upload round-trips exact bytes, survives reopening, and protects font
   const bytes = fixture();
   let id = '';
   try {
+    for (const retired of ['sourceUrl', 'license']) {
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/api/fonts',
+        payload: { title: 'Retired metadata', data: bytes.toString('base64'), [retired]: 'Old' },
+      });
+      expect(rejected.json(), retired).toEqual({ code: 'INVALID_REQUEST' });
+    }
+    expect(fontCatalog(app.store).fonts).toEqual([]);
     const uploaded = await app.inject({
       method: 'POST',
       url: '/api/fonts',

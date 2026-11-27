@@ -16,7 +16,7 @@ import { createDatabaseSnapshot } from './database-backup.js';
 import { personalWorkspaceEndpoints } from '#contracts';
 import { personalWorkspaceOperations, type UpdateBackupSettings } from '#contracts/operations';
 import { HttpError } from './request-validation.js';
-import { AppError } from './app-errors.js';
+import { AppError, assertRevision } from './app-errors.js';
 import { registerEndpoint } from './endpoint.js';
 import type { Store } from './store.js';
 
@@ -151,7 +151,7 @@ export class BackupService {
     retain,
   }: UpdateBackupSettings): BackupSettings {
     const current = this.settings();
-    if (expectedRevision !== current.revision) throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(current.revision, expectedRevision);
     const changedSchedule = !current.enabled || current.hour !== hour || current.minute !== minute;
     const next: BackupSettings = {
       revision: current.revision + 1,

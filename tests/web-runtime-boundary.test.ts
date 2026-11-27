@@ -48,6 +48,67 @@ function nodeOnlyChains(entries: string[], sources: ModuleSources): string[] {
   });
 }
 
+function eagerZodChains(entries: string[], sources: ModuleSources): string[] {
+  const parent = new Map<string, string | undefined>(entries.map((entry) => [entry, undefined]));
+  const queue = [...entries];
+  const reached: string[] = [];
+  for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+    for (const { specifier } of sourceImports(sources.read(next), next).filter(
+      (item) => item.runtime && item.eager
+    )) {
+      if (/^zod(?:\/|$)/u.test(specifier)) {
+        const chain = [specifier, next];
+        for (let step = parent.get(next); step !== undefined; step = parent.get(step))
+          chain.push(step);
+        reached.push(chain.reverse().join(' -> '));
+        continue;
+      }
+      const resolved = importedSource(sources, next, specifier);
+      if (!resolved || parent.has(resolved)) continue;
+      parent.set(resolved, next);
+      queue.push(resolved);
+    }
+  }
+  return reached.sort();
+}
+
+test('#contracts and the web startup graph never load zod eagerly', () => {
+  const chains = eagerZodChains(
+    ['packages/contracts/src/index.ts', 'web/main.tsx'],
+    repositorySources(root)
+  );
+  expect(
+    chains,
+    [
+      'zod is reached through static value imports from #contracts or web/main.tsx:',
+      ...chains.map((chain) => `  ${chain}`),
+      'Schemas live in packages/contracts/src/domains/<domain>/operations.ts behind #contracts/operations;',
+      'endpoints.ts and index.ts import them with `import type` / `export type *` only.',
+    ].join('\n')
+  ).toEqual([]);
+});
+
+test('a zod value import reached through #contracts is reported, and type-only and lazy imports are not', () => {
+  const files: Record<string, string> = {
+    'web/main.tsx': "import { fontEndpoints } from '#contracts';\nvoid import('./lazy.js');",
+    'web/lazy.ts': "import { z } from 'zod/v4';",
+    'packages/contracts/src/index.ts':
+      "export * from './endpoints.js';\nexport type * from './operations.js';",
+    'packages/contracts/src/endpoints.ts':
+      "import type { ops } from './operations.js';\nimport { schema } from './leak.js';",
+    'packages/contracts/src/operations.ts': "import { z } from 'zod/v4';",
+    'packages/contracts/src/leak.ts': "export { z as schema } from 'zod';",
+  };
+  const sources: ModuleSources = {
+    read: (file) => files[file]!,
+    exists: (file) => file in files,
+    imports: { '#contracts': './packages/contracts/src/index.js' },
+  };
+  expect(eagerZodChains(['web/main.tsx'], sources)).toEqual([
+    'web/main.tsx -> packages/contracts/src/index.ts -> packages/contracts/src/endpoints.ts -> packages/contracts/src/leak.ts -> zod',
+  ]);
+});
+
 test('web modules never load Node-only modules at runtime', () => {
   const chains = nodeOnlyChains(sourceFiles(root, 'web'), repositorySources(root));
   expect(

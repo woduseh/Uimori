@@ -4,7 +4,7 @@ import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
-import { appearanceOperations } from '#contracts/operations';
+import { appearanceOperations, fontId, fontTitle } from '#contracts/operations';
 import { HelperToolError } from './app-errors.js';
 import { parseInput } from './endpoint.js';
 import { fields, record, text, number, HttpError } from './request-validation.js';
@@ -196,7 +196,7 @@ export async function preparePresentationTool(
   if (name !== 'font.register') return undefined;
   const args = record(value);
   fields(args, ['title', 'url']);
-  text(args.title, 'font title', 200);
+  parseInput(fontTitle, args.title);
   return downloadFont(
     text(args.url, 'font URL', 4000),
     AbortSignal.any([signal, AbortSignal.timeout(15_000)])
@@ -223,7 +223,7 @@ export function invokePresentationTool(
     text(args.url, 'font URL', 4000);
     return {
       ...registerFont(store, {
-        title: text(args.title, 'font title', 200),
+        title: parseInput(fontTitle, args.title),
         bytes,
       }),
       preferences: fontPreferences(store),
@@ -243,7 +243,7 @@ export function invokePresentationTool(
   }
   if (name === 'font.delete') {
     fields(args, ['id']);
-    return deleteFont(store, text(args.id, 'font ID', 100));
+    return deleteFont(store, parseInput(fontId, args.id));
   }
   if (name === 'palette.save') {
     fields(args, ['id', 'expectedRevision', 'model']);

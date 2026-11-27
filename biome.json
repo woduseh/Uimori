@@ -43,7 +43,15 @@
     "rules": {
       "preset": "recommended",
       "style": {
-        "preset": "none"
+        "preset": "none",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+            }
+          }
+        }
       },
       "complexity": {
         "preset": "none"
@@ -84,7 +92,8 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@playwright/test": "Import from ./fixtures/browser-test.js so the shared page checks run after the test."
+                  "@playwright/test": "Import from ./fixtures/browser-test.js so the shared page checks run after the test.",
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
                 }
               }
             }
@@ -110,10 +119,13 @@
             "noRestrictedImports": {
               "level": "error",
               "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
                 "patterns": [
                   {
-                    "group": ["**", "!./**", "!../**", "!zod", "!zod/**"],
-                    "message": "Contracts are runtime-neutral: import only modules inside packages/contracts and zod."
+                    "group": ["**", "!./**", "!../**", "!zod/v4"],
+                    "message": "Contracts are runtime-neutral: import only modules inside packages/contracts and zod/v4."
                   },
                   {
                     "group": [
@@ -150,6 +162,9 @@
             "noRestrictedImports": {
               "level": "error",
               "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
                 "patterns": [
                   {
                     "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
@@ -178,6 +193,9 @@
             "noRestrictedImports": {
               "level": "error",
               "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
                 "patterns": [
                   {
                     "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
@@ -253,6 +271,8 @@
                   }
                 ],
                 "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'.",
+                  "#contracts/operations": "Web code imports endpoints and types from #contracts; #contracts/operations holds the zod schemas the startup bundle must not load.",
                   "_http_agent": "Browser code cannot import Node builtins.",
                   "_http_client": "Browser code cannot import Node builtins.",
                   "_http_common": "Browser code cannot import Node builtins.",

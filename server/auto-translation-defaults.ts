@@ -7,7 +7,7 @@ import {
   translationOperations,
 } from '#contracts/operations';
 import type { Store } from './store.js';
-import { AppError } from './app-errors.js';
+import { assertRevision } from './app-errors.js';
 import { registerEndpoint } from './endpoint.js';
 
 const KEY = 'auto-translation-defaults';
@@ -43,7 +43,7 @@ export function saveAutoTranslationDefaults(
 ): AutoTranslationDefaults {
   return store.transaction(() => {
     const previous = autoTranslationDefaults(store.db);
-    if (previous.revision !== input.expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(previous.revision, input.expectedRevision);
     const next: AutoTranslationDefaults = {
       revision: previous.revision + 1,
       autoTranslate: input.autoTranslate,

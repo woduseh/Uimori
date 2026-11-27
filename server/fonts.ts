@@ -4,7 +4,7 @@ import { get } from 'node:https';
 import { isIP } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { appearanceEndpoints } from '#contracts';
-import { appearanceOperations, type SelectFonts } from '#contracts/operations';
+import { appearanceOperations, fontTitle, type SelectFonts } from '#contracts/operations';
 import {
   MAX_FONT_BYTES,
   type FontAsset,
@@ -13,8 +13,8 @@ import {
   type FontPreferences,
 } from '../core/fonts.js';
 import type { Store } from './store.js';
-import { AppError, HelperToolError } from './app-errors.js';
-import { registerEndpoint } from './endpoint.js';
+import { AppError, assertRevision, HelperToolError } from './app-errors.js';
+import { parseInput, registerEndpoint } from './endpoint.js';
 
 const key = 'font-preferences';
 const MAX_STORED_FONTS = 100;
@@ -80,7 +80,7 @@ export function fontFileFormat(bytes: Buffer): FontFormat {
 }
 export function registerFont(store: Store, input: { title: string; bytes: Uint8Array }): FontAsset {
   initFonts(store);
-  const title = input.title.trim();
+  const title = parseInput(fontTitle, input.title);
   const bytes = Buffer.from(input.bytes);
   const fontFormat = fontFileFormat(bytes);
   const id = createHash('sha256').update(bytes).digest('hex');
@@ -125,8 +125,7 @@ export function selectFonts(
   { expectedRevision, appFontId, readerFontId }: SelectFonts
 ): FontPreferences {
   return store.transaction(() => {
-    if (fontPreferences(store).revision !== expectedRevision)
-      throw new AppError(409, 'REVISION_CONFLICT');
+    assertRevision(fontPreferences(store).revision, expectedRevision);
     for (const id of [appFontId, readerFontId]) if (id !== null) readFont(store, id);
     return writePreferences(store, { revision: expectedRevision + 1, appFontId, readerFontId });
   });

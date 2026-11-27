@@ -1,47 +1,53 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { defineOperation } from '../../endpoint.js';
 import { revision } from '../revision.js';
 
-export const fontAsset = z.object({
+export const fontId = z.string().min(1).max(64);
+export const fontTitle = z.string().trim().min(1).max(200);
+
+export const fontAsset = z.strictObject({
   id: z.string(),
   title: z.string(),
   format: z.enum(['woff2', 'woff', 'ttf', 'otf']),
   mimeType: z.string(),
-  byteLength: z.number().int().nonnegative(),
+  byteLength: z.int().nonnegative(),
   createdAt: z.string(),
 });
 export type FontAsset = z.infer<typeof fontAsset>;
 export type FontFormat = FontAsset['format'];
 
-export const fontPreferences = z.object({
+export const fontPreferences = z.strictObject({
   revision,
   appFontId: z.string().nullable(),
   readerFontId: z.string().nullable(),
 });
 export type FontPreferences = z.infer<typeof fontPreferences>;
 
-export const fontCatalog = z.object({ fonts: z.array(fontAsset), preferences: fontPreferences });
+export const fontCatalog = z.strictObject({
+  fonts: z.array(fontAsset),
+  preferences: fontPreferences,
+});
 export type FontCatalog = z.infer<typeof fontCatalog>;
 
-export const selectFontsInput = z.object({
+export const selectFontsInput = z.strictObject({
   expectedRevision: revision,
-  appFontId: z.string().nullable(),
-  readerFontId: z.string().nullable(),
+  appFontId: fontId.nullable(),
+  readerFontId: fontId.nullable(),
 });
 export type SelectFonts = z.infer<typeof selectFontsInput>;
 
 export const appearanceOperations = {
-  listFonts: defineOperation('appearance.listFonts', z.object({}), fontCatalog),
+  listFonts: defineOperation('appearance.listFonts', z.strictObject({}), fontCatalog),
   readFontPreferences: defineOperation(
     'appearance.readFontPreferences',
-    z.object({}),
+    z.strictObject({}),
     fontPreferences
   ),
   selectFonts: defineOperation('appearance.selectFonts', selectFontsInput, fontPreferences),
   uploadFont: defineOperation(
     'appearance.uploadFont',
-    z.object({ title: z.string().trim().min(1).max(200), data: z.string() }),
+    z.strictObject({ title: fontTitle, data: z.string() }),
     fontAsset
   ),
-  deleteFont: defineOperation('appearance.deleteFont', z.object({ id: z.string() }), fontCatalog),
+  deleteFont: defineOperation('appearance.deleteFont', z.strictObject({ id: fontId }), fontCatalog),
 };

@@ -1,6 +1,6 @@
 import { Catalog } from '@a2ui/web_core/catalog';
 import basicSchema from '../third_party/a2ui/basic-catalog-v1.json' with { type: 'json' };
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const basicCatalog = Catalog.fromJson(basicSchema);
 

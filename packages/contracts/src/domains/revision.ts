@@ -1,3 +1,3 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 
-export const revision = z.number().int().nonnegative();
+export const revision = z.int().nonnegative();

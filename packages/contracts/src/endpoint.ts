@@ -1,16 +1,12 @@
-import type { z } from 'zod';
+import type { z } from 'zod/v4';
 
 export type Operation<
   N extends string = string,
-  I extends z.ZodTypeAny = z.ZodTypeAny,
-  O extends z.ZodTypeAny = z.ZodTypeAny,
+  I extends z.ZodType = z.ZodType,
+  O extends z.ZodType = z.ZodType,
 > = { readonly name: N; readonly input: I; readonly output: O };
 
-export const defineOperation = <
-  const N extends string,
-  I extends z.ZodTypeAny,
-  O extends z.ZodTypeAny,
->(
+export const defineOperation = <const N extends string, I extends z.ZodType, O extends z.ZodType>(
   name: N,
   input: I,
   output: O
@@ -19,7 +15,7 @@ export const defineOperation = <
 export type OperationInput<Op extends Operation> = z.input<Op['input']>;
 export type OperationOutput<Op extends Operation> = z.output<Op['output']>;
 
-export type HttpMethod = 'GET' | 'PUT' | 'POST' | 'DELETE';
+export type HttpMethod = 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
 
 export type Endpoint<Op extends Operation = Operation> = {
   readonly operation: Op['name'];
@@ -30,8 +26,28 @@ export type Endpoint<Op extends Operation = Operation> = {
   readonly '~operation'?: Op;
 };
 
-export const defineEndpoint = <Op extends Operation>(endpoint: Endpoint<Op>): Endpoint<Op> =>
-  endpoint;
+export type PathParams<P extends string> = P extends `${string}:${infer Rest}`
+  ? Rest extends `${infer Name}/${infer Tail}`
+    ? Name | PathParams<`/${Tail}`>
+    : Rest
+  : never;
+
+type PathInputKeys<I> = {
+  [K in keyof I]-?: object extends Pick<I, K> ? never : I[K] extends string | number ? K : never;
+}[keyof I];
+
+type UnboundPathParams<P extends string, I> = Exclude<PathParams<P>, PathInputKeys<I>>;
+
+type PathCheck<P extends string, I> = [UnboundPathParams<P, I>] extends [never]
+  ? unknown
+  : { 'path parameters need a required string or number input key': UnboundPathParams<P, I> };
+
+export const defineEndpoint =
+  <Op extends Operation>() =>
+  <const P extends `/${string}`>(
+    endpoint: Endpoint<Op> & { readonly path: P } & PathCheck<P, OperationInput<Op>>
+  ): Endpoint<Op> =>
+    endpoint;
 
 export type EndpointInput<E> = E extends Endpoint<infer Op> ? OperationInput<Op> : never;
 export type EndpointOutput<E> = E extends Endpoint<infer Op> ? OperationOutput<Op> : never;
