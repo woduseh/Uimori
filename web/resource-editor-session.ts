@@ -2,6 +2,7 @@ import { UiError, uiMessage, type UiMessage } from './ui-message.js';
 import { resourceEditorEndpoints as endpoints } from '#contracts';
 import { ApiError, callEndpoint, definiteRejection, libraryChangedKey } from './api.js';
 import { toUiMessage } from './api-errors.js';
+import { t } from './i18n.js';
 import {
   editableResource,
   type ResourceKind,
@@ -305,7 +306,7 @@ export class ResourceEditorSession {
           ? model.title
           : 'title' in state.local.model
             ? state.local.model.title
-            : '기본 프롬프트',
+            : t('prompts.uiCurrentPromptPreset'),
       source: model ? ('unsaved' as const) : ('saved' as const),
       ...(model ? { model } : {}),
     };

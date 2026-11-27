@@ -69,6 +69,21 @@ test('comments, regular expressions, English text and the catalogs are not Korea
   );
 });
 
+test('only files inside web/locales/ are catalogs; a sibling sharing the prefix is scanned', () => {
+  withRepository(
+    {
+      'web/locales.ts': "export const a = '제목';",
+      'web/locales-helper.ts': "export const a = '제목';",
+      'web/locales/view.ts': "export const messages = { 'view.title': { ko: '제목' } };",
+    },
+    (directory) =>
+      assert.deepEqual(
+        koreanLiteralErrors(directory).map((error) => error.split(':')[0]),
+        ['web/locales-helper.ts', 'web/locales.ts']
+      )
+  );
+});
+
 test('debt allows exactly its count, and one more literal fails', () => {
   const source = (count) =>
     Array.from({ length: count }, (_, index) => `export const t${index} = '제목${index}';`).join(

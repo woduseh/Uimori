@@ -147,6 +147,12 @@ const classTable = {
     'scriptFile',
     'topLevelScript',
   ],
+  'scripts/korean-literal-allowlist.json': [
+    'biomeFile',
+    'i18nInput',
+    'scriptFile',
+    'topLevelScript',
+  ],
   'scripts/ui-message-allowlist.json': [
     'biomeFile',
     'uiMessageInput',

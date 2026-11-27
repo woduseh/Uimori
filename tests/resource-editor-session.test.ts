@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ContentEditModel, ResourceSaveResult } from '../core/resource-editing.js';
 import { endpointRequest } from '#contracts';
 import { ApiError } from '../web/api.js';
+import { loadLocale, setLocale } from '../web/i18n.js';
 import { uiText } from '../web/ui-message.js';
 import {
   readRecovery,
@@ -242,6 +243,29 @@ test('helper capture is detached from later edits and clean resources send only 
     source: 'unsaved',
     model: { title: 'Captured', text: 'Prepared input' },
   });
+});
+
+test('an untitled resource is named in the reader language in the helper capture', async () => {
+  const { title: _, ...untitled } = model;
+  const untitledModel = untitled as unknown as ContentEditModel;
+  vi.mocked(api).mockResolvedValue(saved(untitledModel));
+  const session = new ResourceEditorSession({
+    editorKey: 'default-prompt:one',
+    kind: 'content',
+    targetId: 'one',
+    initialModel: untitledModel,
+  });
+  sessions.push(session);
+  await session.open();
+  await loadLocale('en');
+  setLocale('en');
+  try {
+    expect(session.captureForHelper()?.title).toBe('Default prompt');
+    session.setModel({ ...untitledModel, text: 'Edited' });
+    expect(session.captureForHelper()?.title).toBe('Default prompt');
+  } finally {
+    setLocale('ko');
+  }
 });
 
 test('closing during initial recovery loading never deletes the unread buffer', async () => {

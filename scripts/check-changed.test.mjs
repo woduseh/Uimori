@@ -209,6 +209,7 @@ test('comments check only the changed files, and i18n runs for the runtime sourc
   assert.equal(checkChanged.selectChecks(['tests/a.test.ts'], {}).i18n, false);
   assert.equal(checkChanged.selectChecks(['web/locales/settings.ts'], {}).i18n, true);
   assert.equal(checkChanged.selectChecks(['scripts/check-i18n.mjs'], {}).i18n, true);
+  assert.equal(checkChanged.selectChecks(['scripts/korean-literal-allowlist.json'], {}).i18n, true);
   assert.equal(checkChanged.selectChecks(['server/app.ts'], {}).i18n, true);
   assert.equal(checks.uiMessage, true);
   assert.equal(checkChanged.selectChecks(['server/app.ts'], {}).uiMessage, false);

@@ -1,7 +1,7 @@
 import { parse } from '@babel/parser';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const locales = ['ko', 'en', 'ja', 'zh'];
@@ -241,7 +241,7 @@ export function readKoreanLiteralAllowlist(root) {
 
 export function scanKoreanLiterals(root) {
   const web = resolve(root, 'web');
-  const localeDirectory = resolve(web, 'locales');
+  const localeDirectory = `${resolve(web, 'locales')}${sep}`;
   const found = new Map();
   if (!existsSync(web)) return found;
   for (const path of files(web).sort()) {
@@ -348,7 +348,8 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
     });
   }
   for (const file of files(resolve(root, 'web')).filter(
-    (path) => /\.[cm]?[jt]sx?$/u.test(path) && !path.includes(`${resolve(root, 'web/locales')}`)
+    (path) =>
+      /\.[cm]?[jt]sx?$/u.test(path) && !path.startsWith(`${resolve(root, 'web/locales')}${sep}`)
   )) {
     const scanned = scanI18nSource(readFileSync(file, 'utf8'), relative(root, file));
     candidates.push(...scanned.candidates);
@@ -369,7 +370,7 @@ export function checkI18n(root = resolve(fileURLToPath(new URL('..', import.meta
         errors.push(`${location}: ${call.key} requires [${required}], received [${call.args}]`);
     } catch {}
   }
-  const localeDirectory = resolve(root, 'web/locales');
+  const localeDirectory = `${resolve(root, 'web/locales')}${sep}`;
   const sources = ['web', 'core', 'packages', 'server', 'scripts', 'tests']
     .filter((directory) => existsSync(resolve(root, directory)))
     .flatMap((directory) => files(resolve(root, directory)))
