@@ -277,3 +277,45 @@ test('RIMAGE leaving a chat during upload keeps late failures in the original sc
     release();
   }
 });
+
+test('RIMAGE pasted and dropped images preserve order, and invalid files preserve the draft', async ({
+  page,
+  request,
+}) => {
+  const chat = await createChat(request);
+  await open(page, chat);
+  const source = (await image()).buffer.toString('base64');
+  for (const kind of ['paste', 'drop'] as const) {
+    await composer(page).evaluate(
+      (input, { source, kind }) => {
+        const bytes = Uint8Array.from(atob(source), (value) => value.charCodeAt(0));
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([bytes], `${kind}.png`, { type: 'image/png' }));
+        input.dispatchEvent(
+          kind === 'paste'
+            ? new ClipboardEvent('paste', {
+                clipboardData: transfer,
+                bubbles: true,
+                cancelable: true,
+              })
+            : new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true })
+        );
+      },
+      { source, kind }
+    );
+    await expect(thumbnails(page)).toHaveCount(kind === 'paste' ? 1 : 2);
+  }
+  await composer(page).fill('첨부 순서를 보존해 줘.');
+  await page.getByLabel('참고 이미지 파일', { exact: true }).setInputFiles({
+    name: 'bad.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('not an image'),
+  });
+  await expect(page.getByRole('alert').filter({ hasText: 'PNG, JPEG, 정지 WebP' })).toBeVisible();
+  await expect(thumbnails(page)).toHaveCount(2);
+  await send(page).click();
+  await expect.poll(async () => (await detail(request, chat.id)).runs[0]?.status).toBe('completed');
+  expect(
+    (await detail(request, chat.id)).runs[0].snapshot.requestImages?.map((image) => image.name)
+  ).toEqual(['paste.png', 'drop.png']);
+});

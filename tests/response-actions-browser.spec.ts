@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openSourceActions } from './ui-navigation.js';
 
@@ -289,4 +290,52 @@ test('RACOM07 cancelled request dismissal waits for acknowledgement, recovers tr
     await page.unrouteAll({ behavior: 'wait' });
     await otherPage.close();
   }
+});
+
+test('RACOM08 cancelled request opens its specific task record and lazily recovers streamed partial output', async ({
+  page,
+  request,
+}) => {
+  const before = await seed(request, '취소 요청 일부 응답 합성 채팅', ['이전 작업과 구분할 장면']);
+  const run = await cancelNewRequest(page, request, before.chat.id);
+  const pending = page.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);
+  const partialText = '취소하기 전에 받은 공개 응답 조각이에요.';
+  let streamReads = 0;
+  await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
+    streamReads++;
+    await route.fulfill({
+      json: {
+        taskKind: 'main',
+        taskId: run.id,
+        status: 'cancelled',
+        cursor: 1,
+        hasMore: false,
+        chunks: [
+          {
+            seq: 1,
+            segment: 0,
+            attemptId: 'cancelled-public',
+            text: partialText,
+            offset: partialText.length,
+          },
+        ],
+      } satisfies ResponseStreamPage,
+    });
+  });
+  await pending.getByRole('button', { name: '작업 기록', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '작업 현황', exact: true });
+  await expect(dialog.getByTestId('run')).toHaveCount(1);
+  const card = dialog.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
+  await expect(card.locator('.task-request')).toHaveText(run.request);
+  await expect(card.locator('.task-history-notice .error')).toHaveCount(0);
+  await expect(card.getByRole('button', { name: '접기', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  const partial = card.locator('.partial-response');
+  await expect(partial).not.toHaveAttribute('open');
+  expect(streamReads).toBe(0);
+  await partial.getByText('일부 응답 보기', { exact: true }).click();
+  await expect(partial.locator('.streaming-text')).toHaveText(partialText);
+  expect(streamReads).toBe(1);
 });
