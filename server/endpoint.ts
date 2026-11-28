@@ -127,11 +127,15 @@ export type RawRouteOptions<U extends `/api/${string}` = `/api/${string}`> = {
   readonly admission?: Endpoint['admission'];
   readonly bodyLimit?: number;
   readonly compress?: RouteOptions['compress'];
+  readonly errorHandler?: RouteOptions['errorHandler'];
 };
 
 export function registerRawRoute(
   app: FastifyInstance,
-  route: RawRouteOptions & { readonly input?: undefined },
+  route: Omit<RawRouteOptions, 'method'> & {
+    readonly method: HttpMethod | readonly HttpMethod[];
+    readonly input?: undefined;
+  },
   handler: (input: undefined, request: FastifyRequest, reply: FastifyReply) => unknown
 ): void;
 export function registerRawRoute<const U extends `/api/${string}`, S extends z.ZodType>(
@@ -141,11 +145,15 @@ export function registerRawRoute<const U extends `/api/${string}`, S extends z.Z
 ): void;
 export function registerRawRoute(
   app: FastifyInstance,
-  route: RawRouteOptions & { readonly input?: z.ZodType },
+  route: Omit<RawRouteOptions, 'method'> & {
+    readonly method: HttpMethod | readonly HttpMethod[];
+    readonly input?: z.ZodType;
+  },
   handler: (input: never, request: FastifyRequest, reply: FastifyReply) => unknown
 ): void {
+  const method = Array.isArray(route.method) ? [...route.method] : (route.method as HttpMethod);
   app.route({
-    method: route.method,
+    method,
     url: route.url,
     config: {
       ...(route.admission === undefined ? {} : { admission: route.admission }),
@@ -154,10 +162,13 @@ export function registerRawRoute(
     },
     ...(route.bodyLimit === undefined ? {} : { bodyLimit: route.bodyLimit }),
     ...(route.compress === undefined ? {} : { compress: route.compress }),
+    ...(route.errorHandler === undefined ? {} : { errorHandler: route.errorHandler }),
     onSend: route.cache === 'no-store' ? noStore : noStoreRefusals,
     handler: async (request, reply) =>
       handler(
-        (route.input ? parseInput(route.input, endpointInput(route, request)) : undefined) as never,
+        (route.input
+          ? parseInput(route.input, endpointInput({ method: method as HttpMethod }, request))
+          : undefined) as never,
         request,
         reply
       ),

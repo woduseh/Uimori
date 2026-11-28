@@ -1,6 +1,6 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { APP_VERSION } from './app-version.js';
-import { noStore } from './endpoint.js';
+import { registerRawRoute } from './endpoint.js';
 import { executeMcpTool, mcpToolDefinitions, McpUnknownToolError } from './mcp-tools.js';
 import { getMcpSkill, listMcpResources, listMcpSkills, readMcpResource } from './mcp-skills.js';
 import { MCP_ROUTE } from './network-policy.js';
@@ -215,21 +215,23 @@ async function handle(request: FastifyRequest, reply: FastifyReply, store: Store
 }
 
 export function mcpRoutes(app: FastifyInstance, store: Store) {
-  app.route({
-    method: 'POST',
-    url: MCP_ROUTE,
-    onSend: noStore,
-    errorHandler: (error: FastifyError, _request, reply) => {
-      if (error.code?.startsWith('FST_ERR_CTP_') && error.statusCode === 400)
-        return failure(reply, null, new RpcError(-32700, 'Parse error', 400));
-      throw error;
+  registerRawRoute(
+    app,
+    {
+      method: 'POST',
+      url: MCP_ROUTE,
+      cache: 'no-store',
+      errorHandler: (error: FastifyError, _request, reply) => {
+        if (error.code?.startsWith('FST_ERR_CTP_') && error.statusCode === 400)
+          return failure(reply, null, new RpcError(-32700, 'Parse error', 400));
+        throw error;
+      },
     },
-    handler: (request, reply) => handle(request, reply, store),
-  });
-  app.route({
-    method: ['GET', 'DELETE'],
-    url: MCP_ROUTE,
-    onSend: noStore,
-    handler: (_request, reply) => reply.code(405).header('Allow', 'POST').send(),
-  });
+    (_input, request, reply) => handle(request, reply, store)
+  );
+  registerRawRoute(
+    app,
+    { method: ['GET', 'DELETE'], url: MCP_ROUTE, cache: 'no-store' },
+    (_input, _request, reply) => reply.code(405).header('Allow', 'POST').send()
+  );
 }
