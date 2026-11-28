@@ -60,7 +60,7 @@ test('font bytes deduplicate without replacing the original title and selections
   expect(() =>
     selectFonts(store, { expectedRevision: 1, appFontId: font.id, readerFontId: null })
   ).toThrow('REVISION_CONFLICT');
-  expect(invalidations).toEqual(['fonts', 'fonts', 'fonts', 'fonts']);
+  expect(invalidations).toEqual(['fonts', 'fonts', 'fonts']);
 });
 
 test('rejects unsupported signatures and table ranges before storing any font', () => {

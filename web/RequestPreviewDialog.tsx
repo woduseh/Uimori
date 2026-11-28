@@ -11,7 +11,7 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import './request-preview.css';
-import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { resourceFrame, promptWorkspaceFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 
@@ -68,7 +68,7 @@ export function RequestPreviewDialog({
       if (event.key === libraryChangedKey) changed();
     };
     const live = watchLive({
-      match: (frame) => promptWorkspaceFrame(frame) || helperDataFrame(frame),
+      match: (frame) => promptWorkspaceFrame(frame) || resourceFrame(frame),
       refresh: async () => changed(),
       minIntervalMs: helperRefreshSpacing,
     });
