@@ -222,7 +222,7 @@ test('an unedited retry keeps the dice result, while a free-text retry has no ac
   const admitted = await f.submit();
   expect(admitted.statusCode, admitted.body).toBe(200);
   const original = admitted.json<Run>();
-  f.app.controls.failures.add('source-transaction');
+  f.app.controls.armFailure('source-transaction', original.chatId);
   f.app.controls.release('run');
   await vi.waitFor(() => expect(f.store.run(original.id).status).toBe('failed'), {
     timeout: 15000,

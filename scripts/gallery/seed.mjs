@@ -124,7 +124,11 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
 
   const failed = await quietChat(bot.id, '실패한 요청이 있는 채팅');
   try {
-    await call('POST', '/api/test/control', { action: 'fail-next', point: 'source-transaction' });
+    await call('POST', '/api/test/control', {
+      action: 'fail-next',
+      point: 'source-transaction',
+      chatId: failed.id,
+    });
     const run = await call('POST', `/api/chats/${failed.id}/runs`, {
       request: '이 요청은 검사용으로 실패해요.',
       expectedRevision: null,

@@ -11,7 +11,7 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   expect(
     (
       await request.post('/api/test/control', {
-        data: { action: 'fail-next', point: 'source-transaction' },
+        data: { action: 'fail-next', point: 'source-transaction', chatId: chat.id },
       })
     ).ok()
   ).toBe(true);

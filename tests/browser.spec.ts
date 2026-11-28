@@ -71,7 +71,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
   request,
 }) => {
   const chat = await newChat(page, '합성 · 보조 재시도');
-  await control(request, 'fail-next', { point: 'translation' });
+  await control(request, 'fail-next', { point: 'translation', chatId: chat.id });
   await send(page, 'SYNTHETIC_FIRST: A letter rests on the desk.');
   await expect(page.getByTestId('source')).toHaveCount(1);
   await page.getByRole('button', { name: '번역 생성', exact: true }).click();

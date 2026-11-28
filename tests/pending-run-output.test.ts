@@ -300,7 +300,7 @@ test('source completion clears the staged duplicate atomically and rollback reta
   store.startRun(run.id);
   store.stageRunOutput(run.id, 'Canonical provider text');
   const controls = new Controls();
-  controls.failures.add('source-transaction');
+  controls.armFailure('source-transaction', chat.id);
 
   expect(() => store.completeRun(run.id, 'Published prose', noUsage, controls)).toThrow(
     'source-transaction'
