@@ -449,7 +449,7 @@ export function ModelWorkspaceEditor({
         <fieldset className="settings-group full model-primary-settings">
           <legend>{t('settings.agentPermissions')}</legend>
           <div className="settings-group-body">
-            <div className="settings-row">
+            <div className="settings-row settings-row-toggle">
               <div className="settings-row-copy">
                 <label htmlFor={`${id}-helper-paid-confirmation`}>
                   {t('settings.helperConfirmPaidGeneration')}
@@ -466,7 +466,7 @@ export function ModelWorkspaceEditor({
                 />
               </div>
             </div>
-            <div className="settings-row">
+            <div className="settings-row settings-row-toggle">
               <div className="settings-row-copy">
                 <label htmlFor={`${id}-mcp-allow-delete`}>{t('settings.mcpAllowDelete')}</label>
                 <small>{t('settings.mcpAllowDeleteHint')}</small>
@@ -830,7 +830,7 @@ export function ModelWorkspaceEditor({
                     />
                   </div>
                 </div>
-                <div className="settings-row">
+                <div className="settings-row settings-row-toggle">
                   <div className="settings-row-copy">
                     <label htmlFor={`${id}-judgment-images`}>{t('settings.judgmentImages')}</label>
                   </div>
