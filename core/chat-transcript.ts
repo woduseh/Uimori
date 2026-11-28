@@ -102,9 +102,13 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
       role: item.role as ContentAttachment['role'],
     };
   });
+  const primary = (role: ContentAttachment['role']) =>
+    packageAttachments.filter((item) => item.role === role).length;
   if (
     new Set(packageAttachments.map((item) => `${item.id}:${item.role}`)).size !==
-    packageAttachments.length
+      packageAttachments.length ||
+    primary('bot') > 1 ||
+    primary('persona') > 1
   )
     fail('CHAT_TRANSCRIPT_DUPLICATE_REFERENCE');
   const entries = list(body.entries, 'CHAT_TRANSCRIPT_INVALID_ENTRIES').map(

@@ -130,8 +130,6 @@ const { revision: _revision, ...generationValues } = chatGenerationDefaults.shap
 export const updateChatGenerationDefaultsInput = z.strictObject({
   ...generationValues,
   expectedRevision: revision,
-  autoRefusalRetryEnabled: generationValues.autoRefusalRetryEnabled.optional(),
-  autoRefusalMaxRetries: generationValues.autoRefusalMaxRetries.optional(),
 });
 export type UpdateChatGenerationDefaults = z.infer<typeof updateChatGenerationDefaultsInput>;
 

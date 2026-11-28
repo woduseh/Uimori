@@ -144,6 +144,11 @@ test('the image bytes route answers a missing image with a refusal no cache keep
   const missing = await app.inject({ method: 'GET', url: '/api/assets/missing-image' });
   expect(missing.statusCode).toBe(404);
   expect(missing.headers['cache-control']).toBe('no-store');
+  for (const url of [`/api/assets/${asset.id}?extra=1`, '/api/assets/%20']) {
+    const refused = await app.inject({ method: 'GET', url });
+    expect(refused.statusCode, url).toBe(400);
+    expect(refused.headers['cache-control'], url).toBe('no-store');
+  }
   const served = await app.inject({ method: 'GET', url: `/api/assets/${asset.id}` });
   expect(served.statusCode).toBe(200);
   expect(served.headers['cache-control']).toBe('private, max-age=86400');

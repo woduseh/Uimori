@@ -874,3 +874,33 @@ test('a backup restores its profile, drops the retired image translation flag an
     expect(refused.destination.product.all('content')).toEqual([]);
   }
 });
+
+test('a transcript with two personas is refused before a chat or an import receipt exists', async () => {
+  const store = await database();
+  const chat = createFixtureChat(store, 'Two readers');
+  turn(store, chat.id, 'Request', 'A scene.');
+  const persona = (title: string) =>
+    store.product.content({
+      kind: 'persona',
+      title,
+      description: '',
+      text: title,
+      loading: 'pinned',
+      relatedIds: [],
+      package: nativeContent({ name: title, description: title }, {}, 'persona'),
+    }) as Content;
+  const transcript = exportChatTranscript(store, chat.id);
+  transcript.packageAttachments.push(
+    ...[persona('First reader'), persona('Second reader')].map((item) => ({
+      id: item.id,
+      revision: item.revision,
+      role: 'persona' as const,
+    }))
+  );
+  const chats = store.chats().length;
+  expect(() =>
+    importChatTranscript(store, { transcript, idempotencyKey: 'two-readers' }, 'library')
+  ).toThrow('CHAT_TRANSCRIPT_DUPLICATE_REFERENCE');
+  expect(store.chats()).toHaveLength(chats);
+  expect(store.db.prepare('SELECT COUNT(*) AS n FROM import_operations').get()).toEqual({ n: 0 });
+});

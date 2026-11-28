@@ -31,8 +31,8 @@ export function saveChatGenerationDefaults(
       maxCalls: values.maxCalls,
       storyUi: values.storyUi,
       storyUiStyle: values.storyUiStyle,
-      autoRefusalRetryEnabled: values.autoRefusalRetryEnabled ?? previous.autoRefusalRetryEnabled,
-      autoRefusalMaxRetries: values.autoRefusalMaxRetries ?? previous.autoRefusalMaxRetries,
+      autoRefusalRetryEnabled: values.autoRefusalRetryEnabled,
+      autoRefusalMaxRetries: values.autoRefusalMaxRetries,
     };
     store.db
       .prepare(

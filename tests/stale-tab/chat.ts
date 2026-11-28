@@ -123,15 +123,15 @@ export const chatCases = domainCases('chat', {
       },
       {
         when: 'a persona another tab deleted',
-        arrange: () => ({
-          input: {
-            botId: bot().id,
-            expectedRevision: 1,
-            persona: { mode: 'persona', persona: { id: removedPersona() } },
-          },
-        }),
+        arrange: () => {
+          const choice = (id: string) => ({ mode: 'persona', persona: { id } });
+          const defaults = { botId: bot().id, expectedRevision: 1 };
+          return {
+            input: { ...defaults, persona: choice(removedPersona()) },
+            control: { ...defaults, persona: choice(libraryPackage('persona').id) },
+          };
+        },
         answer: deleted,
-        targetRevision: true,
       },
     ],
   },
@@ -182,7 +182,10 @@ export const chatCases = domainCases('chat', {
         arrange: () => {
           const { gone, kept } = folderOfPurgedBot();
           const rename = { expectedRevision: 1, title: 'Renamed' };
-          return { input: { ...gone, ...rename }, control: { ...kept, ...rename } };
+          return {
+            input: { ...gone, ...rename, defaultPersona: { id: removedPersona() } },
+            control: { ...kept, ...rename },
+          };
         },
         answer: conflict,
       },
@@ -191,17 +194,13 @@ export const chatCases = domainCases('chat', {
         arrange: () => {
           const owner = bot().id;
           const target = folder(owner);
+          const edit = { botId: owner, folderId: target.id, expectedRevision: target.revision };
           return {
-            input: {
-              botId: owner,
-              folderId: target.id,
-              expectedRevision: target.revision,
-              defaultPersona: { id: removedPersona() },
-            },
+            input: { ...edit, defaultPersona: { id: removedPersona() } },
+            control: { ...edit, defaultPersona: { id: libraryPackage('persona').id } },
           };
         },
         answer: deleted,
-        targetRevision: true,
       },
     ],
   },
@@ -262,7 +261,6 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
-        targetRevision: true,
       },
       {
         when: 'an order anchor another tab deleted',
@@ -278,7 +276,6 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
-        targetRevision: true,
       },
     ],
   },
@@ -355,22 +352,21 @@ export const chatCases = domainCases('chat', {
         arrange: () => {
           const { chat } = scene('Stale tab module');
           const profile = profileOf(chat.id);
-          const module = libraryPackage('module');
-          removed('content', module);
-          return {
-            input: {
-              chatId: chat.id,
-              expectedRevision: profile.revision,
-              image: profile.image,
-              packageAttachments: [
-                ...(profile.packageAttachments ?? []),
-                { id: module.id, revision: module.revision, role: 'module' },
-              ],
-            },
-          };
+          const gone = libraryPackage('module');
+          removed('content', gone);
+          const live = libraryPackage('module');
+          const save = (module: Content) => ({
+            chatId: chat.id,
+            expectedRevision: profile.revision,
+            image: profile.image,
+            packageAttachments: [
+              ...(profile.packageAttachments ?? []),
+              { id: module.id, revision: module.revision, role: 'module' },
+            ],
+          });
+          return { input: save(gone), control: save(live) };
         },
         answer: deleted,
-        targetRevision: true,
       },
     ],
   },

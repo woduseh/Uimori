@@ -188,7 +188,6 @@ function clearCommand(key: string, id: string) {
   if (readCommand(key)?.record.id === id) sessionStorage.removeItem(key);
 }
 async function readQueuedRevisions(chatId: string): Promise<QueuedRevisions> {
-  const chat = `/chats/${encodeURIComponent(chatId)}`;
   const [profile, options, workspace] = await Promise.all([
     callEndpoint(chatEndpoints.readProfile, { chatId }),
     callEndpoint(chatSettingsEndpoints.readOptions, { chatId }),

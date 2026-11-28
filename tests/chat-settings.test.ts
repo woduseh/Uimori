@@ -94,7 +94,7 @@ test('generation defaults persist and apply only when creating a new chat', asyn
   const saved = await put(0, { ...chosen, ...chosenRetry });
   expect(saved.statusCode).toBe(200);
   expect(saved.json()).toEqual({ revision: 1, ...chosen, ...chosenRetry });
-  expect((await put(0, initial)).statusCode).toBe(409);
+  expect((await put(0, { ...initial, ...initialRetry })).statusCode).toBe(409);
   expect((await app.inject(url)).json()).toEqual({ revision: 1, ...chosen, ...chosenRetry });
   expect(app.store.chat(before.id).settings).toEqual(initial);
   expect(app.store.chat(before.id).settingsRevision).toBe(before.settingsRevision);

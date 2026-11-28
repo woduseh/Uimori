@@ -11,7 +11,7 @@ const endpoints = allEndpoints['chat-settings'];
 const chatId = (title: string) => createFixtureChat(store(), title).id;
 const goneChatId = () => {
   const id = chatId('Stale tab gone chat');
-  deleteChat(store(), id, {});
+  deleteChat(store(), id);
   return id;
 };
 const readDeleted = {
