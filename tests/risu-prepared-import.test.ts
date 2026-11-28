@@ -1,3 +1,5 @@
+import { executeOperation } from '../server/command.js';
+import { createStorePorts } from '../server/store-ports.js';
 import { applyRisuCommand } from '../server/commands/risu-import.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import Fastify from 'fastify';
@@ -175,12 +177,36 @@ test('a refused receipt write rolls back the library and preserves staging for a
   await expect(applyRisuImport(store, command)).rejects.toThrow('refused receipt');
   expect(store.product.all('content')).toHaveLength(0);
   expect(store.chats()).toHaveLength(0);
+  expect(store.db.prepare('SELECT hash FROM image_blobs').all()).toEqual([]);
   expect(store.db.prepare('SELECT * FROM import_operations').all()).toEqual([]);
   expect(readPreparedRisuImport(store.path, preview.preparedId!).preview.digest).toBe(
     preview.digest
   );
   store.db.exec('DROP TRIGGER refuse_import');
   expect((await applyRisuImport(store, command)).receipt.created).toBe(true);
+});
+
+test('discarding a draft between preparation and commit prevents the cached import', async () => {
+  const store = fixture();
+  const input = await source();
+  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const command = {
+    source: input,
+    digest: preview.digest,
+    preparedId: preview.preparedId,
+    allowPartial: false,
+    idempotencyKey: 'discarded',
+  };
+  await expect(
+    executeOperation(applyRisuCommand, createStorePorts(store), command, {
+      aroundTx(run) {
+        discardRisuImport(store.path, { preparedId: preview.preparedId });
+        return run();
+      },
+    })
+  ).rejects.toMatchObject({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' });
+  expect(store.product.all('content')).toHaveLength(0);
+  expect(store.db.prepare('SELECT key FROM import_operations').all()).toEqual([]);
 });
 
 test('committed import and retry succeed when staging cleanup is locked, then expiry retries cleanup', async () => {

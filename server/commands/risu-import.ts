@@ -22,7 +22,10 @@ export const applyRisuCommand = defineCommand<Pick<AppPorts, 'tx' | 'receipt' | 
     prepare(ports, head, { idempotencyKey: _key, digest: _digest, ...rawBody }) {
       const body = risuOperations.apply.body.safeParse(rawBody);
       if (!body.success) {
-        const field = body.error.issues[0]?.path[0];
+        const issue = body.error.issues[0];
+        if (issue?.code === 'unrecognized_keys')
+          throw new HttpError(400, `Unknown request field: ${issue.keys.join(', ')}`);
+        const field = issue?.path[0];
         if (field === 'imageHandoffIds')
           throw new HttpError(400, 'RISU_IMPORT_IMAGE_HANDOFF_SELECTION');
         if (

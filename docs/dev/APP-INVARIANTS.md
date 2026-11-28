@@ -75,7 +75,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
 
 ### Idempotency receipt retention policy
 
-- **Receipts are never pruned (`saveImportReceipt`)**: Every import, restore, copy and retry receipt stays, so a lost-response retry of any of them answers its original result however many imports followed. Each receipt row is small next to the data its import created, and an earlier prefix-based prune silently dropped archive and transfer restores. Receipt-first routes (`importNormalizedResourceBundle`, `applyRisuPresetImport`, `applyRisuImport`) read the receipt before re-validating, analyzing or converting the request, so a later 409 `*_DRAFT_CHANGED` or 410 `NATIVE_TRANSFER_EXPIRED` means nothing was saved under that key; the web relies on that in `definiteImportFailure`.
+- **Receipts are never pruned (`saveImportReceipt`)**: Every import, restore, copy and retry receipt stays, so a lost-response retry of any of them answers its original result however many imports followed. Each receipt row is small next to the data its import created, and an earlier prefix-based prune silently dropped archive and transfer restores. `importNormalizedResourceBundle` and the Risu apply commands read the receipt before analyzing or converting the source. A Risu apply receipt saved with an earlier request-hash algorithm yields an idempotency conflict on retry; the saved item remains in the library. For matching request hashes, the receipt takes precedence over the draft, so a later 409 `*_DRAFT_CHANGED` or 410 `NATIVE_TRANSFER_EXPIRED` means nothing was saved under that key; the web relies on that in `definiteImportFailure`.
 
 ## Resource editing, recovery, selection revision and helper changes
 
