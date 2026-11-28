@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { HelperTask } from '../core/helper.js';
 import type { LogicalMessage } from '../core/risu-prompt.js';
-import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { chatVariableView } from './chat-variable-context.js';
 import { updateChatVariablesCommand } from './commands/chat-variables.js';
@@ -380,7 +381,6 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   },
 ];
 
-const READ_TOKEN_BUDGET = 12_000;
 const MESSAGE_OPENING_CHARS = 160;
 const VALUE_PREVIEW_CHARS = 300;
 
@@ -395,7 +395,8 @@ function boundary(value: string, at: number) {
 function textPage<T extends object>(
   value: string,
   args: Record<string, unknown>,
-  wrap: (page: object) => T
+  wrap: (page: object) => T,
+  fits: HelperReadFit
 ): T {
   const start = boundary(value, number(args.textOffset ?? 0, 'text offset', 0, value.length));
   const limit =
@@ -411,7 +412,7 @@ function textPage<T extends object>(
       totalChars: value.length,
       nextOffset: end < value.length ? end : null,
     });
-  while (end - start > 2 && countTextTokens(JSON.stringify(page())) > READ_TOKEN_BUDGET)
+  while (end - start > 2 && !fits(page()))
     end = boundary(value, start + Math.max(2, Math.floor((end - start) / 2)));
   return page();
 }
@@ -420,15 +421,15 @@ function listPage<T, R extends object>(
   items: readonly T[],
   start: number,
   limit: number,
-  wrap: (page: T[], nextOffset: number | null) => R
+  wrap: (page: T[], nextOffset: number | null) => R,
+  fits: HelperReadFit
 ): R {
   let count = Math.min(limit, Math.max(0, items.length - start));
   const page = () => {
     const end = start + count;
     return wrap(items.slice(start, end), end < items.length ? end : null);
   };
-  while (count > 1 && countTextTokens(JSON.stringify(page())) > READ_TOKEN_BUDGET)
-    count = Math.max(1, Math.floor(count / 2));
+  while (count > 1 && !fits(page())) count = Math.max(1, Math.floor(count / 2));
   return page();
 }
 
@@ -443,7 +444,12 @@ function messageText(message: LogicalMessage): string {
     .join('');
 }
 
-async function readChatPreview(store: Store, chatId: string, args: Record<string, unknown>) {
+async function readChatPreview(
+  store: Store,
+  chatId: string,
+  args: Record<string, unknown>,
+  fits: HelperReadFit
+) {
   fields(args, [
     'request',
     'contains',
@@ -490,66 +496,82 @@ async function readChatPreview(store: Store, chatId: string, args: Record<string
     const item = messages[index];
     if (!item) throw new HttpError(400, 'The preview has no messages');
     const body = messageText(item);
-    return textPage(body, args, (page) => ({
-      promptHash,
-      ...describe(item, index, body),
-      ...page,
-    }));
+    return textPage(
+      body,
+      args,
+      (page) => ({
+        promptHash,
+        ...describe(item, index, body),
+        ...page,
+      }),
+      fits
+    );
   }
   const listed = messages
     .map((item, index) => ({ item, index, body: messageText(item) }))
     .filter(({ body }) => contains === undefined || body.toLowerCase().includes(contains));
   const start = number(args.offset ?? 0, 'offset', 0);
   const limit = number(args.limit ?? 20, 'limit', 1, 50);
-  return listPage(listed, start, limit, (page, nextOffset) => ({
-    preview: {
-      scope: preview.scope,
-      stale: preview.snapshot.stale,
-      selected: preview.selected,
-      tokens: {
-        estimatedInputTokens: preview.tokens.estimatedInputTokens,
-        inputTokenLimit: preview.tokens.inputTokenLimit,
-        utilization: preview.tokens.utilization,
-        status: preview.tokens.status,
+  return listPage(
+    listed,
+    start,
+    limit,
+    (page, nextOffset) => ({
+      preview: {
+        scope: preview.scope,
+        stale: preview.snapshot.stale,
+        selected: preview.selected,
+        tokens: {
+          estimatedInputTokens: preview.tokens.estimatedInputTokens,
+          inputTokenLimit: preview.tokens.inputTokenLimit,
+          utilization: preview.tokens.utilization,
+          status: preview.tokens.status,
+        },
+        summary: preview.summary,
+        error: preview.error,
+        caveats: preview.caveats,
       },
-      summary: preview.summary,
-      error: preview.error,
-      caveats: preview.caveats,
-    },
-    promptHash,
-    ...(start === 0
-      ? {
-          lore: {
-            enabled: preview.lore.enabled,
-            pinnedEntries: preview.lore.pinnedEntries,
-            selectionPending: preview.lore.selectionPending,
-            retained: (loreContext?.entries ?? [])
+      promptHash,
+      ...(start === 0
+        ? {
+            lore: {
+              enabled: preview.lore.enabled,
+              pinnedEntries: preview.lore.pinnedEntries,
+              selectionPending: preview.lore.selectionPending,
+              retained: (loreContext?.entries ?? [])
+                .slice(0, 50)
+                .map((entry) => ({ id: entry.id, title: entry.title, chars: entry.text.length })),
+              retainedTotal: loreContext?.entries.length ?? 0,
+            },
+            excludedBlocks: (compilation?.trace ?? [])
+              .filter((block) => !block.included)
               .slice(0, 50)
-              .map((entry) => ({ id: entry.id, title: entry.title, chars: entry.text.length })),
-            retainedTotal: loreContext?.entries.length ?? 0,
-          },
-          excludedBlocks: (compilation?.trace ?? [])
-            .filter((block) => !block.included)
-            .slice(0, 50)
-            .map((block) => ({ blockId: block.blockId, reason: block.reason ?? null })),
-          warnings: (compilation?.warnings ?? []).slice(0, 20).map((item) => opening(item, 300)),
-        }
-      : {}),
-    messages: page.map(({ item, index, body }) => {
-      const at = contains === undefined ? -1 : body.toLowerCase().indexOf(contains);
-      return {
-        ...describe(item, index, body),
-        opening: opening(body, MESSAGE_OPENING_CHARS),
-        ...(at >= 0 ? { matchOffset: at } : {}),
-      };
+              .map((block) => ({ blockId: block.blockId, reason: block.reason ?? null })),
+            warnings: (compilation?.warnings ?? []).slice(0, 20).map((item) => opening(item, 300)),
+          }
+        : {}),
+      messages: page.map(({ item, index, body }) => {
+        const at = contains === undefined ? -1 : body.toLowerCase().indexOf(contains);
+        return {
+          ...describe(item, index, body),
+          opening: opening(body, MESSAGE_OPENING_CHARS),
+          ...(at >= 0 ? { matchOffset: at } : {}),
+        };
+      }),
+      total: listed.length,
+      totalMessages: messages.length,
+      nextOffset,
     }),
-    total: listed.length,
-    totalMessages: messages.length,
-    nextOffset,
-  }));
+    fits
+  );
 }
 
-function readSceneLore(store: Store, chatId: string, args: Record<string, unknown>) {
+function readSceneLore(
+  store: Store,
+  chatId: string,
+  args: Record<string, unknown>,
+  fits: HelperReadFit
+) {
   fields(args, ['sourceId', 'offset', 'limit']);
   const chat = store.chat(chatId);
   const sourceId =
@@ -561,18 +583,29 @@ function readSceneLore(store: Store, chatId: string, args: Record<string, unknow
   if (!lore) return { sourceId, attemptId, lore: null };
   const start = number(args.offset ?? 0, 'offset', 0);
   const limit = number(args.limit ?? 50, 'limit', 1, 200);
-  return listPage(lore.entries, start, limit, (entries, nextOffset) => ({
-    sourceId,
-    attemptId,
-    status: lore.status,
-    ...(lore.selection ? { selection: lore.selection } : {}),
-    entries,
-    total: lore.entries.length,
-    nextOffset,
-  }));
+  return listPage(
+    lore.entries,
+    start,
+    limit,
+    (entries, nextOffset) => ({
+      sourceId,
+      attemptId,
+      status: lore.status,
+      ...(lore.selection ? { selection: lore.selection } : {}),
+      entries,
+      total: lore.entries.length,
+      nextOffset,
+    }),
+    fits
+  );
 }
 
-function readHelperChatVariables(store: Store, chatId: string, args: Record<string, unknown>) {
+function readHelperChatVariables(
+  store: Store,
+  chatId: string,
+  args: Record<string, unknown>,
+  fits: HelperReadFit
+) {
   fields(args, ['query', 'name', 'offset', 'limit', 'textOffset', 'textLimit']);
   const view = chatVariableView(store, chatId);
   const guards = {
@@ -594,13 +627,18 @@ function readHelperChatVariables(store: Store, chatId: string, args: Record<stri
         'CHAT_VARIABLE_NOT_FOUND',
         'List the names with chat.variables.read.'
       );
-    return textPage(value(name), args, (page) => ({
-      ...guards,
-      name,
-      overridden: Object.hasOwn(view.values, name),
-      ...(Object.hasOwn(defaults, name) ? { defaultLength: defaults[name]!.length } : {}),
-      ...page,
-    }));
+    return textPage(
+      value(name),
+      args,
+      (page) => ({
+        ...guards,
+        name,
+        overridden: Object.hasOwn(view.values, name),
+        ...(Object.hasOwn(defaults, name) ? { defaultLength: defaults[name]!.length } : {}),
+        ...page,
+      }),
+      fits
+    );
   }
   if (args.textOffset !== undefined || args.textLimit !== undefined)
     throw new HttpError(400, 'textOffset and textLimit need name');
@@ -612,38 +650,45 @@ function readHelperChatVariables(store: Store, chatId: string, args: Record<stri
     .sort();
   const start = number(args.offset ?? 0, 'offset', 0);
   const limit = number(args.limit ?? 50, 'limit', 1, 200);
-  return listPage(names, start, limit, (page, nextOffset) => ({
-    ...guards,
-    variables: page.map((name) => {
-      const current = value(name);
-      const fallback = defaults[name];
-      return {
-        name,
-        value: opening(current, VALUE_PREVIEW_CHARS),
-        ...(current.length > VALUE_PREVIEW_CHARS ? { valueLength: current.length } : {}),
-        overridden: Object.hasOwn(view.values, name),
-        ...(fallback === undefined
-          ? {}
-          : fallback === current
-            ? { default: 'same' }
-            : { default: opening(fallback, VALUE_PREVIEW_CHARS) }),
-      };
+  return listPage(
+    names,
+    start,
+    limit,
+    (page, nextOffset) => ({
+      ...guards,
+      variables: page.map((name) => {
+        const current = value(name);
+        const fallback = defaults[name];
+        return {
+          name,
+          value: opening(current, VALUE_PREVIEW_CHARS),
+          ...(current.length > VALUE_PREVIEW_CHARS ? { valueLength: current.length } : {}),
+          overridden: Object.hasOwn(view.values, name),
+          ...(fallback === undefined
+            ? {}
+            : fallback === current
+              ? { default: 'same' }
+              : { default: opening(fallback, VALUE_PREVIEW_CHARS) }),
+        };
+      }),
+      total: names.length,
+      nextOffset,
     }),
-    total: names.length,
-    nextOffset,
-  }));
+    fits
+  );
 }
 
 export async function readHelperChatState(
   store: Store,
   chatId: string,
   name: string,
-  value: unknown
+  value: unknown,
+  fits: HelperReadFit = DEFAULT_READ_FIT
 ): Promise<unknown> {
   const args = record(value);
-  if (name === 'chat.preview') return readChatPreview(store, chatId, args);
-  if (name === 'scene.lore') return readSceneLore(store, chatId, args);
-  if (name === 'chat.variables.read') return readHelperChatVariables(store, chatId, args);
+  if (name === 'chat.preview') return readChatPreview(store, chatId, args, fits);
+  if (name === 'scene.lore') return readSceneLore(store, chatId, args, fits);
+  if (name === 'chat.variables.read') return readHelperChatVariables(store, chatId, args, fits);
   if (name === 'chat.profile.read') {
     fields(args, []);
     return readChatProfile(store, chatId);

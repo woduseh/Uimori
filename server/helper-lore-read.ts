@@ -1,4 +1,5 @@
-import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import {
   CHAT_LORE_FIELDS,
   chatAttachmentKey,
@@ -10,8 +11,6 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { HelperToolError } from './app-errors.js';
 import { number, text } from './request-validation.js';
 import type { Store } from './store.js';
-
-const MAX_RESULT_TOKENS = 12_000;
 
 function textPage(value: string, offset: number, limit: number) {
   let start = Math.min(offset, value.length);
@@ -27,7 +26,12 @@ function textPage(value: string, offset: number, limit: number) {
   };
 }
 
-export function readHelperChatLore(store: Store, chatId: string, args: Record<string, unknown>) {
+export function readHelperChatLore(
+  store: Store,
+  chatId: string,
+  args: Record<string, unknown>,
+  fits: HelperReadFit = DEFAULT_READ_FIT
+) {
   const current = new ChatOverridesStore(store).get(chatId);
   const head = {
     chatId,
@@ -106,7 +110,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
       best = 0;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      if (countTextTokens(JSON.stringify(page(middle))) <= MAX_RESULT_TOKENS) {
+      if (fits(page(middle))) {
         best = middle;
         low = middle + 1;
       } else high = middle - 1;
@@ -198,7 +202,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
         ...(overrides.length ? { overrides } : {}),
       });
     }
-    if (countTextTokens(JSON.stringify(page())) > MAX_RESULT_TOKENS) {
+    if (!fits(page())) {
       items.pop();
       if (!items.length)
         throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read fewer lore items');

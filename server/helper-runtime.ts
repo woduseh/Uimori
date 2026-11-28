@@ -229,6 +229,7 @@ import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagn
 import { helperActivityTarget, type HelperProviderRetry } from '../core/helper-activity.js';
 import { autoRefusalRetryLimit } from '../core/chat-settings.js';
 import { chatGenerationDefaults } from './chat-generation-defaults.js';
+import { fitsModelInput, type HelperReadFit } from './helper-read-fit.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
@@ -338,6 +339,26 @@ function shellFailed(result: unknown) {
     typeof shell.error === 'string' ||
     (shell.exitCode !== undefined && shell.exitCode !== 0)
   );
+}
+
+function helperToolEvent(
+  call: ProviderResult['toolCalls'][number],
+  result: unknown,
+  denied: boolean,
+  errorKind?: ToolEvent['errorKind']
+): ToolEvent {
+  return {
+    callId: call.id,
+    name: call.name,
+    args: call.arguments,
+    result,
+    denied,
+    ...(errorKind ? { errorKind } : {}),
+  };
+}
+
+function fitsHelperRead(name: string, event: ToolEvent, budget: ContextBudget) {
+  return fitsModelInput(name === 'data.exec' ? event.result : event, budget);
 }
 
 function helperRead(event: ToolEvent) {
@@ -1645,6 +1666,7 @@ export class HelperRuntime {
         if (callIds.has(call.id)) throw new Error('DUPLICATE_TOOL_ID');
         callIds.add(call.id);
       }
+      const readBudget = contextBudgetForModel(task.snapshot.model);
       const executeCall = async (wireCall: ProviderResult['toolCalls'][number]) => {
         toolSignal.throwIfAborted();
         const args = helperArgumentDiagnostic(wireCall.arguments);
@@ -1725,7 +1747,9 @@ export class HelperRuntime {
             record(call.arguments),
             hooks('context', toolSignal),
             helperCallOperationId(task.id, wireCall.id),
-            collectImage
+            collectImage,
+            (result) =>
+              fitsHelperRead(call.name, helperToolEvent(wireCall, result, false), readBudget)
           );
           output = execution.result;
           denied = execution.denied ?? false;
@@ -1819,21 +1843,10 @@ export class HelperRuntime {
           let { output, denied, errorKind } = completion;
           const originalDiagnostics = helperResultDiagnostic(call.name, output);
           const failedShell = call.name === 'data.exec' && shellFailed(output);
-          const event: ToolEvent = {
-            callId: wireCall.id,
-            name: wireCall.name,
-            args: wireCall.arguments,
-            result: output,
-            denied,
-            ...(errorKind ? { errorKind } : {}),
-          };
+          const event = helperToolEvent(wireCall, output, denied, errorKind);
           const originalResultChars = JSON.stringify(event.result).length;
           if (helperRead(event)) {
-            const budget = contextBudgetForModel(task.snapshot.model);
-            if (
-              estimateContextTokens(call.name === 'data.exec' ? event.result : event, budget) >
-              budget.inputTokenLimit
-            ) {
+            if (!fitsHelperRead(call.name, event, readBudget)) {
               const providedTokens = countTextTokens(
                 JSON.stringify(call.name === 'data.exec' ? event.result : event)
               );
@@ -2859,7 +2872,8 @@ export class HelperRuntime {
     args: Record<string, any>,
     hooks: MainHooks,
     operationId: string,
-    collectImage: CollectImage
+    collectImage: CollectImage,
+    readFit: HelperReadFit
   ): Promise<{ result: unknown; denied?: boolean; errorKind?: ToolEvent['errorKind'] }> {
     hooks.signal.throwIfAborted();
     this.workspace.assertRunning(task.id);
@@ -2941,7 +2955,15 @@ export class HelperRuntime {
       );
       return { result: read.result, denied: read.denied, errorKind: read.errorKind };
     }
-    const result = await this.tool(targeted, name, toolArgs, hooks, operationId, collectImage);
+    const result = await this.tool(
+      targeted,
+      name,
+      toolArgs,
+      hooks,
+      operationId,
+      collectImage,
+      readFit
+    );
     if (!traits.readOnly && name !== 'data.exec') {
       try {
         this.shell.refreshAfterMutation(task.id, name, toolArgs, result);
@@ -2958,7 +2980,8 @@ export class HelperRuntime {
     args: Record<string, unknown>,
     hooks: MainHooks,
     operationId: string,
-    collectImage: CollectImage
+    collectImage: CollectImage,
+    readFit: HelperReadFit
   ): Promise<HelperShellAppResult> {
     const readOnly = helperToolTraits(name, args).readOnly;
     let execution: HelperShellAppResult;
@@ -2970,7 +2993,15 @@ export class HelperRuntime {
         this.workspace.instructions(task.id).some((item) => item.status === 'pending')
       )
         throw new HelperToolError(409, 'USER_INSTRUCTION_UPDATED');
-      execution = await this.invokeOperation(task, name, args, hooks, operationId, collectImage);
+      execution = await this.invokeOperation(
+        task,
+        name,
+        args,
+        hooks,
+        operationId,
+        collectImage,
+        readFit
+      );
     } catch (error) {
       const result = helperToolError(error, readOnly, name);
       execution = {
@@ -3011,7 +3042,8 @@ export class HelperRuntime {
     args: Record<string, any>,
     hooks: MainHooks,
     operationId: string,
-    collectImage: CollectImage
+    collectImage: CollectImage,
+    readFit: HelperReadFit
   ): Promise<unknown> {
     this.workspace.assertRunning(task.id);
     if (name === 'app.tools')
@@ -3054,7 +3086,8 @@ export class HelperRuntime {
       };
     }
     if (name === 'guide.read') return invokeHelperGuideTool(args);
-    if (isHelperCodeTool(name)) return invokeHelperCodeTool(this.store, name, args, hooks.signal);
+    if (isHelperCodeTool(name))
+      return invokeHelperCodeTool(this.store, name, args, hooks.signal, readFit);
     if (name === 'image.list') return listHelperImages(this.store, args);
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
     if (
@@ -3224,7 +3257,15 @@ export class HelperRuntime {
         options.timeoutMs,
         hooks.signal,
         (name, args, operationId, signal) =>
-          this.callFromShell(task, name, args, { ...hooks, signal }, operationId, collectImage),
+          this.callFromShell(
+            task,
+            name,
+            args,
+            { ...hooks, signal },
+            operationId,
+            collectImage,
+            readFit
+          ),
         options.maxOutputBytes
       );
     }
@@ -3252,7 +3293,7 @@ export class HelperRuntime {
     }
     const resourceOperation = helperResourceOperation(name, args);
     if (resourceOperation) {
-      if (resourceOperation.readOnly) return invokeResourceTool(this.store, name, args);
+      if (resourceOperation.readOnly) return invokeResourceTool(this.store, name, args, readFit);
       const receiptId = `${task.id}:${operationId}`;
       return this.workspace.operation(task.id, receiptId, { name, args }, () =>
         applyHelperResourceMutation(
@@ -3302,7 +3343,7 @@ export class HelperRuntime {
       const invoke = () =>
         name === 'scene.search' && args.regex === true
           ? invokeSceneRegexSearch(this.store, scope.chatId, args, hooks.signal)
-          : invokeHelperSceneTool(this.store, scope.chatId, name, args, task);
+          : invokeHelperSceneTool(this.store, scope.chatId, name, args, task, readFit);
       if (helperToolTraits(name).readOnly) return invoke();
       const result = this.workspace.operation(
         task.id,
@@ -3339,7 +3380,7 @@ export class HelperRuntime {
     if (HELPER_CHAT_STATE_TOOLS.some((tool) => tool.name === name)) {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       if (helperToolTraits(name, args).readOnly)
-        return readHelperChatState(this.store, scope.chatId, name, args);
+        return readHelperChatState(this.store, scope.chatId, name, args, readFit);
       this.workspace.assertRunning(task.id);
       const receiptId = `${task.id}:${operationId}`;
       const result = this.workspace.operation(
@@ -3512,7 +3553,8 @@ export class HelperRuntime {
     if (name === 'chat.lore') {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
-      if (args.action === 'read') return readHelperChatLore(this.store, scope.chatId, args);
+      if (args.action === 'read')
+        return readHelperChatLore(this.store, scope.chatId, args, readFit);
       if (args.action === 'patchMany') {
         fields(args, ['action', 'items']);
         if (
@@ -3579,7 +3621,7 @@ export class HelperRuntime {
         };
       });
     }
-    if (name === 'editor.read') return readHelperEditor(task.snapshot.editor, args);
+    if (name === 'editor.read') return readHelperEditor(task.snapshot.editor, args, readFit);
     if (name === 'chat.rename' || name === 'chat.fork') {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       this.workspace.assertRunning(task.id);
@@ -3629,7 +3671,7 @@ export class HelperRuntime {
     }
     if (name === 'outline.read') {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
-      return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
+      return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing, readFit);
     }
     if (name.startsWith('context.') || name === 'notes.write') {
       if (scope.kind !== 'chat' || !this.options.services?.context)
@@ -3672,7 +3714,7 @@ export class HelperRuntime {
         totalChars: value.length,
         nextOffset: end < value.length ? end : null,
       });
-      while (countTextTokens(JSON.stringify(page())) > 12_000)
+      while (end - start > 2 && !readFit(page()))
         end = boundary(start + Math.max(2, Math.floor((end - start) / 2)));
       return page();
     }

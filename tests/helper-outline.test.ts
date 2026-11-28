@@ -1,3 +1,4 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { illustrationDatabases } from './fixtures/illustration.js';
@@ -24,8 +25,14 @@ function fixture() {
       intent: '한글😀\r\n"'.repeat(5000),
     })),
   ]);
-  const read = (args: Record<string, unknown> = {}) =>
-    readHelperOutline(store, chat.id, args) as any;
+  const read = (args: Record<string, unknown> = {}, maxResultTokens?: number) =>
+    readHelperOutline(
+      store,
+      chat.id,
+      args,
+      undefined,
+      maxResultTokens === undefined ? undefined : tokenFit(maxResultTokens)
+    ) as any;
   return { store, chat, root: created[0]!.id, leaf: created[1]!.id, read };
 }
 
@@ -36,7 +43,7 @@ test('large outline pages contain exact tree coverage, not full prose, without f
       throw new Error('full detail not allowed');
     });
   const ids: string[] = [];
-  let page = read({ limit: 50 });
+  let page = read({ limit: 50 }, 12_000);
   expect(page.coverage).toMatchObject({
     scopeTotal: 74,
     total: 74,
@@ -49,10 +56,13 @@ test('large outline pages contain exact tree coverage, not full prose, without f
     ids.push(...page.nodes.map((n: any) => n.id));
     if (!page.nextRead) break;
     expect(page.nextRead).toMatchObject({ name: 'app.call', arguments: { name: 'outline.read' } });
-    page = read(page.nextRead.arguments.arguments);
+    page = read(page.nextRead.arguments.arguments, 12_000);
   }
   expect(ids).toHaveLength(74);
   expect(new Set(ids).size).toBe(74);
+  const spacious = read({ limit: 50 }, 64_000);
+  expect(countTextTokens(JSON.stringify(spacious))).toBeGreaterThan(12_000);
+  expect(spacious.nodes).toHaveLength(50);
   const shallow = read({ mode: 'subtree', nodeId: root, depth: 0 });
   expect(shallow.coverage).toMatchObject({
     scopeTotal: 74,

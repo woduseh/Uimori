@@ -1,3 +1,4 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -32,8 +33,19 @@ function fixture() {
   owned.push({ store, path });
   return store;
 }
-const call = async (store: Store, name: string, args: Record<string, unknown>) =>
-  (await invokeHelperCodeTool(store, name, args)) as Record<string, any>;
+const call = async (
+  store: Store,
+  name: string,
+  args: Record<string, unknown>,
+  maxResultTokens?: number
+) =>
+  (await invokeHelperCodeTool(
+    store,
+    name,
+    args,
+    undefined,
+    maxResultTokens === undefined ? undefined : tokenFit(maxResultTokens)
+  )) as Record<string, any>;
 
 test('code.cbs locates diagnostics, blocks and variables in a text or a saved field', async () => {
   const store = fixture();
@@ -82,7 +94,13 @@ test('code.cbs locates diagnostics, blocks and variables in a text or a saved fi
   const many = await call(store, 'code.cbs', { text: '{{nosuch}}\n'.repeat(5000) });
   expect(many.totalDiagnostics).toBe(5000);
   expect(many.diagnostics.length).toBeLessThanOrEqual(100);
-  expect(countTextTokens(JSON.stringify(many))).toBeLessThanOrEqual(12_000);
+  const denseLine = `${'\u0001'.repeat(120)}{{nosuch}}\n`;
+  const wide = await call(store, 'code.cbs', { text: denseLine.repeat(100) }, 64_000);
+  expect(wide.diagnostics).toHaveLength(100);
+  expect(countTextTokens(JSON.stringify(wide))).toBeGreaterThan(12_000);
+  const narrow = await call(store, 'code.cbs', { text: denseLine.repeat(100) }, 12_000);
+  expect(countTextTokens(JSON.stringify(narrow))).toBeLessThanOrEqual(12_000);
+  expect(narrow.diagnostics.length).toBeLessThan(wide.diagnostics.length);
   await expect(call(store, 'code.cbs', { text: 'x', kind: 'content' })).rejects.toThrow(
     'INVALID_ARGUMENTS'
   );

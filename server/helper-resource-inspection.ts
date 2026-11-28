@@ -1,14 +1,13 @@
-import { countTextTokens } from '../core/text-tokens.js';
 import type { PromptPreset } from '../core/product.js';
 import type { ResourceKind } from '../core/resource-editing.js';
 import { diagnoseRisuPreset } from '../core/risu-preset-diagnostics.js';
 import { readHelperResource } from './helper-resource-editing.js';
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
 import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { readResource } from './resource-service.js';
 import type { Store } from './store.js';
 
-const MAX_RESULT_TOKENS = 12_000;
 const selectionFields = [
   'kind',
   'id',
@@ -22,7 +21,11 @@ const selectionFields = [
   'includeBodies',
 ];
 
-export function readHelperResources(store: Store, rawItems: unknown) {
+export function readHelperResources(
+  store: Store,
+  rawItems: unknown,
+  fits: HelperReadFit = DEFAULT_READ_FIT
+) {
   if (!Array.isArray(rawItems) || !rawItems.length || rawItems.length > 16)
     throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'items must list 1 to 16 selections');
   const items: unknown[] = [];
@@ -43,7 +46,12 @@ export function readHelperResources(store: Store, rawItems: unknown) {
           'kind must be content, prompt-preset, prompt-workspace, theme or illustration-preset'
         );
       const id = text(selection.id, 'resource ID', 100);
-      item = { requestIndex, result: readHelperResource(store, kind, id, selection, 11_500) };
+      item = {
+        requestIndex,
+        result: readHelperResource(store, kind, id, selection, (result) =>
+          fits({ items: [{ requestIndex, result }], nextIndex: rawItems.length })
+        ),
+      };
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
       item = { requestIndex, error: error.message, status: error.statusCode };
@@ -52,13 +60,21 @@ export function readHelperResources(store: Store, rawItems: unknown) {
       items: [...items, item],
       nextIndex: requestIndex + 1 < rawItems.length ? requestIndex + 1 : null,
     };
-    if (countTextTokens(JSON.stringify(candidate)) > MAX_RESULT_TOKENS) break;
+    if (!fits(candidate)) {
+      if (!items.length)
+        throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a smaller range');
+      break;
+    }
     items.push(item);
   }
   return { items, nextIndex: items.length < rawItems.length ? items.length : null };
 }
 
-export function validateHelperPreset(store: Store, args: Record<string, unknown>) {
+export function validateHelperPreset(
+  store: Store,
+  args: Record<string, unknown>,
+  fits: HelperReadFit = DEFAULT_READ_FIT
+) {
   fields(args, ['id', 'offset', 'limit']);
   const id = text(args.id, 'preset ID', 100);
   const saved = readResource(store, 'prompt-preset', id) as PromptPreset;
@@ -87,7 +103,7 @@ export function validateHelperPreset(store: Store, args: Record<string, unknown>
       ...diagnostic,
       path: diagnostic.path.startsWith('/values') ? diagnostic.path : `/program${diagnostic.path}`,
     });
-    if (countTextTokens(JSON.stringify(page())) > MAX_RESULT_TOKENS) {
+    if (!fits(page())) {
       diagnostics.pop();
       if (!diagnostics.length)
         throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a smaller range');

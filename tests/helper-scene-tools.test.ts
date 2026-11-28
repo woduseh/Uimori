@@ -1,3 +1,4 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -53,7 +54,7 @@ function fixture(content = 'First paragraph.\nSecond paragraph.') {
       costUsd: null,
     }).id
   );
-  const call = (name: string, args: Record<string, any>) => {
+  const call = (name: string, args: Record<string, any>, maxResultTokens?: number) => {
     if (args.name === 'app.call') {
       expect(args.arguments.name).toBe(name);
       const { chatId: explicitChatId, ...continuation } = args.arguments.arguments;
@@ -62,7 +63,14 @@ function fixture(content = 'First paragraph.\nSecond paragraph.') {
     }
     const { chatId: selectedChatId, ...toolArgs } = args;
     if (selectedChatId !== undefined) expect(selectedChatId).toBe(chatId);
-    return invokeHelperSceneTool(store, chatId, name, toolArgs) as Record<string, any>;
+    return invokeHelperSceneTool(
+      store,
+      chatId,
+      name,
+      toolArgs,
+      undefined,
+      maxResultTokens === undefined ? undefined : tokenFit(maxResultTokens)
+    ) as Record<string, any>;
   };
   const read = (target = 'original') => call('scene.read', { sourceId: source.id, target });
   return { store, chatId, source, call, read };
@@ -352,19 +360,29 @@ test('translation pagination detects completion that changes displayed text with
 test('escaped pages stay bounded and continuation never splits Unicode characters', () => {
   const content = `😀${'\u0001'.repeat(12000)}終😀`;
   const { call, source, chatId } = fixture(content);
-  let page = call('scene.read', { sourceId: source.id, target: 'original', limit: 10000 });
+  let page = call('scene.read', { sourceId: source.id, target: 'original', limit: 10000 }, 9_000);
   let combined = '';
+  let pages = 0;
   while (true) {
-    expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(12_000);
+    pages++;
+    expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(9_000);
     combined += page.text;
     if (!page.nextRead) break;
     expect(page.nextRead).toMatchObject({
       name: 'app.call',
       arguments: { name: 'scene.read', arguments: { chatId } },
     });
-    page = call('scene.read', page.nextRead);
+    page = call('scene.read', page.nextRead, 9_000);
   }
+  expect(pages).toBeGreaterThan(1);
   expect(combined).toBe(content);
+  const spacious = call(
+    'scene.read',
+    { sourceId: source.id, target: 'original', limit: 10000 },
+    64_000
+  );
+  expect(countTextTokens(JSON.stringify(spacious))).toBeGreaterThan(12_000);
+  expect(spacious.text.length).toBe(10000);
   const first = call('scene.read', { sourceId: source.id, target: 'original', limit: 1 });
   expect(first.text).toBe('😀');
   expect(first.nextOffset).toBe(2);

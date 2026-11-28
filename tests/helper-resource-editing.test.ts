@@ -1,3 +1,4 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -7,9 +8,16 @@ import { editableResource } from '../core/resource-editing.js';
 import { readHelperEditor } from '../server/helper-resource-editing.js';
 import { HelperResourcePatchError } from '../server/helper-resource-patch-error.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { Store } from '../server/store.js';
 import { readTheme } from '../server/themes.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import {
+  helperCall,
+  helperDone,
+  runScriptedChatHelper,
+  selectFixtureModels,
+} from './fixtures/scripted-helper.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
 
 const stores: { store: Store; directory: ReturnType<typeof createTestDirectory> }[] = [];
@@ -49,8 +57,18 @@ function fixture(large = false) {
   const content = store.product.content(input) as Content;
   return { store, content };
 }
-const call = (store: Store, name: string, args: Record<string, unknown>) =>
-  invokeResourceTool(store, name, args) as Record<string, any>;
+const call = (
+  store: Store,
+  name: string,
+  args: Record<string, unknown>,
+  maxResultTokens?: number
+) =>
+  invokeResourceTool(
+    store,
+    name,
+    args,
+    maxResultTokens === undefined ? undefined : tokenFit(maxResultTokens)
+  ) as Record<string, any>;
 const presetBlocksPath = '/program/nativeRisuPreset/preset/promptTemplate';
 function presetFixture(blocks: Record<string, unknown>[]) {
   const store = createStore();
@@ -349,40 +367,64 @@ test('batched resource reads keep the complete envelope bounded with separate pa
     expectedRevision: content.revision,
     changes: [{ path: paths[0], op: 'set', value: original }],
   });
-  const first = call(store, 'resource.read', { ...base, paths, textLimit: 10_000 });
+  const first = call(store, 'resource.read', { ...base, paths, textLimit: 10_000 }, 12_000);
   expect(countTextTokens(JSON.stringify(first))).toBeLessThanOrEqual(12_000);
   expect(first.nextIndex).toBe(1);
   expect(first.items).toHaveLength(1);
   expect(first.items[0]).toMatchObject({ path: paths[0], revision: edited.revision });
   expect(first.items[0].nextOffset).toBeGreaterThan(0);
-  const single = call(store, 'resource.read', {
-    ...base,
-    paths: paths.slice(0, 1),
-    textLimit: 10_000,
-  });
+  const single = call(
+    store,
+    'resource.read',
+    {
+      ...base,
+      paths: paths.slice(0, 1),
+      textLimit: 10_000,
+    },
+    12_000
+  );
   expect(countTextTokens(JSON.stringify(single))).toBeLessThanOrEqual(12_000);
   expect(single.items).toEqual(first.items);
   expect(single.nextIndex).toBeNull();
-  const remaining = call(store, 'resource.read', {
-    ...base,
-    paths: paths.slice(first.nextIndex),
-    textLimit: 10_000,
-  });
+  const remaining = call(
+    store,
+    'resource.read',
+    {
+      ...base,
+      paths: paths.slice(first.nextIndex),
+      textLimit: 10_000,
+    },
+    12_000
+  );
   expect(remaining).toMatchObject({
     items: [{ path: paths[1], revision: edited.revision, text: 'Green forest.', nextOffset: null }],
     nextIndex: null,
   });
-  const continuation = call(store, 'resource.read', {
-    ...base,
-    paths: [paths[0]],
-    textOffset: first.items[0].nextOffset,
-    textLimit: 10_000,
-  });
+  const continuation = call(
+    store,
+    'resource.read',
+    {
+      ...base,
+      paths: [paths[0]],
+      textOffset: first.items[0].nextOffset,
+      textLimit: 10_000,
+    },
+    12_000
+  );
   expect(continuation).toMatchObject({
     items: [{ path: paths[0], revision: edited.revision, nextOffset: null }],
     nextIndex: null,
   });
   expect(first.items[0].text + continuation.items[0].text).toBe(original);
+  const spacious = call(store, 'resource.read', { ...base, paths, textLimit: 10_000 }, 64_000);
+  expect(countTextTokens(JSON.stringify(spacious))).toBeGreaterThan(12_000);
+  expect(spacious).toMatchObject({
+    nextIndex: null,
+    items: [
+      { path: paths[0], text: original, nextOffset: null },
+      { path: paths[1], text: 'Green forest.', nextOffset: null },
+    ],
+  });
 });
 
 test('standalone module overview and patch use its authored lorebook', () => {
@@ -557,13 +599,18 @@ test('opt-in preset body pages include full authored fields and mark oversized b
   const collected: Record<string, any>[] = [];
   let offset = 0;
   for (let pageCount = 0; pageCount < 6; pageCount++) {
-    const page = call(store, 'resource.read', {
-      ...target,
-      path: presetBlocksPath,
-      includeBodies: true,
-      offset,
-      limit: 50,
-    });
+    const page = call(
+      store,
+      'resource.read',
+      {
+        ...target,
+        path: presetBlocksPath,
+        includeBodies: true,
+        offset,
+        limit: 50,
+      },
+      12_000
+    );
     expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(12_000);
     collected.push(...page.items);
     if (page.nextOffset === null) break;
@@ -580,11 +627,31 @@ test('opt-in preset body pages include full authored fields and mark oversized b
   expect(collected[2].block).not.toHaveProperty('bodies');
   expect(collected[2].block.omittedBodyPaths.text).toBe(`${presetBlocksPath}/2/text`);
   expect(collected[3].block.bodies.text).toBe('Final instruction');
-  const next = call(store, 'resource.read', {
-    ...target,
-    path: collected[2].block.omittedBodyPaths.text,
-    textLimit: 10000,
-  });
+  const full = call(
+    store,
+    'resource.read',
+    {
+      ...target,
+      path: presetBlocksPath,
+      includeBodies: true,
+      offset: 0,
+      limit: 50,
+    },
+    64_000
+  );
+  expect(countTextTokens(JSON.stringify(full))).toBeGreaterThan(12_000);
+  expect(full.nextOffset).toBeNull();
+  expect(full.items[2].block.bodies.text).toBe(huge);
+  const next = call(
+    store,
+    'resource.read',
+    {
+      ...target,
+      path: collected[2].block.omittedBodyPaths.text,
+      textLimit: 10000,
+    },
+    12_000
+  );
   expect(next.text).toBe(huge.slice(0, next.nextOffset));
   expect(next.nextOffset).not.toBeNull();
   expect(() => call(store, 'resource.read', { ...target, includeBodies: true })).toThrow(
@@ -1163,4 +1230,87 @@ test('previous reads expose the current undo slot without changing saved state o
     'RESOURCE_UNDO_UNAVAILABLE'
   );
   expect(call(store, 'resource.read', { ...target, path }).text).toBe('Third');
+});
+
+test('HelperRuntime bounds resource reads by the running helper model input budget rather than 12000 tokens', async () => {
+  const { store, content } = fixture();
+  const model = selectFixtureModels(store);
+  const chat = createFixtureChat(store, 'Helper read budget');
+  const paths = [
+    '/package/nativeRisu/card/character_book/entries/0/content',
+    '/package/nativeRisu/card/character_book/entries/1/content',
+  ];
+  const original = '\u0001'.repeat(5_000);
+  call(store, 'resource.patch', {
+    kind: 'content',
+    id: content.id,
+    expectedRevision: content.revision,
+    changes: [{ path: paths[0], op: 'set', value: original }],
+  });
+  const readArgs = { kind: 'content', id: content.id, paths, textLimit: 10_000 };
+
+  const toolResult = (run: Awaited<ReturnType<typeof runScriptedChatHelper>>, callId: string) => {
+    const items = run.requests[1]?.input.results as { callId: string; result: unknown }[];
+    const found = items.find((item) => item.callId === callId);
+    expect(found).toBeDefined();
+    return found!.result as Record<string, any>;
+  };
+
+  const wideModel = store.product.save(
+    'model',
+    { ...model, inputTokenLimit: 64_000 },
+    model.id,
+    model.revision
+  );
+  const wideRun = await runScriptedChatHelper(store, chat.id, [
+    helperCall('wide', 'resource.read', readArgs),
+    helperDone,
+  ]);
+  const wideResult = toolResult(wideRun, 'wide');
+  expect(countTextTokens(JSON.stringify(wideResult))).toBeGreaterThan(12_000);
+  expect(wideResult).toMatchObject({
+    nextIndex: null,
+    items: [
+      { path: paths[0], text: original, nextOffset: null },
+      { path: paths[1], text: 'Green forest.', nextOffset: null },
+    ],
+  });
+  vi.restoreAllMocks();
+
+  store.product.save(
+    'model',
+    { ...wideModel, inputTokenLimit: 12_500 },
+    wideModel.id,
+    wideModel.revision
+  );
+  const routes = modelWorkspace(store);
+  updateModelWorkspace(store, {
+    expectedRevision: routes.revision,
+    routes: routes.routes,
+    translationPolicy: routes.translationPolicy,
+    helperModel: { id: model.id },
+    contextModel: { id: model.id },
+  });
+  const narrowRun = await runScriptedChatHelper(store, chat.id, [
+    helperCall('narrow', 'resource.read', readArgs),
+    helperDone,
+  ]);
+  expect(narrowRun.finished('narrow')).toMatchObject({ denied: false, errorCode: null });
+  const pages: Record<string, any>[] = [];
+  JSON.stringify(
+    narrowRun.requests.map((request) => request.input),
+    (_key, value) => {
+      if (value && typeof value === 'object' && 'nextIndex' in value && 'items' in value)
+        pages.push(value);
+      return value;
+    }
+  );
+  expect(pages.length).toBeGreaterThan(0);
+  for (const page of pages) {
+    expect(page.nextIndex).toBe(1);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({ path: paths[0] });
+    expect(page.items[0]).not.toHaveProperty('error');
+    expect(page.items[0].nextOffset).toBeGreaterThan(0);
+  }
 });

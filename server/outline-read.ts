@@ -1,4 +1,5 @@
-import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { RunSnapshot } from '../core/types.js';
 import type { OutlineLevel } from '../core/outline.js';
@@ -7,7 +8,6 @@ import type { Store } from './store.js';
 import { fields, number, text } from './request-validation.js';
 import { HelperToolError } from './app-errors.js';
 
-const MAX_RESULT_TOKENS = 12_000;
 const stamp = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 type Node = {
   id: string;
@@ -179,10 +179,10 @@ function sourcePages(store: Store, chatId: string, refs: Writing[], writing?: Ru
   });
 }
 
-function fitList<T, R>(items: T[], build: () => R): R {
+function fitList<T, R>(items: T[], build: () => R, fits: HelperReadFit): R {
   for (;;) {
     const result = build();
-    if (countTextTokens(JSON.stringify(result)) <= MAX_RESULT_TOKENS) return result;
+    if (fits(result)) return result;
     if (items.length <= 1) throw new HelperToolError(400, 'OUTLINE_METADATA_TOO_LARGE');
     items.pop();
   }
@@ -196,7 +196,8 @@ export function readHelperOutline(
   store: Store,
   chatId: string,
   args: Record<string, unknown>,
-  writing?: RunSnapshot
+  writing?: RunSnapshot,
+  fits: HelperReadFit = DEFAULT_READ_FIT
 ) {
   fields(args, [
     'chatId',
@@ -328,7 +329,7 @@ export function readHelperOutline(
           nextOffset: end < value.length ? end : null,
           nextRead: end < value.length ? next(end) : null,
         };
-        if (countTextTokens(JSON.stringify(result)) <= MAX_RESULT_TOKENS) return result;
+        if (fits(result)) return result;
         if (end - start <= 2) throw new HelperToolError(400, 'OUTLINE_METADATA_TOO_LARGE');
         end = start + Math.floor((end - start) / 2);
       }
@@ -336,19 +337,23 @@ export function readHelperOutline(
     if (section === 'writings') {
       if (offset > refs.length) throw new HelperToolError(400, 'OUTLINE_RANGE_INVALID');
       const items = sourcePages(store, chatId, refs.slice(offset, offset + limit), writing);
-      return fitList(items, () => ({
-        ...base,
-        kind: 'writings' as const,
+      return fitList(
         items,
-        coverage: {
-          content: 'source-references-only',
-          scopeTotal: refs.length,
-          total: refs.length,
-          returned: items.length,
-          excludedByDepth: 0,
-        },
-        ...pageInfo(items.length, refs.length),
-      }));
+        () => ({
+          ...base,
+          kind: 'writings' as const,
+          items,
+          coverage: {
+            content: 'source-references-only',
+            scopeTotal: refs.length,
+            total: refs.length,
+            returned: items.length,
+            excludedByDepth: 0,
+          },
+          ...pageInfo(items.length, refs.length),
+        }),
+        fits
+      );
     }
     const selected =
       section === 'related'
@@ -368,12 +373,16 @@ export function readHelperOutline(
       ...pageInfo(nodes.length, selected.length),
     });
     return section === 'related'
-      ? fitList(nodes, () => ({ ...page(), kind: 'related' as const, items: nodes }))
-      : fitList(nodes, () => ({
-          ...page(),
-          kind: 'nodes' as const,
-          ...(mode === 'overview' ? { focusId: focusId(store, chatId) } : {}),
+      ? fitList(nodes, () => ({ ...page(), kind: 'related' as const, items: nodes }), fits)
+      : fitList(
           nodes,
-        }));
+          () => ({
+            ...page(),
+            kind: 'nodes' as const,
+            ...(mode === 'overview' ? { focusId: focusId(store, chatId) } : {}),
+            nodes,
+          }),
+          fits
+        );
   });
 }
