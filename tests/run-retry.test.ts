@@ -9,7 +9,8 @@ import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, relative, isAbsolute, basename } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { saveImportReceipt } from '../server/import-operations.js';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
@@ -231,7 +232,7 @@ test('rejudgment reports a conflict while another request runs and preserves bot
   const active = queued(store, chat.id, 'A different active request');
   store.startRun(active.id);
 
-  expect(() => store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toThrow(
+  expect(() => store.candidate(original.id, 'rejudge-active')).toThrow(
     expect.objectContaining({ statusCode: 409 })
   );
   expect(store.run(active.id).status).toBe('running');
@@ -241,12 +242,12 @@ test('rejudgment reports a conflict while another request runs and preserves bot
   const originalKey = String(
     store.db.prepare('SELECT request_key FROM runs WHERE id=?').get(original.id)!.request_key
   );
-  expect(() => store.candidate(original.id, originalKey, 'unused', undefined, true)).toThrow(
+  expect(() => store.candidate(original.id, originalKey)).toThrow(
     expect.objectContaining({ statusCode: 409 })
   );
-  const admitted = store.candidate(original.id, 'rejudge-active', 'unused', undefined, true);
+  const admitted = store.candidate(original.id, 'rejudge-active');
   expect(admitted.created).toBe(true);
-  expect(store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toMatchObject({
+  expect(store.candidate(original.id, 'rejudge-active')).toMatchObject({
     created: false,
     run: { id: admitted.run.id },
   });
@@ -573,4 +574,69 @@ test('uncertain cancellation of a replacement stays visible and cannot be dismis
     )
   ).toBe(true);
   expect(store.source(original.source.id).text).toBe('Preserved original');
+});
+
+test('pre-existing retry and rejudge receipts recover original runs without creating duplicates', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Legacy retry receipt recovery'),
+    rejudgeChat = createFixtureChat(store, 'Legacy rejudge receipt recovery');
+  const original = complete(store, chat.id, 'Initial response');
+  const existingRetry = queued(store, chat.id, 'Recorded retry run');
+  const existingRejudge = queued(store, rejudgeChat.id, 'Recorded rejudge run');
+  const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+  saveImportReceipt(
+    store,
+    `retry:${original.run.id}:legacy-plain`,
+    sha({
+      runId: original.run.id,
+      request: undefined,
+      title: undefined,
+      alwaysCopy: false,
+      judgmentOnly: false,
+    }),
+    { runId: existingRetry.id }
+  );
+  saveImportReceipt(
+    store,
+    `retry:${original.run.id}:legacy-retry`,
+    sha({
+      runId: original.run.id,
+      request: 'Edited request',
+      title: undefined,
+      alwaysCopy: false,
+      judgmentOnly: false,
+      mode: 'copy',
+    }),
+    { runId: existingRetry.id }
+  );
+  saveImportReceipt(
+    store,
+    `retry:${original.run.id}:legacy-rejudge`,
+    sha({
+      runId: original.run.id,
+      request: undefined,
+      title: '판정 복구',
+      alwaysCopy: false,
+      judgmentOnly: true,
+    }),
+    { runId: existingRejudge.id }
+  );
+  const runsBefore = store.db.prepare('SELECT count(*) n FROM runs').get()!.n;
+
+  expect(store.retryRun(original.run.id, 'legacy-plain')).toMatchObject({
+    created: false,
+    run: { id: existingRetry.id },
+  });
+  expect(
+    store.retryRun(original.run.id, 'legacy-retry', undefined, 'Edited request', 'copy')
+  ).toMatchObject({ created: false, run: { id: existingRetry.id } });
+  expect(store.candidate(original.run.id, 'legacy-rejudge')).toMatchObject({
+    created: false,
+    run: { id: existingRejudge.id },
+  });
+  expect(() =>
+    store.retryRun(original.run.id, 'legacy-retry', undefined, 'Different request', 'copy')
+  ).toThrow(expect.objectContaining({ statusCode: 409 }));
+  expect(store.db.prepare('SELECT count(*) n FROM runs').get()!.n).toBe(runsBefore);
 });

@@ -108,8 +108,6 @@ export function retryRun(
   key: string,
   options: {
     request?: string;
-    title?: string;
-    alwaysCopy?: boolean;
     judgmentOnly?: boolean;
     mode?: 'replace' | 'copy';
     validate?: (snapshot: RunSnapshot) => void;
@@ -120,8 +118,8 @@ export function retryRun(
     const command = JSON.stringify({
       runId,
       request: options.request,
-      title: options.title,
-      alwaysCopy: !!options.alwaysCopy,
+      ...(options.judgmentOnly ? { title: '판정 복구' } : {}),
+      alwaysCopy: false,
       judgmentOnly: !!options.judgmentOnly,
       ...(options.mode ? { mode: options.mode } : {}),
     });
@@ -143,10 +141,7 @@ export function retryRun(
     const originalChat = store.chat(original.chatId);
     const replace =
       options.mode === 'replace' ||
-      (options.mode !== 'copy' &&
-        !options.alwaysCopy &&
-        !original.sourceRevision &&
-        !!original.snapshot.replacement);
+      (options.mode !== 'copy' && !original.sourceRevision && !!original.snapshot.replacement);
     const replacement = replace
       ? original.sourceRevision
         ? store.source(original.sourceRevision)
@@ -210,13 +205,11 @@ export function retryRun(
       const copied =
         !replacement &&
         (options.mode === 'copy' ||
-          options.alwaysCopy ||
           !!original.sourceRevision ||
           originalChat.headRevision !== original.parentRevision);
       const chat = copied
         ? forkChat(store, original.chatId, {
             fromRevision: original.parentRevision,
-            ...(options.title !== undefined ? { title: options.title } : {}),
             idempotencyKey: createHash('sha256').update(requestKey).digest('hex'),
           })
         : store.chat(original.chatId);

@@ -1371,10 +1371,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     fields(body, ['idempotencyKey']);
     const result = store.candidate(
       request.params.id,
-      text(body.idempotencyKey, 'idempotency key', 120),
-      '판정 복구',
-      undefined,
-      true
+      text(body.idempotencyKey, 'idempotency key', 120)
     );
     if (result.created) {
       publish(result.run.chatId);

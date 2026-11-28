@@ -1015,7 +1015,7 @@ test('unprepared failed native runs require a fresh retry instead of an unrepeat
   );
   store.startRun(created.run.id);
   store.finishRun(created.run.id, 'failed', 'Interrupted before native preparation');
-  const fresh = store.candidate(created.run.id, 'candidate', 'Candidate');
+  const fresh = store.retryRun(created.run.id, 'candidate', undefined, undefined, 'copy');
   expect(fresh.run.chatId).not.toBe(chatId);
   expect(fresh.run.snapshot.nativeRisuExecution).toBeUndefined();
   expect(store.retryRun(created.run.id, 'retry').created).toBe(true);

@@ -589,19 +589,8 @@ export class Store {
   ) {
     return retryPersonalRun(this, runId, key, { request: editedRequest, validate, mode });
   }
-  candidate(
-    runId: string,
-    key: string,
-    title: string,
-    validate?: (snapshot: RunSnapshot) => void,
-    judgmentRecovery = false
-  ) {
-    return retryPersonalRun(this, runId, key, {
-      title,
-      validate,
-      alwaysCopy: !judgmentRecovery,
-      judgmentOnly: judgmentRecovery,
-    });
+  candidate(runId: string, key: string) {
+    return retryPersonalRun(this, runId, key, { judgmentOnly: true });
   }
   run(id: string): Run {
     const row = this.db.prepare('SELECT * FROM runs WHERE id=?').get(id) as Row | undefined;
