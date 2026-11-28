@@ -129,15 +129,15 @@ export type RawRouteOptions<U extends `/api/${string}` = `/api/${string}`> = {
   readonly compress?: RouteOptions['compress'];
 };
 
-export function registerRawRoute<const U extends `/api/${string}`, S extends z.ZodType>(
-  app: FastifyInstance,
-  route: RawRouteOptions<U> & { readonly input: S } & PathCheck<U, z.input<S>>,
-  handler: (input: z.output<S>, request: FastifyRequest, reply: FastifyReply) => unknown
-): void;
 export function registerRawRoute(
   app: FastifyInstance,
   route: RawRouteOptions & { readonly input?: undefined },
   handler: (input: undefined, request: FastifyRequest, reply: FastifyReply) => unknown
+): void;
+export function registerRawRoute<const U extends `/api/${string}`, S extends z.ZodType>(
+  app: FastifyInstance,
+  route: RawRouteOptions<U> & { readonly input: S } & PathCheck<U, z.input<S>>,
+  handler: (input: z.output<S>, request: FastifyRequest, reply: FastifyReply) => unknown
 ): void;
 export function registerRawRoute(
   app: FastifyInstance,
