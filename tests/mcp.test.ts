@@ -11,7 +11,8 @@ import { MCP_READ_TOKEN_BUDGET } from '../server/mcp-tools.js';
 import { mcpToken as checkedMcpToken } from '../server/network-policy.js';
 import type { Content, ModelPreset } from '../core/product.js';
 import { countTextTokens } from '../core/text-tokens.js';
-import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput, injectWithFixtureBot } from './fixtures/chat.js';
+import { updateTestProfile } from './fixtures/model-workspace.js';
 
 const host = 'story.example.test';
 const origin = `https://${host}`;
@@ -59,7 +60,12 @@ function post(
     payload: { jsonrpc: '2.0', id: nextId++, method, params },
   });
 }
-function modern(target: App, method: string, params: Record<string, unknown> = {}) {
+function modern(
+  target: App,
+  method: string,
+  params: Record<string, unknown> = {},
+  requestHost = host
+) {
   const name = params.name ?? params.uri;
   return post(
     target,
@@ -67,14 +73,15 @@ function modern(target: App, method: string, params: Record<string, unknown> = {
     { ...params, _meta: meta },
     {
       ...bearer,
+      host: requestHost,
       'mcp-protocol-version': MODERN,
       'mcp-method': method,
       ...(typeof name === 'string' ? { 'mcp-name': name } : {}),
     }
   );
 }
-async function call(target: App, name: string, args: Record<string, unknown>) {
-  const response = await modern(target, 'tools/call', { name, arguments: args });
+async function call(target: App, name: string, args: Record<string, unknown>, requestHost = host) {
+  const response = await modern(target, 'tools/call', { name, arguments: args }, requestHost);
   expect(response.statusCode, response.body).toBe(200);
   const result = response.json().result;
   return { isError: result.isError === true, value: JSON.parse(result.content[0].text) };
@@ -558,6 +565,116 @@ test('MCP saves answer a stale or deleted target with REVISION_CONFLICT before o
     arguments: { chatId: chat.id, title: 'Back', expectedRevision: chat.titleRevision ?? 0 },
   });
   expect(renamed).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+});
+
+test('MCP gateway saves refuse a body field the published schema does not list', async () => {
+  const target = await app({ mcpToken });
+  const store = target.store;
+  const organization = store.libraryOrganization.snapshot();
+  const created = await call(target, 'app_call', {
+    name: 'library.organize',
+    arguments: {
+      action: 'create-folder',
+      body: { expectedRevision: organization.revision, category: 'bot', title: 'Covered' },
+    },
+  });
+  const folder = (created.value.folders as { id: string; title: string }[]).find(
+    (item) => item.title === 'Covered'
+  )!;
+  const cleared = await call(target, 'app_call', {
+    name: 'library.organize',
+    arguments: {
+      action: 'update-folder',
+      body: {
+        expectedRevision: created.value.revision,
+        category: 'bot',
+        folderId: folder.id,
+        coverImageHash: null,
+      },
+    },
+  });
+  expect(cleared).toMatchObject({ isError: true, value: { code: 'INVALID_ARGUMENTS' } });
+  expect(store.libraryOrganization.snapshot().revision).toBe(created.value.revision);
+});
+
+test('a failed run inspected over MCP shows no provider key or MCP token', async () => {
+  const target = await app({ mcpToken, selfHost: false });
+  const store = target.store;
+  const credential = 'SYNTHETIC_MCP_LEAK_TEST_CREDENTIAL';
+  const secret = 'synthetic-provider-key-that-must-never-leak-0000';
+  store.credentials.set(credential, secret);
+  const sent: string[] = [];
+  const fetched = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
+    const authorization = new Headers(options?.headers).get('authorization') ?? '';
+    sent.push(authorization);
+    return new Response(
+      JSON.stringify({
+        error: { message: `invalid key ${authorization} ${secret} ${mcpToken}` },
+      }),
+      { status: 401, headers: { 'content-type': 'application/json' } }
+    );
+  });
+  const connection = store.product.connection({
+    title: 'Leaky provider',
+    protocol: 'openai-chat-v1',
+    endpoint: 'http://127.0.0.1:44998/v1',
+    credentialRef: credential,
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Leak check model',
+    connectionId: connection.id,
+    modelId: 'leak-check-1',
+    maxOutputTokens: 512,
+    temperature: null,
+  }) as ModelPreset;
+  const chat = createFixtureChat(store, 'Leak check');
+  const profile = store.product.profile(chat.id);
+  updateTestProfile(store.product, chat.id, {
+    expectedRevision: profile.revision,
+    routes: { main: { id: model.id }, translation: null },
+    image: profile.image,
+  });
+  const current = store.chat(chat.id);
+  const started = await injectWithFixtureBot(target, {
+    method: 'POST',
+    url: `/api/chats/${chat.id}/runs`,
+    headers: { host: '127.0.0.1' },
+    payload: {
+      request: 'Continue the harbor scene.',
+      expectedRevision: current.headRevision,
+      expectedSettingsRevision: current.settingsRevision,
+      idempotencyKey: 'mcp-leak-run',
+    },
+  });
+  expect(started.statusCode, started.body).toBe(200);
+  const runId = started.json().id as string;
+  await vi.waitFor(() => expect(['queued', 'running']).not.toContain(store.run(runId).status), {
+    timeout: 10_000,
+    interval: 20,
+  });
+  expect(fetched).toHaveBeenCalled();
+  expect(sent.join(' ')).toContain(secret);
+  expect(store.run(runId).status).toBe('failed');
+
+  const listed = await call(
+    target,
+    'task_list',
+    { status: 'failed', chatId: chat.id },
+    '127.0.0.1'
+  );
+  const inspected = await call(
+    target,
+    'task_inspect',
+    { kind: 'run', id: runId, includeDiagnostics: true },
+    '127.0.0.1'
+  );
+  expect(inspected.isError, JSON.stringify(inspected.value)).toBe(false);
+  for (const output of [listed.value, inspected.value]) {
+    const text = JSON.stringify(output);
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain(mcpToken);
+  }
 });
 
 test('the 2026-07-28 revision is discovered, checks its headers and serves skills with digests', async () => {

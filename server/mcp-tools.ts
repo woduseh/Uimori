@@ -344,6 +344,23 @@ function checkedArguments(schema: Schema, raw: unknown): Record<string, unknown>
   return args;
 }
 
+function unlistedFields(schema: Json, value: unknown, path: string): string[] {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
+  if (Array.isArray(value))
+    return value.flatMap((item, index) => unlistedFields(schema.items, item, `${path}/${index}`));
+  if (!value || typeof value !== 'object') return [];
+  const properties = schema.properties as Record<string, Json> | undefined;
+  if (!properties) return [];
+  const object = value as Record<string, unknown>;
+  return Object.keys(object).flatMap((key) =>
+    Object.hasOwn(properties, key)
+      ? unlistedFields(properties[key]!, object[key], `${path}/${key}`)
+      : schema.additionalProperties === false
+        ? [`${path}/${key}`]
+        : []
+  );
+}
+
 function unavailable(name: string): never {
   const direct = SOURCE_NAMES.get(name);
   if (direct)
@@ -430,6 +447,13 @@ function gatewayCall(raw: unknown, ports: McpPorts) {
         `over MCP ${name} takes action ${operation.actions.join(', ')}`
       );
     const checked = checkedArguments(entry.inputSchema as Schema, call.arguments);
+    const unlisted = unlistedFields(entry.inputSchema, checked, '');
+    if (unlisted.length)
+      throw new HelperToolError(
+        400,
+        'INVALID_ARGUMENTS',
+        `unknown argument ${unlisted.join(', ')}`
+      );
     const { chatId, ...rest } = checked;
     const args = operation.chat === 'none' ? checked : rest;
     const value = await operation.run(args, {
