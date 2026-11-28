@@ -192,11 +192,13 @@ describe('file SQLite HTTP runtime', () => {
     expect((await detail(url, chat)).sources).toHaveLength(0);
     const events = app.store.events(chat.id, 0) as { seq: number; kind: string }[];
     const cursor = events.find((event) => event.kind === 'run.queued')!.seq;
-    const stream = await fetch(`${url}/api/chats/${chat.id}/events`, {
+    const stream = await fetch(`${url}/api/events?chat=${encodeURIComponent(chat.id)}`, {
       headers: { 'Last-Event-ID': String(cursor) },
     });
     const reader = stream.body!.getReader();
-    const chunk = new TextDecoder().decode((await reader.read()).value);
+    const decoder = new TextDecoder();
+    let chunk = '';
+    while (!chunk.includes('run.failed')) chunk += decoder.decode((await reader.read()).value);
     await reader.cancel();
     expect(chunk).toContain('run.failed');
     expect(chunk).not.toContain('run.queued');
@@ -672,9 +674,6 @@ describe('built server process boundary', () => {
         status: 'completed',
         chunks: [],
       });
-      expect(
-        await (await fetch(`${instance.url}/api/response-streams/main/${run.id}/events`)).text()
-      ).toContain('"status":"completed"');
       const db = new DatabaseSync(join(directory, 'story.sqlite'), { readOnly: true });
       try {
         expect(db.prepare('SELECT count(*) AS n FROM attempts WHERE run_id=?').get(run.id)).toEqual(

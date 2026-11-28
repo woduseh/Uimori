@@ -1,10 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { readerEndpoints } from '#contracts';
-import { nonBlank, readerOperations } from '#contracts/operations';
+import { readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod/v4';
 import type {
   ResponseChunk,
   ResponseProgress,
@@ -13,9 +11,8 @@ import type {
   ResponseTaskIdentity,
   ResponseTaskKind,
 } from '../core/response-stream.js';
-import { RESPONSE_TASK_KINDS } from '../core/response-stream.js';
 import { AppError } from './app-errors.js';
-import { registerEndpoint, registerRawRoute } from './endpoint.js';
+import { registerEndpoint } from './endpoint.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -75,7 +72,6 @@ const PAGE_CHUNKS = 256;
 const THOUGHT_CHARS = 4000;
 
 export class ResponseStreamStore {
-  private readonly listeners = new Map<string, Set<() => void>>();
   private readonly chatListeners = new Map<string | null, Set<ChatListener>>();
   private readonly active = new Map<string, ActiveStream>();
   private sequenceState: { next: number; reserved: number } | undefined;
@@ -164,17 +160,6 @@ export class ResponseStreamStore {
       .map((stream) => ({ ...stream.identity }));
   }
 
-  subscribe(identity: ResponseTaskIdentity, listener: () => void) {
-    const key = keyOf(identity);
-    const listeners = this.listeners.get(key) ?? new Set<() => void>();
-    this.listeners.set(key, listeners);
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-      if (!listeners.size && this.listeners.get(key) === listeners) this.listeners.delete(key);
-    };
-  }
-
   subscribeChat(chatId: string | null, listener: ChatListener) {
     const listeners = this.chatListeners.get(chatId) ?? new Set<ChatListener>();
     this.chatListeners.set(chatId, listeners);
@@ -188,14 +173,6 @@ export class ResponseStreamStore {
 
   private publish(identity: StreamIdentity) {
     const target = { taskKind: identity.taskKind, taskId: identity.taskId };
-    const listeners = this.listeners.get(keyOf(target));
-    for (const listener of [...(listeners ?? [])]) {
-      try {
-        listener();
-      } catch {
-        listeners?.delete(listener);
-      }
-    }
     const chatListeners = this.chatListeners.get(identity.chatId ?? null);
     for (const listener of [...(chatListeners ?? [])]) {
       try {
@@ -458,97 +435,11 @@ export class ResponseStreamStore {
   }
 }
 
-export function responseStreamRoutes(
-  app: FastifyInstance,
-  streams: ResponseStreamStore,
-  options: { authenticated: (cookie: string | undefined) => boolean }
-) {
-  const connections = new Set<ServerResponse>();
-  app.addHook('preClose', async () => {
-    for (const response of connections) response.end();
-    connections.clear();
-  });
-  const identity = (params: { taskKind: string; taskId: string }): StreamIdentity => {
-    const taskKind = RESPONSE_TASK_KINDS.find((kind) => kind === params.taskKind);
-    if (!taskKind) throw new HttpError(404, 'Unknown response stream kind');
-    return { taskKind, taskId: params.taskId };
-  };
-  const cursor = (value: unknown) => {
-    if (value === undefined || value === '') return 0;
-    if (typeof value !== 'string' || !/^\d+$/u.test(value))
-      throw new HttpError(400, 'Invalid stream cursor');
-    const result = Number(value);
-    if (!Number.isSafeInteger(result)) throw new HttpError(400, 'Invalid stream cursor');
-    return result;
-  };
+export function responseStreamRoutes(app: FastifyInstance, streams: ResponseStreamStore) {
   registerEndpoint(
     app,
     readerEndpoints.readResponseStream,
     readerOperations.readResponseStream,
     ({ taskKind, taskId, after }) => streams.read(taskKind, taskId, after ?? 0)
-  );
-  const responseStreamEventsInput = z.strictObject({
-    taskKind: nonBlank(40),
-    taskId: nonBlank(100),
-    after: z.string().optional(),
-  });
-  registerRawRoute(
-    app,
-    {
-      method: 'GET',
-      url: '/api/response-streams/:taskKind/:taskId/events',
-      cache: 'no-store-refusals',
-      input: responseStreamEventsInput,
-    },
-    ({ taskKind, taskId, after: queryAfter }, request, reply) => {
-      const target = identity({ taskKind, taskId });
-      let after = cursor(request.headers['last-event-id'] ?? queryAfter);
-      streams.read(target.taskKind, target.taskId, after);
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        'content-type': 'text/event-stream',
-        'cache-control': 'no-cache',
-        'x-accel-buffering': 'no',
-      });
-      let unsubscribe = () => {};
-      let blocked = false;
-      connections.add(reply.raw);
-      const heartbeat = setInterval(() => {
-        if (!options.authenticated(request.headers.cookie)) reply.raw.end();
-        else if (!blocked && !reply.raw.destroyed) blocked = !reply.raw.write(': keepalive\n\n');
-      }, 15_000);
-      heartbeat.unref();
-      const send = () => {
-        if (blocked || reply.raw.destroyed || reply.raw.writableEnded) return;
-        if (!options.authenticated(request.headers.cookie)) {
-          unsubscribe();
-          reply.raw.end();
-          return;
-        }
-        let page: ResponseStreamPage;
-        do {
-          page = streams.read(target.taskKind, target.taskId, after);
-          blocked = !reply.raw.write(`id: ${page.cursor}\ndata: ${JSON.stringify(page)}\n\n`);
-          after = page.cursor;
-        } while (page.hasMore && !blocked);
-        if (!page.hasMore && page.status !== 'running') {
-          unsubscribe();
-          reply.raw.end();
-        }
-      };
-      const drain = () => {
-        blocked = false;
-        send();
-      };
-      reply.raw.on('drain', drain);
-      unsubscribe = streams.subscribe(target, send);
-      reply.raw.on('close', () => {
-        clearInterval(heartbeat);
-        connections.delete(reply.raw);
-        reply.raw.off('drain', drain);
-        unsubscribe();
-      });
-      send();
-    }
   );
 }

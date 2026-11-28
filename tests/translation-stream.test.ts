@@ -84,7 +84,8 @@ async function translationJob(
   };
   const received = new Map<string, string>();
   let cursor = 0;
-  streams.subscribe({ taskKind: 'translation', taskId: seed.job.id }, () => {
+  streams.subscribeChat(seed.source.chatId, (identity) => {
+    if (identity.taskKind !== 'translation' || identity.taskId !== seed.job.id) return;
     const page = streams.read('translation', seed.job.id, cursor);
     cursor = page.cursor;
     for (const chunk of page.chunks) {

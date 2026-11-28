@@ -129,7 +129,7 @@ test('JSON responses compress with brotli while event streams stay unencoded and
   const address = await app.listen({ host: '127.0.0.1', port: 0 });
   const controller = new AbortController();
   cleanup.push(async () => controller.abort());
-  const stream = await fetch(`${address}/api/chats/${chat.id}/events`, {
+  const stream = await fetch(`${address}/api/events?chat=${encodeURIComponent(chat.id)}`, {
     headers: { 'accept-encoding': 'br, gzip' },
     signal: controller.signal,
   });
@@ -137,8 +137,9 @@ test('JSON responses compress with brotli while event streams stay unencoded and
   expect(stream.headers.get('content-type')).toBe('text/event-stream');
   const reader = stream.body!.getReader();
   const decoder = new TextDecoder();
-  let received = decoder.decode((await reader.read()).value);
-  expect(received).toContain('"kind":"snapshot"');
+  let received = '';
+  while (!received.includes('"kind":"snapshot"'))
+    received += decoder.decode((await reader.read()).value);
   await setFixtureModelRoutes(app, { main: null, translation: null });
   while (!received.includes('prompt-workspace.updated'))
     received += decoder.decode((await reader.read()).value);
