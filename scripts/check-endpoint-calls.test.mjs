@@ -9,16 +9,34 @@ import {
   shrinkLegacyApiAllowlist,
 } from './check-endpoint-calls.mjs';
 
+const demoEndpoints = [
+  'export const demoEndpoints = {',
+  '  readJob: defineEndpoint<typeof operations.readJob>()({',
+  "    operation: 'reader.readJob',",
+  "    method: 'GET',",
+  "    path: '/jobs/:jobId',",
+  '  }),',
+  '  fixOptions: defineEndpoint<typeof operations.fixOptions>()({',
+  "    operation: 'demo.fixOptions',",
+  "    method: 'POST',",
+  "    path: '/chats/:chatId/options/fixed',",
+  '  }),',
+  '};',
+].join('\n');
+
+const code = (text) => text.replaceAll('#{', '$' + '{');
+
 function withRepository(files, allowlist, check) {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-endpoint-calls-'));
   try {
     const allFiles = {
+      'packages/contracts/src/domains/demo/endpoints.ts': demoEndpoints,
       ...(allowlist ? { [allowlistPath]: `${JSON.stringify(allowlist, null, 2)}\n` } : {}),
       ...files,
     };
     for (const [path, content] of Object.entries(allFiles)) {
       mkdirSync(dirname(join(directory, path)), { recursive: true });
-      writeFileSync(join(directory, path), content);
+      writeFileSync(join(directory, path), code(content));
     }
     check(directory);
   } finally {
@@ -48,11 +66,11 @@ test('imported api and apiBinary calls (direct, aliased, and namespace) are coun
       ].join('\n'),
       'web/local.tsx': [
         'const api = (name: string) => name;',
-        "export const label = api('Text') + api('Card');",
+        "export const label = api('Text') + api('/jobs/example');",
       ].join('\n'),
       'web/shadowed.ts': [
         "import { api } from './api.js';",
-        "export const ok = () => { const api = (x: string) => x; return api('local'); };",
+        "export const ok = () => { const api = (x: string) => x; return api('/jobs/example'); };",
         'export const typed = ({ api: 1 } as { api: number }).api;',
         "export const real = () => api('/chats');",
       ].join('\n'),
@@ -67,6 +85,51 @@ test('imported api and apiBinary calls (direct, aliased, and namespace) are coun
       },
     },
     (directory) => assert.deepEqual(endpointCallErrors(directory), [])
+  );
+});
+
+test('a debt file calling a typed contract route through api() fails even when its call count stays within budget', () => {
+  withRepository(
+    {
+      'web/AppAbout.tsx': "import { api } from './api.js';\nawait api<AppBuild>('/health');\n",
+    },
+    { permanent: {}, debt: { 'web/AppAbout.tsx': 1 } },
+    (directory) => assert.deepEqual(endpointCallErrors(directory), [])
+  );
+  withRepository(
+    {
+      'web/AppAbout.tsx':
+        "import { api } from './api.js';\nawait api<AppBuild>('/jobs/example');\n",
+      'web/aliased.ts': [
+        "import { api as legacy } from './api.js';",
+        'const chat = `/chats/#{id}`;',
+        'await legacy(`#{chat}/options/fixed`, body);',
+      ].join('\n'),
+      'web/ns.ts': [
+        "import * as client from './api.js';",
+        "await client.api('/jobs/example');",
+      ].join('\n'),
+    },
+    {
+      permanent: {},
+      debt: { 'web/AppAbout.tsx': 1, 'web/aliased.ts': 1, 'web/ns.ts': 1 },
+    },
+    (directory) => {
+      const errors = endpointCallErrors(directory);
+      assert.equal(errors.length, 3);
+      assert.match(
+        errors.find((line) => line.startsWith('web/AppAbout.tsx:2:')),
+        /reader\.readJob/u
+      );
+      assert.match(
+        errors.find((line) => line.startsWith('web/aliased.ts:3:')),
+        /demo\.fixOptions/u
+      );
+      assert.match(
+        errors.find((line) => line.startsWith('web/ns.ts:2:')),
+        /reader\.readJob/u
+      );
+    }
   );
 });
 
@@ -158,6 +221,54 @@ test('shrink lowers or removes debt entries with LF formatting and never adds ne
       const after = endpointCallErrors(directory);
       assert.equal(after.length, 1);
       assert.ok(after[0].startsWith('web/added.ts: 1 api() call(s)'));
+    }
+  );
+});
+
+const endpointObject = (operation, path) =>
+  [
+    '  entry: defineEndpoint()({',
+    `    operation: '${operation}',`,
+    "    method: 'GET',",
+    `    path: ${path},`,
+    '  }),',
+  ].join('\n');
+
+test('contract paths built from a same-file const are read, and an unreadable contract path fails loudly', () => {
+  withRepository(
+    {
+      'packages/contracts/src/domains/runtime/endpoints.ts': [
+        "const base = '/runtime';",
+        'export const runtimeEndpoints = {',
+        endpointObject('runtime.read', 'base'),
+        endpointObject('runtime.login', '`#{base}/login`'),
+        '};',
+      ].join('\n'),
+      'web/runtime.ts':
+        "import { api } from './api.js';\nawait api('/runtime');\nawait api('/runtime/login');\n",
+    },
+    { permanent: {}, debt: { 'web/runtime.ts': 2 } },
+    (directory) => {
+      const errors = endpointCallErrors(directory);
+      assert.equal(errors.length, 2);
+      assert.match(errors[0], /runtime\.read/u);
+      assert.match(errors[1], /runtime\.login/u);
+    }
+  );
+  withRepository(
+    {
+      'packages/contracts/src/domains/runtime/endpoints.ts': [
+        "const paths = { read: '/runtime' };",
+        'export const runtimeEndpoints = {',
+        endpointObject('runtime.read', 'paths.read'),
+        '};',
+      ].join('\n'),
+    },
+    { permanent: {}, debt: {} },
+    (directory) => {
+      const errors = endpointCallErrors(directory);
+      assert.equal(errors.length, 1);
+      assert.match(errors[0], /runtime\.read has a method or path this check cannot resolve/u);
     }
   );
 });
