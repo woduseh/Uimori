@@ -314,6 +314,7 @@ test('a stale screen acting on a project or conversation deleted elsewhere gets 
     const base = `/api/helper/conversations/${conversation.id}`;
     const answers = [];
     for (const [method, url, payload] of [
+      ['PATCH', `${base}/project`, { expectedRevision: 1, projectId: null }],
       ['POST', `${base}/copy`, { requestKey: 'copy', ...impact.request }],
       ['DELETE', base, impact.request],
       ['PUT', `${base}/context/summary`, { expectedRevision: 1, summary: '요약' }],

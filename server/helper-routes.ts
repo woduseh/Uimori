@@ -146,14 +146,11 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     app,
     helperEndpoints.updateConversation,
     helperOperations.updateConversation,
-    ({ id, expectedRevision, title, persona }) => {
-      if (title === undefined && persona === undefined)
-        throw new HttpError(400, 'Pass title or persona');
-      return store.update(id, expectedRevision, {
+    ({ id, expectedRevision, title, persona }) =>
+      store.update(id, expectedRevision, {
         ...(title === undefined ? {} : { title }),
         ...(persona === undefined ? {} : { persona }),
-      });
-    }
+      })
   );
   registerEndpoint(
     app,
