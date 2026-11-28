@@ -571,7 +571,9 @@ export class ProductStore {
       if (target < 0) throw new HttpError(400, 'Move target outside the list');
       group.splice(target + (position === 'after' ? 1 : 0), 0, moving!);
       const update = this.db.prepare(
-        "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind=? AND id=?"
+        kind === 'model'
+          ? "UPDATE provider_settings SET body=json_set(json_remove(body, '$.evaluationTools'), '$.displayOrder', ?) WHERE kind=? AND id=?"
+          : "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind=? AND id=?"
       );
       group.forEach((item, order) => {
         if (item.displayOrder !== order) update.run(order, kind, item.id);
