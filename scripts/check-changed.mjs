@@ -113,6 +113,7 @@ export function selectChecks(
     uiMessage: files.some(is.uiMessageInput),
     endpointCalls: files.some(is.endpointCallInput),
     scriptImports: files.some(is.scriptImportInput),
+    buildContext: files.some(is.buildContextInput),
     vitest: unique([...modules, ...namedTests, ...guideTests]),
     directTests,
     firstHopTests,
@@ -358,6 +359,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (checks.uiMessage) statics.push(run('ui-message', node, ['scripts/check-ui-message.mjs']));
     if (checks.endpointCalls)
       statics.push(run('endpoint-calls', node, ['scripts/check-endpoint-calls.mjs']));
+    if (checks.buildContext)
+      statics.push(run('build-context', node, ['scripts/check-build-context.mjs']));
     if (checks.scriptImports)
       statics.push(run('script-imports', node, ['scripts/check-script-imports.mjs']));
     if (checks.vitest.length) listing = affectedTests(checks.vitest);

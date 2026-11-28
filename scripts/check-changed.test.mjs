@@ -287,6 +287,19 @@ test('comments check only the changed files, and i18n runs for the runtime sourc
   );
 });
 
+test('a change to what the Docker build context or the build fingerprint admits runs the build context check', () => {
+  const select = (file) => checkChanged.selectChecks([file], {}).buildContext;
+  for (const file of [
+    '.dockerignore',
+    'scripts/lib.mjs',
+    'docs/skills/a/SKILL.md',
+    'docs/READING.md',
+  ])
+    assert.equal(select(file), true, file);
+  for (const file of ['server/app.ts', 'docs/dev/CHECKS.md'])
+    assert.equal(select(file), false, file);
+});
+
 test('sources outside the app run the script import check, and JavaScript runs tsc when the program includes it', () => {
   const select = (file) => checkChanged.selectChecks([file], {});
   assert.equal(select('scripts/doctor.mjs').scriptImports, true);
