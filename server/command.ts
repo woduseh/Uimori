@@ -132,15 +132,29 @@ export type CommandInTxOutcome<Op extends AnySplitOperation> =
       readonly input: OperationParsedInput<Op>;
     };
 
-export type CommandContext<Op extends AnySplitOperation = AnySplitOperation> = {
+export type CommandContext<
+  Op extends AnySplitOperation = AnySplitOperation,
+  OnInTxReturn = void,
+> = {
   readonly signal?: AbortSignal;
   readonly checkOutputs?: boolean;
   readonly bodySchema?: z.ZodType<OperationBody<Op>>;
   readonly aroundTx?: <T>(
     run: () => SynchronousResult<T>
   ) => SynchronousResult<T> | typeof EXTERNAL_REPLAY;
-  readonly onInTx?: (tx: Tx, outcome: CommandInTxOutcome<Op>) => SynchronousResult<void>;
+  readonly onInTx?: (tx: Tx, outcome: CommandInTxOutcome<Op>) => SynchronousResult<OnInTxReturn>;
 };
+
+function assertSyncReturn(value: unknown, phase: string): void {
+  if (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as PromiseLike<unknown>).then === 'function'
+  ) {
+    Promise.resolve(value).catch(() => {});
+    throw new Error(`Async ${phase} callback is not allowed inside a synchronous transaction`);
+  }
+}
 
 function enforceOutput<Op extends AnySplitOperation>(
   op: Op,
@@ -171,11 +185,12 @@ function buildReceiptLookup<Op extends AnySplitOperation, P>(
 export async function executeOperation<
   Op extends AnySplitOperation,
   P extends Pick<AppPorts, 'tx'>,
+  OnInTxReturn = void,
 >(
   command: Command<Op, P>,
   ports: P,
   rawInput: unknown,
-  ctx: CommandContext<Op> = {}
+  ctx: CommandContext<Op, OnInTxReturn> = {}
 ): Promise<OperationOutput<Op>> {
   try {
     const raw = plainRecord(rawInput);
@@ -222,7 +237,7 @@ export async function executeOperation<
               ctx.checkOutputs
             );
             const outcome = { replayed: true as const, output };
-            ctx.onInTx?.(tx, outcome);
+            assertSyncReturn(ctx.onInTx?.(tx, outcome), 'onInTx');
             return outcome;
           }
         }
@@ -239,7 +254,7 @@ export async function executeOperation<
           receiptPorts.receipt.save(tx, receiptLookup, command.receipt.serialize(output));
         }
         const outcome = { replayed: false as const, output, input, guarded };
-        ctx.onInTx?.(tx, outcome);
+        assertSyncReturn(ctx.onInTx?.(tx, outcome), 'onInTx');
         return outcome;
       });
 

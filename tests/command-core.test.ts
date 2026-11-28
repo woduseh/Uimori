@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import { z } from 'zod/v4';
-import { chatSettingsEndpoints, type Endpoint, endpointRequest } from '#contracts';
+import { chatSettingsEndpoints, defineEndpoint, type Endpoint, endpointRequest } from '#contracts';
 import { chatSettingsOperations, defineCommandOperation, nonBlank } from '#contracts/operations';
 import { createApp, type App } from '../server/app.js';
 import { AppError, assertRevision } from '../server/app-errors.js';
@@ -16,6 +18,7 @@ import {
   updateChatVariablesCommand,
   updateStoryGuideCommand,
 } from '../server/commands/index.js';
+import { registerCommand } from '../server/endpoint.js';
 import { helperChatStateCommand } from '../server/helper-chat-state-tools.js';
 import { defineHelperCommandTool, executeHelperCommand } from '../server/helper-command-adapter.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
@@ -1044,6 +1047,14 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     },
   });
 
+  const _checkSyncGuardVoid = defineCommand<Pick<AppPorts, 'tx'>>()(op, {
+    // @ts-expect-error void async guard runs inside synchronous SQLite transaction and cannot be async
+    async guard() {},
+    apply() {
+      throw new AppError(400, 'INVALID_REQUEST');
+    },
+  });
+
   const _checkSyncApply = defineCommand<Pick<AppPorts, 'tx'>>()(op, {
     guard() {},
     // @ts-expect-error apply runs inside synchronous SQLite transaction and cannot be async
@@ -1051,6 +1062,19 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
       throw new AppError(400, 'INVALID_REQUEST');
     },
   });
+
+  const _checkSyncOnInTx = () =>
+    executeOperation(
+      updateStoryGuideCommand,
+      null as unknown as AppPorts,
+      {},
+      {
+        // @ts-expect-error onInTx runs inside synchronous SQLite transaction and cannot be async
+        async onInTx() {
+          await Promise.resolve();
+        },
+      }
+    );
 
   defineHelperCommandTool({
     name: 'test.badBody',
@@ -1073,5 +1097,181 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     outputPolicy: 'always',
   });
 
-  expect([_checkGuardCannotReadBody, _checkSyncGuard, _checkSyncApply]).toHaveLength(3);
+  expect([
+    _checkGuardCannotReadBody,
+    _checkSyncGuard,
+    _checkSyncGuardVoid,
+    _checkSyncApply,
+    _checkSyncOnInTx,
+  ]).toHaveLength(5);
+});
+
+test('registerCommand keeps prepare signal alive after request body completes and aborts only on early client disconnect', async () => {
+  const store = createStoreFixture();
+  const ports = createStorePorts(store);
+  const op = defineCommandOperation<{ id: string; note: string; aborted: boolean }>()({
+    name: 'test.prepareAbort',
+    head: z.strictObject({ id: nonBlank(40) }),
+    body: z.strictObject({ note: nonBlank(40) }),
+  });
+  const endpoint = defineEndpoint<typeof op>()({
+    operation: 'test.prepareAbort',
+    method: 'PUT',
+    path: '/prepare-abort/:id',
+  });
+
+  let disconnectEntered!: () => void;
+  const disconnectPrepareReady = new Promise<void>((resolveReady) => {
+    disconnectEntered = resolveReady;
+  });
+  let disconnectSignalBeforeClose: boolean | undefined;
+  let disconnectAborted!: () => void;
+  const disconnectSignalAborted = new Promise<void>((resolveAborted) => {
+    disconnectAborted = resolveAborted;
+  });
+  const appliedIds: string[] = [];
+
+  const command = defineCommand<Pick<AppPorts, 'tx'>>()(op, {
+    async prepare(_ports, head, _raw, signal) {
+      if (head.id === 'normal') {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 20));
+        signal?.throwIfAborted();
+        return { aborted: signal?.aborted ?? false };
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+      disconnectSignalBeforeClose = signal?.aborted;
+      disconnectEntered();
+      await new Promise<void>((resolveWait, rejectWait) => {
+        if (signal?.aborted) {
+          disconnectAborted();
+          resolveWait();
+          return;
+        }
+        const timer = setTimeout(() => rejectWait(new Error('Expected abort on disconnect')), 2000);
+        signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            disconnectAborted();
+            resolveWait();
+          },
+          { once: true }
+        );
+      });
+      signal?.throwIfAborted();
+      return { aborted: true };
+    },
+    guard() {},
+    apply(_tx, _ports, input, _guarded, prepared) {
+      appliedIds.push(input.id);
+      return { id: input.id, note: input.note, aborted: prepared.aborted };
+    },
+  });
+
+  const server = Fastify({ logger: false });
+  registerCommand(server, endpoint, command, ports);
+  const address = await server.listen({ port: 0, host: '127.0.0.1' });
+  try {
+    const normalRes = await fetch(`${address}/api/prepare-abort/normal`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note: 'steady' }),
+    });
+    expect(normalRes.status).toBe(200);
+    await expect(normalRes.json()).resolves.toEqual({
+      id: 'normal',
+      note: 'steady',
+      aborted: false,
+    });
+
+    const url = new URL('/api/prepare-abort/disconnect', address);
+    const body = JSON.stringify({ note: 'drop-me' });
+    const req = httpRequest({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(body),
+      },
+    });
+    req.on('error', () => {});
+    req.end(body);
+
+    await disconnectPrepareReady;
+    expect(disconnectSignalBeforeClose).toBe(false);
+    req.destroy();
+    await disconnectSignalAborted;
+    expect(appliedIds).toEqual(['normal']);
+  } finally {
+    await server.close();
+  }
+});
+
+test('a runtime async onInTx hook throws synchronously, rolls back writes, and skips afterCommit', async () => {
+  const store = createStoreFixture();
+  const chat = createFixtureChat(store, 'Async onInTx rollback chat');
+  const publish = vi.fn();
+  const ports = createStorePorts(store, { publish });
+
+  await expect(
+    executeOperation(
+      updateStoryGuideCommand,
+      ports,
+      { chatId: chat.id, expectedRevision: 0, changes: { enabled: true, work: 'Must roll back' } },
+      {
+        onInTx: (async () => {
+          await Promise.resolve();
+          throw new Error('late async hook failure');
+        }) as unknown as () => void,
+      }
+    )
+  ).rejects.toThrow('Async onInTx callback');
+
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  expect(store.storyGuide.get(chat.id).revision).toBe(0);
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('op.input and executeOperation parse transforming body fields once and agree on the result', async () => {
+  const store = createStoreFixture();
+  const ports = createStorePorts(store);
+  let transformCount = 0;
+  const amountField = z.string().transform((raw) => {
+    transformCount += 1;
+    return Number(raw);
+  });
+  const op = defineCommandOperation<{ id: string; amount: number }>()({
+    name: 'test.transformBody',
+    head: z.strictObject({ id: nonBlank(20) }),
+    body: z.union([
+      z.strictObject({ amount: amountField }),
+      z.strictObject({ label: nonBlank(20) }),
+    ]),
+  });
+  const command = defineCommand<Pick<AppPorts, 'tx'>>()(op, {
+    guard() {},
+    apply(_tx, _ports, input) {
+      return { id: input.id, amount: 'amount' in input ? input.amount : -1 };
+    },
+  });
+
+  const parsed = op.input.safeParse({ id: 'x', amount: '3' });
+  expect(parsed).toEqual({ success: true, data: { id: 'x', amount: 3 } });
+  expect(transformCount).toBe(1);
+
+  const executed = await executeOperation(command, ports, { id: 'x', amount: '3' });
+  expect(executed).toEqual({ id: 'x', amount: 3 });
+  expect(transformCount).toBe(2);
+
+  expect(op.input.safeParse({ id: 'x', amount: 3 }).success).toBe(false);
+  await expect(executeOperation(command, ports, { id: 'x', amount: 3 })).rejects.toMatchObject({
+    statusCode: 400,
+    code: 'INVALID_REQUEST',
+  });
+  expect(op.input.safeParse({ id: 'x', amount: '3', extra: 1 }).success).toBe(false);
+  await expect(
+    executeOperation(command, ports, { id: 'x', amount: '3', extra: 1 })
+  ).rejects.toMatchObject({ statusCode: 400, code: 'INVALID_REQUEST' });
 });
