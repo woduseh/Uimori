@@ -209,6 +209,12 @@ const classTable = {
     'scriptFile',
     'topLevelScript',
   ],
+  'scripts/legacy-api-allowlist.json': [
+    'biomeFile',
+    'endpointCallInput',
+    'scriptFile',
+    'topLevelScript',
+  ],
   'package.json': ['biomeFile', 'typeScriptInput', 'fullSuiteInput'],
   'package-lock.json': ['biomeFile', 'fullSuiteInput'],
   'tsconfig.json': ['biomeFile', 'typeScriptInput', 'fullSuiteInput'],

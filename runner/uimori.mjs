@@ -47,7 +47,9 @@ function input(args) {
 try {
   const [command, ...args] = process.argv.slice(2);
   if (
-    !command || command === '--help' || command === 'help' ||
+    !command ||
+    command === '--help' ||
+    command === 'help' ||
     (args.length === 1 && args[0] === '--help') ||
     (command === 'call' && args.length === 2 && args[1] === '--help')
   ) {
@@ -57,11 +59,12 @@ try {
     if ((command === 'apply' || command === 'refresh') && args.length === 1) {
       payload = { path: args[0] };
     } else if (command === 'tools') {
-      payload = args.length === 1 && !args[0].startsWith('-') && !args[0].trimStart().startsWith('{')
-        ? { arguments: { names: [args[0]] } }
-        : args.length && args[0].startsWith('--') && args[0] !== '--input'
-          ? { flagArguments: input(args) }
-          : { arguments: input(args) };
+      payload =
+        args.length === 1 && !args[0].startsWith('-') && !args[0].trimStart().startsWith('{')
+          ? { arguments: { names: [args[0]] } }
+          : args.length && args[0].startsWith('--') && args[0] !== '--input'
+            ? { flagArguments: input(args) }
+            : { arguments: input(args) };
     } else if (command === 'export') {
       payload = { arguments: input(args) };
     } else if (command === 'call' && args[0] && !args[0].startsWith('--')) {
@@ -74,7 +77,11 @@ try {
       };
     } else throw Error(usage);
 
-    if (!process.env.UIMORI_TASK_ID || !process.env.UIMORI_TOOL_ID || !process.env.UIMORI_BRIDGE_SOCKET)
+    if (
+      !process.env.UIMORI_TASK_ID ||
+      !process.env.UIMORI_TOOL_ID ||
+      !process.env.UIMORI_BRIDGE_SOCKET
+    )
       throw Error('uimori commands run inside an active data.exec workspace');
     const body = JSON.stringify({
       taskId: process.env.UIMORI_TASK_ID,
@@ -82,21 +89,30 @@ try {
       ...payload,
     });
     if (Buffer.byteLength(body) > 16_000_000) throw Error('SHELL_INPUT_TOO_LARGE');
-    const req = request({
-      socketPath: process.env.UIMORI_BRIDGE_SOCKET,
-      path: '/' + command,
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
-    }, (res) => {
-      res.pipe(process.stdout, { end: false });
-      res.on('end', () => {
-        process.stdout.write('\n');
-        if (res.statusCode !== 200) process.exitCode = 1;
-      });
-      res.on('error', (error) => { console.error(error.message); process.exitCode = 1; });
-    });
+    const req = request(
+      {
+        socketPath: process.env.UIMORI_BRIDGE_SOCKET,
+        path: '/' + command,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        res.pipe(process.stdout, { end: false });
+        res.on('end', () => {
+          process.stdout.write('\n');
+          if (res.statusCode !== 200) process.exitCode = 1;
+        });
+        res.on('error', (error) => {
+          console.error(error.message);
+          process.exitCode = 1;
+        });
+      }
+    );
     req.setTimeout(35000, () => req.destroy(Error('Uimori request timed out')));
-    req.on('error', (error) => { console.error(error.message); process.exitCode = 1; });
+    req.on('error', (error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
     req.end(body);
   }
 } catch (error) {

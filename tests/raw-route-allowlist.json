@@ -1,0 +1,197 @@
+{
+  "permanent": {
+    "GET /api/assets/:id": {
+      "reason": "Serves stored chat asset image bytes with image MIME type and private cache headers."
+    },
+    "GET /api/backup": {
+      "reason": "Streams the live SQLite database backup binary attachment."
+    },
+    "GET /api/backups/:id/download": {
+      "reason": "Streams a scheduled SQLite backup snapshot binary attachment."
+    },
+    "GET /api/chats/:id/backup-archive": {
+      "reason": "Serves a chat backup .uimori ZIP archive as binary bytes."
+    },
+    "GET /api/chats/:id/events": {
+      "reason": "Hijacks the HTTP response for per-chat Server-Sent Events (text/event-stream)."
+    },
+    "GET /api/content/:id/risu-export": {
+      "reason": "Serves binary CHARX/PNG export bytes with response compression disabled."
+    },
+    "GET /api/events": {
+      "reason": "Hijacks the HTTP response for live cross-tab Server-Sent Events (text/event-stream)."
+    },
+    "GET /api/fonts/:id/file": {
+      "reason": "Serves immutable uploaded font binary bytes."
+    },
+    "GET /api/illustration-images/:id": {
+      "reason": "Serves immutable generated illustration image bytes."
+    },
+    "GET /api/package-image-blobs/:hash": {
+      "reason": "Serves content-addressed package image or WebP thumbnail bytes."
+    },
+    "GET /api/prompt-presets/:id/risu-export": {
+      "reason": "Serves binary .risup preset export bytes with response compression disabled."
+    },
+    "GET /api/request-files/:hash": {
+      "reason": "Serves content-addressed attachment file bytes as a binary download."
+    },
+    "GET /api/response-streams/:taskKind/:taskId/events": {
+      "reason": "Hijacks the HTTP response for response-stream Server-Sent Events (text/event-stream)."
+    },
+    "GET /api/theme-assets/:hash": {
+      "reason": "Serves immutable theme font or image binary bytes."
+    },
+    "GET /api/usage/export": {
+      "reason": "Serves a UTF-8 BOM CSV attachment (text/csv)."
+    },
+    "POST /api/native-transfers/export-archive": {
+      "reason": "Serves a .uimori resource archive ZIP as binary bytes."
+    },
+    "POST /api/uploads": {
+      "reason": "Streams a raw application/octet-stream binary upload into staging."
+    }
+  },
+  "debt": [
+    "DELETE /api/helper/conversations/:id",
+    "DELETE /api/helper/conversations/:id/compact",
+    "DELETE /api/helper/conversations/:id/context/summary",
+    "DELETE /api/helper/conversations/:id/messages/:messageId",
+    "DELETE /api/helper/projects/:id",
+    "DELETE /api/illustration-presets/:id",
+    "DELETE /api/illustrations/:id",
+    "DELETE /api/session",
+    "GET /api/activity-feed",
+    "GET /api/chats",
+    "GET /api/chats/:id",
+    "GET /api/chats/:id/activities",
+    "GET /api/chats/:id/activity-acknowledgements",
+    "GET /api/chats/:id/asset-manifest",
+    "GET /api/chats/:id/context",
+    "GET /api/chats/:id/context/jobs/:jobId",
+    "GET /api/chats/:id/illustration-references",
+    "GET /api/chats/:id/illustrations",
+    "GET /api/chats/:id/outline",
+    "GET /api/chats/:id/outline/focus",
+    "GET /api/chats/:id/reader",
+    "GET /api/chats/:id/reader-runs",
+    "GET /api/chats/:id/risu-interactions",
+    "GET /api/chats/:id/sources/:sourceId/presentation",
+    "GET /api/chats/:id/story",
+    "GET /api/chats/:id/story-ui/pins",
+    "GET /api/connections/:id",
+    "GET /api/connections/:id/catalog",
+    "GET /api/content/:id",
+    "GET /api/content/:id/risu-preview",
+    "GET /api/diagnostics/metrics",
+    "GET /api/health",
+    "GET /api/helper/artifacts/:id",
+    "GET /api/helper/conversations",
+    "GET /api/helper/conversations/:id",
+    "GET /api/helper/conversations/:id/context",
+    "GET /api/helper/conversations/:id/deletion",
+    "GET /api/helper/conversations/:id/events",
+    "GET /api/helper/conversations/:id/messages",
+    "GET /api/helper/conversations/:id/references",
+    "GET /api/helper/conversations/:id/tasks",
+    "GET /api/helper/conversations/:id/view",
+    "GET /api/helper/projects",
+    "GET /api/helper/tasks/:id",
+    "GET /api/helper/tasks/:id/activity",
+    "GET /api/helper/tasks/:id/results",
+    "GET /api/helper/tasks/:id/rollback",
+    "GET /api/illustration-presets",
+    "GET /api/illustration-presets/:id/export",
+    "GET /api/illustration-settings",
+    "GET /api/illustrations/:id",
+    "GET /api/library",
+    "GET /api/model-presets/:id",
+    "GET /api/outline-nodes/:id/brief",
+    "GET /api/prompt-presets/:id",
+    "GET /api/revisions/:kind/:id/:revision",
+    "GET /api/risu/cbs-functions",
+    "GET /api/runs/:id",
+    "GET /api/session",
+    "GET /api/sources/:id/illustration-usage",
+    "GET /api/sources/:id/versions",
+    "PATCH /api/chats/:id/settings",
+    "PATCH /api/chats/:id/title",
+    "PATCH /api/helper/conversations/:id",
+    "PATCH /api/helper/conversations/:id/messages/:messageId",
+    "PATCH /api/helper/conversations/:id/project",
+    "PATCH /api/helper/projects/:id",
+    "PATCH /api/sources/:id/illustration-presentation",
+    "PATCH /api/sources/:id/scene-context",
+    "PATCH /api/sources/:id/title",
+    "POST /api/chats",
+    "POST /api/chats/:id/activity-acknowledgements",
+    "POST /api/chats/:id/asset-manifest/resolve",
+    "POST /api/chats/:id/context/compact",
+    "POST /api/chats/:id/context/jobs/:jobId/cancel",
+    "POST /api/chats/:id/notes",
+    "POST /api/chats/:id/outline",
+    "POST /api/chats/:id/package-start",
+    "POST /api/chats/:id/risu-interactions/:interactionId",
+    "POST /api/chats/:id/runs",
+    "POST /api/chats/:id/sources/:sourceId/risu-action",
+    "POST /api/chats/:id/story-ui/actions",
+    "POST /api/connections",
+    "POST /api/connections/:id/catalog",
+    "POST /api/connections/:id/move",
+    "POST /api/content",
+    "POST /api/content/:id/risu-preview",
+    "POST /api/helper/conversations",
+    "POST /api/helper/conversations/:id/compact",
+    "POST /api/helper/conversations/:id/copy",
+    "POST /api/helper/conversations/:id/messages",
+    "POST /api/helper/conversations/:id/read",
+    "POST /api/helper/conversations/new",
+    "POST /api/helper/projects",
+    "POST /api/helper/tasks/:id/cancel",
+    "POST /api/helper/tasks/:id/rollback",
+    "POST /api/helper/tasks/:id/steer",
+    "POST /api/illustration-presets/selection",
+    "POST /api/illustration-settings/comfyui/test",
+    "POST /api/illustration-settings/novelai/test",
+    "POST /api/illustrations/:id/cancel",
+    "POST /api/illustrations/:id/reconcile",
+    "POST /api/illustrations/:id/regenerate",
+    "POST /api/illustrations/:id/retry",
+    "POST /api/jobs/:id/cancel",
+    "POST /api/jobs/:id/rejudge",
+    "POST /api/jobs/:id/retry",
+    "POST /api/model-presets",
+    "POST /api/model-presets/:id/move",
+    "POST /api/outline-nodes/:id/scene-command",
+    "POST /api/packages/resolve",
+    "POST /api/prompt-combinations",
+    "POST /api/prompt-presets",
+    "POST /api/risu-imports/apply",
+    "POST /api/risu-imports/discard",
+    "POST /api/risu-imports/prepare",
+    "POST /api/risu-preset-imports/apply",
+    "POST /api/risu-preset-imports/prepare",
+    "POST /api/runs/:id/cancel",
+    "POST /api/runs/:id/dismiss-reader",
+    "POST /api/runs/:id/rejudge",
+    "POST /api/runs/:id/retry",
+    "POST /api/scene-commands/:id/run",
+    "POST /api/session",
+    "POST /api/sources/:id/illustration-placement",
+    "POST /api/sources/:id/illustrations",
+    "POST /api/sources/:id/retranslate",
+    "POST /api/sources/:id/translation",
+    "POST /api/story-ui/preview",
+    "PUT /api/chats/:id/context/summary",
+    "PUT /api/chats/:id/illustration-references",
+    "PUT /api/chats/:id/outline/focus",
+    "PUT /api/connections/:id",
+    "PUT /api/content/:id",
+    "PUT /api/helper/conversations/:id/context/summary",
+    "PUT /api/illustration-settings",
+    "PUT /api/model-presets/:id",
+    "PUT /api/prompt-presets/:id",
+    "PUT /api/sources/:id/text",
+    "PUT /api/sources/:id/translation"
+  ]
+}

@@ -3,10 +3,13 @@ import type { z } from 'zod/v4';
 import { type Endpoint, endpointInput, type Operation } from '#contracts';
 import { AppError } from './app-errors.js';
 
+export type RouteKind = 'endpoint';
+
 declare module 'fastify' {
   interface FastifyContextConfig {
     admission?: Endpoint['admission'];
     cache?: Endpoint['cache'];
+    routeKind?: RouteKind;
   }
 }
 
@@ -66,7 +69,7 @@ export function registerEndpoint<Op extends Operation>(
   app.route({
     method: endpoint.method,
     url: endpointUrl(endpoint),
-    config: { admission: endpoint.admission, cache: endpoint.cache },
+    config: { admission: endpoint.admission, cache: endpoint.cache, routeKind: 'endpoint' },
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
     ...(endpoint.cache === 'no-store' ? { onSend: noStore } : {}),
     handler: async (request, reply) => {

@@ -34,7 +34,12 @@ import { AppError, asAppError, errorWire, storedModelRequired } from './app-erro
 import { checkEndpointOutputs } from './endpoint.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+  type RouteOptions,
+} from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -158,6 +163,7 @@ export type AppOptions = {
   codex?: CodexRuntimeOptions;
   codexRuntime?: CodexRuntimeService;
   maintenance?: boolean;
+  onRoute?: (route: RouteOptions) => void;
 };
 export type App = FastifyInstance & { store: Store; controls: Controls };
 type RecordBody = Record<string, unknown>;
@@ -167,6 +173,7 @@ const DOCUMENT_CONTENT_SECURITY_POLICY =
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
+  if (options.onRoute) app.addHook('onRoute', options.onRoute);
   if (options.testMode) checkEndpointOutputs(app);
   await registerResponseCompression(app);
   revalidatePrivateJson(app);

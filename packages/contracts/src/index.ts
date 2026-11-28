@@ -2,6 +2,8 @@ export * from './errors/index.js';
 export * from './maintenance.js';
 export * from './image-limits.js';
 export * from './endpoint.js';
+export * from './domains/limits.js';
+export * from './domains/story-ui-styles.js';
 export * from './domains/translation/written-language.js';
 export * from './domains/translation/endpoints.js';
 export type * from './domains/translation/operations.js';

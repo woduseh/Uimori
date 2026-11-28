@@ -1,7 +1,6 @@
 import { defineEndpoint } from '../../endpoint.js';
+import { PROMPT_HTTP_BODY_MAX_BYTES } from '../limits.js';
 import type { promptOperations as operations } from './operations.js';
-
-export const PROMPT_HTTP_BODY_MAX_BYTES = 64 * 1024 * 1024;
 
 export const promptEndpoints = {
   listTemplates: defineEndpoint<typeof operations.listTemplates>()({

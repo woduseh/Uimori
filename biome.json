@@ -10,6 +10,7 @@
     "includes": [
       "core/**",
       "packages/**",
+      "runner/**",
       "server/**",
       "web/**",
       "tests/**",
@@ -112,6 +113,26 @@
       }
     },
     {
+      "includes": ["runner/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**", "!node:*", "!node:*/**", "!./**"],
+                    "message": "Runner scripts run standalone in the container and may import only node:* builtins and modules inside runner/."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["packages/**"],
       "linter": {
         "rules": {
@@ -155,7 +176,7 @@
       }
     },
     {
-      "includes": ["core/**"],
+      "includes": ["packages/contracts/src/domains/*/**"],
       "linter": {
         "rules": {
           "style": {
@@ -164,6 +185,117 @@
               "options": {
                 "paths": {
                   "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
+                "patterns": [
+                  {
+                    "group": ["**", "!./**", "!../**", "!zod/v4"],
+                    "message": "Contracts are runtime-neutral: import only modules inside packages/contracts and zod/v4."
+                  },
+                  {
+                    "group": [
+                      "**/core",
+                      "**/core/**",
+                      "**/server",
+                      "**/server/**",
+                      "**/web",
+                      "**/web/**",
+                      "**/tests",
+                      "**/tests/**",
+                      "**/scripts",
+                      "**/scripts/**",
+                      "**/runner",
+                      "**/runner/**",
+                      "**/third_party",
+                      "**/third_party/**",
+                      "**/package.json"
+                    ],
+                    "message": "Contracts are the lowest layer and cannot import application code, including types."
+                  },
+                  {
+                    "group": ["../*/**", "!../../**", "../../domains/**"],
+                    "message": "Contract domains cannot import sibling domains; move shared constants or schemas into packages/contracts/src/domains/."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/**/endpoints.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'.",
+                  "zod/v4": "Endpoint files are imported through #contracts into the browser startup bundle and must not import zod/v4; put schemas in operations.ts."
+                },
+                "patterns": [
+                  {
+                    "group": ["**", "!./**", "!../**"],
+                    "message": "Endpoint files are runtime-neutral and schema-free: import only modules inside packages/contracts."
+                  },
+                  {
+                    "group": [
+                      "**/core",
+                      "**/core/**",
+                      "**/server",
+                      "**/server/**",
+                      "**/web",
+                      "**/web/**",
+                      "**/tests",
+                      "**/tests/**",
+                      "**/scripts",
+                      "**/scripts/**",
+                      "**/runner",
+                      "**/runner/**",
+                      "**/third_party",
+                      "**/third_party/**",
+                      "**/package.json"
+                    ],
+                    "message": "Contracts are the lowest layer and cannot import application code, including types."
+                  },
+                  {
+                    "group": ["../*/**", "!../../**", "../../domains/**"],
+                    "message": "Contract domains cannot import sibling domains; move shared constants or schemas into packages/contracts/src/domains/."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'.",
+                  "zod/v3": "Only core/story-ui-catalog.ts may import 'zod/v3' to extend @a2ui/web_core schemas.",
+                  "zod/v4": "Contract schemas belong in packages/contracts behind #contracts/operations, not in core/.",
+                  "#contracts/operations": "Core modules stay free of contract operation schemas; import wire types and constants from #contracts.",
+                  "node:fs": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:fs/promises": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:module": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:zlib": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:child_process": "Core modules cannot spawn processes.",
+                  "node:sqlite": "Database access belongs in server/, not core/.",
+                  "node:worker_threads": "Worker threads belong in server/, not core/.",
+                  "fs": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "fs/promises": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "module": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "zlib": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "child_process": "Core modules cannot spawn processes.",
+                  "worker_threads": "Worker threads belong in server/, not core/."
                 },
                 "patterns": [
                   {
@@ -177,6 +309,245 @@
                   {
                     "group": ["**/server", "**/server/**", "**/web", "**/web/**"],
                     "message": "Core cannot import application layers, including types."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Core cannot import runner scripts."
+                  },
+                  {
+                    "group": ["**/package.json"],
+                    "message": "Core cannot import package.json."
+                  },
+                  {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Only core/story-ui-catalog.ts may import vendored assets from third_party/."
+                  },
+                  {
+                    "group": ["zod/v4/**", "zod/v3/**"],
+                    "message": "Contract schemas belong in packages/contracts behind #contracts/operations, not in core/."
+                  },
+                  {
+                    "group": [
+                      "fastify",
+                      "fastify/**",
+                      "@fastify/**",
+                      "sharp",
+                      "sharp/**",
+                      "web-push",
+                      "web-push/**",
+                      "wasmoon",
+                      "wasmoon/**",
+                      "msgpackr",
+                      "msgpackr/**",
+                      "stream-json",
+                      "stream-json/**",
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**",
+                      "@a2ui/agent",
+                      "@a2ui/agent/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**"
+                    ],
+                    "message": "Core cannot import server-only or browser UI packages."
+                  },
+                  {
+                    "group": ["tiktoken", "tiktoken/**", "@huggingface/**"],
+                    "message": "Only core/local-tokenizers.ts may import local tokenizer packages."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["core/story-ui-catalog.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'.",
+                  "zod/v4": "Contract schemas belong in packages/contracts behind #contracts/operations, not in core/.",
+                  "#contracts/operations": "Core modules stay free of contract operation schemas; import wire types and constants from #contracts.",
+                  "node:fs": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:fs/promises": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:module": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:zlib": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "node:child_process": "Core modules cannot spawn processes.",
+                  "node:sqlite": "Database access belongs in server/, not core/.",
+                  "node:worker_threads": "Worker threads belong in server/, not core/.",
+                  "fs": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "fs/promises": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "module": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "zlib": "Only core/local-tokenizers.ts may use filesystem/runtime Node builtins in core/.",
+                  "child_process": "Core modules cannot spawn processes.",
+                  "worker_threads": "Worker threads belong in server/, not core/."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
+                    "group": ["**/server", "**/server/**", "**/web", "**/web/**"],
+                    "message": "Core cannot import application layers, including types."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Core cannot import runner scripts."
+                  },
+                  {
+                    "group": ["**/package.json"],
+                    "message": "Core cannot import package.json."
+                  },
+                  {
+                    "group": ["zod/v4/**"],
+                    "message": "Contract schemas belong in packages/contracts behind #contracts/operations, not in core/."
+                  },
+                  {
+                    "group": [
+                      "fastify",
+                      "fastify/**",
+                      "@fastify/**",
+                      "sharp",
+                      "sharp/**",
+                      "web-push",
+                      "web-push/**",
+                      "wasmoon",
+                      "wasmoon/**",
+                      "msgpackr",
+                      "msgpackr/**",
+                      "stream-json",
+                      "stream-json/**",
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**",
+                      "@a2ui/agent",
+                      "@a2ui/agent/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**"
+                    ],
+                    "message": "Core cannot import server-only or browser UI packages."
+                  },
+                  {
+                    "group": ["tiktoken", "tiktoken/**", "@huggingface/**"],
+                    "message": "Only core/local-tokenizers.ts may import local tokenizer packages."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["core/local-tokenizers.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'.",
+                  "zod/v3": "Only core/story-ui-catalog.ts may import 'zod/v3' to extend @a2ui/web_core schemas.",
+                  "zod/v4": "Contract schemas belong in packages/contracts behind #contracts/operations, not in core/.",
+                  "#contracts/operations": "Core modules stay free of contract operation schemas; import wire types and constants from #contracts.",
+                  "node:child_process": "Core modules cannot spawn processes.",
+                  "node:sqlite": "Database access belongs in server/, not core/.",
+                  "node:worker_threads": "Worker threads belong in server/, not core/.",
+                  "child_process": "Core modules cannot spawn processes.",
+                  "worker_threads": "Worker threads belong in server/, not core/."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
+                    "group": ["**/server", "**/server/**", "**/web", "**/web/**"],
+                    "message": "Core cannot import application layers, including types."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Core cannot import runner scripts."
+                  },
+                  {
+                    "group": ["**/package.json"],
+                    "message": "Core cannot import package.json."
+                  },
+                  {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Only core/story-ui-catalog.ts may import vendored assets from third_party/."
+                  },
+                  {
+                    "group": ["zod/v4/**", "zod/v3/**"],
+                    "message": "Contract schemas belong in packages/contracts behind #contracts/operations, not in core/."
+                  },
+                  {
+                    "group": [
+                      "fastify",
+                      "fastify/**",
+                      "@fastify/**",
+                      "sharp",
+                      "sharp/**",
+                      "web-push",
+                      "web-push/**",
+                      "wasmoon",
+                      "wasmoon/**",
+                      "msgpackr",
+                      "msgpackr/**",
+                      "stream-json",
+                      "stream-json/**",
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**",
+                      "@a2ui/agent",
+                      "@a2ui/agent/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**"
+                    ],
+                    "message": "Core cannot import server-only or browser UI packages."
                   }
                 ]
               }
@@ -210,6 +581,10 @@
                     "message": "Server code cannot import the browser layer, including types."
                   },
                   {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Server code cannot import runner scripts; spawn them by path."
+                  },
+                  {
                     "group": [
                       "**/core/provider-http",
                       "**/core/provider-http.*",
@@ -217,6 +592,264 @@
                       "**/core/vertex.*"
                     ],
                     "message": "Provider execution must use core/transport instead of transport internals."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**",
+                      "@a2ui/web_core",
+                      "@a2ui/web_core/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**"
+                    ],
+                    "message": "Server code cannot import browser UI libraries."
+                  },
+                  {
+                    "group": ["./app", "./app.*", "**/app", "**/app.*"],
+                    "message": "Only server/index.ts may import server/app; pass dependencies through route arguments instead."
+                  },
+                  {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Only server/compat/risu/** and server/risu-native-cbs.ts may import vendored third_party modules."
+                  },
+                  {
+                    "group": [
+                      "./compat/risu",
+                      "./compat/risu/**",
+                      "**/compat/risu",
+                      "**/compat/risu/**"
+                    ],
+                    "message": "Risu compatibility adapters stay behind server/risu-*.ts modules."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["server/index.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
+                    "group": ["**/web", "**/web/**"],
+                    "message": "Server code cannot import the browser layer, including types."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Server code cannot import runner scripts; spawn them by path."
+                  },
+                  {
+                    "group": [
+                      "**/core/provider-http",
+                      "**/core/provider-http.*",
+                      "**/core/vertex",
+                      "**/core/vertex.*"
+                    ],
+                    "message": "Provider execution must use core/transport instead of transport internals."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**",
+                      "@a2ui/web_core",
+                      "@a2ui/web_core/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**"
+                    ],
+                    "message": "Server code cannot import browser UI libraries."
+                  },
+                  {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Only server/compat/risu/** and server/risu-native-cbs.ts may import vendored third_party modules."
+                  },
+                  {
+                    "group": [
+                      "./compat/risu",
+                      "./compat/risu/**",
+                      "**/compat/risu",
+                      "**/compat/risu/**"
+                    ],
+                    "message": "Risu compatibility adapters stay behind server/risu-*.ts modules."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["server/risu-*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
+                    "group": ["**/web", "**/web/**"],
+                    "message": "Server code cannot import the browser layer, including types."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Server code cannot import runner scripts; spawn them by path."
+                  },
+                  {
+                    "group": [
+                      "**/core/provider-http",
+                      "**/core/provider-http.*",
+                      "**/core/vertex",
+                      "**/core/vertex.*"
+                    ],
+                    "message": "Provider execution must use core/transport instead of transport internals."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**",
+                      "@a2ui/web_core",
+                      "@a2ui/web_core/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**"
+                    ],
+                    "message": "Server code cannot import browser UI libraries."
+                  },
+                  {
+                    "group": ["./app", "./app.*", "**/app", "**/app.*"],
+                    "message": "Only server/index.ts may import server/app; pass dependencies through route arguments instead."
+                  },
+                  {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Only server/compat/risu/** and server/risu-native-cbs.ts may import vendored third_party modules."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["server/compat/risu/**", "server/risu-native-cbs.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
+                    "group": ["**/web", "**/web/**"],
+                    "message": "Server code cannot import the browser layer, including types."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Server code cannot import runner scripts; spawn them by path."
+                  },
+                  {
+                    "group": [
+                      "**/core/provider-http",
+                      "**/core/provider-http.*",
+                      "**/core/vertex",
+                      "**/core/vertex.*"
+                    ],
+                    "message": "Provider execution must use core/transport instead of transport internals."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**",
+                      "@a2ui/web_core",
+                      "@a2ui/web_core/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**"
+                    ],
+                    "message": "Server code cannot import browser UI libraries."
+                  },
+                  {
+                    "group": ["./app", "./app.*", "**/app", "**/app.*"],
+                    "message": "Only server/index.ts may import server/app; pass dependencies through route arguments instead."
                   }
                 ]
               }
@@ -247,13 +880,41 @@
                     "message": "Browser contracts belong in packages/contracts or core; do not import server code or types."
                   },
                   {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Browser code cannot import vendored third_party modules directly."
+                  },
+                  {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Browser code cannot import runner scripts."
+                  },
+                  {
+                    "group": ["**/package.json"],
+                    "message": "Browser code cannot import package.json."
+                  },
+                  {
+                    "group": ["zod/**"],
+                    "message": "Browser code must not import zod directly; shared schemas live in packages/contracts behind #contracts/operations."
+                  },
+                  {
                     "group": [
                       "**/core/provider-http",
                       "**/core/provider-http.*",
                       "**/core/vertex",
-                      "**/core/vertex.*"
+                      "**/core/vertex.*",
+                      "**/core/local-tokenizers",
+                      "**/core/local-tokenizers.*",
+                      "**/core/provider-fetch",
+                      "**/core/provider-fetch.*",
+                      "**/core/vertex-auth",
+                      "**/core/vertex-auth.*",
+                      "**/core/transport",
+                      "**/core/transport.*",
+                      "**/core/*-protocol",
+                      "**/core/*-protocol.*",
+                      "**/core/provider",
+                      "**/core/provider.*"
                     ],
-                    "message": "Provider execution must use core/transport instead of transport internals."
+                    "message": "Browser code cannot import Node-only or provider-transport core modules."
                   },
                   {
                     "group": [
@@ -265,7 +926,22 @@
                       "google-auth-library/**",
                       "fastify",
                       "fastify/**",
-                      "@fastify/**"
+                      "@fastify/**",
+                      "sharp",
+                      "sharp/**",
+                      "web-push",
+                      "web-push/**",
+                      "wasmoon",
+                      "wasmoon/**",
+                      "msgpackr",
+                      "msgpackr/**",
+                      "stream-json",
+                      "stream-json/**",
+                      "tiktoken",
+                      "tiktoken/**",
+                      "@huggingface/**",
+                      "@a2ui/agent",
+                      "@a2ui/agent/**"
                     ],
                     "message": "Browser code cannot import Node builtins or server SDKs."
                   }

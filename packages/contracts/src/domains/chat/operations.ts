@@ -1,6 +1,6 @@
 import { z } from 'zod/v4';
 import { defineOperation } from '../../endpoint.js';
-import { storyUiStyles } from '../appearance/theme-vocabulary.js';
+import { storyUiStyles } from '../story-ui-styles.js';
 import { revision } from '../revision.js';
 import { nonBlank } from '../text.js';
 import {
