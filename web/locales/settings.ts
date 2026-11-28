@@ -30,10 +30,16 @@ export const messages = {
     zh: '付费生成前确认',
   },
   'settings.helperConfirmPaidGenerationHint': {
-    ko: '도우미가 다음 장면이나 번역을 요청하기 전에 확인을 받아요. 바꾼 값은 다음 도우미 요청부터 적용돼요.',
-    en: 'The assistant asks before requesting the next scene or a translation. The change applies from the next assistant request.',
-    ja: 'アシスタントが次のシーンや翻訳を依頼する前に確認を求めます。変更は次のアシスタントへの依頼から適用されます。',
-    zh: '助手在请求下一场景或翻译前会先征求确认。更改从下一次助手请求开始生效。',
+    ko: '도우미가 다음 장면이나 번역을 요청하기 전에 확인을 받아요.',
+    en: 'The assistant asks before requesting the next scene or a translation.',
+    ja: 'アシスタントが次のシーンや翻訳を依頼する前に確認を求めます。',
+    zh: '助手在请求下一场景或翻译前会先征求确认。',
+  },
+  'settings.agentPermissions': {
+    ko: '확인과 권한',
+    en: 'Confirmations and permissions',
+    ja: '確認と権限',
+    zh: '确认与权限',
   },
   'settings.mcpAllowDelete': {
     ko: 'MCP에서 삭제도 확인 없이 허용',
