@@ -19,7 +19,10 @@ const outlineRevision = z.int().min(1).max(1_000_000_000);
 const outlinePosition = z.int().min(0).max(OUTLINE_POSITION_MAX);
 const relatedIds = z
   .array(outlineNodeId)
-  .refine((ids) => new Set(ids).size === ids.length, 'Duplicate related outline IDs')
+  .refine(
+    (ids) => ids.length > OUTLINE_RELATED_LIMIT || new Set(ids).size === ids.length,
+    'Duplicate related outline IDs'
+  )
   .describe(
     `Ids of up to ${OUTLINE_RELATED_LIMIT} other plans in the same chat that this item relates to.`
   );

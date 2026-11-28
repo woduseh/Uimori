@@ -2839,10 +2839,11 @@ export class HelperRuntime {
   private targetTask(
     task: HelperTask,
     args: Record<string, unknown>,
-    writing: boolean
+    writing: boolean,
+    commandOwned = false
   ): HelperTask {
     const chatId = text(args.chatId, 'chat ID', 100);
-    this.store.chat(chatId);
+    if (!commandOwned) this.store.chat(chatId);
     return {
       ...task,
       snapshot: {
@@ -2870,7 +2871,12 @@ export class HelperRuntime {
       throw new HttpError(403, PLAN_MODE_READ_ONLY);
     const targeted =
       !traits.direct && args.chatId !== undefined
-        ? this.targetTask(task, args, traits.writing)
+        ? this.targetTask(
+            task,
+            args,
+            traits.writing,
+            !traits.writing && Boolean(helperCommandTool(name))
+          )
         : task;
     const { chatId: _chatId, ...appArgs } = args;
     const toolArgs = traits.direct ? args : appArgs;
