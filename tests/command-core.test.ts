@@ -1733,11 +1733,98 @@ test('registerCommand keeps prepare signal alive after request body completes an
   }
 });
 
-test('a runtime async apply throws synchronously, rolls back writes and the receipt, and skips afterCommit', async () => {
+test('a staged operation runs afterCommit once, and never for a run that rolled back before a replay', async () => {
+  const store = createStoreFixture();
+  const chat = createFixtureChat(store, 'Staged afterCommit chat');
+  const ports = createStorePorts(store);
+  const afterCommit = vi.fn();
+  const command = { ...updateChatVariablesCommand, afterCommit };
+  const input = {
+    chatId: chat.id,
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: randomUUID(),
+    values: { mood: 'steady' },
+  };
+
+  const rolledBack = await stageOperation(command, ports, input);
+  expect(() =>
+    ports.tx.transaction((tx) => {
+      rolledBack.run(tx);
+      throw new Error('a later write failed');
+    })
+  ).toThrow('a later write failed');
+  expect(readChatVariables(store, chat.id).revision).toBe(0);
+  await executeOperation(updateChatVariablesCommand, ports, input);
+  expect(ports.tx.transaction((tx) => rolledBack.run(tx))).toMatchObject({ replayed: true });
+  await rolledBack.afterCommit();
+  expect(afterCommit).not.toHaveBeenCalled();
+
+  const committed = await stageOperation(command, ports, {
+    ...input,
+    expectedRevision: 1,
+    idempotencyKey: randomUUID(),
+    values: { mood: 'bright' },
+  });
+  ports.tx.transaction((tx) => committed.run(tx));
+  await committed.afterCommit();
+  await committed.afterCommit();
+  expect(afterCommit).toHaveBeenCalledOnce();
+});
+
+test('a checked output is the one value returned, stored in the receipt and passed to afterCommit', async () => {
+  const store = createStoreFixture();
+  const chat = createFixtureChat(store, 'Checked output chat');
+  const ports = createStorePorts(store);
+  const op = defineCommandOperation<{ ok: boolean; revision: number }>()({
+    name: 'test.defaultedOutput',
+    head: z.strictObject({ chatId: nonBlank(120), idempotencyKey: nonBlank(120) }),
+    body: z.strictObject({}),
+    output: z.strictObject({ ok: z.boolean(), revision: z.int().default(7) }),
+    outputPolicy: 'always',
+  });
+  const afterCommit = vi.fn();
+  const command = defineCommand<Pick<AppPorts, 'tx' | 'chatVariableReceipt'>>()(op, {
+    receipt: {
+      store: (receiptPorts) => receiptPorts.chatVariableReceipt,
+      scope: (head) => head.chatId,
+      key: (head) => head.idempotencyKey,
+      serialize: (output) => ({ revision: output.revision }),
+      onReplay: () => ({ ok: true, revision: 7 }),
+    },
+    guard() {},
+    apply: () => ({ ok: true }) as unknown as { ok: boolean; revision: number },
+    afterCommit,
+  });
+
+  await expect(
+    executeOperation(command, ports, { chatId: chat.id, idempotencyKey: randomUUID() })
+  ).resolves.toEqual({ ok: true, revision: 7 });
+  expect(
+    store.db.prepare('SELECT revision FROM chat_variable_journal WHERE chat_id=?').get(chat.id)
+  ).toEqual({ revision: 7 });
+  expect(afterCommit.mock.calls[0]?.[1]).toEqual({ ok: true, revision: 7 });
+});
+
+test('a runtime async guard or apply throws synchronously, rolls back writes and the receipt, and skips afterCommit', async () => {
   const store = createStoreFixture();
   const chat = createFixtureChat(store, 'Async apply rollback chat');
   const publish = vi.fn();
   const ports = createStorePorts(store, { publish });
+  const asyncGuard: Command<typeof applyOutlineCommand.op, typeof ports> = {
+    ...applyOutlineCommand,
+    guard: (async () => {
+      throw new AppError(409, 'REVISION_CONFLICT');
+    }) as unknown as typeof applyOutlineCommand.guard,
+  };
+  await expect(
+    executeOperation(asyncGuard, ports, {
+      chatId: chat.id,
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'create', level: 'arc', title: '가드', intent: '' }],
+    })
+  ).rejects.toThrow('Async guard callback');
+
   const asyncApply: Command<typeof applyOutlineCommand.op, typeof ports> = {
     ...applyOutlineCommand,
     apply: (async (...args: Parameters<typeof applyOutlineCommand.apply>) => {

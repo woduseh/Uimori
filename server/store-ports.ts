@@ -81,7 +81,8 @@ export function createStorePorts(
         return readImportReceipt<ImportReceiptRecord>(
           store,
           lookup.scope + lookup.key,
-          lookup.digest
+          lookup.digest,
+          lookup.conflictMessage
         );
       },
       save(tx, lookup, value) {

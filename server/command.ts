@@ -180,25 +180,35 @@ export async function stageOperation<Op extends AnySplitOperation, P extends Pic
   return {
     replay: () => (prior === undefined ? undefined : replayRecord(null, prior)),
     run(tx) {
+      applied = undefined;
       const record = readReceipt(tx);
       if (record !== undefined) return replayRecord(tx, record);
       if (preparationFailure) throw preparationFailure.error;
       const guarded = command.guard(tx, ports, head);
+      assertSyncReturn(guarded, 'guard');
       const input = {
         ...head,
         ...parseInput(command.op.body, bodyRaw),
       } as OperationParsedInput<Op>;
-      const output = command.apply(tx, ports, input, guarded, prepared);
-      assertSyncReturn(output, 'apply');
-      const checked = enforceOutput(command.op, output, ctx.checkOutputs);
+      const returned = command.apply(tx, ports, input, guarded, prepared);
+      assertSyncReturn(returned, 'apply');
+      const output = enforceOutput(command.op, returned, ctx.checkOutputs);
       if (receipt && receiptStore && lookup)
         receiptStore.save(tx, lookup, receipt.serialize(output, input));
       applied = { output, input, guarded };
-      return { replayed: false, output: checked, input };
+      return { replayed: false, output, input };
     },
     async afterCommit() {
-      if (applied && command.afterCommit)
-        await command.afterCommit(ports, applied.output, applied.input, applied.guarded, prepared);
+      const committed = applied;
+      applied = undefined;
+      if (committed && command.afterCommit)
+        await command.afterCommit(
+          ports,
+          committed.output,
+          committed.input,
+          committed.guarded,
+          prepared
+        );
     },
   };
 }
