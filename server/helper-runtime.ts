@@ -3327,7 +3327,12 @@ export class HelperRuntime {
         { name, args, chatId: scope.chatId },
         () => {
           const saved = invoke();
-          const { requested, targets } = helperSceneResultTargets(this.store, scope.chatId, saved);
+          const { requested, targets } = helperSceneResultTargets(
+            this.store,
+            scope.chatId,
+            saved,
+            args
+          );
           recordHelperTaskResult(this.workspace, task, {
             receiptId,
             operation: name,
@@ -3541,8 +3546,11 @@ export class HelperRuntime {
       const service = new ChatOverridesStore(this.store);
       if (args.action === 'read')
         return readHelperChatLore(this.store, scope.chatId, args, readFit);
-      const loreValue = (entry: ChatLoreOverride | undefined) =>
-        entry && !entry.retired ? entry.value : null;
+      const loreSaved = (prior: ChatLoreOverride | undefined, entry: ChatLoreOverride) =>
+        !prior ||
+        prior.id !== entry.id ||
+        prior.revision !== entry.revision ||
+        prior.retired !== entry.retired;
       const recordLore = (
         receiptId: string,
         requested: number,
@@ -3606,7 +3614,7 @@ export class HelperRuntime {
                 task.id
               );
               revision = result.revision;
-              changed ||= loreValue(prior) !== loreValue(result.entry);
+              changed ||= loreSaved(prior, result.entry);
               return { overrideId: result.entry.id, selector: result.entry.selector };
             });
             recordLore(`${task.id}:${operationId}`, items.length, changed, revision ?? 0);
@@ -3624,12 +3632,7 @@ export class HelperRuntime {
           args.action === 'patch'
             ? service.patch(scope.chatId, body, task.id)
             : service.remove(scope.chatId, body, task.id);
-        recordLore(
-          `${task.id}:${operationId}`,
-          1,
-          loreValue(prior) !== loreValue(saved.entry),
-          saved.revision
-        );
+        recordLore(`${task.id}:${operationId}`, 1, loreSaved(prior, saved.entry), saved.revision);
         return {
           revision: saved.revision,
           overrideId: saved.entry.id,

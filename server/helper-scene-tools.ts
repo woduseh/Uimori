@@ -616,32 +616,45 @@ type SceneReceipt = {
   target?: 'original' | 'translation';
   sourceId?: string;
   revision?: number;
+  translationRevision?: number;
   items?: SceneReceipt[];
 };
 
 export function helperSceneResultTargets(
   store: Store,
   chatId: string,
-  result: unknown
+  result: unknown,
+  args?: { expectedRevision?: unknown; items?: unknown }
 ): { requested: number; targets: HelperTaskResultTarget[] } {
   const receipt = result as SceneReceipt;
   const items = receipt.items ?? [receipt];
+  const inputs = (Array.isArray(args?.items) ? args.items : [args]) as (
+    | { expectedRevision?: unknown }
+    | undefined
+  )[];
   const chatTitle = store.chat(chatId).title;
   return {
     requested: items.length,
-    targets: items.flatMap((item) =>
-      item.changed && item.sourceId
-        ? [
-            {
-              kind: item.target === 'translation' ? 'translation' : 'scene',
-              id: item.sourceId,
-              chatId,
-              title: sceneTitle(store, item.sourceId) || chatTitle,
-              revision: item.revision ?? 0,
-            },
-          ]
-        : []
-    ),
+    targets: items.flatMap((item, index) => {
+      const sourceId = item.sourceId;
+      if (!item.changed || !sourceId) return [];
+      const target = (kind: 'scene' | 'translation', revision: number) => ({
+        kind,
+        id: sourceId,
+        chatId,
+        title: sceneTitle(store, sourceId) || chatTitle,
+        revision,
+      });
+      const saved = item.revision ?? 0;
+      return [
+        ...(saved !== inputs[index]?.expectedRevision
+          ? [target(item.target === 'translation' ? 'translation' : 'scene', saved)]
+          : []),
+        ...(item.translationRevision !== undefined
+          ? [target('translation', item.translationRevision)]
+          : []),
+      ];
+    }),
   };
 }
 

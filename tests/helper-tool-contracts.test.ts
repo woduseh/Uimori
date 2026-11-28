@@ -582,6 +582,32 @@ test('helper discovers original lore hashes, uses them for consecutive chat patc
   expect(f.store.product.stored('content', f.bot.id)).toEqual(original);
 });
 
+test('re-saving the same chat lore text over a changed anchor reports the chat lore it saved', async () => {
+  const f = await fixture();
+  const source = completedSource(f.store, f.chat.id);
+  mockSend((request, round) => {
+    if (round === 0 || round === 3)
+      return calls(call(`read-${round}`, 'chat.lore', { action: 'read' }));
+    if (round === 1 || round === 4)
+      return calls(
+        call(`patch-${round}`, 'chat.lore', {
+          action: 'patch',
+          body: patchBody(result<HelperLoreRead>(request, `read-${round - 1}`), 'Chat-only text'),
+        })
+      );
+    return structuredClone(success);
+  });
+  await submit(f, '이 채팅의 로어를 바꿔 줘');
+  f.store.editSource(source.id, { text: 'Edited historical source', expectedRevision: 0 });
+  const service = new ChatOverridesStore(f.store);
+  expect(service.get(f.chat.id).conflicts).toMatchObject([{ kind: 'anchor-changed' }]);
+  const task = await submit(f, '같은 로어 문구로 다시 저장해 줘');
+  expect(service.get(f.chat.id).conflicts).toEqual([]);
+  expect(readHelperTaskResults(f.store, task.id).results).toMatchObject([
+    { operation: 'chat.lore', targets: [{ kind: 'chat-lore', id: f.chat.id }] },
+  ]);
+});
+
 test('chat lore filters the list by text and saves several overrides from list guards in one call', async () => {
   const f = await fixture();
   let listed!: HelperLoreRead;
