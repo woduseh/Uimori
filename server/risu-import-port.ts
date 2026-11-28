@@ -61,7 +61,7 @@ async function prepareCard(
       }));
   }
   return {
-    ...prepareRisuBundle(store, file, staged?.images),
+    ...prepareRisuBundle(file, staged?.images),
     manifest,
     preview,
     uploadId: staged
