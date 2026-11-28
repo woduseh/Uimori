@@ -34,6 +34,7 @@ type Family = { tools: ProviderTool[]; run: Run; chat?: true };
 
 export const MCP_READ_TOKEN_BUDGET = 32_000;
 export const MCP_DELETE_SETTING = 'Allow deletion over MCP without confirmation';
+const DELETE_NAME = /delete|remove/iu;
 const mcpReadFit = tokenFit(MCP_READ_TOKEN_BUDGET);
 
 const data: Family = {
@@ -233,7 +234,7 @@ type McpTool = {
 const TOOLS: McpTool[] = EXPOSED.map(([source, family, readOnly, adapt]) => {
   const tool = family.tools.find((candidate) => candidate.name === source);
   if (!tool) throw new Error(`MCP tool source missing: ${source}`);
-  if (helperConfirmationTrait(source))
+  if (helperConfirmationTrait(source) || DELETE_NAME.test(source))
     throw new Error(`MCP direct tool must not delete or start paid generation: ${source}`);
   return {
     name: mcpName(source),
@@ -290,7 +291,6 @@ const GATEWAY_ADAPT: Record<string, Adapt> = {
   ),
   'prompt.combination.delete': without(OWNER_CONFIRMATION),
 };
-const DELETE_ACTION = /delete|remove/u;
 const deletes = (operation: McpAppOperation, action: unknown) =>
   operation.deletes === true ||
   (typeof action === 'string' && !!operation.deletes?.includes(action));
@@ -303,15 +303,24 @@ const GATEWAY: (ProviderTool & { operation: McpAppOperation })[] = Object.entrie
   const trait = helperConfirmationTrait(name);
   if (trait === 'paid' || SOURCE_NAMES.has(name))
     throw new Error(`MCP app operation must not be exposed through the gateway: ${name}`);
-  if (trait === 'delete' && operation.deletes !== true)
+  if ((trait === 'delete' || DELETE_NAME.test(name)) && operation.deletes !== true)
     throw new Error(`MCP delete operation must be listed under deletes: ${name}`);
-  const unguarded = (operation.actions ?? []).filter(
-    (action) => DELETE_ACTION.test(action) && !deletes(operation, action)
+  const offered: readonly string[] =
+    operation.actions ??
+    ((source.inputSchema as Schema).properties?.action as { enum?: string[] } | undefined)?.enum ??
+    [];
+  const unguarded = offered.filter(
+    (action) => DELETE_NAME.test(action) && !deletes(operation, action)
   );
   if (unguarded.length)
     throw new Error(
       `MCP delete action must be listed under deletes: ${name} ${unguarded.join(', ')}`
     );
+  if (
+    Array.isArray(operation.deletes) &&
+    !(operation.deletes.length && operation.deletes.every((action) => offered.includes(action)))
+  )
+    throw new Error(`MCP deletes must name actions the operation offers: ${name}`);
   if (operation.deletes && operation.readOnly)
     throw new Error(`MCP delete operation must not be read-only: ${name}`);
   return {

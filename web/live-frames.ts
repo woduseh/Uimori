@@ -37,6 +37,9 @@ export const helperDataFrame = (frame: LiveFrame) =>
 export const resourceFrame = (frame: LiveFrame) =>
   helperDataFrame(frame) || (frame.event === 'invalidate' && frame.name === 'resources');
 
+export const chatListFrame = (frame: LiveFrame) =>
+  frame.event === 'invalidate' && frame.name === 'chats';
+
 export const presentationFrame =
   (catalog: 'themes' | 'illustration-presets' | 'fonts') => (frame: LiveFrame) =>
     frame.event === 'invalidate' && frame.name === catalog;

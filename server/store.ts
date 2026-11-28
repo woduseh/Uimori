@@ -103,7 +103,8 @@ export type VolatileChange =
   | 'themes'
   | 'fonts'
   | 'illustration-presets'
-  | 'resources';
+  | 'resources'
+  | 'chats';
 type Row = Record<string, any>;
 const CHAT_SELECT = `SELECT c.*,
   COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision,

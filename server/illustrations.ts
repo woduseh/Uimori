@@ -1589,9 +1589,22 @@ export function cancelIllustration(store: Store, id: string): Illustration {
     return projectIllustration(store, illustrationJob(store, id));
   });
 }
+function placedSetWithout(store: Store, sourceId: string, targetId: string): string | undefined {
+  const source = store.source(sourceId);
+  const placed = illustrationPresentation(store, source.id, source.hash)?.translation;
+  if (!placed) return undefined;
+  const targets = illustrationTargets(store, source);
+  const remaining = targets.filter((target) => target.id !== targetId);
+  return remaining.length &&
+    placed.targetSetHash === illustrationTargetSet(targets).hash &&
+    remaining.every((target) => Object.hasOwn(placed.afterByTarget, target.id))
+    ? illustrationTargetSet(remaining).hash
+    : undefined;
+}
 export function removeIllustration(
   store: Store,
-  id: string
+  id: string,
+  options: { schedulePlacement?: boolean } = {}
 ): { chatId: string; sourceRevision: string } {
   return store.transaction(() => {
     const job = illustrationJob(store, id);
@@ -1604,13 +1617,15 @@ export function removeIllustration(
       .all(job.sourceRevision, targetId) as Row[];
     if (rows.some((row) => ACTIVE.includes(row.status)))
       throw new AppError(409, 'ILLUSTRATION_ACTIVE');
+    const remainingSetHash = placedSetWithout(store, job.sourceRevision, targetId);
     deleteIllustrationAttempts(store, rows);
     for (const row of rows) {
       store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(row.id);
       store.db.prepare('DELETE FROM illustration_jobs WHERE id=?').run(row.id);
     }
-    forgetIllustrationTarget(store, job.sourceRevision, targetId);
-    scheduleIllustrationPlacement(store, job.sourceRevision);
+    forgetIllustrationTarget(store, job.sourceRevision, targetId, remainingSetHash);
+    if (options.schedulePlacement !== false)
+      scheduleIllustrationPlacement(store, job.sourceRevision);
     store.event(job.chatId, 'illustration-layout.updated', job.sourceRevision);
     return { chatId: job.chatId, sourceRevision: job.sourceRevision };
   });

@@ -193,7 +193,9 @@ export const MCP_APP_OPERATIONS: Record<string, McpAppOperation> = {
     image: (args) => args.includeImage !== false,
   },
   'illustration.cut.delete': deletion((args, context) => {
-    const result = deleteIllustrationCut(context.store, chatOf(context), args);
+    const result = deleteIllustrationCut(context.store, chatOf(context), args, {
+      schedulePlacement: false,
+    });
     context.chatChanged(result.chatId);
     return result;
   }, 'required'),

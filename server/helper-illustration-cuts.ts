@@ -553,12 +553,17 @@ export function reviseFailedIllustrationCut(
   });
 }
 
-export function deleteIllustrationCut(store: Store, chatId: string, args: Args) {
+export function deleteIllustrationCut(
+  store: Store,
+  chatId: string,
+  args: Args,
+  options: { schedulePlacement?: boolean } = {}
+) {
   fields(args, ['expectedLatestJobId', 'expectedSourceHash', 'expectedPresentationRevision']);
   return store.transaction(() => {
     const { job, source } = currentCut(store, chatId, args, true);
     const targetId = job.input.target!.id;
-    removeIllustration(store, job.id);
+    removeIllustration(store, job.id, options);
     return {
       deleted: true,
       chatId,
