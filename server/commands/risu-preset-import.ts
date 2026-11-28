@@ -5,21 +5,18 @@ import { analyzeRisuPreset } from '../risu-preset-analysis.js';
 import type { AppPorts } from '../store-ports.js';
 
 export const applyRisuPresetCommand = defineCommand<
-  Pick<AppPorts, 'tx' | 'receipt' | 'risuImport'>
+  Pick<AppPorts, 'tx' | 'importReceipt' | 'risuImport'>
 >()(risuPresetOperations.apply, {
   receipt: {
-    adapter: 'import',
+    store: (ports) => ports.importReceipt,
     scope: () => 'risu-preset:',
     key: (head) => head.idempotencyKey,
     digest: (_head, { digest: _previewDigest, ...request }) => canonicalPayloadHash(request),
     serialize: ({ receipt }) => ({ receipt }),
-    onReplay: (_tx, ports, record) => {
-      if (!('receipt' in record)) throw new Error('Expected import receipt');
-      return {
-        receipt: { ...record.receipt, created: false },
-        preset: ports.risuImport.preset(record.receipt),
-      };
-    },
+    onReplay: (_tx, ports, record) => ({
+      receipt: { ...record.receipt, created: false },
+      preset: ports.risuImport.preset(record.receipt),
+    }),
   },
   async prepare(_ports, head, raw) {
     const { bundle, preview } = analyzeRisuPreset(raw.source);

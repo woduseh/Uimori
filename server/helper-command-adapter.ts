@@ -1,15 +1,11 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v4';
 import type { AnySplitOperation, OperationBody, OperationParsedInput } from '#contracts';
-import { combineStrictObject } from '#contracts/operations';
+import { combineStrictObject, narrowOperationBody } from '#contracts/operations';
 import type { HelperTask, HelperTaskResult } from '../core/helper.js';
 import type { Json, ProviderTool } from '../core/transport.js';
-import {
-  type Command,
-  type CommandInTxOutcome,
-  EXTERNAL_REPLAY,
-  executeOperation,
-} from './command.js';
+import { asAppError } from './app-errors.js';
+import { type Command, type CommandOutcome, stageOperation } from './command.js';
 import { type HelperChangeTarget, withHelperChange } from './helper-changes.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
@@ -42,11 +38,9 @@ export type HelperCommandFormatContext = {
 export type HelperCommandTool<
   Op extends AnySplitOperation = AnySplitOperation,
   P extends Pick<AppPorts, 'tx'> = AppPorts,
-  A = any,
 > = {
   readonly tool: ProviderTool;
-  readonly command: Command<Op, P, A>;
-  readonly schemaBody: z.ZodType<OperationBody<Op>>;
+  readonly command: Command<Op, P>;
   readonly omitHeadKeys: readonly string[];
   readonly injectIdempotencyKey?: boolean;
   readonly changeTarget?: (
@@ -54,7 +48,7 @@ export type HelperCommandTool<
     context: { readonly chatId: string }
   ) => HelperChangeTarget | undefined;
   readonly formatResult: (
-    outcome: CommandInTxOutcome<Op, A>,
+    outcome: CommandOutcome<Op>,
     context: HelperCommandFormatContext
   ) => {
     readonly toolOutput: Record<string, unknown>;
@@ -65,26 +59,24 @@ export type HelperCommandTool<
 export function defineHelperCommandTool<
   Op extends AnySplitOperation,
   P extends Pick<AppPorts, 'tx'>,
-  A,
   B extends z.ZodObject<z.ZodRawShape> & z.ZodType<OperationBody<Op>>,
 >(spec: {
   readonly name: string;
   readonly description: string;
-  readonly command: Command<Op, P, A>;
+  readonly command: Command<Op, P>;
   readonly schemaBody: B;
   readonly omitHeadKeys: readonly (keyof Op['head']['shape'] & string)[];
   readonly injectIdempotencyKey?: boolean;
-  readonly changeTarget?: HelperCommandTool<Op, P, A>['changeTarget'];
-  readonly formatResult: HelperCommandTool<Op, P, A>['formatResult'];
-}): HelperCommandTool<Op, P, A> {
+  readonly changeTarget?: HelperCommandTool<Op, P>['changeTarget'];
+  readonly formatResult: HelperCommandTool<Op, P>['formatResult'];
+}): HelperCommandTool<Op, P> {
   return {
     tool: {
       name: spec.name,
       description: spec.description,
       inputSchema: helperCommandSchema(spec.command.op.head, spec.schemaBody, spec.omitHeadKeys),
     },
-    command: spec.command,
-    schemaBody: spec.schemaBody,
+    command: { ...spec.command, op: narrowOperationBody(spec.command.op, spec.schemaBody) },
     omitHeadKeys: spec.omitHeadKeys,
     ...(spec.injectIdempotencyKey ? { injectIdempotencyKey: true } : {}),
     ...(spec.changeTarget ? { changeTarget: spec.changeTarget } : {}),
@@ -115,6 +107,24 @@ function buildHelperRawInput(
   return raw;
 }
 
+function recordingChange(
+  entry: HelperCommandTool,
+  store: Store,
+  task: ResultTask,
+  chatId: string
+): Command {
+  const { command, changeTarget } = entry;
+  if (!changeTarget) return command;
+  return {
+    ...command,
+    apply(tx, ports, input, guarded, prepared) {
+      const target = changeTarget(input, { chatId });
+      const apply = () => command.apply(tx, ports, input, guarded, prepared);
+      return target ? withHelperChange(store, task, target, apply) : apply();
+    },
+  };
+}
+
 export async function executeHelperCommand(
   entry: HelperCommandTool,
   deps: {
@@ -136,51 +146,34 @@ export async function executeHelperCommand(
   );
   if (cached !== undefined) return cached;
 
-  const ports = createStorePorts(deps.store, { publish: deps.chatChanged });
-  const rawInput = buildHelperRawInput(
-    args,
-    chatId,
-    receiptId,
-    entry.omitHeadKeys,
-    entry.injectIdempotencyKey === true
-  );
-  const formatInTx = (outcome: CommandInTxOutcome<AnySplitOperation>) => {
-    const formatted = entry.formatResult(outcome, {
-      chatId,
-      receiptId,
-      chatTitle: deps.store.chat(chatId).title,
-    });
-    recordHelperTaskResult(deps.workspace, task, formatted.taskResult);
-    return formatted.toolOutput;
-  };
-
-  let toolOutput: Record<string, unknown> | undefined;
-  let resultOutput: Record<string, unknown> | undefined;
-  await executeOperation(entry.command, ports, rawInput, {
-    signal,
-    skipProject: true,
-    bodySchema: entry.schemaBody,
-    aroundTx: (run) => {
-      let ran = false;
-      let executed: ReturnType<typeof run> | undefined;
-      resultOutput = deps.workspace.operation(task.id, receiptId, operationInput, () => {
-        ran = true;
-        executed = run();
-        return toolOutput!;
-      });
-      return ran ? executed! : EXTERNAL_REPLAY;
-    },
-    ...(entry.changeTarget
-      ? {
-          aroundApply: (_tx, input, run) => {
-            const target = entry.changeTarget!(input, { chatId });
-            return target ? withHelperChange(deps.store, task, target, run) : run();
-          },
-        }
-      : {}),
-    onInTx: (_tx, outcome) => {
-      toolOutput = formatInTx(outcome);
-    },
-  });
-  return resultOutput!;
+  try {
+    const ports = createStorePorts(deps.store, { publish: deps.chatChanged });
+    const staged = await stageOperation(
+      recordingChange(entry, deps.store, task, chatId),
+      ports,
+      buildHelperRawInput(
+        args,
+        chatId,
+        receiptId,
+        entry.omitHeadKeys,
+        entry.injectIdempotencyKey === true
+      ),
+      { signal }
+    );
+    const toolOutput = deps.workspace.operation(task.id, receiptId, operationInput, () =>
+      ports.tx.transaction((tx) => {
+        const formatted = entry.formatResult(staged.run(tx), {
+          chatId,
+          receiptId,
+          chatTitle: deps.store.chat(chatId).title,
+        });
+        recordHelperTaskResult(deps.workspace, task, formatted.taskResult);
+        return formatted.toolOutput;
+      })
+    );
+    await staged.afterCommit();
+    return toolOutput;
+  } catch (error) {
+    throw asAppError(error);
+  }
 }
