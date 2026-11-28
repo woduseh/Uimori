@@ -1,3 +1,4 @@
+import { isAuthoredOpening } from './authored-opening.js';
 import { readStoredRunSnapshot } from './run-projections.js';
 import type { CopiedMessageState } from '../core/chat-backup.js';
 import type { MessageChanges } from '../core/message-changes.js';
@@ -20,7 +21,7 @@ export function captureCopiedMessages(
       ...(snapshot.nativeRisuAuthored
         ? { authored: structuredClone(snapshot.nativeRisuAuthored) }
         : {}),
-      ...(snapshot.packageStart?.mode === 'authored' ? { opening: true } : {}),
+      ...(isAuthoredOpening(snapshot) ? { opening: true } : {}),
     };
   });
 }

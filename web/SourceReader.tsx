@@ -137,6 +137,7 @@ type ReaderProps = {
   onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
   packageStart?: { mode: 'authored'; title: string };
+  opening?: boolean;
   startSelection?: PackageStartSelection;
   onStartChanged?: () => void;
   activity?: (slots: SceneHeaderSlots) => ReactNode;
@@ -273,6 +274,7 @@ function SourceReaderContent({
   onAskHelper,
   contextSummary,
   packageStart,
+  opening = false,
   startSelection,
   onStartChanged,
   activity,
@@ -921,8 +923,10 @@ function SourceReaderContent({
   const showToggle = !!translation || mode === 'translation';
   const leading = (
     <span className="folio">
-      {packageStart?.mode === 'authored'
-        ? t('reader.openingTitle', { title: packageStart.title })
+      {opening
+        ? packageStart
+          ? t('reader.openingTitle', { title: packageStart.title })
+          : t('reader.openingMessage2')
         : t('reader.sceneValue', { v0: formatNumber(sceneNumber ?? index + 1) })}
     </span>
   );
@@ -1094,10 +1098,10 @@ function SourceReaderContent({
       )}
       <ThemeFrame
         portrait={portrait}
-        requestPersona={request && packageStart?.mode !== 'authored' ? requestPersona : undefined}
+        requestPersona={request && !opening ? requestPersona : undefined}
       >
         <div slot="request" data-uimori-part="request">
-          {packageStart?.mode !== 'authored' && (request || requestImages?.length) && (
+          {!opening && (request || requestImages?.length) && (
             <RequestMessage
               runId={source.runId}
               request={effectiveRequest}
@@ -1609,7 +1613,7 @@ function SourceReaderContent({
                       {t('reader.changeOpeningMessage')}
                     </button>
                   )}
-                  {(packageStart?.mode === 'authored' || (!request && !requestImages?.length)) && (
+                  {(opening || (!request && !requestImages?.length)) && (
                     <button
                       type="button"
                       className="secondary"

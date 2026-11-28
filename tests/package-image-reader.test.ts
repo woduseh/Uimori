@@ -108,6 +108,7 @@ test('transformed prose suppresses unplaceable images and identifies an authored
     onFork: async () => {},
     request: 'INTERNAL_START_COMMAND',
     packageStart: { mode: 'authored' as const, title: '작성된 첫 장면' },
+    opening: true,
   };
   const normal = renderToStaticMarkup(createElement(SourceReader, props));
   expect(normal).toContain(`data-prose-slot="${source.blocks[0].anchor}"`);

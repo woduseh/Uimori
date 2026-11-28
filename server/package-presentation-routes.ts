@@ -1,3 +1,4 @@
+import { isAuthoredOpening } from './authored-opening.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { fields, HttpError, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
@@ -105,7 +106,7 @@ function preparePresentation(
     return {
       key,
       compute: async () => {
-        const first = own.packageStart?.mode === 'authored' || own.nativeRisuAuthored?.greeting;
+        const first = isAuthoredOpening(own);
         const messages = first
           ? [{ text: source.text, index: -1, role: 'assistant' as const, primary: true }]
           : (live.snapshot.logicalHistory ?? [])

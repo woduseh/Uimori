@@ -15,6 +15,7 @@ const input = workerData as {
   path: string;
   operation: 'index' | 'search';
   query?: ManuscriptSearchQuery;
+  openingSql: string;
 };
 const db = new DatabaseSync(input.path, { readOnly: true });
 db.exec('PRAGMA query_only=ON; PRAGMA busy_timeout=1000; BEGIN');
@@ -177,7 +178,7 @@ function search(query: ManuscriptSearchQuery): ManuscriptSearchResult {
     UNION SELECT v.chat_id,s.parent_revision FROM visible v JOIN sources s ON s.id=v.source_id WHERE s.parent_revision IS NOT NULL
   ), numbered AS (
     SELECT v.*,s.rowid AS ordinal,c.title,o.bot_id,
-      SUM(CASE WHEN json_extract(r.snapshot,'$.packageStart.mode')='authored' THEN 0 ELSE 1 END)
+      SUM(CASE WHEN ${input.openingSql} THEN 0 ELSE 1 END)
         OVER(PARTITION BY v.chat_id ORDER BY s.rowid) AS scene_number
     FROM visible v JOIN sources s ON s.id=v.source_id JOIN runs r ON r.id=s.run_id
       JOIN chats c ON c.id=v.chat_id JOIN chat_organization o ON o.chat_id=c.id

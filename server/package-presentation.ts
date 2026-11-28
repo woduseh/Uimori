@@ -1,3 +1,4 @@
+import { isAuthoredOpening } from './authored-opening.js';
 import { createHash } from 'node:crypto';
 import { splitSource } from '../core/auxiliary.js';
 import { parseStoryUi } from '../core/story-ui.js';
@@ -77,10 +78,7 @@ export async function buildPackagePresentation(
     );
     try {
       const index =
-        options.nativeMessageIndex ??
-        (snapshot.packageStart?.mode === 'authored' || snapshot.nativeRisuAuthored?.greeting
-          ? -1
-          : native.messages.length);
+        options.nativeMessageIndex ?? (isAuthoredOpening(snapshot) ? -1 : native.messages.length);
       const render = async (value: string, index: number, canonical?: string) => {
         const edited = await executeRisuNative({
           ...native,

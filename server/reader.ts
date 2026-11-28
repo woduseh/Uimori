@@ -1,3 +1,4 @@
+import { authoredOpeningSql } from './authored-opening.js';
 import { canChangePackageStart } from './package-start.js';
 import { fields, HttpError, record } from './request-validation.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
@@ -181,7 +182,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     json_extract(command,'$.retryOf') AS retryOf,
     EXISTS(SELECT 1 FROM app_metadata m WHERE m.key=? || runs.chat_id || ':' || runs.id) AS readerDismissed,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
-    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
+    json_extract(snapshot,'$.settingsRevision') AS settingsRevision,${authoredOpeningSql('snapshot')} AS opening,CASE WHEN ${authoredOpeningSql('snapshot')} THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title'),'startId',json_extract(snapshot,'$.packageStart.startId'),'packageId',json_extract(snapshot,'$.packageStart.packageId'),'packageRevision',json_extract(snapshot,'$.packageStart.packageRevision')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
     json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'requestImages',json_extract(snapshot,'$.requestImages'),'replacement',json_extract(snapshot,'$.replacement')) AS snapshot
@@ -204,6 +205,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     ...(row.status === 'running' && { phase: runPhase(readStoredRunSnapshot(store, row.id)) }),
     canRejudge: !!row.canRejudge,
     readerDismissed: !!row.readerDismissed,
+    opening: row.opening ? (true as const) : undefined,
     executionMode: row.executionMode ?? undefined,
     ...costs.get(row.id),
     sceneUsage: sceneUsage.get(row.id),
@@ -317,9 +319,9 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     .prepare(`SELECT id,rowid AS admissionOrder,json_extract(command,'$.retryOf') AS retryOf,source_revision AS sourceRevision,status,
     ${
       navigationUnchanged
-        ? 'NULL AS request,NULL AS startMode'
+        ? 'NULL AS request,NULL AS opening'
         : `CASE WHEN id IN (SELECT value FROM json_each(?)) THEN request END AS request,
-    json_extract(snapshot,'$.packageStart.mode') AS startMode`
+    ${authoredOpeningSql('snapshot')} AS opening`
     }
     FROM runs WHERE chat_id=? ORDER BY created_at,id`)
     .all(
@@ -334,7 +336,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
     admissionOrder: number;
     retryOf: string | null;
     request: string | null;
-    startMode: string | null;
+    opening: number | null;
   }[];
   const requestRows = new Map(indexRows.map((run) => [run.id, run]));
   const orderCache = new Map<string, number>();
@@ -382,7 +384,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
         .replace(/\s+/gu, ' ')
         .trim();
       const characters = Array.from(request.slice(0, 202));
-      const opening = run?.startMode === 'authored';
+      const opening = !!run?.opening;
       if (!opening) sceneNumber++;
       const label = opening
         ? '첫 메시지'

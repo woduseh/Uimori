@@ -2244,6 +2244,9 @@ function App() {
                               packageStart={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
                               }
+                              opening={
+                                !!s.detail!.runs.find((run) => run.id === source.runId)?.opening
+                              }
                               startSelection={
                                 s.detail!.reader.canChangePackageStart &&
                                 source.id === s.detail!.chat.headRevision &&

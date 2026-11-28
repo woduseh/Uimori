@@ -1,3 +1,4 @@
+import { authoredOpeningSql } from './authored-opening.js';
 import { UI_LOCALES, type UiLocale } from '../core/ui-locale.js';
 import {
   modelTimeoutMs,
@@ -62,10 +63,10 @@ export class ChatTitleService {
     try {
       const run = this.store.db
         .prepare(`SELECT id,chat_id AS chatId,request,source_revision AS sourceRevision,
-          json_extract(snapshot,'$.packageStart.mode') AS startMode
+          ${authoredOpeningSql('snapshot')} AS opening
           FROM runs WHERE id=? AND status='completed' AND source_revision IS NOT NULL`)
-        .get(runId) as (TitleSource & { startMode: string | null }) | undefined;
-      if (!run || run.startMode === 'authored') return;
+        .get(runId) as (TitleSource & { opening: number }) | undefined;
+      if (!run || run.opening) return;
       const chatId = run.chatId;
       const enrollment = this.store.db
         .prepare(

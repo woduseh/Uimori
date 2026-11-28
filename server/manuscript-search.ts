@@ -1,3 +1,4 @@
+import { authoredOpeningSql } from './authored-opening.js';
 import { Worker } from 'node:worker_threads';
 import type { FastifyInstance } from 'fastify';
 import type {
@@ -36,7 +37,12 @@ export class ManuscriptSearch {
       const worker = new Worker(
         new URL(`./manuscript-search-worker.${extension}`, import.meta.url),
         {
-          workerData: { path: this.store.path, operation, query },
+          workerData: {
+            path: this.store.path,
+            operation,
+            query,
+            openingSql: authoredOpeningSql('r.snapshot'),
+          },
           execArgv: [],
           resourceLimits: { maxOldGenerationSizeMb: 256 },
         }
