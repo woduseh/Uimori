@@ -180,10 +180,6 @@ function request(file: NativeTransferFile, key = 'synthetic-import') {
   return {
     file,
     digest: prepared.digest,
-    modelBindings: prepared.modelRequirements.map((item) => ({
-      requirementKey: item.key,
-      mode: 'inherit-main' as const,
-    })),
     idempotencyKey: key,
   };
 }
@@ -301,29 +297,15 @@ test('NATIVE02 prepare writes nothing; apply creates one identity graph without 
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
 
-test('a transfer retry is the same request in any binding order, and only for the same file', async () => {
+test('a transfer retry succeeds only for the same file', async () => {
   const source = sourceFixture(),
     target = database();
-  const collaboration = source.file.prompts[0].source.program.collaboration!;
-  collaboration.agents.push({ ...collaboration.agents[0], id: 'editor' });
-  const command = request(source.file, 'binding-order');
-  expect(command.modelBindings).toHaveLength(2);
+  const command = request(source.file, 'same-file-only');
   const apply = (payload: Record<string, unknown>) =>
     target.app.inject({ method: 'POST', url: '/api/native-transfers/apply', payload });
   const first = await apply(command);
   expect(first.statusCode, first.body).toBe(200);
   const applied = snapshot(target.store).versions;
-  const reordered = await apply({
-    ...command,
-    modelBindings: [...command.modelBindings].reverse(),
-  });
-  expect(reordered.json()).toEqual({ ...first.json(), created: false });
-  const malformed = await apply({
-    ...command,
-    idempotencyKey: 'malformed-binding',
-    modelBindings: [command.modelBindings[0], { requirementKey: { toString: null } }],
-  });
-  expect(malformed.statusCode, malformed.body).toBe(400);
   const otherFile = structuredClone(source.file);
   otherFile.contents[0].source.title += ' edited';
   for (const payload of [
@@ -332,6 +314,42 @@ test('a transfer retry is the same request in any binding order, and only for th
   ])
     expect((await apply(payload)).statusCode).toBe(409);
   expect(snapshot(target.store).versions).toEqual(applied);
+});
+
+test('pre-existing UI file transfer receipt recovers with created false and rejects changed content', async () => {
+  const source = sourceFixture(),
+    target = database();
+  const command = request(source.file, 'legacy-ui-file');
+  const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const storedReceipt = {
+    created: true,
+    digest: command.digest,
+    summary: { contents: 4, prompts: 1, combinations: 2, images: 1, imageBytes: 0 },
+    items: [],
+  };
+  saveImportReceipt(
+    target.store,
+    `transfer:${command.idempotencyKey}`,
+    sha({ file: sha(source.file), bindings: [] }),
+    storedReceipt
+  );
+  const replay = await target.app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply',
+    payload: command,
+  });
+  expect(replay.statusCode, replay.body).toBe(200);
+  expect(replay.json()).toEqual({ ...storedReceipt, created: false });
+  expect(target.store.product.all('content')).toEqual([]);
+
+  const otherFile = structuredClone(source.file);
+  otherFile.contents[0].source.title += ' changed';
+  const conflict = await target.app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply',
+    payload: { ...command, file: otherFile },
+  });
+  expect(conflict.statusCode).toBe(409);
 });
 
 test('NATIVE03 same installation IDs and duplicate names are copied; durable keys prevent duplicates across reopen', () => {
@@ -359,64 +377,21 @@ test('NATIVE03 same installation IDs and duplicate names are copied; durable key
   );
 });
 
-test('NATIVE04 mapping is explicit and revalidated; unavailable local model and reused-key changes write nothing', () => {
+test('NATIVE04 imported collaborator models inherit main, and stale digests write nothing', () => {
   const source = sourceFixture(),
     { store } = database();
-  const body = request(source.file),
-    before = snapshot(store);
-  const fallback = database().store;
-  const imported = applyNativeTransfer(fallback, { ...body, modelBindings: [] });
+  const body = request(source.file);
+  const imported = applyNativeTransfer(store, body);
   const prompt = imported.items.find((item) => item.kind === 'prompt-preset')!;
   expect(
-    fallback.product.stored<PromptPreset>('prompt-preset', prompt.id).program.collaboration!
-      .agents[0].model
+    store.product.stored<PromptPreset>('prompt-preset', prompt.id).program.collaboration!.agents[0]
+      .model
   ).toBeNull();
-  expect(() =>
-    applyNativeTransfer(store, {
-      ...body,
-      modelBindings: [
-        {
-          requirementKey: body.modelBindings[0].requirementKey,
-          mode: 'local',
-          model: { id: 'missing-model' },
-        },
-      ],
-    })
-  ).toThrow();
-  expect(snapshot(store)).toEqual(before);
-  const local = model(store);
-  const mapping = [
-    {
-      requirementKey: body.modelBindings[0].requirementKey,
-      mode: 'local' as const,
-      model: { id: local.id },
-    },
-  ];
-  const receipt = applyNativeTransfer(store, { ...body, modelBindings: mapping });
-  expect(
-    store.product.stored<PromptPreset>(
-      'prompt-preset',
-      receipt.items.find((item) => item.kind === 'prompt-preset')!.id
-    ).program.collaboration!.agents[0].model
-  ).toEqual({ id: local.id });
   const after = snapshot(store);
-  expect(() => applyNativeTransfer(store, body)).toThrow(
-    'Idempotency key reused with different command'
-  );
   expect(() =>
     applyNativeTransfer(store, { ...body, digest: '0'.repeat(64), idempotencyKey: 'new-key' })
   ).toThrow('NATIVE_TRANSFER_DRAFT_CHANGED');
   expect(snapshot(store)).toEqual(after);
-  store.db.prepare("INSERT INTO library_hidden VALUES('model',?)").run(local.id);
-  const hidden = snapshot(store);
-  expect(() =>
-    applyNativeTransfer(store, {
-      ...body,
-      modelBindings: mapping,
-      idempotencyKey: 'changed-local-model',
-    })
-  ).toThrow();
-  expect(snapshot(store)).toEqual(hidden);
 });
 
 test('NATIVE05 a failure after creating dependencies rolls the whole apply back including images and organization', () => {
@@ -467,7 +442,6 @@ test.each([
     file,
     digest: createHash('sha256').update(JSON.stringify(file)).digest('hex'),
     idempotencyKey: 'invalid-file',
-    modelBindings: [],
   };
   expect(() => applyNativeTransfer(store, body)).toThrow();
   const response = await app.inject({

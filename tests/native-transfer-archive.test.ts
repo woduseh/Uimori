@@ -48,7 +48,6 @@ import { remapIllustrationPackageReferences } from '../server/illustration-refer
 import { saveChatGenerationDefaults } from '../server/chat-generation-defaults.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -150,7 +149,6 @@ test('12,288 logical assets export as one binary image and reimport preserves na
     preparedId: preview.preparedId,
     digest: preview.digest,
     idempotencyKey: 'stable-native',
-    modelBindings: [],
   };
   const imported = await destination.inject({
     method: 'POST',
@@ -178,6 +176,32 @@ test('12,288 logical assets export as one binary image and reimport preserves na
   expect(retry.statusCode).toBe(200);
   expect(retry.json().created).toBe(false);
   expect(retry.json().items).toEqual(receipt.items);
+
+  const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  const legacyStored = { ...receipt, created: true };
+  saveImportReceipt(
+    target,
+    'archive:legacy-ui-archive',
+    sha({ id: preview.preparedId, digest: preview.digest, modelBindings: [] }),
+    legacyStored
+  );
+  const legacyReplay = await destination.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply-archive',
+    payload: { ...command, idempotencyKey: 'legacy-ui-archive' },
+  });
+  expect(legacyReplay.statusCode, legacyReplay.body).toBe(200);
+  expect(legacyReplay.json()).toEqual({ ...legacyStored, created: false });
+  const legacyConflict = await destination.inject({
+    method: 'POST',
+    url: '/api/native-transfers/apply-archive',
+    payload: {
+      ...command,
+      idempotencyKey: 'legacy-ui-archive',
+      digest: '0'.repeat(64),
+    },
+  });
+  expect(legacyConflict.statusCode).toBe(409);
   await destination.close();
   await app.close();
 });
@@ -626,78 +650,4 @@ test('a chat archive with a prompt preset in a bot slot is refused whole, a bot 
   );
   const bot = restoredProfile.packageAttachments!.find((ref) => ref.role === 'bot')!;
   expect(target.product.isLive('content', bot.id)).toBe(true);
-});
-
-test('an archive import retry is the same request in any binding order', async () => {
-  const source = database();
-  const connection = source.product.connection({
-    title: 'Archive agent connection',
-    protocol: 'fixture-sse-v1',
-    endpoint: 'http://127.0.0.1:49999/turn',
-    enabled: true,
-  });
-  const model = source.product.model({
-    title: 'Archive agent model',
-    connectionId: connection.id,
-    modelId: 'synthetic-model',
-    maxOutputTokens: 1024,
-    temperature: null,
-  }) as { id: string };
-  const agent = (id: string) => ({
-    ...createAgentDefinition('custom', id),
-    model: { id: model.id },
-  });
-  const prompt = source.product.promptPreset({
-    title: 'Two agents',
-    role: 'main',
-    program: {
-      ...nativePrompt('Write'),
-      collaboration: {
-        ...createAgentCollaboration(),
-        enabled: true,
-        agents: [agent('reviewer'), agent('editor')],
-      },
-    },
-  }) as { id: string };
-  const app = Fastify();
-  transferRoutes(app, source, () => {});
-  const exported = await app.inject({
-    method: 'POST',
-    url: '/api/native-transfers/export-archive',
-    payload: { items: [{ kind: 'prompt-preset', id: prompt.id }] },
-  });
-  await app.close();
-  const target = database(),
-    destination = Fastify();
-  transferRoutes(destination, target, () => {});
-  const preview = await prepareNativeArchive(
-    target,
-    upload(target, exported.rawPayload),
-    'resources'
-  );
-  const modelBindings = preview.modelRequirements.map((item) => ({
-    requirementKey: item.key,
-    mode: 'inherit-main' as const,
-  }));
-  expect(modelBindings).toHaveLength(2);
-  const apply = (bindings: typeof modelBindings) =>
-    destination.inject({
-      method: 'POST',
-      url: '/api/native-transfers/apply-archive',
-      payload: {
-        preparedId: preview.preparedId,
-        digest: preview.digest,
-        idempotencyKey: 'archive-binding-order',
-        modelBindings: bindings,
-      },
-    });
-  const first = await apply(modelBindings);
-  expect(first.statusCode, first.body).toBe(200);
-  const reordered = await apply([...modelBindings].reverse());
-  expect(reordered.statusCode, reordered.body).toBe(200);
-  expect(reordered.json()).toEqual({ ...first.json(), created: false });
-  expect(
-    target.product.all('prompt-preset').filter((item) => item.title === 'Two agents')
-  ).toHaveLength(1);
-  await destination.close();
 });

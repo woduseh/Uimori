@@ -7,17 +7,6 @@ const stagedId = z.string().regex(/^[a-f0-9]{32}$/u);
 const count = z.int().nonnegative();
 const resourceKind = z.enum(['content', 'prompt-preset']);
 
-export const nativeTransferModelBinding = z.discriminatedUnion('mode', [
-  z.strictObject({ requirementKey: nonBlank(300), mode: z.literal('inherit-main') }),
-  z.strictObject({
-    requirementKey: nonBlank(300),
-    mode: z.literal('local'),
-    model: z.strictObject({ id: nonBlank(100) }),
-  }),
-]);
-export type NativeTransferModelBinding = z.infer<typeof nativeTransferModelBinding>;
-const modelBindings = z.array(nativeTransferModelBinding);
-
 const summary = z.strictObject({
   contents: count,
   prompts: count,
@@ -87,14 +76,12 @@ const applyFileInput = z.strictObject({
   file: z.unknown(),
   digest: reviewedDigest,
   idempotencyKey: nonBlank(200),
-  modelBindings,
 });
 export type ApplyNativeTransfer = z.infer<typeof applyFileInput>;
 const applyArchiveInput = z.strictObject({
   preparedId: stagedId,
   digest: reviewedDigest,
   idempotencyKey: nonBlank(100),
-  modelBindings,
 });
 export type ApplyNativeArchive = z.infer<typeof applyArchiveInput>;
 const importChatArchiveInput = z.strictObject({

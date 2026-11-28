@@ -18,13 +18,12 @@ import {
 import { readFileSync } from 'node:fs';
 import { storeImage } from './image-storage.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
-import { HttpError } from './request-validation.js';
 import { normalizeTransferImages } from './transfer-images.js';
 import { assertTx, type Tx } from './tx.js';
 import { AppError } from './app-errors.js';
-import type { ApplyNativeTransfer, NativeTransferModelBinding } from '#contracts/operations';
+import type { ApplyNativeTransfer } from '#contracts/operations';
 
-type BundleCommand = Pick<ApplyNativeTransfer, 'idempotencyKey' | 'modelBindings'>;
+type BundleCommand = Pick<ApplyNativeTransfer, 'idempotencyKey'>;
 
 export const bundleDigest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -136,7 +135,7 @@ export function importResourceBundle(
   input: ApplyNativeTransfer
 ): NativeTransferReceipt {
   const bundle = prepareImport(input);
-  return applyPreparedBundle(store, input, bundleReceipt(input, bundle.preview.digest), bundle);
+  return applyPreparedBundle(store, bundleReceipt(input, bundle.preview.digest), bundle);
 }
 
 export async function importNormalizedResourceBundle(
@@ -148,7 +147,7 @@ export async function importNormalizedResourceBundle(
   if (prior) return { ...prior, created: false };
   const bundle = prepareImport(input);
   const converted = await normalizeTransferImages(bundle.checked.file);
-  return applyPreparedBundle(store, input, receipt, prepareBundle(converted));
+  return applyPreparedBundle(store, receipt, prepareBundle(converted));
 }
 
 type BundleReceipt = { key: string; digest: string };
@@ -156,32 +155,12 @@ type BundleReceipt = { key: string; digest: string };
 function bundleReceipt(input: BundleCommand, fileDigest: string, prefix = ''): BundleReceipt {
   return {
     key: `${prefix}${input.idempotencyKey}`,
-    digest: bundleDigest({ file: fileDigest, bindings: sortedBindings(input.modelBindings) }),
+    digest: bundleDigest({ file: fileDigest, bindings: [] }),
   };
-}
-
-export const sortedBindings = (bindings: readonly NativeTransferModelBinding[]) =>
-  [...bindings].sort((a, b) =>
-    a.requirementKey < b.requirementKey ? -1 : a.requirementKey > b.requirementKey ? 1 : 0
-  );
-
-function bundleBindings(
-  bindings: NativeTransferModelBinding[],
-  checked: ValidatedPreparedNativeTransfer
-) {
-  const requirements = new Set(checked.modelRequirements.map((item) => item.key));
-  const mapped = new Map<string, NativeTransferModelBinding>();
-  for (const binding of bindings) {
-    if (!requirements.has(binding.requirementKey) || mapped.has(binding.requirementKey))
-      throw new HttpError(400, 'Unknown or duplicate model binding');
-    mapped.set(binding.requirementKey, binding);
-  }
-  return mapped;
 }
 
 function applyPreparedBundle(
   store: Store,
-  input: BundleCommand,
   { key, digest: commandDigest }: BundleReceipt,
   bundle: CheckedBundle,
   putImages?: () => void
@@ -189,7 +168,7 @@ function applyPreparedBundle(
   return store.transaction(() => {
     const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
     if (prior) return { ...prior, created: false };
-    const receipt = persistBundle(store, input.modelBindings, bundle, putImages);
+    const receipt = persistBundle(store, bundle, putImages);
     saveImportReceipt(store, key, commandDigest, receipt);
     return receipt;
   });
@@ -199,11 +178,9 @@ type CheckedBundle = { checked: ValidatedPreparedNativeTransfer; preview: Native
 
 function persistBundle(
   store: Store,
-  bindings: NativeTransferModelBinding[],
   { checked, preview: prepared }: CheckedBundle,
   putImages?: () => void
 ): NativeTransferReceipt {
-  const mapped = bundleBindings(bindings, checked);
   const ids = new Map(checked.entries.map((entry) => [entry.key, randomUUID()]));
   const contentIds = new Map(
     checked.file.contents.map((entry) => [entry.source.id, ids.get(entry.key)!])
@@ -226,10 +203,7 @@ function persistBundle(
   }
   for (const entry of checked.file.prompts) {
     const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
-    for (const agent of source.program.collaboration?.agents ?? []) {
-      const binding = mapped.get(`${entry.key}/${agent.id}`);
-      agent.model = binding?.mode === 'local' ? binding.model : null;
-    }
+    for (const agent of source.program.collaboration?.agents ?? []) agent.model = null;
     const saved = store.product.promptPreset(source, undefined, true, ids.get(entry.key)!);
     for (const combination of entry.combinations) {
       const { id: _old, revision: _oldRevision, ...data } = combination;
@@ -271,12 +245,8 @@ export function importPreparedResourceBundle(
   command: BundleCommand
 ): NativeTransferReceipt {
   const bundle = prepareStagedBundle(file, images);
-  return applyPreparedBundle(
-    store,
-    command,
-    bundleReceipt(command, bundle.preview.digest),
-    bundle,
-    () => persistStagedImages(store, images)
+  return applyPreparedBundle(store, bundleReceipt(command, bundle.preview.digest), bundle, () =>
+    persistStagedImages(store, images)
   );
 }
 
@@ -312,7 +282,7 @@ export function persistRisuBundle(
   images?: PreparedBundleImage[]
 ) {
   assertTx(tx, store.db);
-  return persistBundle(store, [], bundle, images && (() => persistStagedImages(store, images)));
+  return persistBundle(store, bundle, images && (() => persistStagedImages(store, images)));
 }
 
 export function prepareRisuBundle(

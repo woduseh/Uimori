@@ -179,7 +179,6 @@ test('guide survives restart, native projection, independent resource and chat b
     file: bundle,
     digest: inspectBundle(bundle).digest,
     idempotencyKey: randomUUID(),
-    modelBindings: [],
   };
   const imported = importResourceBundle(target, bundleInput);
   const copy = target.product.stored<Content>('content', imported.items[0].id);

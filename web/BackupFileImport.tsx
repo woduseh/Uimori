@@ -121,7 +121,6 @@ export function BackupFileImport({
         const command = {
           digest: selection.preview.digest,
           idempotencyKey: selection.key,
-          modelBindings: [],
         };
         const result = selection.preparedId
           ? await callEndpoint(transferEndpoints.applyArchive, {

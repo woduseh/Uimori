@@ -31,7 +31,6 @@ import { AppError } from './app-errors.js';
 import {
   bundleDigest,
   importPreparedResourceBundle,
-  sortedBindings,
   type PreparedBundleImage,
 } from './resource-bundle.js';
 import { readImage } from './image-storage.js';
@@ -477,7 +476,7 @@ export function readPreparedArchive(
 export function applyNativeArchive(store: Store, input: ApplyNativeArchive) {
   const { preparedId: id, digest } = input,
     key = `archive:${input.idempotencyKey}`;
-  const command = bundleDigest({ id, digest, modelBindings: sortedBindings(input.modelBindings) });
+  const command = bundleDigest({ id, digest, modelBindings: [] });
   const result = store.transaction(() => {
     const prior = readImportReceipt<NativeTransferReceipt>(store, key, command);
     if (prior) return { ...prior, created: false };
@@ -486,7 +485,7 @@ export function applyNativeArchive(store: Store, input: ApplyNativeArchive) {
       store,
       prepared.manifest.resources,
       prepared.images,
-      { idempotencyKey: `resources:${key}`, modelBindings: input.modelBindings }
+      { idempotencyKey: `resources:${key}` }
     );
     const result = { ...receipt, digest };
     saveImportReceipt(store, key, command, result);
