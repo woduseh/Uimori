@@ -166,15 +166,30 @@ test('SETSYNC03 a chat deleted outside this tab leaves its chat list through the
       data: { title: `바깥에서 지운 채팅 ${stamp}`, botId: kept.botId },
     })
   ).json()) as Chat;
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(`/?chat=${kept.id}`);
-  await expect(page.getByText(doomed.title, { exact: true }).first()).toBeVisible();
+  let listReads = 0;
+  let failNextRead = false;
+  let failedReads = 0;
+  await page.route('**/api/chats', (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    listReads++;
+    if (!failNextRead) return route.continue();
+    failNextRead = false;
+    failedReads++;
+    return route.fulfill({ status: 503, json: { code: 'SYNTHETIC_UNAVAILABLE' } });
+  });
+  try {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/?chat=${kept.id}`);
+    await expect(page.getByText(doomed.title, { exact: true }).first()).toBeVisible();
+    await expect.poll(() => listReads).toBeGreaterThanOrEqual(2);
+    await page.waitForLoadState('networkidle');
 
-  const listRead = page.waitForRequest(
-    (entry) => entry.method() === 'GET' && new URL(entry.url()).pathname === '/api/chats'
-  );
-  expect((await request.delete(`/api/chats/${doomed.id}`)).ok()).toBe(true);
-  await listRead;
-  await expect(page.getByText(doomed.title, { exact: true })).toHaveCount(0);
-  await expect(page.getByText(kept.title, { exact: true }).first()).toBeVisible();
+    failNextRead = true;
+    expect((await request.delete(`/api/chats/${doomed.id}`)).ok()).toBe(true);
+    await expect(page.getByText(doomed.title, { exact: true })).toHaveCount(0);
+    expect(failedReads).toBe(1);
+    await expect(page.getByText(kept.title, { exact: true }).first()).toBeVisible();
+  } finally {
+    await page.unrouteAll({ behavior: 'wait' });
+  }
 });

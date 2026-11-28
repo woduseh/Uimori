@@ -585,12 +585,9 @@ export function useStory() {
     };
   }, [loadLibrary, setLibraryFailure]);
   useEffect(() => {
-    const live = watchLive({
-      match: chatListFrame,
-      refresh: () => loadChats().catch(setError),
-    });
+    const live = watchLive({ match: chatListFrame, refresh: loadChats });
     return () => live.dispose();
-  }, [loadChats, setError]);
+  }, [loadChats]);
   useEffect(() => {
     void loadChats().catch(setError);
     void loadLibrary().catch(setLibraryFailure);
