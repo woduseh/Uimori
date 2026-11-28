@@ -9,6 +9,17 @@ export function timeoutMs(url, overrideSeconds) {
   return (heavy ? 900 : 120) * 1000;
 }
 
+export async function sendWithRetry(fetchOnce, url, options, report, instance) {
+  try {
+    return await fetchOnce();
+  } catch (error) {
+    const connection = error instanceof TypeError && error.message === 'fetch failed';
+    if ((options?.method ?? 'GET') !== 'GET' || !connection) throw error;
+    report.retries.push({ url, instance, cause: String(error.cause?.code ?? error.cause) });
+    return await fetchOnce();
+  }
+}
+
 export async function request(instance, url, consume, options) {
   let response;
   try {

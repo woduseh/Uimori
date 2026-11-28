@@ -1,5 +1,5 @@
 import { Agent } from 'undici';
-import { request, timeoutMs } from './requests.mjs';
+import { request, sendWithRetry, timeoutMs } from './requests.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
@@ -146,13 +146,20 @@ export async function boot(tree, dir, mode, report, children) {
     name,
     request: (url, options = {}) => {
       if (!url.startsWith('/api/')) throw new Error('Invalid replay URL');
-      return fetch('http://127.0.0.1:' + port + url, {
-        ...options,
-        headers: { ...options.headers, authorization: token, 'accept-encoding': 'identity' },
-        redirect: 'error',
-        dispatcher,
-        signal: AbortSignal.timeout(timeoutMs(url, report.timeoutSeconds)),
-      });
+      return sendWithRetry(
+        () =>
+          fetch('http://127.0.0.1:' + port + url, {
+            ...options,
+            headers: { ...options.headers, authorization: token, 'accept-encoding': 'identity' },
+            redirect: 'error',
+            dispatcher,
+            signal: AbortSignal.timeout(timeoutMs(url, report.timeoutSeconds)),
+          }),
+        url,
+        options,
+        report,
+        name
+      );
     },
   };
   if (mode !== 'import' && routes.includes('/api/diagnostics/metrics')) {

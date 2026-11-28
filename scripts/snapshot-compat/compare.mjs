@@ -17,6 +17,8 @@ const importedRevision = {
   ],
 };
 
+const defaultSceneContext = { requestText: null, requestEnabled: true, sceneEnabled: true };
+
 export const normalization = [
   { name: 'HTTP response date', header: 'date' },
   { name: 'HTTP entity tag', header: 'etag' },
@@ -61,6 +63,12 @@ export const normalization = [
     path: 'manifest.resources.contents.*.source.package.starts.*.title',
   },
   {
+    name: 'Default scene context is not recreated on import',
+    scope: 'chat-source',
+    path: 'manifest.backup.chats.*.transcript.entries.*.sceneContext',
+    exactly: defaultSceneContext,
+  },
+  {
     name: 'Inherited illustration profile identity',
     scope: 'chat',
     path: 'manifest.backup.chats.*.state.illustrationReferences.characterProfiles.*.id',
@@ -98,6 +106,11 @@ function projectedImport(body) {
       if (start.title === (i === 0 ? '기본 시작문' : `시작문 ${i + 1}`))
         start.title = i === 0 ? '기본 첫 메시지' : `첫 메시지 ${i + 1}`;
     }
+  }
+  for (const chat of body.manifest.backup.chats) {
+    const { entries } = chat.transcript;
+    for (const entry of entries)
+      if (isDeepStrictEqual(entry.sceneContext, defaultSceneContext)) delete entry.sceneContext;
   }
   for (const path of importedRevision.paths)
     normalize(body, path.split('.'), (revision) =>

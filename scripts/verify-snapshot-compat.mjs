@@ -83,6 +83,7 @@ const report = {
   blocked: [],
   differences: [],
   errors: [],
+  retries: [],
   selfCheck: [],
   comparisons: 0,
   bytes: 0,
@@ -329,7 +330,7 @@ try {
   writeFileSync(output, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   for (const rule of report.rules) console.log(`rule=${rule.id} absorbed=${rule.absorbed}`);
   console.log(
-    `${report.pass ? 'PASS' : 'FAIL'} endpoints=${endpoints} oneSided=${oneSided} zeroTarget=${counts.filter((n) => n === 0).length} refusalOnly=${refusalOnly} derivedLengths=${report.derivedContentLengths} ids=${report.ids} comparisons=${report.comparisons} bytes=${report.bytes} chats=${report.chatRoundTrips} unexpected=${unexpected} blocked=${report.blocked.length} errors=${report.errors.length} selfChecks=${report.selfCheck.length}\nReport ${output}`
+    `${report.pass ? 'PASS' : 'FAIL'} endpoints=${endpoints} oneSided=${oneSided} zeroTarget=${counts.filter((n) => n === 0).length} refusalOnly=${refusalOnly} derivedLengths=${report.derivedContentLengths} ids=${report.ids} comparisons=${report.comparisons} bytes=${report.bytes} chats=${report.chatRoundTrips} unexpected=${unexpected} blocked=${report.blocked.length} errors=${report.errors.length} retries=${report.retries.length} selfChecks=${report.selfCheck.length}\nReport ${output}`
   );
   if (!report.pass) process.exitCode = 1;
 }
