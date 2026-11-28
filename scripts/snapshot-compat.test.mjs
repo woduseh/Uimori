@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Agent } from 'undici';
 import { compare, compareRead, portable, read } from './snapshot-compat/compare.mjs';
 import { sendWithRetry } from './snapshot-compat/requests.mjs';
@@ -402,5 +406,258 @@ test('a dropped connection retries one idempotent GET and nothing else', async (
     assert.deepEqual([refused.response, refused.hits, refused.retries.length], [500, 1, 0]);
   } finally {
     await agent.close();
+  }
+});
+
+function openingDatabase(directory, name, firstSnapshot, secondRoot = false) {
+  const file = join(directory, name + '.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(`CREATE TABLE runs (id TEXT, chat_id TEXT, snapshot TEXT, created_at TEXT);
+    CREATE TABLE sources (id TEXT, run_id TEXT, parent_revision TEXT);
+    CREATE TABLE chats (id TEXT, head_revision TEXT)`);
+  const run = db.prepare('INSERT INTO runs VALUES (?,?,?,?)');
+  const source = db.prepare('INSERT INTO sources VALUES (?,?,?)');
+  run.run('r0', 'chat', JSON.stringify(firstSnapshot), '2026-01-01');
+  run.run('r1', 'chat', '{}', '2026-01-02');
+  source.run('s0', 'r0', null);
+  source.run('s1', 'r1', secondRoot ? null : 's0');
+  db.prepare('INSERT INTO chats VALUES (?,?)').run('chat', 's1');
+  db.close();
+  return file;
+}
+const restoredSnapshot = { nativeRisuAuthored: { greeting: true } };
+
+async function reviewedPaths(route, before, after, file) {
+  const url = route.replace(':', 'chat');
+  const report = { rules: rulesForCommit(commit), comparisons: 0, differences: [] };
+  const left = { status: 200, headers: {}, body: before };
+  const right = { status: 200, headers: {}, body: after };
+  await compareRead('old-new', url, left, right, report, report.differences, route, file);
+  return {
+    paths: report.differences.map((d) => d.path),
+    absorbed: Object.fromEntries(
+      report.rules.filter((r) => r.absorbed).map((r) => [r.id, r.absorbed])
+    ),
+  };
+}
+
+test('removed evaluation tools are absorbed only as the removed field of a preset or library model', async () => {
+  const tools = { contextMode: 'a', approvalReasoningMode: 'b', metadataProfile: 'c' };
+  const preset = '/api/model-presets/:';
+  assert.deepEqual(await reviewedPaths(preset, { id: 'm', evaluationTools: tools }, { id: 'm' }), {
+    paths: [],
+    absorbed: { 'model-preset-evaluation-tools': 1 },
+  });
+  assert.deepEqual(
+    (
+      await reviewedPaths(
+        preset,
+        { id: 'm', title: 'a', evaluationTools: tools },
+        { id: 'm', title: 'b' }
+      )
+    ).paths,
+    ['$["body"]["title"]']
+  );
+  assert.deepEqual(
+    (
+      await reviewedPaths(
+        preset,
+        { evaluationTools: tools },
+        { evaluationTools: { ...tools, contextMode: 'x' } }
+      )
+    ).paths,
+    ['$["body"]["evaluationTools"]["contextMode"]']
+  );
+  assert.deepEqual(
+    (await reviewedPaths('/api/connections/:', { evaluationTools: tools }, {})).paths,
+    ['$["body"]["evaluationTools"]']
+  );
+  const models = (...items) => ({ models: items });
+  assert.deepEqual(
+    await reviewedPaths(
+      '/api/library',
+      models({ id: 'a', evaluationTools: tools }, { id: 'b', title: 'x', evaluationTools: tools }),
+      models({ id: 'a' }, { id: 'b', title: 'y' })
+    ),
+    { paths: ['$["body"]["models"][1]["title"]'], absorbed: { 'library-evaluation-tools': 2 } }
+  );
+  assert.deepEqual((await reviewedPaths('/api/library', { evaluationTools: tools }, {})).paths, [
+    '$["body"]["evaluationTools"]',
+  ]);
+});
+
+test('restored authored opening rules need the restored shape and absorb nothing beyond the opening', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'restored-opening-'));
+  try {
+    const restored = openingDatabase(directory, 'restored', restoredSnapshot);
+    const withStart = openingDatabase(directory, 'start', {
+      ...restoredSnapshot,
+      packageStart: { mode: 'default' },
+    });
+    const plain = openingDatabase(directory, 'plain', { nativeRisuAuthored: { greeting: false } });
+    const detached = openingDatabase(directory, 'detached', restoredSnapshot, true);
+    const scenes = (...numbers) => ({ scenes: numbers.map((number) => ({ number })) });
+
+    const manuscript = '/api/chats/:/manuscript';
+    assert.deepEqual(await reviewedPaths(manuscript, scenes(1, 2, 3), scenes(0, 1, 2), restored), {
+      paths: [],
+      absorbed: { 'restored-opening-manuscript': 3 },
+    });
+    for (const file of [withStart, plain, detached])
+      assert.equal(
+        (await reviewedPaths(manuscript, scenes(1, 2), scenes(0, 1), file)).paths.length,
+        2
+      );
+    for (const after of [scenes(0, 1, 1), scenes(0, 2, 2), scenes(2, 3, 4), scenes(-1, 0, 1)])
+      assert.notEqual(
+        (await reviewedPaths(manuscript, scenes(1, 2, 3), after, restored)).paths.length,
+        0
+      );
+    assert.deepEqual(
+      (await reviewedPaths(manuscript, scenes(2, 3), scenes(1, 2), restored)).paths,
+      ['$["body"]["scenes"][0]["number"]', '$["body"]["scenes"][1]["number"]']
+    );
+
+    const reader = '/api/chats/:/reader';
+    const readerBody = (navigation, runs) => ({ reader: { navigation }, runs });
+    const before = readerBody(
+      [
+        { id: 's0', number: 1, label: '[작성된 도입문] 첫' },
+        { id: 's1', number: 2, label: 'next' },
+      ],
+      [
+        { id: 'r0', modelTitle: 'Model' },
+        { id: 'r1', modelTitle: 'Model' },
+      ]
+    );
+    const after = readerBody(
+      [
+        { id: 's0', number: 0, label: '첫 메시지', opening: true },
+        { id: 's1', number: 1, label: 'next' },
+      ],
+      [
+        { id: 'r0', modelTitle: null, opening: true },
+        { id: 'r1', modelTitle: 'Model' },
+      ]
+    );
+    assert.deepEqual(await reviewedPaths(reader, before, after, restored), {
+      paths: [],
+      absorbed: { 'restored-opening-reader': 5, 'reader-opening-flag': 1 },
+    });
+    assert.equal((await reviewedPaths(reader, before, after, withStart)).paths.length, 5);
+    const changed = async (edit) => {
+      const copy = structuredClone(after);
+      edit(copy);
+      return (await reviewedPaths(reader, before, copy, restored)).paths;
+    };
+    const navigation = (i, key) => `$["body"]["reader"]["navigation"][${i}]["${key}"]`;
+    assert.deepEqual(await changed((x) => (x.runs[1].modelTitle = null)), [
+      navigation(0, 'number'),
+      navigation(0, 'label'),
+      navigation(0, 'opening'),
+      navigation(1, 'number'),
+      '$["body"]["runs"][0]["modelTitle"]',
+      '$["body"]["runs"][1]["modelTitle"]',
+    ]);
+    assert.deepEqual(await changed((x) => (x.reader.navigation[1].label = '첫 메시지')), [
+      navigation(1, 'label'),
+    ]);
+    assert.deepEqual(await changed((x) => (x.reader.navigation[1].opening = true)), [
+      navigation(1, 'opening'),
+    ]);
+    assert.deepEqual(await changed((x) => (x.reader.navigation[0].label = 'other')), [
+      navigation(0, 'label'),
+    ]);
+    assert.notEqual((await changed((x) => (x.reader.navigation[1].number = 0))).length, 0);
+    assert.deepEqual(await changed((x) => delete x.reader.navigation[0].opening), [
+      navigation(0, 'number'),
+      navigation(0, 'label'),
+      navigation(1, 'number'),
+      '$["body"]["runs"][0]["modelTitle"]',
+    ]);
+    assert.deepEqual(await changed((x) => delete x.runs[0].opening), [
+      navigation(0, 'number'),
+      navigation(0, 'label'),
+      navigation(0, 'opening'),
+      navigation(1, 'number'),
+      '$["body"]["runs"][0]["modelTitle"]',
+    ]);
+    assert.equal((await reviewedPaths(reader, before, after, detached)).paths.length, 5);
+
+    const runs = '/api/chats/:/reader-runs';
+    const titled = (...titles) =>
+      titles.map((modelTitle, i) => ({
+        id: 'r' + i,
+        modelTitle,
+        ...(i === 0 && { opening: true }),
+      }));
+    const plainRuns = (...titles) => titles.map((modelTitle, i) => ({ id: 'r' + i, modelTitle }));
+    assert.deepEqual(
+      await reviewedPaths(runs, plainRuns('Model', 'Model'), titled(null, 'Model'), restored),
+      { paths: [], absorbed: { 'restored-opening-reader-runs': 1, 'reader-runs-opening-flag': 1 } }
+    );
+    assert.deepEqual(
+      (await reviewedPaths(runs, plainRuns('Model', 'Model'), plainRuns(null, 'Model'), restored))
+        .paths,
+      ['$["body"][0]["modelTitle"]']
+    );
+    assert.deepEqual(
+      (await reviewedPaths(runs, plainRuns('Model', 'Model'), titled('Model', null), restored))
+        .paths,
+      ['$["body"][1]["modelTitle"]']
+    );
+    assert.deepEqual((await reviewedPaths(runs, plainRuns('Model'), titled(null), plain)).paths, [
+      '$["body"][0]["modelTitle"]',
+    ]);
+
+    const archiveRoute = '/api/chats/:/backup-archive';
+    const authored = { version: 1, action: 'x', greeting: true, messages: [] };
+    const archiveBody = (...messages) => ({
+      manifest: { backup: { chats: [{ state: { messages } }] } },
+    });
+    const message = (i, key) =>
+      `$["body"]["manifest"]["backup"]["chats"][0]["state"]["messages"][${i}]["${key}"]`;
+    const original = archiveBody({ sourceId: 's0', authored }, { sourceId: 's1' });
+    const opened = archiveBody({ sourceId: 's0', opening: true }, { sourceId: 's1' });
+    assert.deepEqual(await reviewedPaths(archiveRoute, original, opened, restored), {
+      paths: [],
+      absorbed: { 'restored-opening-archive': 2 },
+    });
+    assert.deepEqual(
+      (
+        await reviewedPaths(
+          archiveRoute,
+          original,
+          archiveBody({ sourceId: 's0' }, { sourceId: 's1' }),
+          restored
+        )
+      ).paths,
+      [message(0, 'authored')]
+    );
+    assert.deepEqual(
+      (
+        await reviewedPaths(
+          archiveRoute,
+          original,
+          archiveBody({ sourceId: 's0', authored, opening: true }, { sourceId: 's1' }),
+          restored
+        )
+      ).paths,
+      [message(0, 'opening')]
+    );
+    assert.deepEqual(
+      (
+        await reviewedPaths(
+          archiveRoute,
+          archiveBody({ sourceId: 's0', authored }, { sourceId: 's1', authored }),
+          archiveBody({ sourceId: 's0', opening: true }, { sourceId: 's1', opening: true }),
+          restored
+        )
+      ).paths,
+      [message(1, 'authored'), message(1, 'opening')]
+    );
+    assert.equal((await reviewedPaths(archiveRoute, original, opened, withStart)).paths.length, 2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });

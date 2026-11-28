@@ -7,6 +7,14 @@ const field = (path, before, after) => ({ path, before, after });
 const removed = (path, type = string) => field(path, type, undefined);
 const added = (path, value) => field(path, undefined, value);
 const read = (id, routes, fields, reason) => ({ id, routes, status: [200, 200], fields, reason });
+const restored = (id, route, fields, reason) => ({
+  id,
+  routes: [route],
+  status: [200, 200],
+  when: id,
+  fields,
+  reason,
+});
 const deletedCode = 'LIBRARY_ITEM_DELETED';
 const archive = '/api/chats/:/backup-archive';
 
@@ -147,6 +155,50 @@ export const rules = [
     ],
     reason: 'Chat backup can export retained data for a hidden library attachment.',
   },
+  read(
+    'model-preset-evaluation-tools',
+    ['/api/model-presets/:'],
+    [removed('body.evaluationTools', object)],
+    'The evaluation tools feature was removed, so a preset no longer carries its setting.'
+  ),
+  read(
+    'library-evaluation-tools',
+    ['/api/library'],
+    [removed('body.models.*.evaluationTools', object)],
+    'The evaluation tools feature was removed, so a library model no longer carries its setting.'
+  ),
+  restored(
+    'restored-opening-manuscript',
+    '/api/chats/:/manuscript',
+    [field('body.scenes.*.number', number, number)],
+    'A chat restored from an archive now counts its authored opening as scene zero, so every number moves down by one.'
+  ),
+  restored(
+    'restored-opening-reader',
+    '/api/chats/:/reader',
+    [
+      field('body.reader.navigation.*.number', number, number),
+      field('body.reader.navigation.0.label', string, '첫 메시지'),
+      added('body.reader.navigation.0.opening', true),
+      field('body.runs.*.modelTitle', string, null),
+    ],
+    'A chat restored from an archive now reads its authored opening as the opening: scene numbers move down by one, its entry is labelled and flagged, and its run names no model.'
+  ),
+  restored(
+    'restored-opening-reader-runs',
+    '/api/chats/:/reader-runs',
+    [field('body.*.modelTitle', string, null)],
+    'The run of an authored opening restored from an archive no longer names a model.'
+  ),
+  restored(
+    'restored-opening-archive',
+    archive,
+    [
+      removed('body.manifest.backup.chats.0.state.messages.0.authored', object),
+      added('body.manifest.backup.chats.0.state.messages.0.opening', true),
+    ],
+    'The archive of a restored authored opening names it as the opening instead of carrying its authored text.'
+  ),
   {
     id: 'hidden-content-editor',
     routes: ['/api/resources/content/:'],
