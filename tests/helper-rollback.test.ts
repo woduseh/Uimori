@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { OutlineOperation } from '#contracts';
 import type { HelperRollbackUnit, HelperTask } from '../core/helper.js';
 import { OUTLINE_LEVELS, outlineParentAllowed, type OutlineLevel } from '../core/outline.js';
 import type { Content } from '../core/product.js';
@@ -38,6 +39,7 @@ import { Store } from '../server/store.js';
 import { pruneUnusedData } from '../server/unused-data.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
+import { seedOutline } from './fixtures/outline.js';
 import { helperCall, helperDone, selectFixtureModels } from './fixtures/scripted-helper.js';
 
 const owned: { dir: string; store: Store }[] = [];
@@ -579,51 +581,30 @@ test('a task that changed only a bot package setting rolls back', () => {
 
 test('an outline rollback cancels only the scheduled scenes whose plan it changes', () => {
   const f = fixture();
-  const created = f.store.outline.applyReceipt(
-    f.chat.id,
-    {
-      idempotencyKey: 'outline-seed',
-      operations: [
-        { op: 'create', ref: 'a', level: 'arc', title: '1부', intent: '떠난다' },
-        { op: 'create', ref: 'b', parentRef: 'a', level: 'episode', title: '1화', intent: '출발' },
-        { op: 'create', ref: 'c', level: 'arc', title: '2부', intent: '돌아온다' },
-        { op: 'create', ref: 'd', parentRef: 'c', level: 'episode', title: '2화', intent: '귀향' },
-        { op: 'create', ref: 'e', parentRef: 'c', level: 'episode', title: '3화', intent: '재회' },
-      ],
-    },
-    'user'
-  ).created;
+  const created = seedOutline(f.store, f.chat.id, [
+    { op: 'create', ref: 'a', level: 'arc', title: '1부', intent: '떠난다' },
+    { op: 'create', ref: 'b', parentRef: 'a', level: 'episode', title: '1화', intent: '출발' },
+    { op: 'create', ref: 'c', level: 'arc', title: '2부', intent: '돌아온다' },
+    { op: 'create', ref: 'd', parentRef: 'c', level: 'episode', title: '2화', intent: '귀향' },
+    { op: 'create', ref: 'e', parentRef: 'c', level: 'episode', title: '3화', intent: '재회' },
+  ]);
   const id = (ref: string) => created.find((item) => item.ref === ref)!.id;
   const node = (ref: string) =>
     f.store.outline.nodes(f.chat.id).find((item) => item.id === id(ref))!;
-  f.store.outline.applyReceipt(
-    f.chat.id,
-    {
-      idempotencyKey: 'outline-related',
-      operations: [
-        { op: 'update', id: id('b'), expectedRevision: node('b').revision, relatedIds: [id('d')] },
-      ],
-    },
-    'user'
-  );
+  seedOutline(f.store, f.chat.id, [
+    { op: 'update', id: id('b'), expectedRevision: node('b').revision, relatedIds: [id('d')] },
+  ]);
   const task = f.begin();
   f.tracked(task, { domain: 'outline', chatId: f.chat.id }, () =>
-    f.store.outline.applyReceipt(
-      f.chat.id,
+    seedOutline(f.store, f.chat.id, [
       {
-        idempotencyKey: 'outline-move',
-        operations: [
-          {
-            op: 'move',
-            id: id('d'),
-            expectedRevision: node('d').revision,
-            parentId: id('a'),
-            position: 1,
-          },
-        ],
+        op: 'move',
+        id: id('d'),
+        expectedRevision: node('d').revision,
+        parentId: id('a'),
+        position: 1,
       },
-      'user'
-    )
+    ])
   );
   f.finish(task);
   const scheduled = Object.fromEntries(
@@ -767,17 +748,10 @@ function world(): World {
   const bots = ['하나', '둘', '셋'].map(
     (name) => f.store.product.content(fixtureBotInput(`${name} 봇`, `${name} 설명`)).id
   );
-  f.store.outline.applyReceipt(
-    f.chat.id,
-    {
-      operations: [
-        { op: 'create', level: 'arc', title: '1부', intent: '떠난다' },
-        { op: 'create', level: 'arc', title: '2부', intent: '돌아온다' },
-      ],
-      idempotencyKey: 'outline-seed',
-    },
-    'user'
-  );
+  seedOutline(f.store, f.chat.id, [
+    { op: 'create', level: 'arc', title: '1부', intent: '떠난다' },
+    { op: 'create', level: 'arc', title: '2부', intent: '돌아온다' },
+  ]);
   f.store.story.notes.write(f.chat.id, {
     text: '첫 메모',
     author: 'Synthetic author',
@@ -859,7 +833,7 @@ function runSeed(seed: number) {
     expectedHeadRevision: f.store.chat(f.chat.id).headRevision,
     idempotencyKey: randomUUID(),
   });
-  const outlineOperation = (): Record<string, unknown> => {
+  const outlineOperation = (): OutlineOperation => {
     const nodes = f.store.outline.nodes(f.chat.id);
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const levelOf = (id: string | null) => (id === null ? null : byId.get(id)!.level);
@@ -873,12 +847,16 @@ function runSeed(seed: number) {
     const node = nodes.length ? pick(nodes) : undefined;
     const guard = node && { id: node.id, expectedRevision: node.revision };
     if (node && choice < 0.25)
-      return { op: 'update', ...guard, [random() < 0.5 ? 'title' : 'intent']: fresh('구성') };
+      return {
+        op: 'update',
+        ...guard!,
+        ...(random() < 0.5 ? { title: fresh('구성') } : { intent: fresh('구성') }),
+      };
     if (node && choice < 0.4) {
       const levels = OUTLINE_LEVELS.filter(
         (level) => level !== node.level && fits(node.parentId, level, node.id)
       );
-      if (levels.length) return { op: 'update', ...guard, level: pick(levels) };
+      if (levels.length) return { op: 'update', ...guard!, level: pick(levels) };
     }
     if (node && choice < 0.55) {
       const parents = [null, ...nodes.map((item) => item.id)].filter(
@@ -886,7 +864,7 @@ function runSeed(seed: number) {
       );
       return {
         op: 'move',
-        ...guard,
+        ...guard!,
         parentId: pick(parents),
         position: Math.floor(random() * 4),
       };
@@ -894,7 +872,7 @@ function runSeed(seed: number) {
     if (node && choice < 0.65)
       return {
         op: 'update',
-        ...guard,
+        ...guard!,
         relatedIds: nodes
           .filter((item) => item.id !== node.id && random() < 0.4)
           .map((item) => item.id),
@@ -942,12 +920,7 @@ function runSeed(seed: number) {
             expectedRevision: f.store.source(id).editRevision ?? 0,
           });
         else f.translate(id, fresh('User translation'));
-      } else if (kind === 'outline')
-        f.store.outline.applyReceipt(
-          f.chat.id,
-          { operations: [outlineOperation()], idempotencyKey: randomUUID() },
-          'user'
-        );
+      } else if (kind === 'outline') seedOutline(f.store, f.chat.id, [outlineOperation()]);
       else f.store.story.notes.write(f.chat.id, { ...noteOperation(), ...noteBody() });
     });
   };
@@ -981,11 +954,7 @@ function runSeed(seed: number) {
           });
       } else if (kind === 'outline')
         f.tracked(task, { domain: 'outline', chatId: f.chat.id }, () =>
-          f.store.outline.applyReceipt(
-            f.chat.id,
-            { operations: [outlineOperation()], idempotencyKey: randomUUID() },
-            'user'
-          )
+          seedOutline(f.store, f.chat.id, [outlineOperation()])
         );
       else
         f.tracked(task, { domain: 'notes', chatId: f.chat.id }, () =>

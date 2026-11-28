@@ -17,3 +17,4 @@ export * from './operation-registry.js';
 export * from './domains/chat-settings/operations.js';
 export * from './domains/risu/operations.js';
 export * from './domains/risuPreset/operations.js';
+export * from './domains/outline/operations.js';

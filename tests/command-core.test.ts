@@ -6,7 +6,13 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import { z } from 'zod/v4';
-import { chatSettingsEndpoints, defineEndpoint, endpointRequest } from '#contracts';
+import {
+  chatSettingsEndpoints,
+  defineEndpoint,
+  endpointRequest,
+  type OutlineApplyResult,
+  outlineEndpoints,
+} from '#contracts';
 import {
   chatSettingsOperations,
   defineCommandOperation,
@@ -20,18 +26,23 @@ import { readChatVariables, saveChatVariableState } from '../server/chat-variabl
 import { type Command, defineCommand, executeOperation } from '../server/command.js';
 import {
   allCommands,
+  applyOutlineCommand,
   updateChatVariablesCommand,
   updateStoryGuideCommand,
 } from '../server/commands/index.js';
 import { registerCommand } from '../server/endpoint.js';
+import { outlineWriteTool } from '../server/helper-app-tools.js';
 import { helperChatStateCommand } from '../server/helper-chat-state-tools.js';
 import { defineHelperCommandTool, executeHelperCommand } from '../server/helper-command-adapter.js';
+import { rollBackHelperTask } from '../server/helper-rollback.js';
+import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { type AppPorts, createStorePorts } from '../server/store-ports.js';
 import { Store } from '../server/store.js';
 import type { Tx } from '../server/tx.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
+import { seedOutline } from './fixtures/outline.js';
 import {
   helperCall,
   helperDone,
@@ -168,7 +179,7 @@ for (const registered of Object.values(allCommands)) {
   }
 
   if (command.receipt) {
-    test(`${name} replays its receipt and rejects a changed body (${paths.length ? 'after guard state changes' : scope})`, async () => {
+    test(`${name} replays its receipt and rejects a changed body (${revisions.length ? 'after guard state changes' : scope})`, async () => {
       const store = createStoreFixture();
       const { inputs, stale } = arrange(store);
       const sample = inputs[0]!;
@@ -177,7 +188,7 @@ for (const registered of Object.values(allCommands)) {
       const onReplay = vi.spyOn(command.receipt!, 'onReplay');
       await executeOperation(command, ports, sample);
       expect(onReplay).not.toHaveBeenCalled();
-      const path = paths.find((key) =>
+      const path = revisions.find((key) =>
         valuesAtPath(sample, key).some((value) => value !== undefined)
       );
       if (path) {
@@ -199,6 +210,32 @@ for (const registered of Object.values(allCommands)) {
     });
   }
 }
+
+test('outline receipt replays with reordered keys, keeps stored created ids, and returns current detail', async () => {
+  const store = createStoreFixture();
+  const { id: chatId } = createFixtureChat(store, 'Receipt outline chat');
+  const publish = vi.fn();
+  const ports = createStorePorts(store, { publish });
+  const idempotencyKey = randomUUID();
+  const first = await executeOperation(applyOutlineCommand, ports, {
+    chatId,
+    idempotencyKey,
+    operations: [{ op: 'create', ref: 'arc1', level: 'arc', title: '1부', intent: '첫 구성' }],
+  });
+  expect(publish).toHaveBeenCalledTimes(1);
+
+  seedOutline(store, chatId, [{ op: 'create', level: 'arc', title: '2부', intent: '후속 구성' }]);
+
+  const replayed = await executeOperation(applyOutlineCommand, ports, {
+    chatId,
+    idempotencyKey,
+    operations: [{ intent: '첫 구성', title: '1부', level: 'arc', ref: 'arc1', op: 'create' }],
+  });
+  expect(replayed.created).toEqual(first.created);
+  expect(replayed.detail.nodes.map((node) => node.title)).toEqual(['1부', '2부']);
+  expect(replayed).not.toEqual(first);
+  expect(publish).toHaveBeenCalledTimes(1);
+});
 
 test('variable receipt returns the current view after the variables, source and busy state change', async () => {
   const store = createStoreFixture();
@@ -970,6 +1007,352 @@ test('helper commands answer 409 REVISION_CONFLICT on a deleted chat even with a
       { expectedRevision: 0, changes: { unknown: true } }
     )
   ).rejects.toMatchObject({ statusCode: 409, code: 'REVISION_CONFLICT' });
+
+  await expect(
+    executeHelperCommand(
+      outlineWriteTool,
+      { store, workspace },
+      task,
+      `${task.id}:outline-deleted`,
+      chat.id,
+      { operations: 'not-an-array', unknown: 1 }
+    )
+  ).rejects.toMatchObject({ statusCode: 409, code: 'REVISION_CONFLICT' });
+
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 0 });
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 0 });
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM outline_batches WHERE chat_id=?').get(chat.id)
+  ).toEqual({ n: 0 });
+});
+
+test('HTTP and helper produce the same stored state, compact receipt, and error codes for outline.apply', async () => {
+  const app = await createAppFixture();
+  const httpChat = createFixtureChat(app.store, 'HTTP outline');
+  const helperChat = createFixtureChat(app.store, 'Helper outline');
+
+  const initialBatch = [
+    { op: 'create' as const, ref: 'arc1', level: 'arc' as const, title: '1부', intent: '출발' },
+    {
+      op: 'create' as const,
+      ref: 'ep1',
+      parentRef: 'arc1',
+      level: 'episode' as const,
+      title: '1화',
+      intent: '여정의 시작',
+      fixed: true,
+    },
+    {
+      op: 'create' as const,
+      ref: 'ep2',
+      parentRef: 'arc1',
+      level: 'episode' as const,
+      title: '2화',
+      intent: '갈등',
+    },
+  ];
+
+  const httpCreate = await app.inject({
+    method: 'POST',
+    url: `/api${endpointRequest(outlineEndpoints.apply, { chatId: httpChat.id }).path}`,
+    payload: { idempotencyKey: randomUUID(), operations: initialBatch },
+  });
+  expect(httpCreate.statusCode, httpCreate.body).toBe(200);
+  const httpCreated = httpCreate.json<OutlineApplyResult>().created;
+
+  const chatChanged = vi.fn();
+  const helperCreate = await runScriptedChatHelper(
+    app.store,
+    helperChat.id,
+    [helperCall('seed', 'outline.write', { operations: initialBatch as never }), helperDone],
+    { chatChanged }
+  );
+  expect(helperCreate.finished('seed')).toMatchObject({ denied: false });
+  const toolEvent = (
+    helperCreate.requests[1]!.input.results as unknown as Array<{
+      callId: string;
+      result: unknown;
+    }>
+  ).find((item) => item.callId === 'seed');
+  const receipt = toolEvent!.result as {
+    operationId: string;
+    applied: boolean;
+    atomic: boolean;
+    created: { ref?: string; id: string }[];
+    changes: { op: string; id: string; revisionAfterOperation?: number }[];
+  };
+  expect(receipt.applied).toBe(true);
+  expect(receipt.atomic).toBe(true);
+  expect('detail' in receipt).toBe(false);
+  expect(JSON.stringify(receipt).length).toBeLessThan(2000);
+  expect(receipt.changes).toEqual(
+    receipt.created.map((item) => ({ op: 'create', id: item.id, revisionAfterOperation: 1 }))
+  );
+  expect(chatChanged).toHaveBeenCalledTimes(1);
+  expect(chatChanged).toHaveBeenCalledWith(helperChat.id);
+  expect(readHelperTaskResults(app.store, helperCreate.task.id).unrecordedOperations).toBe(0);
+
+  const shapeOf = (chatId: string) => {
+    const nodes = app.store.outline.nodes(chatId);
+    const titleById = new Map(nodes.map((node) => [node.id, node.title]));
+    return nodes.map((node) => ({
+      parentTitle: node.parentId ? (titleById.get(node.parentId) ?? null) : null,
+      level: node.level,
+      position: node.position,
+      title: node.title,
+      intent: node.intent,
+      fixed: node.fixed,
+      revision: node.revision,
+      relatedTitles: (node.relatedIds ?? []).map((id) => titleById.get(id) ?? null),
+    }));
+  };
+  expect(shapeOf(httpChat.id)).toEqual(shapeOf(helperChat.id));
+
+  const idFor = (list: { ref?: string; id: string }[], ref: string) =>
+    list.find((item) => item.ref === ref)!.id;
+  const httpEp1 = idFor(httpCreated, 'ep1');
+  const httpEp2 = idFor(httpCreated, 'ep2');
+  const helperEp1 = idFor(receipt.created, 'ep1');
+  const helperEp2 = idFor(receipt.created, 'ep2');
+
+  const followUp = (ep1: string, ep2: string) => [
+    {
+      op: 'update' as const,
+      id: ep1,
+      expectedRevision: 1,
+      intent: '수정된 의도',
+      relatedIds: [ep2],
+    },
+    { op: 'move' as const, id: ep2, expectedRevision: 1, position: 2 },
+  ];
+  const httpFollow = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${httpChat.id}/outline`,
+    payload: { idempotencyKey: randomUUID(), operations: followUp(httpEp1, httpEp2) },
+  });
+  expect(httpFollow.statusCode, httpFollow.body).toBe(200);
+  const helperFollow = await runScriptedChatHelper(app.store, helperChat.id, [
+    helperCall('follow', 'outline.write', { operations: followUp(helperEp1, helperEp2) as never }),
+    helperDone,
+  ]);
+  expect(helperFollow.finished('follow')).toMatchObject({ denied: false });
+  expect(shapeOf(httpChat.id)).toEqual(shapeOf(helperChat.id));
+
+  const tooManyRelated = Array.from({ length: 41 }, (_, i) => `related-id-${i}`);
+  const errorCases: Array<{
+    name: string;
+    body: (ep1: string, ep2: string) => Record<string, unknown>;
+    expectedCode: string;
+  }> = [
+    {
+      name: 'stale-revision-atomic-rollback',
+      body: (ep1) => ({
+        operations: [
+          { op: 'create', level: 'arc', title: '롤백되어야 함', intent: '실패 배치' },
+          { op: 'update', id: ep1, expectedRevision: 1, title: '충돌' },
+        ],
+      }),
+      expectedCode: 'REVISION_CONFLICT',
+    },
+    {
+      name: 'hierarchy-invalid',
+      body: (ep1) => ({
+        operations: [
+          { op: 'create', parentId: ep1, level: 'arc', title: '잘못된 계층', intent: '' },
+        ],
+      }),
+      expectedCode: 'OUTLINE_HIERARCHY_INVALID',
+    },
+    {
+      name: 'related-too-many',
+      body: (ep1) => ({
+        operations: [{ op: 'update', id: ep1, expectedRevision: 2, relatedIds: tooManyRelated }],
+      }),
+      expectedCode: 'OUTLINE_RELATED_TOO_MANY',
+    },
+    {
+      name: 'empty-operations',
+      body: () => ({ operations: [] }),
+      expectedCode: 'INVALID_REQUEST',
+    },
+    {
+      name: 'duplicate-ref',
+      body: () => ({
+        operations: [
+          { op: 'create', ref: 'dup', level: 'arc', title: 'A', intent: '' },
+          { op: 'create', ref: 'dup', level: 'arc', title: 'B', intent: '' },
+        ],
+      }),
+      expectedCode: 'INVALID_REQUEST',
+    },
+    {
+      name: 'duplicate-related',
+      body: (ep1, ep2) => ({
+        operations: [{ op: 'update', id: ep1, expectedRevision: 2, relatedIds: [ep2, ep2] }],
+      }),
+      expectedCode: 'INVALID_REQUEST',
+    },
+    {
+      name: 'unknown-field',
+      body: () => ({
+        operations: [{ op: 'create', level: 'arc', title: 'A', intent: '' }],
+        extra: 1,
+      }),
+      expectedCode: 'INVALID_REQUEST',
+    },
+  ];
+
+  const helperErrors = await runScriptedChatHelper(app.store, helperChat.id, [
+    ...errorCases.map((entry) =>
+      helperCall(entry.name, 'outline.write', entry.body(helperEp1, helperEp2) as never)
+    ),
+    helperCall('spoof-idempotency', 'outline.write', {
+      idempotencyKey: 'model-supplied',
+      operations: [{ op: 'create', level: 'arc', title: 'spoof', intent: '' }],
+    }),
+    helperDone,
+  ]);
+  for (const entry of errorCases) {
+    const httpRes = await app.inject({
+      method: 'POST',
+      url: `/api/chats/${httpChat.id}/outline`,
+      payload: { idempotencyKey: randomUUID(), ...entry.body(httpEp1, httpEp2) },
+    });
+    expect(httpRes.json().code, `HTTP ${entry.name}`).toBe(entry.expectedCode);
+    expect(helperErrors.finished(entry.name), `Helper ${entry.name}`).toMatchObject({
+      denied: true,
+      errorCode: entry.expectedCode,
+    });
+  }
+  expect(helperErrors.finished('spoof-idempotency')).toMatchObject({
+    denied: true,
+    errorCode: 'INVALID_REQUEST',
+  });
+  expect(shapeOf(httpChat.id)).toEqual(shapeOf(helperChat.id));
+  expect(app.store.outline.nodes(helperChat.id).some((n) => n.title === '롤백되어야 함')).toBe(
+    false
+  );
+  expect(
+    app.store.db
+      .prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?')
+      .get(helperErrors.task.id)
+  ).toEqual({ n: 0 });
+});
+
+test('helper outline.write commits change card atomically, replays once, and restores on turn rollback', async () => {
+  const store = createStoreFixture();
+  const model = selectFixtureModels(store);
+  const chat = createFixtureChat(store, 'Helper outline rollback chat');
+  const seeded = seedOutline(store, chat.id, [
+    { op: 'create', ref: 'arc', level: 'arc', title: '1부', intent: '원래 부 의도' },
+    {
+      op: 'create',
+      ref: 'ep',
+      parentRef: 'arc',
+      level: 'episode',
+      title: '1화',
+      intent: '원래 화 의도',
+      fixed: true,
+    },
+  ]);
+  const arcId = seeded.find((item) => item.ref === 'arc')!.id;
+  const epId = seeded.find((item) => item.ref === 'ep')!.id;
+  const outlineTreeShape = () => {
+    const nodes = store.outline.nodes(chat.id);
+    const titleById = new Map(nodes.map((node) => [node.id, node.title]));
+    return nodes.map((node) => ({
+      parentTitle: node.parentId ? (titleById.get(node.parentId) ?? null) : null,
+      level: node.level,
+      position: node.position,
+      title: node.title,
+      intent: node.intent,
+      fixed: node.fixed,
+      relatedTitles: (node.relatedIds ?? []).map((id) => titleById.get(id) ?? null),
+    }));
+  };
+  const beforeShape = outlineTreeShape();
+
+  const workspace = new HelperWorkspace(store);
+  const conversation = workspace.open({ kind: 'chat', chatId: chat.id });
+  const task = workspace.enqueue(conversation.id, randomUUID(), 'Rewrite outline', {
+    scope: { kind: 'chat', chatId: chat.id },
+    model: store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    limits: { totalCalls: 4, helperCalls: 4 },
+  });
+  workspace.start(task.id, 'owner-1');
+  const chatChanged = vi.fn();
+
+  const failingBatch = {
+    operations: [{ op: 'create', level: 'arc', title: '실패할 구성', intent: '롤백 확인' }],
+  };
+  vi.spyOn(workspace, 'event').mockImplementationOnce(() => {
+    throw new Error('Injected outline helper event failure');
+  });
+  await expect(
+    executeHelperCommand(
+      outlineWriteTool,
+      { store, workspace, chatChanged },
+      task,
+      `${task.id}:outline-atomic-fail`,
+      chat.id,
+      failingBatch
+    )
+  ).rejects.toThrow('Injected outline helper event failure');
+  expect(store.outline.nodes(chat.id).map((node) => node.title)).toEqual(['1부', '1화']);
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 0 });
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 0 });
+  expect(chatChanged).not.toHaveBeenCalled();
+
+  const rewriteArgs = {
+    operations: [
+      { op: 'update', id: arcId, expectedRevision: 1, title: '1부 개정', intent: '도우미 의도' },
+      { op: 'remove', id: epId, expectedRevision: 1 },
+      { op: 'create', parentId: arcId, level: 'episode', title: '새 1화', intent: '도우미 추가' },
+    ],
+  };
+  const receiptId = `${task.id}:outline-rewrite`;
+  const first = await executeHelperCommand(
+    outlineWriteTool,
+    { store, workspace, chatChanged },
+    task,
+    receiptId,
+    chat.id,
+    rewriteArgs
+  );
+  expect(first).toMatchObject({ operationId: receiptId, applied: true, atomic: true });
+  expect(store.outline.nodes(chat.id).map((node) => node.title)).toEqual(['1부 개정', '새 1화']);
+  expect(chatChanged).toHaveBeenCalledTimes(1);
+
+  const replayed = await executeHelperCommand(
+    outlineWriteTool,
+    { store, workspace, chatChanged },
+    task,
+    receiptId,
+    chat.id,
+    rewriteArgs
+  );
+  expect(replayed).toEqual(first);
+  expect(store.outline.nodes(chat.id).map((node) => node.title)).toEqual(['1부 개정', '새 1화']);
+  expect(chatChanged).toHaveBeenCalledTimes(1);
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+
+  workspace.finish(task.id, 'owner-1', task.generation + 1, 'completed', '완료했어요.', null);
+  const rolled = rollBackHelperTask(store, workspace, task.id, undefined);
+  expect(rolled.units).toMatchObject([{ unit: `outline:${chat.id}`, status: 'restored' }]);
+  expect(outlineTreeShape()).toEqual(beforeShape);
+  expect(store.outline.nodes(chat.id)[0]!.id).toBe(arcId);
 });
 
 test('Tx tokens cannot be forged or reused after a transaction closes', () => {
@@ -987,6 +1370,15 @@ test('Tx tokens cannot be forged or reused after a transaction closes', () => {
   expect(() =>
     ports.receipt.save(forged, { scope: chat.id, key: 'k', digest: 'd' }, { revision: 1 })
   ).toThrow('TRANSACTION_REQUIRED');
+  expect(() => store.outline.setFocus(forged, chat.id, null)).toThrow('TRANSACTION_REQUIRED');
+  expect(() => store.outline.applyBatch(forged, chat.id, [])).toThrow('TRANSACTION_REQUIRED');
+  expect(() =>
+    ports.outlineReceipt.save(
+      forged,
+      { scope: chat.id, key: 'k', digest: 'd' },
+      { authority: 'user', operations: [], created: [] }
+    )
+  ).toThrow('TRANSACTION_REQUIRED');
 
   let leaked!: Tx;
   ports.tx.transaction((tx) => {
@@ -997,6 +1389,15 @@ test('Tx tokens cannot be forged or reused after a transaction closes', () => {
   ).toThrow('TRANSACTION_REQUIRED');
   expect(() =>
     store.storyGuide.save(leaked, chat.id, 1, store.storyGuide.get(chat.id).config)
+  ).toThrow('TRANSACTION_REQUIRED');
+  expect(() => store.outline.setFocus(leaked, chat.id, null)).toThrow('TRANSACTION_REQUIRED');
+  expect(() => store.outline.applyBatch(leaked, chat.id, [])).toThrow('TRANSACTION_REQUIRED');
+  expect(() =>
+    ports.outlineReceipt.save(
+      leaked,
+      { scope: chat.id, key: 'k', digest: 'd' },
+      { authority: 'user', operations: [], created: [] }
+    )
   ).toThrow('TRANSACTION_REQUIRED');
 });
 
@@ -1120,6 +1521,19 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
       }
     );
 
+  const _checkSyncAroundApply = () =>
+    executeOperation(
+      applyOutlineCommand,
+      null as unknown as AppPorts,
+      {},
+      {
+        // @ts-expect-error aroundApply runs inside synchronous SQLite transaction and cannot be async
+        async aroundApply(_tx, _input, run) {
+          return run();
+        },
+      }
+    );
+
   defineHelperCommandTool({
     name: 'test.badBody',
     description: 'Mismatched schemaBody',
@@ -1147,7 +1561,8 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     _checkSyncGuardVoid,
     _checkSyncApply,
     _checkSyncOnInTx,
-  ]).toHaveLength(5);
+    _checkSyncAroundApply,
+  ]).toHaveLength(6);
 });
 
 test('registerCommand keeps prepare signal alive after request body completes and aborts only on early client disconnect', async () => {
@@ -1253,7 +1668,7 @@ test('registerCommand keeps prepare signal alive after request body completes an
   }
 });
 
-test('a runtime async onInTx hook throws synchronously, rolls back writes, and skips afterCommit', async () => {
+test('a runtime async onInTx or aroundApply hook throws synchronously, rolls back writes, and skips afterCommit', async () => {
   const store = createStoreFixture();
   const chat = createFixtureChat(store, 'Async onInTx rollback chat');
   const publish = vi.fn();
@@ -1273,8 +1688,31 @@ test('a runtime async onInTx hook throws synchronously, rolls back writes, and s
     )
   ).rejects.toThrow('Async onInTx callback');
 
+  await expect(
+    executeOperation(
+      applyOutlineCommand,
+      ports,
+      {
+        chatId: chat.id,
+        idempotencyKey: randomUUID(),
+        operations: [{ op: 'create', level: 'arc', title: '롤백', intent: '' }],
+      },
+      {
+        aroundApply: (async (_tx: Tx, _input: unknown, run: () => unknown) => {
+          const result = run();
+          await Promise.resolve();
+          return result;
+        }) as unknown as <T>(_tx: Tx, _input: unknown, run: () => T) => T,
+      }
+    )
+  ).rejects.toThrow('Async aroundApply callback');
+
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
   expect(store.storyGuide.get(chat.id).revision).toBe(0);
+  expect(store.outline.nodes(chat.id)).toEqual([]);
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM outline_batches WHERE chat_id=?').get(chat.id)
+  ).toEqual({ n: 0 });
   expect(publish).not.toHaveBeenCalled();
 });
 

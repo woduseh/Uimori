@@ -1,4 +1,5 @@
 import { chatWithSource } from './fixtures/illustration.js';
+import { seedOutline } from './fixtures/outline.js';
 import { readHelperOutline } from '../server/outline-read.js';
 import { editSource } from '../server/source-editing.js';
 import { afterEach, expect, test } from 'vitest';
@@ -770,16 +771,9 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
 test('outline source nextRead works in the real data worker across frozen and edited live text', async () => {
   const f = fixture();
   const { chat, source } = chatWithSource(f.store, '연결 원문');
-  const id = f.store.outline.applyReceipt(
-    chat.id,
-    {
-      idempotencyKey: 'linked',
-      operations: [
-        { op: 'create', level: 'episode', title: '원문 연결', intent: '실제 본문과 대조' },
-      ],
-    },
-    'user'
-  ).created[0].id;
+  const id = seedOutline(f.store, chat.id, [
+    { op: 'create', level: 'episode', title: '원문 연결', intent: '실제 본문과 대조' },
+  ])[0]!.id;
   f.store.db
     .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
     .run('ref', id, source.id, new Date().toISOString());

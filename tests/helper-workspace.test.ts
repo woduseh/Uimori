@@ -11,6 +11,7 @@ import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { seedOutline } from './fixtures/outline.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
 import * as transport from '../core/transport.js';
@@ -1810,16 +1811,10 @@ describe('Helper current view cursor', () => {
 test('selected outline review allows evidence reads, rejects writes and retains only small review provenance', async () => {
   const f = fixture(),
     { chat, source } = chatWithSource(f.store, '원문 점검');
-  const node = f.store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'review-plan',
-      operations: [
-        { op: 'create', level: 'episode', title: '조용한 부두', intent: '미라가 배를 기다린다.' },
-      ],
-    },
-    'user'
-  ).detail.nodes[0];
+  seedOutline(f.store, chat.id, [
+    { op: 'create', level: 'episode', title: '조용한 부두', intent: '미라가 배를 기다린다.' },
+  ]);
+  const node = f.store.outline.detail(chat.id).nodes[0]!;
   f.store.db
     .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
     .run('test-source', node.id, source.id, new Date().toISOString());
@@ -1948,35 +1943,22 @@ test('outline selection scope and revisions are checked before a provider call; 
   const f = fixture(),
     chat = createFixtureChat(f.store, '선택 대상'),
     other = createFixtureChat(f.store, '다른 작품');
-  const node = f.store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'one',
-      operations: [{ op: 'create', level: 'episode', title: '같은 제목', intent: '원래 방향' }],
-    },
-    'user'
-  ).detail.nodes[0];
-  f.store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'pin',
-      operations: [{ op: 'update', id: node.id, expectedRevision: node.revision, fixed: true }],
-    },
-    'user'
-  );
+  seedOutline(f.store, chat.id, [
+    { op: 'create', level: 'episode', title: '같은 제목', intent: '원래 방향' },
+  ]);
+  const node = f.store.outline.detail(chat.id).nodes[0]!;
+  seedOutline(f.store, chat.id, [
+    { op: 'update', id: node.id, expectedRevision: node.revision, fixed: true },
+  ]);
   const pinned = f.store.outline.node(node.id);
   const conversation = f.workspace.open({
     kind: 'chat',
     chatId: chat.id,
   });
-  const foreign = f.store.outline.apply(
-    other.id,
-    {
-      idempotencyKey: 'other',
-      operations: [{ op: 'create', level: 'episode', title: '같은 제목', intent: '' }],
-    },
-    'user'
-  ).detail.nodes[0];
+  seedOutline(f.store, other.id, [
+    { op: 'create', level: 'episode', title: '같은 제목', intent: '' },
+  ]);
+  const foreign = f.store.outline.detail(other.id).nodes[0]!;
   const send = mockSend((_request, _options, index) =>
     index === 0
       ? {

@@ -1,4 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import { outlineEndpoints } from '#contracts';
+import { applyOutlineCommand, setOutlineFocusCommand } from './commands/outline.js';
+import { registerCommand } from './endpoint.js';
+import { createStorePorts } from './store-ports.js';
 import type { Store } from './store.js';
 
 export function outlineRoutes(
@@ -6,29 +10,18 @@ export function outlineRoutes(
   store: Store,
   hooks: { publish: (chatId: string) => void }
 ) {
+  const ports = createStorePorts(store, { publish: hooks.publish });
   app.get<{ Params: { id: string } }>('/api/chats/:id/outline', async (request) =>
     store.outline.detail(request.params.id)
   );
   app.get<{ Params: { id: string } }>('/api/chats/:id/outline/focus', async (request) =>
     store.outline.focus(request.params.id)
   );
-  app.put<{ Params: { id: string } }>('/api/chats/:id/outline/focus', async (request) => {
-    const focus = store.outline.setFocus(request.params.id, request.body);
-    hooks.publish(request.params.id);
-    return focus;
-  });
+  registerCommand(app, outlineEndpoints.setFocus, setOutlineFocusCommand, ports);
   app.get<{ Params: { id: string } }>('/api/outline-nodes/:id/brief', (request) =>
     store.outline.preview(request.params.id)
   );
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/outline',
-    { bodyLimit: 16 * 1024 * 1024 },
-    async (request) => {
-      const result = store.outline.apply(request.params.id, request.body, 'user');
-      hooks.publish(request.params.id);
-      return result;
-    }
-  );
+  registerCommand(app, outlineEndpoints.apply, applyOutlineCommand, ports);
   app.post<{ Params: { id: string } }>(
     '/api/outline-nodes/:id/scene-command',
     { bodyLimit: 16 * 1024 * 1024 },

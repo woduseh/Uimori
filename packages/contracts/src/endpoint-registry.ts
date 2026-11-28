@@ -5,6 +5,7 @@ import { chatEndpoints } from './domains/chat/endpoints.js';
 import { chatSettingsEndpoints } from './domains/chat-settings/endpoints.js';
 import { deletionEndpoints } from './domains/deletion/endpoints.js';
 import { libraryEndpoints } from './domains/library/endpoints.js';
+import { outlineEndpoints } from './domains/outline/endpoints.js';
 import { personalWorkspaceEndpoints } from './domains/personal-workspace/endpoints.js';
 import { promptEndpoints } from './domains/prompts/endpoints.js';
 import { providerEndpoints } from './domains/providers/endpoints.js';
@@ -22,6 +23,7 @@ export const allEndpoints = {
   'chat-settings': chatSettingsEndpoints,
   deletion: deletionEndpoints,
   library: libraryEndpoints,
+  outline: outlineEndpoints,
   'personal-workspace': personalWorkspaceEndpoints,
   prompts: promptEndpoints,
   providers: providerEndpoints,

@@ -16,6 +16,7 @@ import { Store } from '../server/store.js';
 import { readRunSnapshot } from '../server/run-projections.js';
 import type { RunSnapshot } from '../core/types.js';
 import { OutlineStore } from '../server/outline-store.js';
+import { seedOutline } from './fixtures/outline.js';
 
 const owned: { close: () => unknown; directory: string }[] = [];
 afterEach(async () => {
@@ -335,22 +336,15 @@ test('scene names use manual titles then the smallest linked outline and preserv
   const chat = createFixtureChat(store, 'Named scenes');
   const written = source(store, chat.id);
   const outline = new OutlineStore(store);
-  outline.apply(
-    chat.id,
+  seedOutline(store, chat.id, [
+    { op: 'create', level: 'episode', title: 'The winter ball', intent: 'A meeting' },
     {
-      idempotencyKey: randomUUID(),
-      operations: [
-        { op: 'create', level: 'episode', title: 'The winter ball', intent: 'A meeting' },
-        {
-          op: 'create',
-          level: 'beat',
-          title: 'A secret revealed',
-          intent: 'The identity is revealed',
-        },
-      ],
+      op: 'create',
+      level: 'beat',
+      title: 'A secret revealed',
+      intent: 'The identity is revealed',
     },
-    'user'
-  );
+  ]);
   const nodes = outline.detail(chat.id).nodes;
   for (const node of nodes)
     store.db

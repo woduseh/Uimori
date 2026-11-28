@@ -8,10 +8,12 @@ import type {
 } from '#contracts';
 import { splitHeadBody } from '#contracts/operations';
 import { AppError, asAppError } from './app-errors.js';
-import { jsonPayloadHash } from './json-hash.js';
-import type { AppPorts, ReceiptLookup, ReceiptRecord } from './store-ports.js';
+import { canonicalPayloadHash } from './json-hash.js';
+import type { AppPorts, ReceiptLookup, ReceiptPort, ReceiptRecord } from './store-ports.js';
 import type { SynchronousResult } from './synchronous-transaction.js';
 import type { Tx } from './tx.js';
+
+export { canonicalPayloadHash };
 
 export const EXTERNAL_REPLAY = Symbol('externalReplay');
 
@@ -25,49 +27,38 @@ export function parseInput<S extends z.ZodType>(schema: S, value: unknown): z.ou
   throw error;
 }
 
-function stripUndefined(value: unknown): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(stripUndefined);
-  const cleaned: Record<string, unknown> = {};
-  for (const key of Object.keys(value)) {
-    const item = (value as Record<string, unknown>)[key];
-    if (item !== undefined)
-      Object.defineProperty(cleaned, key, {
-        value: stripUndefined(item),
-        enumerable: true,
-        configurable: true,
-        writable: true,
-      });
-  }
-  return cleaned;
-}
-
-export const canonicalPayloadHash = (value: unknown): string =>
-  jsonPayloadHash(stripUndefined(value));
-
 function plainRecord(value: unknown): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
     throw new AppError(400, 'INVALID_REQUEST');
   return value as Record<string, unknown>;
 }
 
-export type ReceiptSpec<Op extends AnySplitOperation, P> = {
+export type ReceiptSpec<Op extends AnySplitOperation, P, R = ReceiptRecord> = {
   readonly adapter?: 'import';
+  readonly store?: (ports: P) => ReceiptPort<R>;
   readonly scope: (head: OperationHead<Op>) => string;
   readonly key: (head: OperationHead<Op>) => string;
   readonly digest?: (head: OperationHead<Op>, raw: Record<string, unknown>) => string;
   readonly conflictMessage?: string;
-  readonly serialize: (output: OperationOutput<Op>) => ReceiptRecord;
+  readonly serialize: (output: OperationOutput<Op>, input: OperationParsedInput<Op>) => R;
   readonly onReplay: (
     tx: Tx | null,
     ports: P,
-    record: ReceiptRecord,
+    record: R,
     head: OperationHead<Op>
   ) => SynchronousResult<OperationOutput<Op>>;
 };
 
-export type CommandSpec<Op extends AnySplitOperation, P extends Pick<AppPorts, 'tx'>, G, Prep> = {
-  readonly receipt?: P extends Pick<AppPorts, 'tx' | 'receipt'> ? ReceiptSpec<Op, P> : never;
+export type CommandSpec<
+  Op extends AnySplitOperation,
+  P extends Pick<AppPorts, 'tx'>,
+  G,
+  Prep,
+  R = ReceiptRecord,
+> = {
+  readonly receipt?: P extends Pick<AppPorts, 'tx' | 'receipt'>
+    ? ReceiptSpec<Op, P, R>
+    : ReceiptSpec<Op, P, R> & { readonly store: (ports: P) => ReceiptPort<R> };
   readonly prepare?: (
     ports: P,
     head: OperationHead<Op>,
@@ -96,7 +87,7 @@ export type Command<
   P extends Pick<AppPorts, 'tx'> = AppPorts,
 > = {
   readonly op: Op;
-  readonly receipt?: ReceiptSpec<Op, P>;
+  readonly receipt?: ReceiptSpec<Op, P, any>;
   readonly prepare?: (
     ports: P,
     head: OperationHead<Op>,
@@ -121,9 +112,9 @@ export type Command<
 };
 
 export function defineCommand<P extends Pick<AppPorts, 'tx'> = Pick<AppPorts, 'tx'>>() {
-  return <Op extends AnySplitOperation, G = void, Prep = void>(
+  return <Op extends AnySplitOperation, G = void, Prep = void, R = ReceiptRecord>(
     op: Op,
-    spec: CommandSpec<Op, P, G, Prep>
+    spec: CommandSpec<Op, P, G, Prep, R>
   ): Command<Op, P> => ({ op, ...spec });
 }
 
@@ -145,6 +136,11 @@ export type CommandContext<
   readonly aroundTx?: <T>(
     run: () => SynchronousResult<T>
   ) => SynchronousResult<T> | typeof EXTERNAL_REPLAY;
+  readonly aroundApply?: <T>(
+    tx: Tx,
+    input: OperationParsedInput<Op>,
+    run: () => SynchronousResult<T>
+  ) => SynchronousResult<T>;
   readonly onInTx?: (tx: Tx, outcome: CommandInTxOutcome<Op>) => SynchronousResult<OnInTxReturn>;
 };
 
@@ -172,8 +168,8 @@ function enforceOutput<Op extends AnySplitOperation>(
   return output;
 }
 
-function buildReceiptLookup<Op extends AnySplitOperation, P>(
-  receipt: ReceiptSpec<Op, P>,
+function buildReceiptLookup<Op extends AnySplitOperation, P, R>(
+  receipt: ReceiptSpec<Op, P, R>,
   head: OperationHead<Op>,
   raw: Record<string, unknown>
 ): ReceiptLookup {
@@ -203,26 +199,28 @@ export async function executeOperation<
     const receiptLookup = command.receipt
       ? buildReceiptLookup(command.receipt, head, raw)
       : undefined;
+    const receiptStore = command.receipt
+      ? (command.receipt.store?.(ports) ?? (ports as P & Pick<AppPorts, 'receipt'>).receipt)
+      : undefined;
 
-    const receiptPort = (ports as P & Pick<AppPorts, 'receipt'>).receipt;
     const fastReplay = !ctx.aroundTx && !ctx.onInTx;
     let prior =
-      receiptLookup && (command.prepare || fastReplay)
-        ? receiptPort.read(null, receiptLookup)
+      receiptLookup && receiptStore && (command.prepare || fastReplay)
+        ? receiptStore.read(null, receiptLookup)
         : undefined;
     let prepared: unknown;
     let preparationFailure: { error: unknown } | undefined;
-    if (!prior && command.prepare) {
+    if (prior === undefined && command.prepare) {
       try {
         prepared = await command.prepare(ports, head, raw, ctx.signal);
       } catch (error) {
         if (ctx.signal?.aborted) throw error;
-        prior = receiptLookup && receiptPort.read(null, receiptLookup);
-        if (!prior) throw error;
+        prior = receiptLookup && receiptStore ? receiptStore.read(null, receiptLookup) : undefined;
+        if (prior === undefined) throw error;
         preparationFailure = { error };
       }
     }
-    if (prior && command.receipt && fastReplay)
+    if (prior !== undefined && command.receipt && fastReplay)
       return enforceOutput(
         command.op,
         command.receipt.onReplay(null, ports, prior, head),
@@ -231,8 +229,8 @@ export async function executeOperation<
 
     const runInTx = () =>
       ports.tx.transaction((tx) => {
-        if (command.receipt && receiptLookup) {
-          const prior = receiptPort.read(tx, receiptLookup);
+        if (command.receipt && receiptLookup && receiptStore) {
+          const prior = receiptStore.read(tx, receiptLookup);
           if (prior !== undefined) {
             const output = enforceOutput(
               command.op,
@@ -248,14 +246,13 @@ export async function executeOperation<
         const guarded = command.guard(tx, ports, head);
         const body = parseInput(ctx.bodySchema ?? command.op.body, bodyRaw);
         const input = { ...head, ...body } as OperationParsedInput<Op>;
-        const output = enforceOutput(
-          command.op,
-          command.apply(tx, ports, input, guarded, prepared),
-          ctx.checkOutputs
-        );
-        if (command.receipt && receiptLookup) {
-          receiptPort.save(tx, receiptLookup, command.receipt.serialize(output));
-        }
+        const applied = ctx.aroundApply
+          ? ctx.aroundApply(tx, input, () => command.apply(tx, ports, input, guarded, prepared))
+          : command.apply(tx, ports, input, guarded, prepared);
+        assertSyncReturn(applied, ctx.aroundApply ? 'aroundApply' : 'apply');
+        const output = enforceOutput(command.op, applied, ctx.checkOutputs);
+        if (command.receipt && receiptLookup && receiptStore)
+          receiptStore.save(tx, receiptLookup, command.receipt.serialize(output, input));
         const outcome = { replayed: false as const, output, input, guarded };
         assertSyncReturn(ctx.onInTx?.(tx, outcome), 'onInTx');
         return outcome;

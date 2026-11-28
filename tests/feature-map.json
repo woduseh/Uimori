@@ -566,6 +566,7 @@
       "sources": [
         "core/outline*.ts",
         "server/outline-*.ts",
+        "packages/contracts/src/domains/outline/**",
         "web/OutlinePanel.tsx",
         "web/outline-helper.ts",
         "web/outline.css"

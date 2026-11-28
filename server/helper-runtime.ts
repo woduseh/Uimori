@@ -17,6 +17,7 @@ import { availableParallelism } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   HELPER_APP_TOOLS,
+  helperCommandTool,
   helperToolTraits,
   helperGatewayTools,
   describeHelperTools,
@@ -32,7 +33,7 @@ import {
 import { HelperShell, type HelperShellAppResult } from './helper-shell.js';
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
 import { applyHelperResourceMutation } from './helper-resource-mutation.js';
-import { recordHelperChatLoreChange, withHelperChange } from './helper-changes.js';
+import { recordHelperChatLoreChange } from './helper-changes.js';
 import {
   helperRevertedChanges,
   helperRollbackView,
@@ -61,7 +62,6 @@ import {
 import { sceneTitle } from './scene-titles.js';
 import {
   HELPER_CHAT_STATE_TOOLS,
-  helperChatStateCommand,
   readHelperChatState,
   applyHelperChatState,
 } from './helper-chat-state-tools.js';
@@ -3313,12 +3313,12 @@ export class HelperRuntime {
       }
       return result;
     }
-    const chatStateCommand = helperChatStateCommand(name);
-    if (chatStateCommand) {
+    const commandTool = helperCommandTool(name);
+    if (commandTool) {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
       this.workspace.assertRunning(task.id);
       return executeHelperCommand(
-        chatStateCommand,
+        commandTool,
         {
           store: this.store,
           workspace: this.workspace,
@@ -3622,23 +3622,9 @@ export class HelperRuntime {
         throw new HelperToolError(400, 'INVALID_LIBRARY_ACTION');
       });
     }
-    if (name === 'outline.read' || name === 'outline.write') {
+    if (name === 'outline.read') {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
-      if (name === 'outline.read')
-        return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
-      this.workspace.assertRunning(task.id);
-      return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () =>
-        withHelperChange(this.store, task, { domain: 'outline', chatId: scope.chatId }, () =>
-          this.store.outline.applyReceipt(
-            scope.chatId,
-            {
-              operations: args.operations,
-              idempotencyKey: `helper:${task.id}:${operationId}`,
-            },
-            'user'
-          )
-        )
-      );
+      return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
     }
     if (name.startsWith('context.') || name === 'notes.write') {
       if (scope.kind !== 'chat' || !this.options.services?.context)

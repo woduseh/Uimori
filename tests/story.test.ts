@@ -1,4 +1,5 @@
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
+import { seedOutline } from './fixtures/outline.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -245,18 +246,13 @@ test('long requests share one bound for new runs and outline writing, without st
   });
   expect(response.statusCode, response.body).toBe(409);
   expect(response.json()).toEqual({ code: 'REVISION_CONFLICT' });
-  const outline = app.store.outline.apply(
-    created.id,
-    {
-      idempotencyKey: randomUUID(),
-      operations: [{ op: 'create', level: 'episode', title: 'Long scene', intent: '' }],
-    },
-    'user'
-  );
+  const outlineCreated = seedOutline(app.store, created.id, [
+    { op: 'create', level: 'episode', title: 'Long scene', intent: '' },
+  ]);
   const command = await api(
     app,
     'POST',
-    `/api/outline-nodes/${outline.created[0].id}/scene-command`,
+    `/api/outline-nodes/${outlineCreated[0]!.id}/scene-command`,
     {
       request: longRequest,
       idempotencyKey: randomUUID(),

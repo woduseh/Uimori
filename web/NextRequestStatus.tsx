@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookText, ListTree, SlidersHorizontal, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
-import { chatSettingsEndpoints } from '#contracts';
+import { chatSettingsEndpoints, outlineEndpoints } from '#contracts';
 import { api, callEndpoint } from './api.js';
 import { formatNumber, t, useI18n } from './i18n.js';
 import { toUiMessage } from './api-errors.js';
@@ -79,7 +79,7 @@ export function NextRequestStatus({
     setBusy(true);
     setError(null);
     try {
-      await api(`${base}/outline/focus`, { nodeId: null }, 'PUT');
+      await callEndpoint(outlineEndpoints.setFocus, { chatId, nodeId: null });
       generation.current++;
       setState((old) => ({ ...old, focus: null }));
       dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));

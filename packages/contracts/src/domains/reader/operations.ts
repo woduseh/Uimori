@@ -4,15 +4,17 @@ import { queryInt } from '../query.js';
 import { revision } from '../revision.js';
 import { nonBlank } from '../text.js';
 import {
+  REQUEST_TEXT_MAX_CHARS,
+  SOURCE_TEXT_MAX_CHARS,
+  TRANSLATION_TEXT_MAX_CHARS,
+} from '../limits.js';
+import {
   INPUT_TRANSLATION_LANGUAGE_CODES,
   REQUEST_IMAGE_DIMENSION_MAX,
   REQUEST_IMAGE_MAX_COUNT,
   REQUEST_IMAGE_NAME_MAX_CHARS,
-  REQUEST_TEXT_MAX_CHARS,
   RESPONSE_TASK_KINDS,
   REVISION_CONTEXTS,
-  SOURCE_TEXT_MAX_CHARS,
-  TRANSLATION_TEXT_MAX_CHARS,
 } from './limits.js';
 
 const id = nonBlank(100);

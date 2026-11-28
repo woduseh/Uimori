@@ -1,7 +1,30 @@
-import { REQUEST_TEXT_MAX_CHARS } from './content-limits.js';
+import {
+  OUTLINE_INTENT_MAX,
+  OUTLINE_LEVELS,
+  OUTLINE_TITLE_MAX,
+  OUTLINE_WRITING_ORIGINS,
+  type OutlineDetail,
+  type OutlineFocus,
+  type OutlineLevel,
+  type OutlineNode,
+  type OutlineProgress,
+  type OutlineWriting,
+  type OutlineWritingOrigin,
+} from '#contracts';
 
-export const OUTLINE_LEVELS = ['theme', 'mainStory', 'arc', 'episode', 'beat'] as const;
-export type OutlineLevel = (typeof OUTLINE_LEVELS)[number];
+export {
+  OUTLINE_INTENT_MAX,
+  OUTLINE_LEVELS,
+  OUTLINE_TITLE_MAX,
+  OUTLINE_WRITING_ORIGINS,
+  type OutlineDetail,
+  type OutlineFocus,
+  type OutlineLevel,
+  type OutlineNode,
+  type OutlineProgress,
+  type OutlineWriting,
+  type OutlineWritingOrigin,
+};
 export const OUTLINE_LEVEL_LABELS: Record<OutlineLevel, string> = {
   theme: '작품 방향과 주제',
   mainStory: '메인 스토리',
@@ -16,41 +39,6 @@ export const outlineParentAllowed = (parent: OutlineLevel | null, child: Outline
 
 export const outlineWritable = (level: OutlineLevel) => OUTLINE_WRITABLE_LEVELS.includes(level);
 
-export const OUTLINE_TITLE_MAX = 200;
-export const OUTLINE_INTENT_MAX = REQUEST_TEXT_MAX_CHARS;
-
-export type OutlineProgress = {
-  state: 'planned' | 'scheduled' | 'writing' | 'written' | 'failed' | 'cancelled';
-  commandId: string | null;
-  runId: string | null;
-  sourceRevision: string | null;
-};
-export type OutlineNode = {
-  id: string;
-  chatId: string;
-  parentId: string | null;
-  level: OutlineLevel;
-  position: number;
-  title: string;
-  intent: string;
-  fixed: boolean;
-  revision: number;
-  progress: OutlineProgress;
-  relatedIds?: string[];
-  writings?: OutlineWriting[];
-  createdAt: string;
-  updatedAt: string;
-};
-export type OutlineWriting = {
-  sourceRevision: string;
-  sourceHash: string;
-  nodeId: string;
-  origin: OutlineWritingOrigin;
-  current: boolean;
-  createdAt: string;
-};
-export const OUTLINE_WRITING_ORIGINS = ['planned', 'focus'] as const;
-export type OutlineWritingOrigin = (typeof OUTLINE_WRITING_ORIGINS)[number];
 export type OutlineTarget = {
   nodeId: string | null;
   expectedRevision: number | null;
@@ -62,9 +50,6 @@ export type OutlineHelperContext = {
   sources: { id: string; hash: string; start: number; end: number; total: number; text: string }[];
   partial: boolean;
 };
-
-export type OutlineDetail = { chatId: string; focusId: string | null; nodes: OutlineNode[] };
-export type OutlineFocus = { nodeId: string; level: OutlineLevel; title: string } | null;
 
 export type OutlineSnapshotNode = {
   id: string;
