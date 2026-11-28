@@ -3,7 +3,18 @@ import { createWriteStream, statSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { isDeepStrictEqual } from 'node:util';
 import { shape, targets, tableDigests } from './probes.mjs';
+import { classify } from './reviewed-changes.mjs';
 import { unpack } from './archive.ts';
+
+const importedRevision = {
+  name: 'Newly imported content starts at revision one',
+  scope: 'chat-source',
+  paths: [
+    'manifest.resources.contents.*.source.revision',
+    'manifest.resources.contents.*.source.package.revision',
+    'manifest.backup.chats.*.transcript.packageAttachments.*.revision',
+  ],
+};
 
 export const normalization = [
   { name: 'HTTP response date', header: 'date' },
@@ -37,6 +48,31 @@ export const normalization = [
     alias: 'scene',
     paths: ['manifest.backup.chats.*.state.messages.*.sourceId'],
   },
+  importedRevision,
+  {
+    name: 'Import materializes an empty module list',
+    scope: 'chat-source',
+    path: 'manifest.resources.contents.*.source.package.modules',
+  },
+  {
+    name: 'Historical native greeting labels from c6a8ce3d',
+    scope: 'chat-source',
+    path: 'manifest.resources.contents.*.source.package.starts.*.title',
+  },
+  {
+    name: 'Inherited illustration profile identity',
+    scope: 'chat',
+    path: 'manifest.backup.chats.*.state.illustrationReferences.characterProfiles.*.id',
+  },
+  {
+    name: 'Imported illustration image references',
+    scope: 'chat',
+    paths: [
+      'manifest.backup.chats.*.state.illustrationReferences.characterProfiles.*.referenceRef',
+      'manifest.backup.chats.*.state.illustrationReferences.references.*.ref',
+      'manifest.backup.chats.*.state.illustrationReferences.images.*.ref',
+    ],
+  },
 ];
 function normalize(obj, parts, transform = () => '<request metadata>') {
   if (!obj || typeof obj !== 'object') return;
@@ -47,19 +83,73 @@ function normalize(obj, parts, transform = () => '<request metadata>') {
     else obj[key] = transform(obj[key]);
   }
 }
-export function portable(body) {
+function projectedImport(body) {
+  const { resources } = body.manifest;
+  for (const entry of resources.contents) {
+    const pkg = entry.source.package;
+    if (!Object.hasOwn(pkg, 'modules') && entry.modules.length === 0) pkg.modules = [];
+    const card = pkg.nativeRisu?.card;
+    for (const start of pkg.starts ?? []) {
+      const match = /^start-(0|[1-9][0-9]*)$/u.exec(start.id);
+      if (!card || !match || start.mode !== 'authored') continue;
+      const i = Number(match[1]);
+      if (start.text !== (i === 0 ? card.first_mes : card.alternate_greetings?.[i - 1])) continue;
+      if (start.title === (i === 0 ? '기본 시작문' : `시작문 ${i + 1}`))
+        start.title = i === 0 ? '기본 첫 메시지' : `첫 메시지 ${i + 1}`;
+    }
+  }
+  for (const path of importedRevision.paths)
+    normalize(body, path.split('.'), (revision) =>
+      Number.isSafeInteger(revision) && revision > 0 ? 1 : revision
+    );
+}
+function normalizeIllustrationReferences(chat, resources, resourceAliases) {
+  const refs = chat.state.illustrationReferences;
+  if (!refs) return;
+  const images = new Map((refs.images ?? []).map((item, i) => [item.ref, { image: i }]));
+  const profiles = new Map();
+  for (const attachment of chat.transcript.packageAttachments) {
+    const entry = resources.contents.find((x) => x.source.id === attachment.id);
+    if (!entry || !['bot', 'persona'].includes(attachment.role)) continue;
+    const native = entry.source.package.nativeRisu;
+    const doc = native && (Object.keys(native.card).length ? native.card : native.module);
+    for (const item of doc?.extensions?.uimori?.illustrationProfiles ?? []) {
+      const identity = attachment.role + ':' + item.id;
+      profiles.set('default:' + digest(attachment.id + ':' + identity), {
+        resource: entry.key,
+        role: attachment.role,
+        profile: item.id,
+      });
+    }
+  }
+  const reference = (ref) => {
+    if (images.has(ref)) return images.get(ref);
+    const parts = /^package:(.+):(bot|persona|module):([^:]+)$/u.exec(ref);
+    return parts && resourceAliases.has(parts[1])
+      ? { ...resourceAliases.get(parts[1]), role: parts[2], image: parts[3] }
+      : ref;
+  };
+  for (const profile of refs.characterProfiles) {
+    if (profiles.has(profile.id)) profile.id = profiles.get(profile.id);
+    if (profile.referenceRef) profile.referenceRef = reference(profile.referenceRef);
+  }
+  for (const item of [...refs.references, ...refs.images]) item.ref = reference(item.ref);
+}
+export function portable(body, source = false) {
   const { resources, backup } = body.manifest;
   const resource = new Map(
     [...resources.contents, ...resources.prompts].map((entry) => [
       entry.source.id,
-      'resource:' + entry.key,
+      { resource: entry.key },
     ])
   );
   const scene = new Map(
     backup.chats.flatMap((chat, c) =>
-      (chat.state.messages ?? []).map((message, i) => [message.sourceId, 'scene:' + c + ':' + i])
+      (chat.state.messages ?? []).map((message, i) => [message.sourceId, { chat: c, scene: i }])
     )
   );
+  if (source) projectedImport(body);
+  for (const chat of backup.chats) normalizeIllustrationReferences(chat, resources, resource);
   for (const rule of normalization) {
     if (!rule.alias) continue;
     const aliases = rule.alias === 'resource' ? resource : scene;
@@ -68,7 +158,7 @@ export function portable(body) {
   return body;
 }
 export const digest = (value) => createHash('sha256').update(value).digest('hex');
-export function differences(before, after, path = '$', out = []) {
+export function differences(before, after, path = '$', out = [], segments = []) {
   if (isDeepStrictEqual(before, after)) return out;
   if (
     before &&
@@ -82,22 +172,24 @@ export function differences(before, after, path = '$', out = []) {
         before[key],
         after[key],
         path + '[' + (Array.isArray(before) ? key : JSON.stringify(key)) + ']',
-        out
+        out,
+        [...segments, Array.isArray(before) ? Number(key) : key]
       );
     }
-  } else out.push({ path, before, after });
+  } else out.push({ path, before, after, segments });
   return out;
 }
+const responseBytes = new WeakMap();
 export async function read(instance, template, url, stats, backupFile) {
   const response =
     url === '/api/diagnostics/metrics' ? instance.initialMetrics() : await instance.request(url);
   const headers = Object.fromEntries(response.headers);
   for (const rule of normalization) if (rule.header) delete headers[rule.header];
   const type = headers['content-type'] ?? '';
-  let body;
+  let body, byteLength;
   if (response.ok && template === '/api/backup') {
     await pipeline(response.body, createWriteStream(backupFile, { mode: 0o600 }));
-    stats.bytes += statSync(backupFile).size;
+    byteLength = statSync(backupFile).size;
     body = tableDigests(backupFile, false);
   } else {
     let bytes;
@@ -115,21 +207,44 @@ export async function read(instance, template, url, stats, backupFile) {
       }
       bytes = frame.subarray(0, frame.indexOf('\n\n') + 2);
     } else bytes = Buffer.from(await response.arrayBuffer());
-    stats.bytes += bytes.length;
-    if (type.includes('json')) body = JSON.parse(bytes);
+    byteLength = bytes.length;
+    if (!response.ok && url.endsWith('/backup-archive') && bytes[0] === 123)
+      body = JSON.parse(bytes);
+    else if (type.includes('json')) body = JSON.parse(bytes);
     else if (response.ok && url.endsWith('/backup-archive')) body = unpack(bytes);
     else if (type.startsWith('text/')) body = bytes.toString();
     else body = { bytes: bytes.length, sha256: digest(bytes) };
   }
   for (const rule of normalization)
     if (rule.route === shape(template)) normalize(body, rule.path.split('.'));
-  return { status: response.status, headers, body };
+  const result = { status: response.status, headers, body };
+  stats.bytes += byteLength;
+  responseBytes.set(result, byteLength);
+  return result;
 }
-export async function compareRead(phase, url, left, right, report, findings = report.differences) {
+export async function compareRead(
+  phase,
+  url,
+  left,
+  right,
+  report,
+  findings = report.differences,
+  template,
+  file
+) {
   const [a, b] = await Promise.all([left, right]);
-  if (a.status >= 400 && b.status >= 400) report.errors.push({ phase, url, left: a, right: b });
-  for (const item of differences(a, b)) findings.push({ phase, url, ...item });
+  let diffs = differences(a, b);
+  if (phase === 'old-new' && template && diffs.length) {
+    const reviewed = classify(report.rules, template, url, a, b, diffs, file, [
+      responseBytes.get(a),
+      responseBytes.get(b),
+    ]);
+    diffs = reviewed.remaining;
+    if (reviewed.derivedLength) report.derivedContentLengths++;
+  }
+  for (const { segments, ...item } of diffs) findings.push({ phase, url, ...item });
   report.comparisons++;
+  return a.status >= 400 && b.status >= 400;
 }
 export async function compare(phase, left, right, report, dir) {
   const index = (side) => new Map(side.routes.map((route) => [shape(route), route]));
@@ -149,15 +264,24 @@ export async function compare(phase, left, right, report, dir) {
     ])
       for (const target of await targets(instance, template)) requests.set(target.url, target.ids);
     inventory[route] = requests.size;
+    let refused = 0;
     for (const [url, ids] of requests) {
       for (const id of ids) report.ids.add(id);
-      await compareRead(
-        phase,
-        url,
-        read(left, l.get(route), url, report, dir + '/left.sqlite'),
-        read(right, r.get(route), url, report, dir + '/right.sqlite'),
-        report
-      );
+      if (
+        await compareRead(
+          phase,
+          url,
+          read(left, l.get(route), url, report, dir + '/left.sqlite'),
+          read(right, r.get(route), url, report, dir + '/right.sqlite'),
+          report,
+          report.differences,
+          route,
+          right.file
+        )
+      )
+        refused++;
     }
+    if (refused && refused === requests.size)
+      report.refusalOnly.push({ phase, route, requests: refused });
   }
 }

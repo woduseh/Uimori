@@ -155,7 +155,9 @@ Run this before release or when reviewing a schema change. The old revision gets
 
 The runner downloads both full exports through `/api/backup`, opens each in a fresh current-build process, and compares the reads with the current copy. It also re-exports up to three imported chat archives to compare their contents and image bytes. Add `--self-check` to exercise changed text and a deleted row on the disposable databases. For the bundled stand-in, decompress `tests/fixtures/backup-horizon-0.18.0/snapshot.db.gz` outside the repository first.
 
-Review each difference before putting its `fingerprint` in an external JSON array next to the snapshot and rerunning with `--expect <file>`. A fingerprint includes the comparison, URL, JSON path and both values. Boot mutations, blocked calls and incomplete probes fail the run.
+Old/current comparisons use the reviewed classes in `scripts/snapshot-compat/rules/` for the resolved old commit. Each class names GET routes, status pairs, exact field paths, allowed changes and a reason. A path wildcard matches one array index. A derived Content-Length change is counted separately when all body changes are accepted and the headers agree with the wire sizes. Unknown old commits and both full restores use strict comparisons. The report lists unabsorbed differences, per-class counts and routes where every sampled pair returned a refusal. Equal refusals still count as comparisons.
+
+Chat re-import compares the content under its newly assigned identities. Only the known historical native greeting label is translated to its current wording when the greeting ID, mode and native text agree. An authored title change remains visible. Boot and shutdown checks also compare the exact push outbox expected after the local replay drops foreign-authority access sessions and their dependent rows. Other work-table changes and blocked calls fail the run.
 
 ## Release checks
 
