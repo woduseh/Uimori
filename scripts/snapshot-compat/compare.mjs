@@ -21,15 +21,51 @@ export const normalization = [
     route: '/api/chats/:/backup-archive',
     path: 'manifest.backup.chats.*.transcript.exportedAt',
   },
+  {
+    name: 'Resource identities assigned on chat import',
+    alias: 'resource',
+    paths: [
+      'manifest.resources.contents.*.source.id',
+      'manifest.resources.contents.*.source.package.id',
+      'manifest.resources.prompts.*.source.id',
+      'manifest.backup.chats.*.transcript.packageAttachments.*.id',
+      'manifest.backup.chats.*.state.profile.pinned.mainPromptPresetId',
+    ],
+  },
+  {
+    name: 'Scene identities assigned on chat import',
+    alias: 'scene',
+    paths: ['manifest.backup.chats.*.state.messages.*.sourceId'],
+  },
 ];
-function normalize(obj, parts) {
+function normalize(obj, parts, transform = () => '<request metadata>') {
   if (!obj || typeof obj !== 'object') return;
   const [part, ...rest] = parts;
   for (const key of part === '*' ? Object.keys(obj) : [part]) {
     if (!Object.hasOwn(obj, key)) continue;
-    if (rest.length) normalize(obj[key], rest);
-    else obj[key] = '<request metadata>';
+    if (rest.length) normalize(obj[key], rest, transform);
+    else obj[key] = transform(obj[key]);
   }
+}
+export function portable(body) {
+  const { resources, backup } = body.manifest;
+  const resource = new Map(
+    [...resources.contents, ...resources.prompts].map((entry) => [
+      entry.source.id,
+      'resource:' + entry.key,
+    ])
+  );
+  const scene = new Map(
+    backup.chats.flatMap((chat, c) =>
+      (chat.state.messages ?? []).map((message, i) => [message.sourceId, 'scene:' + c + ':' + i])
+    )
+  );
+  for (const rule of normalization) {
+    if (!rule.alias) continue;
+    const aliases = rule.alias === 'resource' ? resource : scene;
+    for (const path of rule.paths) normalize(body, path.split('.'), (id) => aliases.get(id) ?? id);
+  }
+  return body;
 }
 export const digest = (value) => createHash('sha256').update(value).digest('hex');
 export function differences(before, after, path = '$', out = []) {
