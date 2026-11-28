@@ -87,3 +87,68 @@ test('another method, an unrelated path and a path the check cannot see through 
     (directory) => assert.deepEqual(endpointCallErrors(directory), [])
   );
 });
+
+const endpointObject = (operation, path) =>
+  [
+    '  entry: defineEndpoint()({',
+    `    operation: '${operation}',`,
+    "    method: 'GET',",
+    `    path: ${path},`,
+    '  }),',
+  ].join('\n');
+
+test('contract paths built from a same-file const are read, and a path the check cannot read fails loudly', () => {
+  withRepository(
+    {
+      'packages/contracts/src/domains/runtime/endpoints.ts': [
+        "const base = '/runtime';",
+        'export const runtimeEndpoints = {',
+        endpointObject('runtime.read', 'base'),
+        endpointObject('runtime.login', '`#{base}/login`'),
+        '};',
+      ].join('\n'),
+      'web/runtime.ts': "await api('/runtime');\nawait api('/runtime/login');\n",
+    },
+    (directory) => {
+      const errors = endpointCallErrors(directory);
+      assert.equal(errors.length, 2);
+      assert.match(errors[0], /runtime\.read/u);
+      assert.match(errors[1], /runtime\.login/u);
+    }
+  );
+  withRepository(
+    {
+      'packages/contracts/src/domains/runtime/endpoints.ts': [
+        "const paths = { read: '/runtime' };",
+        'export const runtimeEndpoints = {',
+        endpointObject('runtime.read', 'paths.read'),
+        '  second: other({',
+        "    operation: 'runtime.second',",
+        '  }),',
+        '};',
+      ].join('\n'),
+    },
+    (directory) => {
+      const errors = endpointCallErrors(directory);
+      assert.equal(errors.length, 2);
+      assert.match(errors[0], /runtime\.read has a method or path this check cannot resolve/u);
+      assert.match(errors[1], /runtime\.second has a method or path this check cannot resolve/u);
+    }
+  );
+  withRepository(
+    {
+      'packages/contracts/src/domains/runtime/endpoints.ts': [
+        'export const runtimeEndpoints = {',
+        '  read: build({',
+        '    operation: runtimeOperation,',
+        '  }),',
+        '};',
+      ].join('\n'),
+    },
+    (directory) => {
+      const errors = endpointCallErrors(directory);
+      assert.equal(errors.length, 1);
+      assert.match(errors[0], /1 operation: entries but 0 endpoint objects/u);
+    }
+  );
+});

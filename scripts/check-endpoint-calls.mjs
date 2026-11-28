@@ -46,37 +46,52 @@ const propertyName = (property) =>
   property.key?.type === 'Identifier' ? property.key.name : property.key?.value;
 
 export function contractEndpoints(source, file = `${domainsPath}/domain/endpoints.ts`) {
+  const tree = parseSource(source, file);
+  const initial = declarations(tree);
   const found = [];
-  walk(parseSource(source, file), (node) => {
+  const problems = [];
+  let declared = 0;
+  walk(tree, (node) => {
     if (node.type !== 'ObjectExpression') return;
     const values = Object.fromEntries(
       node.properties
         .filter((property) => property.type === 'ObjectProperty')
         .map((property) => [propertyName(property), property.value])
     );
-    const text = (name) =>
-      values[name]?.type === 'StringLiteral' ? values[name].value : undefined;
-    if (text('operation') && text('method') && text('path'))
-      found.push({
-        operation: text('operation'),
-        method: text('method'),
-        path: text('path'),
-        file,
-      });
+    const operation = values.operation?.type === 'StringLiteral' && values.operation.value;
+    if (!operation) return;
+    declared++;
+    const method = values.method?.type === 'StringLiteral' ? values.method.value : undefined;
+    const path = resolvePath(values.path, initial);
+    if (method && path !== undefined && !path.includes(wildcard))
+      found.push({ operation, method, path, file });
+    else
+      problems.push(
+        `${file}: ${operation} has a method or path this check cannot resolve; write the path as a string, a same-file const or a template of same-file consts`
+      );
   });
-  return found;
+  const listed = (source.match(/^\s*operation:/gmu) ?? []).length;
+  if (listed !== declared)
+    problems.push(
+      `${file}: ${listed} operation: entries but ${declared} endpoint objects were read; every endpoint is written as an object with an operation, a method and a path`
+    );
+  return { found, problems };
 }
 
 function allEndpoints(directory) {
   const domains = resolve(directory, domainsPath);
-  if (!existsSync(domains)) return [];
-  return readdirSync(domains, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => {
-      const file = `${domainsPath}/${entry.name}/endpoints.ts`;
-      const path = resolve(directory, file);
-      return existsSync(path) ? contractEndpoints(readFileSync(path, 'utf8'), file) : [];
-    });
+  const result = { endpoints: [], problems: [] };
+  if (!existsSync(domains)) return result;
+  for (const entry of readdirSync(domains, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const file = `${domainsPath}/${entry.name}/endpoints.ts`;
+    const path = resolve(directory, file);
+    if (!existsSync(path)) continue;
+    const { found, problems } = contractEndpoints(readFileSync(path, 'utf8'), file);
+    result.endpoints.push(...found);
+    result.problems.push(...problems);
+  }
+  return result;
 }
 
 function declarations(tree) {
@@ -187,9 +202,12 @@ function sourceFiles(directory) {
     });
 }
 
+export const limits =
+  "Checked: api() and apiBinary() calls in web/ whose path is a literal, a template or a same-file const. Not checked: a path passed through a parameter, prop, lookup table, conditional or another file's helper. A local function named api is scanned too.";
+
 export function endpointCallErrors(directory = root) {
-  const endpoints = allEndpoints(directory);
-  const errors = [];
+  const { endpoints, problems } = allEndpoints(directory);
+  const errors = [...problems];
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
     for (const call of apiCalls(readFileSync(path, 'utf8'), file)) {
@@ -206,7 +224,7 @@ export function endpointCallErrors(directory = root) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const errors = endpointCallErrors();
   if (errors.length) {
-    console.error(errors.join('\n'));
+    console.error([...errors, '', limits].join('\n'));
     process.exitCode = 1;
-  } else console.log(`Endpoint calls PASS (${allEndpoints(root).length} typed routes)`);
+  } else console.log(`Endpoint calls PASS (${allEndpoints(root).endpoints.length} typed routes)`);
 }

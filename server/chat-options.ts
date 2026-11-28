@@ -384,6 +384,13 @@ export function invokeHelperOptions(
   }
   if (name !== 'options.fix') throw new HttpError(400, 'Unknown option tool');
   const { set, unset, ...saved } = parseInput(helperOptionInputs.fix, args);
+  const given = args as { values?: object; set?: object };
+  for (const [field, kept] of [
+    ['values', saved.values],
+    ['set', set],
+  ] as const)
+    if (kept && Object.keys(given[field] ?? {}).length !== Object.keys(kept).length)
+      throw new HttpError(400, `Option ${field} lost a key while parsing`);
   const workspace = new HelperWorkspace(store);
   workspace.assertRunning(task.id);
   store.writableChat(chatId);

@@ -9,7 +9,19 @@ const chatTarget = z.strictObject({ chatId });
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
 
 const optionBinding = z.strictObject({ owner: nonBlank(200), definitionHash: sha256 });
-const optionValues = z.record(z.string(), z.unknown());
+const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype']);
+const keyedValues = <K extends z.core.$ZodRecordKey, V extends z.ZodType>(keys: K, value: V) =>
+  z
+    .custom<Record<string, z.input<V>>>(
+      (input) =>
+        typeof input === 'object' &&
+        input !== null &&
+        !Array.isArray(input) &&
+        !Object.keys(input).some((key) => unsafeKeys.has(key)),
+      'Expected an object without __proto__, constructor or prototype keys'
+    )
+    .pipe(z.record(keys, value));
+const optionValues = keyedValues(z.string(), z.unknown());
 const optionsCommand = {
   expectedRevision: revision,
   operationId: nonBlank(100),
@@ -112,7 +124,7 @@ export const updateVariablesToolInput = z
       .string()
       .regex(/^[a-f0-9]{64}$/u, 'pass sourceHash from chat.variables.read')
       .nullable(),
-    set: z.record(variableName, z.string()).optional(),
+    set: keyedValues(variableName, z.string()).optional(),
     unset: z.array(variableName).optional(),
   })
   .refine(
