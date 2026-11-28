@@ -333,6 +333,54 @@ test('options.fix refuses a values object whose key the parser would drop and ke
   });
 });
 
+test('options.fix patches refuse to run empty or against a changed definition and keep the fixed options', async () => {
+  const { store, chat } = fixture();
+  const options = new ChatOptionsStore(store);
+  const state = options.get(chat.id);
+  const changeable = state.controls!.filter(
+    (item) => item.type === 'boolean' || (item.options?.length ?? 0) > 1
+  );
+  const other = (control: (typeof changeable)[number]) =>
+    control.type === 'boolean'
+      ? !control.default
+      : control.options!.find((option) => option.value !== control.default)!.value;
+  const [first, second] = changeable;
+  await runScriptedChatHelper(store, chat.id, [
+    helperCall('fix', 'options.fix', {
+      expectedRevision: state.revision,
+      binding: state.binding as unknown as Json,
+      values: { [first!.id]: other(first!), [second!.id]: other(second!) } as Json,
+    }),
+    helperDone,
+  ]);
+  const stored = () =>
+    String(
+      store.db.prepare('SELECT body FROM chat_prompt_options WHERE chat_id=?').get(chat.id)!.body
+    );
+  store.db
+    .prepare(
+      "UPDATE chat_prompt_options SET body=json_set(body,'$.binding.definitionHash',?) WHERE chat_id=?"
+    )
+    .run('a'.repeat(64), chat.id);
+  const before = stored();
+  const changed = options.get(chat.id);
+  expect(changed.conflicts).toContain('fixed_definition_changed');
+  const request = {
+    expectedRevision: changed.revision,
+    binding: changed.binding as unknown as Json,
+  };
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('empty-set', 'options.fix', { ...request, set: {} }),
+    helperCall('empty-unset', 'options.fix', { ...request, unset: [] }),
+    helperCall('set', 'options.fix', { ...request, set: { [first!.id]: other(first!) } as Json }),
+    helperCall('unset', 'options.fix', { ...request, unset: [first!.id] }),
+    helperDone,
+  ]);
+  for (const call of ['empty-set', 'empty-unset', 'set', 'unset'])
+    expect(run.finished(call), call).toMatchObject({ denied: true });
+  expect(stored()).toBe(before);
+});
+
 test('options.read refuses input that is not an empty object', () => {
   const { store, chat } = fixture();
   const task = { id: 'task', snapshot: { scope: { kind: 'chat', chatId: chat.id } } } as HelperTask;

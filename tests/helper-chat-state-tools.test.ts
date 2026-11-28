@@ -181,6 +181,11 @@ test('chat.variables.update answers REVISION_CONFLICT for an unchanged write on 
       expectedSourceHash: sourceHash,
       set: JSON.parse('{"__proto__":"x","mood":"calm"}'),
     }),
+    helperCall('unsafe-unset', 'chat.variables.update', {
+      expectedRevision: 1,
+      expectedSourceHash: sourceHash,
+      unset: ['__proto__', 'mood'],
+    }),
     helperCall('extra', 'chat.variables.update', {
       expectedRevision: 1,
       expectedSourceHash: sourceHash,
