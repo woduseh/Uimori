@@ -44,7 +44,8 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:ui-message": "node scripts/check-ui-message.mjs",
     "check:endpoint-calls": "node scripts/check-endpoint-calls.mjs",
-    "check:script-imports": "node scripts/check-script-imports.mjs"
+    "check:script-imports": "node scripts/check-script-imports.mjs",
+    "verify:snapshot": "node scripts/verify-snapshot-compat.mjs"
   },
   "dependencies": {
     "@a2ui/agent": "0.1.0",
