@@ -108,6 +108,19 @@ test('test edits change evidence identity without invalidating compiled inputs; 
   assert.notEqual((await buildFingerprint(cwd)).hash, guide.hash);
 });
 
+test('the source fingerprint orders files as the Linux image build does', async (t) => {
+  const { cwd } = await fixture(t);
+  for (const dir of ['server/risu', 'server/risuPreset']) {
+    await mkdir(path.join(cwd, dir), { recursive: true });
+    await writeFile(path.join(cwd, dir, 'endpoints.ts'), dir);
+  }
+  const { files } = await buildFingerprint(cwd);
+  assert.deepEqual(
+    files.filter((file) => file.startsWith('server/risu')),
+    ['server/risu/endpoints.ts', 'server/risuPreset/endpoints.ts']
+  );
+});
+
 test('vendor edits invalidate build and release evidence', async (t) => {
   const { cwd } = await fixture(t);
   await mkdir(path.join(cwd, 'third_party/vendor'), { recursive: true });

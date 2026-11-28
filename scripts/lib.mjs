@@ -37,6 +37,9 @@ export async function json(file, value) {
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify(value, null, 2) + '\n');
 }
+const posixPath = (file) => file.replaceAll('\\', '/');
+const byPosixPath = (a, b) =>
+  posixPath(a) < posixPath(b) ? -1 : posixPath(a) > posixPath(b) ? 1 : 0;
 export async function filesBelow(dir) {
   if (!existsSync(dir)) return [];
   const entries = await readdir(dir, { withFileTypes: true });
@@ -49,7 +52,7 @@ export async function filesBelow(dir) {
           : []
     )
   );
-  return nested.flat().sort();
+  return nested.flat().sort(byPosixPath);
 }
 export function ownedPath(parent, target) {
   const relative = path.relative(path.resolve(parent), path.resolve(target));
@@ -107,7 +110,7 @@ export async function fingerprint(sourceRoot = root, { buildOnly = false } = {})
           .map((name) => path.join(root, name))
           .filter(existsSync)
       : []),
-  ].sort();
+  ].sort(byPosixPath);
   const hash = createHash('sha256');
   for (const file of files) {
     const content = await readFile(file);
