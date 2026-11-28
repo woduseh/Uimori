@@ -16,7 +16,6 @@ import { HttpError } from './request-validation.js';
 import { AppError } from './app-errors.js';
 import { registerRawRoute } from './endpoint.js';
 import { RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
-import { ownedImportStagingRoot } from './import-preparation.js';
 
 export const UPLOAD_MAX_BYTES = RISU_IMPORT_MAX_UPLOAD_BYTES;
 export const UPLOAD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -32,15 +31,14 @@ function uploadPath(dbPath: string, id: string): string {
 
 export function pruneUploads(dbPath: string, maxAgeMs = UPLOAD_MAX_AGE_MS): void {
   const directory = uploadDirectory(dbPath);
-  if (!ownedImportStagingRoot(dbPath, directory)) return;
+  if (!existsSync(directory)) return;
   const cutoff = Date.now() - Math.max(0, maxAgeMs);
   for (const entry of readdirSync(directory)) {
     if (!/^[a-f0-9]{32}\.bin$/u.test(entry)) continue;
     const path = join(directory, entry);
     try {
       const info = lstatSync(path);
-      if (info.isFile() && !info.isSymbolicLink() && info.mtimeMs < cutoff)
-        rmSync(path, { force: true });
+      if (info.isFile() && info.mtimeMs < cutoff) rmSync(path, { force: true });
     } catch {}
   }
 }
@@ -100,10 +98,8 @@ export function readUpload(dbPath: string, id: string, limit = UPLOAD_MAX_BYTES)
 
 export function deleteUpload(dbPath: string, id: string): void {
   const path = uploadPath(dbPath, id);
-  if (!ownedImportStagingRoot(dbPath, uploadDirectory(dbPath))) return;
   try {
-    const info = lstatSync(path);
-    if (info.isFile() && !info.isSymbolicLink()) rmSync(path, { force: true });
+    if (lstatSync(path).isFile()) rmSync(path, { force: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }

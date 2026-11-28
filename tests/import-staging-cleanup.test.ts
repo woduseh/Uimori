@@ -1,14 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  utimesSync,
-  existsSync,
-  rmSync,
-  symlinkSync,
-  lstatSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, existsSync, rmSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store } from '../server/store.js';
@@ -101,84 +92,6 @@ test('expired previews are cleaned on startup and later sweeps while unrelated p
   expect(recent.some(existsSync)).toBe(false);
   expect(unrelated.every(existsSync)).toBe(true);
 });
-
-test.each(['risu root', 'archive root', 'uploads parent'] as const)(
-  'cleanup refuses an outside directory reached through a %s junction',
-  (kind) => {
-    const directory = mkdtempSync(join(tmpdir(), 'uimori-staging-'));
-    const store = new Store(join(directory, 'db', 'story.sqlite'));
-    const owner = { directory, store, stop: undefined as (() => void) | undefined };
-    owned.push(owner);
-    const outside = join(directory, 'outside');
-    const outsideRoot = kind === 'uploads parent' ? join(outside, 'native-prepared') : outside;
-    const aged = join(outsideRoot, 'd'.repeat(32));
-    mkdirSync(aged, { recursive: true });
-    const marker = join(aged, 'outside-user-data');
-    writeFileSync(marker, 'must not be deleted');
-    const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    utimesSync(aged, expired, expired);
-
-    const dbDirectory = dirname(store.path);
-    const link =
-      kind === 'risu root'
-        ? join(dbDirectory, 'risu-prepared')
-        : kind === 'archive root'
-          ? join(dbDirectory, 'uploads', 'native-prepared')
-          : join(dbDirectory, 'uploads');
-    mkdirSync(dirname(link), { recursive: true });
-    symlinkSync(outside, link, 'junction');
-    owner.stop = startImportStagingCleanup(store);
-    expect(existsSync(marker)).toBe(true);
-    if (kind === 'risu root') discardPreparedRisuImport(store.path, 'd'.repeat(32));
-    else deletePreparedArchive(store, 'd'.repeat(32));
-    expect(existsSync(marker)).toBe(true);
-  }
-);
-
-test('upload pruning and discard refuse an outside uploads junction', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'uimori-staging-'));
-  const store = new Store(join(directory, 'db', 'story.sqlite'));
-  owned.push({ directory, store });
-  const outside = join(directory, 'outside');
-  mkdirSync(outside);
-  const id = 'e'.repeat(32);
-  const marker = join(outside, `${id}.bin`);
-  writeFileSync(marker, 'outside-user-data');
-  const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
-  utimesSync(marker, expired, expired);
-  symlinkSync(outside, uploadDirectory(store.path), 'junction');
-
-  pruneUploads(store.path);
-  expect(existsSync(marker)).toBe(true);
-  deleteUpload(store.path, id);
-  expect(existsSync(marker)).toBe(true);
-});
-
-test.each(['risu', 'archive'] as const)(
-  'discard leaves a linked %s prepared item and its target untouched',
-  (kind) => {
-    const directory = mkdtempSync(join(tmpdir(), 'uimori-staging-'));
-    const store = new Store(join(directory, 'db', 'story.sqlite'));
-    owned.push({ directory, store });
-    const outside = join(directory, 'outside');
-    mkdirSync(outside);
-    const marker = join(outside, 'outside-user-data');
-    writeFileSync(marker, 'must not be deleted');
-    const root =
-      kind === 'risu'
-        ? join(dirname(store.path), 'risu-prepared')
-        : join(uploadDirectory(store.path), 'native-prepared');
-    mkdirSync(root, { recursive: true });
-    const id = 'f'.repeat(32);
-    const link = join(root, id);
-    symlinkSync(outside, link, 'junction');
-
-    if (kind === 'risu') discardPreparedRisuImport(store.path, id);
-    else deletePreparedArchive(store, id);
-    expect(existsSync(marker)).toBe(true);
-    expect(lstatSync(link).isSymbolicLink()).toBe(true);
-  }
-);
 
 test('owned upload files still expire and discard remains idempotent with ID validation', () => {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-staging-'));

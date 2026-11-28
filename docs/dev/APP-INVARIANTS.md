@@ -72,7 +72,7 @@ Developer invariants not stated by code, schemas, or user guides. Entry files pe
 ### Concurrency lock and staging file lifecycle
 
 - **Single-job lock and cancellation**: `acquireImportPreparation` serializes Risu imports and `.uimori` staging to 1 job at a time per process without building a queue (callers retry after completion). Client disconnect cancels staging immediately, cleaning temporary files and discarding any already-started image conversion without proceeding to the next image.
-- **Expiration and safe root guard**: Incomplete staged files expire after 24 hours (cleaned at write-enabled startup and hourly, retrying on failure). `ownedImportStagingRoot` restricts cleanup strictly to subdirectories of the SQLite DB's actual directory, never touching symlinks/junctions and preserving active staging outputs.
+- **Expiration**: Incomplete staged files expire after 24 hours (cleaned at write-enabled startup and hourly, retrying on failure). Cleanup touches only 32-hex staging entries and skips the active ones.
 
 ### Idempotency receipt retention policy
 

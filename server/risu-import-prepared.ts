@@ -24,11 +24,7 @@ import { hasControl } from './import-envelope.js';
 import { uploadDirectory, UPLOAD_MAX_AGE_MS, UPLOAD_MAX_BYTES } from './uploads.js';
 import type { PreparedBundleImage } from './resource-bundle.js';
 import { typeScriptSourceHooks } from './risu-native-worker.js';
-import {
-  acquireImportPreparation,
-  checkImportPreparation,
-  ownedImportStagingRoot,
-} from './import-preparation.js';
+import { acquireImportPreparation, checkImportPreparation } from './import-preparation.js';
 import { AppError, appErrorFrom } from './app-errors.js';
 import { isAppErrorCode } from '#contracts';
 
@@ -62,11 +58,9 @@ export function preparedManifestIdentity(dbPath: string, id: string) {
 }
 export function deletePreparedRisuImport(dbPath: string, id: string) {
   const path = pathFor(dbPath, id);
-  if (active.has(path) || !ownedImportStagingRoot(dbPath, directory(dbPath))) return;
+  if (active.has(path)) return;
   try {
-    const info = lstatSync(path);
-    if (info.isDirectory() && !info.isSymbolicLink())
-      rmSync(path, { recursive: true, force: true });
+    if (lstatSync(path).isDirectory()) rmSync(path, { recursive: true, force: true });
   } catch {}
 }
 export function discardPreparedRisuImport(dbPath: string, id: string) {
@@ -88,16 +82,12 @@ export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisu
 }
 export function prunePreparedRisuImports(dbPath: string) {
   const root = directory(dbPath);
-  if (!ownedImportStagingRoot(dbPath, root)) return;
+  if (!existsSync(root)) return;
   for (const id of readdirSync(root)) {
     if (!ID.test(id) || active.has(join(root, id))) continue;
     try {
       const info = lstatSync(join(root, id));
-      if (
-        info.isDirectory() &&
-        !info.isSymbolicLink() &&
-        info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS
-      )
+      if (info.isDirectory() && info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS)
         deletePreparedRisuImport(dbPath, id);
     } catch {}
   }

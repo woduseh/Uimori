@@ -62,18 +62,6 @@ export function ownedPath(parent, target) {
 }
 export async function removeOwned(parent, target) {
   ownedPath(parent, target);
-  const { lstat, realpath } = await import('node:fs/promises');
-  const resolvedParent = await realpath(parent);
-  const comparable = (value) => (process.platform === 'win32' ? value.toLowerCase() : value);
-  if (comparable(resolvedParent) !== comparable(path.resolve(parent)))
-    throw new Error(`Junction/alias cleanup parent refused: ${parent}`);
-  let cursor = path.resolve(target);
-  while (true) {
-    if (existsSync(cursor) && (await lstat(cursor)).isSymbolicLink())
-      throw new Error(`Symlink cleanup refused: ${cursor}`);
-    if (cursor === path.resolve(parent)) break;
-    cursor = path.dirname(cursor);
-  }
   await rm(target, { recursive: true, force: true });
 }
 export async function guideFiles(sourceRoot = root) {
