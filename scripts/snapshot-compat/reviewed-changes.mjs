@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { database } from './probes.mjs';
+import { restoredOpening, restoredOpeningConditions } from './restored-opening.mjs';
 import * as v0181 from './rules/v0.18.1.mjs';
 
 export function rulesForCommit(commit) {
@@ -32,7 +33,11 @@ function matchesPath(path, segments) {
   return (
     parts.length === segments.length &&
     parts.every((part, i) =>
-      part === '*' ? typeof segments[i] === 'number' : part === segments[i]
+      part === '*'
+        ? typeof segments[i] === 'number'
+        : /^\d+$/u.test(part)
+          ? segments[i] === Number(part)
+          : part === segments[i]
     )
   );
 }
@@ -46,6 +51,8 @@ function eligible(rule, a, b, url, file) {
   if (rule.when === 'deleted-refusal')
     return a.body.error === 'Library item not found' && b.body.code === 'LIBRARY_ITEM_DELETED';
   const id = decodeURIComponent(url.split('/').at(rule.when === 'hidden-content' ? -1 : -2));
+  if (Object.hasOwn(restoredOpeningConditions, rule.when))
+    return restoredOpeningConditions[rule.when](a, b, () => restoredOpening(file, id));
   if (rule.when === 'hidden-content') {
     if (b.body.code !== 'LIBRARY_ITEM_DELETED' || a.body.id !== id) return false;
     return database(file, (db) =>
