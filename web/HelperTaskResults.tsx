@@ -559,18 +559,25 @@ export function HelperTaskResultItems({
   onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
 }) {
   useI18n();
+  const rows = data.results.flatMap((result) =>
+    result.targets.map((target, index) => ({ result, target, index }))
+  );
+  const previewAt = new Map<string, number>();
+  rows.forEach(({ result, target }, position) => {
+    if (target.kind !== 'theme') return;
+    if (result.operation === 'resource.delete') previewAt.delete(target.id);
+    else previewAt.set(target.id, position);
+  });
   return (
     <ul className="helper-result-list">
-      {data.results.flatMap((result) =>
-        result.targets.map((target, index) => (
-          <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
-            <ResultTarget target={target} operation={result.operation} onOpen={onOpenTarget} />
-            {target.kind === 'theme' && result.operation !== 'resource.delete' && (
-              <ChangedStoryUiTheme themeId={target.id} />
-            )}
-          </li>
-        ))
-      )}
+      {rows.map(({ result, target, index }, position) => (
+        <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
+          <ResultTarget target={target} operation={result.operation} onOpen={onOpenTarget} />
+          {target.kind === 'theme' && previewAt.get(target.id) === position && (
+            <ChangedStoryUiTheme themeId={target.id} />
+          )}
+        </li>
+      ))}
     </ul>
   );
 }

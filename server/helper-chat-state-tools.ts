@@ -306,7 +306,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.context.update',
     description:
-      'Hide or show a saved scene for the writer, turn the request that produced it off or on, or replace that request text. A hidden scene stays in the chat but is left out of later requests and of scene numbers; a request that is off is left out while the scene text stays. requestText replaces the request the writer sees for this scene, and null drops that replacement so the request originally sent applies again. The earlier text stays in the change record; read the current text through db.query (agent_messages.request). Refused while the chat has a queued or running request. Take expectedRevision from contextRevision in chat.read.',
+      'Hide or show a saved scene for the writer, turn the request that produced it off or on, or replace that request text. A hidden scene stays in the chat but is left out of later requests and of scene numbers; a request that is off is left out while the scene text stays. requestText replaces the request the writer sees for this scene, and null drops that replacement so the request originally sent applies again. Read the current text through db.query (agent_messages.request). Refused while the chat has a queued or running request. Take expectedRevision from contextRevision in chat.read.',
     inputSchema: schema(
       {
         sourceId: {
@@ -337,7 +337,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'chat.bookmark',
     description:
-      'Read, add, rename or delete the bookmarks of a chat: named places in the story with an optional note, shown in the reader. action=read lists them with their ids and revisions. add takes sourceId and title, and optionally note and representation (original by default), and marks the start of that scene. update takes id, expectedRevision, and a new title, note or both; an omitted one stays. delete takes id and expectedRevision. The earlier title and note of an updated or deleted bookmark stay in the change record; no scene text changes.',
+      'Read, add, rename or delete the bookmarks of a chat: named places in the story with an optional note, shown in the reader. action=read lists them with their ids and revisions. add takes sourceId and title, and optionally note and representation (original by default), and marks the start of that scene. update takes id, expectedRevision, and a new title, note or both; an omitted one stays. delete takes id and expectedRevision. No scene text changes.',
     inputSchema: schema(
       {
         action: {
@@ -915,7 +915,16 @@ function updateHelperSceneContext(
     operation: 'scene.context.update',
     requestedTargets: 1,
     targets: changed
-      ? [{ kind: 'scene', id: sourceId, chatId, title, revision: after.revision }]
+      ? [
+          {
+            kind: 'scene',
+            id: sourceId,
+            chatId,
+            title,
+            revision: after.revision,
+            setting: 'scene.context',
+          },
+        ]
       : [],
   });
   return {
@@ -959,7 +968,7 @@ function changeBookmark(
       receiptId,
       operation: 'chat.bookmark',
       requestedTargets: 1,
-      targets: [target],
+      targets: [{ ...target, setting: 'chat.bookmark' }],
     });
   if (args.action === 'add') {
     fields(args, ['action', 'sourceId', 'representation', 'title', 'note']);
