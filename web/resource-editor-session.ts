@@ -77,7 +77,7 @@ export class ResourceEditorSession {
   private loadVersion = 0;
   private readonly preparations = new Map<string, (model: ResourceModel) => ResourceModel>();
   private disposed = false;
-  private refreshAfterSave = false;
+  private writing: Promise<void> | null = null;
   readonly options: {
     editorKey: string;
     kind: ResourceKind;
@@ -319,17 +319,14 @@ export class ResourceEditorSession {
   async refresh() {
     if (this.disposed) return;
     await this.open();
-    if (!this.state.document.targetId) return;
-    if (this.state.saving) {
-      this.refreshAfterSave = true;
-      return;
-    }
-    const load = this.loadVersion;
-    const saved = await this.readTarget();
-    if (this.disposed) return;
-    if (load !== this.loadVersion || this.state.saving) {
-      if (this.state.saving) this.refreshAfterSave = true;
-      return;
+    let saved: SavedResource;
+    for (;;) {
+      while (this.writing) await this.writing;
+      if (this.disposed || !this.state.document.targetId) return;
+      const load = this.loadVersion;
+      saved = await this.readTarget();
+      if (this.disposed) return;
+      if (!this.writing && load === this.loadVersion) break;
     }
     if (saved.revision <= (this.state.document.baseRevision ?? 0)) return;
     if (this.state.dirty) this.emit({ conflict: true });
@@ -372,7 +369,13 @@ export class ResourceEditorSession {
       throw error;
     }
   }
-  async save(
+  save(
+    model?: ResourceModel,
+    options?: { copy?: boolean }
+  ): Promise<ResourceSaveResult & { creationIntent: boolean }> {
+    return this.write(() => this.saveNow(model, options));
+  }
+  private async saveNow(
     model?: ResourceModel,
     options?: { copy?: boolean }
   ): Promise<ResourceSaveResult & { creationIntent: boolean }> {
@@ -477,13 +480,24 @@ export class ResourceEditorSession {
       throw error;
     } finally {
       this.emit({ saving: false });
-      if (this.refreshAfterSave) {
-        this.refreshAfterSave = false;
-        void this.refresh().catch(() => {});
-      }
     }
   }
-  async undo() {
+  private write<T>(work: () => Promise<T>): Promise<T> {
+    const running = work();
+    const settled = running.then(
+      () => {},
+      () => {}
+    );
+    this.writing = settled;
+    void settled.then(() => {
+      if (this.writing === settled) this.writing = null;
+    });
+    return running;
+  }
+  undo() {
+    return this.write(() => this.undoNow());
+  }
+  private async undoNow() {
     if (!this.state.document.targetId || this.state.dirty || this.state.saving)
       throw new UiError(uiMessage('shared.unsavedRequired'));
     const generation = this.generation;

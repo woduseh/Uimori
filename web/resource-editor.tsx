@@ -29,7 +29,7 @@ import {
 import { EditorHelperContext, type EditorHelperOpener } from './editor-helper.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { ResourceEditorSession, EditorState } from './resource-editor-session.js';
-import { libraryChangedKey } from './api.js';
+import { definiteRejection, libraryChangedKey } from './api.js';
 import { useShortcut } from './shortcuts.js';
 import './resource-editor.css';
 import { promptWorkspaceFrame, resourceFrame } from './live-frames.js';
@@ -218,7 +218,10 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
     const workspace = session.options.kind === 'prompt-workspace';
     const live = watchLive({
       match: (frame) => resourceFrame(frame) || (workspace && promptWorkspaceFrame(frame)),
-      refresh: () => session.refresh(),
+      refresh: () =>
+        session.refresh().catch((error: unknown) => {
+          if (!definiteRejection(error)) throw error;
+        }),
       minIntervalMs: helperRefreshSpacing,
     });
     window.addEventListener('focus', refresh);

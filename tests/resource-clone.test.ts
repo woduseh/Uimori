@@ -35,7 +35,7 @@ function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-resource-clone-'));
   const store = new Store(join(path, 'test.sqlite'));
   const app = Fastify();
-  resourceRoutes(app, store);
+  resourceRoutes(app, store, () => {});
   owned.push({ path, store, app });
   return { store, app };
 }
