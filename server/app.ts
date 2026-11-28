@@ -62,7 +62,7 @@ import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { dismissReaderRun } from './run-reader-state.js';
 import { activityFeed, acknowledgedActivities, acknowledgeActivities } from './activity-feed.js';
 import { readerRoutes } from './reader-routes.js';
-import { Controls, type Barrier, type FailurePoint } from './controls.js';
+import { Controls, FAILURE_POINTS, type Barrier, type FailurePoint } from './controls.js';
 import { type MainHooks } from './model-runner.js';
 import { prepareInputContext } from './context-compaction.js';
 import { contextFailureCode } from './context-failure.js';
@@ -841,7 +841,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               gate: async () => {
                 await controls.wait('illustration', signal);
                 signal.throwIfAborted();
-                controls.fail('illustration');
+                controls.fail('illustration', chatId);
               },
             });
             requeued = outcome?.status === 'requeued';
@@ -1518,7 +1518,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     app.get('/api/test/control', async () => controls.snapshot());
     app.post('/api/test/control', async (request) => {
       const body: RecordBody = record(request.body);
-      fields(body, ['action', 'barrier', 'point', 'preset', 'mode']);
+      fields(body, ['action', 'barrier', 'point', 'chatId', 'preset', 'mode']);
       if (body.action === 'fixture') {
         if (body.preset !== undefined && !['calm', 'vivid'].includes(String(body.preset)))
           throw new HttpError(400, 'Invalid fixture preset');
@@ -1537,19 +1537,11 @@ export async function createApp(options: AppOptions): Promise<App> {
           throw new HttpError(400, 'Invalid barrier');
         controls[body.action](body.barrier as Barrier);
       } else if (body.action === 'fail-next') {
-        if (
-          ![
-            'source-transaction',
-            'job-transaction',
-            'translation',
-            'image',
-            'state',
-            'context',
-            'illustration',
-          ].includes(String(body.point))
-        )
+        if (!FAILURE_POINTS.includes(body.point as FailurePoint))
           throw new HttpError(400, 'Invalid failure point');
-        controls.failures.add(body.point as FailurePoint);
+        if (typeof body.chatId !== 'string') throw new HttpError(400, 'Invalid chat');
+        store.chat(body.chatId);
+        controls.armFailure(body.point as FailurePoint, body.chatId);
       } else if (body.action === 'crash-after-source-commit')
         controls.crashAfterSourceCommit = true;
       else throw new HttpError(400, 'Invalid control action');

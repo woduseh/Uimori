@@ -288,7 +288,11 @@ describe('illustration API in test mode with the synthetic generator', () => {
       generation: detail.generation,
     });
     await api('/api/test/control', { action: 'release', barrier: 'illustration' });
-    await api('/api/test/control', { action: 'fail-next', point: 'illustration' });
+    await api('/api/test/control', {
+      action: 'fail-next',
+      point: 'illustration',
+      chatId: chat.id,
+    });
     const injected = await settle(
       (await api<Illustration>(`/api/sources/${source.id}/illustrations`, {})).id
     );

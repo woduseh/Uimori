@@ -26,7 +26,7 @@ test('AUXREC translation failure retries from the reader without changing the so
   expect(
     (
       await request.post('/api/test/control', {
-        data: { action: 'fail-next', point: 'translation' },
+        data: { action: 'fail-next', point: 'translation', chatId: chat.id },
       })
     ).ok()
   ).toBe(true);

@@ -108,7 +108,7 @@ test('S01 source transaction failure rolls back original, Run completion and all
   const run = queued(store, id);
   store.startRun(run.id);
   const controls = new Controls();
-  controls.failures.add('source-transaction');
+  controls.armFailure('source-transaction', id);
   expect(() =>
     store.completeRun(
       run.id,

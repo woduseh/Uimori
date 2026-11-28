@@ -82,7 +82,11 @@ test('a translation job owns a response stream that ends with the job and is rec
   const [completed] = await until(scene.translation, (jobs) => jobs[0]?.status === 'completed');
   expect(await stream(first.url, completed.id)).toMatchObject({ status: 'completed', chunks: [] });
 
-  await api(first.url, '/api/test/control', { action: 'fail-next', point: 'job-transaction' });
+  await api(first.url, '/api/test/control', {
+    action: 'fail-next',
+    point: 'job-transaction',
+    chatId: scene.chat.id,
+  });
   await api(first.url, `/api/sources/${scene.source.id}/retranslate`, {});
   const failed = (
     await until(scene.translation, (jobs) => jobs.some((job) => job.status === 'failed'))

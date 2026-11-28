@@ -108,7 +108,7 @@ test('HSPACE03 failed-task diagnosis prepares a precise helper draft without sta
   expect(
     (
       await request.post('/api/test/control', {
-        data: { action: 'fail-next', point: 'source-transaction' },
+        data: { action: 'fail-next', point: 'source-transaction', chatId: chat.id },
       })
     ).ok()
   ).toBe(true);

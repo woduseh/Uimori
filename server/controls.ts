@@ -1,17 +1,18 @@
 import type { FixtureGeneration } from '../core/fixture-provider.js';
 export type Barrier = 'run' | 'translation' | 'image' | 'state' | 'illustration';
-export type FailurePoint =
-  | 'source-transaction'
-  | 'job-transaction'
-  | 'translation'
-  | 'image'
-  | 'state'
-  | 'illustration';
+export const FAILURE_POINTS = [
+  'source-transaction',
+  'job-transaction',
+  'translation',
+  'image',
+  'illustration',
+] as const;
+export type FailurePoint = (typeof FAILURE_POINTS)[number];
 
 export class Controls {
   fixture: FixtureGeneration = {};
   readonly held = new Set<Barrier>();
-  readonly failures = new Set<FailurePoint>();
+  private readonly failures = new Map<string, { point: FailurePoint; chatId: string }>();
   private waiters = new Map<Barrier, Set<() => void>>();
   crashAfterSourceCommit = false;
 
@@ -22,8 +23,12 @@ export class Controls {
     this.held.delete(barrier);
     for (const resume of this.waiters.get(barrier) ?? []) resume();
   }
-  fail(point: FailurePoint) {
-    if (this.failures.delete(point)) throw new Error(`Injected failure: ${point}`);
+  armFailure(point: FailurePoint, chatId: string) {
+    this.failures.set(JSON.stringify([point, chatId]), { point, chatId });
+  }
+  fail(point: FailurePoint, chatId: string) {
+    if (this.failures.delete(JSON.stringify([point, chatId])))
+      throw new Error(`Injected failure: ${point}`);
   }
   async wait(barrier: Barrier, signal: AbortSignal) {
     signal.throwIfAborted();
@@ -51,7 +56,7 @@ export class Controls {
     return {
       held: [...this.held],
       waiting: Object.fromEntries([...this.waiters].map(([key, value]) => [key, value.size])),
-      failures: [...this.failures],
+      failures: [...this.failures.values()],
     };
   }
 }

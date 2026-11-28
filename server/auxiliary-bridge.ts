@@ -63,7 +63,7 @@ export function auxiliaryBridge(
       if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
       await controls.wait(job.kind, signal);
       signal.throwIfAborted();
-      controls.fail(job.kind);
+      controls.fail(job.kind, job.chatId);
       return job.generation;
     },
     finish(id, generation, owner, outcome) {

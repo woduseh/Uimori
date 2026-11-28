@@ -215,7 +215,7 @@ describe('file SQLite HTTP runtime', () => {
 
   it('F05 rolls back source/run/job reservations together and honors snapshotted disabled jobs', async () => {
     const { app, url, chat } = await setup();
-    await control(url, { action: 'fail-next', point: 'source-transaction' });
+    await control(url, { action: 'fail-next', point: 'source-transaction', chatId: chat.id });
     const run = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(chat));
     const failed = await until(
       () => api<Run>(url, `/api/runs/${run.id}`),
@@ -269,7 +269,7 @@ describe('file SQLite HTTP runtime', () => {
       () => api(url, '/api/test/control'),
       (value) => value.waiting.translation === 2
     );
-    await control(url, { action: 'fail-next', point: 'job-transaction' });
+    await control(url, { action: 'fail-next', point: 'job-transaction', chatId: chat.id });
     await control(url, { action: 'release', barrier: 'translation' });
     const failedDetail = await until(
       () => detail(url, chat),
@@ -281,7 +281,7 @@ describe('file SQLite HTTP runtime', () => {
     const failed = failedDetail.jobs.find((job) => job.status === 'failed')!;
     expect(failed.error).toBe('AUXILIARY_EXECUTION_FAILED');
     expect(failedDetail.jobs.filter((job) => job.status === 'failed')).toHaveLength(1);
-    expect((await api(url, '/api/test/control')).failures).not.toContain('job-transaction');
+    expect((await api(url, '/api/test/control')).failures).toEqual([]);
     expect(failed.result).toMatchObject({
       sourceRevision: failed.sourceRevision,
       sourceHash: failed.sourceHash,

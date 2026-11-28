@@ -964,7 +964,7 @@ test('UI whole-source translation retains completed results across retry and can
       expect(
         (
           await request.post('/api/test/control', {
-            data: { action: 'fail-next', point: 'translation' },
+            data: { action: 'fail-next', point: 'translation', chatId: chat.id },
           })
         ).ok()
       ).toBeTruthy();

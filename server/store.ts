@@ -779,7 +779,7 @@ export class Store {
         "UPDATE runs SET status='completed',source_revision=?,partial_text=NULL,usage=?,updated_at=? WHERE id=?"
       )
       .run(source.id, json(usage), now(), id);
-    controls?.fail('source-transaction');
+    controls?.fail('source-transaction', run.chatId);
     this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
     if (replacement) {
       this.db
@@ -1181,7 +1181,7 @@ export class Store {
             'INSERT INTO job_results VALUES(?,?,?,?) ON CONFLICT(job_id) DO UPDATE SET generation=excluded.generation,result=excluded.result,created_at=excluded.created_at'
           )
           .run(id, generation, json(value.result), now());
-        controls?.fail('job-transaction');
+        controls?.fail('job-transaction', row.chat_id);
       }
       this.db
         .prepare('UPDATE jobs SET status=?,error=?,updated_at=? WHERE id=?')

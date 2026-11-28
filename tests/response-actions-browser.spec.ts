@@ -76,7 +76,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   expect(modes).toHaveLength(0);
   await expect(oldScene).toBeVisible();
 
-  await control('fail-next', { point: 'source-transaction' });
+  await control('fail-next', { point: 'source-transaction', chatId: before.chat.id });
   await reopen();
   await dialog.getByRole('button', { name: '다시 쓰기', exact: true }).click();
   await expect
