@@ -25,7 +25,7 @@
     "system": "Windows file system"
   },
   {
-    "file": "server/helper-runtime.ts",
+    "file": "server/helper-tool-error.ts",
     "comment": "SQLite uses ERR_SQLITE_ERROR for both user mistakes and authorization failures.",
     "system": "node:sqlite"
   },

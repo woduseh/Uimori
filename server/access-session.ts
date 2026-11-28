@@ -15,6 +15,7 @@ export class AccessSessionRateLimitError extends HttpError {
 export class AccessSessions {
   readonly required: boolean;
   private readonly authority: Buffer;
+  private readonly mcpAuthority: Buffer | undefined;
   private readonly secure: boolean;
   private failures = 0;
   private blockedUntil = 0;
@@ -23,11 +24,17 @@ export class AccessSessions {
   private readonly db: DatabaseSync;
   constructor(
     db: DatabaseSync,
-    options: { accessToken?: string; publicOrigin?: string; now?: () => number }
+    options: {
+      accessToken?: string;
+      mcpToken?: string;
+      publicOrigin?: string;
+      now?: () => number;
+    }
   ) {
     this.db = db;
     this.required = !!options.accessToken;
     this.authority = digest(options.accessToken ?? '');
+    this.mcpAuthority = options.mcpToken ? digest(options.mcpToken) : undefined;
     this.secure = !!options.publicOrigin;
     this.now = options.now ?? Date.now;
     this.db
@@ -72,15 +79,26 @@ export class AccessSessions {
     return token && this.authenticated(cookie) ? this.cookie(token) : undefined;
   }
 
+  private reject(message: string): never {
+    if (++this.failures >= 10) {
+      this.blockedUntil = this.now() + 60_000;
+      this.failures = 0;
+    }
+    throw new HttpError(401, message);
+  }
+
+  authorizeMcp(authorization?: string): void {
+    this.checkLoginAllowed();
+    const bearer = /^Bearer (\S+)$/iu.exec(authorization ?? '')?.[1];
+    if (!bearer || !this.mcpAuthority) throw new HttpError(401, 'MCP token required');
+    if (!timingSafeEqual(digest(bearer), this.mcpAuthority)) this.reject('MCP token rejected');
+    this.failures = 0;
+  }
+
   login(value: string): { cookie: string } {
     this.checkLoginAllowed();
-    if (this.required && !timingSafeEqual(digest(value), this.authority)) {
-      if (++this.failures >= 10) {
-        this.blockedUntil = this.now() + 60_000;
-        this.failures = 0;
-      }
-      throw new HttpError(401, 'Access token rejected');
-    }
+    if (this.required && !timingSafeEqual(digest(value), this.authority))
+      this.reject('Access token rejected');
     this.failures = 0;
     const token = randomBytes(32).toString('hex');
     this.db

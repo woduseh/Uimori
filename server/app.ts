@@ -118,7 +118,8 @@ import {
 } from './illustrations.js';
 import { CredentialStore } from './credentials.js';
 import { createPackageStart } from './package-start.js';
-import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
+import { deniedBrowserRequest, mcpToken, networkPolicy } from './network-policy.js';
+import { mcpRoutes } from './mcp-routes.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
 import { JevCredentialStore } from './jev-credentials.js';
 import { jevSettings } from './jev-settings.js';
@@ -158,6 +159,7 @@ export type AppOptions = {
   webRoot?: string;
 
   accessToken?: string;
+  mcpToken?: string;
   publicOrigin?: string;
   vertexRequestTier?: 'standard' | 'flex';
   codex?: CodexRuntimeOptions;
@@ -172,6 +174,7 @@ const DOCUMENT_CONTENT_SECURITY_POLICY =
 
 export async function createApp(options: AppOptions): Promise<App> {
   const network = networkPolicy(options);
+  const mcp = mcpToken(options.mcpToken, options.accessToken);
   const app = Fastify({ logger: false, bodyLimit: 4 * 1024 * 1024 }) as unknown as App;
   if (options.onRoute) app.addHook('onRoute', options.onRoute);
   if (options.testMode) checkEndpointOutputs(app);
@@ -928,9 +931,11 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.addHook('onRequest', async (request) => {
     const denied = deniedBrowserRequest(network, {
       method: request.method,
+      route: request.routeOptions.url,
       headers: {
         host: request.headers.host,
         origin: request.headers.origin,
+        cookie: request.headers.cookie,
         'sec-fetch-site':
           typeof request.headers['sec-fetch-site'] === 'string'
             ? request.headers['sec-fetch-site']
@@ -975,6 +980,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     codex,
 
     accessToken: options.accessToken,
+    mcpToken: mcp,
     publicOrigin: network.publicOrigin,
     publish,
     onChatDeleted: chatDeleted,
@@ -1001,6 +1007,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   usageRoutes(app, store);
   readerRoutes(app, store);
   helperRoutes(app, helper);
+  if (mcp) mcpRoutes(app, store);
   chatOptionRoutes(app, store);
   chatVariableRoutes(app, store, publish);
   contextRoutes(app, store, {

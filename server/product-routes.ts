@@ -18,6 +18,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
 import { chatForkRoutes } from './chat-fork.js';
+import { MCP_ROUTE } from './network-policy.js';
 import { transferRoutes } from './transfer-routes.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
@@ -36,6 +37,7 @@ export function productRoutes(
     credentials?: VertexCredentialStore;
     codex?: CodexRuntimeService;
     accessToken?: string;
+    mcpToken?: string;
     publicOrigin?: string;
 
     publish: (chatId: string) => void;
@@ -57,11 +59,22 @@ export function productRoutes(
   transferRoutes(app, store, options.publish);
   const sessions = new AccessSessions(store.db, options);
   const authenticated = (cookie?: string) => sessions.authenticated(cookie);
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async (request, reply) => {
     // Fastify resolves percent-encoded paths before hooks, while request.url stays raw.
     // Authenticate the matched route so /%61pi/export cannot skip API protection.
     const rawPath = request.url.split('?')[0],
       routePath = request.routeOptions.url ?? rawPath;
+    if (request.routeOptions.url === MCP_ROUTE) {
+      try {
+        sessions.authorizeMcp(request.headers.authorization);
+      } catch (error) {
+        if (error instanceof AccessSessionRateLimitError)
+          reply.header('Retry-After', String(error.retryAfterSeconds));
+        else reply.header('WWW-Authenticate', 'Bearer');
+        throw error;
+      }
+      return;
+    }
     if (
       (routePath.startsWith('/api/') || rawPath.startsWith('/api/')) &&
       routePath !== '/api/session' &&

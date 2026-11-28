@@ -2,6 +2,7 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import {
   copyFile,
+  cp,
   lstat,
   mkdir,
   open,
@@ -158,6 +159,9 @@ export async function build({
     await mkdir(path.join(candidate, 'docs'));
     for (const guide of guides)
       await copyFile(guide, path.join(candidate, 'docs', path.basename(guide)));
+    const skills = path.join(cwd, 'docs', 'skills');
+    if (existsSync(skills))
+      await cp(skills, path.join(candidate, 'docs', 'skills'), { recursive: true });
     await json(
       path.join(candidate, 'bundle-sizes.json'),
       await bundleSizes(path.join(candidate, 'web'))
