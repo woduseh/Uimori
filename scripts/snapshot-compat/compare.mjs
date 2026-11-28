@@ -253,7 +253,8 @@ export async function compareRead(
   report,
   findings = report.differences,
   template,
-  file
+  file,
+  oldBackup
 ) {
   const [a, b] = await Promise.all([
     attempt(report, phase, url, () => left, 'left'),
@@ -262,10 +263,17 @@ export async function compareRead(
   if (!a || !b) return undefined;
   let diffs = differences(a, b);
   if (phase === 'old-new' && template && diffs.length) {
-    const reviewed = classify(report.rules, template, url, a, b, diffs, file, [
-      responseBytes.get(a),
-      responseBytes.get(b),
-    ]);
+    const reviewed = classify(
+      report.rules,
+      template,
+      url,
+      a,
+      b,
+      diffs,
+      file,
+      [responseBytes.get(a), responseBytes.get(b)],
+      oldBackup
+    );
     diffs = reviewed.remaining;
     if (reviewed.derivedLength) report.derivedContentLengths++;
   }
@@ -317,7 +325,8 @@ export async function compare(phase, left, right, report, dir) {
           report,
           report.differences,
           route,
-          right.file
+          right.file,
+          dir + '/left.sqlite'
         )
       );
       if (refusal === undefined) continue;
