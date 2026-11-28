@@ -18,7 +18,19 @@ import { uploadDirectory } from '../server/uploads.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
 import { transferRoutes } from '../server/transfer-routes.js';
 import { importChatBackupArchiveRequest } from '../server/chat-backup.js';
-import type { Content, PromptPreset, SavedPromptCombination } from '../core/product.js';
+import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
+import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import {
+  validateModelSnapshot,
+  validateProviderSettingVersion,
+} from '../server/provider-archive.js';
+import type {
+  Connection,
+  Content,
+  ModelPreset,
+  PromptPreset,
+  SavedPromptCombination,
+} from '../core/product.js';
 
 const fixtures = join(import.meta.dirname, 'fixtures', 'backup-horizon-0.18.0');
 const manifest = JSON.parse(readFileSync(join(fixtures, 'manifest.json'), 'utf8'));
@@ -181,4 +193,145 @@ test('.uimori and .chat.uimori archives exported by v0.18.0 import as new copies
     secondScene,
   ]);
   expect(store.product.all('content')).toHaveLength(2);
+});
+
+test('stored presets, provider archives and model snapshots carrying legacy evaluationTools load without error, drop the field and keep writing requests identical', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-horizon-eval-'));
+  const path = join(directory, 'app.sqlite');
+  writeFileSync(path, gunzipSync(readFileSync(join(fixtures, 'snapshot.db.gz'))));
+  const connection: Connection = {
+    id: 'conn-horizon',
+    revision: 1,
+    title: 'Horizon OpenAI',
+    protocol: 'openai-responses-v1',
+    endpoint: 'https://api.openai.com/v1',
+    credentialRef: 'HORIZON_KEY',
+    enabled: true,
+    catalog: [],
+    catalogError: null,
+  };
+  const baseModel = {
+    revision: 1,
+    connectionId: connection.id,
+    modelId: 'gpt-6.2-astra',
+    maxOutputTokens: 8192,
+    temperature: null,
+    capabilityProtocol: connection.protocol,
+    enabled: true,
+  };
+  const legacyModelBody = {
+    ...baseModel,
+    id: 'model-legacy-eval',
+    title: 'Horizon model with legacy evaluationTools',
+    evaluationTools: {
+      contextMode: 'preloaded',
+      approvalReasoningMode: 'economized',
+      metadataProfile: 'anthropic',
+    },
+  };
+  const obsoleteModelBody = {
+    ...baseModel,
+    id: 'model-obsolete-eval',
+    title: 'Horizon model with obsolete evaluationTools',
+    evaluationTools: { contextMode: 'source-bound' },
+  };
+  const plainModelBody = {
+    ...baseModel,
+    id: 'model-plain',
+    title: 'Horizon plain model',
+  };
+  const seeded = new DatabaseSync(path);
+  const insert = seeded.prepare('INSERT INTO provider_settings VALUES(?,?,?,?)');
+  insert.run('connection', connection.id, connection.revision, JSON.stringify(connection));
+  for (const model of [legacyModelBody, obsoleteModelBody, plainModelBody])
+    insert.run('model', model.id, model.revision, JSON.stringify(model));
+  seeded.close();
+
+  const store = database(readFileSync(path));
+  rmSync(directory, { recursive: true, force: true });
+
+  const listed = store.product.all('model') as ModelPreset[];
+  expect(listed.map((item) => item.id)).toEqual([
+    'model-legacy-eval',
+    'model-obsolete-eval',
+    'model-plain',
+  ]);
+  for (const item of listed) expect(item).not.toHaveProperty('evaluationTools');
+  expect(store.product.stored<ModelPreset>('model', 'model-legacy-eval')).not.toHaveProperty(
+    'evaluationTools'
+  );
+  expect(store.product.stored<ModelPreset>('model', 'model-obsolete-eval')).not.toHaveProperty(
+    'evaluationTools'
+  );
+
+  for (const legacy of [legacyModelBody, obsoleteModelBody]) {
+    expect(() =>
+      validateProviderSettingVersion({
+        kind: 'model',
+        id: legacy.id,
+        revision: legacy.revision,
+        body: JSON.stringify(legacy),
+      })
+    ).not.toThrow();
+    const validatedSnapshot = validateModelSnapshot({ ...legacy, connection });
+    expect(validatedSnapshot).not.toHaveProperty('evaluationTools');
+  }
+
+  const legacySnapshot = store.product.modelSnapshot('model-legacy-eval', undefined, false);
+  const plainSnapshot = store.product.modelSnapshot('model-plain', undefined, false);
+  expect(legacySnapshot).not.toHaveProperty('evaluationTools');
+
+  const [chat] = store.chats();
+  const baseProfile = store.product.snapshot(chat.id, 'inspect');
+  const baseRunSnapshot = {
+    chatId: chat.id,
+    parentRevision: chat.headRevision,
+    settingsRevision: chat.settingsRevision,
+    settings: chat.settings,
+    request: 'Continue from the pier.',
+    history: store.history(chat.headRevision),
+    resources: [],
+    profile: {
+      ...baseProfile,
+      models: { ...baseProfile.models, main: plainSnapshot },
+    },
+  };
+  const preparedPlain = await prepareNativeRisuRun(baseRunSnapshot, { preview: true });
+  const preparedLegacy = await prepareNativeRisuRun(
+    {
+      ...baseRunSnapshot,
+      profile: {
+        ...baseRunSnapshot.profile,
+        models: { ...baseRunSnapshot.profile.models, main: legacySnapshot },
+      },
+    },
+    { preview: true }
+  );
+  const plainBuilt = buildMainProviderRequest(preparedPlain);
+  const legacyBuilt = buildMainProviderRequest(preparedLegacy);
+  expect(legacyBuilt.request.stable.tools.some((tool) => tool.name.startsWith('eval_'))).toBe(
+    false
+  );
+  expect(JSON.stringify(encodeMainPreview(legacyBuilt.request, legacySnapshot).body)).toBe(
+    JSON.stringify(encodeMainPreview(plainBuilt.request, plainSnapshot).body)
+  );
+
+  const resaved = store.product.model(
+    {
+      title: 'Horizon model resaved',
+      connectionId: connection.id,
+      modelId: baseModel.modelId,
+      maxOutputTokens: baseModel.maxOutputTokens,
+      temperature: baseModel.temperature,
+      enabled: true,
+      expectedRevision: 1,
+    },
+    'model-legacy-eval'
+  ) as ModelPreset;
+  expect(resaved.revision).toBe(2);
+  expect(resaved).not.toHaveProperty('evaluationTools');
+  const rawRow = store.db
+    .prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?")
+    .get('model-legacy-eval') as { body: string };
+  expect(JSON.parse(rawRow.body)).not.toHaveProperty('evaluationTools');
 });

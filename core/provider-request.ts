@@ -1,5 +1,4 @@
-import { GENERATION_KEYS, validateGenerationShape } from './model-capabilities.js';
-import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
+import { validateGenerationShape } from './model-capabilities.js';
 import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
 import { createHash } from 'node:crypto';
 import {
@@ -8,7 +7,6 @@ import {
   MODEL_ROLES,
   type ModelRole,
   type ProviderProtocol,
-  type ModelGeneration,
 } from './product.js';
 import { validateProviderPrompt } from './risu-prompt.js';
 import { ProviderContractError } from './provider-errors.js';
@@ -115,7 +113,6 @@ export function validateRequest(value: unknown): ProviderRequest {
     'modelId',
     'stable',
     'generation',
-    'generationBinding',
     'contextBudget',
     'providerOptions',
     'input',
@@ -154,35 +151,6 @@ export function validateRequest(value: unknown): ProviderRequest {
     }
   }
   if (value.contextBudget !== undefined) validateContextBudget(value.contextBudget);
-  if (value.generationBinding !== undefined) {
-    validateGenerationShape(value.generationBinding);
-    if (value.generation === undefined) reject('INVALID_GENERATION_BINDING');
-    for (const key of GENERATION_KEYS.filter(
-      (key) =>
-        !['maxOutputTokens', 'reasoningEffort', 'outputEffort', 'safetySettings'].includes(key)
-    ))
-      if (JSON.stringify(value.generation[key]) !== JSON.stringify(value.generationBinding[key]))
-        reject('INVALID_GENERATION_BINDING');
-    if (
-      GEMINI_SAFETY_CATEGORIES.some(
-        (category) =>
-          (value.generation as ModelGeneration).safetySettings?.[category] !==
-          (value.generationBinding as ModelGeneration).safetySettings?.[category]
-      )
-    )
-      reject('INVALID_GENERATION_BINDING');
-    if (value.generation.maxOutputTokens > value.generationBinding.maxOutputTokens)
-      reject('INVALID_GENERATION_BINDING');
-    for (const key of ['reasoningEffort', 'outputEffort'] as const) {
-      const before = value.generationBinding[key],
-        after = value.generation[key];
-      if (
-        after !== before &&
-        !(before !== undefined && after === 'low' && !['none', 'minimal'].includes(before))
-      )
-        reject('INVALID_GENERATION_BINDING');
-    }
-  }
   if (value.bootstrap !== undefined) {
     if (!Array.isArray(value.bootstrap) || value.bootstrap.length > 8) reject('INVALID_BOOTSTRAP');
     const ids = new Set<string>();

@@ -785,12 +785,6 @@ export const messages = {
     ja: 'この確認はもう承認できません。最新の会話を確認してから、もう一度依頼してください。',
     zh: '此确认已无法批准。请查看最新对话后重新请求。',
   },
-  'errors.HELPER_MODEL_EVALUATION_TOOLS': {
-    ko: '도우미 모델에서는 평가 도구를 꺼 주세요. 설정 > 프로바이더와 모델에서 바꿀 수 있어요.',
-    en: 'Turn off evaluation tools for the assistant model in Settings > Providers and models.',
-    ja: 'アシスタントのモデルでは評価ツールをオフにしてください。設定 > プロバイダーとモデルで変更できます。',
-    zh: '请为助手模型关闭评估工具。可在“设置 > 提供方与模型”中更改。',
-  },
   'errors.HELPER_SELECTION_STALE': {
     ko: '선택한 원문이 바뀌었어요. 다시 선택해 주세요.',
     en: 'The selected original text changed. Select it again.',
@@ -1295,12 +1289,6 @@ export const messages = {
     ja: 'モデルの応答がこの作業の出力形式を満たしませんでした。この作業のプロンプトとモデル設定を確認してから再度お試しください。',
     zh: '模型响应不符合此任务的输出格式。请检查此任务的提示词和模型设置后重试。',
   },
-  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.details': {
-    ko: '모델이 결과를 제출하지 않았어요. 평가 도구 설정을 확인해 주세요.',
-    en: 'The model did not submit results. Check evaluation tool settings.',
-    ja: 'モデルが結果を提出しませんでした。評価ツールの設定を確認してください。',
-    zh: '模型未提交结果。请检查评估工具设置。',
-  },
   'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.details': {
     ko: '작업 결과가 가리키는 원문과 현재 작업의 원문이 일치하지 않아요. 최신 원문을 확인한 뒤 새 작업을 요청해 주세요.',
     en: 'The original text referenced by the result does not match this task’s original text. Check the latest original text before requesting a new task.',
@@ -1576,18 +1564,6 @@ export const messages = {
     en: 'Check the prompt and model settings.',
     ja: 'プロンプトとモデル設定を確認してください。',
     zh: '请检查提示词和模型设置。',
-  },
-  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.message': {
-    ko: '모델이 결과를 제출하지 않았어요.',
-    en: 'The model did not submit results.',
-    ja: 'モデルが結果を提出しませんでした。',
-    zh: '模型未提交结果。',
-  },
-  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.action': {
-    ko: '평가 도구 설정을 확인해 주세요.',
-    en: 'Check evaluation tool settings.',
-    ja: '評価ツールの設定を確認してください。',
-    zh: '请检查评估工具设置。',
   },
   'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.message': {
     ko: '작업 결과가 가리키는 원문과 현재 작업의 원문이 일치하지 않아요.',

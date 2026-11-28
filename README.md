@@ -92,7 +92,7 @@ The [self-hosting guide](docs/SELF-HOST.md) covers Docker Compose and an Nginx H
 
 | Guide | Covers |
 | --- | --- |
-| [Providers](docs/PROVIDERS.md) | Vertex and Google AI Studio Gemini, Responses/Chat-compatible APIs, Anthropic realtime and Batch, Vercel, Codex providers, optional evaluation tools and synthetic tests |
+| [Providers](docs/PROVIDERS.md) | Vertex and Google AI Studio Gemini, Responses/Chat-compatible APIs, Anthropic realtime and Batch, Vercel, Codex providers and synthetic tests |
 | [Self-hosting](docs/SELF-HOST.md) | Docker Compose, HTTPS, sign-in, persistent data, model API keys and updates |
 | [Automatic backups](docs/AUTOMATIC-BACKUPS.md) | Daily snapshots on Korea time, verification, retention and download |
 | [Diagnostics and run details](docs/DIAGNOSTICS.md) | Checking task status, errors, retained run inputs and recovery behavior |

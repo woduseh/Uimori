@@ -43,8 +43,6 @@ import {
   transportConnection,
 } from '../core/transport.js';
 import type { ImageTarget, RunSnapshot, ToolEvent, ToolEventTiming } from '../core/types.js';
-import { createEvaluationToolSession } from './evaluation-session.js';
-import { EVALUATION_TOOL_ROUND_LIMIT } from '../core/evaluation-tool-config.js';
 import {
   translationContextMode,
   translationPolicy,
@@ -307,8 +305,7 @@ function providerInput(
   modelFields: ReturnType<typeof modelRequestFields>,
   generation: ProviderRequest['generation'],
   opaqueState: Json | undefined,
-  snapshot: RunSnapshot,
-  evaluation?: ReturnType<typeof createEvaluationToolSession>
+  snapshot: RunSnapshot
 ): ProviderRequest {
   if (input.role === 'presentation') throw new AuxiliaryExecutionError('JEV_JUDGMENT_REQUIRED');
   const task = input.customPrompt
@@ -331,38 +328,12 @@ function providerInput(
     role: input.role,
     ...modelFields,
     stable: {
-      contract:
-        input.contract +
-        (input.referencePolicy ? '\n' + input.referencePolicy : '') +
-        (evaluation
-          ? '\nThe selected evaluation tool set is scoped to this model preset and this source-time task. Finish by calling eval_submit_artifact alone with the complete task output in content, preserving the requested output format and source identity. userFacingNotice remains separate metadata. Ordinary final text does not complete the task.'
-          : ''),
-      tools: [
-        ...toolSchemas
-          .filter((tool) => input.tools.includes(tool.name))
-          .map((tool) => structuredClone(tool)),
-        ...(evaluation?.definitions.map((tool) => structuredClone(tool)) ?? []),
-      ],
+      contract: input.contract + (input.referencePolicy ? '\n' + input.referencePolicy : ''),
+      tools: toolSchemas
+        .filter((tool) => input.tools.includes(tool.name))
+        .map((tool) => structuredClone(tool)),
     },
     generation,
-    ...(evaluation?.bootstrap.length
-      ? {
-          bootstrap: evaluation.bootstrap.map((item) => ({
-            callId: item.callId,
-            name: item.name,
-            args: json(item.args) as Record<string, Json>,
-            result: json(item.result),
-            denied: item.denied,
-          })),
-        }
-      : {}),
-    ...(evaluation?.toolChoice(Array.isArray(input.results) ? input.results.length : 0)
-      ? {
-          toolChoice: evaluation.toolChoice(
-            Array.isArray(input.results) ? input.results.length : 0
-          ),
-        }
-      : {}),
     ...(compilation
       ? {
           prompt: {
@@ -488,8 +459,6 @@ export async function runAuxiliaryJob(
   const target = job.kind === 'image' ? undefined : snapshot.profile?.models[job.kind];
   let calls = 0;
   let readTranslation: ReturnType<typeof translationReader> | undefined;
-  const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
-  let evaluationRounds = 0;
   const mock =
     !bundle.judgmentRecovery &&
     job.kind !== 'image' &&
@@ -500,11 +469,7 @@ export async function runAuxiliaryJob(
   let stage: AuxiliaryFailureDiagnostic['stage'] = 'preparation';
   let lastAttemptId: string | undefined;
   const cancelState = () => hooks.cancellationStatus ?? 'cancelled';
-  const callProvider = async (
-    target: ModelSnapshot,
-    body: ProviderRequest,
-    diagnostics?: ReturnType<typeof createEvaluationToolSession>
-  ) => {
+  const callProvider = async (target: ModelSnapshot, body: ProviderRequest) => {
     lastAttemptId = undefined;
     if (hooks.signal.aborted) throw new AuxiliaryExecutionError('AUXILIARY_CANCELLED');
     if (calls >= maxCalls)
@@ -524,8 +489,6 @@ export async function runAuxiliaryJob(
     )
       throw new AuxiliaryExecutionError('CONNECTION_NOT_AUTHORIZED');
     let attemptId: string | undefined;
-    const remainingTimeout = diagnostics?.remainingMs();
-    if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT');
     let result: ProviderResult;
     try {
       result = await executeProvider(transportConnection(authorized), body, {
@@ -534,7 +497,6 @@ export async function runAuxiliaryJob(
         executeCodex: hooks.executeCodex,
         vertexRequestTier: hooks.vertexRequestTier,
         timeoutMs:
-          remainingTimeout ??
           hooks.timeoutMs ??
           target.timeoutMs ??
           (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
@@ -567,45 +529,29 @@ export async function runAuxiliaryJob(
       }
       throw error;
     }
-    if (attemptId !== undefined)
-      await hooks.onAttemptFinish(
-        attemptId,
-        diagnostics ? diagnostics.diagnosticResult(result) : structuredClone(result)
-      );
+    if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, structuredClone(result));
     return result;
   };
   const runInput = async (packet: AuxiliaryInput) => {
-    if (evaluation)
-      packet = {
-        ...packet,
-        tools: [...packet.tools, ...evaluation.definitions.map((tool) => tool.name)],
-      };
     let opaqueState: Json | undefined;
     const providerRequest = (next: AuxiliaryInput, model: ModelSnapshot) => {
       const generation = generationFromModel(model);
-      const completedToolResults = Array.isArray(next.results) ? next.results.length : 0;
-      const body: ProviderRequest = {
+      return {
         ...providerInput(
           next,
           modelRequestFields(model),
-          evaluation ? evaluation.generation(generation, completedToolResults) : generation,
+          generation,
           opaqueState,
-          executionSnapshot,
-          evaluation
+          executionSnapshot
         ),
         contextBudget: contextBudgetForModel(model),
       };
-      const generationBinding = evaluation?.generationBinding(generation, completedToolResults);
-      if (generationBinding) body.generationBinding = generationBinding;
-      return body;
     };
     const request = async (next: AuxiliaryInput) => {
       stage = 'preparation';
       lastAttemptId = undefined;
       if (calls >= maxCalls)
         throw Object.assign(new Error('Auxiliary call budget exhausted'), { name: 'BudgetError' });
-      if (evaluation && evaluation.remainingMs() === 0)
-        throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT');
       if (!target) {
         await hooks.onScriptedInput?.(structuredClone(next));
         calls++;
@@ -613,20 +559,8 @@ export async function runAuxiliaryJob(
       }
       const body = providerRequest(next, target);
       stage = job.kind;
-      const result = await callProvider(target, body, evaluation);
+      const result = await callProvider(target, body);
       if (result.status === 'tool_calls') {
-        if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
-          if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
-            throw Object.assign(new Error('Auxiliary call budget exhausted'), {
-              name: 'BudgetError',
-            });
-        }
-        if (
-          evaluation?.requiresSubmission &&
-          result.toolCalls.some((call) => call.name === 'eval_submit_artifact') &&
-          result.toolCalls.length !== 1
-        )
-          throw new AuxiliaryExecutionError('INVALID_EVALUATION_ARTIFACT');
         opaqueState = result.opaqueState;
         return {
           kind: 'tools',
@@ -634,7 +568,6 @@ export async function runAuxiliaryJob(
             callId: call.id,
             name: call.name,
             args: call.arguments,
-            ...(call.recoveredFromTruncation ? { recoveredFromTruncation: true } : {}),
           })),
         };
       }
@@ -649,8 +582,6 @@ export async function runAuxiliaryJob(
                 : `AUXILIARY_PROVIDER_${result.error?.code ?? 'ERROR'}`,
           result.status === 'refused' && !result.error
         );
-      if (evaluation?.requiresSubmission)
-        throw new AuxiliaryExecutionError('EVALUATION_SUBMISSION_REQUIRED');
       const output =
         job.kind === 'translation' && target.structuredOutput === true
           ? parseStructuredTranslation(source, result.text)
@@ -663,69 +594,25 @@ export async function runAuxiliaryJob(
     return executeAuxiliary(packet, snapshot, request, {
       signal: hooks.signal,
       captureInputs: false,
-      maxCalls: evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls,
-      localTools: {
-        names: [
-          ...(job.kind === 'translation' ? TRANSLATION_READ_NAMES : []),
-          ...(evaluation?.allNames ?? []),
-        ],
-        execute: (action) => {
-          if (TRANSLATION_READ_NAMES.includes(action.name)) {
-            readTranslation ??= translationReader(
-              snapshot,
-              references?.load ?? bundle.translationReferences ?? []
-            );
-            return readTranslation(action);
-          }
-          const call = {
-            id: action.callId,
-            name: action.name,
-            arguments: json(action.args) as Record<string, Json>,
-          };
-          if (action.name !== 'eval_submit_artifact') return evaluation!.execute(call);
-          const submitted = evaluation!.submit(call, action.recoveredFromTruncation === true);
-          if (!submitted.ok) {
-            if (evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT)
-              throw Object.assign(new Error('Auxiliary call budget exhausted'), {
-                name: 'BudgetError',
-              });
-            return submitted.event;
-          }
-          return {
-            event: {
-              callId: action.callId,
-              name: action.name,
-              args: {},
-              denied: false,
-              result: {
-                accepted: true,
-                sha256: submitted.artifact.sha256,
-                characters: submitted.artifact.text.length,
-                utf8Bytes: submitted.artifact.utf8Bytes,
-                noticeProvided: submitted.artifact.noticeProvided,
-                noticeCharacters: submitted.artifact.noticeCharacters,
-                correctionCount: submitted.artifact.correctionCount,
+      maxCalls,
+      ...(job.kind === 'translation'
+        ? {
+            localTools: {
+              names: TRANSLATION_READ_NAMES,
+              execute: (action) => {
+                readTranslation ??= translationReader(
+                  snapshot,
+                  references?.load ?? bundle.translationReferences ?? []
+                );
+                return readTranslation(action);
               },
             },
-            terminalOutput:
-              evaluation!.requiresSubmission &&
-              job.kind === 'translation' &&
-              target?.structuredOutput === true
-                ? parseStructuredTranslation(source, submitted.artifact.text)
-                : submitted.artifact.text,
-          };
-        },
-      },
+          }
+        : {}),
       onInput: onInput && ((value) => onInput(jobId, value)),
       onToolStart: (value) => hooks.onToolStart?.(jobId, value, generation),
       prepareToolEvent: (event, next, remainingActions) => {
-        if (
-          !target ||
-          job.kind !== 'translation' ||
-          event.denied ||
-          evaluation?.allNames.some((name) => name === event.name)
-        )
-          return event;
+        if (!target || job.kind !== 'translation' || event.denied) return event;
         const tooLarge = (event: ToolEvent): ToolEvent => ({
           ...event,
           denied: true,

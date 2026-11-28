@@ -15,9 +15,7 @@ import {
   type ModelPreset,
   type ProviderProtocol,
 } from '../core/product.js';
-import { validateRequest, type Json, type ProviderRequest } from '../core/transport.js';
-import { createEvaluationToolSession } from '../server/evaluation-session.js';
-import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { type Json, type ProviderRequest } from '../core/transport.js';
 import { modelHints } from '../core/model-hints.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
@@ -135,41 +133,6 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
         'vertex-gemini-v1'
       )
     ).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
-
-  const request = {
-    role: 'main',
-    modelId: 'gemini-4-carbon',
-    stable: { contract: 'Synthetic', tools: [] },
-    input: { task: 'Synthetic', controls: {} },
-    generation: configured,
-    generationBinding: configured,
-  };
-  expect(() => validateRequest(request)).not.toThrow();
-  expect(() =>
-    validateRequest({
-      ...request,
-      generation: {
-        ...configured,
-        safetySettings: {
-          HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' as const,
-          HARM_CATEGORY_HARASSMENT: 'OFF' as const,
-          HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH' as const,
-        },
-      },
-    })
-  ).not.toThrow();
-  expect(() =>
-    validateRequest({
-      ...request,
-      generation: {
-        ...configured,
-        safetySettings: {
-          ...configured.safetySettings,
-          HARM_CATEGORY_JAILBREAK: 'BLOCK_LOW_AND_ABOVE' as const,
-        },
-      },
-    })
-  ).toThrow('INVALID_GENERATION_BINDING');
 });
 
 test('cache times are explicit, provider-specific, and incompatible with OFF', () => {
@@ -196,59 +159,6 @@ test('cache times are explicit, provider-specific, and incompatible with OFF', (
   expect(() =>
     validateModelOptions({ ...base, cacheMode: 'disabled' }, 'openai-chat-v1')
   ).toThrow();
-});
-
-test('opt-in economy can lower effort but cannot change cache, tier, stop strings or enable reasoning', () => {
-  const selected: ModelPreset & { connection: unknown } = {
-    id: 'model',
-    revision: 1,
-    title: 'Synthetic',
-    modelId: 'claude-opus-5-5',
-    connectionId: 'connection',
-    ...base,
-    maxOutputTokens: 16000,
-    outputEffort: 'max',
-    cacheMode: 'explicit',
-    cacheTtl: '5m',
-    stopSequences: ['END'],
-    serviceTier: 'auto',
-    evaluationTools: {
-      ...defaultEvaluationToolOptions(),
-      contextMode: 'preloaded',
-      approvalReasoningMode: 'economized',
-    },
-    connection: {},
-  };
-  const evaluation = createEvaluationToolSession(selected)!;
-  const configured = generationFromModel(selected),
-    actual = evaluation.generation(configured, 0);
-  expect(actual).toEqual({ ...configured, maxOutputTokens: 8000, outputEffort: 'low' });
-  const request = {
-    role: 'main',
-    modelId: selected.modelId,
-    stable: { contract: 'Synthetic', tools: [] },
-    input: { task: 'Synthetic', controls: {} },
-    generation: actual,
-    generationBinding: configured,
-  };
-  expect(() => validateRequest(request)).not.toThrow();
-  for (const mutation of [
-    { cacheMode: 'disabled' },
-    { cacheTtl: '1h' },
-    { serviceTier: 'standard_only' },
-    { stopSequences: ['CHANGED'] },
-    { maxOutputTokens: 17000 },
-  ])
-    expect(() => validateRequest({ ...request, generation: { ...actual, ...mutation } })).toThrow(
-      'INVALID_GENERATION_BINDING'
-    );
-  expect(() =>
-    validateRequest({
-      ...request,
-      generation: { ...base, reasoningEffort: 'low' },
-      generationBinding: { ...base, reasoningEffort: 'none' },
-    })
-  ).toThrow('INVALID_GENERATION_BINDING');
 });
 
 test('a helper request caches by default only on a reviewed Claude model without a chosen cache mode', () => {

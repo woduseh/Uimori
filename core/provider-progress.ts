@@ -10,9 +10,7 @@ export function publicProgressAllowed(request: ProviderRequest, protocol: Provid
   return (
     protocol !== 'codex-app-server-v1' &&
     !(request.role === 'translation' && request.generation?.structuredOutput === true) &&
-    !request.stable.tools.some((tool) =>
-      ['story.submit', 'eval_submit_artifact'].includes(tool.name)
-    )
+    !request.stable.tools.some((tool) => tool.name === 'story.submit')
   );
 }
 

@@ -165,7 +165,7 @@ export function encodeVertex(
         ...(protocol === 'google-gemini-v1' ? { protocol } : {}),
         modelId: request.modelId,
         stable: request.stable,
-        generation: request.generationBinding ?? request.generation ?? null,
+        generation: request.generation ?? null,
         contextBudget: request.contextBudget ?? null,
         input,
         prompt: request.prompt ?? null,

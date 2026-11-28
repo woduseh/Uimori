@@ -18,8 +18,6 @@ import {
   transportConnection,
 } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, ToolEventTiming, Usage } from '../core/types.js';
-import { createEvaluationToolSession } from './evaluation-session.js';
-import { EVALUATION_TOOL_ROUND_LIMIT } from '../core/evaluation-tool-config.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { attachMainHostContext } from './main-host-context.js';
@@ -72,7 +70,6 @@ export type MainHooks = {
     origin?: 'story-guide'
   ) => void | Promise<void>;
   replayToolEvents?: readonly ToolEvent[];
-  evaluationRunId?: string;
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
   authorize: (connection: Connection) => Connection | Promise<Connection>;
@@ -113,17 +110,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   let completedToolHistory: ToolEvent[] = [];
   let lastUnhelpfulRead: string | undefined;
   const results: ToolEvent[] = [];
-  const evaluation = createEvaluationToolSession(
-    target,
-    hooks.timeoutMs,
-    hooks.evaluationRunId && fixed.executionClock
-      ? { id: hooks.evaluationRunId, issuedAt: fixed.executionClock.iso }
-      : undefined
-  );
   const maxCalls = fixed.settings.maxCalls;
-  const mainCallLimit = evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls;
   let mainCalls = 0;
-  let evaluationRounds = 0;
   const completedCallIds = new Set<string>();
   const usage: Usage = structuredClone(
     hooks.initialUsage ?? { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
@@ -231,10 +219,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     native = false,
     prepareShellEvent?: (event: ToolEvent, remainingCalls: ProviderResult['toolCalls']) => ToolEvent
   ): Promise<MainResult | undefined> => {
-    if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
-      if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
-        return fail('MODEL_CALL_BUDGET_EXHAUSTED');
-    }
     const callIds = new Set(
       [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
     );
@@ -304,70 +288,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       return { status: 'completed', text: content, error: null, usage };
     }
-    const evaluationTerminals = result.toolCalls.filter(
-      (call) => call.name === 'eval_submit_artifact'
-    );
-    if (evaluationTerminals.length) {
-      const started = performance.now();
-      if (
-        !evaluation ||
-        evaluationTerminals.length !== 1 ||
-        result.toolCalls.length !== 1 ||
-        result.refusal ||
-        result.error
-      )
-        return fail('INVALID_EVALUATION_ARTIFACT');
-      const terminalCall = evaluationTerminals[0];
-      const savedTerminal = replayEvents.get(JSON.stringify([terminalCall.id, terminalCall.name]));
-      if (!savedTerminal)
-        await hooks.onToolStart?.({
-          callId: terminalCall.id,
-          name: terminalCall.name,
-          args: terminalCall.arguments,
-        });
-      const submitted = evaluation.submit(
-        evaluationTerminals[0],
-        evaluationTerminals[0].recoveredFromTruncation === true
-      );
-      if (!submitted.ok) {
-        if (evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT)
-          return fail('MODEL_CALL_BUDGET_EXHAUSTED');
-        results.push(submitted.event);
-        if (
-          !(await persistOrReplay(submitted.event, {
-            elapsedMs: performance.now() - started,
-            diagnosticArgs: evaluationTerminals[0].arguments,
-          }))
-        )
-          return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-        opaqueState = result.opaqueState;
-        return undefined;
-      }
-      if (signal.aborted) return fail('CANCELLED');
-      const event: ToolEvent = {
-        callId: evaluationTerminals[0].id,
-        name: 'eval_submit_artifact',
-        args: {},
-        denied: false,
-        result: {
-          accepted: true,
-          sha256: submitted.artifact.sha256,
-          characters: submitted.artifact.text.length,
-          utf8Bytes: submitted.artifact.utf8Bytes,
-          noticeProvided: submitted.artifact.noticeProvided,
-          noticeCharacters: submitted.artifact.noticeCharacters,
-          correctionCount: submitted.artifact.correctionCount,
-        },
-      };
-      if (
-        !(await persistOrReplay(event, {
-          elapsedMs: performance.now() - started,
-          diagnosticArgs: evaluationTerminals[0].arguments,
-        }))
-      )
-        return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-      return { status: 'completed', text: submitted.artifact.text, error: null, usage };
-    }
     opaqueState = result.opaqueState;
     for (const [callIndex, call] of result.toolCalls.entries()) {
       if (signal.aborted) return fail('CANCELLED');
@@ -379,12 +299,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (saved) {
         if (call.name === 'agents.consult' && collaboration) {
           event = collaboration.replay(saved);
-        } else if (
-          evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
-        ) {
-          const restored = evaluation.execute(call);
-          if (!isDeepStrictEqual(restored, saved)) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-          event = saved;
         } else {
           event = saved;
         }
@@ -394,13 +308,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           reserveWriterCall: native ? 0 : 1,
         });
       } else
-        event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
-          ? evaluation.execute(call)
-          : await executeMainTool(
-              action,
-              offered.map((tool) => tool.name),
-              signal
-            );
+        event = await executeMainTool(
+          action,
+          offered.map((tool) => tool.name),
+          signal
+        );
       const originalResultChars = toolResultChars(event.result);
       if (!saved && event.name === 'data.exec' && !event.denied)
         event = prepareShellEvent?.(event, result.toolCalls.slice(callIndex + 1)) ?? event;
@@ -424,10 +336,9 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       !Number.isSafeInteger(maxCalls) ||
       maxCalls < 1 ||
       usage.modelCalls >= maxCalls ||
-      mainCalls >= mainCallLimit
+      mainCalls >= maxCalls
     )
       return fail('MODEL_CALL_BUDGET_EXHAUSTED');
-    if (evaluation && evaluation.remainingMs() === 0) return fail('TIMEOUT');
     let authorized: Connection;
     try {
       authorized = await hooks.authorize(structuredClone(target.connection));
@@ -441,14 +352,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       authorized.protocol !== target.connection.protocol
     )
       return fail('CONNECTION_NOT_AUTHORIZED');
-    const economizedBootstrap =
-      evaluation?.options.contextMode === 'preloaded' &&
-      evaluation.options.approvalReasoningMode === 'economized' &&
-      results.length === 0;
     const native =
-      authorized.protocol === 'codex-app-server-v1' &&
-      hooks.executeCodexAgent &&
-      !economizedBootstrap
+      authorized.protocol === 'codex-app-server-v1' && hooks.executeCodexAgent
         ? hooks.executeCodexAgent
         : undefined;
     const build = (freshHistory?: ToolEvent[], projectedResults: ToolEvent[] = results) => {
@@ -457,17 +362,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       return buildMainProviderRequest(fixed, {
         shell: !!hooks.executeShell,
         results: fresh ? [] : projectedResults,
-        ...(evaluation
-          ? {
-              evaluation: {
-                definitions: evaluation.definitions,
-                bootstrap: evaluation.bootstrap,
-                ...(evaluation.toolChoice(results.length)
-                  ? { toolChoice: evaluation.toolChoice(results.length) }
-                  : {}),
-              },
-            }
-          : {}),
         ...(!fresh && opaqueState !== undefined ? { opaqueState } : {}),
         ...(collaboration ? { agentBootstrap: collaboration.bootstrap } : {}),
         ...(history.length ? { completedToolHistory: history } : {}),
@@ -481,7 +375,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       ).estimatedInputTokens;
     let built = build();
     const latestRead = results.findLast(compactableRead)?.callId;
-    if (!native && !evaluation && fixed.contextPlan && latestRead) {
+    if (!native && fixed.contextPlan && latestRead) {
       const before = measure(built.request);
       const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
       if (latestRead === lastUnhelpfulRead && before > inputLimit)
@@ -555,16 +449,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       }
     }
     if (usage.modelCalls >= maxCalls) return fail('MODEL_CALL_BUDGET_EXHAUSTED');
-    if (evaluation && request.generation) {
-      const configured = request.generation;
-      request.generation = evaluation.generation(configured, results.length);
-      const binding = evaluation.generationBinding(configured, results.length);
-      if (binding) request.generationBinding = binding;
-    }
     await hooks.onInput(structuredClone(input));
     let attemptId: string | undefined;
-    const remainingTimeout = evaluation?.remainingMs();
-    if (remainingTimeout === 0) return fail('TIMEOUT');
     const execution: ProviderExecutionOptions = {
       signal: hooks.signal,
       resolveCredential: hooks.resolveCredential,
@@ -575,7 +461,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       executionMode: target.executionMode,
       cancelRemoteOnAbort: hooks.cancelRemoteOnAbort,
       timeoutMs:
-        remainingTimeout ??
         hooks.timeoutMs ??
         target.timeoutMs ??
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
@@ -613,7 +498,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         if (requestContext && !wire.requestContext)
           hooks.onPhaseSpan?.('preflightTokenize', performance.now() - tokenizeStarted);
         readHeadroomTokens =
-          !native && !evaluation && request.contextBudget && requestContext
+          !native && request.contextBudget && requestContext
             ? Math.max(
                 0,
                 (request.contextBudget.inputTokenLimit * 0.85 -
@@ -724,15 +609,10 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       throw new ModelRunError(error, structuredClone(usage));
     }
     await pendingTools;
-    if (attemptId !== undefined) {
-      const diagnostic = evaluation ? evaluation.diagnosticResult(result) : structuredClone(result);
-      await hooks.onAttemptFinish(attemptId, diagnostic);
-    }
+    if (attemptId !== undefined) await hooks.onAttemptFinish(attemptId, structuredClone(result));
     addUsage(usage, result);
     if (nativeHostError) throw new ModelRunError(nativeHostError, structuredClone(usage));
     continuationPrompt = request.prompt;
-    if (result.status === 'completed' && evaluation?.requiresSubmission && !nativeFinished)
-      return fail('EVALUATION_SUBMISSION_REQUIRED');
     if (result.status !== 'tool_calls')
       return {
         status: result.status,

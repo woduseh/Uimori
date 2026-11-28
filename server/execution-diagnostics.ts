@@ -69,7 +69,7 @@ export function startToolDiagnostic(
 
 function argumentDiagnostic(name: string, args: Record<string, unknown>) {
   const original = helperArgumentDiagnostic(args as Json);
-  if (name === 'story.submit' || name === 'eval_submit_artifact')
+  if (name === 'story.submit')
     return { ...original, argsPreview: '[authored submission withheld]', argsRedacted: true };
   if (name === 'agents.consult' && ('draft' in args || 'question' in args)) {
     const preview = helperArgumentDiagnostic({

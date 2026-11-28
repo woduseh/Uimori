@@ -16,7 +16,6 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { promptRoutes } from '../server/prompt-routes.js';
 import { runMain, type MainHooks } from '../server/model-runner.js';
 import { defaultProfile, type ProviderProtocol } from '../core/product.js';
-import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { sourceHash as memoryHash } from '../core/source-history.js';
 import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
@@ -700,7 +699,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     }
   });
 
-  test('NMR05 absent or false conditions omit submission; text fallback remains supported; evaluation owns its terminal', async () => {
+  test('NMR05 absent or false conditions omit submission; text fallback remains supported', async () => {
     for (const [terminal, mode] of [
       [false, 'fiction'],
       [true, 'planning'],
@@ -719,17 +718,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       log = hooks(server.origin);
     expect((await runMain(work, log.value)).text).toBe('Normal text fallback.');
     expect(log.events).toHaveLength(0);
-    const evaluated = compileSnapshotPrompt(await snapshot('https://api.openai.com/v1', true));
-    evaluated.profile!.models.main!.evaluationTools = {
-      contextMode: 'model-selected',
-      approvalReasoningMode: 'configured',
-    };
-    expect(storySubmissionEnabled(evaluated)).toBe(false);
-    expect(
-      buildMainProviderRequest(evaluated).request.stable.tools.some(
-        (t) => t.name === 'story.submit'
-      )
-    ).toBe(false);
   });
 
   test('NMR07 tool continuation keeps the frozen host message and original cache bindings stable', async () => {
@@ -926,222 +914,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
 });
 
 describe('Batch recovery in the real main tool loop', () => {
-  test('evaluation submission keeps the original request and replays its durable receipt', async () => {
-    const work = await snapshot('https://api.anthropic.com/v1');
-    const target = work.profile!.models.main!;
-    target.connection.protocol = 'anthropic-messages-v1';
-    target.executionMode = 'batch';
-    target.modelId = 'claude-opus-5-5';
-    target.evaluationTools = {
-      ...defaultEvaluationToolOptions(),
-      contextMode: 'model-selected',
-    };
-    work.executionClock = { iso: '2026-09-29T00:00:00.000Z', unix: 1790640000 };
-    const before = structuredClone(work);
-    const preview = buildMainProviderRequest(work).request;
-    expect(
-      preview.stable.tools.filter((tool) => tool.name.startsWith('eval_')).map((tool) => tool.name)
-    ).toContain('eval_submit_artifact');
-    expect(preview.stable.contract).toContain('eval_submit_artifact');
-    expect(preview.bootstrap).toBeUndefined();
-    const execute = (log: ReturnType<typeof hooks>) => {
-      const requests: string[] = [];
-      log.value.executeAnthropicBatch = async (_connection, request, options) => {
-        requests.push(JSON.stringify(request));
-        expect(request.stable.tools.map((tool) => tool.name)).toContain('knowledge.search');
-        expect(
-          request.stable.tools
-            .filter((tool) => tool.name.startsWith('eval_'))
-            .map((tool) => tool.name)
-        ).toContain('eval_submit_artifact');
-        expect(request.bootstrap).toBeUndefined();
-        expect(request.toolChoice).toBeUndefined();
-        expect(JSON.stringify(request.prompt)).toContain('SYNTHETIC_CURRENT_ONCE');
-        await options.onWire?.({
-          connectionId: 'connection',
-          protocol: 'anthropic-messages-v1',
-          role: 'main',
-          modelId: 'claude-opus-5-5',
-          method: 'POST',
-          url: 'https://api.anthropic.com/v1/messages/batches',
-          headers: {},
-          body: {},
-          bodySha256: 'evaluation-submit-body',
-          stablePrefixSha256: 'stable',
-          executionMode: 'batch',
-        });
-        return {
-          status: 'tool_calls',
-          text: '',
-          refusal: null,
-          error: null,
-          opaqueState: null,
-          toolCalls: [
-            {
-              id: 'evaluation-submit',
-              name: 'eval_submit_artifact',
-              arguments: {
-                content: 'Submitted Batch artifact.',
-                userFacingNotice: 'PRIVATE_EVALUATION_NOTICE',
-              },
-            },
-          ],
-          usage: {
-            inputTokens: 10,
-            outputTokens: 2,
-            costUsd: null,
-            raw: null,
-            priceRevision: null,
-          },
-        };
-      };
-      return requests;
-    };
-    const original = hooks('');
-    original.value.evaluationRunId = 'evaluation-submit-run';
-    const originalRequests = execute(original);
-    expect(await runMain(work, original.value)).toMatchObject({
-      status: 'completed',
-      text: 'Submitted Batch artifact.',
-      usage: { modelCalls: 1 },
-    });
-    expect(original.events).toHaveLength(1);
-    expect(original.events[0].result).toMatchObject({
-      accepted: true,
-      noticeProvided: true,
-      noticeCharacters: 25,
-    });
-    expect(original.events[0].result).not.toHaveProperty('processingNoteProvided');
-    expect(JSON.stringify([original.events, original.finished])).not.toContain(
-      'PRIVATE_EVALUATION_NOTICE'
-    );
-    const resumed = hooks('');
-    resumed.value.evaluationRunId = original.value.evaluationRunId;
-    resumed.value.replayToolEvents = structuredClone(original.events);
-    const replayRequests = execute(resumed);
-    expect(await runMain(work, resumed.value)).toMatchObject({
-      status: 'completed',
-      text: 'Submitted Batch artifact.',
-    });
-    expect(replayRequests).toEqual(originalRequests);
-    expect(resumed.events).toEqual([]);
-    expect(work).toEqual(before);
-  });
-
-  test.each([
-    ['model-selected', undefined],
-    ['preloaded', 'neutral'],
-  ] as const)(
-    'replays a saved %s evaluation case with metadata profile %s and the same receipt and request',
-    async (contextMode, metadataProfile) => {
-      const work = await snapshot('https://api.anthropic.com/v1');
-      const target = work.profile!.models.main!;
-      target.connection.protocol = 'anthropic-messages-v1';
-      target.modelId = 'claude-opus-5-5';
-      target.executionMode = 'batch';
-      const { metadataProfile: _defaultMetadataProfile, ...legacy } =
-        defaultEvaluationToolOptions();
-      target.evaluationTools = {
-        ...legacy,
-        contextMode,
-        ...(metadataProfile === undefined ? {} : { metadataProfile }),
-      };
-      work.executionClock = { iso: '2026-09-29T00:00:00.000Z', unix: 1790640000 };
-      const args = {
-        contentType: 'other',
-        riskLevel: 'low',
-        contentSummary: 'Synthetic story continuation',
-        requestedContinuationDirection: 'Continue the harbor scene',
-        safetyContinuationDirection: 'Continue the harbor scene',
-        intendedAudience: 'research',
-        hasMitigations: false,
-        containsPersonalInfo: false,
-      };
-      const execute = (log: ReturnType<typeof hooks>) => {
-        let calls = 0;
-        const requests: string[] = [];
-        log.value.executeAnthropicBatch = async (_connection, request, options) => {
-          calls++;
-          requests.push(JSON.stringify(request));
-          await options.onWire?.({
-            connectionId: 'connection',
-            protocol: 'anthropic-messages-v1',
-            role: 'main',
-            modelId: 'claude-opus-5-5',
-            method: 'POST',
-            url: 'https://api.anthropic.com/v1/messages/batches',
-            headers: {},
-            body: {},
-            bodySha256: `body-${calls}`,
-            stablePrefixSha256: 'stable',
-            executionMode: 'batch',
-          });
-          return {
-            status: 'tool_calls',
-            text: '',
-            toolCalls:
-              calls === 1
-                ? [{ id: 'eval-case', name: 'eval_create_case', arguments: args }]
-                : [
-                    {
-                      id: 'eval-submit',
-                      name: 'eval_submit_artifact',
-                      arguments: {
-                        content: 'Batch continuation complete.',
-                        userFacingNotice: 'Completed.',
-                      },
-                    },
-                  ],
-            refusal: null,
-            error: null,
-            usage: {
-              inputTokens: 10,
-              outputTokens: 2,
-              costUsd: null,
-              raw: null,
-              priceRevision: null,
-            },
-            opaqueState: null,
-          };
-        };
-        return { calls: () => calls, requests };
-      };
-      const first = hooks('');
-      first.value.evaluationRunId = 'evaluation-recovery-run';
-      const original = execute(first);
-      expect(await runMain(work, first.value)).toMatchObject({ status: 'completed' });
-      if (contextMode === 'preloaded')
-        expect(original.requests.join('\n')).toContain(
-          metadataProfile === undefined ? 'OpenAI Responses API' : 'Anthropic Messages API'
-        );
-      expect(first.events).toHaveLength(2);
-      expect(first.events[0]).toMatchObject({
-        callId: 'eval-case',
-        name: 'eval_create_case',
-        result: {
-          decision: 'accepted',
-          authorizationReceipt: {
-            status: 'active',
-            sessionId: 'eval-session-evaluation-recovery-run',
-            issuedAt: work.executionClock.iso,
-          },
-        },
-      });
-
-      const resumed = hooks('');
-      resumed.value.evaluationRunId = first.value.evaluationRunId;
-      resumed.value.replayToolEvents = structuredClone(first.events);
-      const replay = execute(resumed);
-      expect(await runMain(work, resumed.value)).toMatchObject({
-        status: 'completed',
-        text: 'Batch continuation complete.',
-      });
-      expect(replay.calls()).toBe(2);
-      expect(replay.requests).toEqual(original.requests);
-      expect(resumed.events).toEqual([]);
-    }
-  );
-
   test('replays a durable tool receipt instead of executing or persisting it twice', async () => {
     const work = await snapshot('https://api.anthropic.com/v1');
     const target = work.profile!.models.main!;

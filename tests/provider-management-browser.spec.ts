@@ -11,7 +11,6 @@ import {
 import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
 import type { Connection, Library, ModelPreset } from '../core/product.js';
 import { generateKeyPairSync } from 'node:crypto';
-import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 
 async function api<T>(
@@ -41,7 +40,6 @@ const modelInput = (connection: Connection, title: string) => ({
   modelId: 'synthetic-model',
   maxOutputTokens: 8192,
   temperature: null,
-  evaluationTools: defaultEvaluationToolOptions(),
   enabled: true,
 });
 const connectionBody = (item: Connection, changes: Record<string, unknown> = {}) => ({
@@ -140,14 +138,6 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .filter({ hasText: '새 실행에 이 모델 사용' })
       .screenshot({ path: info.outputPath('model-visibility-switch.png') });
   await modelForm.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(modelForm.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
-  await modelForm.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
-  if (visualReview)
-    await modelForm
-      .locator('.toggle-row')
-      .filter({ hasText: '이 모델 프리셋에 평가 도구 사용' })
-      .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
-
   await modelForm.getByText('요금과 추정 비용', { exact: true }).click();
   await modelForm.getByLabel('요금 기준', { exact: true }).selectOption('manual');
   await modelForm.getByLabel('Standard 입력 요금', { exact: true }).fill('2');
@@ -171,11 +161,6 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   expect(saved).toMatchObject({
     connectionId: connection.id,
     modelId: 'synthetic/manual-id',
-    evaluationTools: {
-      contextMode: 'model-selected',
-      approvalReasoningMode: 'configured',
-      metadataProfile: 'neutral',
-    },
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
   expect(observed.errors).toEqual([]);
@@ -673,11 +658,6 @@ for (const [index, item] of providerOptionCases.entries()) {
         'adaptive'
       );
       await expect(mode.locator('optgroup[label="기타"] option[value="disabled"]')).toHaveCount(1);
-      await form.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
-      await expect(
-        form.getByLabel('평가 컨텍스트 제공').locator('option[value="preloaded"]')
-      ).toHaveJSProperty('disabled', true);
-      await expect(form.getByLabel('평가 컨텍스트 제공')).toHaveValue('model-selected');
     }
     await form.getByRole('button', { name: '기본', exact: true }).click();
     expect(

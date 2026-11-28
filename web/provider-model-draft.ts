@@ -16,14 +16,8 @@ import { validateModelPricing } from '../core/model-pricing.js';
 import {
   GENERATION_KEYS,
   generationFromModel,
-  modelCapability,
   validateModelOptions,
 } from '../core/model-capabilities.js';
-import {
-  defaultEvaluationToolOptions,
-  validateEvaluationToolOptions,
-  type EvaluationToolOptions,
-} from '../core/evaluation-tool-config.js';
 import {
   ProviderOptionsError,
   parseProviderOptionsText,
@@ -142,8 +136,6 @@ export type ModelDraft = {
   cacheTtl: string;
   thinkingMode: string;
   enabled: boolean;
-  evaluationToolsEnabled: boolean;
-  evaluationTools: EvaluationToolOptions;
   providerOptions: string;
   pricing: PricingDraft;
 };
@@ -173,8 +165,6 @@ export const initialModel = (): ModelDraft => ({
   cacheTtl: '',
   thinkingMode: '',
   enabled: true,
-  evaluationToolsEnabled: false,
-  evaluationTools: defaultEvaluationToolOptions(),
   providerOptions: '',
   pricing: pricingDraft(),
 });
@@ -206,11 +196,6 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     cacheTtl: value.cacheTtl ?? '',
     thinkingMode: value.thinkingMode ?? '',
     enabled: value.enabled !== false,
-    evaluationToolsEnabled: value.evaluationTools !== undefined,
-    evaluationTools: {
-      ...defaultEvaluationToolOptions(),
-      ...value.evaluationTools,
-    },
     providerOptions:
       value.providerOptions === undefined ? '' : JSON.stringify(value.providerOptions, null, 2),
     pricing: pricingDraft(value.pricing),
@@ -285,11 +270,6 @@ export function modelPayload(draft: ModelDraft, connection: LibraryConnection) {
     ...(draft.cacheMode ? { cacheMode: draft.cacheMode } : {}),
     ...(draft.cacheTtl ? { cacheTtl: draft.cacheTtl } : {}),
     ...(draft.thinkingMode ? { thinkingMode: draft.thinkingMode } : {}),
-    ...(draft.evaluationToolsEnabled
-      ? {
-          evaluationTools: structuredClone(draft.evaluationTools),
-        }
-      : {}),
     ...(providerOptions !== undefined ? { providerOptions } : {}),
     pricing: pricingPayload(draft.pricing),
   };
@@ -341,21 +321,12 @@ export function modelDraftError(
   try {
     validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return uiMessage('providers.m326');
-    if (draft.evaluationToolsEnabled) {
-      validateEvaluationToolOptions(modelPayload(draft, connection).evaluationTools);
-    }
     validateModelOptions(
       generationFromModel(modelPayload(draft, connection) as ModelPreset),
       connection.protocol
     );
     const tierError = forcedServiceTierError(draft, connection, forcedVertexTier);
     if (tierError) return tierError;
-    if (
-      draft.evaluationToolsEnabled &&
-      draft.evaluationTools.contextMode === 'preloaded' &&
-      modelCapability(connection.protocol, draft.modelId)?.forcedTools === false
-    )
-      return uiMessage('providers.m327');
     return null;
   } catch (error) {
     const code = error instanceof ProviderContractError ? error.code : undefined;

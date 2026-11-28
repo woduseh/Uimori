@@ -98,7 +98,7 @@
       ]
     },
     "chat-settings": {
-      "title": "Chat settings, creative options, chat variables, model selection, advisors and evaluation tools",
+      "title": "Chat settings, creative options, chat variables, model selection and advisors",
       "sources": [
         "web/ChatSettingsPanel.tsx",
         "web/ChatOptionSettings.tsx",
@@ -112,14 +112,12 @@
         "core/chat-settings.ts",
         "core/chat-variables.ts",
         "core/agent-collaboration.ts",
-        "core/evaluation-tool*.ts",
         "server/chat-options.ts",
         "server/chat-overrides.ts",
         "server/chat-profile-routes.ts",
         "server/chat-variable*.ts",
         "packages/contracts/src/domains/chat-settings/**",
         "server/agent-collaboration.ts",
-        "server/evaluation-session.ts",
         "web/chat-*.css",
         "web/agent-collaboration.css"
       ],

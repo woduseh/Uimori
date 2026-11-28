@@ -2,12 +2,10 @@ import { validateModelPricing, validatePricingSnapshot } from '../core/model-pri
 import {
   GENERATION_KEYS,
   generationFromModel,
-  modelCapability,
   validateGenerationShape,
   validateModelOptions,
 } from '../core/model-capabilities.js';
 import { validCredentialRef } from '../core/credential-reference.js';
-import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { ProviderOptionsError, validateProviderOptions } from '../core/provider-options.js';
 import {
@@ -48,7 +46,6 @@ export const modelOptionKeys = [
   ...GENERATION_KEYS.filter((key) => !['maxOutputTokens', 'temperature'].includes(key)),
   'executionMode',
   'timeoutMs',
-  'evaluationTools',
   'inputTokenLimit',
   'tokenizer',
   'providerOptions',
@@ -105,12 +102,6 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
       TOKENIZER_PROFILES.map((profile) => profile.id),
       'tokenizer'
     );
-  if (value.evaluationTools !== undefined)
-    try {
-      validateEvaluationToolOptions(value.evaluationTools);
-    } catch {
-      throw new HttpError(400, 'Invalid evaluation tool options');
-    }
   if (value.providerOptions !== undefined) {
     try {
       validateProviderOptions(value.providerOptions);
@@ -127,14 +118,8 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
     number(value.timeoutMs, 'timeout', 1, protocol === 'fixture-sse-v1' ? 600000 : 1800000);
   const generation = generationFromModel(value as ModelPreset);
   try {
-    if (protocol) {
-      validateModelOptions(generation, protocol);
-      if (
-        modelCapability(protocol, value.modelId)?.forcedTools === false &&
-        value.evaluationTools?.contextMode === 'preloaded'
-      )
-        throw new Error('Preloaded evaluation context requires forced tool calls');
-    } else validateGenerationShape(generation);
+    if (protocol) validateModelOptions(generation, protocol);
+    else validateGenerationShape(generation);
   } catch (error) {
     throw new HttpError(400, error instanceof Error ? error.message : 'Invalid model options');
   }
@@ -246,6 +231,7 @@ export function validateProviderSettingVersion(row: Row): void {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
+      'evaluationTools',
       'enabled',
       'displayOrder',
       'pricing',
@@ -292,5 +278,7 @@ export function validateModelSnapshot(value: unknown): ModelSnapshot {
     )
       throw new HttpError(400, 'Pricing snapshot model mismatch');
   }
-  return structuredClone(snapshot) as ModelSnapshot;
+  const cleaned = structuredClone(snapshot);
+  delete cleaned.evaluationTools;
+  return cleaned as ModelSnapshot;
 }

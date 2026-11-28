@@ -3,7 +3,6 @@ import { storyUiPrompt } from './story-ui.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX } from '../core/agent-collaboration.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { evaluationToolDefinitions } from '../core/evaluation-tools.js';
 import { contextBudgetForModel, estimateContextInput } from '../core/context-budget.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
@@ -64,10 +63,7 @@ export const STORY_SUBMIT_TOOL: ProviderTool = {
 };
 const json = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 export function storySubmissionEnabled(snapshot: RunSnapshot): boolean {
-  return (
-    !snapshot.profile?.models.main?.evaluationTools &&
-    snapshot.promptCompilation?.execution?.storySubmission === true
-  );
+  return snapshot.promptCompilation?.execution?.storySubmission === true;
 }
 export function buildMainProviderRequest(
   snapshot: RunSnapshot,
@@ -75,11 +71,6 @@ export function buildMainProviderRequest(
     shell?: boolean;
     results?: readonly ToolEvent[];
     opaqueState?: Json;
-    evaluation?: {
-      definitions: readonly ProviderTool[];
-      bootstrap: readonly ToolEvent[];
-      toolChoice?: string;
-    };
     agentBootstrap?: readonly ToolEvent[];
     completedToolHistory?: readonly ToolEvent[];
   } = {}
@@ -93,11 +84,6 @@ export function buildMainProviderRequest(
     ),
     target = fixed.profile?.models.main;
   if (!target) throw new ProviderContractError('MAIN_MODEL_REQUIRED');
-  const evaluation: typeof options.evaluation =
-    options.evaluation ??
-    (target.evaluationTools
-      ? { definitions: evaluationToolDefinitions(target.evaluationTools), bootstrap: [] }
-      : undefined);
   const input = buildMainInput(fixed, options.results ?? []),
     terminal = storySubmissionEnabled(fixed);
   const readTools = [...input.tools];
@@ -144,8 +130,6 @@ export function buildMainProviderRequest(
     : [];
   if (agentTools.length) input.tools.push('agents.consult');
   if (terminal) input.tools = [...input.tools, STORY_SUBMIT_TOOL.name];
-  if (evaluation)
-    input.tools = [...input.tools, ...evaluation.definitions.map((tool) => tool.name)];
   const shell = options.shell ?? !!process.env.UIMORI_SHELL_ROOT;
   let contract = input.contract;
   if (
@@ -177,9 +161,6 @@ export function buildMainProviderRequest(
   if (terminal)
     contract +=
       "\nThe registered story.submit tool is this run's final fiction submission boundary. Ordinary final text remains a supported fallback.";
-  if (evaluation)
-    contract +=
-      '\nThe selected evaluation tool set is scoped to this model preset and this run. Complete this run by calling eval_submit_artifact alone with the finished artifact in content and userFacingNotice as separate metadata. Ordinary final text does not complete the run.';
   const knowledge = readTools.includes('knowledge.read');
   if (knowledge) contract += '\n' + CATALOG_READ_GUIDANCE;
   if (shell) {
@@ -188,7 +169,7 @@ export function buildMainProviderRequest(
       contract +=
         '\nUse data.exec when a reference question needs several searches or local processing; read known reference ids directly with knowledge.read.';
   }
-  const bootstrap = [...(evaluation?.bootstrap ?? []), ...(options.agentBootstrap ?? [])];
+  const bootstrap = [...(options.agentBootstrap ?? [])];
   const providerInput = requestInput(fixed, input);
   if (options.completedToolHistory?.length)
     providerInput.source = {
@@ -229,7 +210,6 @@ export function buildMainProviderRequest(
         ),
         ...agentTools,
         ...(terminal ? [structuredClone(STORY_SUBMIT_TOOL)] : []),
-        ...(evaluation?.definitions.map((tool) => structuredClone(tool)) ?? []),
       ],
     },
     generation: generationFromModel(target),
@@ -246,7 +226,6 @@ export function buildMainProviderRequest(
           })),
         }
       : {}),
-    ...(evaluation?.toolChoice ? { toolChoice: evaluation.toolChoice } : {}),
     ...(fixed.promptCompilation
       ? {
           prompt: {

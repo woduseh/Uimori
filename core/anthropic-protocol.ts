@@ -201,7 +201,7 @@ export function encodeAnthropic(request: ProviderRequest): {
         ...(request.webSearch ? { webSearch: true } : {}),
         modelId: request.modelId,
         stable: request.stable,
-        generation: request.generationBinding ?? generation ?? null,
+        generation: generation ?? null,
         contextBudget: request.contextBudget ?? null,
         input,
         prompt: request.prompt ?? null,
