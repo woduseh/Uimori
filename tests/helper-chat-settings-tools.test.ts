@@ -14,7 +14,7 @@ import { sceneTitle } from '../server/scene-titles.js';
 import { Store } from '../server/store.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { invokeHelperModelParameterTool } from '../server/helper-model-parameter-tools.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { softDeleteLibraryItem } from './fixtures/soft-delete.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { forgetHelperSceneChanges, readHelperChanges } from '../server/helper-changes.js';
@@ -398,7 +398,7 @@ test('options.fix on a chat deleted underneath the task answers REVISION_CONFLIC
   const state = new ChatOptionsStore(store).get(chat.id);
   const task = { id: 'task', snapshot: { scope: { kind: 'chat', chatId: chat.id } } } as HelperTask;
   vi.spyOn(HelperWorkspace.prototype, 'assertRunning').mockReturnValue(undefined as never);
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
   expect(() =>
     invokeHelperOptions(
       store,
@@ -879,6 +879,39 @@ test('chat.organize checks revisions before the persona kind and treats a hidden
   expect(run.finished('module')).toMatchObject({ errorCode: 'NOT_A_PERSONA' });
   expect(store.organization.folders(botId)).toEqual([folder]);
   expect(store.organization.defaults(botId)).toEqual(defaults);
+});
+
+test('chat.organize answers a deleted chat as a conflict and a chat of another bot by name', async () => {
+  const { store, chat } = fixture();
+  const botId = store.organization.metadata(chat.id)!.botId;
+  const gone = createFixtureChat(store, 'Gone', { botId });
+  deleteChat(store, gone.id);
+  const foreign = createFixtureChat(store, 'Elsewhere');
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('pin-gone', 'chat.organize', {
+      action: 'pin',
+      botId,
+      chatId: gone.id,
+      pinned: true,
+    }),
+    helperCall('move-gone', 'chat.organize', {
+      action: 'move',
+      botId,
+      chatId: gone.id,
+      expectedRevision: 1,
+      folderId: null,
+    }),
+    helperCall('pin-foreign', 'chat.organize', {
+      action: 'pin',
+      botId,
+      chatId: foreign.id,
+      pinned: true,
+    }),
+    helperDone,
+  ]);
+  expect(run.finished('pin-gone')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  expect(run.finished('move-gone')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  expect(run.finished('pin-foreign')).toMatchObject({ errorCode: 'CHAT_OF_ANOTHER_BOT' });
 });
 
 test('model.parameters.update tells a stale or deleted target to refresh before checking changes', () => {

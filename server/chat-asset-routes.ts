@@ -4,7 +4,7 @@ import { chatEndpoints } from '#contracts';
 import { chatOperations, nonBlank } from '#contracts/operations';
 import { deleteChatAsset } from './asset-deletion.js';
 import { updateAssetMetadata } from './asset-metadata.js';
-import { parseInput, registerEndpoint } from './endpoint.js';
+import { noStoreRefusals, parseInput, registerEndpoint } from './endpoint.js';
 import { processImageUpload } from './image-processing.js';
 import type { Store } from './store.js';
 
@@ -38,22 +38,16 @@ export function chatAssetRoutes(
     publish(input.chatId);
     return result;
   });
-  app.get(
-    '/api/assets/:id',
-    {
-      onSend: async (_request, reply, payload) => {
-        if (reply.statusCode !== 200) reply.header('Cache-Control', 'no-store');
-        return payload;
-      },
-    },
-    async (request, reply) => {
-      const { id } = parseInput(assetBytesInput, request.params);
-      const { asset, bytes } = store.product.asset(id);
-      return reply
-        .header('X-Content-Type-Options', 'nosniff')
-        .header('Cache-Control', 'private, max-age=86400')
-        .type(asset.mime)
-        .send(bytes);
-    }
-  );
+  app.get('/api/assets/:id', { onSend: noStoreRefusals }, async (request, reply) => {
+    const { id } = parseInput(assetBytesInput, {
+      ...(request.query as object),
+      ...(request.params as object),
+    });
+    const { asset, bytes } = store.product.asset(id);
+    return reply
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', 'private, max-age=86400')
+      .type(asset.mime)
+      .send(bytes);
+  });
 }

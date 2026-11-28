@@ -106,8 +106,7 @@ function personaView(store: Store, ref: ContentRef | null) {
 
 function ownedChat(store: Store, botId: string, chatId: string) {
   const owner = store.organization.metadata(chatId)?.botId;
-  if (owner === undefined)
-    throw new HelperToolError(404, 'LIBRARY_ITEM_DELETED', `chat ${chatId} no longer exists.`);
+  if (owner === undefined) throw new AppError(409, 'REVISION_CONFLICT');
   if (owner !== botId)
     throw new HelperToolError(409, 'CHAT_OF_ANOTHER_BOT', 'The chat belongs to another bot.');
 }

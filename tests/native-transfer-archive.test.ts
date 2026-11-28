@@ -248,6 +248,8 @@ test('chat archive restores authored resources without execution and recovers re
     maxCalls: 1,
     storyUi: false,
     storyUiStyle: 'modern',
+    autoRefusalRetryEnabled: true,
+    autoRefusalMaxRetries: 2,
   });
   const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
   expect(preview.backup?.title).toBe('Archive conversation');

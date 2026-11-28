@@ -108,6 +108,12 @@ test('new-chat defaults can be changed without a selected chat and preserve exis
   update('newChat.maxCalls', 1);
   expect(() => update('newChat.storyUi', false, stale)).toThrow();
   expect(() => update('newChat.maxCalls', 129)).toThrow();
+  const kept = read().newChat;
+  for (const setting of ['newChat.autoRefusalRetryEnabled', 'newChat.autoRefusalMaxRetries'])
+    expect(() =>
+      call(store, 'settings.update', { setting, expectedRevision: kept.revision })
+    ).toThrow('INVALID_REQUEST');
+  expect(read().newChat).toEqual(kept);
   expect(store.chat(next.id).settings).toEqual(next.settings);
   expect(read().newChat).toMatchObject({
     maxCalls: 1,

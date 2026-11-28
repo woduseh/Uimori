@@ -225,6 +225,7 @@ test('settings, a moved head and an ended status other than refusal stop the ret
     maxCalls: 8,
     storyUi: false,
     storyUiStyle: 'auto',
+    autoRefusalRetryEnabled: true,
     autoRefusalMaxRetries: 0,
   });
   expect(queueAutomaticRefusalRetry(store, disabled.id, anyModel)).toBeUndefined();
@@ -233,6 +234,7 @@ test('settings, a moved head and an ended status other than refusal stop the ret
     maxCalls: 8,
     storyUi: false,
     storyUiStyle: 'auto',
+    autoRefusalRetryEnabled: true,
     autoRefusalMaxRetries: 2,
   });
 
