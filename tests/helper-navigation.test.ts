@@ -311,6 +311,22 @@ test('a stale screen acting on a project or conversation deleted elsewhere gets 
       404,
       { code: 'HELPER_CONVERSATION_NOT_FOUND' },
     ]);
+    const base = `/api/helper/conversations/${conversation.id}`;
+    const answers = [];
+    for (const [method, url, payload] of [
+      ['POST', `${base}/copy`, { requestKey: 'copy', ...impact.request }],
+      ['DELETE', base, impact.request],
+      ['PUT', `${base}/context/summary`, { expectedRevision: 1, summary: '요약' }],
+      ['DELETE', `${base}/context/summary`, { expectedRevision: 1 }],
+      ['PATCH', `${base}/messages/any`, { expectedRevision: 1, text: '고침' }],
+      ['DELETE', `${base}/messages/any`, { expectedRevision: 1, scope: 'pair' }],
+    ] as const) {
+      const response = await app.inject({ method, url, payload });
+      answers.push([method, url, response.statusCode, response.json()]);
+    }
+    expect(answers.map(([, , status, body]) => [status, body])).toEqual(
+      answers.map(() => [404, { code: 'HELPER_CONVERSATION_NOT_FOUND' }])
+    );
     await loadLocale('en');
     setLocale('en');
     expect(apiErrorDisplay(stale.json(), stale.statusCode)).toBe(
@@ -341,6 +357,20 @@ test('a stale screen acting on a project or conversation deleted elsewhere gets 
       payload: { expectedRevision: kept.revision, projectId: project.id },
     });
     expect([move.statusCode, move.json()]).toEqual([404, { code: 'HELPER_PROJECT_NOT_FOUND' }]);
+    for (const [method, payload] of [
+      ['PATCH', { expectedRevision: project.revision, title: 'Renamed' }],
+      ['DELETE', { expectedRevision: project.revision }],
+    ] as const) {
+      const response = await app.inject({
+        method,
+        url: `/api/helper/projects/${project.id}`,
+        payload,
+      });
+      expect([response.statusCode, response.json()]).toEqual([
+        404,
+        { code: 'HELPER_PROJECT_NOT_FOUND' },
+      ]);
+    }
   } finally {
     setLocale('ko');
     await app.close();

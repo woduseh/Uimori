@@ -23,6 +23,7 @@ import {
   startStaleTabApp,
   stopStaleTabApp,
 } from './stale-tab/harness.js';
+import { helperCases } from './stale-tab/helper.js';
 import { libraryCases } from './stale-tab/library.js';
 import { personalWorkspaceCases } from './stale-tab/personal-workspace.js';
 import { promptsCases } from './stale-tab/prompts.js';
@@ -38,6 +39,7 @@ const domainFiles: DomainCases[] = [
   chatCases,
   chatSettingsCases,
   deletionCases,
+  helperCases,
   libraryCases,
   personalWorkspaceCases,
   promptsCases,

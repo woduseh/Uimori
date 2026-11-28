@@ -40,7 +40,6 @@ import {
   type HelperCompactionStart,
   type HelperContextReference,
   type HelperConversation,
-  type HelperMessageMutation,
   type HelperEditor,
   type HelperMode,
   type HelperReferencePointer,
@@ -50,7 +49,8 @@ import {
 } from '../core/helper.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from './helper-persona.js';
-import { api, ApiError } from './api.js';
+import { helperEndpoints } from '#contracts';
+import { api, ApiError, callEndpoint } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -968,10 +968,8 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       let owner: HelperConversation;
       try {
         owner = selected.conversationId
-          ? await api<HelperConversation>(
-              `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
-            )
-          : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
+          ? await callEndpoint(helperEndpoints.readConversation, { id: selected.conversationId })
+          : await callEndpoint(helperEndpoints.openConversation, { scope: selected.scope });
       } catch (cause) {
         if (!current()) return;
         if (
@@ -980,7 +978,7 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
           cause.status !== 404
         )
           throw cause;
-        owner = await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
+        owner = await callEndpoint(helperEndpoints.openConversation, { scope: selected.scope });
       }
       if (!current()) return;
       if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
@@ -1357,11 +1355,14 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
     setBusyScopes((old) => ({ ...old, [owner]: true }));
     setErrors((old) => ({ ...old, [owner]: null }));
     try {
-      const result = await api<HelperMessageMutation>(
-        `/helper/conversations/${encodeURIComponent(owner)}/messages/${encodeURIComponent(messageId)}`,
-        { expectedRevision, ...mutation },
-        'text' in mutation ? 'PATCH' : 'DELETE'
-      );
+      const target = { id: owner, messageId, expectedRevision };
+      const result =
+        'text' in mutation
+          ? await callEndpoint(helperEndpoints.editMessage, { ...target, text: mutation.text })
+          : await callEndpoint(helperEndpoints.deleteMessages, {
+              ...target,
+              scope: mutation.scope,
+            });
       data.applyMessageMutation(result);
       return true;
     } catch (cause) {
@@ -1865,14 +1866,11 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                   if (props.ready === false) return;
                   setSavingPersona(true);
                   setSaveNotice(null);
-                  void api<HelperConversation>(
-                    `/helper/conversations/${conversation.id}`,
-                    {
-                      expectedRevision: persona.revision,
-                      persona: persona.text,
-                    },
-                    'PATCH'
-                  )
+                  void callEndpoint(helperEndpoints.updateConversation, {
+                    id: conversation.id,
+                    expectedRevision: persona.revision,
+                    persona: persona.text,
+                  })
                     .then((value) => {
                       setSaveNotice(uiMessage('helpers.toneSaved'));
                       data.updateConversation(value);
@@ -1889,9 +1887,9 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                       if (cause instanceof ApiError && cause.status === 409) {
                         try {
                           data.updateConversation(
-                            await api<HelperConversation>(
-                              `/helper/conversations/${conversation.id}`
-                            )
+                            await callEndpoint(helperEndpoints.readConversation, {
+                              id: conversation.id,
+                            })
                           );
                         } catch {}
                       }

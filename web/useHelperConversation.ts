@@ -296,9 +296,9 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
     earlierLock.current = true;
     setLoadingEarlier(true);
     try {
-      const path = `/helper/conversations/${id(view.conversation.id)}/${kind}?before=${id(before)}`;
+      const base = `/helper/conversations/${id(view.conversation.id)}`;
       if (kind === 'messages') {
-        const page = await api<HelperMessage[]>(path);
+        const page = await api<HelperMessage[]>(`${base}/messages?before=${id(before)}`);
         if ((cache.current.get(scopeKey)?.conversation.historyRevision ?? 0) !== historyRevision)
           return;
         if (!alive.current || (!cache.current.has(scopeKey) && selectedScope.current !== scopeKey))
@@ -311,7 +311,7 @@ export function useHelperConversation(open: boolean, conversationId: string | nu
           hasOlderMessages: page.length === 100,
         });
       } else {
-        const page = await api<HelperTaskView[]>(path);
+        const page = await api<HelperTaskView[]>(`${base}/tasks?before=${id(before)}`);
         if (!alive.current || (!cache.current.has(scopeKey) && selectedScope.current !== scopeKey))
           return;
         const latest = cache.current.get(scopeKey) ?? view;

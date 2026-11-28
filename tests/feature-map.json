@@ -576,6 +576,7 @@
       "sources": [
         "core/helper*.ts",
         "server/helper-*.ts",
+        "packages/contracts/src/domains/helper/**",
         "web/Helper*.tsx",
         "web/helper-*.ts",
         "web/useHelper*.ts",

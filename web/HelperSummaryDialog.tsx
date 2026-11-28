@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { HelperContextSummaryView } from '../core/helper.js';
-import { api, ApiError } from './api.js';
+import { helperEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { Dialog } from './Dialog.js';
 import { formatNumber, t, useI18n } from './i18n.js';
@@ -42,7 +43,6 @@ export function HelperSummaryDialog({
   const editorInput = useRef<HTMLTextAreaElement>(null);
   const editTrigger = useRef<HTMLButtonElement>(null);
   const focus = useRef<'editor' | 'trigger' | null>(null);
-  const base = `/helper/conversations/${encodeURIComponent(conversationId)}/context`;
 
   function show(view: HelperContextSummaryView) {
     sequence.current++;
@@ -52,7 +52,7 @@ export function HelperSummaryDialog({
   async function load() {
     const request = ++sequence.current;
     try {
-      const view = await api<HelperContextSummaryView>(base);
+      const view = await callEndpoint(helperEndpoints.readContextSummary, { id: conversationId });
       if (request !== sequence.current) return null;
       setCurrent(view);
       setReadFailed(false);
@@ -88,11 +88,11 @@ export function HelperSummaryDialog({
     setError(null);
     try {
       show(
-        await api<HelperContextSummaryView>(
-          `${base}/summary`,
-          { expectedRevision: draft.revision, summary: draft.text },
-          'PUT'
-        )
+        await callEndpoint(helperEndpoints.editContextSummary, {
+          id: conversationId,
+          expectedRevision: draft.revision,
+          summary: draft.text,
+        })
       );
       focus.current = 'trigger';
       onDraftChange(null);
@@ -119,11 +119,10 @@ export function HelperSummaryDialog({
     setError(null);
     try {
       show(
-        await api<HelperContextSummaryView>(
-          `${base}/summary`,
-          { expectedRevision: current.checkpointRevision },
-          'DELETE'
-        )
+        await callEndpoint(helperEndpoints.resetContextSummary, {
+          id: conversationId,
+          expectedRevision: current.checkpointRevision,
+        })
       );
       setConfirmReset(false);
       await onChanged(uiMessage('helperSummary.resetDone'));

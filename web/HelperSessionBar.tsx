@@ -16,7 +16,8 @@ import type {
   HelperConversationDeletion,
   HelperProject,
 } from '../core/helper.js';
-import { api, ApiError } from './api.js';
+import { helperEndpoints } from '#contracts';
+import { api, ApiError, callEndpoint } from './api.js';
 import { helperListChange, helperListFrame } from './live-frames.js';
 import { announceLocalChange, watchLive } from './live-stream.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -119,7 +120,7 @@ export function HelperSessionBar(props: Props) {
   const reloadProjects = useCallback(async () => {
     const version = ++projectReadVersion.current;
     try {
-      const values = await api<HelperProject[]>('/helper/projects');
+      const values = await callEndpoint(helperEndpoints.listProjects);
       if (version !== projectReadVersion.current) return;
       setProjects(values);
       setProjectsLoaded(true);
@@ -149,9 +150,9 @@ export function HelperSessionBar(props: Props) {
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
       try {
-        const value = await api<HelperConversationDeletion>(
-          `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
-        );
+        const value = await callEndpoint(helperEndpoints.readConversationDeletion, {
+          id: deleting.id,
+        });
         if (!disposed) {
           setImpact(value);
           setReadError(null);
@@ -206,10 +207,10 @@ export function HelperSessionBar(props: Props) {
           );
         }
       );
-      const value = await api<HelperConversation>(
-        `/helper/conversations/${encodeURIComponent(session.id)}/copy`,
-        pending.request
-      );
+      const value = await callEndpoint(helperEndpoints.copyConversation, {
+        id: session.id,
+        ...pending.request,
+      });
       clearPendingHelperRequest(storageKey, pending);
       props.onClone(value, selectionEpoch);
     } catch (cause) {
@@ -267,11 +268,11 @@ export function HelperSessionBar(props: Props) {
     setProjectWorking(true);
     setProjectError(null);
     try {
-      const value = await api<HelperConversation>(
-        `/helper/conversations/${encodeURIComponent(session.id)}/project`,
-        { projectId, expectedRevision: session.revision },
-        'PATCH'
-      );
+      const value = await callEndpoint(helperEndpoints.moveConversation, {
+        id: session.id,
+        projectId,
+        expectedRevision: session.revision,
+      });
       props.onUpdate({ ...value, projectId } as HelperSession);
       props.onProjectsChanged?.();
       return true;
@@ -342,9 +343,9 @@ export function HelperSessionBar(props: Props) {
         if (tasks.length < 50) break;
         before = tasks.at(-1)!.id;
       }
-      const value = await api<HelperConversationDeletion>(
-        `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
-      ).catch((cause) => {
+      const value = await callEndpoint(helperEndpoints.readConversationDeletion, {
+        id: deleting.id,
+      }).catch((cause) => {
         setReadError(toUiMessage(cause, 'helpers.m168'));
         return null;
       });
@@ -510,7 +511,10 @@ export function HelperSessionBar(props: Props) {
                   }
                 );
                 try {
-                  const created = await api<HelperProject>('/helper/projects', pending.request);
+                  const created = await callEndpoint(
+                    helperEndpoints.createProject,
+                    pending.request
+                  );
                   setProjects((old) => [
                     ...old.filter((project) => project.id !== created.id),
                     created,
@@ -530,11 +534,11 @@ export function HelperSessionBar(props: Props) {
                 }
                 clearPendingHelperRequest(key, pending);
               } else {
-                await api(
-                  `/helper/projects/${encodeURIComponent(projectEditor.id)}`,
-                  { title, expectedRevision: projectEditor.revision },
-                  'PATCH'
-                );
+                await callEndpoint(helperEndpoints.renameProject, {
+                  id: projectEditor.id,
+                  title,
+                  expectedRevision: projectEditor.revision,
+                });
               }
               setProjectEditor(null);
               projectChanged();
@@ -600,11 +604,10 @@ export function HelperSessionBar(props: Props) {
               if (!projectDeleting || projectWorking) return;
               setProjectWorking(true);
               setProjectError(null);
-              void api(
-                `/helper/projects/${encodeURIComponent(projectDeleting.id)}`,
-                { expectedRevision: projectDeleting.revision },
-                'DELETE'
-              )
+              void callEndpoint(helperEndpoints.deleteProject, {
+                id: projectDeleting.id,
+                expectedRevision: projectDeleting.revision,
+              })
                 .then(async () => {
                   setProjectDeleting(null);
                   props.onProjectsChanged?.();
@@ -633,11 +636,11 @@ export function HelperSessionBar(props: Props) {
             if (!moving || projectWorking) return;
             setProjectWorking(true);
             setProjectError(null);
-            void api<HelperConversation>(
-              `/helper/conversations/${encodeURIComponent(moving.id)}/project`,
-              { projectId: moveProject || null, expectedRevision: moving.revision },
-              'PATCH'
-            )
+            void callEndpoint(helperEndpoints.moveConversation, {
+              id: moving.id,
+              projectId: moveProject || null,
+              expectedRevision: moving.revision,
+            })
               .then((value) => {
                 props.onUpdate({ ...value, projectId: moveProject || null } as HelperSession);
                 setMoving(null);
@@ -697,11 +700,11 @@ export function HelperSessionBar(props: Props) {
             if (!rename || working || !title.trim()) return;
             setWorking(true);
             setError(null);
-            void api<HelperConversation>(
-              `/helper/conversations/${encodeURIComponent(rename.id)}`,
-              { expectedRevision: rename.revision, title: title.trim() },
-              'PATCH'
-            )
+            void callEndpoint(helperEndpoints.updateConversation, {
+              id: rename.id,
+              expectedRevision: rename.revision,
+              title: title.trim(),
+            })
               .then((value) => {
                 props.onUpdate(value);
                 setRename(null);
@@ -711,9 +714,7 @@ export function HelperSessionBar(props: Props) {
                 if (cause instanceof ApiError && cause.status === 409) {
                   try {
                     setRename(
-                      await api<HelperConversation>(
-                        `/helper/conversations/${encodeURIComponent(rename.id)}`
-                      )
+                      await callEndpoint(helperEndpoints.readConversation, { id: rename.id })
                     );
                   } catch {}
                 }
@@ -802,11 +803,10 @@ export function HelperSessionBar(props: Props) {
               if (!deleting || !impact || working) return;
               setWorking(true);
               setError(null);
-              void api(
-                `/helper/conversations/${encodeURIComponent(deleting.id)}`,
-                impact.request,
-                'DELETE'
-              )
+              void callEndpoint(helperEndpoints.deleteConversation, {
+                id: deleting.id,
+                ...impact.request,
+              })
                 .then(async () => {
                   forgetHelperSession(deleting);
                   try {

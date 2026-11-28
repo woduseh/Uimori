@@ -4,7 +4,8 @@ import { toUiMessage } from './api-errors.js';
 import type { UiMessage } from './ui-message.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
-import { api, ApiError } from './api.js';
+import { helperEndpoints } from '#contracts';
+import { ApiError, callEndpoint } from './api.js';
 import { watchLive } from './live-stream.js';
 import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
 import { helperSessionsFrame } from './live-frames.js';
@@ -113,10 +114,7 @@ export function useHelperSessions(
     (id: string, sequence: number) => {
       if ((readWrites.current.get(id) ?? 0) >= sequence) return;
       readWrites.current.set(id, sequence);
-      api<{ readActivityEventSeq: number }>(
-        `/helper/conversations/${encodeURIComponent(id)}/read`,
-        { activityEventSeq: sequence }
-      )
+      callEndpoint(helperEndpoints.markConversationRead, { id, activityEventSeq: sequence })
         .then((result) => {
           confirmedReads.current.set(
             id,
@@ -196,12 +194,14 @@ export function useHelperSessions(
     const version = (versions.current.get(group) ?? 0) + 1;
     versions.current.set(group, version);
     const target = parseOwnJson(scopeKey) as HelperScope;
-    const query = expanded
-      ? 'kind=all'
-      : target.kind === 'chat'
-        ? `kind=chat&chatId=${encodeURIComponent(target.chatId)}`
-        : 'kind=library';
-    const values = await api<HelperSession[]>(`/helper/conversations?${query}`);
+    const values: HelperSession[] = await callEndpoint(
+      helperEndpoints.listConversations,
+      expanded
+        ? { kind: 'all' }
+        : target.kind === 'chat'
+          ? { kind: 'chat', chatId: target.chatId }
+          : { kind: 'library' }
+    );
     if (!alive.current || versions.current.get(group) !== version) return;
     const active = values.some((session) => session.activity?.running || session.activity?.queued);
     setLists((old) => ({ ...old, [group]: values }));
@@ -220,7 +220,7 @@ export function useHelperSessions(
       return active;
     }
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
-    const created = await api<HelperConversation>('/helper/conversations', {
+    const created = await callEndpoint(helperEndpoints.openConversation, {
       scope: expanded ? { kind: 'library', workId: 'workspace' } : target,
     });
     if (alive.current && versions.current.get(group) === version) {
@@ -311,7 +311,7 @@ export function useHelperSessions(
         requestKey: pending.request.requestKey,
         ...(projectId ? { projectId } : {}),
       };
-      const value = await api<HelperConversation>('/helper/conversations/new', request);
+      const value = await callEndpoint(helperEndpoints.createConversation, request);
       clearPendingHelperRequest(key, pending);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
       if (alive.current) {
