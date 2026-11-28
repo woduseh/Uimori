@@ -433,3 +433,38 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
   const settings = await app.inject('/api/backups');
   expect(settings.json().settings).toMatchObject({ revision: 0, retain: 7 });
 });
+
+test('raw byte routes answer refusals with no-store and keep an immutable blob success', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-endpoint-'));
+  const { createApp } = await import('../server/app.js');
+  const { putImageBlob } = await import('../server/package-images.js');
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'endpoint-test',
+    testMode: true,
+  });
+  cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
+  cleanup.push(() => app.close());
+  const missing = 'f'.repeat(64);
+  for (const [request, status] of [
+    [{ method: 'GET', url: `/api/package-image-blobs/${missing}` }, 404],
+    [{ method: 'GET', url: '/api/package-image-blobs/not-a-hash' }, 400],
+    [{ method: 'GET', url: `/api/request-files/${missing}` }, 404],
+    [{ method: 'GET', url: '/api/chats/missing-chat/backup-archive' }, 404],
+    [{ method: 'GET', url: '/api/chats/missing-chat/backup-archive?extra=1' }, 400],
+    [{ method: 'POST', url: '/api/native-transfers/export-archive', payload: {} }, 400],
+    [{ method: 'POST', url: '/api/uploads', payload: { not: 'bytes' } }, 415],
+  ] as const) {
+    const response = await app.inject(request);
+    expect(response.statusCode, `${request.method} ${request.url}`).toBe(status);
+    expect(response.headers['cache-control'], `${request.method} ${request.url}`).toBe('no-store');
+  }
+  const blob = putImageBlob(app.store.product, {
+    mime: 'image/png',
+    base64:
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
+  });
+  const image = await app.inject({ method: 'GET', url: `/api/package-image-blobs/${blob.hash}` });
+  expect(image.statusCode).toBe(200);
+  expect(image.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+});
