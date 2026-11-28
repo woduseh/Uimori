@@ -218,7 +218,7 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
     const workspace = session.options.kind === 'prompt-workspace';
     const live = watchLive({
       match: (frame) => resourceFrame(frame) || (workspace && promptWorkspaceFrame(frame)),
-      refresh: async () => refresh(),
+      refresh: () => session.refresh(),
       minIntervalMs: helperRefreshSpacing,
     });
     window.addEventListener('focus', refresh);
