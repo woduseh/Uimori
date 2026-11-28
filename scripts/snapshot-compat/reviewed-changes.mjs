@@ -38,6 +38,11 @@ function matchesPath(path, segments) {
 }
 function eligible(rule, a, b, url, file) {
   if (!rule.when) return true;
+  if (rule.when === 'scene-detail-refusal')
+    return (
+      isDeepStrictEqual(a.body, { error: 'Scene invocation not found' }) &&
+      isDeepStrictEqual(b.body, { code: 'LIBRARY_ITEM_DELETED' })
+    );
   if (rule.when === 'deleted-refusal')
     return a.body.error === 'Library item not found' && b.body.code === 'LIBRARY_ITEM_DELETED';
   const id = decodeURIComponent(url.split('/').at(rule.when === 'hidden-content' ? -1 : -2));

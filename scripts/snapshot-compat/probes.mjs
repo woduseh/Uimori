@@ -1,3 +1,4 @@
+import { request } from './requests.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash } from 'node:crypto';
 
@@ -80,13 +81,14 @@ export async function targets(instance, template) {
   let tuples = [[]];
   if (prefix in catalogs) {
     const [url, key] = catalogs[prefix];
-    const response = await instance.request('/api/' + url);
-    if (!response.ok) throw new Error('Catalog HTTP ' + response.status + ' at ' + url);
-    const value = await response.json();
-    tuples = (key ? value[key] : value)
-      .map((item) => [item.id])
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .slice(0, cap);
+    tuples = await request(instance, '/api/' + url, async (response) => {
+      if (!response.ok) throw new Error('Catalog HTTP ' + response.status);
+      const value = await response.json();
+      return (key ? value[key] : value)
+        .map((item) => [item.id])
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .slice(0, cap);
+    });
   } else if (prefix) {
     if (!queries[prefix]) throw new Error('Missing parameter discovery for ' + template);
     const count = (prefix.match(/:/g) || []).length;

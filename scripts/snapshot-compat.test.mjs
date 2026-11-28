@@ -1,9 +1,118 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { compareRead, portable } from './snapshot-compat/compare.mjs';
+import { compare, compareRead, portable, read } from './snapshot-compat/compare.mjs';
 import { rulesForCommit } from './snapshot-compat/reviewed-changes.mjs';
 import { commit } from './snapshot-compat/rules/v0.18.1.mjs';
+
+test('a failed response body records its phase and URL and the next comparison still reports data loss', async () => {
+  const routes = ['/api/chats', '/api/health'];
+  let otherBodyFinished = false;
+  const instance = (name) => ({
+    name,
+    routes,
+    request: async (url) => {
+      if (name === 'A' && url === '/api/chats')
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new DOMException('body deadline', 'TimeoutError'));
+            },
+          })
+        );
+      if (url === '/api/chats')
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              setImmediate(() => {
+                otherBodyFinished = true;
+                controller.close();
+              });
+            },
+          })
+        );
+      assert.ok(otherBodyFinished, 'the previous pair still has a response in flight');
+      return Response.json({ ready: name === 'A' });
+    },
+  });
+  const report = {
+    coverage: {},
+    completed: {},
+    ids: new Set(),
+    rules: [],
+    differences: [],
+    errors: [],
+    refusalOnly: [],
+    comparisons: 0,
+    bytes: 0,
+  };
+  await compare('old-new', instance('A'), instance('B'), report, '');
+  assert.equal(report.errors.length, 1);
+  assert.deepEqual(
+    [
+      report.errors[0].phase,
+      report.errors[0].method,
+      report.errors[0].url,
+      report.errors[0].instance,
+    ],
+    ['old-new', 'GET', '/api/chats', 'A']
+  );
+  assert.match(report.errors[0].error, /TimeoutError/);
+  assert.equal(report.comparisons, 1);
+  assert.deepEqual(report.completed['old-new'], { '/api/chats': 0, '/api/health': 1 });
+  assert.deepEqual(
+    report.differences.map((d) => d.url),
+    ['/api/health']
+  );
+});
+
+test('only the reviewed scene-detail 404 pair absorbs both fields and its derived wire length', async () => {
+  const path = '/api/attempts/:/scene-detail',
+    url = '/api/attempts/fixture/scene-detail';
+  const report = {
+    rules: rulesForCommit(commit),
+    derivedContentLengths: 0,
+    comparisons: 0,
+    bytes: 0,
+    differences: [],
+  };
+  const refusal = (body) => {
+    const text = JSON.stringify(body);
+    return read(
+      {
+        request: () =>
+          new Response(text, {
+            status: 404,
+            headers: {
+              'content-length': String(Buffer.byteLength(text)),
+              'content-type': 'application/json',
+            },
+          }),
+      },
+      path,
+      url,
+      report
+    );
+  };
+  for (const code of ['LIBRARY_ITEM_DELETED', 'OTHER']) {
+    await compareRead(
+      'old-new',
+      url,
+      refusal({ error: 'Scene invocation not found' }),
+      refusal({ code }),
+      report,
+      report.differences,
+      path
+    );
+  }
+  assert.equal(report.rules.find((r) => r.id === 'scene-detail-refusal').absorbed, 2);
+  assert.equal(report.derivedContentLengths, 1);
+  assert.deepEqual(report.differences.map((d) => d.path).sort(), [
+    '$["body"]["code"]',
+    '$["body"]["error"]',
+    '$["headers"]["content-length"]',
+  ]);
+});
 
 test('reviewed scene label removal still reports adjacent manuscript loss and every restore difference', async () => {
   const route = '/api/chats/:/manuscript',

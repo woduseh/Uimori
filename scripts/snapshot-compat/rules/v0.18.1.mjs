@@ -83,6 +83,14 @@ export const rules = [
     'New exports omit the static notices that the importer never rendered.'
   ),
   {
+    id: 'scene-detail-refusal',
+    routes: ['/api/attempts/:/scene-detail'],
+    status: [404, 404],
+    when: 'scene-detail-refusal',
+    fields: [removed('body.error', 'Scene invocation not found'), added('body.code', deletedCode)],
+    reason: 'An attempt without a writing scene now returns the stable missing-record code.',
+  },
+  {
     id: 'deleted-library-refusal',
     routes: [
       '/api/content/:',

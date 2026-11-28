@@ -1,3 +1,5 @@
+import { attempt, request } from './snapshot-compat/requests.mjs';
+import { unpack } from './snapshot-compat/archive.ts';
 import { rulesForCommit } from './snapshot-compat/reviewed-changes.mjs';
 import { parseArgs } from 'node:util';
 import path from 'node:path';
@@ -22,6 +24,8 @@ import {
   differences,
   normalization,
   portable,
+  normalizedBody,
+  saveBackup,
   read,
 } from './snapshot-compat/compare.mjs';
 
@@ -29,9 +33,16 @@ const { values } = parseArgs({
   options: {
     snapshot: { type: 'string' },
     old: { type: 'string', default: 'v0.18.1' },
+    timeout: { type: 'string' },
     'self-check': { type: 'boolean' },
   },
 });
+const timeoutSeconds = values.timeout === undefined ? undefined : Number(values.timeout);
+if (
+  timeoutSeconds !== undefined &&
+  (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 2147483)
+)
+  throw new Error('--timeout must be a positive whole number of seconds (maximum 2147483)');
 const worktrees = git('worktree', 'list', '--porcelain', '-z')
   .split('\0')
   .filter((line) => line.startsWith('worktree '))
@@ -63,6 +74,8 @@ const report = {
   cap,
   normalization,
   coverage: {},
+  completed: {},
+  timeoutSeconds,
   oneSided: [],
   refusalOnly: [],
   rules: [],
@@ -84,65 +97,109 @@ function file(name) {
 }
 const start = (tree, name, mode = 'read') =>
   boot(tree, path.dirname(file(name)), mode, report, children);
-async function exportTo(instance, name) {
-  const result = await read(instance, '/api/backup', '/api/backup', report, file(name));
-  if (result.status !== 200) throw new Error('Backup export failed');
-  return start(root, name);
+function skipped(phase, url, reason) {
+  report.errors.push({ phase, url, error: 'Skipped: ' + reason });
+}
+async function restore(phase, name, source, baseline) {
+  const url = '/api/backup';
+  if (!source || !baseline)
+    return skipped(phase, url, 'source or current comparison instance unavailable');
+  const size = await attempt(report, phase, url, () =>
+    request(source, url, (res) => saveBackup(res, file(name)))
+  );
+  if (size === undefined)
+    return skipped(phase, url, 'restore comparison requires a complete backup export');
+  report.bytes += size;
+  const restored = await attempt(report, phase, null, () => start(root, name), name);
+  if (!restored) return skipped(phase, url, 'restored instance unavailable');
+  await compare(phase, baseline, restored, report, tmp);
+  return restored;
 }
 async function post(app, url, body, binary = false) {
-  const res = await app.request(url, {
-    method: 'POST',
-    headers: { 'content-type': binary ? 'application/octet-stream' : 'application/json' },
-    body: binary ? body : JSON.stringify(body),
-  });
-  if (!res.ok)
-    throw new Error('Chat import HTTP ' + res.status + ' ' + url + ' ' + (await res.text()));
-  return res.json();
+  return request(
+    app,
+    url,
+    async (res) => {
+      if (!res.ok) throw new Error('Chat import HTTP ' + res.status + ' ' + (await res.text()));
+      return res.json();
+    },
+    {
+      method: 'POST',
+      headers: { 'content-type': binary ? 'application/octet-stream' : 'application/json' },
+      body: binary ? body : JSON.stringify(body),
+    }
+  );
 }
-async function archive(app, id) {
-  const url = '/api/chats/' + encodeURIComponent(id) + '/backup-archive';
-  return (await read(app, '/api/chats/:id/backup-archive', url, report)).body;
+const archiveUrl = (id) => '/api/chats/' + encodeURIComponent(id) + '/backup-archive';
+function archive(app, id, source = false) {
+  return request(app, archiveUrl(id), async (res) => {
+    if (!res.ok) throw new Error('Chat export HTTP ' + res.status);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    report.bytes += bytes.length;
+    return {
+      bytes,
+      body: portable(normalizedBody('/api/chats/:id/backup-archive', unpack(bytes)), source),
+    };
+  });
+}
+async function roundTripChat(app, dest, id) {
+  const source = await archive(app, id, true);
+  const expected = source.body;
+  const upload = await post(dest, '/api/uploads', source.bytes, true);
+  const { preparedId, digest } = await post(dest, '/api/chats/prepare-backup-archive', {
+    uploadId: upload.uploadId,
+  });
+  const imported = await post(dest, '/api/chats/import-backup-archive', {
+    preparedId,
+    digest,
+    idempotencyKey: randomUUID(),
+  });
+  if (!imported.created || imported.chat.id === id)
+    throw Object.assign(new Error('Chat import did not create independent copy'), {
+      url: '/api/chats/import-backup-archive',
+      method: 'POST',
+      instance: dest.name,
+    });
+  const actual = (await archive(dest, imported.chat.id)).body;
+  report.differences.push(
+    ...differences(expected, actual).map((item) => ({
+      phase: 'chat',
+      url: archiveUrl(id),
+      ...item,
+    }))
+  );
+  report.chatRoundTrips++;
+  if (values['self-check']) {
+    database(
+      dest.file,
+      (db) =>
+        db.prepare('UPDATE chats SET title=? WHERE id=?').run('changed-' + id, imported.chat.id),
+      false
+    );
+    const changed = (await archive(dest, imported.chat.id)).body;
+    if (!differences(expected, changed).some((item) => item.after === 'changed-' + id))
+      throw new Error('Chat content canary missed');
+    report.selfCheck.push('chat-title');
+  }
 }
 async function chats(app) {
-  const dest = await start(root, 'chat-import', 'import');
+  if (!app) return skipped('chat', '/api/chats', 'current source instance unavailable');
+  const dest = await attempt(
+    report,
+    'chat',
+    null,
+    () => start(root, 'chat-import', 'import'),
+    'chat-import'
+  );
+  if (!dest)
+    return skipped('chat', '/api/chats/import-backup-archive', 'chat import instance unavailable');
+  const items = (await targets(app, '/api/chats/:id')).slice(0, 3);
+  if (!items.length)
+    return skipped('chat', '/api/chats', 'snapshot contains no chats for archive verification');
   for (const {
     ids: [id],
-  } of (await targets(app, '/api/chats/:id')).slice(0, 3)) {
-    const expected = portable(await archive(app, id), true);
-    const res = await app.request('/api/chats/' + encodeURIComponent(id) + '/backup-archive');
-    if (!res.ok) throw new Error('Export failed ' + res.status);
-    const upload = await post(dest, '/api/uploads', Buffer.from(await res.arrayBuffer()), true);
-    const { preparedId, digest } = await post(dest, '/api/chats/prepare-backup-archive', {
-      uploadId: upload.uploadId,
-    });
-    const imported = await post(dest, '/api/chats/import-backup-archive', {
-      preparedId,
-      digest,
-      idempotencyKey: randomUUID(),
-    });
-    if (!imported.created || imported.chat.id === id)
-      throw new Error('Chat import did not create independent copy');
-    const actual = portable(await archive(dest, imported.chat.id));
-    const url = '/api/chats/' + id + '/backup-archive';
-    report.differences.push(
-      ...differences(expected, actual).map((item) => ({ phase: 'chat', url, ...item }))
-    );
-    if (values['self-check']) {
-      database(
-        dest.file,
-        (db) =>
-          db.prepare('UPDATE chats SET title=? WHERE id=?').run('changed-' + id, imported.chat.id),
-        false
-      );
-      const changed = portable(await archive(dest, imported.chat.id));
-      if (!differences(expected, changed).some((item) => item.after === 'changed-' + id))
-        throw new Error('Chat content canary missed');
-      report.selfCheck.push('chat-title');
-    }
-    report.chatRoundTrips++;
-  }
-  if (!report.chatRoundTrips)
-    throw new Error('Snapshot contains no chats for archive verification');
+  } of items)
+    await attempt(report, 'chat', archiveUrl(id), () => roundTripChat(app, dest, id));
 }
 function addCanary(file) {
   return database(
@@ -172,6 +229,8 @@ function addCanary(file) {
   );
 }
 async function checkCanary(reference, subject, seed, label) {
+  if (!reference || !subject)
+    return skipped('self-check/' + label, null, 'required instance unavailable');
   database(
     subject.file,
     (db) => {
@@ -185,7 +244,7 @@ async function checkCanary(reference, subject, seed, label) {
   for (const path of ['/api/chats/:id', '/api/chats/:id/bookmarks']) {
     const url = path.replace(':id', encodeURIComponent(seed.chat));
     await compareRead(
-      label,
+      'self-check/' + label,
       url,
       read(reference, path, url, report),
       read(subject, path, url, report),
@@ -201,46 +260,60 @@ async function checkCanary(reference, subject, seed, label) {
     throw new Error('Content or missing-row canary missed in ' + label);
 }
 try {
-  report.newBuild = (await assertBuild()).buildId;
-  report.oldCommit = buildOld(old, values.old);
+  report.newBuild = (await attempt(report, 'build-current', null, assertBuild))?.buildId;
+  report.oldCommit = await attempt(report, 'build-old', null, () => buildOld(old, values.old));
   report.rules = rulesForCommit(report.oldCommit);
-  const aFile = file('A');
-  copyFileSync(snapshot, aFile);
-  const seed = values['self-check'] ? addCanary(aFile) : null;
-  copyFileSync(aFile, file('B'));
-  const a = await start(old, 'A'),
-    b = await start(root, 'B');
-  await compare('old-new', a, b, report, tmp);
-  const fromOld = await exportTo(a, 'old-restored'),
-    fromNew = await exportTo(b, 'new-restored');
-  await compare('old-restore', b, fromOld, report, tmp);
-  await compare('new-restore', b, fromNew, report, tmp);
-  await chats(b);
-  if (seed) {
-    await checkCanary(b, fromOld, seed, 'old-restore');
-    await checkCanary(b, fromNew, seed, 'new-restore');
-    await checkCanary(a, b, seed, 'old-new');
+  const copies = await attempt(report, 'copy', null, () => {
+    const aFile = file('A');
+    copyFileSync(snapshot, aFile);
+    const seed = values['self-check'] ? addCanary(aFile) : null;
+    copyFileSync(aFile, file('B'));
+    return { seed };
+  });
+  const a =
+    copies && report.oldCommit && (await attempt(report, 'boot', null, () => start(old, 'A'), 'A'));
+  const b =
+    copies && report.newBuild && (await attempt(report, 'boot', null, () => start(root, 'B'), 'B'));
+  if (a && b) await attempt(report, 'old-new', null, () => compare('old-new', a, b, report, tmp));
+  else skipped('old-new', null, 'old or current source instance unavailable');
+  const fromOld = await attempt(report, 'old-restore', '/api/backup', () =>
+    restore('old-restore', 'old-restored', a, b)
+  );
+  const fromNew = await attempt(report, 'new-restore', '/api/backup', () =>
+    restore('new-restore', 'new-restored', b, b)
+  );
+  await attempt(report, 'chat', '/api/chats', () => chats(b));
+  if (values['self-check']) {
+    for (const [reference, subject, label] of [
+      [b, fromOld, 'old-restore'],
+      [b, fromNew, 'new-restore'],
+      [a, b, 'old-new'],
+    ])
+      await attempt(report, 'self-check/' + label, null, () =>
+        checkCanary(reference, subject, copies?.seed, label)
+      );
   }
-  if (!report.comparisons || !report.ids.size || !report.bytes) throw new Error('Empty comparison');
+  if (!report.comparisons || !report.ids.size || !report.bytes)
+    report.errors.push({ phase: 'coverage', url: null, error: 'Empty comparison' });
 } catch (error) {
-  report.errors.push(String(error.stack ?? error));
+  report.errors.push({ phase: 'setup', url: null, error: String(error.stack ?? error) });
 } finally {
   for (const close of children.reverse())
     try {
       await close();
     } catch (error) {
-      report.errors.push(String(error));
+      report.errors.push({ phase: 'cleanup', url: null, error: String(error) });
     }
   try {
     if (existsSync(path.join(old, '.git'))) git('worktree', 'remove', '--force', old);
     rmSync(tmp, { recursive: true, force: true, maxRetries: 4 });
   } catch (error) {
-    report.errors.push(String(error));
+    report.errors.push({ phase: 'cleanup', url: null, error: String(error) });
   }
   report.ids = report.ids.size;
   const unexpected = report.differences.length;
   const counts = Object.values(report.coverage['old-new'] ?? {});
-  const endpoints = counts.filter(Boolean).length;
+  const endpoints = Object.values(report.completed['old-new'] ?? {}).filter(Boolean).length;
   const oneSided = report.oneSided.filter((item) => item.phase === 'old-new').length;
   const refusalOnly = report.refusalOnly.filter((item) => item.phase === 'old-new').length;
   report.pass = Boolean(
@@ -250,7 +323,7 @@ try {
   writeFileSync(output, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   for (const rule of report.rules) console.log(`rule=${rule.id} absorbed=${rule.absorbed}`);
   console.log(
-    `${report.pass ? 'PASS' : 'FAIL'} endpoints=${endpoints} oneSided=${oneSided} zeroTarget=${counts.length - endpoints} refusalOnly=${refusalOnly} derivedLengths=${report.derivedContentLengths} ids=${report.ids} comparisons=${report.comparisons} bytes=${report.bytes} chats=${report.chatRoundTrips} unexpected=${unexpected} blocked=${report.blocked.length} errors=${report.errors.length} selfChecks=${report.selfCheck.length}\nReport ${output}`
+    `${report.pass ? 'PASS' : 'FAIL'} endpoints=${endpoints} oneSided=${oneSided} zeroTarget=${counts.filter((n) => n === 0).length} refusalOnly=${refusalOnly} derivedLengths=${report.derivedContentLengths} ids=${report.ids} comparisons=${report.comparisons} bytes=${report.bytes} chats=${report.chatRoundTrips} unexpected=${unexpected} blocked=${report.blocked.length} errors=${report.errors.length} selfChecks=${report.selfCheck.length}\nReport ${output}`
   );
   if (!report.pass) process.exitCode = 1;
 }
