@@ -1,0 +1,299 @@
+import { afterEach, expect, test } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createApp, type App } from '../server/app.js';
+import { setMaintenance } from '../server/maintenance.js';
+import type { Content } from '../core/product.js';
+import { fixtureBotInput } from './fixtures/chat.js';
+
+const host = 'story.example.test';
+const origin = `https://${host}`;
+const accessToken = 'synthetic-access-token-for-mcp-tests-0000';
+const mcpToken = 'synthetic-mcp-token-for-mcp-tests-00000000';
+const bearer = { host, authorization: `Bearer ${mcpToken}` };
+const MODERN = '2026-07-28';
+const meta = {
+  'io.modelcontextprotocol/protocolVersion': MODERN,
+  'io.modelcontextprotocol/clientCapabilities': {},
+};
+
+const apps: App[] = [];
+const directories: string[] = [];
+afterEach(async () => {
+  for (const app of apps.splice(0)) await app.close();
+  for (const directory of directories.splice(0))
+    rmSync(directory, { recursive: true, force: true });
+});
+
+async function app(options: { mcpToken?: string; selfHost?: boolean } = {}) {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-mcp-'));
+  directories.push(directory);
+  const created = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'synthetic-mcp',
+    ...(options.selfHost === false ? { testMode: true } : { accessToken, publicOrigin: origin }),
+    ...(options.mcpToken === undefined ? {} : { mcpToken: options.mcpToken }),
+  });
+  apps.push(created);
+  return created;
+}
+
+let nextId = 1;
+function post(
+  target: App,
+  method: string,
+  params: Record<string, unknown> = {},
+  headers: Record<string, string> = bearer
+) {
+  return target.inject({
+    method: 'POST',
+    url: '/api/mcp',
+    headers,
+    payload: { jsonrpc: '2.0', id: nextId++, method, params },
+  });
+}
+function modern(target: App, method: string, params: Record<string, unknown> = {}) {
+  const name = params.name ?? params.uri;
+  return post(
+    target,
+    method,
+    { ...params, _meta: meta },
+    {
+      ...bearer,
+      'mcp-protocol-version': MODERN,
+      'mcp-method': method,
+      ...(typeof name === 'string' ? { 'mcp-name': name } : {}),
+    }
+  );
+}
+async function call(target: App, name: string, args: Record<string, unknown>) {
+  const response = await modern(target, 'tools/call', { name, arguments: args });
+  expect(response.statusCode, response.body).toBe(200);
+  const result = response.json().result;
+  return { isError: result.isError === true, value: JSON.parse(result.content[0].text) };
+}
+
+test('only the dedicated bearer token opens the MCP endpoint, and it opens nothing else', async () => {
+  const local = await app({ selfHost: false });
+  expect((await post(local, 'tools/list', {}, { host: '127.0.0.1' })).statusCode).toBe(404);
+
+  const target = await app({ mcpToken });
+  expect((await post(target, 'tools/list', {}, { host })).statusCode).toBe(401);
+  const login = await target.inject({
+    method: 'POST',
+    url: '/api/session',
+    headers: { host, origin },
+    payload: { token: accessToken },
+  });
+  const cookie = String(login.headers['set-cookie']).split(';')[0]!;
+  expect((await post(target, 'tools/list', {}, { host, origin, cookie })).statusCode).toBe(401);
+  expect((await post(target, 'tools/list', {}, { host, cookie })).statusCode).toBe(403);
+  expect(
+    (await post(target, 'tools/list', {}, { ...bearer, origin: 'https://elsewhere.example' }))
+      .statusCode
+  ).toBe(403);
+  const listed = await post(target, 'tools/list');
+  expect(listed.statusCode).toBe(200);
+  expect(listed.headers['cache-control']).toBe('no-store');
+  expect((await post(target, 'tools/list', {}, { ...bearer, origin })).statusCode).toBe(200);
+  expect(
+    (await target.inject({ method: 'GET', url: '/api/library', headers: bearer })).statusCode
+  ).toBe(401);
+  expect(
+    (await target.inject({ method: 'GET', url: '/api/mcp', headers: bearer })).statusCode
+  ).toBe(405);
+
+  for (let attempt = 0; attempt < 10; attempt++)
+    expect(
+      (await post(target, 'tools/list', {}, { host, authorization: 'Bearer wrong-token' }))
+        .statusCode
+    ).toBe(401);
+  expect((await post(target, 'tools/list')).statusCode).toBe(429);
+  expect(
+    (
+      await target.inject({
+        method: 'POST',
+        url: '/api/session',
+        headers: { host, origin },
+        payload: { token: accessToken },
+      })
+    ).statusCode
+  ).toBe(429);
+});
+
+test('a client edits a saved card through MCP without creating helper tasks', async () => {
+  const target = await app({ mcpToken });
+  const bot = target.store.product.content(
+    fixtureBotInput('Harbor keeper', 'The keeper says {{getvar::mood}} at the lighthouse.')
+  ) as Content;
+
+  const legacy = await post(target, 'initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'test', version: '1' },
+  });
+  expect(legacy.json().result).toMatchObject({
+    protocolVersion: '2025-06-18',
+    serverInfo: { name: 'uimori' },
+  });
+  expect(
+    (
+      await target.inject({
+        method: 'POST',
+        url: '/api/mcp',
+        headers: bearer,
+        payload: { jsonrpc: '2.0', method: 'notifications/initialized' },
+      })
+    ).statusCode
+  ).toBe(202);
+
+  const tools = (await post(target, 'tools/list')).json().result.tools;
+  expect(tools.map((tool: { name: string }) => tool.name)).toEqual([
+    'db_query',
+    'data_search',
+    'data_read',
+    'guide_read',
+    'resource_read',
+    'resource_readMany',
+    'resource_patch',
+    'resource_patchMany',
+    'resource_clone',
+    'resource_undo',
+    'preset_validate',
+    'code_cbs',
+    'code_references',
+    'code_diagnose',
+    'code_regex',
+    'code_preview',
+    'chat_preview',
+    'chat_variables_read',
+    'scene_lore',
+    'image_list',
+  ]);
+
+  const read = await call(target, 'resource_read', {
+    kind: 'content',
+    id: bot.id,
+    path: '/package/nativeRisu/card/description',
+  });
+  expect(read.isError).toBe(false);
+  expect(JSON.stringify(read.value)).toContain('at the lighthouse');
+  const revision = read.value.revision as number;
+
+  const diagnosed = await call(target, 'code_diagnose', { kind: 'content', id: bot.id });
+  expect(diagnosed.isError).toBe(false);
+
+  const changes = [
+    {
+      op: 'replaceText',
+      path: '/package/nativeRisu/card/description',
+      oldText: 'at the lighthouse',
+      newText: 'at the harbor light',
+    },
+  ];
+  const patched = await call(target, 'resource_patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: revision,
+    changes,
+  });
+  expect(patched.isError, JSON.stringify(patched.value)).toBe(false);
+  expect(
+    (target.store.product.available('content', bot.id) as Content).package.nativeRisu
+  ).toMatchObject({
+    card: { description: 'The keeper says {{getvar::mood}} at the harbor light.' },
+  });
+
+  const stale = await call(target, 'resource_patch', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: revision,
+    changes,
+  });
+  expect(stale).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+
+  const unknown = await call(target, 'resource_read', { kind: 'content', id: bot.id, extra: 1 });
+  expect(unknown).toMatchObject({ isError: true, value: { code: 'INVALID_ARGUMENTS' } });
+
+  const undone = await call(target, 'resource_undo', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: revision + 1,
+  });
+  expect(undone.isError, JSON.stringify(undone.value)).toBe(false);
+  expect(
+    (target.store.product.available('content', bot.id) as Content).package.nativeRisu
+  ).toMatchObject({ card: { description: 'The keeper says {{getvar::mood}} at the lighthouse.' } });
+
+  const searched = await call(target, 'data_search', { patterns: ['lighthouse'] });
+  expect(searched.isError, JSON.stringify(searched.value)).toBe(false);
+  expect(JSON.stringify(searched.value)).toContain(bot.id);
+  const helperScope = await call(target, 'data_search', { scope: 'editor', patterns: ['x'] });
+  expect(helperScope.isError).toBe(true);
+
+  const queried = await call(target, 'db_query', {
+    sql: 'SELECT id, title FROM agent_resources WHERE id=?',
+    params: [bot.id],
+  });
+  expect(queried.isError, JSON.stringify(queried.value)).toBe(false);
+  expect(JSON.stringify(queried.value)).toContain('Harbor keeper');
+
+  for (const table of ['helper_tasks', 'helper_events', 'helper_changes'])
+    expect(target.store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
+});
+
+test('the 2026-07-28 revision is discovered, checks its headers and serves skills with digests', async () => {
+  const target = await app({ mcpToken });
+  const discovered = (await modern(target, 'server/discover')).json().result;
+  expect(discovered).toMatchObject({
+    resultType: 'complete',
+    supportedVersions: expect.arrayContaining([MODERN, '2025-06-18']),
+    capabilities: {
+      tools: {},
+      resources: {},
+      extensions: { 'io.modelcontextprotocol/skills': {} },
+    },
+    cacheScope: 'private',
+  });
+
+  const mismatch = await post(
+    target,
+    'tools/list',
+    { _meta: meta },
+    { ...bearer, 'mcp-protocol-version': '2025-11-25', 'mcp-method': 'tools/list' }
+  );
+  expect(mismatch.statusCode).toBe(400);
+  expect(mismatch.json().error.code).toBe(-32020);
+  const unsupported = await post(
+    target,
+    'tools/list',
+    { _meta: { ...meta, 'io.modelcontextprotocol/protocolVersion': '2099-01-01' } },
+    { ...bearer, 'mcp-protocol-version': '2099-01-01', 'mcp-method': 'tools/list' }
+  );
+  expect(unsupported.json().error).toMatchObject({
+    code: -32022,
+    data: { supported: expect.arrayContaining([MODERN]) },
+  });
+
+  const skills = (await modern(target, 'skills/list')).json().result.skills;
+  expect(skills.length).toBeGreaterThanOrEqual(3);
+  const lore = skills.find(
+    (skill: { frontmatter: { name: string } }) => skill.frontmatter.name === 'uimori-lorebooks'
+  );
+  const got = (await modern(target, 'skills/get', { uri: lore.uri })).json().result.skill;
+  expect(got).toEqual(lore);
+  const guide = got.resources.find((file: { uri: string }) => file.uri.endsWith('LORE-CONTEXT.md'));
+  const content = (await modern(target, 'resources/read', { uri: guide.uri })).json().result
+    .contents[0];
+  const bytes = Buffer.from(content.text, 'utf8');
+  expect(bytes.length).toBe(guide.size);
+  expect(`sha256:${createHash('sha256').update(bytes).digest('hex')}`).toBe(guide.digest);
+  const skill = (await modern(target, 'resources/read', { uri: lore.uri })).json().result
+    .contents[0].text;
+  expect(skill).toContain('](guides/LORE-CONTEXT.md)');
+
+  setMaintenance(target.store, { closed: true });
+  expect((await modern(target, 'tools/list')).statusCode).toBe(503);
+});

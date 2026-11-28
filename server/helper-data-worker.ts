@@ -1188,11 +1188,13 @@ function runDataOperation(input: DataOperation): unknown {
     db.exec('PRAGMA query_only=ON');
     if (input.name === 'db.query') return query(db, input.args);
     if (input.name === 'scene.regex') return sceneRegex(db, input.args);
-    const row = db
-      .prepare(
-        "SELECT json_extract(snapshot,'$.scope') scope, json_type(snapshot,'$.editor.model') has_editor, json_type(snapshot,'$.writing') has_writing FROM helper_tasks WHERE id=?"
-      )
-      .get(input.taskId);
+    const row = input.taskId
+      ? db
+          .prepare(
+            "SELECT json_extract(snapshot,'$.scope') scope, json_type(snapshot,'$.editor.model') has_editor, json_type(snapshot,'$.writing') has_writing FROM helper_tasks WHERE id=?"
+          )
+          .get(input.taskId)
+      : { scope: JSON.stringify({ kind: 'library', workId: '' }) };
     if (!row) throw new Error('DATA_TASK_UNAVAILABLE');
     const snapshot: DataSnapshot = { taskId: input.taskId, scope: JSON.parse(String(row.scope)) };
     let requestedRefs: unknown[] = [];
@@ -1209,6 +1211,13 @@ function runDataOperation(input: DataOperation): unknown {
               (row.has_editor ? 'editor' : row.has_writing ? 'current' : 'library'),
           ]
         : requestedRefs.map((ref) => (ref as DataRef | null)?.scope);
+    if (
+      !input.taskId &&
+      scopes.some((scope) => scope === 'current' || scope === 'editor' || scope === 'conversation')
+    )
+      throw new Error(
+        'DATA_SCOPE_UNAVAILABLE: only the library and chats scopes exist outside a helper task'
+      );
     if (scopes.includes('current')) {
       const writing = db
         .prepare("SELECT json_extract(snapshot,'$.writing') body FROM helper_tasks WHERE id=?")

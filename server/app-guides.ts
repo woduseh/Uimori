@@ -57,6 +57,9 @@ function cbsReference() {
   ].join('\n\n');
 }
 
+export const appGuideText = (name: string): string | undefined =>
+  guides().find((guide) => guide.name === name)?.text;
+
 export function listAppGuides() {
   return guides().map(({ name, title, text }) => ({ name, title, chars: text.length }));
 }

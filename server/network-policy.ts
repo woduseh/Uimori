@@ -40,6 +40,15 @@ export function networkPolicy(options: {
   return { publicOrigin: url.origin, publicHost: url.host };
 }
 
+export function mcpToken(value: string | undefined, accessToken?: string): string | undefined {
+  if (!value) return undefined;
+  if (value.length < 32 || value.length > 1000 || /\s/u.test(value))
+    throw new Error('UIMORI_MCP_TOKEN must contain 32–1000 non-whitespace characters.');
+  if (value === accessToken)
+    throw new Error('UIMORI_MCP_TOKEN must differ from UIMORI_ACCESS_TOKEN.');
+  return value;
+}
+
 export function listenAddress(
   env: NodeJS.ProcessEnv,
   policy: NetworkPolicy
@@ -61,8 +70,11 @@ export function listenAddress(
 
 export type BrowserRequest = {
   method: string;
-  headers: { host?: string; origin?: string; 'sec-fetch-site'?: string };
+  route?: string;
+  headers: { host?: string; origin?: string; cookie?: string; 'sec-fetch-site'?: string };
 };
+
+export const MCP_ROUTE = '/api/mcp';
 
 export function deniedBrowserRequest(
   policy: NetworkPolicy,
@@ -84,7 +96,9 @@ export function deniedBrowserRequest(
   if (origin !== undefined && origin !== expected) return 'Cross-origin access denied';
   if (policy.publicOrigin) {
     if (request.headers['sec-fetch-site'] === 'cross-site') return 'Cross-site access denied';
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && origin !== expected)
+    const cliCall =
+      request.route === MCP_ROUTE && origin === undefined && request.headers.cookie === undefined;
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && origin !== expected && !cliCall)
       return 'Request origin required';
   }
 }

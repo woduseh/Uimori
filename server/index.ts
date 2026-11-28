@@ -39,6 +39,7 @@ const app = await createApp({
   buildId,
   instanceId,
   ...access,
+  mcpToken: process.env.UIMORI_MCP_TOKEN,
   webRoot: resolve('dist/web'),
 
   vertexRequestTier: parseVertexRequestTier(process.env.UIMORI_VERTEX_REQUEST_TIER),
