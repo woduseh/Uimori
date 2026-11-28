@@ -1,18 +1,20 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import {
+  BookMarked,
   BookOpen,
   Check,
   Clock3,
   FileText,
   Image,
   Languages,
+  ListTree,
   Palette,
   PenLine,
   Settings2,
+  StickyNote,
 } from 'lucide-react';
 import {
   HELPER_COMPACTION_INPUT_RATIO,
-  type HelperChange,
   type HelperStatus,
   type HelperTaskResultTarget,
   type HelperTaskResultsView,
@@ -20,15 +22,12 @@ import {
 import { api } from './api.js';
 import { watchLive } from './live-stream.js';
 import { helperPollDelay, helperRefreshSpacing } from './poll-delays.js';
-import { HelperChangeCard } from './HelperChangeCard.js';
 import { HelperQuestionCard } from './HelperQuestionCard.js';
-import { rollbackCovers, useHelperRollback } from './HelperTaskRollback.js';
 import {
   HelperConfirmations,
   type HelperConfirmationGrant,
   type HelperConfirmationTarget,
 } from './HelperConfirmations.js';
-import { settingsLabels } from './helper-change-location.js';
 import { isStoryUiStyle } from '../core/story-ui-style.js';
 import { ContextBar, ContextLegend, ContextTable } from './ContextBreakdown.js';
 import { helperInputBreakdown } from './HelperContextUsage.js';
@@ -48,6 +47,53 @@ import './scene-usage.css';
 import './run-task-details.css';
 import { useRetryableEffect } from './useRetryableEffect.js';
 
+const settingsLabels: Record<string, string> = {
+  'global.mainModel': 'helperResults.globalMainModel',
+  'global.translationModel': 'helperResults.globalTranslationModel',
+  'global.helperModel': 'helperResults.globalHelperModel',
+  'global.contextModel': 'helperResults.globalContextModel',
+  'global.scriptModel': 'helperResults.globalScriptModel',
+  'global.titleModel': 'helperResults.globalTitleModel',
+  'chat.mainModel': 'helperResults.chatMainModel',
+  'chat.mainPromptPreset': 'helperResults.chatMainPromptPreset',
+  'chat.maxCalls': 'helperResults.chatMaxCalls',
+  'chat.storyUi': 'storyUi.enable',
+  'chat.storyUiStyle': 'storyUi.style',
+  'newChat.maxCalls': 'settings.m92',
+  'newChat.storyUi': 'storyUi.enable',
+  'newChat.storyUiStyle': 'storyUi.style',
+  'bot.storyUiTheme': 'storyUi.botDefault',
+  'chat.illustrationProfiles': 'visuals.characterProfiles',
+  'chat.illustrationReferences': 'visuals.m028',
+  'model.pricing': 'helperResults.modelPricing',
+  'judgment.pricing': 'helperResults.judgmentPricing',
+  'vertex.location': 'helperResults.vertexLocation',
+  'chat.variables': 'helperResults.chatVariables',
+  'chat.options': 'helperResults.chatOptions',
+  'chat.storyGuide': 'helperResults.storyGuide',
+  'model.parameters': 'helperResults.modelParameters',
+  'global.mainPromptPreset': 'helperResults.globalMainPromptPreset',
+  'global.translationPromptPreset': 'helperResults.globalTranslationPromptPreset',
+  'global.autoTranslate': 'helperResults.globalAutoTranslate',
+  'global.translationLanguage': 'settings.autoTranslationLanguage',
+  'newChat.autoRefusalRetryEnabled': 'helperResults.newChatAutoRefusalRetry',
+  'newChat.autoRefusalMaxRetries': 'helperResults.newChatAutoRefusalMaxRetries',
+  'newChat.loreContext': 'helperResults.newChatLoreContext',
+  'model.register': 'helperResults.modelRegistered',
+  'model.delete': 'helperResults.modelDeleted',
+  'prompt.combination.save': 'helperResults.promptCombinationSaved',
+  'prompt.combination.update': 'helperResults.promptCombinationUpdated',
+  'prompt.combination.delete': 'helperResults.promptCombinationDeleted',
+  'prompt.combination.apply': 'helperResults.promptCombinationApplied',
+  'illustrationPreset.global': 'helperResults.illustrationPreset',
+  'bot.illustrationPreset': 'helperResults.illustrationPreset',
+  'chat.illustrationPreset': 'helperResults.illustrationPreset',
+  'chat.attachments': 'helperResults.chatAttachments',
+  'chat.loreContext': 'helperResults.chatLoreContext',
+  'chat.authorNote': 'helperResults.chatAuthorNote',
+  'scene.context': 'helperResults.sceneContext',
+  'chat.bookmark': 'helperResults.chatBookmark',
+};
 const targetIcons = {
   content: BookOpen,
   'prompt-preset': FileText,
@@ -59,6 +105,9 @@ const targetIcons = {
   chat: PenLine,
   translation: Languages,
   scene: BookOpen,
+  outline: ListTree,
+  notes: StickyNote,
+  'chat-lore': BookMarked,
 };
 const workOutcomes: Record<string, string> = {
   'illustration.generate': 'helperResults.illustrationQueued',
@@ -68,8 +117,16 @@ const workOutcomes: Record<string, string> = {
   'scene.request': 'helperResults.sceneQueued',
   'scene.translate': 'helperResults.translationQueued',
   'scene.title': 'helperResults.sceneNamed',
+  'scene.patch': 'helperResults.sceneSaved',
+  'scene.patchMany': 'helperResults.sceneSaved',
+  'scene.save': 'helperResults.sceneSaved',
+  'scene.restore': 'helperResults.sceneRestored',
+  'outline.write': 'helperResults.outlineSaved',
+  'notes.write': 'helperResults.notesSaved',
+  'chat.lore': 'helperResults.chatLoreSaved',
   'chat.create': 'helperResults.chatCreated',
 };
+const savedTranslation = new Set(['scene.patch', 'scene.patchMany']);
 const deletingOperations = new Set(['resource.delete', 'chat.delete', 'prompt.combination.delete']);
 const queuedOperations = new Set([
   'illustration.generate',
@@ -78,35 +135,6 @@ const queuedOperations = new Set([
   'scene.translate',
 ]);
 const active = (status: HelperStatus) => status === 'running' || status === 'queued';
-const resourceKinds = new Set<HelperTaskResultTarget['kind']>([
-  'content',
-  'prompt-preset',
-  'prompt-workspace',
-  'theme',
-  'illustration-preset',
-]);
-
-function recordedByChange(
-  target: HelperTaskResultTarget,
-  operation: string,
-  changes: readonly HelperChange[]
-) {
-  if (resourceKinds.has(target.kind))
-    return changes.some((change) => change.domain === 'resource' && change.targetId === target.id);
-  if (operation === 'scene.title')
-    return changes.some(
-      (change) => change.domain === 'scene' && change.targetId === `${target.id}:title`
-    );
-  return false;
-}
-
-function settingRecorded(change: HelperChange, results: HelperTaskResultsView['results']) {
-  return results.some((result) =>
-    result.targets.some(
-      (target) => target.kind === 'settings' && `${target.setting}:${target.id}` === change.targetId
-    )
-  );
-}
 
 function useSeen<T extends Element>(eager: boolean) {
   const ref = useRef<T>(null);
@@ -299,12 +327,17 @@ function ResultTarget({
       ? t(settingLabel)
       : undefined;
   const outcome =
-    target.kind === 'illustration' ||
-    target.kind === 'chat' ||
-    target.kind === 'translation' ||
-    target.kind === 'scene'
-      ? workOutcomes[operation]
-      : undefined;
+    target.kind === 'translation' && savedTranslation.has(operation)
+      ? 'helperResults.translationSaved'
+      : target.kind === 'illustration' ||
+          target.kind === 'chat' ||
+          target.kind === 'translation' ||
+          target.kind === 'scene' ||
+          target.kind === 'outline' ||
+          target.kind === 'notes' ||
+          target.kind === 'chat-lore'
+        ? workOutcomes[operation]
+        : undefined;
   const queued = queuedOperations.has(operation);
   const content = (
     <>
@@ -515,90 +548,30 @@ export function HelperTaskUsageRecord({ usage }: { usage: HelperTaskResultsView[
 }
 
 export function helperTaskHasResults(data: HelperTaskResultsView) {
-  return data.changes.length > 0 || data.results.some((result) => result.targets.length > 0);
+  return data.results.some((result) => result.targets.length > 0);
 }
 
 export function HelperTaskResultItems({
-  taskId,
-  status,
   data,
   onOpenTarget,
-  onOpenChange,
-  rollbackUnavailable,
-  review = false,
 }: {
-  taskId: string;
-  status: HelperStatus;
   data: HelperTaskResultsView;
   onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
-  onOpenChange?: (change: HelperChange) => Promise<void> | void;
-  rollbackUnavailable: boolean;
-  review?: boolean;
 }) {
   useI18n();
-  const changes = data.changes.filter(
-    (change) => change.domain !== 'settings' || !settingRecorded(change, data.results)
-  );
-  const undoable = !active(data.status) && rollbackCovers(data.changes);
-  const rollback = useHelperRollback({
-    taskId,
-    changes: data.changes,
-    enabled: undoable,
-    unavailable: rollbackUnavailable || active(status),
-    review,
-  });
-  const expandSingle = review && undoable && changes.length === 1;
-  const groups: HelperChange[][] = [];
-  const unitGroups = new Map<string, HelperChange[]>();
-  for (const change of changes) {
-    const unit = rollback.unitKey(change);
-    const group = unit ? unitGroups.get(unit) : undefined;
-    if (group) group.push(change);
-    else {
-      groups.push([change]);
-      if (unit) unitGroups.set(unit, groups.at(-1)!);
-    }
-  }
-  const lastResourceGroup = new Map<string, number>();
-  groups.forEach((group, index) => {
-    for (const change of group)
-      if (change.domain === 'resource') lastResourceGroup.set(change.targetId, index);
-  });
   return (
-    <>
-      {rollback.strip}
-      <ul className="helper-result-list">
-        {groups.map((group, index) => (
-          <li key={`change:${group[0]!.domain}:${group[0]!.targetId}:${index}`}>
-            {group.map((change, position) => (
-              <HelperChangeCard
-                key={position}
-                change={change}
-                expanded={expandSingle}
-                onOpen={onOpenChange}
-                rollback={rollback.action(change)}
-                outcome={rollback.status(change)}
-              />
-            ))}
-            {[...lastResourceGroup]
-              .filter(([, last]) => last === index)
-              .map(([themeId]) => (
-                <ChangedStoryUiTheme key={themeId} themeId={themeId} />
-              ))}
+    <ul className="helper-result-list">
+      {data.results.flatMap((result) =>
+        result.targets.map((target, index) => (
+          <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
+            <ResultTarget target={target} operation={result.operation} onOpen={onOpenTarget} />
+            {target.kind === 'theme' && result.operation !== 'resource.delete' && (
+              <ChangedStoryUiTheme themeId={target.id} />
+            )}
           </li>
-        ))}
-        {data.results.flatMap((result) =>
-          result.targets
-            .filter((target) => !recordedByChange(target, result.operation, data.changes))
-            .map((target, index) => (
-              <li key={`${result.eventSeq}:${target.kind}:${target.id}:${index}`}>
-                <ResultTarget target={target} operation={result.operation} onOpen={onOpenTarget} />
-              </li>
-            ))
-        )}
-      </ul>
-      {rollback.footer}
-    </>
+        ))
+      )}
+    </ul>
   );
 }
 
@@ -608,10 +581,7 @@ export function HelperTaskResults({
   visible = true,
   eager = false,
   onOpenTarget,
-  onOpenChange,
   onUsage,
-  rollbackUnavailable = false,
-  review = false,
   confirmation,
   questionAnswer,
 }: {
@@ -620,10 +590,7 @@ export function HelperTaskResults({
   visible?: boolean;
   eager?: boolean;
   onOpenTarget?: (target: HelperTaskResultTarget) => Promise<void> | void;
-  onOpenChange?: (change: HelperChange) => Promise<void> | void;
   onUsage?: (taskId: string, usage: HelperTaskResultsView['usage']) => void;
-  rollbackUnavailable?: boolean;
-  review?: boolean;
   confirmation?: {
     nameTarget: (target: HelperConfirmationTarget) => string;
     pending: readonly string[];
@@ -670,15 +637,7 @@ export function HelperTaskResults({
               onAnswer={questionAnswer?.onAnswer}
             />
           )}
-          <HelperTaskResultItems
-            taskId={taskId}
-            status={status}
-            data={data}
-            onOpenTarget={onOpenTarget}
-            onOpenChange={onOpenChange}
-            rollbackUnavailable={rollbackUnavailable}
-            review={review}
-          />
+          <HelperTaskResultItems data={data} onOpenTarget={onOpenTarget} />
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">
               {t('helperResults.unrecorded', { count: data.unrecordedOperations })}

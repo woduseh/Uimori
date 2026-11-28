@@ -24,8 +24,8 @@ import {
 import type { Content } from '../core/product.js';
 import { readResource } from './resource-service.js';
 import { applyHelperResourceMutation } from './helper-resource-mutation.js';
-import { withHelperChange } from './helper-changes.js';
-import { helperSceneSource } from './helper-scene-tools.js';
+import { helperSceneResultTargets, helperSceneSource } from './helper-scene-tools.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
 import { REPETITION_SCRIPT } from './helper-shell-scripts.js';
 import { latestTranslation } from './source-editing.js';
@@ -863,16 +863,21 @@ export class HelperShell {
         let savedResult: { id: string; revision: number } & Record<string, unknown>;
         if (target.kind === 'scene') {
           const compiled = compileEditedSourceText(this.store, target.id, content);
-          const saved = withHelperChange(
-            this.store,
-            task.task,
-            { domain: 'scene', chatId: target.chatId, sourceId: target.id, field: 'original' },
-            () =>
-              this.store.editSource(target.id, {
-                text: compiled.text,
-                expectedRevision: target.revision,
-              })
-          );
+          const saved = this.store.editSource(target.id, {
+            text: compiled.text,
+            expectedRevision: target.revision,
+          });
+          recordHelperTaskResult(this.workspace, task.task, {
+            receiptId: operationId,
+            operation: 'scene.save',
+            requestedTargets: 1,
+            targets: helperSceneResultTargets(this.store, target.chatId, {
+              changed: true,
+              target: 'original',
+              sourceId: target.id,
+              revision: saved.editRevision ?? 0,
+            }).targets,
+          });
           savedResult = {
             changed: true,
             id: target.id,

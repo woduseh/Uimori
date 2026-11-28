@@ -280,7 +280,7 @@ test('a client edits a saved card through MCP without creating helper tasks', as
   expect(queried.isError, JSON.stringify(queried.value)).toBe(false);
   expect(JSON.stringify(queried.value)).toContain('Harbor keeper');
 
-  for (const table of ['helper_tasks', 'helper_events', 'helper_changes'])
+  for (const table of ['helper_tasks', 'helper_events', 'helper_operations'])
     expect(target.store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
 });
 

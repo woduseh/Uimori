@@ -8,7 +8,7 @@ export const diagnosticHelperEvent = ({ kind, taskId }: Pick<HelperEvent, 'kind'
   kind === 'progress' ||
   (kind.startsWith('context.') && !(taskId === null && kind.startsWith('context.compaction')));
 
-const finishedTask = /^task\.(?:completed|failed|cancelled|interrupted|rolled-back)$/u;
+const finishedTask = /^task\.(?:completed|failed|cancelled|interrupted)$/u;
 const helperDataKinds = new Set(['artifact.saved', 'settings.updated', 'resource.updated']);
 const chatTitleKind = /^chat\.title\.(?:manual|generated)$/u;
 const activityKind = /^(?:run|job|illustration)\.[a-z]+$/u;

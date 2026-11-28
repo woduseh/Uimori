@@ -32,7 +32,6 @@ import { registerCommand } from '../server/endpoint.js';
 import { outlineWriteTool } from '../server/helper-app-tools.js';
 import { helperChatStateCommand } from '../server/helper-chat-state-tools.js';
 import { defineHelperCommandTool, executeHelperCommand } from '../server/helper-command-adapter.js';
-import { rollBackHelperTask } from '../server/helper-rollback.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { type AppPorts, createStorePorts } from '../server/store-ports.js';
@@ -771,7 +770,7 @@ test('helper tools refuse full-replacement inputs while preserving stored state 
   });
 });
 
-test('helper command writes domain state, change card and receipt in one transaction and rolls all back on failure', async () => {
+test('helper command writes domain state, task result and receipt in one transaction and rolls all back on failure', async () => {
   const store = createStoreFixture();
   const model = selectFixtureModels(store);
   const chat = createFixtureChat(store, 'Atomic helper chat');
@@ -789,7 +788,7 @@ test('helper command writes domain state, change card and receipt in one transac
   const chatChanged = vi.fn();
 
   vi.spyOn(workspace, 'event').mockImplementationOnce(() => {
-    throw new Error('Injected helper change record failure');
+    throw new Error('Injected task result failure');
   });
   await expect(
     executeHelperCommand(
@@ -800,11 +799,15 @@ test('helper command writes domain state, change card and receipt in one transac
       chat.id,
       { expectedRevision: 0, changes: { enabled: true, work: 'Must roll back' } }
     )
-  ).rejects.toThrow('Injected helper change record failure');
+  ).rejects.toThrow('Injected task result failure');
 
   expect(store.storyGuide.get(chat.id).revision).toBe(0);
   expect(
-    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+    store.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
+      .get(task.id)
   ).toEqual({ n: 0 });
   expect(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
@@ -822,7 +825,11 @@ test('helper command writes domain state, change card and receipt in one transac
   expect(saved).toMatchObject({ changed: true, revision: 1 });
   expect(store.storyGuide.get(chat.id).revision).toBe(1);
   expect(
-    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+    store.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
+      .get(task.id)
   ).toEqual({ n: 1 });
   expect(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
@@ -891,7 +898,11 @@ test('helper commands answer 409 REVISION_CONFLICT on a deleted chat even with a
   ).rejects.toMatchObject({ statusCode: 409, code: 'REVISION_CONFLICT' });
 
   expect(
-    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+    store.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
+      .get(task.id)
   ).toEqual({ n: 0 });
   expect(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
@@ -933,7 +944,9 @@ test('helper commands answer 409 REVISION_CONFLICT on a deleted chat even with a
   });
   expect(
     store.db
-      .prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?')
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
       .get(dispatched.task.id)
   ).toEqual({ n: 0 });
   expect(
@@ -1189,15 +1202,17 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
   );
   expect(
     app.store.db
-      .prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?')
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
       .get(helperErrors.task.id)
   ).toEqual({ n: 0 });
 });
 
-test('helper outline.write commits change card atomically, replays once, and restores on turn rollback', async () => {
+test('helper outline.write commits its task result atomically and replays once', async () => {
   const store = createStoreFixture();
   const model = selectFixtureModels(store);
-  const chat = createFixtureChat(store, 'Helper outline rollback chat');
+  const chat = createFixtureChat(store, 'Helper outline result chat');
   const seeded = seedOutline(store, chat.id, [
     { op: 'create', ref: 'arc', level: 'arc', title: '1부', intent: '원래 부 의도' },
     {
@@ -1212,20 +1227,6 @@ test('helper outline.write commits change card atomically, replays once, and res
   ]);
   const arcId = seeded.find((item) => item.ref === 'arc')!.id;
   const epId = seeded.find((item) => item.ref === 'ep')!.id;
-  const outlineTreeShape = () => {
-    const nodes = store.outline.nodes(chat.id);
-    const titleById = new Map(nodes.map((node) => [node.id, node.title]));
-    return nodes.map((node) => ({
-      parentTitle: node.parentId ? (titleById.get(node.parentId) ?? null) : null,
-      level: node.level,
-      position: node.position,
-      title: node.title,
-      intent: node.intent,
-      fixed: node.fixed,
-      relatedTitles: (node.relatedIds ?? []).map((id) => titleById.get(id) ?? null),
-    }));
-  };
-  const beforeShape = outlineTreeShape();
 
   const workspace = new HelperWorkspace(store);
   const conversation = workspace.open({ kind: 'chat', chatId: chat.id });
@@ -1257,7 +1258,11 @@ test('helper outline.write commits change card atomically, replays once, and res
   ).rejects.toThrow('Injected outline helper event failure');
   expect(store.outline.nodes(chat.id).map((node) => node.title)).toEqual(['1부', '1화']);
   expect(
-    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+    store.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
+      .get(task.id)
   ).toEqual({ n: 0 });
   expect(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
@@ -1296,14 +1301,21 @@ test('helper outline.write commits change card atomically, replays once, and res
   expect(store.outline.nodes(chat.id).map((node) => node.title)).toEqual(['1부 개정', '새 1화']);
   expect(chatChanged).toHaveBeenCalledTimes(1);
   expect(
-    store.db.prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?').get(task.id)
+    store.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='operation.result'"
+      )
+      .get(task.id)
   ).toEqual({ n: 1 });
 
-  workspace.finish(task.id, 'owner-1', task.generation + 1, 'completed', '완료했어요.', null);
-  const rolled = rollBackHelperTask(store, workspace, task.id, undefined);
-  expect(rolled.units).toMatchObject([{ unit: `outline:${chat.id}`, status: 'restored' }]);
-  expect(outlineTreeShape()).toEqual(beforeShape);
-  expect(store.outline.nodes(chat.id)[0]!.id).toBe(arcId);
+  expect(readHelperTaskResults(store, task.id).results).toMatchObject([
+    {
+      receiptId,
+      operation: 'outline.write',
+      requestedTargets: 3,
+      targets: [{ kind: 'outline', id: chat.id, chatId: chat.id, title: chat.title }],
+    },
+  ]);
 });
 
 test('Tx tokens cannot be forged or reused after a transaction closes', () => {

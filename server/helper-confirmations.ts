@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   HelperConfirmation,
   HelperConfirmationReason,
@@ -6,7 +7,6 @@ import type {
   HelperTask,
 } from '../core/helper.js';
 import { helperConfirmationTrait } from './helper-confirmation-traits.js';
-import { helperStateHash } from './helper-changes.js';
 import { helperResourceOperation } from './helper-resource-tools.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { fontCatalog } from './fonts.js';
@@ -136,13 +136,27 @@ function requirement(
   );
 }
 
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : value !== null && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([, item]) => item !== undefined)
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([key, item]) => [key, canonical(item)])
+        )
+      : value;
+
 function confirmationId(
   conversationId: string,
   chatId: string | null,
   name: string,
   args: unknown
 ) {
-  return helperStateHash({ conversationId, chatId, name, args });
+  return createHash('sha256')
+    .update(JSON.stringify(canonical({ conversationId, chatId, name, args })))
+    .digest('hex');
 }
 
 function uses(store: Store, taskId: string, id: string) {

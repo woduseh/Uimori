@@ -11,8 +11,6 @@ import { updateChatVariablesCommand } from './commands/chat-variables.js';
 import { updateStoryGuideCommand } from './commands/story-guide.js';
 import { defineHelperCommandTool, type HelperCommandTool } from './helper-command-adapter.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
-import { recordHelperAction, withHelperChange } from './helper-changes.js';
-import { diffText } from '../core/text-diff.js';
 import type { HelperTaskResultTarget } from '../core/helper.js';
 import { CHAT_AUTHOR_NOTE_MAX_CHARS, type Content } from '../core/product.js';
 import type { ContentAttachment } from '../core/risu-content.js';
@@ -273,7 +271,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
     name: 'chat.profile.update',
     description:
-      'Change what a chat is assembled from: the attached persona, the attached modules, the lore context policy or the Risu author note. Give only the fields to change. persona takes a saved persona id, or null to detach it; modules replaces the whole list of attached module ids; the owning bot cannot be changed. loreContext takes the complete policy object as chat.profile.read returns it. authorNote replaces the whole note, and an empty string clears it; the earlier note stays in the change record. Changes apply to later requests; scenes already written keep what they used. Take expectedRevision from chat.profile.read.',
+      'Change what a chat is assembled from: the attached persona, the attached modules, the lore context policy or the Risu author note. Give only the fields to change. persona takes a saved persona id, or null to detach it; modules replaces the whole list of attached module ids; the owning bot cannot be changed. loreContext takes the complete policy object as chat.profile.read returns it. authorNote replaces the whole note, and an empty string clears it. Changes apply to later requests; scenes already written keep what they used. Take expectedRevision from chat.profile.read.',
     inputSchema: schema(
       {
         expectedRevision: {
@@ -736,12 +734,10 @@ function nameScene(
   if (!store.history(chat.headRevision).some((item) => item.revision === sourceId))
     throw new HelperToolError(404, 'SCENE_NOT_IN_CHAT', 'Find the scene id with chat.read.');
   const before = sceneTitle(store, sourceId);
-  const saved = withHelperChange(
-    store,
-    task,
-    { domain: 'scene', chatId, sourceId, field: 'title' },
-    () => setSceneTitle(store, sourceId, { title: args.title, expectedTitle: args.expectedTitle })
-  );
+  const saved = setSceneTitle(store, sourceId, {
+    title: args.title,
+    expectedTitle: args.expectedTitle,
+  });
   const changed = saved.title !== before;
   recordHelperTaskResult(workspace, task, {
     receiptId,
@@ -879,20 +875,14 @@ function updateChatProfile(
     revision: saved.revision,
     setting,
   }));
-  if (noteBefore !== noteAfter) {
-    recordHelperAction(store, task, {
-      domain: 'settings',
-      targetId: `chat.authorNote:${chatId}`,
-      chatId,
+  if (noteBefore !== noteAfter)
+    targets.push({
+      kind: 'settings',
+      id: chatId,
       title: chat.title,
-      location: { kind: 'setting', setting: 'chat.authorNote' },
-      action: 'update',
-      anchor: { domain: 'settings', id: chatId, chatId, setting: 'chat.authorNote' },
-      value: { before: noteBefore, after: noteAfter },
-      diff: (baseline) => diffText(String(baseline ?? ''), noteAfter, 'prose'),
+      revision: saved.revision,
+      setting: 'chat.authorNote',
     });
-    targets.push({ kind: 'chat', id: chatId, title: chat.title, revision: saved.revision });
-  }
   recordHelperTaskResult(workspace, task, {
     receiptId,
     operation: 'chat.profile.update',
@@ -920,27 +910,6 @@ function updateHelperSceneContext(
   const after = updateSceneContext(store, sourceId, change);
   const changed = after.revision !== before.revision;
   const title = sceneTitle(store, sourceId) || chat.title;
-  if (changed) {
-    const { revision: _before, ...beforeValue } = before;
-    const { revision: _after, ...afterValue } = after;
-    recordHelperAction(store, task, {
-      domain: 'settings',
-      targetId: `scene.context:${sourceId}`,
-      chatId,
-      title,
-      location: { kind: 'setting', setting: 'scene.context' },
-      action: 'update',
-      anchor: { domain: 'scene', chatId, sourceId, field: 'original', paragraph: null },
-      value: { before: beforeValue, after: afterValue },
-      sourceId,
-      diff: (baseline) => {
-        const earlier = (baseline as { requestText?: string | null } | undefined)?.requestText;
-        return (earlier ?? null) === after.requestText
-          ? null
-          : diffText(earlier ?? '', after.requestText ?? '', 'prose');
-      },
-    });
-  }
   recordHelperTaskResult(workspace, task, {
     receiptId,
     operation: 'scene.context.update',
@@ -1025,23 +994,6 @@ function changeBookmark(
       'BOOKMARK_NOT_FOUND',
       'List the bookmarks of this chat with action=read.'
     );
-  const keep = (after: { title: string; note: string } | null) =>
-    recordHelperAction(store, task, {
-      domain: 'settings',
-      targetId: `chat.bookmark:${id}`,
-      chatId,
-      title: current.title,
-      location: { kind: 'setting', setting: 'chat.bookmark' },
-      action: after ? 'update' : 'delete',
-      anchor: { domain: 'settings', id: chatId, chatId, setting: 'chat.bookmark' },
-      value: { before: { title: current.title, note: current.note }, after },
-      diff: (baseline) => {
-        const earlier = baseline as { title: string; note: string } | undefined;
-        const text = (value: { title: string; note: string } | null | undefined) =>
-          value ? `${value.title}\n\n${value.note}` : '';
-        return diffText(text(earlier), text(after), 'prose');
-      },
-    });
   if (args.action === 'delete') {
     deleteBookmark(
       store,
@@ -1050,7 +1002,6 @@ function changeBookmark(
         expectedRevision: args.expectedRevision,
       })
     );
-    keep(null);
     report({ kind: 'chat', id: chatId, title: chat.title, revision: current.revision });
     return { changed: true, deleted: id };
   }
@@ -1063,7 +1014,6 @@ function changeBookmark(
       note: args.note ?? current.note,
     })
   );
-  keep({ title: saved.title, note: saved.note });
   report({
     kind: 'scene',
     id: current.target.sourceId,

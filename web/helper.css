@@ -929,7 +929,7 @@
   min-width: 0;
   order: 3;
 }
-.helper-turn-meta :is(.helper-review-strip, .helper-result-list, .helper-result-note) {
+.helper-turn-meta :is(.helper-result-list, .helper-result-note) {
   order: 0;
 }
 .helper-turn-meta .helper-result-list:empty {

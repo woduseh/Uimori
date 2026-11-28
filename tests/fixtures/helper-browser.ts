@@ -7,8 +7,6 @@ import type {
   HelperMessage,
   HelperMessageMutation,
   HelperScope,
-  HelperRollbackUnit,
-  HelperRollbackView,
   HelperTaskResultsView,
 } from '../../core/helper.js';
 import type { HelperActivityEvent } from '../../core/helper-activity.js';
@@ -32,10 +30,6 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
   const streams = new Map<string, ResponseStreamPage>();
   const activities = new Map<string, HelperActivityEvent[]>();
   const results = new Map<string, Partial<HelperTaskResultsView>>();
-  const rollbacks = new Map<string, HelperRollbackView>();
-  const rollbackPosts: { unit?: string }[] = [];
-  let onRollback: ((units: HelperRollbackUnit[]) => Promise<void>) | undefined;
-  let loseRollback = false;
   const posts: {
     requestKey: string;
     text: string;
@@ -339,44 +333,12 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
       return route.fulfill({ json: view.tasks.slice(start, start + 50) });
     }
     const taskMatch =
-      /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer|\/results|\/rollback)?$/u.exec(
-        path
-      );
+      /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer|\/results)?$/u.exec(path);
     if (taskMatch) {
       const view = [...views.values()].find((view) =>
         view.tasks.some((task) => task.id === taskMatch[1])
       )!;
       const task = view.tasks.find((task) => task.id === taskMatch[1])!;
-      if (taskMatch[2] === '/rollback') {
-        const current = rollbacks.get(task.id) ?? { taskId: task.id, blocked: null, units: [] };
-        if (request.method() === 'GET') return route.fulfill({ json: current });
-        rollbackPosts.push(body);
-        const selected = current.units.filter(
-          (unit) => unit.status === 'restorable' && (!body.unit || unit.unit === body.unit)
-        );
-        await onRollback?.(selected);
-        const restored = selected.map((unit) => ({ ...unit, status: 'restored' as const }));
-        current.units = current.units.map(
-          (unit) => restored.find((item) => item.unit === unit.unit) ?? unit
-        );
-        rollbacks.set(task.id, current);
-        const kinds = restored.some((unit) => unit.domain === 'resource')
-          ? ['resource.updated', 'task.rolled-back']
-          : ['task.rolled-back'];
-        for (const kind of kinds)
-          record(view, {
-            seq: ++nextSeq,
-            conversationId: view.conversation.id,
-            taskId: task.id,
-            kind,
-            data: null,
-          });
-        if (loseRollback) {
-          loseRollback = false;
-          return route.abort('failed');
-        }
-        return route.fulfill({ json: { taskId: task.id, blocked: null, units: restored } });
-      }
       if (taskMatch[2] === '/steer') {
         steerPosts.push({ taskId: task.id, requestKey: body.requestKey, text: body.text });
         const instructions = (task.instructions ??= []);
@@ -401,7 +363,6 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
             taskId: task.id,
             status: task.status,
             results: [],
-            changes: [],
             confirmations: [],
             unrecordedOperations: 0,
             usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
@@ -439,14 +400,6 @@ export async function routeSyntheticHelper(page: Page, seedCount = 0) {
       failNextMessageMutation = failure;
     },
     results,
-    rollbacks,
-    rollbackPosts,
-    onRollback(handler: (units: HelperRollbackUnit[]) => Promise<void>) {
-      onRollback = handler;
-    },
-    loseRollback: () => {
-      loseRollback = true;
-    },
     activity: (task: HelperTaskView, events: HelperActivityEvent[]) => {
       activities.set(task.id, events);
       const view = [...views.values()].find((item) =>

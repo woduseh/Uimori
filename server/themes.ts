@@ -15,7 +15,6 @@ import { assertAppearanceTargetLive } from './appearance-scope.js';
 import { AppError, asAppError, assertRevision, HelperToolError } from './app-errors.js';
 import { NOT_MODIFIED, registerEndpoint } from './endpoint.js';
 import { matchesEntityTag } from './private-etag.js';
-import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
   BUILTIN_THEMES,
@@ -200,7 +199,6 @@ export function deleteTheme(store: Store, id: string, expectedRevision: number) 
     writePreferences(store, p);
     store.db.prepare('DELETE FROM versions WHERE kind=? AND id=?').run('theme', id);
     store.db.prepare('DELETE FROM resource_undo WHERE kind=? AND id=?').run('theme', id);
-    forgetHelperResourceChanges(store.db, 'theme', id);
     forgetHelperConfirmationTargets(store.db, [{ kind: 'theme', id }]);
     pruneThemeAssets(store.db, owned);
     return { deleted: id };

@@ -638,7 +638,7 @@ test('chat lore filters the list by text and saves several overrides from list g
   ]);
 });
 
-test('helper discovers an override after its shared lore was removed, retires it at once, and rollback brings it back', async () => {
+test('helper discovers an override after its shared lore was removed, retires it at once, and reports the chat lore it changed', async () => {
   const f = await fixture();
   const service = new ChatOverridesStore(f.store);
   const initial = service.get(f.chat.id);
@@ -727,16 +727,17 @@ test('helper discovers an override after its shared lore was removed, retires it
   const task = await submit(f, '원본 로어가 없어진 채팅 전용 변경을 찾아 제거해줘');
   expect(service.get(f.chat.id).overrides).toEqual([]);
   expect(f.store.product.stored('content', f.bot.id)).toEqual(shared);
-  const rollback = await f.app.inject({
-    method: 'POST',
-    url: `/api/helper/tasks/${task.id}/rollback`,
-    payload: {},
+  const results = await f.app.inject({
+    method: 'GET',
+    url: `/api/helper/tasks/${task.id}/results`,
   });
-  expect(rollback.json().units).toMatchObject([{ domain: 'chat-lore', status: 'restored' }]);
-  expect(service.get(f.chat.id).overrides).toMatchObject([
-    { selector, value: localText, retired: false },
+  expect(results.json().results).toMatchObject([
+    {
+      operation: 'chat.lore',
+      requestedTargets: 1,
+      targets: [{ kind: 'chat-lore', id: f.chat.id, chatId: f.chat.id }],
+    },
   ]);
-  expect(service.get(f.chat.id).conflicts).toMatchObject([{ kind: 'entry-missing' }]);
 });
 
 test('app.call saves shared bot and persona appearance defaults atomically and preserves native data', async () => {

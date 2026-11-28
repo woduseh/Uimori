@@ -36,7 +36,6 @@ import { SettingsIcon, CloseIcon, LibraryIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
 import {
   MAX_HELPER_REFERENCES,
-  type HelperChangeAnchor,
   type HelperCompactionStart,
   type HelperContextReference,
   type HelperConversation,
@@ -167,7 +166,7 @@ type Props = {
   onOpenTarget?: (
     target: import('../core/helper.js').HelperTaskResultTarget
   ) => void | Promise<void>;
-  onOpenChange?: (change: import('../core/helper.js').HelperChange) => void | Promise<void>;
+  onOpenReference?: (reference: HelperContextReference) => void | Promise<void>;
   onScopeChange?: (scope: HelperScope) => void;
   ready?: boolean;
   scope: HelperScope;
@@ -634,39 +633,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
       node.focus();
       node.setSelectionRange(nextCursor, nextCursor);
     });
-  };
-  const openReference = (ref: HelperContextReference) => {
-    if (!props.onOpenChange) return;
-    let anchor: HelperChangeAnchor | null = null;
-    if (ref.kind === 'scene' && ref.chatId)
-      anchor = {
-        domain: 'scene',
-        chatId: ref.chatId,
-        sourceId: ref.id,
-        field: 'original',
-        paragraph: null,
-      };
-    else if (ref.kind === 'outline' && ref.chatId)
-      anchor = { domain: 'outline', chatId: ref.chatId, nodeId: ref.id, field: null };
-    else if (ref.kind === 'content' || ref.kind === 'prompt-preset')
-      anchor = {
-        domain: 'resource',
-        kind: ref.kind,
-        id: ref.id,
-        path: null,
-        section: null,
-        index: null,
-      };
-    if (anchor)
-      void props.onOpenChange({
-        domain: anchor.domain,
-        targetId: ref.id,
-        title: helperReferenceLabel(ref),
-        location: null,
-        action: 'update',
-        diff: null,
-        anchor,
-      });
   };
   const toggleMode = () => {
     if (!scopeKey || document.activeElement?.closest('dialog')) return false;
@@ -2090,12 +2056,12 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                       aria-label={t('helpers.mentionReferencesLabel')}
                     >
                       {message.references!.map((ref) =>
-                        props.onOpenChange ? (
+                        props.onOpenReference ? (
                           <button
                             key={referenceKey(ref)}
                             type="button"
                             className="helper-context-chip helper-mention-chip helper-mention-chip-link"
-                            onClick={() => openReference(ref)}
+                            onClick={() => void props.onOpenReference!(ref)}
                           >
                             <span className="helper-chip-badge">
                               {helperReferenceKindLabel(ref)}
@@ -2133,9 +2099,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
                         eager={task.id === latestTaskId}
                         onUsage={task.id === latestTaskId ? reportUsage : undefined}
                         onOpenTarget={props.onOpenTarget}
-                        onOpenChange={props.onOpenChange}
-                        rollbackUnavailable={pending.length > 0 || busy}
-                        review={task.id === latestTaskId}
                         confirmation={{
                           nameTarget,
                           pending: grantList.map((grant) => grant.id),
@@ -2267,14 +2230,6 @@ export const HelperPanel = memo(function HelperPanel(props: Props) {
               setTaskHistory(null);
             })
           }
-          onOpenChange={
-            props.onOpenChange &&
-            (async (change) => {
-              await props.onOpenChange!(change);
-              setTaskHistory(null);
-            })
-          }
-          rollbackUnavailable={pending.length > 0 || busy}
         />
       </Dialog>
       <Dialog

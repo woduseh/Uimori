@@ -37,14 +37,16 @@
 
 - 장면 삭제는 그 채팅의 도우미 이벤트에서 인자 미리보기를 지우고 작업 스냅샷을 비워요([scene-deletion.ts](../../server/scene-deletion.ts)). 채팅 삭제와 도우미 대화 삭제는 [chat-deletion.ts](../../server/chat-deletion.ts)와 [helper-workspace.ts](../../server/helper-workspace.ts)가 맡아요.
 - 도우미 작업이 끝나면 `releaseCompletedHelperInputs`가 도구 결과와 작업 스냅샷의 본문을 비워요([execution-retention.ts](../../server/execution-retention.ts)). 그래서 diff를 도구 결과나 작업 스냅샷에 얹어 둘 수 없어요. 자기 저장 위치와 수명을 가져야 해요.
-- 변경 기록(`helper_changes`)은 6단계에서 이 네 경로와 보관 범위를 갖췄어요([DELETION](../DELETION.md#도우미-변경-기록)). 7단계의 롤백은 그 `baseline`으로 되돌려서 체크포인트 사본을 따로 두지 않았어요.
+- 변경 기록(`helper_changes`)은 6단계에서 이 네 경로와 보관 범위를 갖췄어요([DELETION](../DELETION.md#도우미-작업-기록)). 7단계의 롤백은 그 `baseline`으로 되돌려서 체크포인트 사본을 따로 두지 않았어요.
 - 자료를 삭제하면 그 자료의 체크포인트도 바로 지워요. 삭제는 턴 롤백으로 되돌릴 수 없고, 그래서 삭제 앞의 승인 단계가 의미를 가져요.
 - 체크포인트 수명은 대화당 최근 15턴, 30일이에요. [DELETION](../DELETION.md)과 [DATA-MIGRATIONS](../DATA-MIGRATIONS.md)에 이 보관 범위를 적어요.
 - 진행 표시에 쓰는 대상 이름은 구조화된 대상(종류, ID, 제목)에서 만들어요. 인자 미리보기 문자열을 그대로 보여 주지 않아요.
 
 ### 도우미 변경 추적과 롤백
 
-- 체크포인트도 변경 기록처럼 `uimori apply` 셸의 장면 직접 저장 경로를 거쳐야 해요. 변경 기록은 [helper-changes.ts](../../server/helper-changes.ts)의 `withHelperChange`로 그 경로를 덮어요.
+2026-11-28에 변경 카드, 변경 기록(`helper_changes`)과 턴 롤백을 제거했어요. 이 절은 당시의 설계 기록이에요.
+
+- 체크포인트도 변경 기록처럼 `uimori apply` 셸의 장면 직접 저장 경로를 거쳐야 해요. 변경 기록은 당시 `withHelperChange`로 그 경로를 덮어요.
 - 미사용 자료 정리([unused-data.ts](../../server/unused-data.ts), [theme-assets.ts](../../server/theme-assets.ts))는 `resource_undo`와 변경 기록의 `baseline`이 참조하는 이미지와 글꼴을 남겨요. 체크포인트를 따로 두면 그것도 보존 대상에 넣어요.
 - 원문과 번역을 함께 바꾼 턴을 되돌릴 때는 원문을 먼저 복원하고, 새 원문 해시를 기준으로 직전 번역을 다시 저장해요. 번역 삽화 배치는 복원되지 않는다는 점을 화면에 알려요.
 - 턴 롤백이 생기면 도우미 되돌리기의 경로는 그것 하나예요. 지금의 "마지막 자료 수정 되돌리기" 바는 턴 롤백으로 대체해요. 편집기의 직전 저장 되돌리기는 사용자 저장용으로 그대로 둬요.

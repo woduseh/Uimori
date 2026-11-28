@@ -31,7 +31,6 @@ import { readResource, saveResource } from '../server/resource-service.js';
 import { retryRun } from '../server/run-retry.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { applyHelperResourceMutation } from '../server/helper-resource-mutation.js';
-import { rollBackHelperTask } from '../server/helper-rollback.js';
 import { helperResourceOperation } from '../server/helper-resource-tools.js';
 import type { Content } from '../core/product.js';
 
@@ -238,16 +237,16 @@ test('a scene saved by apply is recorded as the net change of its task', () => {
     });
     internals.applied.set(`${f.task.id}:scene-apply`, []);
     expect(internals.apply(f.task.id, 'scene-apply', relative)).toMatchObject({ changed: true });
-    expect(readHelperTaskResults(f.store, f.task.id).changes).toMatchObject([
-      {
-        domain: 'scene',
-        targetId: `${source.id}:original`,
-        location: { kind: 'scene', scene: 1, field: 'original' },
-        action: 'update',
-        diff: { added: 1, removed: 1 },
-        anchor: { sourceId: source.id, field: 'original', paragraph: 0 },
-      },
-    ]);
+    expect(readHelperTaskResults(f.store, f.task.id)).toMatchObject({
+      results: [
+        {
+          operation: 'scene.save',
+          requestedTargets: 1,
+          targets: [{ kind: 'scene', id: source.id, chatId: chat.id }],
+        },
+      ],
+      unrecordedOperations: 0,
+    });
   } finally {
     f.shell.close();
     f.store.close();
@@ -601,7 +600,7 @@ posixTest(
   }
 );
 posixTest(
-  'native apply records a change that turn rollback restores and a repeated apply does not save twice',
+  'native apply records its task result and a repeated apply does not save twice',
   async () => {
     const f = await fixture();
     prepareFiles(f, 'library', f.resource.id);
@@ -613,14 +612,9 @@ posixTest(
     expect(applied.exitCode).toBe(0);
     expect(applied.applied).toHaveLength(1);
     expect(JSON.parse(applied.output.trim().split('\n').at(-1)!).changed).toBe(false);
-    const task = f.workspace.task(f.task.id);
-    f.workspace.finish(task.id, 'shell-fixture', task.generation, 'completed', 'Saved', null);
-    expect(rollBackHelperTask(f.store, f.workspace, task.id, undefined).units).toMatchObject([
-      { status: 'restored', touches: { domain: 'resource', id: f.resource.id } },
+    expect(readHelperTaskResults(f.store, f.task.id).results).toMatchObject([
+      { operation: 'resource.save', targets: [{ kind: 'content', id: f.resource.id }] },
     ]);
-    expect((readResource(f.store, 'content', f.resource.id) as Content).description).toBe(
-      f.resource.description
-    );
   }
 );
 posixTest(

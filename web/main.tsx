@@ -62,7 +62,7 @@ import { api } from './api.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
 import type {
-  HelperChange,
+  HelperContextReference,
   HelperScope,
   HelperResourceRef,
   HelperTaskResultTarget,
@@ -454,7 +454,6 @@ function App() {
     [resourceAnchor, consumeResourceAnchor]
   );
   const helperResultNavigation = useRef(0);
-  const helperAnchorEpoch = useRef(0);
   const [helperNavigation, setHelperNavigation] = useState<{
     conversationId: string;
     taskId: string;
@@ -1086,6 +1085,13 @@ function App() {
     } else if (target.kind === 'chat') {
       if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
       setPanel('');
+    } else if (target.kind === 'outline') {
+      if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
+      openOutlineWorkspace();
+    } else if (target.kind === 'notes' || target.kind === 'chat-lore') {
+      if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
+      setSettingsSection(target.kind === 'notes' ? 'story' : 'packages');
+      setPanel('story');
     } else if (
       target.kind === 'settings' &&
       (target.setting?.startsWith('newChat.') ||
@@ -1169,61 +1175,32 @@ function App() {
         target.kind === 'scene' ||
         target.kind === 'translation' ||
         target.kind === 'chat' ||
+        target.kind === 'outline' ||
+        target.kind === 'notes' ||
+        target.kind === 'chat-lore' ||
         (target.kind === 'settings' && target.setting?.startsWith('chat.')))
     )
       setPendingNavigation(() => () => void go().catch((error) => s.setError(error)));
     else await go();
   }
-  async function openHelperChange(change: HelperChange) {
-    const anchor = change.anchor;
-    if (!anchor) return;
-    const base = { title: change.title, revision: 0 };
-    if (anchor.domain === 'resource') {
-      return openHelperResult(
-        { ...base, kind: anchor.kind, id: anchor.id },
-        { ...anchor, epoch: ++helperAnchorEpoch.current }
-      );
-    }
-    if (anchor.domain === 'scene') {
-      const go = () => {
-        helperResultNavigation.current++;
-        s.openTarget({
-          chatId: anchor.chatId,
-          sourceId: anchor.sourceId,
-          representation: anchor.field === 'translation' ? 'translation' : 'original',
-          changedParagraph: anchor.field === 'title' ? null : anchor.paragraph,
-        });
-        setPanel('');
-        setHelperExpanded(false);
-      };
-      if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
-      else go();
-      return;
-    }
-    if (anchor.domain === 'outline') {
-      const go = () => {
-        helperResultNavigation.current++;
-        if (s.selected !== anchor.chatId || s.destination !== 'story') s.select(anchor.chatId);
-        setHelperExpanded(false);
-        openOutlineWorkspace(anchor.nodeId);
-      };
-      if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
-      else go();
-      return;
-    }
-    if (anchor.domain === 'settings')
+  async function openHelperReference(reference: HelperContextReference) {
+    const base = { title: reference.title, revision: 0 };
+    if (reference.kind === 'scene' && reference.chatId)
       return openHelperResult({
         ...base,
-        kind: 'settings',
-        id: anchor.id,
-        setting: anchor.setting,
+        kind: 'scene',
+        id: reference.id,
+        chatId: reference.chatId,
       });
+    if (reference.kind === 'content' || reference.kind === 'prompt-preset')
+      return openHelperResult({ ...base, kind: reference.kind, id: reference.id });
+    if (reference.kind !== 'outline' || !reference.chatId) return;
+    const chatId = reference.chatId;
     const go = () => {
       helperResultNavigation.current++;
-      if (s.selected !== anchor.chatId || s.destination !== 'story') s.select(anchor.chatId);
-      setSettingsSection(anchor.domain === 'notes' ? 'story' : 'packages');
-      setPanel('story');
+      if (s.selected !== chatId || s.destination !== 'story') s.select(chatId);
       setHelperExpanded(false);
+      openOutlineWorkspace(reference.id);
     };
     if (libraryDirty && s.destination === 'library') setPendingNavigation(() => go);
     else go();
@@ -1291,7 +1268,7 @@ function App() {
     setHelperExpanded((value) => !value);
   });
   const openHelperTarget = useStableHandler(openHelperResult);
-  const openHelperChangeTarget = useStableHandler(openHelperChange);
+  const openHelperReferenceTarget = useStableHandler(openHelperReference);
   const helperChatScope = s.destination === 'story' && !!s.selected && !!s.detail;
   const helperPanelScope = useMemo<HelperScope>(
     () =>
@@ -3155,7 +3132,7 @@ function App() {
               : t(libraryTab === 'prompts' ? 'transfer.m286' : 'transfer.m285')
           }
           onOpenTarget={openHelperTarget}
-          onOpenChange={openHelperChangeTarget}
+          onOpenReference={openHelperReferenceTarget}
           modal={panelModal}
           enterSend={enterSend}
           responseDisplay={responseDisplay}

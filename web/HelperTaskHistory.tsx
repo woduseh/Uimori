@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { HelperChange, HelperTaskResultTarget } from '../core/helper.js';
+import type { HelperTaskResultTarget } from '../core/helper.js';
 import { labels } from './api.js';
 import {
   HelperActivityTimeline,
@@ -38,8 +38,6 @@ import { TraceCallTable, TraceDisclosure, TraceFooter } from './TaskTrace.js';
 
 type ResultActions = {
   onOpenTarget?: (target: HelperTaskResultTarget) => void | Promise<void>;
-  onOpenChange?: (change: HelperChange) => void | Promise<void>;
-  rollbackUnavailable: boolean;
 };
 
 const running = (task: HelperTaskView) => task.status === 'queued' || task.status === 'running';
@@ -124,16 +122,7 @@ function HelperTaskHistoryDetail({
   return (
     <div className="task-history-sections">
       <TaskHistorySection title={t('helpers.historyChanges')}>
-        {data && (
-          <HelperTaskResultItems
-            taskId={task.id}
-            status={task.status}
-            data={data}
-            onOpenTarget={actions.onOpenTarget}
-            onOpenChange={actions.onOpenChange}
-            rollbackUnavailable={actions.rollbackUnavailable}
-          />
-        )}
+        {data && <HelperTaskResultItems data={data} onOpenTarget={actions.onOpenTarget} />}
         {data && !running(task) && !helperTaskHasResults(data) && (
           <p>{t('helpers.historyNoChanges')}</p>
         )}

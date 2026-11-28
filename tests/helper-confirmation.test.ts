@@ -6,7 +6,6 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { helperConfirmationGate } from '../server/helper-confirmations.js';
-import { helperRollbackView, rollBackHelperTask } from '../server/helper-rollback.js';
 import { HELPER_APP_TOOLS, helperToolTraits } from '../server/helper-app-tools.js';
 import { HELPER_CONFIRMATION_OPERATION_LABELS } from '../web/HelperConfirmations.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
@@ -69,7 +68,7 @@ const remove = (bot: Content, expectedRevision = bot.revision) => ({
   expectedRevision,
 });
 
-test('resource deletion waits for confirmation, and a patch of three resources saves with an undo for each', async () => {
+test('resource deletion waits for confirmation, and a patch of three resources saves at once', async () => {
   const f = fixture();
   const [one, two, three] = f.bots as [Content, Content, Content];
   const run = await runScriptedChatHelper(f.store(), f.chat.id, [
@@ -97,19 +96,11 @@ test('resource deletion waits for confirmation, and a patch of three resources s
       grantable: true,
     },
   ]);
-  const workspace = new HelperWorkspace(f.store());
-  expect(
-    helperRollbackView(f.store(), workspace, run.task.id).units.map(({ unit, status }) => [
-      unit,
-      status,
-    ])
-  ).toEqual([one, two, three].map((bot) => [`resource:content:${bot.id}`, 'restorable'] as const));
-  rollBackHelperTask(f.store(), workspace, run.task.id, undefined);
   expect(
     [one, two, three].map(
       (bot) => f.store().product.stored<Content>('content', bot.id).package!.nativeRisu!.card
     )
-  ).toMatchObject([{ description: '설명' }, { description: '설명' }, { description: '설명' }]);
+  ).toMatchObject([{ description: '1' }, { description: '2' }, { description: '3' }]);
 });
 
 test('paid generation waits for confirmation only when the helper setting asks for it', async () => {
@@ -446,9 +437,8 @@ test('a plan-mode request cannot carry a confirmation, which stays grantable', a
 
 const UNCONFIRMED_DELETIONS: Record<string, string> = {
   'chat.lore:remove':
-    'turn rollback brings back the chat-only override the removal retired (tests/helper-rollback.test.ts)',
-  'chat.bookmark:delete':
-    'a bookmark marks a place in the reader, and its earlier title and note stay in the change record',
+    'the field goes back to the shared lore text; only the chat-only override is retired',
+  'chat.bookmark:delete': 'a bookmark marks a place in the reader; no scene text changes',
   'chat.organize:delete-folder':
     'the chats of the folder move to the top level; no chat is deleted',
   'library.organize:delete-folder':

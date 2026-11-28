@@ -149,7 +149,7 @@ import type { CodexImageRequest, CodexImageResult, CodexSession } from './codex-
 
 import { PROVIDER_PROTOCOLS } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
-import { withHelperChange } from './helper-changes.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 
 export type AppOptions = {
   dbPath: string;
@@ -550,20 +550,31 @@ export async function createApp(options: AppOptions): Promise<App> {
           expectedHeadRevision: task.snapshot.writing!.parentRevision,
           idempotencyKey: key,
         };
-        if (name === 'notes.write')
-          return helper.workspace.operation(
-            task.id,
-            `${task.id}:${operationId}`,
-            { name, args },
-            () =>
-              withHelperChange(store, task, { domain: 'notes', chatId: scope.chatId }, () =>
-                store.story.notes.write(scope.chatId, {
-                  ...record(args.body),
-                  ...base,
-                  author: '사용자 도우미 요청',
-                })
-              )
-          );
+        if (name === 'notes.write') {
+          const receiptId = `${task.id}:${operationId}`;
+          return helper.workspace.operation(task.id, receiptId, { name, args }, () => {
+            const saved = store.story.notes.write(scope.chatId, {
+              ...record(args.body),
+              ...base,
+              author: '사용자 도우미 요청',
+            });
+            recordHelperTaskResult(helper.workspace, task, {
+              receiptId,
+              operation: name,
+              requestedTargets: 1,
+              targets: [
+                {
+                  kind: 'notes',
+                  id: scope.chatId,
+                  chatId: scope.chatId,
+                  title: store.chat(scope.chatId).title,
+                  revision: saved.revision,
+                },
+              ],
+            });
+            return saved;
+          });
+        }
         const snapshot = await prepareNativeRisuReadOnly(
           helperWritingSnapshot(store, scope.chatId),
           'context'

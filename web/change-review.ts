@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { NATIVE_PREFIX, listItemFieldLabels } from './helper-change-location.js';
 import { formatNumber, t } from './i18n.js';
 import { codeFieldName } from './code-field-reveal.js';
 import {
@@ -14,6 +13,31 @@ import {
 } from './editor-values.js';
 import { promptBlockTypeLabels, type ChangedSection } from './studio-sections.js';
 import { firstChangeOffset } from './text-diff-rows.js';
+
+const listItemFieldLabels: Record<'lore' | 'prompt' | 'terms', Record<string, string>> = {
+  lore: {
+    comment: 'native.text_3df0f8d368',
+    name: 'native.text_3df0f8d368',
+    content: 'native.text_bf0b828e2d',
+    key: 'native.text_4fc1889a0b',
+    keys: 'native.text_4fc1889a0b',
+    secondkey: 'native.text_e45a128fa4',
+    secondary_keys: 'native.text_e45a128fa4',
+  },
+  prompt: {
+    name: 'native.text_d07c6c9a24',
+    role: 'native.text_32ae236cf2',
+    role2: 'native.text_32ae236cf2',
+    text: 'native.text_d7e4bc7b33',
+  },
+  terms: {
+    source: 'library.originalTerm',
+    target: 'library.preferredTerm',
+    note: 'library.conditionsOrDescription',
+  },
+};
+const NATIVE_PREFIX =
+  /^\/(?:package\/nativeRisu\/(?:card|module)|program\/nativeRisuPreset\/preset)(?=\/|$)/u;
 
 export type LabelPart = { text: string; identifier?: boolean };
 export type ReviewCard<K extends string> = {

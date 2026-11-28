@@ -309,7 +309,6 @@
         "web/TextDiffView.tsx",
         "web/text-diff-rows.ts",
         "web/SaveConflictDialog.tsx",
-        "web/unsaved-input.ts",
         "web/RisuNativeFields.tsx",
         "web/NativeRisu*.tsx",
         "web/native-*.ts",

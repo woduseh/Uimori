@@ -3,7 +3,6 @@ import type { Store } from './store.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import { AppError, HelperToolError, validationAppError } from './app-errors.js';
 import { ValidationError } from '../core/validation-error.js';
-import { forgetHelperResourceChanges } from './helper-changes.js';
 import { assertAppearanceTargetLive } from './appearance-scope.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import {
@@ -130,7 +129,6 @@ export function deleteIllustrationPreset(store: Store, id: string, expectedRevis
     store.db
       .prepare('DELETE FROM resource_undo WHERE kind=? AND id=?')
       .run('illustration-preset', id);
-    forgetHelperResourceChanges(store.db, 'illustration-preset', id);
     forgetHelperConfirmationTargets(store.db, [{ kind: 'illustration-preset', id }]);
     return { deleted: id };
   });

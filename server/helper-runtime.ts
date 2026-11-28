@@ -33,12 +33,6 @@ import {
 import { HelperShell, type HelperShellAppResult } from './helper-shell.js';
 import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
 import { applyHelperResourceMutation } from './helper-resource-mutation.js';
-import { recordHelperChatLoreChange } from './helper-changes.js';
-import {
-  helperRevertedChanges,
-  helperRollbackView,
-  rollBackHelperTask,
-} from './helper-rollback.js';
 import {
   helperConfirmationGate,
   resolveHelperConfirmations,
@@ -56,6 +50,7 @@ import {
 import {
   HELPER_SCENE_TOOLS,
   helperSceneEditTarget,
+  helperSceneResultTargets,
   invokeHelperSceneTool,
   sceneTranslationState,
 } from './helper-scene-tools.js';
@@ -222,7 +217,11 @@ import { boundedWebSearch, helperWebSearchCapability } from '../core/helper-web-
 import { GEMINI_HELPER_SEARCH_TOOL, geminiHelperSearchRequest } from './helper-web-search-tool.js';
 import { invokeHelperGuideTool } from './helper-guide-tools.js';
 import { invokeHelperCodeTool, isHelperCodeTool } from './helper-code-tools.js';
-import { chatLoreKey, validateChatLoreSelector } from '../core/chat-overrides.js';
+import {
+  chatLoreKey,
+  type ChatLoreOverride,
+  validateChatLoreSelector,
+} from '../core/chat-overrides.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
@@ -316,7 +315,7 @@ const FINAL_CALL_GUIDANCE =
   'The call budget allows only this response. Do not call tools. Reply to the user with what you completed, which changes were saved, any change whose outcome is uncertain, and what remains to do.';
 export function helperContract(session: { chat: boolean; shell: boolean }) {
   return [
-    `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. The owner undid the changes in source.revertedChanges and declined the held calls in source.declinedCalls: do not make them again unless the request asks for them. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs.${session.chat ? ` ${AUTHOR_NOTE_GUIDANCE}` : ''}`,
+    `Complete the user's Uimori task and reply in their language. The request authorizes the changes it asks for: save requested edits and carry the work through without per-step confirmation. Apply, select, cancel or retry only when requested. A request for a review, comparison, preview or proposal asks for findings, not a save or selection. Resolve routine choices yourself and say what you assumed. Ask only when missing input materially changes the result, or before a permanent deletion the request did not name. When a short multiple-choice question resolves that ambiguity cleanly, you may call helper.ask with 2 to 5 options and then end this turn so the user can choose in the UI. A CONFIRMATION_REQUIRED result means the host held the call for the owner: do not repeat it in this task, and say in your reply what needs confirmation. A request whose source lists confirmedCalls carries the owner's confirmation; make each such call with exactly the listed arguments when the request still wants it. The owner declined the held calls in source.declinedCalls: do not make them again unless the request asks for them. When source.referencedTargets is present, those are the exact scenes, outline nodes or library resources the user pointed to with @; inspect them directly with the matching read tool using their listed IDs.${session.chat ? ` ${AUTHOR_NOTE_GUIDANCE}` : ''}`,
     `source already holds, as of the task start: ${session.chat ? 'writing (head, packages with the owning bot as role=bot, author notes, and chat: title, revisions, settings, effective main model and prompt, original-work reference, folder and the latest scene with its editTarget), selection with its editTarget, the outline brief, ' : ''}editor (with focus: the section, item, field, selection and diagnostics the user is looking at, which says where to work and is not a permission), usageDate (today in the calendar usage.read uses) and knownOperations with their schemas. Use these instead of reading them again, and read live state only for what source lacks or after a change.`,
     `Choose and combine the tools suited to the task: app operations${session.shell ? ', data.exec for workspace search and transformation, or shell workspace files described in INDEX.md' : ''}. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Put independent reads in one response as several calls; the host runs adjacent reads together. Prefer one call that covers several targets over repeated calls: resource.read paths, resource.readMany, data.read refs, resource.patchMany, scene.patchMany, chat.lore patchMany and settings.update updates. Use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.`,
     `Edit saved targets using their recorded revisions and preserve unrelated fields. ${session.shell ? 'For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts.' : 'Follow the save contract of each operation.'} Reconcile conflicts against the latest version and report changes from successful receipts. When editor.hasUnsavedInput is true, every save still changes the saved revision, never the draft: take expectedRevision, paths, anchors and replaced text from resource.read or a library data.search of the saved resource, not from editor.read or scope=editor, whose indexes and text can differ; the draft stays open and the editor has the user compare it with your save, so say in the reply that their unsaved input was kept. For translation guides, preserve established terms and distinguish proposed choices from authored facts.`,
@@ -1173,12 +1172,6 @@ export class HelperRuntime {
       const confirmedCalls =
         inherited ?? resolveHelperConfirmations(this.store, conversationId, confirmations);
       const retried = retryOf ? this.workspace.task(retryOf).snapshot : undefined;
-      const revertedChanges = helperRevertedChanges(
-        this.store,
-        conversationId,
-        retryOf,
-        retried?.revertedChanges
-      );
       const declinedCalls = retried
         ? retried.declinedCalls
         : resolveHelperDeclines(this.store, conversationId, declined);
@@ -1196,7 +1189,6 @@ export class HelperRuntime {
         requestFingerprint,
         ...(mode === 'plan' ? { mode } : {}),
         ...(confirmedCalls.length ? { confirmations: confirmedCalls } : {}),
-        ...(revertedChanges ? { revertedChanges } : {}),
         ...(declinedCalls?.length ? { declinedCalls } : {}),
         ...(workspace.helperConfirmPaidGeneration ? { confirmPaidGeneration: true as const } : {}),
         ...(admission?.images?.length ? { images: structuredClone(admission.images) } : {}),
@@ -1263,15 +1255,6 @@ export class HelperRuntime {
           break;
         }
       }
-    });
-  }
-  rollbackView(taskId: string) {
-    return helperRollbackView(this.store, this.workspace, taskId);
-  }
-  rollBack(taskId: string, unit?: string) {
-    return rollBackHelperTask(this.store, this.workspace, taskId, unit, {
-      sceneUpdated: this.options.services?.sceneUpdated,
-      chatChanged: this.options.services?.chatChanged,
     });
   }
   deletionImpact(id: string) {
@@ -2415,14 +2398,6 @@ export class HelperRuntime {
                   ),
                 }
               : {}),
-            ...(task.snapshot.revertedChanges
-              ? {
-                  revertedChanges: task.snapshot.revertedChanges.changes,
-                  ...(task.snapshot.revertedChanges.omitted
-                    ? { revertedChangesOmitted: task.snapshot.revertedChanges.omitted }
-                    : {}),
-                }
-              : {}),
             ...(task.snapshot.declinedCalls?.length
               ? {
                   declinedCalls: task.snapshot.declinedCalls.map(
@@ -3343,13 +3318,24 @@ export class HelperRuntime {
       const invoke = () =>
         name === 'scene.search' && args.regex === true
           ? invokeSceneRegexSearch(this.store, scope.chatId, args, hooks.signal)
-          : invokeHelperSceneTool(this.store, scope.chatId, name, args, task, readFit);
+          : invokeHelperSceneTool(this.store, scope.chatId, name, args, readFit);
       if (helperToolTraits(name).readOnly) return invoke();
+      const receiptId = `${task.id}:${operationId}`;
       const result = this.workspace.operation(
         task.id,
-        `${task.id}:${operationId}`,
+        receiptId,
         { name, args, chatId: scope.chatId },
-        invoke
+        () => {
+          const saved = invoke();
+          const { requested, targets } = helperSceneResultTargets(this.store, scope.chatId, saved);
+          recordHelperTaskResult(this.workspace, task, {
+            receiptId,
+            operation: name,
+            requestedTargets: requested,
+            targets,
+          });
+          return saved;
+        }
       );
       const receipt = record(result);
       if (receipt.changed) {
@@ -3555,6 +3541,30 @@ export class HelperRuntime {
       const service = new ChatOverridesStore(this.store);
       if (args.action === 'read')
         return readHelperChatLore(this.store, scope.chatId, args, readFit);
+      const loreValue = (entry: ChatLoreOverride | undefined) =>
+        entry && !entry.retired ? entry.value : null;
+      const recordLore = (
+        receiptId: string,
+        requested: number,
+        changed: boolean,
+        revision: number
+      ) =>
+        recordHelperTaskResult(this.workspace, task, {
+          receiptId,
+          operation: name,
+          requestedTargets: requested,
+          targets: changed
+            ? [
+                {
+                  kind: 'chat-lore',
+                  id: scope.chatId,
+                  chatId: scope.chatId,
+                  title: this.store.chat(scope.chatId).title,
+                  revision,
+                },
+              ]
+            : [],
+        });
       if (args.action === 'patchMany') {
         fields(args, ['action', 'items']);
         if (
@@ -3577,6 +3587,7 @@ export class HelperRuntime {
           () => {
             const expected = items[0]!.expectedRevision;
             let revision: number | undefined;
+            let changed = false;
             const saved = items.map((item: Record<string, unknown>, index: number) => {
               if (item.expectedRevision !== expected)
                 throw new HelperToolError(
@@ -3595,9 +3606,10 @@ export class HelperRuntime {
                 task.id
               );
               revision = result.revision;
-              recordHelperChatLoreChange(this.store, task, scope.chatId, prior, result.entry);
+              changed ||= loreValue(prior) !== loreValue(result.entry);
               return { overrideId: result.entry.id, selector: result.entry.selector };
             });
+            recordLore(`${task.id}:${operationId}`, items.length, changed, revision ?? 0);
             return { revision, items: saved };
           }
         );
@@ -3612,7 +3624,12 @@ export class HelperRuntime {
           args.action === 'patch'
             ? service.patch(scope.chatId, body, task.id)
             : service.remove(scope.chatId, body, task.id);
-        recordHelperChatLoreChange(this.store, task, scope.chatId, prior, saved.entry);
+        recordLore(
+          `${task.id}:${operationId}`,
+          1,
+          loreValue(prior) !== loreValue(saved.entry),
+          saved.revision
+        );
         return {
           revision: saved.revision,
           overrideId: saved.entry.id,

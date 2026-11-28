@@ -21,7 +21,6 @@ import { detachAttemptUsage } from './usage-accounting.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { readChatVariables } from './chat-variables.js';
 import { disposeNativeRisuChatSessions } from './risu-native-lua-session.js';
-import { forgetHelperSceneChanges } from './helper-changes.js';
 import {
   forgetHelperConfirmationTargets,
   redactHelperArgumentPreviews,
@@ -245,7 +244,6 @@ export function deleteScenes(
       }
     }
     redactHelperArgumentPreviews(store.db, chatId, ids, '[arguments removed after scene deletion]');
-    forgetHelperSceneChanges(store.db, ids);
     forgetHelperConfirmationTargets(
       store.db,
       [...ids].map((id) => ({ kind: 'scene', id }))

@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v4';
-import type { AnySplitOperation, OperationBody, OperationParsedInput } from '#contracts';
+import type { AnySplitOperation, OperationBody } from '#contracts';
 import { combineStrictObject, narrowOperationBody } from '#contracts/operations';
 import type { HelperTask, HelperTaskResult } from '../core/helper.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { asAppError } from './app-errors.js';
 import { type Command, type CommandOutcome, stageOperation } from './command.js';
-import { type HelperChangeTarget, withHelperChange } from './helper-changes.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { type AppPorts, createStorePorts } from './store-ports.js';
@@ -43,10 +42,6 @@ export type HelperCommandTool<
   readonly command: Command<Op, P>;
   readonly omitHeadKeys: readonly string[];
   readonly injectIdempotencyKey?: boolean;
-  readonly changeTarget?: (
-    input: OperationParsedInput<Op>,
-    context: { readonly chatId: string }
-  ) => HelperChangeTarget | undefined;
   readonly formatResult: (
     outcome: CommandOutcome<Op>,
     context: HelperCommandFormatContext
@@ -67,7 +62,6 @@ export function defineHelperCommandTool<
   readonly schemaBody: B;
   readonly omitHeadKeys: readonly (keyof Op['head']['shape'] & string)[];
   readonly injectIdempotencyKey?: boolean;
-  readonly changeTarget?: HelperCommandTool<Op, P>['changeTarget'];
   readonly formatResult: HelperCommandTool<Op, P>['formatResult'];
 }): HelperCommandTool<Op, P> {
   return {
@@ -79,7 +73,6 @@ export function defineHelperCommandTool<
     command: { ...spec.command, op: narrowOperationBody(spec.command.op, spec.schemaBody) },
     omitHeadKeys: spec.omitHeadKeys,
     ...(spec.injectIdempotencyKey ? { injectIdempotencyKey: true } : {}),
-    ...(spec.changeTarget ? { changeTarget: spec.changeTarget } : {}),
     formatResult: spec.formatResult,
   };
 }
@@ -107,24 +100,6 @@ function buildHelperRawInput(
   return raw;
 }
 
-function recordingChange(
-  entry: HelperCommandTool,
-  store: Store,
-  task: ResultTask,
-  chatId: string
-): Command {
-  const { command, changeTarget } = entry;
-  if (!changeTarget) return command;
-  return {
-    ...command,
-    apply(tx, ports, input, guarded, prepared) {
-      const target = changeTarget(input, { chatId });
-      const apply = () => command.apply(tx, ports, input, guarded, prepared);
-      return target ? withHelperChange(store, task, target, apply) : apply();
-    },
-  };
-}
-
 export async function executeHelperCommand(
   entry: HelperCommandTool,
   deps: {
@@ -149,7 +124,7 @@ export async function executeHelperCommand(
   try {
     const ports = createStorePorts(deps.store, { publish: deps.chatChanged });
     const staged = await stageOperation(
-      recordingChange(entry, deps.store, task, chatId),
+      entry.command,
       ports,
       buildHelperRawInput(
         args,

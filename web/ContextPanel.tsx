@@ -15,7 +15,6 @@ import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { api, ApiError } from './api.js';
 import { useLiveRefresh } from './live-stream.js';
 import { contextJobPollDelay } from './poll-delays.js';
-import { useUnsavedInput } from './unsaved-input.js';
 import './context.css';
 
 type ContextJob = Omit<StoredContextJob, 'snapshot'>;
@@ -118,7 +117,6 @@ export function ContextPanel({
   useEffect(() => {
     onDirtyChange(draft !== null || notesDirty || busy);
   }, [draft, notesDirty, busy, onDirtyChange]);
-  useUnsavedInput(notesDirty ? { domain: 'notes', chatId } : null);
   function report(caught: unknown, fallback?: MessageKey) {
     const text = toUiMessage(caught, fallback);
     setError(text);
