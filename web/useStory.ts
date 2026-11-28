@@ -1221,7 +1221,7 @@ export function useStory() {
     return (
       !!run &&
       (!!run.request.trim() || !!run.snapshot.requestImages?.length) &&
-      run.packageStart?.mode !== 'authored' &&
+      !run.opening &&
       ['completed', 'failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(run.status)
     );
   }

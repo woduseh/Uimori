@@ -80,7 +80,7 @@ export function RunNotices({
   readyContext?: boolean;
 }) {
   useI18n();
-  if (run.packageStart?.mode === 'authored') return null;
+  if (run.opening) return null;
   const shownError =
     run.error &&
     !(run.status === 'cancelled' && run.error === 'Run cancelled') &&
@@ -192,7 +192,7 @@ export function RunTaskDetails({
   onError: (error: UiMessage | null) => void;
 }) {
   useI18n();
-  const authored = run.packageStart?.mode === 'authored';
+  const authored = !!run.opening;
   const record = useApiRecord<Run>(`/runs/${run.id}`, revision, !authored);
   const trace = useChatTrace(run.chatId, revision);
   const calls = trace.value?.filter((call) => call.sceneRunId === run.id) ?? [];

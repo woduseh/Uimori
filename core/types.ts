@@ -285,6 +285,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     error: string | null;
   };
   modelTitle?: string;
+  opening?: true;
   executionMode?: import('./product.js').ModelExecutionMode;
   rejection?: import('./provider-rejection.js').ProviderRejection;
   packageStart?: Pick<

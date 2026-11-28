@@ -265,7 +265,7 @@ export function SceneInspector({
   const [loreOpen, setLoreOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const [rawTab, setRawTab] = useState('main');
-  const authored = run.packageStart?.mode === 'authored';
+  const authored = !!run.opening;
   const settled = !['queued', 'running'].includes(run.status);
   const usage = run.sceneUsage;
   const noRecord = !authored && settled && !!run.sourceRevision && !usage;

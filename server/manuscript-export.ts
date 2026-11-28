@@ -2,6 +2,7 @@ import type {
   ManuscriptExportMetadata,
   ManuscriptExportResult,
 } from '../core/manuscript-export.js';
+import { authoredOpeningSql } from './authored-opening.js';
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 import type { ExportManuscript } from '#contracts/operations';
@@ -11,7 +12,7 @@ import { successfulTranslation } from './translation-artifacts.js';
 function manuscriptScenes(store: Store, chatId: string, head: string | null) {
   const read =
     store.db.prepare(`SELECT s.id,s.chat_id AS chatId,s.parent_revision AS parentRevision,
-    json_extract(r.snapshot,'$.packageStart.mode') AS startMode
+    ${authoredOpeningSql('r.snapshot')} AS opening
     FROM sources s JOIN runs r ON r.id=s.run_id WHERE s.id=?`);
   const chain: { id: string; opening: boolean }[] = [];
   const seen = new Set<string>();
@@ -19,11 +20,11 @@ function manuscriptScenes(store: Store, chatId: string, head: string | null) {
     if (seen.has(head)) throw new HttpError(400, 'Source ancestry cycle');
     seen.add(head);
     const row = read.get(head) as
-      | { id: string; chatId: string; parentRevision: string | null; startMode: string | null }
+      | { id: string; chatId: string; parentRevision: string | null; opening: number }
       | undefined;
     if (!row) throw new HttpError(404, 'Source not found');
     if (row.chatId !== chatId) throw new HttpError(400, 'Source outside chat');
-    chain.push({ id: row.id, opening: row.startMode === 'authored' });
+    chain.push({ id: row.id, opening: !!row.opening });
     head = row.parentRevision;
   }
   let sceneNumber = 0;

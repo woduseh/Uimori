@@ -1,3 +1,4 @@
+import { isAuthoredOpening } from './authored-opening.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { RunSnapshot, Usage } from '../core/types.js';
@@ -315,10 +316,9 @@ export async function applyNativeRisuAction(
     );
     const previous = groupMessages(context.messages);
     const next = groupMessages(result.messages);
-    const greeting = captured.snapshot.history.find((entry) => {
-      const saved = store.run(store.source(entry.revision).runId).snapshot;
-      return saved.packageStart?.mode === 'authored' || saved.nativeRisuAuthored?.greeting;
-    });
+    const greeting = captured.snapshot.history.find((entry) =>
+      isAuthoredOpening(store.run(store.source(entry.revision).runId).snapshot)
+    );
     const messageSources = captured.snapshot.history.filter((entry) => entry !== greeting);
     const sourceByMessage = new Map(
       (captured.snapshot.logicalHistory ?? []).map((message) => [

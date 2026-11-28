@@ -121,17 +121,16 @@ function TurnActivityContent({
     const timer = setInterval(() => setNow(Date.now()), ELAPSED_LABEL_REFRESH_MS);
     return () => clearInterval(timer);
   }, [running]);
-  const authored = run.packageStart?.mode === 'authored';
-  const mainLabel =
-    run.packageStart?.mode === 'authored'
-      ? t('helpers.m249')
-      : run.status === 'running'
-        ? run.phase && run.phase !== 'writing'
-          ? t(phaseLabels[run.phase])
-          : run.executionMode === 'batch'
-            ? t('helpers.m250')
-            : t('helpers.m212')
-        : t('helpers.m251', { v0: labels[run.status] ?? run.status });
+  const authored = !!run.opening;
+  const mainLabel = authored
+    ? t('helpers.m249')
+    : run.status === 'running'
+      ? run.phase && run.phase !== 'writing'
+        ? t(phaseLabels[run.phase])
+        : run.executionMode === 'batch'
+          ? t('helpers.m250')
+          : t('helpers.m212')
+      : t('helpers.m251', { v0: labels[run.status] ?? run.status });
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [
     ...(authored ? [] : [mainLabel]),

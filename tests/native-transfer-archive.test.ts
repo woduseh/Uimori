@@ -48,6 +48,13 @@ import { remapIllustrationPackageReferences } from '../server/illustration-refer
 import { saveChatGenerationDefaults } from '../server/chat-generation-defaults.js';
 import { ChatOptionsStore } from '../server/chat-options.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { createPackageStart } from '../server/package-start.js';
+import { completedSource } from './fixtures/illustration.js';
+import { readerDetail } from '../server/reader.js';
+import { exportManuscript } from '../server/manuscript-export.js';
+import { ManuscriptSearch } from '../server/manuscript-search.js';
+import type { ManuscriptSearchInput } from '#contracts/operations';
+import type { ReaderRun } from '../core/types.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -306,6 +313,107 @@ test('chat archive restores authored resources without execution and recovers re
     saveImportReceipt(target, `other-import-${index}`, 'digest', { index });
   expect(importChatBackupArchiveRequest(target, command).created).toBe(false);
   expect(target.chats()).toHaveLength(1);
+});
+
+test('a restored authored opening reads, numbers, exports and searches like the original across repeated archive round trips', async () => {
+  const source = database();
+  const pkg = nativeContent({ name: 'Ari', first_mes: 'Ari opens the observatory door.' });
+  const content = source.product.content({
+    kind: 'bot',
+    title: pkg.title,
+    description: '',
+    text: '',
+    loading: 'pinned',
+    relatedIds: [],
+    package: pkg,
+  }) as Content;
+  const chat = createFixtureChat(source, 'Authored opening', { botId: content.id });
+  createPackageStart(source, chat.id, {
+    packageId: content.id,
+    packageRevision: content.revision,
+    startId: 'start-0',
+    expectedSettingsRevision: chat.settingsRevision,
+    expectedProfileRevision: source.product.profile(chat.id).revision,
+    idempotencyKey: 'authored-opening',
+  });
+  completedSource(source, chat.id, 'The telescope turned toward the comet.');
+
+  async function reading(store: Store, chatId: string) {
+    const detail = readerDetail(store, chatId, {});
+    const runs = new Map((detail.runs as ReaderRun[]).map((run) => [run.id, run]));
+    const head = store.chat(chatId).headRevision;
+    const search = new ManuscriptSearch(store);
+    try {
+      return {
+        scenes: detail.reader.navigation.map((item) => {
+          const run = runs.get(store.source(item.id).runId)!;
+          return {
+            number: item.number,
+            opening: item.opening ?? false,
+            runOpening: run.opening ?? false,
+            modelTitle: run.modelTitle ?? null,
+          };
+        }),
+        firstScene: exportManuscript(store, chatId, {
+          mode: 'source',
+          fromScene: 1,
+          toScene: 1,
+          expectedHeadRevision: head,
+        }).markdown,
+        search: (
+          await search.search({
+            query: 'comet',
+            scope: 'chat',
+            chatId,
+            kinds: ['original'],
+          } as ManuscriptSearchInput)
+        ).items.map((item) => item.sceneNumber),
+      };
+    } finally {
+      await search.close();
+    }
+  }
+  async function restore(from: Store, chatId: string, key: string) {
+    expect(captureChatCopy(from, chatId, undefined, true).state.messages?.[0].opening).toBe(true);
+    const archive = await bytes(exportChatBackupArchive(from, chatId)),
+      target = database();
+    const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
+    const restored = importChatBackupArchiveRequest(target, {
+      preparedId: preview.preparedId,
+      digest: preview.digest,
+      idempotencyKey: key.padEnd(100, '-'),
+    });
+    return { store: target, chatId: restored.chat.id };
+  }
+
+  const original = await reading(source, chat.id);
+  expect(original).toEqual({
+    scenes: [
+      { number: 0, opening: true, runOpening: true, modelTitle: null },
+      expect.objectContaining({ number: 1, opening: false, runOpening: false }),
+    ],
+    firstScene: 'The telescope turned toward the comet.\n',
+    search: [1],
+  });
+  const once = await restore(source, chat.id, 'first-restore');
+  const restoredOpening = once.store.run(
+    once.store.source(once.store.history(once.store.chat(once.chatId).headRevision)[0].revision)
+      .runId
+  ).snapshot;
+  expect(restoredOpening.packageStart).toBeUndefined();
+  expect(restoredOpening.nativeRisuAuthored).toMatchObject({
+    action: 'copied-opening',
+    greeting: true,
+  });
+  expect(await reading(once.store, once.chatId)).toEqual(original);
+  const twice = await restore(once.store, once.chatId, 'second-restore');
+  expect(await reading(twice.store, twice.chatId)).toEqual(original);
+  const usage = twice.store.db
+    .prepare(
+      "SELECT COALESCE(SUM(json_extract(usage,'$.modelCalls')),0) AS calls FROM runs WHERE chat_id=?"
+    )
+    .get(twice.chatId) as { calls: number };
+  expect(usage.calls).toBe(0);
 });
 
 test('chat copies and backups preserve character appearances and remap only their owned images', async () => {
