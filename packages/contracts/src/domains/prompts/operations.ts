@@ -65,6 +65,7 @@ export const updateModelWorkspaceInput = z.strictObject({
   helperModel: optionalModel,
   helperTaskTimeoutMinutes: z.unknown().optional(),
   helperConfirmPaidGeneration: z.boolean().optional(),
+  mcpAllowDelete: z.boolean().optional(),
   contextModel: optionalModel,
   scriptModel: optionalModel,
   summaryLength: z.unknown().optional(),

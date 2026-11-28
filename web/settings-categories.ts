@@ -82,7 +82,7 @@ export function getSettingsCategories(sessionRequired: boolean): SettingsCategor
       label: t('chatsettings.m27'),
       icon: ModelIcon,
       group: 'generation',
-      terms: `${t('chatsettings.m28')} ${t('settings.helperTaskTimeout')} ${t('settings.helperConfirmPaidGeneration')}`,
+      terms: `${t('chatsettings.m28')} ${t('settings.helperTaskTimeout')} ${t('settings.helperConfirmPaidGeneration')} ${t('settings.mcpAllowDelete')}`,
     },
     {
       key: 'prompts',

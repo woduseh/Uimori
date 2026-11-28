@@ -1,9 +1,11 @@
 import { readHelperOptions } from './chat-options.js';
+import { deleteListedChat } from './helper-chat-lifecycle-tools.js';
 import { readHelperChatOrganization } from './helper-chat-organization-tools.js';
 import { readHelperChatState } from './helper-chat-state-tools.js';
 import { readHelperChatContext } from './helper-context.js';
 import { invokeSceneRegexSearch } from './helper-data-tools.js';
 import {
+  deleteIllustrationCut,
   listIllustrationCuts,
   readIllustrationScene,
   inspectIllustrationCut,
@@ -17,7 +19,10 @@ import {
 } from './helper-image-tools.js';
 import { readHelperChatLore } from './helper-lore-read.js';
 import { invokePresentationTool } from './helper-presentation-tools.js';
-import { readHelperPromptCombinations } from './helper-prompt-combination-tools.js';
+import {
+  deletePromptCombination,
+  readHelperPromptCombinations,
+} from './helper-prompt-combination-tools.js';
 import type { HelperReadFit } from './helper-read-fit.js';
 import { invokeResourceTool } from './helper-resource-tools.js';
 import { invokeHelperSceneTool } from './helper-scene-tools.js';
@@ -40,6 +45,8 @@ export type McpOperationContext = {
   signal: AbortSignal;
   chatId: string | undefined;
   fit: HelperReadFit;
+  chatChanged: (chatId: string) => void;
+  chatDeleted: (chatId: string) => void;
 };
 type Args = Record<string, unknown>;
 type Image = { result: unknown; resolved: { mime: string; base64: string } };
@@ -48,6 +55,7 @@ export type McpAppOperation = {
   chat: 'required' | 'optional' | 'none';
   actions?: readonly string[];
   fields?: readonly string[];
+  deletes?: true | readonly string[];
   image?: (args: Args) => boolean;
   run: (args: Args, context: McpOperationContext) => unknown;
 };
@@ -58,6 +66,10 @@ const read = (run: McpAppOperation['run'], chat: McpAppOperation['chat'] = 'none
   chat,
   run,
 });
+const deletion = (
+  run: McpAppOperation['run'],
+  chat: McpAppOperation['chat'] = 'none'
+): McpAppOperation => ({ readOnly: false, chat, deletes: true, run });
 const chatRead = (run: (store: Store, chatId: string, args: Args, fit: HelperReadFit) => unknown) =>
   read((args, context) => run(context.store, chatOf(context), args, context.fit), 'required');
 const settings = (name: string) =>
@@ -86,12 +98,28 @@ export const MCP_APP_OPERATIONS: Record<string, McpAppOperation> = {
   'illustration-preset.guide': resource('illustration-preset.guide'),
   'theme.list': resource('theme.list'),
   'theme.guide': resource('theme.guide'),
+  'model.delete': deletion((args, { store }) =>
+    invokeHelperSettingsTool(store, 'model.delete', args)
+  ),
   'resource.save': resource('resource.save', false),
+  'resource.delete': { ...resource('resource.delete', false), deletes: true },
   'image.update-metadata': resource('image.update-metadata', false),
   'font.list': read((args, { store }) => invokePresentationTool(store, 'font.list', args)),
+  'font.delete': deletion((args, { store }) => invokePresentationTool(store, 'font.delete', args)),
   'palette.list': read((args, { store }) => invokePresentationTool(store, 'palette.list', args)),
+  'palette.delete': deletion((args, { store }) =>
+    invokePresentationTool(store, 'palette.delete', args)
+  ),
   'prompt.combination.list': read((args, { store }) => readHelperPromptCombinations(store, args)),
+  'prompt.combination.delete': deletion(
+    (args, { store }) => deletePromptCombination(store, args).result
+  ),
   'chat.list': read((args, { store }) => listHelperChats(store, args)),
+  'chat.delete': deletion((_args, context) => {
+    const { result } = deleteListedChat(context.store, chatOf(context));
+    context.chatDeleted(result.chatId);
+    return result;
+  }, 'required'),
   'chat.read': chatRead((store, chatId, args) => readHelperChatIndex(store, chatId, args)),
   'chat.rename': {
     readOnly: false,
@@ -127,7 +155,8 @@ export const MCP_APP_OPERATIONS: Record<string, McpAppOperation> = {
   'library.organize': {
     readOnly: false,
     chat: 'none',
-    actions: ['read', 'create-folder', 'update-folder', 'move'],
+    actions: ['read', 'create-folder', 'update-folder', 'delete-folder', 'move'],
+    deletes: ['delete-folder'],
     run: (args, { store }) => organizeHelperLibrary(store, args),
   },
   'outline.read': chatRead((store, chatId, args, fit) =>
@@ -163,6 +192,11 @@ export const MCP_APP_OPERATIONS: Record<string, McpAppOperation> = {
     ),
     image: (args) => args.includeImage !== false,
   },
+  'illustration.cut.delete': deletion((args, context) => {
+    const result = deleteIllustrationCut(context.store, chatOf(context), args);
+    context.chatChanged(result.chatId);
+    return result;
+  }, 'required'),
   'illustration.image.read': {
     ...read(
       (args, { store, chatId, signal }) =>

@@ -35,6 +35,18 @@ export const messages = {
     ja: 'アシスタントが次のシーンや翻訳を依頼する前に確認を求めます。変更は次のアシスタントへの依頼から適用されます。',
     zh: '助手在请求下一场景或翻译前会先征求确认。更改从下一次助手请求开始生效。',
   },
+  'settings.mcpAllowDelete': {
+    ko: 'MCP에서 삭제도 확인 없이 허용',
+    en: 'Allow deletion over MCP without confirmation',
+    ja: 'MCP からの削除も確認なしで許可',
+    zh: '允许通过 MCP 直接删除，无需确认',
+  },
+  'settings.mcpAllowDeleteHint': {
+    ko: 'MCP로 연결한 바깥 에이전트가 서재 자료, 채팅, 폴더, 옵션 프리셋, 삽화 컷, 글꼴, 팔레트, 모델을 바로 지울 수 있어요. 지운 것은 되돌릴 수 없어요.',
+    en: 'An outside agent connected over MCP can delete library resources, chats, folders, option presets, illustration cuts, fonts, palettes and models right away. A deletion cannot be undone.',
+    ja: 'MCP で接続した外部エージェントが、ライブラリの資料、チャット、フォルダー、オプションプリセット、挿絵カット、フォント、パレット、モデルをすぐに削除できます。削除したものは元に戻せません。',
+    zh: '通过 MCP 连接的外部代理可以直接删除资料库内容、聊天、文件夹、选项预设、插图分镜、字体、调色板和模型。删除后无法恢复。',
+  },
   'settings.helperTaskTimeoutRange': {
     ko: '1~{max} 사이의 정수를 입력해 주세요.',
     en: 'Enter a whole number from 1 to {max}.',

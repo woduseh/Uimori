@@ -1,7 +1,14 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { APP_VERSION } from './app-version.js';
 import { registerRawRoute } from './endpoint.js';
-import { executeMcpTool, mcpToolDefinitions, McpUnknownToolError } from './mcp-tools.js';
+import {
+  executeMcpTool,
+  MCP_DELETE_SETTING,
+  mcpToolDefinitions,
+  McpUnknownToolError,
+  type McpEffects,
+  type McpPorts,
+} from './mcp-tools.js';
 import { getMcpSkill, listMcpResources, listMcpSkills, readMcpResource } from './mcp-skills.js';
 import { MCP_ROUTE } from './network-policy.js';
 import type { Store } from './store.js';
@@ -29,8 +36,7 @@ const CACHEABLE = new Set([
 ]);
 const SERVER_INFO = { name: 'uimori', title: 'Uimori', version: APP_VERSION };
 const CAPABILITIES = { tools: {}, resources: {}, extensions: { [SKILLS]: {} } };
-const INSTRUCTIONS =
-  "Uimori's saved library: bots, personas and modules (character cards, lorebooks, CBS, Lua, regex and triggers) and prompt presets. Find with data_search or db_query, read with resource_read, edit with resource_patch at the revision you read, and take the last save back with resource_undo. Find why a run failed with task_list and task_inspect, which return its error, request text and model. Chats, scenes, outlines, settings and the other app operations are found with app_tools and run with app_call. No tool here starts paid generation or deletes a resource, chat or folder; a save replaces content as it does in the app.";
+const INSTRUCTIONS = `Uimori's saved library: bots, personas and modules (character cards, lorebooks, CBS, Lua, regex and triggers) and prompt presets. Find with data_search or db_query, read with resource_read, edit with resource_patch at the revision you read, and take the last save back with resource_undo. Find why a run failed with task_list and task_inspect, which return its error, request text and model. Chats, scenes, outlines, settings and the other app operations are found with app_tools and run with app_call. No tool here starts paid generation; a save replaces content as it does in the app. Deleting a resource, chat, folder or other saved item runs through app_call only while the owner has turned on "${MCP_DELETE_SETTING}" in the app settings, then at once and without undo.`;
 
 type Id = string | number | null;
 type Params = Record<string, unknown>;
@@ -100,8 +106,7 @@ async function dispatch(
   method: string,
   params: Params,
   modern: boolean,
-  store: Store,
-  signal: AbortSignal
+  ports: McpPorts
 ): Promise<Params> {
   switch (method) {
     case 'initialize': {
@@ -129,10 +134,7 @@ async function dispatch(
       return { tools: mcpToolDefinitions() };
     case 'tools/call':
       try {
-        return await executeMcpTool(requiredString(params, 'name'), params.arguments, {
-          store,
-          signal,
-        });
+        return await executeMcpTool(requiredString(params, 'name'), params.arguments, ports);
       } catch (error) {
         if (error instanceof McpUnknownToolError)
           throw new RpcError(-32602, `Unknown tool: ${error.message}`);
@@ -180,7 +182,12 @@ const failure = (reply: FastifyReply, id: Id, error: RpcError) =>
     },
   });
 
-async function handle(request: FastifyRequest, reply: FastifyReply, store: Store) {
+async function handle(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: Store,
+  effects: McpEffects
+) {
   const message = object(request.body);
   const id = message && Object.hasOwn(message, 'id') ? (message.id as Id) : undefined;
   if (
@@ -202,7 +209,11 @@ async function handle(request: FastifyRequest, reply: FastifyReply, store: Store
     reply.raw.on('close', () => {
       if (!reply.raw.writableEnded) disconnected.abort();
     });
-    const result = await dispatch(message.method, params, modern, store, disconnected.signal);
+    const result = await dispatch(message.method, params, modern, {
+      store,
+      signal: disconnected.signal,
+      ...effects,
+    });
     return reply.send({
       jsonrpc: '2.0',
       id,
@@ -214,7 +225,7 @@ async function handle(request: FastifyRequest, reply: FastifyReply, store: Store
   }
 }
 
-export function mcpRoutes(app: FastifyInstance, store: Store) {
+export function mcpRoutes(app: FastifyInstance, store: Store, effects: McpEffects) {
   registerRawRoute(
     app,
     {
@@ -227,7 +238,7 @@ export function mcpRoutes(app: FastifyInstance, store: Store) {
         throw error;
       },
     },
-    (_input, request, reply) => handle(request, reply, store)
+    (_input, request, reply) => handle(request, reply, store, effects)
   );
   registerRawRoute(
     app,

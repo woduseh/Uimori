@@ -127,6 +127,9 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     const paidConfirmation = editor.getByRole('switch', { name: '유료 생성 전에 확인' });
     await expect(paidConfirmation).not.toBeChecked();
     await paidConfirmation.check();
+    const mcpDeletion = editor.getByRole('switch', { name: 'MCP에서 삭제도 확인 없이 허용' });
+    await expect(mcpDeletion).not.toBeChecked();
+    await mcpDeletion.check();
     await previousSceneLimit.fill('32769');
     await expect(saveModels).toBeDisabled();
     await previousSceneLimit.fill('1024');
@@ -148,6 +151,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     const selected = await models(request);
     expect(selected.helperTaskTimeoutMinutes).toBe(90);
     expect(selected.helperConfirmPaidGeneration).toBe(true);
+    expect(selected.mcpAllowDelete).toBe(true);
     expect(selected.titleModel).toEqual({ id: ids[0] });
     expect(selected.scriptModel).toEqual({ id: ids[0] });
     expect(selected.mainJudgmentEnabled).toBe(false);
