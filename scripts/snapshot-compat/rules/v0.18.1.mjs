@@ -77,6 +77,18 @@ export const rules = [
     'The client explains notification availability.'
   ),
   read(
+    'reader-opening-flag',
+    ['/api/chats/:/reader'],
+    [added('body.runs.*.opening', true)],
+    'Reader runs name the authored opening so the web hides its request and rewrite controls.'
+  ),
+  read(
+    'reader-runs-opening-flag',
+    ['/api/chats/:/reader-runs'],
+    [added('body.*.opening', true)],
+    'Reader runs name the authored opening so the web hides its request and rewrite controls.'
+  ),
+  read(
     'archive-notices',
     [archive],
     [removed('body.manifest.backup.notices', { type: 'strings' })],

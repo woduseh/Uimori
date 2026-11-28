@@ -339,6 +339,11 @@ test('a restored authored opening reads, numbers, exports and searches like the 
   completedSource(source, chat.id, 'The telescope turned toward the comet.');
 
   async function reading(store: Store, chatId: string) {
+    store.db
+      .prepare(
+        "UPDATE runs SET snapshot=json_set(snapshot,'$.displayModelTitle','Writer') WHERE chat_id=?"
+      )
+      .run(chatId);
     const detail = readerDetail(store, chatId, {});
     const runs = new Map((detail.runs as ReaderRun[]).map((run) => [run.id, run]));
     const head = store.chat(chatId).headRevision;
@@ -374,7 +379,12 @@ test('a restored authored opening reads, numbers, exports and searches like the 
     }
   }
   async function restore(from: Store, chatId: string, key: string) {
-    expect(captureChatCopy(from, chatId, undefined, true).state.messages?.[0].opening).toBe(true);
+    const [opening] = captureChatCopy(from, chatId, undefined, true).state.messages ?? [];
+    expect(opening).toEqual({
+      sourceId: expect.any(String),
+      sourceHash: expect.any(String),
+      opening: true,
+    });
     const archive = await bytes(exportChatBackupArchive(from, chatId)),
       target = database();
     const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
@@ -390,23 +400,28 @@ test('a restored authored opening reads, numbers, exports and searches like the 
   expect(original).toEqual({
     scenes: [
       { number: 0, opening: true, runOpening: true, modelTitle: null },
-      expect.objectContaining({ number: 1, opening: false, runOpening: false }),
+      { number: 1, opening: false, runOpening: false, modelTitle: 'Writer' },
     ],
     firstScene: 'The telescope turned toward the comet.\n',
     search: [1],
   });
+  const restoredOpening = (restored: { store: Store; chatId: string }) =>
+    restored.store.run(
+      restored.store.source(
+        restored.store.history(restored.store.chat(restored.chatId).headRevision)[0].revision
+      ).runId
+    ).snapshot;
   const once = await restore(source, chat.id, 'first-restore');
-  const restoredOpening = once.store.run(
-    once.store.source(once.store.history(once.store.chat(once.chatId).headRevision)[0].revision)
-      .runId
-  ).snapshot;
-  expect(restoredOpening.packageStart).toBeUndefined();
-  expect(restoredOpening.nativeRisuAuthored).toMatchObject({
+  expect(restoredOpening(once).packageStart).toBeUndefined();
+  expect(restoredOpening(once).nativeRisuAuthored).toMatchObject({
     action: 'copied-opening',
     greeting: true,
   });
   expect(await reading(once.store, once.chatId)).toEqual(original);
   const twice = await restore(once.store, once.chatId, 'second-restore');
+  expect(restoredOpening(twice).nativeRisuAuthored).toEqual(
+    restoredOpening(once).nativeRisuAuthored
+  );
   expect(await reading(twice.store, twice.chatId)).toEqual(original);
 });
 
