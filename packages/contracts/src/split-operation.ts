@@ -23,54 +23,74 @@ export function splitHeadBody(
   return { headRaw, bodyRaw };
 }
 
+function unwrapObjectShape(schema: unknown): z.ZodRawShape | undefined {
+  const def = (
+    schema as { _zod?: { def?: { type?: string; in?: unknown; shape?: z.ZodRawShape } } }
+  )._zod?.def;
+  if (def?.type === 'object') return def.shape;
+  if (def?.type === 'pipe') return unwrapObjectShape(def.in);
+  return undefined;
+}
+
+function assertDisjointKeys(head: z.ZodObject<z.ZodRawShape>, bodyShape: z.ZodRawShape): void {
+  for (const key of Object.keys(bodyShape)) {
+    if (Object.hasOwn(head.shape, key))
+      throw new Error(`SplitOperation head and body share key: ${key}`);
+  }
+}
+
 export function combineStrictObject<
   H extends z.ZodObject<z.ZodRawShape>,
   B extends z.ZodObject<z.ZodRawShape>,
 >(head: H, body: B): z.ZodObject<H['shape'] & B['shape']> {
-  for (const key of Object.keys(body.shape)) {
-    if (Object.hasOwn(head.shape, key))
-      throw new Error(`SplitOperation head and body share key: ${key}`);
-  }
+  assertDisjointKeys(head, body.shape);
   return z.strictObject({ ...head.shape, ...body.shape }) as z.ZodObject<H['shape'] & B['shape']>;
 }
 
-function mergeBranch(
-  head: z.ZodObject<z.ZodRawShape>,
-  branch: z.ZodObject<z.ZodRawShape>
-): z.ZodType {
-  return combineStrictObject(head, branch).superRefine((value, ctx) => {
-    const { bodyRaw } = splitHeadBody(head, value as Record<string, unknown>);
-    const checked = branch.safeParse(bodyRaw);
-    if (checked.success) return;
-    for (const issue of checked.error.issues) ctx.addIssue({ ...issue });
-  });
+function validateBodyStructure(head: z.ZodObject<z.ZodRawShape>, body: z.ZodType): void {
+  const directShape = unwrapObjectShape(body);
+  if (directShape) {
+    assertDisjointKeys(head, directShape);
+    return;
+  }
+  const def = (body as unknown as { _zod?: { def?: { type?: string; options?: unknown[] } } })._zod
+    ?.def;
+  if (def?.type === 'union' && Array.isArray(def.options) && def.options.length >= 2) {
+    for (const option of def.options) {
+      const shape = unwrapObjectShape(option);
+      if (!shape) throw new Error('SplitOperation union body branches must be strict objects');
+      assertDisjointKeys(head, shape);
+    }
+    return;
+  }
+  throw new Error('SplitOperation body must be a strict object or a union of strict objects');
 }
 
 function combineInput<H extends z.ZodObject<z.ZodRawShape>, B extends z.ZodType>(
   head: H,
   body: B
 ): z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>> {
-  const def = (body as unknown as { _zod?: { def?: { type?: string; options?: unknown[] } } })._zod
-    ?.def;
-  if (def?.type === 'object') {
-    return mergeBranch(head, body as unknown as z.ZodObject<z.ZodRawShape>) as unknown as z.ZodType<
-      z.output<H> & z.output<B>,
-      z.input<H> & z.input<B>
-    >;
-  }
-  if (def?.type === 'union' && Array.isArray(def.options) && def.options.length >= 2) {
-    const branches = def.options.map((option) => {
-      const optionDef = (option as { _zod?: { def?: { type?: string } } })._zod?.def;
-      if (optionDef?.type !== 'object')
-        throw new Error('SplitOperation union body branches must be strict objects');
-      return mergeBranch(head, option as z.ZodObject<z.ZodRawShape>);
-    });
-    return z.union(branches as [z.ZodType, z.ZodType, ...z.ZodType[]]) as unknown as z.ZodType<
-      z.output<H> & z.output<B>,
-      z.input<H> & z.input<B>
-    >;
-  }
-  throw new Error('SplitOperation body must be a strict object or a union of strict objects');
+  validateBodyStructure(head, body);
+  return z.unknown().transform((raw, ctx) => {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+      ctx.addIssue({ code: 'custom', message: 'Expected an object' });
+      return z.NEVER;
+    }
+    const { headRaw, bodyRaw } = splitHeadBody(head, raw as Record<string, unknown>);
+    const parsedHead = head.safeParse(headRaw);
+    const parsedBody = body.safeParse(bodyRaw);
+    if (!parsedHead.success) {
+      for (const issue of parsedHead.error.issues) ctx.addIssue({ ...issue });
+    }
+    if (!parsedBody.success) {
+      for (const issue of parsedBody.error.issues) ctx.addIssue({ ...issue });
+    }
+    if (!parsedHead.success || !parsedBody.success) return z.NEVER;
+    return {
+      ...(parsedHead.data as Record<string, unknown>),
+      ...(parsedBody.data as Record<string, unknown>),
+    };
+  }) as unknown as z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>;
 }
 
 type OutputSpec<Out> =

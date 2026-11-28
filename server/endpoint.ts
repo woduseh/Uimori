@@ -101,8 +101,11 @@ export function registerCommand<Op extends AnySplitOperation, P extends Pick<App
     ...(endpoint.cache === 'no-store' ? { onSend: noStore } : {}),
     handler: async (request, reply) => {
       const controller = new AbortController();
-      const abort = () => controller.abort();
-      request.raw.once('close', abort);
+      const abort = () => {
+        if (!reply.raw.writableEnded) controller.abort();
+      };
+      if (reply.raw.destroyed && !reply.raw.writableEnded) controller.abort();
+      else reply.raw.once('close', abort);
       try {
         const output = await executeOperation(command, ports, endpointInput(endpoint, request), {
           signal: controller.signal,
@@ -112,7 +115,7 @@ export function registerCommand<Op extends AnySplitOperation, P extends Pick<App
         if (endpoint.status !== undefined) reply.code(endpoint.status);
         return output;
       } finally {
-        request.raw.off('close', abort);
+        reply.raw.off('close', abort);
       }
     },
   });
