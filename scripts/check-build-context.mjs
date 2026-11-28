@@ -9,7 +9,7 @@ const shown = 8;
 
 export function contextErrors(files, dockerignore) {
   if (!files.length) return ['the build fingerprint counts no files'];
-  const rules = ignore().add(dockerignore);
+  const rules = ignore({ ignorecase: false }).add(dockerignore);
   const excluded = files.filter((file) => rules.ignores(file));
   if (!excluded.length) return [];
   return [

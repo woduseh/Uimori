@@ -27,6 +27,14 @@ test('an ignored file added to the fingerprint is reported', async () => {
     assert.match(contextErrors([...files, ignored], dockerignore).join('\n'), new RegExp(ignored));
 });
 
+test('rules match case-sensitively, as Docker does on Linux', () => {
+  const miscased = dockerignore.replaceAll('!docs/skills', '!docs/Skills');
+  assert.match(
+    contextErrors(['docs/skills/a/SKILL.md'], miscased).join('\n'),
+    /docs\/skills\/a\/SKILL\.md/u
+  );
+});
+
 test('an empty fingerprint cannot pass', () => {
   assert.notDeepEqual(contextErrors([], dockerignore), []);
 });
