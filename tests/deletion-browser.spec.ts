@@ -66,6 +66,12 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   expect((await request.get(`/api/revisions/content/${item.id}/1`)).ok()).toBe(true);
   await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
+  await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
+  await expect(dialog).toBeVisible();
+  const refreshed = page.waitForResponse(
+    (response) => response.url().includes('/api/library') && response.request().method() === 'GET'
+  );
   const changed = await request.put(`/api/content/${item.id}`, {
     data: {
       kind: item.kind,
@@ -78,8 +84,8 @@ test('DEL01 library cancel, stale revision, dependent bot and actual deletion at
     },
   });
   expect(changed.ok()).toBe(true);
-  await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
-  await panel.getByRole('button', { name: `${item.title} 삭제`, exact: true }).click();
+  await refreshed;
+  await expect(dialog).toBeVisible();
   await confirm(page);
   await expect(dialog.getByRole('alert')).toContainText('다른 요청이 먼저 반영됐어요');
   await page.keyboard.press('Escape');
