@@ -110,6 +110,15 @@ export const rules = [
     reason: 'The library visibility check reports deleted items with a stable code.',
   },
   {
+    id: 'risu-export-refusal-cache',
+    routes: ['/api/content/:/risu-export', '/api/prompt-presets/:/risu-export'],
+    status: [404, 404],
+    when: 'deleted-refusal',
+    fields: [added('headers.cache-control', 'no-store')],
+    reason:
+      'These routes set no-store only on a successful export; registerRawRoute now sets it on every reply, so the deleted-item refusal carries it too.',
+  },
+  {
     id: 'retained-chat-archive',
     routes: [archive],
     status: [404, 200],
