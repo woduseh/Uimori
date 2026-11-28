@@ -56,7 +56,7 @@ export const rules = [
     'deletion-description',
     ['/api/chats/:/deletion-impact'],
     [removed('body.description')],
-    'The client owns the deletion explanation.'
+    'The deletion dialog did not render the old server description.'
   ),
   read(
     'template-list-description',
@@ -80,7 +80,7 @@ export const rules = [
     'archive-notices',
     [archive],
     [removed('body.manifest.backup.notices', { type: 'strings' })],
-    'Transfer notices are localized by the importing client.'
+    'New exports omit the static notices that the importer never rendered.'
   ),
   {
     id: 'deleted-library-refusal',
