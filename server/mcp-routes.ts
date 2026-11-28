@@ -30,7 +30,7 @@ const CACHEABLE = new Set([
 const SERVER_INFO = { name: 'uimori', title: 'Uimori', version: APP_VERSION };
 const CAPABILITIES = { tools: {}, resources: {}, extensions: { [SKILLS]: {} } };
 const INSTRUCTIONS =
-  "Uimori's saved library: bots, personas and modules (character cards, lorebooks, CBS, Lua, regex and triggers) and prompt presets. Find with data_search or db_query, read with resource_read, edit with resource_patch at the revision you read, and take the last save back with resource_undo. Find why a run failed with task_list and task_inspect, which return its error, request text and model. Chats, scenes, outlines, settings and the other app operations are found with app_tools and run with app_call. No tool here starts paid generation or deletes anything.";
+  "Uimori's saved library: bots, personas and modules (character cards, lorebooks, CBS, Lua, regex and triggers) and prompt presets. Find with data_search or db_query, read with resource_read, edit with resource_patch at the revision you read, and take the last save back with resource_undo. Find why a run failed with task_list and task_inspect, which return its error, request text and model. Chats, scenes, outlines, settings and the other app operations are found with app_tools and run with app_call. No tool here starts paid generation or deletes a resource, chat or folder; a save replaces content as it does in the app.";
 
 type Id = string | number | null;
 type Params = Record<string, unknown>;
