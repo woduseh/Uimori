@@ -74,7 +74,7 @@ export async function throwApiError(
     throw new ApiError(emptyMessage, response.status);
   if (
     response.status === 503 &&
-    (payload.code ?? payload.error) === MAINTENANCE_CLOSED &&
+    payload.code === MAINTENANCE_CLOSED &&
     typeof window !== 'undefined'
   )
     window.dispatchEvent(new Event(maintenanceChangedEvent));

@@ -62,7 +62,7 @@ test('JSON session probe does not recursively request login', async () => {
 test('JSON and binary requests report maintenance only for its recognized status and code', async () => {
   for (const mode of ['json', 'binary'] as const) {
     const b = browser();
-    respond(503, { error: 'MAINTENANCE_CLOSED' });
+    respond(503, { code: 'MAINTENANCE_CLOSED' });
     await expect(request(mode)).rejects.toMatchObject({
       status: 503,
       code: 'MAINTENANCE_CLOSED',
@@ -70,11 +70,12 @@ test('JSON and binary requests report maintenance only for its recognized status
     expect(b.maintenance).toHaveBeenCalledTimes(1);
     expect(b.session).not.toHaveBeenCalled();
     b.maintenance.mockClear();
-    for (const [status, error] of [
-      [409, 'MAINTENANCE_CLOSED'],
-      [503, 'UNRELATED_FAILURE'],
+    for (const [status, payload] of [
+      [409, { code: 'MAINTENANCE_CLOSED' }],
+      [503, { error: 'MAINTENANCE_CLOSED' }],
+      [503, { error: 'UNRELATED_FAILURE' }],
     ] as const) {
-      respond(status, { error });
+      respond(status, payload);
       await expect(request(mode)).rejects.toMatchObject({ status });
       expect(b.maintenance).not.toHaveBeenCalled();
     }

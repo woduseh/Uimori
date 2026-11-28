@@ -87,12 +87,12 @@ test('an action uses the current original source and accepts the declared event 
   const otherChat = f.store.createChat('A different chat', { botId: f.chat.botId });
   const foreign = await f.submit({}, otherChat.id);
   expect(foreign.statusCode).toBe(409);
-  expect(foreign.json()).toEqual({ error: 'STORY_UI_STALE_SOURCE' });
+  expect(foreign.json()).toEqual({ code: 'STORY_UI_STALE_SOURCE' });
   const disabled = f.store.settings(f.chat.id, f.chat.settingsRevision, {
     ...f.chat.settings,
     storyUi: false,
   });
-  expect((await f.submit()).json()).toEqual({ error: 'STORY_UI_DISABLED' });
+  expect((await f.submit()).json()).toEqual({ code: 'STORY_UI_DISABLED' });
   f.store.settings(f.chat.id, disabled.settingsRevision, f.chat.settings);
 
   for (const changes of [
@@ -104,7 +104,7 @@ test('an action uses the current original source and accepts the declared event 
   ]) {
     const response = await f.submit(changes);
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: 'STORY_UI_INVALID_ACTION' });
+    expect(response.json()).toEqual({ code: 'STORY_UI_INVALID_ACTION' });
   }
   const edited = f.store.editSource(f.source.id, {
     expectedRevision: 0,
@@ -112,7 +112,7 @@ test('an action uses the current original source and accepts the declared event 
   });
   const stale = await f.submit();
   expect(stale.statusCode).toBe(409);
-  expect(stale.json()).toEqual({ error: 'STORY_UI_STALE_SOURCE' });
+  expect(stale.json()).toEqual({ code: 'STORY_UI_STALE_SOURCE' });
   const blockId = parseStoryUi(edited.text).find((part) => part.kind === 'ui')!.id;
   const accepted = await f.submit({ sourceHash: edited.hash, blockId, mode: 'continue' });
   expect(accepted.statusCode, accepted.body).toBe(200);
@@ -181,7 +181,7 @@ test('a concurrent dice submission reserves one server roll and replays it after
   expect(changedCommand.json()).toEqual({ error: 'Idempotency key reused with different command' });
   const historical = await f.submit({ idempotencyKey: randomUUID() });
   expect(historical.statusCode).toBe(409);
-  expect(historical.json()).toEqual({ error: 'STORY_UI_STALE_SOURCE' });
+  expect(historical.json()).toEqual({ code: 'STORY_UI_STALE_SOURCE' });
 });
 
 test('editing the originating scene during execution invalidates completion and unedited retry', async () => {
@@ -212,7 +212,7 @@ test('editing the originating scene during execution invalidates completion and 
     payload: { idempotencyKey: 'stale' },
   });
   expect(retry.statusCode).toBe(409);
-  expect(retry.json()).toEqual({ error: 'STORY_UI_STALE_SOURCE' });
+  expect(retry.json()).toEqual({ code: 'STORY_UI_STALE_SOURCE' });
 });
 
 test('an unedited retry keeps the dice result, while a free-text retry has no action receipt', async () => {

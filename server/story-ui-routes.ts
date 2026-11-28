@@ -10,6 +10,7 @@ import {
 import { latestTranslation } from './source-editing.js';
 import { storyUiPinSlot } from '../core/story-ui-style.js';
 import type { RunSnapshot } from '../core/types.js';
+import { AppError } from './app-errors.js';
 import {
   choice,
   fields,
@@ -28,7 +29,7 @@ function actionRequest(source: string, action: StoryUiAction): string {
   const block = parseStoryUi(source).find(
     (part) => part.kind === 'ui' && part.id === action.blockId
   );
-  if (block?.kind !== 'ui') throw new HttpError(400, 'STORY_UI_INVALID_ACTION');
+  if (block?.kind !== 'ui') throw new AppError(400, 'STORY_UI_INVALID_ACTION');
   const surface = (
     block.messages[0] as unknown as { createSurface: { components: Record<string, unknown>[] } }
   ).createSurface;
@@ -154,11 +155,11 @@ export function storyUiRoutes(
 
         const chat = store.chat(chatId);
         if (chat.headRevision !== action.sourceRevision)
-          throw new HttpError(409, 'STORY_UI_STALE_SOURCE');
+          throw new AppError(409, 'STORY_UI_STALE_SOURCE');
         const source = store.source(action.sourceRevision);
         if (source.chatId !== chatId || source.hash !== action.sourceHash)
-          throw new HttpError(409, 'STORY_UI_STALE_SOURCE');
-        if (chat.settings.storyUi !== true) throw new HttpError(409, 'STORY_UI_DISABLED');
+          throw new AppError(409, 'STORY_UI_STALE_SOURCE');
+        if (chat.settings.storyUi !== true) throw new AppError(409, 'STORY_UI_DISABLED');
         const event = validateStoryUiAction(
           source.text,
           action.blockId,
@@ -166,7 +167,7 @@ export function storyUiRoutes(
           action.context,
           action.componentId
         );
-        if (!event) throw new HttpError(400, 'STORY_UI_INVALID_ACTION');
+        if (!event) throw new AppError(400, 'STORY_UI_INVALID_ACTION');
 
         const receipt: StoryUiAction = { ...action, ...event };
         if (event.name === 'roll') {

@@ -417,7 +417,7 @@ describe('JEV connection settings and explicit diagnostics', () => {
         payload: { expectedRevision: current.revision, apiKey: savedKey },
       });
       expect(response.statusCode, response.body).toBe(503);
-      expect(response.json()).toMatchObject({ error: 'MAINTENANCE_CLOSED' });
+      expect(response.json()).toMatchObject({ code: 'MAINTENANCE_CLOSED' });
     }
     expect(
       (

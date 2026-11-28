@@ -68,7 +68,7 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
     },
   });
   expect(write.statusCode).toBe(503);
-  expect(write.json()).toEqual({ error: 'MAINTENANCE_CLOSED' });
+  expect(write.json()).toEqual({ code: 'MAINTENANCE_CLOSED' });
   expect(app.store.db.prepare('SELECT COUNT(*) AS count FROM runs').get()).toEqual({ count: 0 });
 
   const read = await app.inject({ method: 'GET', url: `/api/chats/${chat.id}` });
