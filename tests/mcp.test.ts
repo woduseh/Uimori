@@ -315,21 +315,25 @@ test('the 2026-07-28 revision is discovered, checks its headers and serves skill
     data: { supported: expect.arrayContaining([MODERN]) },
   });
 
-  const skills = (await modern(target, 'skills/list')).json().result.skills;
+  type Manifest = { uri: string; size: number; digest: string };
+  type Listed = { uri: string; frontmatter: { name: string }; resources: Manifest[] };
+  const skills: Listed[] = (await modern(target, 'skills/list')).json().result.skills;
   expect(skills.length).toBeGreaterThanOrEqual(3);
-  const lore = skills.find(
-    (skill: { frontmatter: { name: string } }) => skill.frontmatter.name === 'uimori-lorebooks'
-  );
-  const got = (await modern(target, 'skills/get', { uri: lore.uri })).json().result.skill;
+  for (const listed of skills)
+    expect(listed.uri).toBe(`skill://${listed.frontmatter.name}/SKILL.md`);
+  const lore = skills.find((skill) => skill.frontmatter.name === 'uimori-lorebooks')!;
+  const got: Listed = (await modern(target, 'skills/get', { uri: lore.uri })).json().result.skill;
   expect(got).toEqual(lore);
-  const guide = got.resources.find((file: { uri: string }) => file.uri.endsWith('LORE-CONTEXT.md'));
-  const content = (await modern(target, 'resources/read', { uri: guide.uri })).json().result
-    .contents[0];
-  const bytes = Buffer.from(content.text, 'utf8');
-  expect(bytes.length).toBe(guide.size);
-  expect(`sha256:${createHash('sha256').update(bytes).digest('hex')}`).toBe(guide.digest);
-  const skill = (await modern(target, 'resources/read', { uri: lore.uri })).json().result
-    .contents[0].text;
+  const served = async (file: Manifest) => {
+    const text: string = (await modern(target, 'resources/read', { uri: file.uri })).json().result
+      .contents[0].text;
+    const bytes = Buffer.from(text, 'utf8');
+    expect(bytes.length).toBe(file.size);
+    expect(`sha256:${createHash('sha256').update(bytes).digest('hex')}`).toBe(file.digest);
+    return text;
+  };
+  await served(got.resources.find((file) => file.uri.endsWith('LORE-CONTEXT.md'))!);
+  const skill = await served(got.resources.find((file) => file.uri === lore.uri)!);
   expect(skill).toContain('](guides/LORE-CONTEXT.md)');
 
   setMaintenance(target.store, { closed: true });
