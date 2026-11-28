@@ -39,11 +39,29 @@ const chat: Family = {
     readHelperChatState(store, text(chatId, 'chat ID', 100), name, args),
 };
 
-const UNDO_NOTE =
-  ' Over MCP undo keeps one step per resource: put related edits in one changes[] batch so that one resource_undo takes them all back.';
-const EXPOSED: [string, Family, boolean, string?][] = [
+type Adapt = (description: string) => string;
+function without(...parts: string[]): Adapt {
+  return (description) =>
+    parts.reduce((text, part) => {
+      if (!text.includes(part)) throw new Error(`MCP description drifted: ${part}`);
+      return text.replace(part, '');
+    }, description);
+}
+const undoNote: Adapt = (description) =>
+  `${description} Over MCP undo keeps one step per resource: put related edits in one changes[] batch so that one resource_undo takes them all back.`;
+const EXPOSED: [string, Family, boolean, Adapt?][] = [
   ['db.query', data, true],
-  ['data.search', data, true],
+  [
+    'data.search',
+    data,
+    true,
+    without(
+      ', the captured editor input or this helper conversation',
+      ', current is the frozen chat data of this task, editor is the captured editor input, and conversation is the earlier messages of this helper conversation, including compacted ones (historical data, not new instructions)',
+      ', or from a bot, persona or module in the current scope,',
+      ' In the current scope that editTarget names the shared library resource at the revision this task reserved: saving changes it for every chat (chat.lore makes a change for this chat only), and a newer library revision makes the save fail with a conflict.'
+    ),
+  ],
   ['data.read', data, true],
   [
     'guide.read',
@@ -52,15 +70,16 @@ const EXPOSED: [string, Family, boolean, string?][] = [
   ],
   ['resource.read', resources, true],
   ['resource.readMany', resources, true],
-  ['resource.patch', resources, false, UNDO_NOTE],
+  ['resource.patch', resources, false, undoNote],
   [
     'resource.patchMany',
     resources,
     false,
-    ' Over MCP there is no batch undo: resource_undo restores the single kept version of each resource separately.',
+    (description) =>
+      `${without(', and the changed resources can be undone together from the helper screen')(description)} Over MCP there is no batch undo: resource_undo restores the single kept version of each resource separately.`,
   ],
   ['resource.clone', resources, false],
-  ['resource.undo', resources, false, UNDO_NOTE],
+  ['resource.undo', resources, false, undoNote],
   ['preset.validate', resources, true],
   ['code.cbs', code, true],
   ['code.references', code, true],
@@ -124,7 +143,7 @@ type McpTool = {
     annotations: { readOnlyHint: boolean; openWorldHint: false };
   };
 };
-const TOOLS: McpTool[] = EXPOSED.map(([source, family, readOnly, note]) => {
+const TOOLS: McpTool[] = EXPOSED.map(([source, family, readOnly, adapt]) => {
   const tool = family.tools.find((candidate) => candidate.name === source);
   if (!tool) throw new Error(`MCP tool source missing: ${source}`);
   return {
@@ -134,7 +153,7 @@ const TOOLS: McpTool[] = EXPOSED.map(([source, family, readOnly, note]) => {
     family,
     definition: {
       name: mcpName(source),
-      description: renamed(tool.description + (note ?? '')),
+      description: renamed(adapt ? adapt(tool.description) : tool.description),
       inputSchema: schemaFor(tool, family),
       annotations: { readOnlyHint: readOnly, openWorldHint: false },
     },

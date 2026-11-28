@@ -87,6 +87,15 @@ function checkModernHeaders(request: FastifyRequest, method: string, params: Par
     throw new RpcError(HEADER_MISMATCH, 'Header mismatch: Mcp-Name must equal the body', 400);
 }
 
+function checkLegacyHeader(request: FastifyRequest) {
+  const declared = header(request, 'mcp-protocol-version');
+  if (declared !== undefined && !LEGACY.includes(declared))
+    throw new RpcError(UNSUPPORTED_VERSION, 'Unsupported protocol version', 400, {
+      supported: [MODERN, ...LEGACY],
+      requested: declared,
+    });
+}
+
 async function dispatch(
   method: string,
   params: Params,
@@ -187,6 +196,7 @@ async function handle(request: FastifyRequest, reply: FastifyReply, store: Store
     header(request, 'mcp-protocol-version') === MODERN;
   try {
     if (modern) checkModernHeaders(request, message.method, params, id);
+    else checkLegacyHeader(request);
     if (id === undefined) return reply.code(202).send();
     const disconnected = new AbortController();
     reply.raw.on('close', () => {

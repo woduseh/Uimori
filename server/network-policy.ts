@@ -42,8 +42,8 @@ export function networkPolicy(options: {
 
 export function mcpToken(value: string | undefined, accessToken?: string): string | undefined {
   if (!value) return undefined;
-  if (value.length < 32 || value.length > 1000 || /\s/u.test(value))
-    throw new Error('UIMORI_MCP_TOKEN must contain 32–1000 non-whitespace characters.');
+  if (!/^[!-~]{32,1000}$/u.test(value))
+    throw new Error('UIMORI_MCP_TOKEN must contain 32–1000 visible ASCII characters.');
   if (value === accessToken)
     throw new Error('UIMORI_MCP_TOKEN must differ from UIMORI_ACCESS_TOKEN.');
   return value;
