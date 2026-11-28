@@ -9,6 +9,8 @@ import {
   summarizeDistVitest,
   summarizeBrowser,
   browserCases,
+  testsLineDelta,
+  formatTestsDelta,
 } from './ci-summary.mjs';
 
 const sha = 'a'.repeat(40);
@@ -341,6 +343,16 @@ test('a pull request passes without a report only when the impact selection is e
   );
   const fourShards = vitestFixture();
   assert.throws(() => summarizeVitest(fourShards.inventories, fourShards.reports, sha, { event }));
+});
+
+test('the test-line signal sums added and removed lines and skips binary files', () => {
+  const numstat = '12\t3\ttests/a.test.ts\n0\t40\ttests/b.test.ts\n-\t-\ttests/image.png\n';
+  const lineCounts = 'HEAD:tests/a.test.ts:100\nHEAD:tests/b.test.ts:7\n';
+  const delta = testsLineDelta(numstat, lineCounts);
+  assert.deepEqual(delta, { added: 12, removed: 43, total: 107 });
+  assert.match(formatTestsDelta(delta), /\+12 \/ -43 \(net -31\), 107 lines in total/);
+  assert.match(formatTestsDelta({ added: 5, removed: 1, total: 9 }), /net \+4/);
+  assert.deepEqual(testsLineDelta('', ''), { added: 0, removed: 0, total: 0 });
 });
 
 test('browser inventory spans nested suites/projects and aggregate detects a lost scenario', () => {
