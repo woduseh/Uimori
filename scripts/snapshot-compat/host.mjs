@@ -1,3 +1,5 @@
+import { Agent } from 'undici';
+import { request, timeoutMs } from './requests.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
@@ -68,6 +70,8 @@ export async function boot(tree, dir, mode, report, children) {
     ],
     { cwd: dir, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }
   );
+  const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+  const name = path.basename(dir);
   const closed = once(child, 'close');
   let stderr = '';
   child.stderr.on('data', (bytes) => {
@@ -87,12 +91,18 @@ export async function boot(tree, dir, mode, report, children) {
         clearTimeout(timer);
       }
     }
+    await dispatcher.destroy();
     const log = path.join(dir, 'blocked.jsonl');
     if (before && report.boot[path.basename(dir)]) {
       const final = tableDigests(file, true);
       report.boot[path.basename(dir)].final = final;
       if (JSON.stringify(final) !== JSON.stringify(expected))
-        report.errors.push('Work tables changed during replay ' + path.basename(dir));
+        report.errors.push({
+          phase: 'shutdown',
+          url: null,
+          instance: name,
+          error: 'Work tables changed during replay',
+        });
     }
     if (existsSync(log))
       report.blocked.push(
@@ -120,27 +130,46 @@ export async function boot(tree, dir, mode, report, children) {
       after,
       expectedOutbox: expected.push_outbox,
       outboxReason:
-        'AccessSessions removes sessions for a different access token. Foreign keys cascade to their subscriptions and outbox rows.',
+        'Environment-dependent: AccessSessions removes sessions for a different access token. Foreign keys cascade to their subscriptions and outbox rows.',
     };
     if (JSON.stringify(expected) !== JSON.stringify(after))
-      report.errors.push('Work tables changed on boot ' + path.basename(dir));
+      report.errors.push({
+        phase: 'boot',
+        url: null,
+        instance: name,
+        error: 'Work tables changed on boot',
+      });
   }
   const instance = {
     routes,
     file,
+    name,
     request: (url, options = {}) => {
       if (!url.startsWith('/api/')) throw new Error('Invalid replay URL');
       return fetch('http://127.0.0.1:' + port + url, {
         ...options,
         headers: { ...options.headers, authorization: token, 'accept-encoding': 'identity' },
         redirect: 'error',
-        signal: AbortSignal.timeout(120000),
+        dispatcher,
+        signal: AbortSignal.timeout(timeoutMs(url, report.timeoutSeconds)),
       });
     },
   };
-  const metrics = await instance.request('/api/diagnostics/metrics');
-  const bytes = await metrics.arrayBuffer();
-  instance.initialMetrics = () =>
-    new Response(bytes, { status: metrics.status, headers: metrics.headers });
+  if (mode !== 'import' && routes.includes('/api/diagnostics/metrics')) {
+    try {
+      instance.initialMetrics = await request(
+        instance,
+        '/api/diagnostics/metrics',
+        async (metrics) => {
+          const bytes = await metrics.arrayBuffer();
+          return () => new Response(bytes, { status: metrics.status, headers: metrics.headers });
+        }
+      );
+    } catch (error) {
+      instance.initialMetrics = () => {
+        throw error;
+      };
+    }
+  }
   return instance;
 }

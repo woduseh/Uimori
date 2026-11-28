@@ -1,3 +1,4 @@
+import { attempt, request } from './requests.mjs';
 import { createHash } from 'node:crypto';
 import { createWriteStream, statSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -179,48 +180,57 @@ export function differences(before, after, path = '$', out = [], segments = []) 
   } else out.push({ path, before, after, segments });
   return out;
 }
-const responseBytes = new WeakMap();
-export async function read(instance, template, url, stats, backupFile) {
-  const response =
-    url === '/api/diagnostics/metrics' ? instance.initialMetrics() : await instance.request(url);
-  const headers = Object.fromEntries(response.headers);
-  for (const rule of normalization) if (rule.header) delete headers[rule.header];
-  const type = headers['content-type'] ?? '';
-  let body, byteLength;
-  if (response.ok && template === '/api/backup') {
-    await pipeline(response.body, createWriteStream(backupFile, { mode: 0o600 }));
-    byteLength = statSync(backupFile).size;
-    body = tableDigests(backupFile, false);
-  } else {
-    let bytes;
-    if (type.includes('text/event-stream')) {
-      const reader = response.body.getReader();
-      let frame = Buffer.alloc(0);
-      try {
-        while (frame.indexOf('\n\n') === -1) {
-          const { done, value } = await reader.read();
-          if (done) throw new Error('Event stream ended before first frame');
-          frame = Buffer.concat([frame, value]);
-        }
-      } finally {
-        await reader.cancel();
-      }
-      bytes = frame.subarray(0, frame.indexOf('\n\n') + 2);
-    } else bytes = Buffer.from(await response.arrayBuffer());
-    byteLength = bytes.length;
-    if (!response.ok && url.endsWith('/backup-archive') && bytes[0] === 123)
-      body = JSON.parse(bytes);
-    else if (type.includes('json')) body = JSON.parse(bytes);
-    else if (response.ok && url.endsWith('/backup-archive')) body = unpack(bytes);
-    else if (type.startsWith('text/')) body = bytes.toString();
-    else body = { bytes: bytes.length, sha256: digest(bytes) };
-  }
+export function normalizedBody(template, body) {
   for (const rule of normalization)
     if (rule.route === shape(template)) normalize(body, rule.path.split('.'));
-  const result = { status: response.status, headers, body };
-  stats.bytes += byteLength;
-  responseBytes.set(result, byteLength);
-  return result;
+  return body;
+}
+export async function saveBackup(response, file) {
+  if (response.status !== 200) throw new Error('Backup export HTTP ' + response.status);
+  await pipeline(response.body, createWriteStream(file, { mode: 0o600 }));
+  const size = statSync(file).size;
+  if (!size) throw new Error('Empty SQLite backup');
+  return size;
+}
+const responseBytes = new WeakMap();
+export async function read(instance, template, url, stats, backupFile) {
+  return request(instance, url, async (response) => {
+    const headers = Object.fromEntries(response.headers);
+    for (const rule of normalization) if (rule.header) delete headers[rule.header];
+    const type = headers['content-type'] ?? '';
+    let body, byteLength;
+    if (response.ok && template === '/api/backup') {
+      byteLength = await saveBackup(response, backupFile);
+      body = tableDigests(backupFile, false);
+    } else {
+      let bytes;
+      if (type.includes('text/event-stream')) {
+        const reader = response.body.getReader();
+        let frame = Buffer.alloc(0);
+        try {
+          while (frame.indexOf('\n\n') === -1) {
+            const { done, value } = await reader.read();
+            if (done) throw new Error('Event stream ended before first frame');
+            frame = Buffer.concat([frame, value]);
+          }
+        } finally {
+          await reader.cancel();
+        }
+        bytes = frame.subarray(0, frame.indexOf('\n\n') + 2);
+      } else bytes = Buffer.from(await response.arrayBuffer());
+      byteLength = bytes.length;
+      if (!response.ok && url.endsWith('/backup-archive') && bytes[0] === 123)
+        body = JSON.parse(bytes);
+      else if (type.includes('json')) body = JSON.parse(bytes);
+      else if (response.ok && url.endsWith('/backup-archive')) body = unpack(bytes);
+      else if (type.startsWith('text/')) body = bytes.toString();
+      else body = { bytes: bytes.length, sha256: digest(bytes) };
+    }
+    const result = { status: response.status, headers, body: normalizedBody(template, body) };
+    stats.bytes += byteLength;
+    responseBytes.set(result, byteLength);
+    return result;
+  });
 }
 export async function compareRead(
   phase,
@@ -232,7 +242,11 @@ export async function compareRead(
   template,
   file
 ) {
-  const [a, b] = await Promise.all([left, right]);
+  const [a, b] = await Promise.all([
+    attempt(report, phase, url, () => left, 'left'),
+    attempt(report, phase, url, () => right, 'right'),
+  ]);
+  if (!a || !b) return undefined;
   let diffs = differences(a, b);
   if (phase === 'old-new' && template && diffs.length) {
     const reviewed = classify(report.rules, template, url, a, b, diffs, file, [
@@ -251,6 +265,7 @@ export async function compare(phase, left, right, report, dir) {
   const l = index(left),
     r = index(right);
   const inventory = (report.coverage[phase] = {});
+  const completed = (report.completed[phase] = {});
   const routes = [...new Set([...l.keys(), ...r.keys()])].sort();
   for (const route of routes) {
     if (!l.has(route) || !r.has(route)) {
@@ -258,17 +273,30 @@ export async function compare(phase, left, right, report, dir) {
       continue;
     }
     const requests = new Map();
+    let discoveryFailed = false;
     for (const [instance, template] of [
       [left, l.get(route)],
       [right, r.get(route)],
-    ])
-      for (const target of await targets(instance, template)) requests.set(target.url, target.ids);
-    inventory[route] = requests.size;
+    ]) {
+      const items = await attempt(
+        report,
+        phase,
+        template,
+        () => targets(instance, template),
+        instance.name
+      );
+      if (!items) {
+        discoveryFailed = true;
+        continue;
+      }
+      for (const target of items) requests.set(target.url, target.ids);
+    }
+    inventory[route] = requests.size || (discoveryFailed ? null : 0);
+    completed[route] = 0;
     let refused = 0;
     for (const [url, ids] of requests) {
-      for (const id of ids) report.ids.add(id);
-      if (
-        await compareRead(
+      const refusal = await attempt(report, phase, url, () =>
+        compareRead(
           phase,
           url,
           read(left, l.get(route), url, report, dir + '/left.sqlite'),
@@ -278,10 +306,13 @@ export async function compare(phase, left, right, report, dir) {
           route,
           right.file
         )
-      )
-        refused++;
+      );
+      if (refusal === undefined) continue;
+      completed[route]++;
+      for (const id of ids) report.ids.add(id);
+      if (refusal) refused++;
     }
-    if (refused && refused === requests.size)
+    if (!discoveryFailed && refused && refused === requests.size)
       report.refusalOnly.push({ phase, route, requests: refused });
   }
 }
