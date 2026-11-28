@@ -859,6 +859,64 @@
       }
     },
     {
+      "includes": ["server/commands/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "zod": "Import 'zod/v4'. Only a module that hands schemas to a zod 3 library (such as @a2ui) imports 'zod/v3'.",
+                  "node:sqlite": "Domain commands use TxPort and narrow ports instead of node:sqlite.",
+                  "fastify": "Domain commands are transport-neutral and cannot import fastify."
+                },
+                "patterns": [
+                  {
+                    "group": ["**/tests", "**/tests/**", "**/scripts", "**/scripts/**"],
+                    "message": "Product code cannot import tests or operational scripts."
+                  },
+                  {
+                    "group": ["**/packages", "**/packages/**"],
+                    "message": "Import shared contracts through #contracts, not by a path into packages/."
+                  },
+                  {
+                    "group": ["**/web", "**/web/**"],
+                    "message": "Server code cannot import the browser layer, including types."
+                  },
+                  {
+                    "group": [
+                      "**/core/provider-http",
+                      "**/core/provider-http.*",
+                      "**/core/vertex",
+                      "**/core/vertex.*"
+                    ],
+                    "message": "Provider execution must use core/transport instead of transport internals."
+                  },
+                  {
+                    "group": ["fastify/**", "@fastify/**"],
+                    "message": "Domain commands are transport-neutral and cannot import fastify."
+                  },
+                  {
+                    "group": ["**/store", "**/store.*", "**/product-store", "**/product-store.*"],
+                    "message": "Domain commands receive Pick<AppPorts, ...> instead of importing Store or ProductStore."
+                  },
+                  {
+                    "group": ["**/request-validation", "**/request-validation.*"],
+                    "message": "Domain commands validate through SplitOperation schemas and throw AppError instead of importing request-validation."
+                  },
+                  {
+                    "group": ["**/app", "**/app.*"],
+                    "message": "Domain commands cannot import server/app."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["web/**"],
       "linter": {
         "rules": {

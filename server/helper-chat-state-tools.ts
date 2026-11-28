@@ -1,18 +1,14 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { CHAT_VARIABLE_LIMITS, validateChatVariableValues } from '../core/chat-variables.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import {
-  normalizeStoryGuideConfig,
-  STORY_GUIDE_LIMITS,
-  type StoryGuideConfig,
-} from '../core/story-guide.js';
 import type { HelperTask } from '../core/helper.js';
 import type { LogicalMessage } from '../core/risu-prompt.js';
 import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { chatVariableView } from './chat-variable-context.js';
-import { readChatVariables, writeChatVariables } from './chat-variables.js';
+import { updateChatVariablesCommand } from './commands/chat-variables.js';
+import { updateStoryGuideCommand } from './commands/story-guide.js';
+import { defineHelperCommandTool, type HelperCommandTool } from './helper-command-adapter.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import { recordHelperAction, withHelperChange } from './helper-changes.js';
 import { diffText } from '../core/text-diff.js';
@@ -28,8 +24,8 @@ import { addBookmark, deleteBookmark, listBookmarks, updateBookmark } from './re
 import {
   chatOperations,
   personalWorkspaceOperations,
-  updateStoryGuideToolInput,
-  updateVariablesToolInput,
+  updateStoryGuidePatchBody,
+  writeVariablesPatchBody,
 } from '#contracts/operations';
 import { parseInput } from './endpoint.js';
 import { readSceneContext, updateSceneContext } from './scene-context.js';
@@ -67,6 +63,96 @@ const textLimit: Json = {
     'Maximum text to return, in UTF-16 code units. Omit to read up to about 3000 tokens.',
 };
 const sha256: Json = { type: 'string', pattern: '^[a-f0-9]{64}$' };
+
+const chatVariablesUpdateTool = defineHelperCommandTool({
+  name: 'chat.variables.update',
+  description:
+    "Change Risu variables of a chat. set gives new values by name; Risu stores every value as text, so write numbers and flags as text too. unset removes this chat's value so the authored default applies again, and a variable without a default disappears. Variables you do not name keep their values. Take expectedRevision and expectedSourceHash from chat.variables.read. The change is refused while a request of the chat is queued or running, and when the story or the variables changed after that read. It affects later requests only; saved scenes are not rewritten.",
+  command: updateChatVariablesCommand,
+  schemaBody: writeVariablesPatchBody,
+  omitHeadKeys: ['chatId', 'idempotencyKey'],
+  injectIdempotencyKey: true,
+  formatResult(outcome, { chatId, receiptId, chatTitle }) {
+    const changed = !outcome.replayed && outcome.output.revision !== outcome.input.expectedRevision;
+    const set =
+      !outcome.replayed && 'set' in outcome.input && outcome.input.set
+        ? Object.keys(outcome.input.set)
+        : [];
+    const unset =
+      !outcome.replayed && 'unset' in outcome.input && outcome.input.unset
+        ? outcome.input.unset
+        : [];
+    return {
+      toolOutput: {
+        changed,
+        revision: outcome.output.revision,
+        sourceHash: outcome.output.sourceHash,
+        set,
+        unset,
+      },
+      taskResult: {
+        receiptId,
+        operation: 'chat.variables.update',
+        requestedTargets: 1,
+        targets: changed
+          ? [
+              {
+                kind: 'settings',
+                id: chatId,
+                title: chatTitle,
+                revision: outcome.output.revision,
+                setting: 'chat.variables',
+              },
+            ]
+          : [],
+      },
+    };
+  },
+});
+
+const chatGuideUpdateTool = defineHelperCommandTool({
+  name: 'chat.guide.update',
+  description:
+    'Change the original-work reference settings of a chat: whether the automatic reference step runs before writing, the work and edition, the reader position and spoiler limit, supplied reference text, whether canon events are followed, and whether the step may search the web. source.writing.chat.storyGuide has the revision for the current chat; context.read with sections ["storyGuide"] returns all settings. changes names only the settings to change; the others keep their values. It affects later requests only.',
+  command: updateStoryGuideCommand,
+  schemaBody: updateStoryGuidePatchBody,
+  omitHeadKeys: ['chatId'],
+  formatResult(outcome, { chatId, receiptId, chatTitle }) {
+    const changed = !outcome.replayed && outcome.output.revision !== outcome.input.expectedRevision;
+    return {
+      toolOutput: {
+        changed,
+        revision: outcome.output.revision,
+        config: outcome.output.config,
+      },
+      taskResult: {
+        receiptId,
+        operation: 'chat.guide.update',
+        requestedTargets: 1,
+        targets: changed
+          ? [
+              {
+                kind: 'settings',
+                id: chatId,
+                title: chatTitle,
+                revision: outcome.output.revision,
+                setting: 'chat.storyGuide',
+              },
+            ]
+          : [],
+      },
+    };
+  },
+});
+
+const HELPER_CHAT_STATE_COMMAND_TOOLS: readonly HelperCommandTool[] = [
+  chatVariablesUpdateTool,
+  chatGuideUpdateTool,
+];
+
+export function helperChatStateCommand(name: string): HelperCommandTool | undefined {
+  return HELPER_CHAT_STATE_COMMAND_TOOLS.find((entry) => entry.tool.name === name);
+}
 
 export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
   {
@@ -153,37 +239,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
       textLimit,
     }),
   },
-  {
-    name: 'chat.variables.update',
-    description:
-      "Change Risu variables of a chat. set gives new values by name; Risu stores every value as text, so write numbers and flags as text too. unset removes this chat's value so the authored default applies again, and a variable without a default disappears. Variables you do not name keep their values. Take expectedRevision and expectedSourceHash from chat.variables.read. The change is refused while a request of the chat is queued or running, and when the story or the variables changed after that read. It affects later requests only; saved scenes are not rewritten.",
-    inputSchema: schema(
-      {
-        expectedRevision: {
-          type: 'integer',
-          minimum: 0,
-          description: 'revision from chat.variables.read.',
-        },
-        expectedSourceHash: {
-          type: ['string', 'null'],
-          pattern: '^[a-f0-9]{64}$',
-          description: 'sourceHash from chat.variables.read, null for a chat without scenes.',
-        },
-        set: {
-          type: 'object',
-          additionalProperties: { type: 'string', maxLength: CHAT_VARIABLE_LIMITS.maxValueChars },
-          description: 'Variable names and their new text values.',
-        },
-        unset: {
-          type: 'array',
-          maxItems: CHAT_VARIABLE_LIMITS.maxEntries,
-          items: { type: 'string', minLength: 1, maxLength: 1000 },
-          description: 'Variable names whose chat value is removed.',
-        },
-      },
-      ['expectedRevision', 'expectedSourceHash']
-    ),
-  },
+  chatVariablesUpdateTool.tool,
   {
     name: 'scene.title',
     description:
@@ -206,47 +262,7 @@ export const HELPER_CHAT_STATE_TOOLS: ProviderTool[] = [
       ['sourceId', 'title', 'expectedTitle']
     ),
   },
-  {
-    name: 'chat.guide.update',
-    description:
-      'Change the original-work reference settings of a chat: whether the automatic reference step runs before writing, the work and edition, the reader position and spoiler limit, supplied reference text, whether canon events are followed, and whether the step may search the web. source.writing.chat.storyGuide has the revision for the current chat; context.read with sections ["storyGuide"] returns all settings. changes names only the settings to change; the others keep their values. It affects later requests only.',
-    inputSchema: schema(
-      {
-        expectedRevision: {
-          type: 'integer',
-          minimum: 0,
-          description: 'storyGuide.revision from source.writing.chat or context.read.',
-        },
-        changes: {
-          type: 'object',
-          additionalProperties: false,
-          minProperties: 1,
-          properties: {
-            enabled: { type: 'boolean', description: 'Run the automatic reference step.' },
-            work: {
-              type: 'string',
-              maxLength: STORY_GUIDE_LIMITS.work,
-              description: 'Original work and edition.',
-            },
-            position: {
-              type: 'string',
-              maxLength: STORY_GUIDE_LIMITS.position,
-              description: 'Where the reader is in the original work and the spoiler limit.',
-            },
-            reference: {
-              type: 'string',
-              maxLength: STORY_GUIDE_LIMITS.reference,
-              description: 'Reference text the user supplies about the work.',
-            },
-            followCanon: { type: 'boolean', description: 'Consider canon events.' },
-            webSearch: { type: 'boolean', description: 'Allow the step to search the web.' },
-          },
-          description: 'Only the settings to change.',
-        },
-      },
-      ['expectedRevision', 'changes']
-    ),
-  },
+  chatGuideUpdateTool.tool,
   {
     name: 'chat.profile.read',
     description:
@@ -651,11 +667,7 @@ export function applyHelperChatState(
   value: unknown
 ): { changed: boolean } & Record<string, unknown> {
   const args = record(value);
-  if (name === 'chat.variables.update')
-    return updateChatVariables(store, workspace, task, receiptId, chatId, args);
   if (name === 'scene.title') return nameScene(store, workspace, task, receiptId, chatId, args);
-  if (name === 'chat.guide.update')
-    return updateStoryGuide(store, workspace, task, receiptId, chatId, args);
   if (name === 'chat.profile.update')
     return updateChatProfile(store, workspace, task, receiptId, chatId, args);
   if (name === 'scene.context.update')
@@ -695,97 +707,6 @@ function nameScene(
       : [],
   });
   return { changed, sourceId, title: saved.title };
-}
-
-function updateStoryGuide(
-  store: Store,
-  workspace: HelperWorkspace,
-  task: ResultTask,
-  receiptId: string,
-  chatId: string,
-  args: Record<string, unknown>
-) {
-  const { expectedRevision, changes } = parseInput(updateStoryGuideToolInput, args);
-  const current = store.storyGuide.get(chatId);
-  let config: StoryGuideConfig;
-  try {
-    config = normalizeStoryGuideConfig({ ...current.config, ...changes });
-  } catch {
-    throw new HelperToolError(
-      400,
-      'STORY_GUIDE_INVALID',
-      `enabled, followCanon and webSearch are booleans; work, position and reference are text of at most ${STORY_GUIDE_LIMITS.work}, ${STORY_GUIDE_LIMITS.position} and ${STORY_GUIDE_LIMITS.reference} characters.`
-    );
-  }
-  const saved = store.storyGuide.update(chatId, { expectedRevision, config });
-  const changed = saved.revision !== current.revision;
-  recordHelperTaskResult(workspace, task, {
-    receiptId,
-    operation: 'chat.guide.update',
-    requestedTargets: 1,
-    targets: changed
-      ? [
-          {
-            kind: 'settings',
-            id: chatId,
-            title: store.chat(chatId).title,
-            revision: saved.revision,
-            setting: 'chat.storyGuide',
-          },
-        ]
-      : [],
-  });
-  return { changed, revision: saved.revision, config: saved.config };
-}
-
-function updateChatVariables(
-  store: Store,
-  workspace: HelperWorkspace,
-  task: ResultTask,
-  receiptId: string,
-  chatId: string,
-  args: Record<string, unknown>
-) {
-  const input = parseInput(updateVariablesToolInput, args);
-  const { expectedRevision, expectedSourceHash } = input;
-  const set = input.set ?? {};
-  const unset = input.unset ?? [];
-  const both = unset.filter((name) => Object.hasOwn(set, name));
-  if (both.length) throw new HttpError(400, `Both set and unset name: ${both.join(', ')}`);
-  const current = readChatVariables(store, chatId);
-  const next: Record<string, string> = { ...current.values, ...set };
-  for (const name of unset) delete next[name];
-  try {
-    validateChatVariableValues(next);
-  } catch {
-    throw new HelperToolError(
-      400,
-      'CHAT_VARIABLE_VALUES_INVALID',
-      `At most ${CHAT_VARIABLE_LIMITS.maxEntries} variables, ${CHAT_VARIABLE_LIMITS.maxValueChars} characters per value and ${CHAT_VARIABLE_LIMITS.maxTotalChars} in total.`
-    );
-  }
-  const changed = !isDeepStrictEqual(next, current.values);
-  const chat = store.chat(chatId);
-  const sourceHash = chat.headRevision ? store.source(chat.headRevision).hash : null;
-  let revision = current.revision;
-  if (changed)
-    revision = writeChatVariables(store, chatId, {
-      expectedRevision,
-      expectedSourceHash,
-      idempotencyKey: `helper:${createHash('sha256').update(receiptId).digest('hex')}`,
-      values: next,
-    }).revision;
-  else if (current.revision !== expectedRevision || sourceHash !== expectedSourceHash)
-    throw new AppError(409, 'REVISION_CONFLICT');
-  recordHelperTaskResult(workspace, task, {
-    receiptId,
-    operation: 'chat.variables.update',
-    requestedTargets: 1,
-    targets: changed
-      ? [{ kind: 'settings', id: chatId, title: chat.title, revision, setting: 'chat.variables' }]
-      : [],
-  });
-  return { changed, revision, sourceHash, set: Object.keys(set), unset };
 }
 
 function attachmentView(store: Store, ref: ContentAttachment) {

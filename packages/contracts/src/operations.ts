@@ -10,6 +10,7 @@ export * from './domains/providers/operations.js';
 export * from './domains/reader/operations.js';
 export * from './domains/transfer/operations.js';
 export * from './domains/chat/operations.js';
+export * from './split-operation.js';
 export * from './domains/query.js';
 export * from './domains/text.js';
 export * from './operation-registry.js';

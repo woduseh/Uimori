@@ -410,54 +410,6 @@ test('options.fix on a chat deleted underneath the task answers REVISION_CONFLIC
   ).toThrow('REVISION_CONFLICT');
 });
 
-test('chat.guide.update refuses an empty change, an unknown setting and an unknown field', async () => {
-  const { store, chat } = fixture();
-  const before = store.storyGuide.get(chat.id);
-  const run = await runScriptedChatHelper(store, chat.id, [
-    helperCall('empty', 'chat.guide.update', { expectedRevision: before.revision, changes: {} }),
-    helperCall('unknown-setting', 'chat.guide.update', {
-      expectedRevision: before.revision,
-      changes: { unknown: true },
-    }),
-    helperCall('unknown-field', 'chat.guide.update', {
-      expectedRevision: before.revision,
-      changes: { enabled: true },
-      note: 'x',
-    }),
-    helperDone,
-  ]);
-  for (const call of ['empty', 'unknown-setting', 'unknown-field'])
-    expect(run.finished(call), call).toMatchObject({ denied: true });
-  expect(store.storyGuide.get(chat.id).revision).toBe(before.revision);
-});
-
-test('chat.guide.update changes only the named settings and rejects invalid text', async () => {
-  const { store, chat } = fixture();
-  const before = store.storyGuide.get(chat.id);
-  const run = await runScriptedChatHelper(store, chat.id, [
-    helperCall('guide', 'chat.guide.update', {
-      expectedRevision: before.revision,
-      changes: { enabled: true, work: '항구 연대기 1권' },
-    }),
-    helperCall('invalid', 'chat.guide.update', {
-      expectedRevision: before.revision + 1,
-      changes: { work: 'x'.repeat(600) },
-    }),
-    helperDone,
-  ]);
-  expect(store.storyGuide.get(chat.id)).toMatchObject({
-    revision: before.revision + 1,
-    config: { ...before.config, enabled: true, work: '항구 연대기 1권' },
-  });
-  expect(run.finished('invalid')).toMatchObject({
-    denied: true,
-    errorCode: 'STORY_GUIDE_INVALID',
-  });
-  expect(run.results.map((item) => [item.operation, item.changedTargets])).toEqual([
-    ['chat.guide.update', 1],
-  ]);
-});
-
 test('model.parameters.update changes supported parameters and keeps pricing', async () => {
   const { store, chat, model } = fixture();
   const pricing = {

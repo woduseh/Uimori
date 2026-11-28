@@ -9,6 +9,7 @@ import { AppError } from './app-errors.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { readRunState } from './run-projections.js';
+import { assertTx, type Tx } from './tx.js';
 
 export type { ChatVariableCommand };
 
@@ -29,6 +30,32 @@ export function chatVariablesPending(store: Store, chatId: string): boolean {
   return !!store.db
     .prepare("SELECT 1 FROM runs WHERE chat_id=? AND status IN ('queued','running') LIMIT 1")
     .get(chatId);
+}
+
+function writeChatVariableStateRow(
+  store: Store,
+  chatId: string,
+  revision: number,
+  values: Record<string, string>
+): ChatVariableState {
+  const result = { revision, values: validateChatVariableValues(values) };
+  store.db
+    .prepare(
+      'INSERT INTO chat_variable_states(chat_id,revision,values_json) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json'
+    )
+    .run(chatId, result.revision, JSON.stringify(result.values));
+  store.event(chatId, 'chat.variables.changed', chatId);
+  return result;
+}
+
+export function saveChatVariableState(
+  store: Store,
+  tx: Tx,
+  chatId: string,
+  state: ChatVariableState
+): ChatVariableState {
+  assertTx(tx, store.db);
+  return writeChatVariableStateRow(store, chatId, state.revision, state.values);
 }
 
 function applyChatVariablesInTransaction(
@@ -56,21 +83,12 @@ function applyChatVariablesInTransaction(
   if (source && source.chatId !== chatId) throw new HttpError(400, 'CHAT_VARIABLE_SOURCE_OWNER');
   if ((source?.hash ?? null) !== command.expectedSourceHash)
     throw new AppError(409, 'REVISION_CONFLICT');
-  const result = {
-    revision: current.revision + 1,
-    values: validateChatVariableValues(command.values),
-  };
-  store.db
-    .prepare(
-      'INSERT INTO chat_variable_states(chat_id,revision,values_json) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json'
-    )
-    .run(chatId, result.revision, JSON.stringify(result.values));
+  const result = writeChatVariableStateRow(store, chatId, current.revision + 1, command.values);
   store.db
     .prepare(
       'INSERT INTO chat_variable_journal(chat_id,request_key,payload_hash,revision,created_at) VALUES(?,?,?,?,?)'
     )
     .run(chatId, command.idempotencyKey, payloadHash, result.revision, new Date().toISOString());
-  store.event(chatId, 'chat.variables.changed', chatId);
   return result;
 }
 
