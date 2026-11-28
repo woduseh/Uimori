@@ -885,6 +885,10 @@
                     "message": "Server code cannot import the browser layer, including types."
                   },
                   {
+                    "group": ["**/runner", "**/runner/**"],
+                    "message": "Server code cannot import runner scripts; spawn them by path."
+                  },
+                  {
                     "group": [
                       "**/core/provider-http",
                       "**/core/provider-http.*",
@@ -892,6 +896,40 @@
                       "**/core/vertex.*"
                     ],
                     "message": "Provider execution must use core/transport instead of transport internals."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "dompurify",
+                      "dompurify/**",
+                      "@codemirror/**",
+                      "@lezer/**",
+                      "lucide-react",
+                      "lucide-react/**",
+                      "@a2ui/react",
+                      "@a2ui/react/**",
+                      "@a2ui/web_core",
+                      "@a2ui/web_core/**",
+                      "intl-messageformat",
+                      "intl-messageformat/**"
+                    ],
+                    "message": "Server code cannot import browser UI libraries."
+                  },
+                  {
+                    "group": ["**/third_party", "**/third_party/**"],
+                    "message": "Only server/compat/risu/** and server/risu-native-cbs.ts may import vendored third_party modules."
+                  },
+                  {
+                    "group": [
+                      "./compat/risu",
+                      "./compat/risu/**",
+                      "**/compat/risu",
+                      "**/compat/risu/**"
+                    ],
+                    "message": "Risu compatibility adapters stay behind server/risu-*.ts modules."
                   },
                   {
                     "group": ["fastify/**", "@fastify/**"],
@@ -906,7 +944,7 @@
                     "message": "Domain commands validate through SplitOperation schemas and throw AppError instead of importing request-validation."
                   },
                   {
-                    "group": ["**/app", "**/app.*"],
+                    "group": ["./app", "./app.*", "**/app", "**/app.*"],
                     "message": "Domain commands cannot import server/app."
                   }
                 ]

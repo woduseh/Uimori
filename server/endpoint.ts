@@ -10,7 +10,7 @@ import {
 import { type Command, executeOperation, parseInput } from './command.js';
 import type { AppPorts } from './store-ports.js';
 
-export type RouteKind = 'endpoint';
+export type RouteKind = 'endpoint' | 'command';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -96,7 +96,7 @@ export function registerCommand<Op extends AnySplitOperation, P extends Pick<App
   app.route({
     method: endpoint.method,
     url: endpointUrl(endpoint),
-    config: { admission: endpoint.admission, cache: endpoint.cache },
+    config: { admission: endpoint.admission, cache: endpoint.cache, routeKind: 'command' },
     ...(endpoint.bodyLimit === undefined ? {} : { bodyLimit: endpoint.bodyLimit }),
     ...(endpoint.cache === 'no-store' ? { onSend: noStore } : {}),
     handler: async (request, reply) => {
