@@ -14,14 +14,15 @@ export function captureCopiedMessages(
   return history.map((item) => {
     const source = store.source(item.revision);
     const snapshot = readStoredRunSnapshot(store, source.runId);
+    const opening = isAuthoredOpening(snapshot);
     return {
       sourceId: source.id,
       sourceHash: source.hash,
       ...(snapshot.messageChanges ? { changes: structuredClone(snapshot.messageChanges) } : {}),
-      ...(snapshot.nativeRisuAuthored
+      ...(snapshot.nativeRisuAuthored && !opening
         ? { authored: structuredClone(snapshot.nativeRisuAuthored) }
         : {}),
-      ...(isAuthoredOpening(snapshot) ? { opening: true } : {}),
+      ...(opening ? { opening: true } : {}),
     };
   });
 }

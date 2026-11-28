@@ -143,6 +143,29 @@ test('reviewed scene label removal still reports adjacent manuscript loss and ev
   assert.equal(report.rules.find((r) => r.id === 'manuscript-label').absorbed, 1);
 });
 
+test('the reviewed reader opening flag absorbs only an added true flag', async () => {
+  const route = '/api/chats/:/reader',
+    url = '/api/chats/chat/reader';
+  const report = { rules: rulesForCommit(commit), comparisons: 0, differences: [] };
+  const before = { status: 200, headers: {}, body: { runs: [{ id: 'a' }, { id: 'b' }] } };
+  const after = {
+    status: 200,
+    headers: {},
+    body: {
+      runs: [
+        { id: 'a', opening: true },
+        { id: 'b', opening: false },
+      ],
+    },
+  };
+  await compareRead('old-new', url, before, after, report, report.differences, route);
+  assert.deepEqual(
+    report.differences.map((x) => x.path),
+    ['$["body"]["runs"][1]["opening"]']
+  );
+  assert.equal(report.rules.find((r) => r.id === 'reader-opening-flag').absorbed, 1);
+});
+
 test('illustration links follow their imported resource while a switched image remains a finding', () => {
   function archive(id, image) {
     const role = 'bot',
