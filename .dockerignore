@@ -30,6 +30,8 @@ scripts/**
 !docs/
 docs/**
 !docs/*.md
+!docs/skills/
+!docs/skills/**
 **/.env*
 **/*.sqlite*
 **/*.pem

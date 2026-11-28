@@ -9,19 +9,19 @@
 - 원문·번역을 직접 편집하고, 채팅을 독립 사본으로 복사해요.
 - 이야기 기억과 백업 기능을 제공해요.
 
-> **현재 버전 `v0.19.0` · DB 스키마 15**
+> **현재 버전 `v0.19.1` · DB 스키마 15**
 >
-> 외부 에이전트가 서재 자료를 고칠 수 있는 실험용 MCP 연결이 생기고 평가 도구가 빠졌어요. 오류 문구와 새 항목 이름이 UI 언어를 따르고, 복원한 채팅·채팅 사본·열린 편집기의 동작을 바로잡았어요. 복구와 가져오기는 v0.18.0 이후 백업을 지원해요. [릴리스 노트](docs/releases/v0.19.0.md) · [업데이트 안내](docs/UPDATES.md)
+> 외부 에이전트가 서재 자료를 고칠 수 있는 실험용 MCP 연결이 생기고 평가 도구가 빠졌어요. 오류 문구와 새 항목 이름이 UI 언어를 따르고, 복원한 채팅·채팅 사본·열린 편집기의 동작을 바로잡았어요. 복구와 가져오기는 v0.18.0 이후 백업을 지원해요. v0.19.1은 Docker 이미지에 MCP 작성 스킬을 넣어요. 릴리스 노트: [v0.19.0](docs/releases/v0.19.0.md) · [v0.19.1](docs/releases/v0.19.1.md) · [업데이트 안내](docs/UPDATES.md)
 
 ## 빠른 시작 (Windows)
 
 **준비물**: Node **26.13.0 이상 26.x**, npm, Chrome 또는 Edge. SQLite는 Node에 포함된 기능을 사용하므로 따로 설치하지 않아요.
 
-1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.19.0` 릴리스가 공개됐는지 확인해요.
+1. [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 `v0.19.1` 릴리스가 공개됐는지 확인해요.
 2. 소스를 받아 실행해요.
 
    ```powershell
-   git clone --branch v0.19.0 --single-branch https://github.com/woduseh/Uimori.git
+   git clone --branch v0.19.1 --single-branch https://github.com/woduseh/Uimori.git
    cd Uimori
    npm ci
    npm run dev
