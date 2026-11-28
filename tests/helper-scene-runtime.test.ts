@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { createApp, type App } from '../server/app.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
+import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { editTranslation } from '../server/source-editing.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -243,6 +244,45 @@ test('library helper targets an explicit chat and edits translation without chan
   expect(f.store.job(String(latest.id)).result).toMatchObject({
     text: '요시노가 “안녕하세요.” 하고 말했다.',
   });
+});
+
+test('a co-edit that keeps the original and changes the translation reports only the translation', async () => {
+  const f = await fixture();
+  editTranslation(f.store, f.source.id, {
+    text: '요시노가 “안녕.” 하고 말했다.',
+    expectedRevision: 0,
+    expectedSourceHash: f.source.hash,
+  });
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('original', 'scene.read', { sourceId: f.source.id, target: 'original' }),
+        call('translation', 'scene.read', { sourceId: f.source.id, target: 'translation' })
+      );
+    if (round === 1) {
+      const original = result(request, 'original') as { editTarget: Record<string, unknown> };
+      const translation = result(request, 'translation') as {
+        editTarget: Record<string, unknown>;
+      };
+      return calls(
+        call('patch', 'scene.patch', {
+          ...original.editTarget,
+          text: f.source.text,
+          translation: { ...translation.editTarget, text: '요시노가 “안녕하세요.” 하고 말했다.' },
+        })
+      );
+    }
+    result(request, 'patch');
+    return structuredClone(success);
+  });
+  const task = await submit(f, 'Scene 1 번역만 다듬어서 저장해줘.');
+  expect(f.store.source(f.source.id).editRevision ?? 0).toBe(0);
+  expect(readHelperTaskResults(f.store, task.id).results).toMatchObject([
+    {
+      operation: 'scene.patch',
+      targets: [{ kind: 'translation', id: f.source.id, chatId: f.chat.id }],
+    },
+  ]);
 });
 
 test('helper runs isolated regex chat search then commits a guarded scene batch', async () => {

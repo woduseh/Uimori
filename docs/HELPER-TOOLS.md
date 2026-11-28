@@ -97,7 +97,7 @@ Behavior the response types leave out:
 - `usage.toolExecutions` counts recorded `tool.finished` events, so a callback interrupted before it finished is not counted.
 - `usage.latestInputEstimate` is the last stored local estimate. It is not a percentage and says nothing about a native agent's current context.
 - `usage.latestInputParts` splits that estimate into the request parts the runtime measured before sending, and `usage.latestInputExecution` says whether a provider tool loop or a native agent ran it. The composer indicator draws a budget bar only for the provider loop, marks automatic compaction at 85%, and lets the user trigger manual compaction for provider-loop conversations (refused while a task or compaction is active or on native Codex).
-- A result row names a target the task saved: a library resource, a scene original or translation, a scene name, the outline, the author notes, the chat-only lore, a setting, or queued work. It says that the save happened, not what changed in it, and opening it goes to the target. A scene row lists one scene, so a batch over several scenes has one row per changed scene.
+- A result row names a target the task saved: a library resource, a scene original or translation, a scene name, the outline, the author notes, the chat-only lore, a setting, or queued work. It says that the save happened, not what changed in it, and opening it goes to the target. A scene row lists one scene and one text, so a batch over several scenes, or an edit that saves both the original and its translation, has one row per saved text.
 
 ### Plan mode
 
