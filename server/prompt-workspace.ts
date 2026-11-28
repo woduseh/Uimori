@@ -257,6 +257,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'helperModel',
     'helperTaskTimeoutMinutes',
     'helperConfirmPaidGeneration',
+    'mcpAllowDelete',
     'contextModel',
     'scriptModel',
     'summaryLength',
@@ -280,6 +281,8 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     typeof b.helperConfirmPaidGeneration !== 'boolean'
   )
     throw new HttpError(400, 'HELPER_CONFIRM_PAID_GENERATION_INVALID');
+  if (b.mcpAllowDelete !== undefined && typeof b.mcpAllowDelete !== 'boolean')
+    throw new HttpError(400, 'MCP_ALLOW_DELETE_INVALID');
   const judgment = readJudgmentSettings(b.judgment, b.judgmentPricing);
   return {
     judgment: judgment.selection,
@@ -294,6 +297,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     helperModel: validateTitleModel(b.helperModel ?? null),
     helperTaskTimeoutMinutes: validateHelperTaskTimeoutMinutes(b.helperTaskTimeoutMinutes),
     ...(b.helperConfirmPaidGeneration === true ? { helperConfirmPaidGeneration: true } : {}),
+    ...(b.mcpAllowDelete === true ? { mcpAllowDelete: true } : {}),
     contextModel: validateTitleModel(b.contextModel ?? null),
     scriptModel: validateTitleModel(b.scriptModel ?? null),
     modelRoutes: validateModelRoutes(
@@ -562,11 +566,21 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     helperModel: workspaceModelRef(current, 'helper'),
     helperTaskTimeoutMinutes: current.helperTaskTimeoutMinutes,
     helperConfirmPaidGeneration: current.helperConfirmPaidGeneration === true,
+    mcpAllowDelete: current.mcpAllowDelete === true,
     contextModel: workspaceModelRef(current, 'context'),
     scriptModel: workspaceModelRef(current, 'script'),
     routes: current.modelRoutes,
     translationPolicy: current.translationPolicy,
   };
+}
+export function mcpDeleteAllowed(store: Store): boolean {
+  return (
+    store.db
+      .prepare(
+        "SELECT json_type(body,'$.mcpAllowDelete') AS allowed FROM prompt_workspace WHERE id=1"
+      )
+      .get()?.allowed === 'true'
+  );
 }
 export function updateModelWorkspace(store: Store, input: UpdateModelWorkspace): ModelWorkspace {
   return store.transaction(() => {
@@ -590,6 +604,9 @@ export function updateModelWorkspace(store: Store, input: UpdateModelWorkspace):
       helperConfirmPaidGeneration: Object.hasOwn(input, 'helperConfirmPaidGeneration')
         ? input.helperConfirmPaidGeneration
         : prior.helperConfirmPaidGeneration,
+      mcpAllowDelete: Object.hasOwn(input, 'mcpAllowDelete')
+        ? input.mcpAllowDelete
+        : prior.mcpAllowDelete,
       contextModel: Object.hasOwn(input, 'contextModel')
         ? (input.contextModel ?? null)
         : (prior.contextModel ?? null),

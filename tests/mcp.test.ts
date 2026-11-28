@@ -1,17 +1,30 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { splitSource } from '../core/auxiliary.js';
+import { editableResource } from '../core/resource-editing.js';
 import { createApp, type App } from '../server/app.js';
 import { deleteChat } from '../server/chat-deletion.js';
+import { fontCatalog, registerFont } from '../server/fonts.js';
+import { listIllustrationCuts } from '../server/helper-illustration-cuts.js';
+import { generateHelperIllustrations } from '../server/helper-illustration-generation.js';
+import { cancelIllustration, updateIllustrationSettings } from '../server/illustrations.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { setMaintenance } from '../server/maintenance.js';
-import { MCP_READ_TOKEN_BUDGET } from '../server/mcp-tools.js';
+import { MCP_DELETE_SETTING, MCP_READ_TOKEN_BUDGET } from '../server/mcp-tools.js';
 import { mcpToken as checkedMcpToken } from '../server/network-policy.js';
+import {
+  modelWorkspace,
+  promptWorkspace,
+  updateModelWorkspace,
+} from '../server/prompt-workspace.js';
+import { paletteCatalog, savePalette } from '../server/themes.js';
 import type { Content, ModelPreset } from '../core/product.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { createFixtureChat, fixtureBotInput, injectWithFixtureBot } from './fixtures/chat.js';
+import { chatWithSource, fixtureSettings } from './fixtures/illustration.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 
 const host = 'story.example.test';
@@ -297,7 +310,7 @@ test('a client edits a saved card through MCP without creating helper tasks', as
     expect(target.store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
 });
 
-test('MCP explains a failed run and reaches app operations, but never starts paid generation or deletes', async () => {
+test('MCP explains a failed run and reaches app operations, but never starts paid generation', async () => {
   const target = await app({ mcpToken });
   const store = target.store;
   const connection = store.product.connection({
@@ -427,7 +440,6 @@ test('MCP explains a failed run and reaches app operations, but never starts pai
   expect(JSON.stringify(inspected.value)).not.toMatch(/PRIVATE_KEY_REF|private-endpoint/u);
 
   const botId = chat.botId;
-  const folderCategory = 'bot';
   const folders = await call(target, 'app_call', {
     name: 'library.organize',
     arguments: { action: 'read' },
@@ -437,28 +449,18 @@ test('MCP explains a failed run and reaches app operations, but never starts pai
     name: 'library.organize',
     arguments: {
       action: 'create-folder',
-      body: { expectedRevision: folders.value.revision, category: folderCategory, title: 'Kept' },
+      body: { expectedRevision: folders.value.revision, category: 'bot', title: 'Kept' },
     },
   });
   expect(folder.isError, JSON.stringify(folder.value)).toBe(false);
   expect(invalidated).toHaveBeenCalledWith('resources');
-  const folderId = JSON.stringify(folder.value).match(/"id":"([^"]+)"/u)![1];
   const runsBefore = store.db.prepare('SELECT count(*) AS n FROM runs').get()!.n;
   const refused: [string, Record<string, unknown>][] = [
     ['scene.request', { chatId: chat.id, request: 'Again.' }],
     ['scene.translate', { chatId: chat.id, sourceId: 'any' }],
     ['task.retry', { kind: 'run', id: run.id }],
     ['task.cancel', { kind: 'run', id: run.id }],
-    ['resource.delete', { kind: 'content', id: botId }],
-    ['chat.delete', { chatId: chat.id }],
     ['chat.lore', { chatId: chat.id, action: 'remove', body: {} }],
-    [
-      'library.organize',
-      {
-        action: 'delete-folder',
-        body: { expectedRevision: 0, category: folderCategory, folderId },
-      },
-    ],
   ];
   for (const [name, args] of refused) {
     const result = await call(target, 'app_call', { name, arguments: args });
@@ -494,7 +496,7 @@ test('MCP explains a failed run and reaches app operations, but never starts pai
   expect(described.value.code).toBe('MCP_OPERATION_UNAVAILABLE');
   const catalog = await call(target, 'app_tools', { limit: 200 });
   for (const tool of catalog.value.tools as { name: string }[])
-    expect(['scene.request', 'chat.delete', 'resource.delete']).not.toContain(tool.name);
+    expect(['scene.request', 'scene.translate', 'task.retry']).not.toContain(tool.name);
   const effects = Object.fromEntries(
     (catalog.value.tools as { name: string; effect: string }[]).map((tool) => [
       tool.name,
@@ -504,9 +506,6 @@ test('MCP explains a failed run and reaches app operations, but never starts pai
   expect(effects).toMatchObject({ 'chat.lore': 'read', 'library.organize': 'mixed' });
 
   expect(store.db.prepare('SELECT count(*) AS n FROM runs').get()!.n).toBe(runsBefore);
-  expect(store.chat(chat.id).id).toBe(chat.id);
-  expect(store.product.available('content', botId)).toBeTruthy();
-  expect(JSON.stringify(store.libraryOrganization.snapshot())).toContain(folderId);
 
   const index = await call(target, 'app_call', {
     name: 'chat.read',
@@ -528,6 +527,200 @@ test('MCP explains a failed run and reaches app operations, but never starts pai
 
   for (const table of ['helper_tasks', 'helper_events'])
     expect(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
+});
+
+test('MCP deletes only while the owner allows it in the settings, and cannot allow it itself', async () => {
+  const target = await app({ mcpToken });
+  const store = target.store;
+  const allow = (mcpAllowDelete?: boolean) => {
+    const current = modelWorkspace(store);
+    return updateModelWorkspace(store, {
+      expectedRevision: current.revision,
+      routes: current.routes,
+      translationPolicy: current.translationPolicy,
+      ...(mcpAllowDelete === undefined ? {} : { mcpAllowDelete }),
+    }).mcpAllowDelete;
+  };
+  const gateway = (name: string, args: Record<string, unknown>) =>
+    call(target, 'app_call', { name, arguments: args });
+
+  const bot = store.product.content(fixtureBotInput('Doomed card')) as Content;
+  const doomed = createFixtureChat(store, 'Doomed chat');
+  const { chat, source } = chatWithSource(store);
+  const { revision: illustrationRevision, ...illustration } = fixtureSettings({ maxPerSource: 3 });
+  updateIllustrationSettings(
+    store,
+    { expectedRevision: illustrationRevision, ...illustration },
+    true
+  );
+  const anchor = splitSource(source)[0]!.anchor;
+  const jobId = generateHelperIllustrations(
+    store,
+    chat.id,
+    {
+      moments: [
+        {
+          sourceId: source.id,
+          expectedSourceHash: source.hash,
+          startAnchor: anchor,
+          endAnchor: anchor,
+          focus: 'The lantern',
+        },
+      ],
+    },
+    { testMode: true }
+  ).plans[0]!.jobId;
+  cancelIllustration(store, jobId);
+  const cut = listIllustrationCuts(store, chat.id, { sourceId: source.id }).cuts[0]!;
+  const connection = store.product.connection({
+    title: 'Unused provider',
+    protocol: 'openai-chat-v1',
+    endpoint: 'http://127.0.0.1:44997/v1',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Doomed model',
+    connectionId: connection.id,
+    modelId: 'doomed-1',
+    maxOutputTokens: 512,
+    temperature: null,
+  }) as ModelPreset;
+  const combination = store.product.promptCombination({
+    workspaceRevision: promptWorkspace(store).revision,
+    title: 'Doomed options',
+    role: 'main',
+    values: {},
+  }) as { id: string; revision: number };
+  const palette = savePalette(store, {
+    title: 'Doomed palette',
+    description: '',
+    colors: { light: {}, dark: {} },
+  });
+  const font = registerFont(store, {
+    title: 'Doomed font',
+    bytes: readFileSync(join(import.meta.dirname, 'fixtures/appearance-synthetic.ttf')),
+  });
+  const folder = store.libraryOrganization
+    .createFolder({
+      expectedRevision: store.libraryOrganization.snapshot().revision,
+      category: 'bot',
+      title: 'Doomed folder',
+    })
+    .folders.find((item) => item.title === 'Doomed folder')!;
+
+  const deletions: [string, () => Record<string, unknown>][] = [
+    ['resource.delete', () => ({ kind: 'content', id: bot.id, expectedRevision: bot.revision })],
+    ['chat.delete', () => ({ chatId: doomed.id })],
+    [
+      'illustration.cut.delete',
+      () => ({
+        chatId: chat.id,
+        expectedLatestJobId: jobId,
+        expectedSourceHash: source.hash,
+        expectedPresentationRevision: cut.presentationRevision,
+      }),
+    ],
+    ['model.delete', () => ({ modelId: model.id, expectedRevision: model.revision })],
+    [
+      'prompt.combination.delete',
+      () => ({ id: combination.id, expectedRevision: combination.revision }),
+    ],
+    ['font.delete', () => ({ id: font.id })],
+    ['palette.delete', () => ({ id: palette.id, expectedRevision: palette.revision })],
+    [
+      'library.organize',
+      () => ({
+        action: 'delete-folder',
+        body: {
+          expectedRevision: store.libraryOrganization.snapshot().revision,
+          category: 'bot',
+          folderId: folder.id,
+        },
+      }),
+    ],
+  ];
+
+  expect(modelWorkspace(store).mcpAllowDelete).toBe(false);
+  for (const [name, args] of deletions) {
+    const refused = await gateway(name, args());
+    expect(refused, name).toMatchObject({
+      isError: true,
+      value: { code: 'MCP_DELETE_DISABLED', retryMode: 'never', outcome: 'unchanged' },
+    });
+    expect(refused.value.error, name).toContain(MCP_DELETE_SETTING);
+  }
+
+  const editable = editableResource('prompt-workspace', promptWorkspace(store));
+  const saved = await gateway('resource.save', {
+    kind: 'prompt-workspace',
+    expectedRevision: promptWorkspace(store).revision,
+    model: editable,
+  });
+  expect(saved.isError, JSON.stringify(saved.value)).toBe(false);
+  await gateway('resource.save', {
+    kind: 'prompt-workspace',
+    expectedRevision: promptWorkspace(store).revision,
+    model: { ...editable, mcpAllowDelete: true },
+  });
+  await call(target, 'resource_patch', {
+    kind: 'prompt-workspace',
+    expectedRevision: promptWorkspace(store).revision,
+    changes: [{ op: 'add', path: '/mcpAllowDelete', value: true }],
+  });
+  expect(modelWorkspace(store).mcpAllowDelete).toBe(false);
+  expect(await gateway('chat.delete', { chatId: doomed.id })).toMatchObject({
+    isError: true,
+    value: { code: 'MCP_DELETE_DISABLED' },
+  });
+
+  expect(allow(true)).toBe(true);
+  expect(allow()).toBe(true);
+  const stale = await gateway('resource.delete', {
+    kind: 'content',
+    id: bot.id,
+    expectedRevision: bot.revision + 1,
+  });
+  expect(stale).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+  for (const [name, args] of deletions) {
+    const deleted = await gateway(name, args());
+    expect(deleted.isError, `${name} ${JSON.stringify(deleted.value)}`).toBe(false);
+  }
+  expect(() => store.chat(doomed.id)).toThrow();
+  expect(() => store.product.available('content', bot.id)).toThrow();
+  expect(() => store.product.available('model', model.id)).toThrow();
+  expect(() => store.product.available('prompt-combination', combination.id)).toThrow();
+  expect(listIllustrationCuts(store, chat.id, { sourceId: source.id }).cuts).toEqual([]);
+  expect(JSON.stringify(fontCatalog(store))).not.toContain(font.id);
+  expect(JSON.stringify(paletteCatalog(store))).not.toContain(palette.id);
+  expect(JSON.stringify(store.libraryOrganization.snapshot())).not.toContain(folder.id);
+
+  expect(await gateway('scene.request', { chatId: chat.id, request: 'Again.' })).toMatchObject({
+    isError: true,
+    value: { code: 'MCP_OPERATION_UNAVAILABLE' },
+  });
+  expect(allow(false)).toBe(false);
+  expect(await gateway('chat.delete', { chatId: chat.id })).toMatchObject({
+    isError: true,
+    value: { code: 'MCP_DELETE_DISABLED' },
+  });
+  expect(store.chat(chat.id).id).toBe(chat.id);
+  for (const table of ['helper_tasks', 'helper_events'])
+    expect(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
+});
+
+test('a delete operation added to the MCP gateway without its marker stops the module from loading', async () => {
+  vi.resetModules();
+  vi.doMock('../server/helper-confirmation-traits.js', () => ({
+    helperConfirmationTrait: (name: string) => (name === 'chat.rename' ? 'delete' : undefined),
+  }));
+  try {
+    await expect(import('../server/mcp-tools.js')).rejects.toThrow(
+      'MCP delete operation must be listed under deletes: chat.rename'
+    );
+  } finally {
+    vi.doUnmock('../server/helper-confirmation-traits.js');
+    vi.resetModules();
+  }
 });
 
 test('MCP saves answer a stale or deleted target with REVISION_CONFLICT before other checks', async () => {

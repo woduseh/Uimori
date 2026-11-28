@@ -165,6 +165,17 @@ export function deleteHelperChat(
       'CURRENT_CHAT_DELETION',
       'deleting this chat would also delete this helper conversation and the task making the call. Tell the owner to delete it from the chat list, or from a helper conversation in the library.'
     );
+  const { result, titleRevision } = deleteListedChat(store, chatId);
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: 'chat.delete',
+    requestedTargets: 1,
+    targets: [{ kind: 'chat', id: chatId, title: result.title, revision: titleRevision }],
+  });
+  return result;
+}
+
+export function deleteListedChat(store: Store, chatId: string) {
   const chat = store.chat(chatId);
   assertChatIdleForDeletion(store, chatId);
   const conversations = Number(
@@ -172,11 +183,13 @@ export function deleteHelperChat(
       ?.n ?? 0
   );
   deleteChat(store, chatId);
-  recordHelperTaskResult(workspace, task, {
-    receiptId,
-    operation: 'chat.delete',
-    requestedTargets: 1,
-    targets: [{ kind: 'chat', id: chatId, title: chat.title, revision: chat.titleRevision ?? 0 }],
-  });
-  return { deleted: true, chatId, title: chat.title, deletedHelperConversations: conversations };
+  return {
+    titleRevision: chat.titleRevision ?? 0,
+    result: {
+      deleted: true,
+      chatId,
+      title: chat.title,
+      deletedHelperConversations: conversations,
+    },
+  };
 }

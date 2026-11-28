@@ -131,6 +131,20 @@ export function readHelperPromptCombinations(store: Store, value: unknown) {
   };
 }
 
+export function deletePromptCombination(store: Store, value: unknown) {
+  const input = parseInput(deletionOperations.deleteLibraryItem.input, value);
+  const item = store.transaction(() => {
+    const item = store.product.editable<SavedPromptCombination>(
+      'prompt-combination',
+      input.id,
+      input.expectedRevision
+    );
+    deleteLibraryItem(store, 'prompt-combination', input.id, input);
+    return item;
+  });
+  return { item, result: { deleted: true, id: input.id, title: item.title } };
+}
+
 export function applyHelperPromptCombination(
   store: Store,
   workspace: HelperWorkspace,
@@ -177,18 +191,9 @@ export function applyHelperPromptCombination(
     return { id: saved.id, revision: saved.revision, title: saved.title, values: saved.values };
   }
   if (name === 'prompt.combination.delete') {
-    const input = parseInput(deletionOperations.deleteLibraryItem.input, args);
-    const item = store.transaction(() => {
-      const item = store.product.editable<SavedPromptCombination>(
-        'prompt-combination',
-        input.id,
-        input.expectedRevision
-      );
-      deleteLibraryItem(store, 'prompt-combination', input.id, input);
-      return item;
-    });
+    const { item, result } = deletePromptCombination(store, args);
     report(item);
-    return { deleted: true, id: input.id, title: item.title };
+    return result;
   }
   if (name === 'prompt.combination.apply') {
     fields(args, ['role', 'id', 'workspaceRevision']);

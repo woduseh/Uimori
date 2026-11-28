@@ -117,6 +117,7 @@ export function ModelWorkspaceEditor({
               helperModel: workspace.helperModel ?? null,
               helperTaskTimeoutMinutes: workspace.helperTaskTimeoutMinutes,
               helperConfirmPaidGeneration: workspace.helperConfirmPaidGeneration === true,
+              mcpAllowDelete: workspace.mcpAllowDelete === true,
               contextModel: workspace.contextModel ?? null,
               scriptModel: workspace.scriptModel ?? null,
               routes: workspace.modelRoutes,
@@ -223,6 +224,7 @@ export function ModelWorkspaceEditor({
       helperModel: draft.helperModel ?? null,
       helperTaskTimeoutMinutes,
       helperConfirmPaidGeneration: draft.helperConfirmPaidGeneration === true,
+      mcpAllowDelete: draft.mcpAllowDelete === true,
       contextModel: draft.contextModel ?? null,
       summaryLength: draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
       scriptModel: draft.scriptModel ?? null,
@@ -408,6 +410,19 @@ export function ModelWorkspaceEditor({
                   onChange={(event) =>
                     change({ ...draft, helperConfirmPaidGeneration: event.target.checked })
                   }
+                />
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-mcp-allow-delete`}>{t('settings.mcpAllowDelete')}</label>
+                <small>{t('settings.mcpAllowDeleteHint')}</small>
+              </div>
+              <div className="settings-row-control">
+                <Switch
+                  id={`${id}-mcp-allow-delete`}
+                  checked={draft.mcpAllowDelete === true}
+                  onChange={(event) => change({ ...draft, mcpAllowDelete: event.target.checked })}
                 />
               </div>
             </div>

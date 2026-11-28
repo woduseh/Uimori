@@ -19,15 +19,21 @@ import { tokenFit } from './helper-read-fit.js';
 import { HELPER_TASK_TOOLS, readTaskTool } from './helper-task-tools.js';
 import { helperToolError } from './helper-tool-error.js';
 import { imageContent, MCP_APP_OPERATIONS, type McpAppOperation } from './mcp-app-operations.js';
+import { mcpDeleteAllowed } from './prompt-workspace.js';
 import { text } from './request-validation.js';
 import type { Store } from './store.js';
 
-export type McpPorts = { store: Store; signal: AbortSignal };
+export type McpEffects = {
+  chatChanged: (chatId: string) => void;
+  chatDeleted: (chatId: string) => void;
+};
+export type McpPorts = { store: Store; signal: AbortSignal } & McpEffects;
 
 type Run = (name: string, args: Record<string, unknown>, ports: McpPorts) => unknown;
 type Family = { tools: ProviderTool[]; run: Run; chat?: true };
 
 export const MCP_READ_TOKEN_BUDGET = 32_000;
+export const MCP_DELETE_SETTING = 'Allow deletion over MCP without confirmation';
 const mcpReadFit = tokenFit(MCP_READ_TOKEN_BUDGET);
 
 const data: Family = {
@@ -227,6 +233,8 @@ type McpTool = {
 const TOOLS: McpTool[] = EXPOSED.map(([source, family, readOnly, adapt]) => {
   const tool = family.tools.find((candidate) => candidate.name === source);
   if (!tool) throw new Error(`MCP tool source missing: ${source}`);
+  if (helperConfirmationTrait(source))
+    throw new Error(`MCP direct tool must not delete or start paid generation: ${source}`);
   return {
     name: mcpName(source),
     source,
@@ -274,16 +282,41 @@ function gatewaySchema(source: ProviderTool, operation: McpAppOperation): Schema
   return schema;
 }
 
+const OWNER_CONFIRMATION = ', so the call waits for the owner confirmation';
+const GATEWAY_ADAPT: Record<string, Adapt> = {
+  'chat.delete': without(
+    OWNER_CONFIRMATION,
+    ', and the chat this helper conversation belongs to cannot be deleted from here, because the deletion would delete this conversation and the task making the call'
+  ),
+  'prompt.combination.delete': without(OWNER_CONFIRMATION),
+};
+const DELETE_ACTION = /delete|remove/u;
+const deletes = (operation: McpAppOperation, action: unknown) =>
+  operation.deletes === true ||
+  (typeof action === 'string' && !!operation.deletes?.includes(action));
+
 const GATEWAY: (ProviderTool & { operation: McpAppOperation })[] = Object.entries(
   MCP_APP_OPERATIONS
 ).map(([name, operation]) => {
   const source = HELPER_APP_TOOLS.find((tool) => tool.name === name);
   if (!source) throw new Error(`MCP app operation source missing: ${name}`);
-  if (helperConfirmationTrait(name) || SOURCE_NAMES.has(name))
+  const trait = helperConfirmationTrait(name);
+  if (trait === 'paid' || SOURCE_NAMES.has(name))
     throw new Error(`MCP app operation must not be exposed through the gateway: ${name}`);
+  if (trait === 'delete' && operation.deletes !== true)
+    throw new Error(`MCP delete operation must be listed under deletes: ${name}`);
+  const unguarded = (operation.actions ?? []).filter(
+    (action) => DELETE_ACTION.test(action) && !deletes(operation, action)
+  );
+  if (unguarded.length)
+    throw new Error(
+      `MCP delete action must be listed under deletes: ${name} ${unguarded.join(', ')}`
+    );
+  if (operation.deletes && operation.readOnly)
+    throw new Error(`MCP delete operation must not be read-only: ${name}`);
   return {
     name,
-    description: renamed(source.description),
+    description: renamed((GATEWAY_ADAPT[name] ?? ((text) => text))(source.description)),
     inputSchema: gatewaySchema(source, operation),
     operation,
   };
@@ -294,14 +327,14 @@ const [helperAppTools, helperAppCall] = HELPER_GATEWAY_TOOLS;
 const GATEWAY_DEFINITIONS = [
   {
     name: 'app_tools',
-    description: `Look up the Uimori app operations that have no tool of their own here: what each one does and its exact argument schema. Run them with app_call. Pass names for the schemas of operations listed below, for example ["chat.read","scene.read"]. Pass query, an English purpose such as "find a scene by its text" or an exact operation name, for ranked candidates with complete schemas (3 by default; limit and offset page them). Pass neither to page through a compact catalog without schemas. The descriptions were written for the in-app helper: over MCP there is no current chat, task, editor or helper conversation, so chat operations take chatId, and a phrase about the current chat or the frozen data of a task does not apply. Paid generation, delete operations and saves that still run inside an in-app helper task are not available here. Operations by area, written as area.operation: ${operationIndex(GATEWAY_TOOLS, false)}.`,
+    description: `Look up the Uimori app operations that have no tool of their own here: what each one does and its exact argument schema. Run them with app_call. Pass names for the schemas of operations listed below, for example ["chat.read","scene.read"]. Pass query, an English purpose such as "find a scene by its text" or an exact operation name, for ranked candidates with complete schemas (3 by default; limit and offset page them). Pass neither to page through a compact catalog without schemas. The descriptions were written for the in-app helper: over MCP there is no current chat, task, editor or helper conversation, so chat operations take chatId, and a phrase about the current chat or the frozen data of a task does not apply. Paid generation and saves that still run inside an in-app helper task are not available here. Delete operations are listed, and they run only while the owner has turned on "${MCP_DELETE_SETTING}" in the app settings; otherwise they answer MCP_DELETE_DISABLED and change nothing. Operations by area, written as area.operation: ${operationIndex(GATEWAY_TOOLS, false)}.`,
     inputSchema: renamedSchema(helperAppTools!.inputSchema),
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   {
     name: 'app_call',
     description:
-      'Run one Uimori app operation from app_tools by its exact name, with arguments that follow its schema. Read operations return data with continuation fields such as nextOffset, nextIndex or a ready nextRead. A save takes the revision you read and returns the new one, so a stale revision fails with REVISION_CONFLICT instead of overwriting. A failed call returns an error code and says whether to correct the arguments, refresh and retry, or stop.',
+      'Run one Uimori app operation from app_tools by its exact name, with arguments that follow its schema. Read operations return data with continuation fields such as nextOffset, nextIndex or a ready nextRead. A save takes the revision you read and returns the new one, so a stale revision fails with REVISION_CONFLICT instead of overwriting. A delete runs at once, without a confirmation, and nothing here restores what it removed, so read the target first. A failed call returns an error code and says whether to correct the arguments, refresh and retry, or stop.',
     inputSchema: renamedSchema(helperAppCall!.inputSchema),
     annotations: { readOnlyHint: false, openWorldHint: false },
   },
@@ -446,6 +479,12 @@ function gatewayCall(raw: unknown, ports: McpPorts) {
         'MCP_OPERATION_UNAVAILABLE',
         `over MCP ${name} takes action ${operation.actions.join(', ')}`
       );
+    if (deletes(operation, action) && !mcpDeleteAllowed(ports.store))
+      throw new HelperToolError(
+        403,
+        'MCP_DELETE_DISABLED',
+        `${name}${operation.deletes === true ? '' : ` ${String(action)}`} deletes, and the owner has not allowed deletion over MCP. Nothing was changed. The owner can turn on "${MCP_DELETE_SETTING}" under Settings, Models by role in the app, or delete it there.`
+      );
     const checked = checkedArguments(entry.inputSchema as Schema, call.arguments);
     const unlisted = unlistedFields(entry.inputSchema, checked, '');
     if (unlisted.length)
@@ -457,8 +496,7 @@ function gatewayCall(raw: unknown, ports: McpPorts) {
     const { chatId, ...rest } = checked;
     const args = operation.chat === 'none' ? checked : rest;
     const value = await operation.run(args, {
-      store: ports.store,
-      signal: ports.signal,
+      ...ports,
       chatId:
         operation.chat === 'none' || chatId === undefined
           ? undefined

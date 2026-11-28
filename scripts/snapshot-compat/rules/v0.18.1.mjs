@@ -185,6 +185,12 @@ export const rules = [
     [removed('body.changes', list)],
     'Helper change cards and turn rollback were removed, so task results no longer carry change records.'
   ),
+  read(
+    'model-workspace-mcp-delete',
+    ['/api/model-workspace'],
+    [added('body.mcpAllowDelete', false)],
+    'The model workspace reports the MCP deletion setting, which stays off until the owner turns it on.'
+  ),
   {
     id: 'backup-helper-changes',
     routes: ['/api/backup'],

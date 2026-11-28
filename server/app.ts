@@ -1020,7 +1020,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   usageRoutes(app, store);
   readerRoutes(app, store);
   helperRoutes(app, helper);
-  if (mcp) mcpRoutes(app, store);
+  if (mcp) mcpRoutes(app, store, { chatChanged: publish, chatDeleted });
   chatOptionRoutes(app, store);
   chatVariableRoutes(app, store, publish);
   contextRoutes(app, store, {
