@@ -8,6 +8,7 @@ import { AppError, HelperToolError } from './app-errors.js';
 import { parseInput } from './endpoint.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Store } from './store.js';
+import type { SynchronousResult } from './synchronous-transaction.js';
 
 const id: Json = { type: 'string', minLength: 1, maxLength: 100 };
 const CHAT_LIST_MAX = 200;
@@ -79,16 +80,17 @@ function named<T>(target: string | null, run: () => T): T {
   }
 }
 
-function personaChoice(store: Store, value: unknown) {
-  const id = text(value, 'persona ID', 100);
-  const saved = store.db
-    .prepare(
-      "SELECT json_extract(body,'$.kind') AS kind FROM versions WHERE kind='content' AND id=?"
-    )
-    .get(id) as { kind: string } | undefined;
-  if (saved && saved.kind !== 'persona')
-    throw new HelperToolError(400, 'NOT_A_PERSONA', `${id} is a ${saved.kind}.`);
-  return { id };
+function withPersona<T>(
+  store: Store,
+  id: string | null,
+  save: () => SynchronousResult<T>
+): SynchronousResult<T> {
+  return store.transaction(() => {
+    const saved = named(id === null ? null : `persona ${id}`, save);
+    const kind = id === null ? 'persona' : store.product.stored<Content>('content', id).kind;
+    if (kind !== 'persona') throw new HelperToolError(400, 'NOT_A_PERSONA', `${id} is a ${kind}.`);
+    return saved;
+  });
 }
 
 function personaView(store: Store, ref: ContentRef | null) {
@@ -178,9 +180,12 @@ export function applyHelperChatOrganization(
       ? {}
       : {
           defaultPersona:
-            args.defaultPersona === null ? null : personaChoice(store, args.defaultPersona),
+            args.defaultPersona === null
+              ? null
+              : { id: text(args.defaultPersona, 'persona ID', 100) },
         };
-  const persona = (id: unknown) => (typeof id === 'string' ? `persona ${id}` : null);
+  const folderPersona = (input: { defaultPersona?: { id: string } | null }) =>
+    input.defaultPersona?.id ?? null;
   const title = args.title === undefined ? {} : { title: args.title };
   switch (args.action) {
     case 'create-folder': {
@@ -190,7 +195,9 @@ export function applyHelperChatOrganization(
         ...title,
         ...defaultPersona(),
       });
-      const folder = named(persona(args.defaultPersona), () => organization.createFolder(input));
+      const folder = withPersona(store, folderPersona(input), () =>
+        organization.createFolder(input)
+      );
       report(folder.revision);
       return { changedChatIds: [], folder };
     }
@@ -203,7 +210,9 @@ export function applyHelperChatOrganization(
         ...title,
         ...defaultPersona(),
       });
-      const folder = named(persona(args.defaultPersona), () => organization.updateFolder(input));
+      const folder = withPersona(store, folderPersona(input), () =>
+        organization.updateFolder(input)
+      );
       report(folder.revision);
       return { changedChatIds: [], folder };
     }
@@ -284,9 +293,13 @@ export function applyHelperChatOrganization(
         persona:
           choice === 'inherit' || choice === 'none'
             ? { mode: choice }
-            : { mode: 'persona', persona: personaChoice(store, choice) },
+            : { mode: 'persona', persona: { id: choice } },
       });
-      const defaults = named(persona(choice), () => organization.updateDefaults(input));
+      const defaults = withPersona(
+        store,
+        input.persona.mode === 'persona' ? input.persona.persona.id : null,
+        () => organization.updateDefaults(input)
+      );
       report(defaults.revision);
       return { changedChatIds: [], defaults };
     }

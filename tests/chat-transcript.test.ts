@@ -836,3 +836,41 @@ test('the transcript routes download the file and create the chat over HTTP', as
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('a backup restores its profile, drops the retired image translation flag and refuses a malformed profile without writing', async () => {
+  const store = await database();
+  const chat = createFixtureChat(store, 'Backup profile');
+  turn(store, chat.id, 'Request', 'A scene.');
+  const profile = store.product.profile(chat.id);
+  store.product.updateProfile(chat.id, {
+    expectedRevision: profile.revision,
+    image: true,
+    authorNote: 'Keep the harbor bell.',
+  });
+  const backup = legacyChatBackupFixture(store, chat.id);
+  const restore = async (state: Record<string, unknown>, key: string) => {
+    const destination = await database();
+    const copy = structuredClone(backup);
+    copy.chats[0]!.state.profile = state as never;
+    const result = importChatBackup(destination, { backup: copy, idempotencyKey: key });
+    return { destination, result };
+  };
+  const saved = backup.chats[0]!.state.profile;
+  const { destination, result } = await restore({ ...saved, imageTranslation: false }, 'kept');
+  const restored = (await result).chat;
+  expect(destination.product.profile(restored.id)).toMatchObject({
+    image: true,
+    authorNote: 'Keep the harbor bell.',
+  });
+  expect(destination.product.profile(restored.id)).not.toHaveProperty('imageTranslation');
+  for (const [key, state] of [
+    ['wrong-types', { image: 'not-a-bool', authorNote: 12345 }],
+    ['revision', { ...saved, expectedRevision: 999 }],
+    ['attachments', { ...saved, packageAttachments: 'oops' }],
+  ] as const) {
+    const refused = await restore(state, key);
+    await expect(refused.result).rejects.toMatchObject({ code: 'CHAT_BACKUP_INVALID' });
+    expect(refused.destination.chats()).toEqual([]);
+    expect(refused.destination.product.all('content')).toEqual([]);
+  }
+});

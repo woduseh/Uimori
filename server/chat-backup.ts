@@ -14,7 +14,7 @@ import {
   type ChatBackupImport,
   type ChatCopy,
 } from '../core/chat-backup.js';
-import { captureChatCopy, restoreChatCopy } from './chat-copy.js';
+import { captureChatCopy, checkedCopyProfile, restoreChatCopy } from './chat-copy.js';
 import {
   captureResourceBundle,
   importResourceBundle,
@@ -80,6 +80,7 @@ function checkedBackup(value: unknown, binary = false): ChatBackup {
     const copy = record(raw);
     validateChatTranscript(copy.transcript);
     const state = record(copy.state);
+    checkedCopyProfile(state.profile);
     if (state.illustrationReferences !== undefined)
       checkedPortableIllustrationReferences(state.illustrationReferences);
     if (state.storyGuide !== undefined)
