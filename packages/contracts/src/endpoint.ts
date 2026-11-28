@@ -7,28 +7,25 @@ export type Operation<
 > = { readonly name: N; readonly input: I; readonly output: O };
 
 export type OutputPolicy = 'always' | 'test';
-export type OperationEffect = 'paid-generation';
 
 export type SplitOperation<
   N extends string = string,
   H extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>,
   B extends z.ZodType = z.ZodType,
   Out = unknown,
-  I extends z.ZodType = z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>,
-  S extends boolean = boolean,
 > = {
-  readonly kind: 'command' | 'query';
+  readonly kind: 'command';
   readonly name: N;
   readonly head: H;
   readonly body: B;
-  readonly input: I;
+  readonly input: z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>;
   readonly output?: z.ZodType<Out>;
   readonly outputPolicy?: OutputPolicy;
-  readonly effects?: readonly OperationEffect[];
   readonly '~output'?: Out;
-} & (S extends true ? { readonly sensitive: true } : { readonly sensitive?: false });
+};
 
-export type AnyOperation = Operation<any, any, any> | SplitOperation<any, any, any, any, any, any>;
+export type AnySplitOperation = SplitOperation<any, any, any, any>;
+export type AnyOperation = Operation<any, any, any> | AnySplitOperation;
 
 export const defineOperation = <const N extends string, I extends z.ZodType, O extends z.ZodType>(
   name: N,
@@ -38,14 +35,10 @@ export const defineOperation = <const N extends string, I extends z.ZodType, O e
 
 export type OperationInput<Op extends AnyOperation> = z.input<Op['input']>;
 export type OperationParsedInput<Op extends AnyOperation> = z.output<Op['input']>;
-export type OperationHead<Op extends SplitOperation<any, any, any, any, any, any>> = z.output<
-  Op['head']
->;
-export type OperationBody<Op extends SplitOperation<any, any, any, any, any, any>> = z.output<
-  Op['body']
->;
+export type OperationHead<Op extends AnySplitOperation> = z.output<Op['head']>;
+export type OperationBody<Op extends AnySplitOperation> = z.output<Op['body']>;
 export type OperationOutput<Op extends AnyOperation> =
-  Op extends SplitOperation<any, any, any, infer Out, any, any>
+  Op extends SplitOperation<any, any, any, infer Out>
     ? Out
     : Op extends Operation<any, any, infer O>
       ? z.output<O>
@@ -59,7 +52,7 @@ export type Endpoint<Op extends AnyOperation = AnyOperation> = {
   readonly operation: Op['name'];
   readonly method: HttpMethod;
   readonly path: `/${string}`;
-  readonly status?: number | ((output: OperationOutput<Op>) => number);
+  readonly status?: number;
   readonly bodyLimit?: number;
   readonly admission?: 'always';
   readonly cache?: 'revalidate' | 'no-store';
@@ -84,15 +77,10 @@ type PathCheck<P extends string, I> = [UnboundPathParams<P, I>] extends [never]
   ? unknown
   : { 'path parameters need a required string or number input key': UnboundPathParams<P, I> };
 
-type SensitiveCheck<Op extends AnyOperation> = Op extends { readonly sensitive: true }
-  ? { readonly cache: 'no-store' }
-  : unknown;
-
 export const defineEndpoint =
   <Op extends AnyOperation>() =>
   <const P extends `/${string}`>(
-    endpoint: Endpoint<Op> & { readonly path: P } & PathCheck<P, OperationInput<Op>> &
-      SensitiveCheck<Op>
+    endpoint: Endpoint<Op> & { readonly path: P } & PathCheck<P, OperationInput<Op>>
   ): Endpoint<Op> =>
     endpoint;
 

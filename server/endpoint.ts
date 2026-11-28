@@ -2,12 +2,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod/v4';
 import {
   type AnyOperation,
+  type AnySplitOperation,
   type Endpoint,
   endpointInput,
   type Operation,
-  type SplitOperation,
 } from '#contracts';
-import { type Command, executeOperation, NOT_MODIFIED, parseInput, type Query } from './command.js';
+import { type Command, executeOperation, parseInput } from './command.js';
 import type { AppPorts } from './store-ports.js';
 
 export type RouteKind = 'endpoint';
@@ -22,7 +22,9 @@ declare module 'fastify' {
 
 const checkOutputs = 'uimoriCheckEndpointOutputs';
 
-export { NOT_MODIFIED, parseInput };
+export const NOT_MODIFIED = Symbol('notModified');
+
+export { parseInput };
 
 export function checkEndpointOutputs(app: FastifyInstance): void {
   app.decorate(checkOutputs, true);
@@ -52,14 +54,6 @@ export const endpointUrl = (endpoint: Endpoint<AnyOperation>): string => `/api${
 
 type Output<Op extends Operation> = z.output<Op['output']> | typeof NOT_MODIFIED;
 
-function responseStatus<Op extends AnyOperation>(
-  endpoint: Endpoint<Op>,
-  output: unknown
-): number | undefined {
-  if (endpoint.status === undefined) return undefined;
-  return typeof endpoint.status === 'function' ? endpoint.status(output as never) : endpoint.status;
-}
-
 export function registerEndpoint<Op extends Operation>(
   app: FastifyInstance,
   endpoint: Endpoint<Op>,
@@ -86,27 +80,16 @@ export function registerEndpoint<Op extends Operation>(
       if (output === NOT_MODIFIED) return reply.code(304).send();
       if (checked && (!endpoint.preferMinimal || prefersMinimal(request.headers.prefer)))
         operation.output.parse(output);
-      const status = responseStatus(endpoint, output);
-      if (status !== undefined) reply.code(status);
+      if (endpoint.status !== undefined) reply.code(endpoint.status);
       return output;
     },
   });
 }
 
-export function registerCommand<
-  Op extends SplitOperation<any, any, any, any, any, any>,
-  P extends Pick<AppPorts, 'tx'>,
->(app: FastifyInstance, endpoint: Endpoint<Op>, target: Command<Op, P>, ports: P): void;
-export function registerCommand<Op extends SplitOperation<any, any, any, any, any, any>, P>(
+export function registerCommand<Op extends AnySplitOperation, P extends Pick<AppPorts, 'tx'>>(
   app: FastifyInstance,
   endpoint: Endpoint<Op>,
-  target: Query<Op, P>,
-  ports: P
-): void;
-export function registerCommand<Op extends SplitOperation<any, any, any, any, any, any>, P>(
-  app: FastifyInstance,
-  endpoint: Endpoint<Op>,
-  target: Command<Op, P & Pick<AppPorts, 'tx'>> | Query<Op, P>,
+  command: Command<Op, P>,
   ports: P
 ): void {
   const checked = app.hasDecorator(checkOutputs);
@@ -121,23 +104,12 @@ export function registerCommand<Op extends SplitOperation<any, any, any, any, an
       const abort = () => controller.abort();
       request.raw.once('close', abort);
       try {
-        const check =
-          checked && (!endpoint.preferMinimal || prefersMinimal(request.headers.prefer));
-        const output =
-          target.kind === 'command'
-            ? await executeOperation(
-                target,
-                ports as P & Pick<AppPorts, 'tx'>,
-                endpointInput(endpoint, request),
-                { signal: controller.signal, checkOutputs: check }
-              )
-            : await executeOperation(target, ports, endpointInput(endpoint, request), {
-                signal: controller.signal,
-                checkOutputs: check,
-              });
-        if (output === NOT_MODIFIED) return reply.code(304).send();
-        const status = responseStatus(endpoint, output);
-        if (status !== undefined) reply.code(status);
+        const output = await executeOperation(command, ports, endpointInput(endpoint, request), {
+          signal: controller.signal,
+          checkOutputs:
+            checked && (!endpoint.preferMinimal || prefersMinimal(request.headers.prefer)),
+        });
+        if (endpoint.status !== undefined) reply.code(endpoint.status);
         return output;
       } finally {
         request.raw.off('close', abort);
