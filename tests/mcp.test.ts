@@ -4,12 +4,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, type App } from '../server/app.js';
+import { deleteChat } from '../server/chat-deletion.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 import { setMaintenance } from '../server/maintenance.js';
 import { MCP_READ_TOKEN_BUDGET } from '../server/mcp-tools.js';
 import { mcpToken as checkedMcpToken } from '../server/network-policy.js';
-import type { Content } from '../core/product.js';
+import type { Content, ModelPreset } from '../core/product.js';
 import { countTextTokens } from '../core/text-tokens.js';
-import { fixtureBotInput } from './fixtures/chat.js';
+import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 
 const host = 'story.example.test';
 const origin = `https://${host}`;
@@ -192,6 +194,10 @@ test('a client edits a saved card through MCP without creating helper tasks', as
     'chat_variables_read',
     'scene_lore',
     'image_list',
+    'task_list',
+    'task_inspect',
+    'app_tools',
+    'app_call',
   ]);
 
   const read = await call(target, 'resource_read', {
@@ -282,6 +288,276 @@ test('a client edits a saved card through MCP without creating helper tasks', as
 
   for (const table of ['helper_tasks', 'helper_events', 'helper_operations'])
     expect(target.store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
+});
+
+test('MCP explains a failed run and reaches app operations, but never starts paid generation or deletes', async () => {
+  const target = await app({ mcpToken });
+  const store = target.store;
+  const connection = store.product.connection({
+    title: 'Direct provider',
+    protocol: 'openai-chat-v1',
+    endpoint: 'https://private-endpoint.example/v1',
+    credentialRef: 'PRIVATE_KEY_REF',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Storm writer',
+    connectionId: connection.id,
+    modelId: 'storm-writer-1',
+    maxOutputTokens: 1024,
+    temperature: null,
+  }) as ModelPreset;
+  const chat = createFixtureChat(store, 'Harbor night');
+  const profile = {
+    ...store.product.snapshot(chat.id),
+    models: { main: store.product.modelSnapshot(model.id) },
+  };
+  const request = 'Write the storm over the harbor.';
+  const { run } = store.createRun(
+    chat.id,
+    {
+      request,
+      expectedRevision: chat.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: 'mcp-failed-run',
+    },
+    (current) => ({
+      chatId: chat.id,
+      parentRevision: current.headRevision,
+      settingsRevision: current.settingsRevision,
+      settings: current.settings,
+      request,
+      history: store.history(current.headRevision),
+      resources: store.product.resources(chat.id, profile),
+      profile,
+    })
+  );
+  store.startRun(run.id);
+  const wire = {
+    connectionId: connection.id,
+    role: 'main' as const,
+    protocol: 'openai-chat-v1' as const,
+    method: 'POST' as const,
+    url: 'https://provider.invalid',
+    headers: {},
+    body: {},
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  };
+  store.product.startAttempt(
+    chat.id,
+    run.id,
+    null,
+    { ...wire, modelId: model.modelId },
+    {
+      kind: 'writing',
+    }
+  );
+  store.product.startAttempt(
+    chat.id,
+    run.id,
+    null,
+    { ...wire, modelId: 'refusal-judge-1' },
+    {
+      kind: 'judgment',
+    }
+  );
+  store.finishRun(run.id, 'failed', 'PROVIDER_FAILED');
+  const laterRun = (key: string, extra: Record<string, unknown> = {}) => {
+    const created = store.createRun(
+      chat.id,
+      {
+        request,
+        expectedRevision: chat.headRevision,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: key,
+      },
+      (current) => ({
+        chatId: chat.id,
+        parentRevision: current.headRevision,
+        settingsRevision: current.settingsRevision,
+        settings: current.settings,
+        request,
+        history: store.history(current.headRevision),
+        resources: store.product.resources(chat.id, profile),
+        profile,
+        ...extra,
+      })
+    ).run;
+    store.startRun(created.id);
+    store.finishRun(created.id, 'failed', 'CONTEXT_TOO_LARGE');
+    return created;
+  };
+  const unsent = laterRun('mcp-unsent-run');
+  const imported = laterRun('mcp-imported-run', { transcriptImport: { index: 0 } });
+
+  const listed = await call(target, 'task_list', { status: 'failed' });
+  expect(listed.value.tasks).toContainEqual(expect.objectContaining({ kind: 'run', id: run.id }));
+  const inspected = await call(target, 'task_inspect', { kind: 'run', id: run.id });
+  expect(inspected).toMatchObject({
+    isError: false,
+    value: {
+      status: 'failed',
+      error: 'PROVIDER_FAILED',
+      request: { text: request, totalChars: request.length, truncated: false },
+      model: {
+        title: 'Storm writer',
+        providerModelId: 'storm-writer-1',
+        protocol: 'openai-chat-v1',
+        executionMode: 'realtime',
+      },
+    },
+  });
+  expect((await call(target, 'task_inspect', { kind: 'run', id: unsent.id })).value.model).toEqual({
+    title: 'Storm writer',
+    providerModelId: null,
+    protocol: null,
+    executionMode: null,
+  });
+  expect(
+    (await call(target, 'task_inspect', { kind: 'run', id: imported.id })).value.model
+  ).toBeNull();
+  expect(JSON.stringify(inspected.value)).not.toMatch(/PRIVATE_KEY_REF|private-endpoint/u);
+
+  const botId = chat.botId;
+  const folderCategory = 'bot';
+  const folders = await call(target, 'app_call', {
+    name: 'library.organize',
+    arguments: { action: 'read' },
+  });
+  const invalidated = vi.spyOn(store, 'invalidated');
+  const folder = await call(target, 'app_call', {
+    name: 'library.organize',
+    arguments: {
+      action: 'create-folder',
+      body: { expectedRevision: folders.value.revision, category: folderCategory, title: 'Kept' },
+    },
+  });
+  expect(folder.isError, JSON.stringify(folder.value)).toBe(false);
+  expect(invalidated).toHaveBeenCalledWith('resources');
+  const folderId = JSON.stringify(folder.value).match(/"id":"([^"]+)"/u)![1];
+  const runsBefore = store.db.prepare('SELECT count(*) AS n FROM runs').get()!.n;
+  const refused: [string, Record<string, unknown>][] = [
+    ['scene.request', { chatId: chat.id, request: 'Again.' }],
+    ['scene.translate', { chatId: chat.id, sourceId: 'any' }],
+    ['task.retry', { kind: 'run', id: run.id }],
+    ['task.cancel', { kind: 'run', id: run.id }],
+    ['resource.delete', { kind: 'content', id: botId }],
+    ['chat.delete', { chatId: chat.id }],
+    ['chat.lore', { chatId: chat.id, action: 'remove', body: {} }],
+    [
+      'library.organize',
+      {
+        action: 'delete-folder',
+        body: { expectedRevision: 0, category: folderCategory, folderId },
+      },
+    ],
+  ];
+  for (const [name, args] of refused) {
+    const result = await call(target, 'app_call', { name, arguments: args });
+    expect(result, name).toMatchObject({
+      isError: true,
+      value: { code: 'MCP_OPERATION_UNAVAILABLE', retryMode: 'never' },
+    });
+  }
+  const malformed: [Record<string, unknown>, string][] = [
+    [{ name: 'chat.list' }, 'INVALID_ARGUMENTS'],
+    [{ name: 'library.organize', arguments: null }, 'INVALID_ARGUMENTS'],
+    [{ name: 'library.organize', arguments: {} }, 'INVALID_ARGUMENTS'],
+    [{ name: 'chat.list', arguments: {}, extra: 1 }, 'INVALID_ARGUMENTS'],
+    [
+      { name: 'chat.lore', arguments: { chatId: chat.id, action: ['read'] } },
+      'MCP_OPERATION_UNAVAILABLE',
+    ],
+    [
+      { name: 'chat.lore', arguments: { chatId: chat.id, action: 'read', body: {} } },
+      'INVALID_ARGUMENTS',
+    ],
+    [
+      { name: 'chat.organize', arguments: { action: 'read', botId, chatId: chat.id } },
+      'INVALID_ARGUMENTS',
+    ],
+  ];
+  for (const [args, code] of malformed)
+    expect(await call(target, 'app_call', args), JSON.stringify(args)).toMatchObject({
+      isError: true,
+      value: { code },
+    });
+  const described = await call(target, 'app_tools', { names: ['scene.request'] });
+  expect(described.value.code).toBe('MCP_OPERATION_UNAVAILABLE');
+  const catalog = await call(target, 'app_tools', { limit: 200 });
+  for (const tool of catalog.value.tools as { name: string }[])
+    expect(['scene.request', 'chat.delete', 'resource.delete']).not.toContain(tool.name);
+  const effects = Object.fromEntries(
+    (catalog.value.tools as { name: string; effect: string }[]).map((tool) => [
+      tool.name,
+      tool.effect,
+    ])
+  );
+  expect(effects).toMatchObject({ 'chat.lore': 'read', 'library.organize': 'mixed' });
+
+  expect(store.db.prepare('SELECT count(*) AS n FROM runs').get()!.n).toBe(runsBefore);
+  expect(store.chat(chat.id).id).toBe(chat.id);
+  expect(store.product.available('content', botId)).toBeTruthy();
+  expect(JSON.stringify(store.libraryOrganization.snapshot())).toContain(folderId);
+
+  const index = await call(target, 'app_call', {
+    name: 'chat.read',
+    arguments: { chatId: chat.id },
+  });
+  expect(index).toMatchObject({ isError: false, value: { chat: { id: chat.id } } });
+  const titleRevision = store.chat(chat.id).titleRevision ?? 0;
+  const stale = await call(target, 'app_call', {
+    name: 'chat.rename',
+    arguments: { chatId: chat.id, title: 'Harbor dawn', expectedRevision: titleRevision + 1 },
+  });
+  expect(stale).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+  const renamed = await call(target, 'app_call', {
+    name: 'chat.rename',
+    arguments: { chatId: chat.id, title: 'Harbor dawn', expectedRevision: titleRevision },
+  });
+  expect(renamed.isError, JSON.stringify(renamed.value)).toBe(false);
+  expect(store.chat(chat.id).title).toBe('Harbor dawn');
+
+  for (const table of ['helper_tasks', 'helper_events', 'helper_changes'])
+    expect(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
+});
+
+test('MCP saves answer a stale or deleted target with REVISION_CONFLICT before other checks', async () => {
+  const target = await app({ mcpToken });
+  const store = target.store;
+  const bot = store.product.content(fixtureBotInput('Lantern card')) as Content;
+  const stale = await call(target, 'app_call', {
+    name: 'image.update-metadata',
+    arguments: {
+      contentId: bot.id,
+      imageId: 'no-such-image',
+      expectedRevision: bot.revision + 1,
+      title: 'Lantern',
+      description: '',
+    },
+  });
+  expect(stale).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+  deleteLibraryItem(store, 'content', bot.id, { expectedRevision: bot.revision });
+  const removed = await call(target, 'app_call', {
+    name: 'image.update-metadata',
+    arguments: {
+      contentId: bot.id,
+      imageId: 'no-such-image',
+      expectedRevision: bot.revision,
+      title: 'Lantern',
+      description: '',
+    },
+  });
+  expect(removed).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+
+  const chat = createFixtureChat(store, 'Gone soon');
+  deleteChat(store, chat.id);
+  const renamed = await call(target, 'app_call', {
+    name: 'chat.rename',
+    arguments: { chatId: chat.id, title: 'Back', expectedRevision: chat.titleRevision ?? 0 },
+  });
+  expect(renamed).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
 });
 
 test('the 2026-07-28 revision is discovered, checks its headers and serves skills with digests', async () => {

@@ -68,6 +68,7 @@ export class LibraryOrganizationStore {
       assertRevision(this.snapshot().revision, expected);
       action();
       this.bump();
+      this.store.invalidated('resources');
       return this.snapshot();
     });
   }

@@ -15,9 +15,9 @@ import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { editableResource } from '../core/resource-editing.js';
 import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
-import { cloneResource, readResource, saveResource, undoResource } from './resource-service.js';
+import { cloneResource, readForEdit, saveResource, undoResource } from './resource-service.js';
 import { deleteLibraryItem } from './library-deletion.js';
-import { HelperToolError } from './app-errors.js';
+import { AppError, HelperToolError } from './app-errors.js';
 import { number, text } from './request-validation.js';
 import { patchHelperResource, readHelperResource } from './helper-resource-editing.js';
 import { patchHelperResources } from './helper-resource-batch.js';
@@ -529,7 +529,9 @@ export function invokeResourceTool(
     };
   if (name === 'image.update-metadata') {
     const id = text(args.contentId, 'content ID', 100);
-    const content = readResource(store, 'content', id) as Content;
+    const expectedRevision = number(args.expectedRevision, 'revision');
+    const content = readForEdit(store, 'content', id) as Content;
+    if (content.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
     const imageId = text(args.imageId, 'image ID', 200);
     if (!content.package.images?.some((image) => image.id === imageId))
       throw new HelperToolError(404, 'IMAGE_NOT_FOUND_IN_CONTENT');
@@ -539,7 +541,7 @@ export function invokeResourceTool(
       saveResource(store, {
         kind: 'content',
         id,
-        expectedRevision: number(args.expectedRevision, 'revision'),
+        expectedRevision,
         model: {
           ...editableResource('content', content),
           package: {

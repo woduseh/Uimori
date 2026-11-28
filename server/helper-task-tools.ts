@@ -2,6 +2,7 @@ import { helperCallOperationId } from './helper-workspace.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { IllustrationDiagnostic, IllustrationJobInput } from '../core/illustration.js';
 import type { HelperTask } from '../core/helper.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { HelperToolError } from './app-errors.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
@@ -62,7 +63,7 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.inspect',
     description:
-      'Inspect one run, auxiliary job, illustration render or helper task by its exact id, to explain why it failed, what it cost or what it changed. Returns compact status, error, usage and the actions that are available, without manuscript text or execution snapshots. includeDiagnostics adds the recorded provider attempts and tool events in pages of 20. For an illustration it also reports the stage that failed, the target and whether a prepared prompt exists; includePrompt returns that prompt, which a refused request may not have. For a helper task, committedEffects lists the saves that have a durable receipt in pages of 20; a receipt confirms that the save was committed, not that the resource still has that state or that the task succeeded. Missing records of old tasks mean unknown, not that nothing happened, and no receipt does not prove that an uncertain action had no effect.',
+      'Inspect one run, auxiliary job, illustration render or helper task by its exact id, to explain why it failed, what it cost or what it changed. Returns compact status, error, usage and the actions that are available, without manuscript text or execution snapshots. For a writing run it also returns the request text that was sent (a very long request is cut and says so, with its total length) and its model: the title, and the provider model id, protocol and execution mode (realtime or batch) of its latest writing call, which are null when it failed before calling the provider; model is null for an authored opening or an imported transcript, which call no model. includeDiagnostics adds the recorded provider attempts and tool events in pages of 20. For an illustration it also reports the stage that failed, the target and whether a prepared prompt exists; includePrompt returns that prompt, which a refused request may not have. For a helper task, committedEffects lists the saves that have a durable receipt in pages of 20; a receipt confirms that the save was committed, not that the resource still has that state or that the task succeeded. Missing records of old tasks mean unknown, not that nothing happened, and no receipt does not prove that an uncertain action had no effect.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -130,6 +131,13 @@ type TaskView = {
   kind: Kind;
   id: string;
   chatId?: string;
+  request?: { text: string; totalChars: number; truncated: boolean };
+  model?: {
+    title: string | null;
+    providerModelId: string | null;
+    protocol: string | null;
+    executionMode: string | null;
+  } | null;
   conversationId?: string;
   jobKind?: string;
   status: string;
@@ -469,7 +477,10 @@ function recordedDiagnostics(
   return { attempts: attemptPage, tools };
 }
 
-function listTasks(store: Store, current: HelperTask, args: Record<string, unknown>) {
+export type TaskViewer = { taskId: string | null; chatId: string | null };
+const RUN_REQUEST_TOKENS = 4_000;
+
+function listTasks(store: Store, viewer: TaskViewer, args: Record<string, unknown>) {
   fields(record(args), ['chatId', 'kind', 'status', 'limit']);
   const status =
     args.status === undefined
@@ -480,12 +491,7 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
       ? null
       : choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
   const limit = args.limit === undefined ? 10 : number(args.limit, 'task limit', 1, 20);
-  const chatId =
-    args.chatId === undefined
-      ? current.snapshot.scope.kind === 'chat'
-        ? current.snapshot.scope.chatId
-        : null
-      : text(args.chatId, 'chat ID', 100);
+  const chatId = args.chatId === undefined ? viewer.chatId : text(args.chatId, 'chat ID', 100);
   if (chatId) store.chat(chatId);
   const tasks = store.db
     .prepare(
@@ -508,7 +514,7 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
     ...(selectedKind ? { kind: selectedKind } : {}),
     ...(chatId ? { chatId } : {}),
     tasks: tasks.map(({ sourceId, error, ...task }): Row => {
-      const view = inspect(store, current.id, task.kind as Kind, String(task.id));
+      const view = inspect(store, viewer.taskId, task.kind as Kind, String(task.id));
       return {
         ...task,
         ...(sourceId ? { sourceId } : {}),
@@ -583,7 +589,7 @@ function inspectCommittedEffects(store: Store, taskId: string, offset: number) {
 
 function inspect(
   store: Store,
-  currentTaskId: string,
+  currentTaskId: string | null,
   target: Kind,
   id: string,
   effectsOffset = 0,
@@ -641,18 +647,42 @@ function inspect(
   if (target === 'run') {
     const run = row(
       store,
-      "SELECT id,chat_id,status,error,created_at,updated_at,usage,json_extract(snapshot,'$.packageStart.mode') AS start_mode,json_extract(snapshot,'$.nativeRisuAuthored') AS native_authored FROM runs WHERE id=?",
+      `SELECT id,chat_id,status,error,request,created_at,updated_at,usage,
+        json_extract(snapshot,'$.packageStart.mode') AS start_mode,
+        json_extract(snapshot,'$.nativeRisuAuthored') AS native_authored,
+        json_extract(snapshot,'$.transcriptImport') AS transcript_import,
+        COALESCE(json_extract(snapshot,'$.profile.models.main.title'),json_extract(snapshot,'$.displayModelTitle')) AS model_title
+       FROM runs WHERE id=?`,
       id
     );
     const active = ['queued', 'running'].includes(run.status);
     const authored = run.start_mode === 'authored' || !!run.native_authored;
+    const attempt = store.db
+      .prepare(
+        `SELECT model_id AS providerModelId,json_extract(request,'$.protocol') AS protocol,
+          json_extract(request,'$.executionMode') AS executionMode
+         FROM attempts WHERE run_id=? AND job_id IS NULL AND usage_kind='writing' ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(id) as Row | undefined;
     const usage = run.usage ? JSON.parse(String(run.usage)) : attemptUsage(store, 'run_id', id);
+    const request = String(run.request);
+    const excerpt = textTokenExcerpt(request, RUN_REQUEST_TOKENS);
     return {
       kind: target,
       id,
       chatId: run.chat_id,
       status: run.status,
       error: run.error,
+      request: { text: excerpt.text, totalChars: request.length, truncated: excerpt.truncated },
+      model:
+        authored || run.transcript_import !== null || (!attempt && run.model_title === null)
+          ? null
+          : {
+              title: run.model_title,
+              providerModelId: attempt?.providerModelId ?? null,
+              protocol: attempt?.protocol ?? null,
+              executionMode: attempt ? (attempt.executionMode ?? 'realtime') : null,
+            },
       usage,
       ...(includeDiagnostics
         ? { diagnostics: recordedDiagnostics(store, target, id, attemptsOffset, toolsOffset) }
@@ -736,6 +766,45 @@ function inspect(
   };
 }
 
+const taskTarget = (args: Record<string, unknown>) => ({
+  target: choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind'),
+  targetId: text(args.id, 'task ID', 100),
+});
+
+export function readTaskTool(
+  store: Store,
+  name: string,
+  args: Record<string, unknown>,
+  viewer: TaskViewer = { taskId: null, chatId: null }
+) {
+  if (name === 'task.list') return listTasks(store, viewer, args);
+  if (name !== 'task.inspect') throw new HelperToolError(400, 'UNKNOWN_HELPER_TOOL');
+  fields(record(args), [
+    'kind',
+    'id',
+    'effectsOffset',
+    'includePrompt',
+    'includeDiagnostics',
+    'attemptsOffset',
+    'toolsOffset',
+  ]);
+  const { target, targetId } = taskTarget(args);
+  for (const key of ['includePrompt', 'includeDiagnostics'])
+    if (args[key] !== undefined && typeof args[key] !== 'boolean')
+      throw new HttpError(400, `Invalid ${key}`);
+  return inspect(
+    store,
+    viewer.taskId,
+    target,
+    targetId,
+    number(args.effectsOffset ?? 0, 'effects offset', 0),
+    args.includePrompt === true,
+    args.includeDiagnostics === true,
+    number(args.attemptsOffset ?? 0, 'attempts offset', 0),
+    number(args.toolsOffset ?? 0, 'tools offset', 0)
+  );
+}
+
 export function invokeTaskTool(
   store: Store,
   current: HelperTask,
@@ -744,53 +813,17 @@ export function invokeTaskTool(
   operationId: string,
   actions: TaskControlActions
 ) {
-  if (name === 'task.list') return listTasks(store, current, args);
-  fields(
-    record(args),
-    name === 'task.inspect'
-      ? [
-          'kind',
-          'id',
-          'effectsOffset',
-          'includePrompt',
-          'includeDiagnostics',
-          'attemptsOffset',
-          'toolsOffset',
-        ]
-      : ['kind', 'id']
-  );
-  const target = choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
-  const targetId = text(args.id, 'task ID', 100);
-  const effectsOffset =
-    name === 'task.inspect' ? number(args.effectsOffset ?? 0, 'effects offset', 0) : 0;
-  if (
-    name === 'task.inspect' &&
-    args.includePrompt !== undefined &&
-    typeof args.includePrompt !== 'boolean'
-  )
-    throw new HttpError(400, 'Invalid includePrompt');
-  if (
-    name === 'task.inspect' &&
-    args.includeDiagnostics !== undefined &&
-    typeof args.includeDiagnostics !== 'boolean'
-  )
-    throw new HttpError(400, 'Invalid includeDiagnostics');
-  const attemptsOffset =
-    name === 'task.inspect' ? number(args.attemptsOffset ?? 0, 'attempts offset', 0) : 0;
-  const toolsOffset =
-    name === 'task.inspect' ? number(args.toolsOffset ?? 0, 'tools offset', 0) : 0;
-  const before = inspect(
-    store,
-    current.id,
-    target,
-    targetId,
-    effectsOffset,
-    args.includePrompt === true,
-    args.includeDiagnostics === true,
-    attemptsOffset,
-    toolsOffset
-  );
-  if (name === 'task.inspect') return before;
+  if (name === 'task.list' || name === 'task.inspect')
+    return readTaskTool(store, name, args, {
+      taskId: current.id,
+      chatId:
+        name === 'task.list' && current.snapshot.scope.kind === 'chat'
+          ? current.snapshot.scope.chatId
+          : null,
+    });
+  fields(record(args), ['kind', 'id']);
+  const { target, targetId } = taskTarget(args);
+  const before = inspect(store, current.id, target, targetId);
   if (target === 'helper' && targetId === current.id)
     throw new HelperToolError(409, 'CURRENT_HELPER_TASK');
   if (name === 'task.cancel') {

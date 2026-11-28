@@ -360,6 +360,11 @@ const helperOptionInputs = {
   command: fixOptionsInput.omit({ chatId: true }),
 };
 
+export function readHelperOptions(store: Store, chatId: string, args: unknown) {
+  parseInput(helperOptionInputs.read, args === undefined ? {} : args);
+  return helperOptionState(new ChatOptionsStore(store).get(chatId));
+}
+
 export function invokeHelperOptions(
   store: Store,
   task: HelperTask,
@@ -372,10 +377,7 @@ export function invokeHelperOptions(
   const service = new ChatOptionsStore(store);
   const { chatId } = scope;
   const args = value === undefined ? {} : value;
-  if (name === 'options.read') {
-    parseInput(helperOptionInputs.read, args);
-    return helperOptionState(service.get(chatId));
-  }
+  if (name === 'options.read') return readHelperOptions(store, chatId, args);
   if (name === 'options.oneoff') {
     const input = parseInput(helperOptionInputs.stage, args);
     new HelperWorkspace(store).assertRunning(task.id);
