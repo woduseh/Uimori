@@ -1,5 +1,3 @@
-import { libraryCategory, libraryOperations } from '#contracts/operations';
-import { parseInput } from './endpoint.js';
 import {
   HELPER_PRESENTATION_TOOLS,
   presentationReadOnly,
@@ -8,6 +6,12 @@ import {
   applyHelperPresentationMutation,
 } from './helper-presentation-tools.js';
 import { readHelperOutline } from './outline-read.js';
+import {
+  listHelperChats,
+  organizeHelperLibrary,
+  readHelperArtifact,
+  readHelperChatIndex,
+} from './helper-store-operations.js';
 import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outline-guidance.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
@@ -52,9 +56,7 @@ import {
   helperSceneEditTarget,
   helperSceneResultTargets,
   invokeHelperSceneTool,
-  sceneTranslationState,
 } from './helper-scene-tools.js';
-import { sceneTitle } from './scene-titles.js';
 import {
   HELPER_CHAT_STATE_TOOLS,
   readHelperChatState,
@@ -174,15 +176,7 @@ import {
   readIllustrationScene,
 } from './helper-illustration-cuts.js';
 import { readIllustrationContinuity } from './illustration-continuity.js';
-import {
-  chatTitle,
-  choice,
-  fields,
-  HttpError,
-  number,
-  record,
-  text,
-} from './request-validation.js';
+import { chatTitle, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import type { ResponseStreamStore } from './response-stream.js';
 import {
@@ -232,7 +226,6 @@ import { fitsModelInput, type HelperReadFit } from './helper-read-fit.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
-const CHAT_READ_REQUEST_TOKENS = 200;
 const CHAT_LORE_BATCH_MAX = 16;
 const SEQUENTIAL_READS = new Set([
   'data.exec',
@@ -3246,26 +3239,7 @@ export class HelperRuntime {
     }
     if (HELPER_DATA_TOOLS.some((tool) => tool.name === name))
       return invokeDataTool(this.store, task, name, args, hooks.signal);
-    if (name === 'chat.list') {
-      fields(args, ['query', 'offset', 'limit']);
-      const query =
-        args.query === undefined ? '' : text(args.query, 'chat query', 200, true).toLowerCase();
-      const offset = number(args.offset ?? 0, 'offset', 0);
-      const limit = number(args.limit ?? 20, 'limit', 1, 50);
-      const all = this.store.chats().filter((chat) => chat.title.toLowerCase().includes(query));
-      const chats = all.slice(offset, offset + limit).map((chat) => ({
-        id: chat.id,
-        title: chat.title,
-        headRevision: chat.headRevision,
-        titleRevision: chat.titleRevision,
-        lastActivityAt: chat.lastActivityAt,
-      }));
-      return {
-        chats,
-        total: all.length,
-        nextOffset: offset + chats.length < all.length ? offset + chats.length : null,
-      };
-    }
+    if (name === 'chat.list') return listHelperChats(this.store, args);
     const resourceOperation = helperResourceOperation(name, args);
     if (resourceOperation) {
       if (resourceOperation.readOnly) return invokeResourceTool(this.store, name, args, readFit);
@@ -3476,64 +3450,7 @@ export class HelperRuntime {
     }
     if (name === 'chat.read') {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
-      fields(args, ['includePreview', 'includeRequest', 'order', 'offset', 'limit']);
-      for (const key of ['includePreview', 'includeRequest'])
-        if (args[key] !== undefined && typeof args[key] !== 'boolean')
-          throw new HttpError(400, `Invalid ${key}`);
-      const order =
-        args.order === undefined
-          ? 'oldest'
-          : choice(args.order, ['oldest', 'newest'], 'scene order');
-      const offset = number(args.offset ?? 0, 'offset', 0);
-      const limit = number(args.limit ?? 50, 'limit', 1, 100);
-      const chat = this.store.chat(scope.chatId);
-      const history = this.store.history(chat.headRevision);
-      let visible = 0;
-      const numbered = history.map((item) => {
-        const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
-        if (sceneEnabled) visible++;
-        return { item, sceneEnabled, sceneNumber: sceneEnabled ? visible : null };
-      });
-      const ordered = order === 'newest' ? numbered.reverse() : numbered;
-      const request = this.store.db.prepare(
-        'SELECT CASE WHEN COALESCE(sc.request_enabled,1)=0 THEN NULL ELSE COALESCE(sc.request_text,r.request) END AS request FROM sources s JOIN runs r ON r.id=s.run_id LEFT JOIN scene_context sc ON sc.source_id=s.id WHERE s.id=?'
-      );
-      const messages = ordered
-        .slice(offset, offset + limit)
-        .map(({ item, sceneEnabled, sceneNumber }) => {
-          const source = this.store.source(item.revision);
-          const title = sceneTitle(this.store, item.revision);
-          const requestText = args.includeRequest
-            ? (request.get(item.revision)?.request as string | null | undefined)
-            : undefined;
-          return {
-            id: item.revision,
-            hash: item.contentHash,
-            sceneNumber,
-            sceneEnabled,
-            requestEnabled: item.sceneContext?.requestEnabled !== false,
-            contextRevision: item.sceneContext?.revision ?? 0,
-            editRevision: source.editRevision ?? 0,
-            translation: sceneTranslationState(this.store, source),
-            originalLength: item.text.length,
-            ...(title ? { title } : {}),
-            ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
-            ...(args.includeRequest
-              ? {
-                  request:
-                    typeof requestText === 'string'
-                      ? textTokenExcerpt(requestText, CHAT_READ_REQUEST_TOKENS).text
-                      : null,
-                }
-              : {}),
-          };
-        });
-      return {
-        chat,
-        messages,
-        total: history.length,
-        nextOffset: offset + limit < history.length ? offset + limit : null,
-      };
+      return readHelperChatIndex(this.store, scope.chatId, args);
     }
     if (name.startsWith('options.')) {
       const invoke = () => invokeHelperOptions(this.store, task, name, args, operationId);
@@ -3663,31 +3580,11 @@ export class HelperRuntime {
       });
     }
     if (name === 'library.organize') {
-      if (args.action === 'read') return this.store.libraryOrganization.snapshot();
+      if (args.action === 'read') return organizeHelperLibrary(this.store, args);
       this.workspace.assertRunning(task.id);
-      return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () => {
-        const organization = this.store.libraryOrganization;
-        if (args.action === 'create-folder')
-          return organization.createFolder(
-            parseInput(libraryOperations.createFolder.input, args.body)
-          );
-        if (args.action === 'move')
-          return organization.move(parseInput(libraryOperations.moveItems.input, args.body));
-        if (args.action === 'update-folder' || args.action === 'delete-folder') {
-          const { folderId, category, ...body } = record(args.body);
-          const expectedCategory = parseInput(libraryCategory, category);
-          return args.action === 'delete-folder'
-            ? organization.deleteFolder(
-                parseInput(libraryOperations.deleteFolder.input, { ...body, id: folderId }),
-                expectedCategory
-              )
-            : organization.updateFolder(
-                parseInput(libraryOperations.updateFolder.input, { ...body, id: folderId }),
-                expectedCategory
-              );
-        }
-        throw new HelperToolError(400, 'INVALID_LIBRARY_ACTION');
-      });
+      return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () =>
+        organizeHelperLibrary(this.store, args)
+      );
     }
     if (name === 'outline.read') {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
@@ -3703,41 +3600,7 @@ export class HelperRuntime {
       if (name !== 'context.read') this.workspace.assertRunning(task.id);
       return await this.options.services.context(task, name, args, hooks, operationId);
     }
-    if (name === 'artifact.read') {
-      const artifact = this.workspace.artifact(
-        text(args.id, 'artifact ID', 100),
-        number(args.revision, 'artifact revision')
-      );
-      const field: unknown = args.field ?? 'text';
-      if (field !== 'text' && field !== 'request')
-        throw new HelperToolError(400, 'INVALID_ARTIFACT_FIELD');
-      const value = artifact[field];
-      const offset = number(args.offset ?? 0, 'artifact offset', 0, value.length);
-      const boundary = (at: number) =>
-        at > 0 && /[\uD800-\uDBFF]/u.test(value[at - 1]) && /[\uDC00-\uDFFF]/u.test(value[at] ?? '')
-          ? at - 1
-          : at;
-      const start = boundary(offset);
-      const limit =
-        args.limit === undefined
-          ? textTokenExcerpt(value.slice(start), 2000).text.length
-          : number(args.limit, 'artifact limit', 1, 10000);
-      let end = boundary(Math.min(value.length, start + limit));
-      if (end === start && start < value.length) end = Math.min(value.length, start + 2);
-      const page = () => ({
-        id: artifact.id,
-        revision: artifact.revision,
-        origin: artifact.origin,
-        field,
-        text: value.slice(start, end),
-        range: { start, end, unit: 'utf16-code-unit' },
-        totalChars: value.length,
-        nextOffset: end < value.length ? end : null,
-      });
-      while (end - start > 2 && !readFit(page()))
-        end = boundary(start + Math.max(2, Math.floor((end - start) / 2)));
-      return page();
-    }
+    if (name === 'artifact.read') return readHelperArtifact(this.workspace, args, readFit);
     if (helperToolTraits(name).writingRead)
       throw new HelperToolError(
         400,

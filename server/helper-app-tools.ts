@@ -802,12 +802,12 @@ const areaRank = new Map(HELPER_OPERATION_AREAS.map(([area], index) => [area, in
 const byArea = (a: ProviderTool, b: ProviderTool) =>
   (areaRank.get(operationArea(a.name)) ?? areaRank.size) -
   (areaRank.get(operationArea(b.name)) ?? areaRank.size);
-function operationIndex(tools: readonly ProviderTool[]): string {
+export function operationIndex(tools: readonly ProviderTool[], purposes = true): string {
   return HELPER_OPERATION_AREAS.flatMap(([area, purpose]) => {
     const names = tools
       .filter((tool) => operationArea(tool.name) === area)
       .map((tool) => tool.name.slice(area.length + 1));
-    return names.length ? [`${area} (${purpose}): ${names.join(', ')}`] : [];
+    return names.length ? [`${area}${purposes ? ` (${purpose})` : ''}: ${names.join(', ')}`] : [];
   }).join('; ');
 }
 
@@ -1016,7 +1016,7 @@ function searchHelperTools(allowed: ProviderTool[], query: string, scope?: 'chat
   const exact = HELPER_APP_TOOLS.find(
     (tool) => tool.name.toLowerCase() === query.trim().toLowerCase()
   );
-  if (exact) return allowed.includes(exact) ? [exact] : [];
+  if (exact) return allowed.filter((tool) => tool.name === exact.name);
   const terms = [...new Set(searchWords(query))];
   if (!terms.length || !allowed.length) return [];
   const documents = allowed.map((tool) => ({ tool, index: searchIndex.get(tool.name)! }));
@@ -1083,7 +1083,18 @@ export function describeHelperTools(
   review = false,
   scope?: 'chat' | 'library'
 ) {
-  const allowed = availableAppTools(review);
+  return describeAppTools(availableAppTools(review), args, scope);
+}
+
+export const isHelperChatTool = (name: string) => chatToolNames.has(name);
+
+export function describeAppTools(
+  allowed: ProviderTool[],
+  args: Record<string, unknown>,
+  scope?: 'chat' | 'library',
+  effectOf: (name: string) => ToolCatalog['tools'][number]['effect'] = (name) =>
+    helperToolTraits(name).effect
+): { tools: ProviderTool[] } | ToolCatalog {
   if (typeof args.name === 'string' && args.names === undefined) {
     const { name, ...rest } = args;
     args = { ...rest, names: [name] };
@@ -1134,7 +1145,7 @@ export function describeHelperTools(
             ? tool.description
             : `${tool.description.slice(0, 257)}…`,
         required: (tool.inputSchema as { required?: string[] }).required ?? [],
-        effect: helperToolTraits(tool.name).effect,
+        effect: effectOf(tool.name),
         ...(searching ? { inputSchema: tool.inputSchema } : {}),
       };
     }),

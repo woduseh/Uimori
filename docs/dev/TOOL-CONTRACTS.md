@@ -99,7 +99,7 @@ With `UIMORI_SHELL_ROOT` configured, the main writer also receives `data.exec`, 
 
 ## Mutations
 
-Helper mutations stay behind `app.tools` and `app.call`; see [Helper tools](HELPER-TOOLS.md#discovering-and-executing-app-operations) and [Editing saved scenes](HELPER-TOOLS.md#editing-saved-scenes).
+Helper mutations stay behind `app.tools` and `app.call`; see [Helper tools](HELPER-TOOLS.md#discovering-and-executing-app-operations) and [Editing saved scenes](HELPER-TOOLS.md#editing-saved-scenes). The MCP endpoint has its own `app_tools` and `app_call` over a smaller, explicitly listed set ([MCP endpoint](HELPER-TOOLS.md#mcp-endpoint-experimental)).
 
 - Revision and source-hash checks remain explicit arguments where they protect stale-write correctness.
 - Idempotency identity is different: the model does not invent `operationId` values. The helper derives mutation identity from the helper task ID and the provider tool-call ID and passes it separately from model arguments. Only adapters for services that use receipts add the identity to their internal commands. There is no second mutation-tool registry to maintain.

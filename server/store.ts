@@ -364,7 +364,7 @@ export class Store {
   }
   renameChat(id: string, title: string, expectedTitleRevision: number): Chat {
     return this.transaction(() => {
-      const prior = this.chat(id);
+      const prior = this.writableChat(id);
       if (prior.titleRevision !== expectedTitleRevision)
         throw new AppError(409, 'REVISION_CONFLICT');
       this.db.prepare('UPDATE chats SET title=? WHERE id=?').run(title, id);

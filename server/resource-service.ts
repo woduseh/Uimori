@@ -41,7 +41,7 @@ export function readResource(store: Store, kind: ResourceKind, id: string): Save
 const deleted = (error: unknown) =>
   error instanceof AppError && error.code === 'LIBRARY_ITEM_DELETED';
 
-function readForEdit(store: Store, kind: ResourceKind, id: string): SavedResource {
+export function readForEdit(store: Store, kind: ResourceKind, id: string): SavedResource {
   try {
     return readResource(store, kind, id);
   } catch (error) {
