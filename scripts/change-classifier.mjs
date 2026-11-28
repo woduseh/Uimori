@@ -31,7 +31,7 @@ const patterns = {
   uiMessageInput:
     /^(?:web\/.+\.(?:ts|tsx|mts|js|mjs)$|scripts\/(?:check-ui-message\.mjs|ui-message-allowlist\.json)$)/u,
   endpointCallInput:
-    /^(?:web\/.+\.(?:ts|tsx|mts|js|mjs)$|scripts\/(?:check-endpoint-calls\.mjs|legacy-api-allowlist\.json)$)/u,
+    /^(?:web\/.+\.(?:ts|tsx|mts|js|mjs)$|packages\/contracts\/src\/domains\/[^/]+\/endpoints\.ts$|scripts\/(?:check-endpoint-calls\.mjs|legacy-api-allowlist\.json)$)/u,
   userGuide: /^docs\/[^/]+\.md$/u,
   distEntry: /^server\/(?:index|app)\.ts$/u,
   hookFile: /^(?:\.githooks|\.claude\/hooks)\//u,

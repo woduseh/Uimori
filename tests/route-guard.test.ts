@@ -2,11 +2,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { RouteOptions } from 'fastify';
+import Fastify, { type RouteOptions } from 'fastify';
 import { expect, test } from 'vitest';
-import { allEndpoints, type Endpoint } from '#contracts';
+import { z } from 'zod/v4';
+import { allEndpoints, defineEndpoint, defineOperation, type Endpoint } from '#contracts';
 import { createApp } from '../server/app.js';
-import { endpointUrl, type RouteKind } from '../server/endpoint.js';
+import { endpointUrl, registerEndpoint, type RouteKind } from '../server/endpoint.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const allowlistPath = 'tests/raw-route-allowlist.json';
@@ -105,11 +106,18 @@ function shrinkAllowlist(
 }
 
 function captureRoutes(routes: CapturedRoute[]) {
+  const getHandlers = new Map<string, RouteOptions['handler']>();
   return (route: RouteOptions) => {
+    if (
+      !Array.isArray(route.method) &&
+      route.method.toUpperCase() === 'HEAD' &&
+      getHandlers.get(route.url) === route.handler
+    )
+      return;
     const methods = Array.isArray(route.method) ? route.method : [route.method];
     for (const rawMethod of methods) {
       const method = rawMethod.toUpperCase();
-      if (method === 'HEAD') continue;
+      if (method === 'GET') getHandlers.set(route.url, route.handler);
       routes.push({
         method,
         url: route.url,
@@ -306,4 +314,37 @@ test('route guard catches unregistered raw routes, stale debt, missing contracts
   const shrunk = shrinkAllowlist(allowlist, new Set(['GET /api/blob', 'POST /api/new-raw']));
   expect(shrunk.debt).toEqual([]);
   expect(Object.keys(shrunk.permanent)).toEqual(['GET /api/blob', 'GET /api/gone-permanent']);
+});
+
+test('standalone or custom HEAD routes fail while Fastify auto-generated HEAD for GET passes', async () => {
+  const captured: CapturedRoute[] = [];
+  const app = Fastify({ logger: false });
+  app.addHook('onRoute', captureRoutes(captured));
+  const op = defineOperation('demo.known', z.strictObject({}), z.strictObject({ ok: z.boolean() }));
+  const ep = defineEndpoint<typeof op>()({
+    operation: 'demo.known',
+    method: 'GET',
+    path: '/known',
+  });
+  registerEndpoint(app, ep, op, () => ({ ok: true }));
+  app.head('/api/explicit', async () => '');
+  app.get('/api/custom', { exposeHeadRoute: false }, async () => ({ ok: true }));
+  app.head('/api/custom', async () => '');
+  try {
+    await app.ready();
+  } finally {
+    await app.close();
+  }
+  const errors = routeGuardErrors(captured, captured, new Map([['GET /api/known', 'demo.known']]), {
+    permanent: { 'GET /api/custom': { reason: 'Custom GET fixture.' } },
+    debt: [],
+  });
+  expect(
+    errors.some((line) => line.includes('HEAD /api/explicit: unregistered raw API route'))
+  ).toBe(true);
+  expect(errors.some((line) => line.includes('HEAD /api/custom: unregistered raw API route'))).toBe(
+    true
+  );
+  expect(errors.some((line) => line.includes('/api/known'))).toBe(false);
+  expect(errors).toHaveLength(2);
 });

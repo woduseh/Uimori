@@ -5,10 +5,16 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
+export const domainsPath = 'packages/contracts/src/domains';
 export const allowlistPath = 'scripts/legacy-api-allowlist.json';
 export const apiModuleFile = 'web/api.ts';
+export const remedyFor = (endpoint, path) =>
+  `${path} is the typed route ${endpoint.method} /api${endpoint.path} (${endpoint.operation}); call it with callEndpoint and the endpoint named by that operation in ${endpoint.file} instead of api()`;
+
 const apiModuleStem = 'web/api';
 const shrinkCommand = 'node scripts/check-endpoint-calls.mjs --shrink';
+const wildcard = '\u0000';
+const placeholder = '$' + '{…}';
 const sourceExtension = /\.(?:ts|tsx|mts|cts|js|mjs)$/u;
 const legacyBindings = new Set(['api', 'apiBinary']);
 const globalFetchReceivers = new Set(['window', 'self', 'globalThis']);
@@ -41,6 +47,16 @@ export const remedy = [
   `When a file drops legacy api() calls, shrink its debt count with \`${shrinkCommand}\`.`,
   `A permanent binary or stream call (apiBinary() or direct fetch() outside web/api.ts) goes under "permanent" in ${allowlistPath} with its count, kind, and reason.`,
 ].join('\n');
+
+function walk(node, visit) {
+  if (!node || typeof node !== 'object') return;
+  if (typeof node.type === 'string') visit(node);
+  for (const [key, value] of Object.entries(node)) {
+    if (ignored.has(key)) continue;
+    if (Array.isArray(value)) for (const child of value) walk(child, visit);
+    else if (value && typeof value === 'object') walk(value, visit);
+  }
+}
 
 function parseSource(source, file) {
   return parse(source, {
@@ -75,6 +91,133 @@ const unwrap = (node) =>
   ].includes(node.type)
     ? unwrap(node.expression)
     : node;
+
+function declarations(tree) {
+  const initial = new Map();
+  walk(tree, (node) => {
+    if (node.type !== 'VariableDeclarator' || node.id.type !== 'Identifier' || !node.init) return;
+    initial.set(node.id.name, initial.has(node.id.name) ? null : node.init);
+  });
+  return initial;
+}
+
+function resolvePath(node, initial, depth = 0) {
+  if (!node || depth > 6) return undefined;
+  const inner = (child) => resolvePath(child, initial, depth + 1);
+  switch (node.type) {
+    case 'StringLiteral':
+      return node.value;
+    case 'TemplateLiteral': {
+      let text = '';
+      for (const [index, quasi] of node.quasis.entries()) {
+        text += quasi.value.cooked;
+        if (index < node.expressions.length) text += inner(node.expressions[index]) ?? wildcard;
+      }
+      return text;
+    }
+    case 'BinaryExpression': {
+      if (node.operator !== '+') return undefined;
+      return `${inner(node.left) ?? wildcard}${inner(node.right) ?? wildcard}`;
+    }
+    case 'Identifier': {
+      const value = initial.get(node.name);
+      return value ? inner(value) : undefined;
+    }
+    case 'TSAsExpression':
+    case 'TSSatisfiesExpression':
+    case 'TSNonNullExpression':
+    case 'ParenthesizedExpression':
+      return inner(node.expression);
+    default:
+      return undefined;
+  }
+}
+
+function methodOf(kind, args) {
+  if (kind === 'apiBinary') return 'POST';
+  const method = args[2];
+  if (method?.type === 'StringLiteral') return method.value.toUpperCase();
+  if (method) return undefined;
+  const body = args[1];
+  return !body || (body.type === 'Identifier' && body.name === 'undefined') ? 'GET' : 'POST';
+}
+
+export function contractEndpoints(source, file = `${domainsPath}/domain/endpoints.ts`) {
+  const tree = parseSource(source, file);
+  const initial = declarations(tree);
+  const found = [];
+  const problems = [];
+  let declared = 0;
+  walk(tree, (node) => {
+    if (node.type !== 'ObjectExpression') return;
+    const values = Object.fromEntries(
+      node.properties
+        .filter((property) => property.type === 'ObjectProperty')
+        .map((property) => [propertyName(property.key), property.value])
+    );
+    const operation = values.operation?.type === 'StringLiteral' && values.operation.value;
+    if (!operation) return;
+    declared++;
+    const method = values.method?.type === 'StringLiteral' ? values.method.value : undefined;
+    const path = resolvePath(values.path, initial);
+    if (method && path !== undefined && !path.includes(wildcard))
+      found.push({ operation, method, path, file });
+    else
+      problems.push(
+        `${file}: ${operation} has a method or path this check cannot resolve; write the path as a string, a same-file const or a template of same-file consts`
+      );
+  });
+  const listed = (source.match(/^\s*operation:/gmu) ?? []).length;
+  if (listed !== declared)
+    problems.push(
+      `${file}: ${listed} operation: entries but ${declared} endpoint objects were read; every endpoint is written as an object with an operation, a method and a path`
+    );
+  return { found, problems };
+}
+
+function allEndpoints(directory) {
+  const domains = resolve(directory, domainsPath);
+  const result = { endpoints: [], problems: [] };
+  if (!existsSync(domains)) return result;
+  for (const entry of readdirSync(domains, { withFileTypes: true }).sort((left, right) =>
+    left.name < right.name ? -1 : 1
+  )) {
+    if (!entry.isDirectory()) continue;
+    const file = `${domainsPath}/${entry.name}/endpoints.ts`;
+    const path = resolve(directory, file);
+    if (!existsSync(path)) continue;
+    const { found, problems } = contractEndpoints(readFileSync(path, 'utf8'), file);
+    result.endpoints.push(...found);
+    result.problems.push(...problems);
+  }
+  return result;
+}
+
+const segmentMatches = (candidate, endpoint) => {
+  if (endpoint.startsWith(':') || candidate === wildcard) return true;
+  if (!candidate.includes(wildcard)) return candidate === endpoint;
+  const pattern = candidate
+    .split(wildcard)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+    .join('.+');
+  return new RegExp(`^${pattern}$`, 'u').test(endpoint);
+};
+
+export function callsEndpoint(call, endpoint) {
+  if (call.method !== undefined && call.method !== endpoint.method) return false;
+  const text = call.path.split(/[?#]/u)[0];
+  const candidate = text.split('/').filter((part, index) => index > 0 || part !== '');
+  const open = !text.startsWith('/') && candidate[0]?.startsWith(wildcard);
+  const fixed = open ? candidate.slice(1) : candidate;
+  if (!fixed.some((part) => !part.includes(wildcard))) return false;
+  const target = endpoint.path.split('/').filter(Boolean);
+  if (open ? fixed.length >= target.length : fixed.length !== target.length) return false;
+  const tail = open ? target.slice(target.length - fixed.length) : target;
+  return (
+    fixed.every((part, index) => segmentMatches(part, tail[index])) &&
+    fixed.some((part, index) => part === tail[index])
+  );
+}
 
 function resolvesToApiModule(file, specifier) {
   if (typeof specifier !== 'string' || !specifier.startsWith('.')) return false;
@@ -197,6 +340,7 @@ function scopeBindingsFor(node) {
 
 export function scanLegacyApiSource(source, file = 'web/input.tsx') {
   const tree = parseSource(source, file);
+  const initial = declarations(tree);
   const importedDirect = new Map();
   const importedNamespaces = new Set();
   const issues = [];
@@ -240,6 +384,7 @@ export function scanLegacyApiSource(source, file = 'web/input.tsx') {
   }
 
   const calls = { api: [], apiBinary: [], fetch: [] };
+  const resolvedCalls = [];
   const scopes = [];
   const countedRefNodes = new Set();
 
@@ -285,6 +430,11 @@ export function scanLegacyApiSource(source, file = 'web/input.tsx') {
     return false;
   };
 
+  const recordResolvedCall = (kind, args, line) => {
+    const path = resolvePath(args[0], initial);
+    if (path !== undefined) resolvedCalls.push({ kind, path, method: methodOf(kind, args), line });
+  };
+
   function visit(node, parent, parentKey) {
     if (!node || typeof node !== 'object' || typeNodeTypes.has(node.type)) return;
 
@@ -306,6 +456,7 @@ export function scanLegacyApiSource(source, file = 'web/input.tsx') {
       const direct = directKind(callee);
       if (direct) {
         calls[direct.kind].push(node.loc.start.line);
+        recordResolvedCall(direct.kind, node.arguments, node.loc.start.line);
         for (const ref of direct.refs) countedRefNodes.add(ref);
       } else if (
         (callee?.type === 'MemberExpression' || callee?.type === 'OptionalMemberExpression') &&
@@ -314,6 +465,15 @@ export function scanLegacyApiSource(source, file = 'web/input.tsx') {
         const helperTarget = directKind(callee.object);
         if (helperTarget) {
           calls[helperTarget.kind].push(node.loc.start.line);
+          const helperName = memberProperty(callee);
+          if (helperName === 'call' || helperName === 'bind')
+            recordResolvedCall(helperTarget.kind, node.arguments.slice(1), node.loc.start.line);
+          else if (helperName === 'apply' && node.arguments[1]?.type === 'ArrayExpression')
+            recordResolvedCall(
+              helperTarget.kind,
+              node.arguments[1].elements.filter(Boolean),
+              node.loc.start.line
+            );
           for (const ref of helperTarget.refs) countedRefNodes.add(ref);
         } else if (file !== apiModuleFile && fetchTarget(callee.object)) {
           calls.fetch.push(node.loc.start.line);
@@ -369,7 +529,7 @@ export function scanLegacyApiSource(source, file = 'web/input.tsx') {
 
   visit(tree.program, null, null);
   for (const list of Object.values(calls)) list.sort((left, right) => left - right);
-  return { calls, issues };
+  return { calls, resolvedCalls, issues };
 }
 
 function sourceFiles(directory) {
@@ -410,6 +570,7 @@ export function readAllowlist(directory = root) {
 
 export function scanWebLegacyApi(directory = root) {
   const found = new Map();
+  const resolved = new Map();
   const issues = [];
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
@@ -417,14 +578,26 @@ export function scanWebLegacyApi(directory = root) {
     issues.push(...result.issues);
     const { api, apiBinary, fetch } = result.calls;
     if (api.length || apiBinary.length || fetch.length) found.set(file, result.calls);
+    if (result.resolvedCalls.length) resolved.set(file, result.resolvedCalls);
   }
-  return { found, issues };
+  return { found, resolved, issues };
 }
 
 export function endpointCallErrors(directory = root, allowlist = readAllowlist(directory)) {
+  const { endpoints, problems } = allEndpoints(directory);
   const { permanent, debt } = allowlist;
-  const { found, issues } = scanWebLegacyApi(directory);
-  const errors = [...issues];
+  const { found, resolved, issues } = scanWebLegacyApi(directory);
+  const errors = [...problems, ...issues];
+
+  for (const [file, calls] of resolved) {
+    for (const call of calls) {
+      const endpoint = endpoints.find((item) => callsEndpoint(call, item));
+      if (endpoint)
+        errors.push(
+          `${file}:${call.line}: ${remedyFor(endpoint, call.path.replaceAll(wildcard, placeholder))}`
+        );
+    }
+  }
 
   const allFiles = [
     ...new Set([...found.keys(), ...Object.keys(permanent), ...Object.keys(debt)]),
@@ -506,7 +679,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       0
     );
     console.log(
-      `Endpoint calls PASS (${debtCalls} legacy api() calls in ${Object.keys(allowlist.debt).length} debt files; ${permanentCalls} permanent calls in ${Object.keys(allowlist.permanent).length} files)`
+      `Endpoint calls PASS (${allEndpoints(root).endpoints.length} typed routes; ${debtCalls} legacy api() calls in ${Object.keys(allowlist.debt).length} debt files; ${permanentCalls} permanent calls in ${Object.keys(allowlist.permanent).length} files)`
     );
   }
 }
