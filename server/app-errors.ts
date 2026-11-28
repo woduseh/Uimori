@@ -13,6 +13,8 @@ import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js'
 import { ValidationError } from '../core/validation-error.js';
 import { HttpError } from './request-validation.js';
 
+export { HttpError };
+
 export class AppError<C extends AppErrorCode = AppErrorCode> extends HttpError {
   readonly code: C;
   readonly params: AppErrorParams[C];

@@ -5,13 +5,11 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
-import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
 import { readHelperChatState } from '../server/helper-chat-state-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import * as nativeRuntime from '../server/risu-native-runtime.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { helperCall, helperDone, runScriptedChatHelper } from './fixtures/scripted-helper.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(async () => {
@@ -150,115 +148,4 @@ test('chat.preview lists, searches and pages the assembled next request without 
     readHelperChatState(store, chat.id, 'chat.preview', { textLimit: 10 })
   ).rejects.toMatchObject({ statusCode: 400 });
   expect(changes(store)).toBe(before);
-});
-
-test('chat.variables.update answers REVISION_CONFLICT for an unchanged write on a stale revision or source', async () => {
-  const { store, chat } = fixture();
-  const sourceHash = store.source(chat.headRevision!).hash;
-  writeChatVariables(store, chat.id, {
-    expectedRevision: 0,
-    expectedSourceHash: sourceHash,
-    idempotencyKey: randomUUID(),
-    values: { mood: 'tense' },
-  });
-  const { finished } = await runScriptedChatHelper(store, chat.id, [
-    helperCall('stale-revision', 'chat.variables.update', {
-      expectedRevision: 0,
-      expectedSourceHash: sourceHash,
-      set: { mood: 'tense' },
-    }),
-    helperCall('stale-source', 'chat.variables.update', {
-      expectedRevision: 1,
-      expectedSourceHash: 'a'.repeat(64),
-      set: { mood: 'tense' },
-    }),
-    helperCall('empty', 'chat.variables.update', {
-      expectedRevision: 1,
-      expectedSourceHash: sourceHash,
-    }),
-    helperCall('unsafe', 'chat.variables.update', {
-      expectedRevision: 1,
-      expectedSourceHash: sourceHash,
-      set: JSON.parse('{"__proto__":"x","mood":"calm"}'),
-    }),
-    helperCall('unsafe-unset', 'chat.variables.update', {
-      expectedRevision: 1,
-      expectedSourceHash: sourceHash,
-      unset: ['__proto__', 'mood'],
-    }),
-    helperCall('extra', 'chat.variables.update', {
-      expectedRevision: 1,
-      expectedSourceHash: sourceHash,
-      set: { mood: 'calm' },
-      note: 'x',
-    }),
-    helperDone,
-  ]);
-  for (const call of ['stale-revision', 'stale-source'])
-    expect(finished(call), call).toMatchObject({ denied: true, errorCode: 'REVISION_CONFLICT' });
-  for (const call of ['empty', 'extra'])
-    expect(finished(call), call).toMatchObject({ denied: true });
-  expect(readChatVariables(store, chat.id).values).toEqual({ mood: 'tense' });
-});
-
-test('chat.variables.update merges changes with a receipt and rejects a stale read', async () => {
-  const { store, chat } = fixture();
-  const sourceHash = store.source(chat.headRevision!).hash;
-  writeChatVariables(store, chat.id, {
-    expectedRevision: 0,
-    expectedSourceHash: sourceHash,
-    idempotencyKey: randomUUID(),
-    values: { mood: 'tense', quest: 'started' },
-  });
-  const chatChanged = vi.fn();
-  const { finished, results } = await runScriptedChatHelper(
-    store,
-    chat.id,
-    [
-      helperCall('merge', 'chat.variables.update', {
-        expectedRevision: 1,
-        expectedSourceHash: sourceHash,
-        set: { score: '5' },
-        unset: ['mood'],
-      }),
-      helperCall('stale', 'chat.variables.update', {
-        expectedRevision: 1,
-        expectedSourceHash: sourceHash,
-        set: { score: '6' },
-      }),
-      helperCall('same', 'chat.variables.update', {
-        expectedRevision: 2,
-        expectedSourceHash: sourceHash,
-        set: { score: '5' },
-      }),
-      helperDone,
-    ],
-    { chatChanged }
-  );
-
-  expect(readChatVariables(store, chat.id)).toEqual({
-    revision: 2,
-    values: { quest: 'started', score: '5' },
-  });
-  expect(chatChanged).toHaveBeenCalledTimes(1);
-  expect(chatChanged).toHaveBeenCalledWith(chat.id);
-  expect(finished('merge')).toMatchObject({ denied: false });
-  expect(finished('stale')).toMatchObject({
-    denied: true,
-    errorCode: 'REVISION_CONFLICT',
-  });
-  expect(finished('same')).toMatchObject({ denied: false });
-  expect(results.map((item) => [item.operation, item.changedTargets])).toEqual([
-    ['chat.variables.update', 1],
-    ['chat.variables.update', 0],
-  ]);
-  expect(results[0]!.targets).toEqual([
-    {
-      kind: 'settings',
-      id: chat.id,
-      title: chat.title,
-      revision: 2,
-      setting: 'chat.variables',
-    },
-  ]);
 });

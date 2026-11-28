@@ -66,9 +66,11 @@ import {
 import { sceneTitle } from './scene-titles.js';
 import {
   HELPER_CHAT_STATE_TOOLS,
+  helperChatStateCommand,
   readHelperChatState,
   applyHelperChatState,
 } from './helper-chat-state-tools.js';
+import { executeHelperCommand } from './helper-command-adapter.js';
 import type { UiLocale } from '../core/ui-locale.js';
 import { createHelperChat, deleteHelperChat } from './helper-chat-lifecycle-tools.js';
 import {
@@ -3418,6 +3420,24 @@ export class HelperRuntime {
           if (typeof id === 'string') this.options.services?.sceneUpdated?.(id);
       }
       return result;
+    }
+    const chatStateCommand = helperChatStateCommand(name);
+    if (chatStateCommand) {
+      if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');
+      this.workspace.assertRunning(task.id);
+      return executeHelperCommand(
+        chatStateCommand,
+        {
+          store: this.store,
+          workspace: this.workspace,
+          chatChanged: this.options.services?.chatChanged,
+        },
+        task,
+        `${task.id}:${operationId}`,
+        scope.chatId,
+        args,
+        hooks.signal
+      );
     }
     if (HELPER_CHAT_STATE_TOOLS.some((tool) => tool.name === name)) {
       if (scope.kind !== 'chat') throw new HelperToolError(400, 'CHAT_SCOPE_REQUIRED');

@@ -2,8 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { chatSettingsEndpoints } from '#contracts';
 import { chatSettingsOperations } from '#contracts/operations';
 import { chatVariableView } from './chat-variable-context.js';
-import { writeChatVariables } from './chat-variables.js';
-import { registerEndpoint } from './endpoint.js';
+import { updateChatVariablesCommand } from './commands/chat-variables.js';
+import { registerCommand, registerEndpoint } from './endpoint.js';
+import { createStorePorts } from './store-ports.js';
 import type { Store } from './store.js';
 
 export function chatVariableRoutes(
@@ -17,14 +18,10 @@ export function chatVariableRoutes(
     chatSettingsOperations.readVariables,
     ({ chatId }) => chatVariableView(store, chatId)
   );
-  registerEndpoint(
+  registerCommand(
     app,
     chatSettingsEndpoints.writeVariables,
-    chatSettingsOperations.writeVariables,
-    ({ chatId, ...command }) => {
-      const state = writeChatVariables(store, chatId, command);
-      publish(chatId);
-      return chatVariableView(store, chatId, state);
-    }
+    updateChatVariablesCommand,
+    createStorePorts(store, { publish })
   );
 }

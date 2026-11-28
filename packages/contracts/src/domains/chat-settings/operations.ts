@@ -1,5 +1,6 @@
 import { z } from 'zod/v4';
 import { defineOperation } from '../../endpoint.js';
+import { defineCommandOperation } from '../../split-operation.js';
 import { revision } from '../revision.js';
 import { nonBlank } from '../text.js';
 import { CHAT_VARIABLE_LIMITS, STORY_GUIDE_LIMITS } from './limits.js';
@@ -50,22 +51,56 @@ const chatOptionState = z.looseObject({
   conflicts: z.array(z.enum(['fixed_definition_changed', 'pending_definition_changed'])),
 });
 
-const variableValues = z
-  .record(z.string(), z.string().max(CHAT_VARIABLE_LIMITS.maxValueChars))
+const variableName = nonBlank(1000);
+const variableValues = keyedValues(z.string(), z.string().max(CHAT_VARIABLE_LIMITS.maxValueChars))
   .refine((values) => Object.keys(values).length <= CHAT_VARIABLE_LIMITS.maxEntries)
   .refine(
     (values) =>
       Object.values(values).reduce((total, value) => total + value.length, 0) <=
       CHAT_VARIABLE_LIMITS.maxTotalChars
   );
-export const writeVariablesInput = z.strictObject({
+export const writeVariablesHead = z.strictObject({
   chatId,
-  expectedRevision: revision,
-  expectedSourceHash: sha256.nullable(),
+  expectedRevision: revision.describe('revision from chat.variables.read.'),
+  expectedSourceHash: sha256
+    .nullable()
+    .describe('sourceHash from chat.variables.read, null for a chat without scenes.'),
   idempotencyKey: nonBlank(200),
+});
+export const writeVariablesReplaceBody = z.strictObject({
   values: variableValues,
 });
-export type ChatVariableCommand = Omit<z.output<typeof writeVariablesInput>, 'chatId'>;
+export const writeVariablesPatchBody = z
+  .strictObject({
+    set: keyedValues(variableName, z.string().max(CHAT_VARIABLE_LIMITS.maxValueChars))
+      .describe('Variable names and their new text values.')
+      .optional(),
+    unset: z
+      .array(variableName.refine((name) => !unsafeKeys.has(name), 'Reserved variable name'))
+      .max(CHAT_VARIABLE_LIMITS.maxEntries)
+      .describe('Variable names whose chat value is removed.')
+      .optional(),
+  })
+  .refine(
+    (input) => Object.keys(input.set ?? {}).length > 0 || (input.unset?.length ?? 0) > 0,
+    'Pass set or unset with at least one variable'
+  )
+  .refine((input) => {
+    const set = input.set ?? {};
+    return !(input.unset ?? []).some((name) => Object.hasOwn(set, name));
+  }, 'A variable cannot be named in both set and unset');
+export type ChatVariableCommand = Omit<z.output<typeof writeVariablesHead>, 'chatId'> &
+  z.output<typeof writeVariablesReplaceBody>;
+export type ChatVariableView = {
+  revision: number;
+  values: Record<string, string>;
+  defaults: Record<string, string>;
+  resolved: Record<string, string>;
+  origins?: Record<string, unknown>;
+  sourceHash: string | null;
+  pending: boolean;
+  variableDefaultsError?: 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT';
+};
 const variableView = z.looseObject({
   revision,
   values: z.record(z.string(), z.string()),
@@ -76,19 +111,70 @@ const variableView = z.looseObject({
 });
 
 const storyGuideConfig = z.strictObject({
-  enabled: z.boolean(),
-  work: z.string().max(STORY_GUIDE_LIMITS.work),
-  reference: z.string().max(STORY_GUIDE_LIMITS.reference),
-  position: z.string().max(STORY_GUIDE_LIMITS.position),
-  followCanon: z.boolean(),
-  webSearch: z.boolean().default(false),
+  enabled: z.boolean().describe('Run the automatic reference step.'),
+  work: z.string().max(STORY_GUIDE_LIMITS.work).describe('Original work and edition.'),
+  reference: z
+    .string()
+    .max(STORY_GUIDE_LIMITS.reference)
+    .describe('Reference text the user supplies about the work.'),
+  position: z
+    .string()
+    .max(STORY_GUIDE_LIMITS.position)
+    .describe('Where the reader is in the original work and the spoiler limit.'),
+  followCanon: z.boolean().describe('Consider canon events.'),
+  webSearch: z.boolean().default(false).describe('Allow the step to search the web.'),
 });
-export const updateStoryGuideInput = z.strictObject({
+export const updateStoryGuideHead = z.strictObject({
   chatId,
-  expectedRevision: revision,
+  expectedRevision: revision.describe(
+    'storyGuide.revision from source.writing.chat or context.read.'
+  ),
+});
+export const updateStoryGuideReplaceBody = z.strictObject({
   config: storyGuideConfig,
 });
-export type StoryGuideUpdate = Omit<z.output<typeof updateStoryGuideInput>, 'chatId'>;
+export const updateStoryGuidePatchBody = z.strictObject({
+  changes: z
+    .strictObject({
+      enabled: z.boolean().describe('Run the automatic reference step.').optional(),
+      work: z
+        .string()
+        .max(STORY_GUIDE_LIMITS.work)
+        .describe('Original work and edition.')
+        .optional(),
+      position: z
+        .string()
+        .max(STORY_GUIDE_LIMITS.position)
+        .describe('Where the reader is in the original work and the spoiler limit.')
+        .optional(),
+      reference: z
+        .string()
+        .max(STORY_GUIDE_LIMITS.reference)
+        .describe('Reference text the user supplies about the work.')
+        .optional(),
+      followCanon: z.boolean().describe('Consider canon events.').optional(),
+      webSearch: z.boolean().describe('Allow the step to search the web.').optional(),
+    })
+    .refine((changes) => Object.keys(changes).length > 0, 'Pass at least one change')
+    .describe('Only the settings to change.'),
+});
+export type StoryGuideUpdate = Omit<z.output<typeof updateStoryGuideHead>, 'chatId'> &
+  z.output<typeof updateStoryGuideReplaceBody>;
+export type StoryGuideDetailWire = {
+  revision: number;
+  config: z.output<typeof storyGuideConfig>;
+  brief: {
+    fingerprint: string;
+    text: string;
+    createdAt: string;
+    parentRevision: string | null;
+    configRevision: number;
+    runId?: string;
+    modelTitle: string;
+    webSearch?: unknown;
+  } | null;
+  latestRun?: { status: string; used: boolean; error?: string };
+};
 const storyGuideDetail = z.looseObject({ revision, config: storyGuideConfig });
 
 export const applyOrphanMemoryInput = z.strictObject({
@@ -116,38 +202,6 @@ const orphanMemoryDetail = z.looseObject({
   ),
 });
 
-const variableName = nonBlank(1000);
-export const updateVariablesToolInput = z
-  .strictObject({
-    expectedRevision: revision,
-    expectedSourceHash: z
-      .string()
-      .regex(/^[a-f0-9]{64}$/u, 'pass sourceHash from chat.variables.read')
-      .nullable(),
-    set: keyedValues(variableName, z.string()).optional(),
-    unset: z
-      .array(variableName.refine((name) => !unsafeKeys.has(name), 'Reserved variable name'))
-      .optional(),
-  })
-  .refine(
-    (input) => Object.keys(input.set ?? {}).length > 0 || (input.unset?.length ?? 0) > 0,
-    'Pass set or unset with at least one variable'
-  );
-
-export const updateStoryGuideToolInput = z.strictObject({
-  expectedRevision: revision,
-  changes: z
-    .strictObject({
-      enabled: z.unknown().optional(),
-      work: z.unknown().optional(),
-      position: z.unknown().optional(),
-      reference: z.unknown().optional(),
-      followCanon: z.unknown().optional(),
-      webSearch: z.unknown().optional(),
-    })
-    .refine((changes) => Object.keys(changes).length > 0, 'Pass at least one change'),
-});
-
 export const chatSettingsOperations = {
   readOptions: defineOperation('chat-settings.readOptions', chatTarget, chatOptionState),
   fixOptions: defineOperation('chat-settings.fixOptions', fixOptionsInput, chatOptionState),
@@ -158,17 +212,17 @@ export const chatSettingsOperations = {
     chatOptionState
   ),
   readVariables: defineOperation('chat-settings.readVariables', chatTarget, variableView),
-  writeVariables: defineOperation(
-    'chat-settings.writeVariables',
-    writeVariablesInput,
-    variableView
-  ),
+  writeVariables: defineCommandOperation<ChatVariableView>()({
+    name: 'chat-settings.writeVariables',
+    head: writeVariablesHead,
+    body: z.union([writeVariablesReplaceBody, writeVariablesPatchBody]),
+  }),
   readStoryGuide: defineOperation('chat-settings.readStoryGuide', chatTarget, storyGuideDetail),
-  updateStoryGuide: defineOperation(
-    'chat-settings.updateStoryGuide',
-    updateStoryGuideInput,
-    storyGuideDetail
-  ),
+  updateStoryGuide: defineCommandOperation<StoryGuideDetailWire>()({
+    name: 'chat-settings.updateStoryGuide',
+    head: updateStoryGuideHead,
+    body: z.union([updateStoryGuideReplaceBody, updateStoryGuidePatchBody]),
+  }),
   readOrphanMemory: defineOperation(
     'chat-settings.readOrphanMemory',
     chatTarget,

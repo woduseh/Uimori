@@ -166,7 +166,7 @@ export const chatSettingsCases = domainCases('chat-settings', {
   writeVariables: {
     cases: [
       {
-        when: 'a chat another tab deleted and values the service refuses',
+        when: 'a chat another tab deleted and a schema-invalid body',
         arrange: () => {
           const request = { expectedRevision: 0, expectedSourceHash: null };
           return {
@@ -174,7 +174,7 @@ export const chatSettingsCases = domainCases('chat-settings', {
               ...request,
               chatId: goneChatId(),
               idempotencyKey: randomUUID(),
-              values: { prototype: 'x' },
+              values: 'not-an-object',
             },
             control: {
               ...request,
@@ -192,9 +192,13 @@ export const chatSettingsCases = domainCases('chat-settings', {
   updateStoryGuide: {
     cases: [
       {
-        when: 'a chat another tab deleted',
+        when: 'a chat another tab deleted and a schema-invalid body',
         arrange: () => ({
-          input: { chatId: goneChatId(), expectedRevision: 0, config: guide },
+          input: {
+            chatId: goneChatId(),
+            expectedRevision: 0,
+            config: { enabled: 'not-a-boolean' },
+          },
           control: { chatId: chatId('Stale tab guide'), expectedRevision: 0, config: guide },
         }),
         answer: conflict,

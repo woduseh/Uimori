@@ -5,11 +5,14 @@ import {
   defaultStoryGuideConfig,
   normalizeStoryGuideConfig,
   type StoryGuideBrief,
+  type StoryGuideConfig,
+  type StoryGuideDetail,
   type StoryGuideState,
 } from '../core/story-guide.js';
 import type { RunSnapshot } from '../core/types.js';
 import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
+import { assertTx, type Tx } from './tx.js';
 
 export function initStoryGuide(db: DatabaseSync): void {
   db.exec(`CREATE TABLE IF NOT EXISTS chat_story_guides(
@@ -40,18 +43,68 @@ export class StoryGuideStore {
       : { revision: 0, config: defaultStoryGuideConfig(), brief: null };
   }
 
+  detail(chatId: string): StoryGuideDetail {
+    const state = this.get(chatId);
+    const writerIncludesGuide = `a.job_id IS NULL AND a.usage_kind='writing' AND
+      json_extract(a.request,'$.requestReceipt.storyGuide.status')='included'`;
+    const last = this.store.db
+      .prepare(
+        `SELECT r.status,COALESCE(json_extract(r.snapshot,'$.storyGuideReceipt'),
+          json_extract(r.snapshot,'$.storyGuide')) AS guide,
+          EXISTS (SELECT 1 FROM attempts a WHERE a.run_id=r.id AND ${writerIncludesGuide}) AS used
+          FROM runs r WHERE r.chat_id=? ORDER BY r.rowid DESC LIMIT 1`
+      )
+      .get(chatId);
+    const guide = last?.guide
+      ? (JSON.parse(String(last.guide)) as RunSnapshot['storyGuideReceipt'])
+      : undefined;
+    const lastWithBrief = this.store.db
+      .prepare(
+        `SELECT COALESCE(json_extract(r.snapshot,'$.storyGuideReceipt.brief'),json_extract(r.snapshot,'$.storyGuide.brief')) AS brief
+          FROM attempts a JOIN runs r ON r.id=a.run_id WHERE r.chat_id=? AND (
+            json_type(r.snapshot,'$.storyGuideReceipt.brief')='object' OR
+            json_type(r.snapshot,'$.storyGuide.brief')='object'
+          ) AND ${writerIncludesGuide} ORDER BY r.rowid DESC LIMIT 1`
+      )
+      .get(chatId);
+    return {
+      ...state,
+      brief: lastWithBrief
+        ? (JSON.parse(String(lastWithBrief.brief)) as StoryGuideDetail['brief'])
+        : null,
+      ...(guide
+        ? {
+            latestRun: {
+              status: String(last!.status),
+              used: !!guide.brief && last!.used === 1,
+              ...(guide.error ? { error: guide.error } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  private writeRow(chatId: string, revision: number, config: StoryGuideConfig): StoryGuideState {
+    this.store.db
+      .prepare(`INSERT INTO chat_story_guides(chat_id,revision,config,brief) VALUES(?,?,?,NULL)
+        ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,config=excluded.config`)
+      .run(chatId, revision, JSON.stringify(config));
+    this.store.event(chatId, 'story-guide.updated', chatId);
+    return this.get(chatId);
+  }
+
+  save(tx: Tx, chatId: string, revision: number, config: StoryGuideConfig): StoryGuideState {
+    assertTx(tx, this.store.db);
+    return this.writeRow(chatId, revision, config);
+  }
+
   update(chatId: string, { expectedRevision, config }: StoryGuideUpdate): StoryGuideState {
     return this.store.transaction(() => {
       this.store.writableChat(chatId);
       const current = this.get(chatId);
       if (current.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       if (isDeepStrictEqual(current.config, config)) return current;
-      this.store.db
-        .prepare(`INSERT INTO chat_story_guides(chat_id,revision,config,brief) VALUES(?,?,?,NULL)
-          ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,config=excluded.config`)
-        .run(chatId, current.revision + 1, JSON.stringify(config));
-      this.store.event(chatId, 'story-guide.updated', chatId);
-      return this.get(chatId);
+      return this.writeRow(chatId, current.revision + 1, config);
     });
   }
 
