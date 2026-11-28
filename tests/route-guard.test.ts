@@ -18,6 +18,7 @@ type RouteGroup = 'contract' | 'raw';
 
 const routeKindGroup: Record<RouteKind, RouteGroup> = {
   endpoint: 'contract',
+  command: 'contract',
 };
 
 type CapturedRoute = {
