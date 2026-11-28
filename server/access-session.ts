@@ -92,7 +92,6 @@ export class AccessSessions {
     const bearer = /^Bearer (\S+)$/iu.exec(authorization ?? '')?.[1];
     if (!bearer || !this.mcpAuthority) throw new HttpError(401, 'MCP token required');
     if (!timingSafeEqual(digest(bearer), this.mcpAuthority)) this.reject('MCP token rejected');
-    this.failures = 0;
   }
 
   login(value: string): { cookie: string } {

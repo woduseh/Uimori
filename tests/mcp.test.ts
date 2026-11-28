@@ -125,6 +125,22 @@ test('only the dedicated bearer token opens the MCP endpoint, and it opens nothi
   ).toBe(429);
 });
 
+test('a successful MCP call does not reset the browser login failure count', async () => {
+  const target = await app({ mcpToken });
+  const login = (token: string) =>
+    target.inject({
+      method: 'POST',
+      url: '/api/session',
+      headers: { host, origin },
+      payload: { token },
+    });
+  for (let attempt = 0; attempt < 9; attempt++)
+    expect((await login('wrong-access-token')).statusCode).toBe(401);
+  expect((await post(target, 'tools/list')).statusCode).toBe(200);
+  expect((await login('wrong-access-token')).statusCode).toBe(401);
+  expect((await login(accessToken)).statusCode).toBe(429);
+});
+
 test('a client edits a saved card through MCP without creating helper tasks', async () => {
   const target = await app({ mcpToken });
   const bot = target.store.product.content(
