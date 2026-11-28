@@ -107,7 +107,7 @@ const commandProbes: Record<keyof typeof allCommands, CommandProbe> = {
     endpoint: chatSettingsEndpoints.writeVariables,
     arrange(store) {
       const gone = createFixtureChat(store, 'Deleted variables chat');
-      deleteChat(store, gone.id, {});
+      deleteChat(store, gone.id);
       const live = createFixtureChat(store, 'Live variables chat');
       const source = completedSource(store, live.id, 'First scene');
       const receiptChat = createFixtureChat(store, 'Receipt variables chat');
@@ -178,7 +178,7 @@ const commandProbes: Record<keyof typeof allCommands, CommandProbe> = {
     endpoint: chatSettingsEndpoints.updateStoryGuide,
     arrange(store) {
       const gone = createFixtureChat(store, 'Deleted guide chat');
-      deleteChat(store, gone.id, {});
+      deleteChat(store, gone.id);
       const live = createFixtureChat(store, 'Live guide chat');
       return {
         deletedWithBrokenBody: {
@@ -688,7 +688,7 @@ test('helper commands answer 409 REVISION_CONFLICT on a deleted chat even with a
     limits: { totalCalls: 4, helperCalls: 4 },
   });
   workspace.start(task.id, 'owner-1');
-  deleteChat(store, chat.id, {});
+  deleteChat(store, chat.id);
 
   await expect(
     executeHelperCommand(
