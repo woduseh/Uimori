@@ -89,7 +89,7 @@ test('independent rewrites start from the copied checkpoint rather than later va
     revision: current.revision + 1,
     values: { mood: 'later' },
   });
-  const candidate = f.store.candidate(old.id, randomUUID(), 'Historical inputs').run;
+  const candidate = f.store.retryRun(old.id, randomUUID(), undefined, undefined, 'copy').run;
   expect(candidate.snapshot.profile).not.toHaveProperty('variableState');
   expect(readChatVariables(f.store, candidate.chatId)).toEqual({
     revision: 0,

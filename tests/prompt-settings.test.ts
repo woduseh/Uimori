@@ -769,7 +769,7 @@ describe('global working prompts and independent library copies', () => {
       prompt('main', 'Next current')
     );
     await apply(app, nextPreset);
-    const candidate = app.store.candidate(run.id, randomUUID(), 'Synthetic candidate').run;
+    const candidate = app.store.retryRun(run.id, randomUUID(), undefined, undefined, 'copy').run;
     expect(candidate.chatId).not.toBe(chat.id);
     expect(candidate.snapshot.profile!.promptPresets!.main!.program).toEqual(nextPreset.program);
     app.store.finishRun(candidate.id, 'cancelled', 'Synthetic');
