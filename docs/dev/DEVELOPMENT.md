@@ -157,7 +157,7 @@ The runner downloads both full exports through `/api/backup`, opens each in a fr
 
 Old/current comparisons use the reviewed classes in `scripts/snapshot-compat/rules/` for the resolved old commit. Each class names GET routes, status pairs, exact field paths, allowed changes and a reason. A path wildcard matches one array index. A derived Content-Length change is counted separately when all body changes are accepted and the headers agree with the wire sizes. Unknown old commits and both full restores use strict comparisons. The report lists unabsorbed differences, per-class counts and routes where every sampled pair returned a refusal. Equal refusals still count as comparisons.
 
-Chat re-import compares the content under its newly assigned identities. Only the known historical native greeting label is translated to its current wording when the greeting ID, mode and native text agree. An authored title change remains visible. Boot and shutdown checks also compare the exact push outbox expected after the local replay drops foreign-authority access sessions and their dependent rows. Other work-table changes and blocked calls fail the run.
+Chat re-import compares the content under its newly assigned identities. Stored first-message titles are compared verbatim, including historical default labels. Boot and shutdown checks also compare the exact push outbox expected after the local replay drops foreign-authority access sessions and their dependent rows. Other work-table changes and blocked calls fail the run.
 
 ## Release checks
 

@@ -84,7 +84,7 @@ test('illustration links follow their imported resource while a switched image r
   assert.notDeepEqual(portable(archive('old', 'portrait')), portable(archive('new', 'landscape')));
 });
 
-test('chat import accepts the historical projected greeting label and detects a replaced custom title', () => {
+test('chat import normalizes fresh revisions but reports any replaced start title', () => {
   const archive = (title) => ({
     manifest: {
       resources: {
@@ -115,6 +115,7 @@ test('chat import accepts the historical projected greeting label and detects a 
     modules: [],
     revision: 1,
   });
-  assert.deepEqual(portable(archive('기본 시작문'), true), portable(imported));
+  assert.deepEqual(portable(archive('기본 첫 메시지'), true), portable(imported));
+  assert.notDeepEqual(portable(archive('기본 시작문'), true), imported);
   assert.notDeepEqual(portable(archive('My opening'), true), imported);
 });

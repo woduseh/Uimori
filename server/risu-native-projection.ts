@@ -40,6 +40,7 @@ export function projectNativeRisuPackage(
   });
   findings.append(loreFindings.list);
   const imageHandoff = detectRisuImageHandoff(native, base.imageHandoff);
+  const startTitles = new Map(base.starts?.map(({ id, title }) => [id, title]));
   const pkg: RisuContent = {
     version: 2,
     id: base.id,
@@ -62,18 +63,14 @@ export function projectNativeRisuPackage(
     starts: [
       card.first_mes,
       ...(Array.isArray(card.alternate_greetings) ? card.alternate_greetings : []),
-    ].flatMap((value, index) =>
-      string(value).trim()
-        ? [
-            {
-              id: `start-${index}`,
-              title: index === 0 ? '기본 첫 메시지' : `첫 메시지 ${index + 1}`,
-              mode: 'authored' as const,
-              text: string(value),
-            },
-          ]
-        : []
-    ),
+    ].flatMap((value, index) => {
+      const greeting = string(value);
+      if (!greeting.trim()) return [];
+      const id = `start-${index}`;
+      const title =
+        startTitles.get(id) ?? (index === 0 ? '기본 첫 메시지' : `첫 메시지 ${index + 1}`);
+      return [{ id, title, mode: 'authored' as const, text: greeting }];
+    }),
     images: base.images ?? [],
     ...(base.portraitImageId ? { portraitImageId: base.portraitImageId } : {}),
     ...(base.modules ? { modules: base.modules } : {}),

@@ -55,11 +55,6 @@ export const normalization = [
     path: 'manifest.resources.contents.*.source.package.modules',
   },
   {
-    name: 'Historical native greeting labels from c6a8ce3d',
-    scope: 'chat-source',
-    path: 'manifest.resources.contents.*.source.package.starts.*.title',
-  },
-  {
     name: 'Inherited illustration profile identity',
     scope: 'chat',
     path: 'manifest.backup.chats.*.state.illustrationReferences.characterProfiles.*.id',
@@ -88,15 +83,6 @@ function projectedImport(body) {
   for (const entry of resources.contents) {
     const pkg = entry.source.package;
     if (!Object.hasOwn(pkg, 'modules') && entry.modules.length === 0) pkg.modules = [];
-    const card = pkg.nativeRisu?.card;
-    for (const start of pkg.starts ?? []) {
-      const match = /^start-(0|[1-9][0-9]*)$/u.exec(start.id);
-      if (!card || !match || start.mode !== 'authored') continue;
-      const i = Number(match[1]);
-      if (start.text !== (i === 0 ? card.first_mes : card.alternate_greetings?.[i - 1])) continue;
-      if (start.title === (i === 0 ? '기본 시작문' : `시작문 ${i + 1}`))
-        start.title = i === 0 ? '기본 첫 메시지' : `첫 메시지 ${i + 1}`;
-    }
   }
   for (const path of importedRevision.paths)
     normalize(body, path.split('.'), (revision) =>

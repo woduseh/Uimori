@@ -14,7 +14,7 @@ import { illustrationPresetCatalog } from '../server/illustration-presets.js';
 import { illustrationSettings } from '../server/illustrations.js';
 import { defaultIllustrationSettings } from '../core/illustration.js';
 import { deleteChat } from '../server/chat-deletion.js';
-import { uploadDirectory } from '../server/uploads.js';
+import { uploadDirectory, uploadRoutes } from '../server/uploads.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
 import { transferRoutes } from '../server/transfer-routes.js';
 import { importChatBackupArchiveRequest } from '../server/chat-backup.js';
@@ -48,6 +48,69 @@ function upload(store: Store, name: string) {
 }
 const lore = (content: Content) =>
   (content.package.nativeRisu.card.character_book as { entries: { content: string }[] }).entries;
+
+test('stored native greeting titles survive a full database restore and a chat archive import', async () => {
+  const source = database(gunzipSync(readFileSync(join(fixtures, 'snapshot.db.gz'))));
+  const [chat] = source.chats();
+  const [bot] = source.product.all('content') as Content[];
+  const starts = [
+    { id: 'start-0', title: '  부두에서 — 다시 만남  ', mode: 'authored' as const, text: '인사' },
+    { id: 'start-2', title: '', mode: 'authored' as const, text: '인사' },
+    { id: 'start-3', title: '시작문 4', mode: 'authored' as const, text: '마지막 인사' },
+  ];
+  bot.package.nativeRisu.card.first_mes = '인사';
+  bot.package.nativeRisu.card.alternate_greetings = ['', '인사', '마지막 인사', '새 인사'];
+  bot.package.starts = starts;
+  source.db
+    .prepare("UPDATE versions SET body=? WHERE kind='content' AND id=? AND revision=?")
+    .run(JSON.stringify(bot), bot.id, bot.revision);
+
+  const exporter = Fastify(),
+    importer = Fastify();
+  const target = database();
+  transferRoutes(exporter, source, () => {});
+  transferRoutes(importer, target, () => {});
+  uploadRoutes(importer, target.path);
+  try {
+    const full = await exporter.inject({ method: 'GET', url: '/api/backup' });
+    expect(full.statusCode).toBe(200);
+    const restored = database(full.rawPayload);
+    expect(restored.product.stored<Content>('content', bot.id).package.starts).toEqual(starts);
+
+    const archive = await exporter.inject({
+      method: 'GET',
+      url: `/api/chats/${chat.id}/backup-archive`,
+    });
+    expect(archive.statusCode).toBe(200);
+    const upload = await importer.inject({
+      method: 'POST',
+      url: '/api/uploads',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: archive.rawPayload,
+    });
+    expect(upload.statusCode).toBe(200);
+    const prepared = await importer.inject({
+      method: 'POST',
+      url: '/api/chats/prepare-backup-archive',
+      payload: { uploadId: upload.json().uploadId },
+    });
+    expect(prepared.statusCode).toBe(200);
+    const { preparedId, digest } = prepared.json();
+    const imported = await importer.inject({
+      method: 'POST',
+      url: '/api/chats/import-backup-archive',
+      payload: { preparedId, digest, idempotencyKey: 'horizon-start-titles' },
+    });
+    expect(imported.statusCode).toBe(200);
+    const [attachment] = target.product.profile(imported.json().chat.id).packageAttachments!;
+    expect(target.product.stored<Content>('content', attachment.id).package.starts).toEqual([
+      ...starts,
+      { id: 'start-4', title: '첫 메시지 5', mode: 'authored', text: '새 인사' },
+    ]);
+  } finally {
+    await Promise.all([exporter.close(), importer.close()]);
+  }
+});
 
 test('a v0.18.0 automatic backup, made in a worktree of tag v0.18.0, opens with its chat, search, library, presets and helper conversation', async () => {
   const snapshot = gunzipSync(readFileSync(join(fixtures, 'snapshot.db.gz')));
