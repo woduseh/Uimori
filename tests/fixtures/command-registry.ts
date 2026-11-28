@@ -1,4 +1,6 @@
+import { isAppErrorCode } from '#contracts';
 import type { Command } from '../../server/command.js';
+import { type AppPorts, createStorePorts } from '../../server/store-ports.js';
 import type { Store } from '../../server/store.js';
 import { analyzeSchema } from '../stale-tab/schema.js';
 
@@ -20,7 +22,7 @@ export type CommandException = {
 export type CommandSamplesFile = {
   samples: Record<string, (store: Store) => CommandSamples>;
   exceptions?: Record<string, CommandException>;
-  ports?: (store: Store, options: { publish: (chatId: string) => void }) => unknown;
+  ports?: (store: Store, base: AppPorts) => Record<string, unknown>;
 };
 
 export const defaultStaleAnswer = { statusCode: 409, code: 'REVISION_CONFLICT' };
@@ -107,7 +109,7 @@ export function registryProblems(
         problems.push(`${path}: exception for ${name}, whose samples live in another file`);
       const { revisions, targets } = analyzeSchema(command.op.head);
       const paths = new Set([...revisions, ...targets]);
-      if (!exception.staleAnswers && exception.noChatEvent === undefined)
+      if (!Object.keys(exception.staleAnswers ?? {}).length && exception.noChatEvent === undefined)
         problems.push(`${path}: ${name} lists an exception with no staleAnswers or noChatEvent`);
       for (const [stalePath, answer] of Object.entries(exception.staleAnswers ?? {})) {
         const label = `${path}: ${name} staleAnswers.${stalePath}`;
@@ -120,6 +122,12 @@ export function registryProblems(
           answer.code === defaultStaleAnswer.code
         )
           problems.push(`${label} repeats the default 409 REVISION_CONFLICT; remove it`);
+        if (!isAppErrorCode(answer.code))
+          problems.push(`${label} names ${answer.code}, which is not an app error code`);
+        if (answer.statusCode === 400 && answer.code === 'INVALID_REQUEST')
+          problems.push(
+            `${label} answers 400 INVALID_REQUEST, which the probe's broken body already produces; declare the answer the stale state itself gives`
+          );
         if (answer.reason.trim().length < reasonLength)
           problems.push(`${label} needs a reason of ${reasonLength}+ characters`);
       }
@@ -140,6 +148,15 @@ export function registryProblems(
 
 export const missingSamples = (name: string) =>
   `${name}: no samples. Add \`'${name}': (store) => ({ inputs, stale })\` to a file in tests/fixtures/command-samples/ (inputs cover every body branch; stale holds one maker per head path)`;
+
+export function buildPorts(
+  registered: Pick<RegisteredCommand, 'ports'>,
+  store: Store,
+  publish: (chatId: string) => void
+): never {
+  const base = createStorePorts(store, { publish });
+  return { ...base, ...registered.ports?.(store, base), events: base.events } as never;
+}
 
 export type RegisteredCommand = {
   name: string;
