@@ -138,6 +138,7 @@ async function bootRoutes(testMode: boolean): Promise<CapturedRoute[]> {
       dbPath: join(directory, 'app.sqlite'),
       buildId: 'route-guard',
       testMode,
+      mcpToken: 'route-guard-mcp-token-0000000000000000',
       onRoute: captureRoutes(routes),
     });
     await app.ready();
