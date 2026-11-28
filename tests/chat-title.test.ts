@@ -279,3 +279,26 @@ test('an enrollment without a supported locale fails before any title request', 
       .all(f.chat.id)
   ).toEqual([{ entity_id: f.run.id }]);
 });
+
+test('an opening restored from a chat archive never starts automatic title generation', async () => {
+  const f = setup(),
+    send = mockSend();
+  const snapshot = f.store.run(f.run.id).snapshot;
+  snapshot.nativeRisuAuthored = {
+    version: 1,
+    action: 'copied-opening',
+    greeting: true,
+    messages: [{ role: 'char', data: f.source.text }],
+  };
+  f.store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(snapshot), f.run.id);
+  f.service.afterSource(f.run.id);
+  await Promise.all(f.work);
+  expect(
+    f.store.db
+      .prepare("SELECT count(*) AS n FROM events WHERE chat_id=? AND kind='chat.title.started'")
+      .get(f.chat.id)
+  ).toEqual({ n: 0 });
+  expect(send).not.toHaveBeenCalled();
+});

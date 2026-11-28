@@ -408,12 +408,6 @@ test('a restored authored opening reads, numbers, exports and searches like the 
   expect(await reading(once.store, once.chatId)).toEqual(original);
   const twice = await restore(once.store, once.chatId, 'second-restore');
   expect(await reading(twice.store, twice.chatId)).toEqual(original);
-  const usage = twice.store.db
-    .prepare(
-      "SELECT COALESCE(SUM(json_extract(usage,'$.modelCalls')),0) AS calls FROM runs WHERE chat_id=?"
-    )
-    .get(twice.chatId) as { calls: number };
-  expect(usage.calls).toBe(0);
 });
 
 test('chat copies and backups preserve character appearances and remap only their owned images', async () => {
