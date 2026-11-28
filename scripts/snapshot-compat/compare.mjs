@@ -185,7 +185,7 @@ export function normalizedBody(template, body) {
     if (rule.route === shape(template)) normalize(body, rule.path.split('.'));
   return body;
 }
-export async function saveBackup(response, file) {
+async function saveBackup(response, file) {
   if (response.status !== 200) throw new Error('Backup export HTTP ' + response.status);
   await pipeline(response.body, createWriteStream(file, { mode: 0o600 }));
   const size = statSync(file).size;

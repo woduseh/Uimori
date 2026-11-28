@@ -25,7 +25,6 @@ import {
   normalization,
   portable,
   normalizedBody,
-  saveBackup,
   read,
 } from './snapshot-compat/compare.mjs';
 
@@ -104,12 +103,19 @@ async function restore(phase, name, source, baseline) {
   const url = '/api/backup';
   if (!source || !baseline)
     return skipped(phase, url, 'source or current comparison instance unavailable');
-  const size = await attempt(report, phase, url, () =>
-    request(source, url, (res) => saveBackup(res, file(name)))
+  const exported = await attempt(
+    report,
+    phase,
+    url,
+    async () => {
+      const response = await read(source, url, url, report, file(name));
+      if (response.status !== 200)
+        throw Object.assign(new Error('Backup export HTTP ' + response.status), { method: 'GET' });
+      return true;
+    },
+    source.name
   );
-  if (size === undefined)
-    return skipped(phase, url, 'restore comparison requires a complete backup export');
-  report.bytes += size;
+  if (!exported) return skipped(phase, url, 'restore comparison requires a complete backup export');
   const restored = await attempt(report, phase, null, () => start(root, name), name);
   if (!restored) return skipped(phase, url, 'restored instance unavailable');
   await compare(phase, baseline, restored, report, tmp);
