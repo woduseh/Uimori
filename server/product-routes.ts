@@ -23,7 +23,6 @@ import { transferRoutes } from './transfer-routes.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
 import { promptRoutes } from './prompt-routes.js';
-import { managementImpact } from './provider-management.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
 import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
@@ -120,15 +119,6 @@ export function productRoutes(
     providerEndpoints.validateVertexCredential,
     providerOperations.validateVertexCredential,
     ({ serviceAccount }) => inspectVertexAccount(serviceAccount)
-  );
-  app.get<{ Params: { kind: string; id: string } }>(
-    '/api/provider-management/:kind/:id/impact',
-    async (request) => {
-      if (request.params.kind !== 'connection' && request.params.kind !== 'model')
-        throw new HttpError(404, 'Unsupported management kind');
-      product.assertAvailable(request.params.kind, request.params.id);
-      return managementImpact(product, request.params.kind, request.params.id);
-    }
   );
   app.get<{ Params: { id: string } }>('/api/content/:id', async (request) => {
     return product.available('content', request.params.id);

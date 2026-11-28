@@ -91,8 +91,8 @@ test('outside test mode, generation, translation and candidate requests with no 
   }
   const response = await app.inject({
     method: 'POST',
-    url: `/api/runs/${run.id}/candidate`,
-    payload: { idempotencyKey: randomUUID() },
+    url: `/api/runs/${run.id}/retry`,
+    payload: { idempotencyKey: randomUUID(), mode: 'copy' },
   });
   expect(response.statusCode).toBe(409);
   expect(response.json()).toEqual({ code: 'MODEL_REQUIRED', params: { role: 'main' } });

@@ -59,9 +59,9 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
   const firstRun = makeRun(first.id);
   const secondRun = makeRun(second.id);
   store.startRun(secondRun.id);
-  const initial = await app.inject('/api/chat-activities');
+  const initial = await app.inject('/api/activity-feed');
   expect(initial.statusCode).toBe(200);
-  expect(initial.json()).toEqual(
+  expect(initial.json().running).toEqual(
     [first.id, second.id].sort().map((chatId) => ({ chatId, kind: 'main', count: 1 }))
   );
   store.startRun(firstRun.id);
@@ -84,7 +84,7 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
   add(source.hash, 'running');
   add(source.hash, 'failed');
   add('old-source-hash', 'running');
-  const active = (await app.inject('/api/chat-activities')).json();
+  const active = (await app.inject('/api/activity-feed')).json().running;
   expect(active).toEqual(
     [
       { chatId: first.id, kind: 'translation', count: 2 },
@@ -93,7 +93,7 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
   );
   expect(JSON.stringify(active)).not.toContain('Private');
   store.editSource(source.id, { text: 'New source text', expectedRevision: 0 });
-  expect((await app.inject('/api/chat-activities')).json()).toEqual([
+  expect((await app.inject('/api/activity-feed')).json().running).toEqual([
     { chatId: second.id, kind: 'main', count: 1 },
   ]);
 });

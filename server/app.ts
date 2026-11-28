@@ -60,7 +60,6 @@ import { chatEventResume, createChatEventStreams } from './chat-event-stream.js'
 import { createLiveHub, LIVE_FRAME_EVENTS, type LiveFrameEvent } from './live-events.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { dismissReaderRun } from './run-reader-state.js';
-import { chatActivities } from './chat-activity.js';
 import { activityFeed, acknowledgedActivities, acknowledgeActivities } from './activity-feed.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
@@ -1166,7 +1165,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     vertexRequestTier: options.vertexRequestTier ?? null,
   }));
   app.get('/api/chats', async () => store.chats());
-  app.get('/api/chat-activities', async () => chatActivities(store));
   app.get('/api/activity-feed', async () => activityFeed(store));
   app.get<{ Params: { id: string } }>(
     '/api/chats/:id/activity-acknowledgements',
@@ -1352,21 +1350,6 @@ export async function createApp(options: AppOptions): Promise<App> {
       return runResponse(request.headers.prefer, result.run);
     }
   );
-  app.post<{ Params: { id: string } }>('/api/runs/:id/candidate', async (request) => {
-    const body: RecordBody = record(request.body);
-    fields(body, ['idempotencyKey', 'title']);
-    const result = store.candidate(
-      request.params.id,
-      text(body.idempotencyKey, 'idempotency key', 120),
-      body.title === undefined ? '후보 분기' : chatTitle(body.title),
-      (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
-    );
-    if (result.created) {
-      publish(result.run.chatId);
-      execute(result.run.id);
-    }
-    return runResponse(request.headers.prefer, result.run);
-  });
   app.post<{ Params: { id: string } }>('/api/runs/:id/rejudge', async (request) => {
     const body = record(request.body);
     fields(body, ['idempotencyKey']);
