@@ -47,6 +47,7 @@ import {
   helperCall,
   helperDone,
   runScriptedChatHelper,
+  runScriptedHelper,
   selectFixtureModels,
 } from './fixtures/scripted-helper.js';
 
@@ -1028,6 +1029,51 @@ test('helper commands answer 409 REVISION_CONFLICT on a deleted chat even with a
   expect(
     store.db.prepare('SELECT COUNT(*) AS n FROM outline_batches WHERE chat_id=?').get(chat.id)
   ).toEqual({ n: 0 });
+
+  const dispatched = await runScriptedHelper(
+    store,
+    { kind: 'library', workId: 'deleted-chat-dispatch' },
+    [
+      helperCall('outline-write-deleted', 'outline.write', {
+        chatId: chat.id,
+        operations: 'not-an-array',
+        extra: 1,
+      }),
+      helperCall('vars-write-deleted', 'chat.variables.update', {
+        chatId: chat.id,
+        expectedRevision: 0,
+        expectedSourceHash: null,
+        set: {},
+      }),
+      helperCall('outline-read-deleted', 'outline.read', { chatId: chat.id }),
+      helperDone,
+    ]
+  );
+  expect(dispatched.finished('outline-write-deleted')).toMatchObject({
+    denied: true,
+    errorCode: 'REVISION_CONFLICT',
+  });
+  expect(dispatched.finished('vars-write-deleted')).toMatchObject({
+    denied: true,
+    errorCode: 'REVISION_CONFLICT',
+  });
+  expect(dispatched.finished('outline-read-deleted')).toMatchObject({
+    denied: true,
+    errorCode: 'LIBRARY_ITEM_DELETED',
+  });
+  expect(
+    store.db
+      .prepare('SELECT COUNT(*) AS n FROM helper_changes WHERE task_id=?')
+      .get(dispatched.task.id)
+  ).toEqual({ n: 0 });
+  expect(
+    store.db
+      .prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?')
+      .get(dispatched.task.id)
+  ).toEqual({ n: 0 });
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM outline_batches WHERE chat_id=?').get(chat.id)
+  ).toEqual({ n: 0 });
 });
 
 test('HTTP and helper produce the same stored state, compact receipt, and error codes for outline.apply', async () => {
@@ -1062,15 +1108,23 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
     payload: { idempotencyKey: randomUUID(), operations: initialBatch },
   });
   expect(httpCreate.statusCode, httpCreate.body).toBe(200);
-  const httpCreated = httpCreate.json<OutlineApplyResult>().created;
+  const httpCreateBody = httpCreate.json<OutlineApplyResult>();
+  const httpCreated = httpCreateBody.created;
+  expect(httpCreateBody.detail.chatId).toBe(httpChat.id);
+  expect(httpCreateBody.detail.nodes.map((node) => node.title)).toEqual(['1부', '1화', '2화']);
 
   const chatChanged = vi.fn();
+  const detailSpy = vi.spyOn(app.store.outline, 'detail').mockImplementation(() => {
+    throw new Error('full detail not allowed');
+  });
   const helperCreate = await runScriptedChatHelper(
     app.store,
     helperChat.id,
     [helperCall('seed', 'outline.write', { operations: initialBatch as never }), helperDone],
     { chatChanged }
   );
+  expect(detailSpy).not.toHaveBeenCalled();
+  detailSpy.mockRestore();
   expect(helperCreate.finished('seed')).toMatchObject({ denied: false });
   const toolEvent = (
     helperCreate.requests[1]!.input.results as unknown as Array<{
@@ -1135,10 +1189,18 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
     payload: { idempotencyKey: randomUUID(), operations: followUp(httpEp1, httpEp2) },
   });
   expect(httpFollow.statusCode, httpFollow.body).toBe(200);
+  expect(httpFollow.json<OutlineApplyResult>().detail.nodes).toEqual(
+    app.store.outline.nodes(httpChat.id)
+  );
+  const followDetailSpy = vi.spyOn(app.store.outline, 'detail').mockImplementation(() => {
+    throw new Error('full detail not allowed');
+  });
   const helperFollow = await runScriptedChatHelper(app.store, helperChat.id, [
     helperCall('follow', 'outline.write', { operations: followUp(helperEp1, helperEp2) as never }),
     helperDone,
   ]);
+  expect(followDetailSpy).not.toHaveBeenCalled();
+  followDetailSpy.mockRestore();
   expect(helperFollow.finished('follow')).toMatchObject({ denied: false });
   expect(shapeOf(httpChat.id)).toEqual(shapeOf(helperChat.id));
 
@@ -1147,6 +1209,7 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
     name: string;
     body: (ep1: string, ep2: string) => Record<string, unknown>;
     expectedCode: string;
+    expectedParams?: Record<string, unknown>;
   }> = [
     {
       name: 'stale-revision-atomic-rollback',
@@ -1173,6 +1236,17 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
         operations: [{ op: 'update', id: ep1, expectedRevision: 2, relatedIds: tooManyRelated }],
       }),
       expectedCode: 'OUTLINE_RELATED_TOO_MANY',
+      expectedParams: { limit: 40 },
+    },
+    {
+      name: 'related-too-many-duplicate',
+      body: (ep1, ep2) => ({
+        operations: [
+          { op: 'update', id: ep1, expectedRevision: 2, relatedIds: Array(41).fill(ep2) },
+        ],
+      }),
+      expectedCode: 'OUTLINE_RELATED_TOO_MANY',
+      expectedParams: { limit: 40 },
     },
     {
       name: 'empty-operations',
@@ -1216,17 +1290,34 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
     }),
     helperDone,
   ]);
+  const helperToolEvents = helperErrors.requests.flatMap(
+    (request) =>
+      (request.input.results as unknown as Array<{
+        callId: string;
+        result: Record<string, unknown>;
+      }>) ?? []
+  );
   for (const entry of errorCases) {
     const httpRes = await app.inject({
       method: 'POST',
       url: `/api/chats/${httpChat.id}/outline`,
       payload: { idempotencyKey: randomUUID(), ...entry.body(httpEp1, httpEp2) },
     });
-    expect(httpRes.json().code, `HTTP ${entry.name}`).toBe(entry.expectedCode);
+    const httpJson = httpRes.json();
+    expect(httpJson.code, `HTTP ${entry.name}`).toBe(entry.expectedCode);
+    if (entry.expectedParams)
+      expect(httpJson.params, `HTTP params ${entry.name}`).toEqual(entry.expectedParams);
     expect(helperErrors.finished(entry.name), `Helper ${entry.name}`).toMatchObject({
       denied: true,
       errorCode: entry.expectedCode,
     });
+    if (entry.expectedParams) {
+      const event = helperToolEvents.find((item) => item.callId === entry.name);
+      expect(event?.result, `Helper params ${entry.name}`).toMatchObject({
+        code: entry.expectedCode,
+        params: entry.expectedParams,
+      });
+    }
   }
   expect(helperErrors.finished('spoof-idempotency')).toMatchObject({
     denied: true,
@@ -1508,6 +1599,17 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     },
   });
 
+  const _checkSyncProject = defineCommand<Pick<AppPorts, 'tx'>, { compact: boolean }>()(op, {
+    guard() {},
+    apply() {
+      return { compact: true };
+    },
+    // @ts-expect-error project runs inside synchronous SQLite transaction and cannot be async
+    async project() {
+      throw new AppError(400, 'INVALID_REQUEST');
+    },
+  });
+
   const _checkSyncOnInTx = () =>
     executeOperation(
       updateStoryGuideCommand,
@@ -1560,9 +1662,10 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     _checkSyncGuard,
     _checkSyncGuardVoid,
     _checkSyncApply,
+    _checkSyncProject,
     _checkSyncOnInTx,
     _checkSyncAroundApply,
-  ]).toHaveLength(6);
+  ]).toHaveLength(7);
 });
 
 test('registerCommand keeps prepare signal alive after request body completes and aborts only on early client disconnect', async () => {

@@ -33,32 +33,38 @@ function plainRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export type ReceiptSpec<Op extends AnySplitOperation, P, R = ReceiptRecord> = {
+export type ReceiptSpec<
+  Op extends AnySplitOperation,
+  P,
+  R = ReceiptRecord,
+  A = OperationOutput<Op>,
+> = {
   readonly adapter?: 'import';
   readonly store?: (ports: P) => ReceiptPort<R>;
   readonly scope: (head: OperationHead<Op>) => string;
   readonly key: (head: OperationHead<Op>) => string;
   readonly digest?: (head: OperationHead<Op>, raw: Record<string, unknown>) => string;
   readonly conflictMessage?: string;
-  readonly serialize: (output: OperationOutput<Op>, input: OperationParsedInput<Op>) => R;
+  readonly serialize: (applied: NoInfer<A>, input: OperationParsedInput<Op>) => R;
   readonly onReplay: (
     tx: Tx | null,
     ports: P,
     record: R,
     head: OperationHead<Op>
-  ) => SynchronousResult<OperationOutput<Op>>;
+  ) => SynchronousResult<A>;
 };
 
-export type CommandSpec<
+type BaseCommandSpec<
   Op extends AnySplitOperation,
   P extends Pick<AppPorts, 'tx'>,
   G,
   Prep,
-  R = ReceiptRecord,
+  R,
+  A,
 > = {
   readonly receipt?: P extends Pick<AppPorts, 'tx' | 'receipt'>
-    ? ReceiptSpec<Op, P, R>
-    : ReceiptSpec<Op, P, R> & { readonly store: (ports: P) => ReceiptPort<R> };
+    ? ReceiptSpec<Op, P, R, A>
+    : ReceiptSpec<Op, P, R, A> & { readonly store: (ports: P) => ReceiptPort<R> };
   readonly prepare?: (
     ports: P,
     head: OperationHead<Op>,
@@ -72,22 +78,39 @@ export type CommandSpec<
     input: OperationParsedInput<Op>,
     guarded: G,
     prepared: Prep
-  ) => SynchronousResult<OperationOutput<Op>>;
+  ) => SynchronousResult<A>;
   readonly afterCommit?: (
     ports: P,
-    output: OperationOutput<Op>,
+    output: NoInfer<A>,
     input: OperationParsedInput<Op>,
     guarded: G,
     prepared: Prep
   ) => void | Promise<void>;
 };
 
+export type CommandSpec<
+  Op extends AnySplitOperation,
+  P extends Pick<AppPorts, 'tx'>,
+  G,
+  Prep,
+  R = ReceiptRecord,
+  A = OperationOutput<Op>,
+> = BaseCommandSpec<Op, P, G, Prep, R, A> & {
+  readonly project?: (
+    tx: Tx | null,
+    ports: P,
+    applied: NoInfer<A>,
+    head: OperationHead<Op>
+  ) => SynchronousResult<OperationOutput<Op>>;
+};
+
 export type Command<
   Op extends AnySplitOperation = AnySplitOperation,
   P extends Pick<AppPorts, 'tx'> = AppPorts,
+  A = any,
 > = {
   readonly op: Op;
-  readonly receipt?: ReceiptSpec<Op, P, any>;
+  readonly receipt?: ReceiptSpec<Op, P, any, A>;
   readonly prepare?: (
     ports: P,
     head: OperationHead<Op>,
@@ -101,37 +124,59 @@ export type Command<
     input: OperationParsedInput<Op>,
     guarded: any,
     prepared: any
+  ) => SynchronousResult<A>;
+  readonly project?: (
+    tx: Tx | null,
+    ports: P,
+    applied: A,
+    head: OperationHead<Op>
   ) => SynchronousResult<OperationOutput<Op>>;
   readonly afterCommit?: (
     ports: P,
-    output: OperationOutput<Op>,
+    output: A,
     input: OperationParsedInput<Op>,
     guarded: any,
     prepared: any
   ) => void | Promise<void>;
 };
 
-export function defineCommand<P extends Pick<AppPorts, 'tx'> = Pick<AppPorts, 'tx'>>() {
+type ResolvedApplied<Op extends AnySplitOperation, A> = [A] extends [never]
+  ? OperationOutput<Op>
+  : A;
+
+export function defineCommand<P extends Pick<AppPorts, 'tx'> = Pick<AppPorts, 'tx'>, A = never>() {
   return <Op extends AnySplitOperation, G = void, Prep = void, R = ReceiptRecord>(
     op: Op,
-    spec: CommandSpec<Op, P, G, Prep, R>
-  ): Command<Op, P> => ({ op, ...spec });
+    spec: BaseCommandSpec<Op, P, G, Prep, R, ResolvedApplied<Op, A>> &
+      ([A] extends [never]
+        ? { readonly project?: undefined }
+        : {
+            readonly project: (
+              tx: Tx | null,
+              ports: P,
+              applied: A,
+              head: OperationHead<Op>
+            ) => SynchronousResult<OperationOutput<Op>>;
+          })
+  ): Command<Op, P, ResolvedApplied<Op, A>> => ({ op, ...spec });
 }
 
-export type CommandInTxOutcome<Op extends AnySplitOperation> =
-  | { readonly replayed: true; readonly output: OperationOutput<Op> }
+export type CommandInTxOutcome<Op extends AnySplitOperation, Output = OperationOutput<Op>> =
+  | { readonly replayed: true; readonly output: Output }
   | {
       readonly replayed: false;
-      readonly output: OperationOutput<Op>;
+      readonly output: Output;
       readonly input: OperationParsedInput<Op>;
     };
 
 export type CommandContext<
   Op extends AnySplitOperation = AnySplitOperation,
   OnInTxReturn = void,
+  Output = OperationOutput<Op>,
 > = {
   readonly signal?: AbortSignal;
   readonly checkOutputs?: boolean;
+  readonly skipProject?: boolean;
   readonly bodySchema?: z.ZodType<OperationBody<Op>>;
   readonly aroundTx?: <T>(
     run: () => SynchronousResult<T>
@@ -141,7 +186,10 @@ export type CommandContext<
     input: OperationParsedInput<Op>,
     run: () => SynchronousResult<T>
   ) => SynchronousResult<T>;
-  readonly onInTx?: (tx: Tx, outcome: CommandInTxOutcome<Op>) => SynchronousResult<OnInTxReturn>;
+  readonly onInTx?: (
+    tx: Tx,
+    outcome: CommandInTxOutcome<Op, Output>
+  ) => SynchronousResult<OnInTxReturn>;
 };
 
 function assertSyncReturn(value: unknown, phase: string): void {
@@ -168,8 +216,8 @@ function enforceOutput<Op extends AnySplitOperation>(
   return output;
 }
 
-function buildReceiptLookup<Op extends AnySplitOperation, P, R>(
-  receipt: ReceiptSpec<Op, P, R>,
+function buildReceiptLookup<Op extends AnySplitOperation, P, R, A>(
+  receipt: ReceiptSpec<Op, P, R, A>,
   head: OperationHead<Op>,
   raw: Record<string, unknown>
 ): ReceiptLookup {
@@ -185,12 +233,13 @@ function buildReceiptLookup<Op extends AnySplitOperation, P, R>(
 export async function executeOperation<
   Op extends AnySplitOperation,
   P extends Pick<AppPorts, 'tx'>,
+  A = OperationOutput<Op>,
   OnInTxReturn = void,
 >(
-  command: Command<Op, P>,
+  command: Command<Op, P, A>,
   ports: P,
   rawInput: unknown,
-  ctx: CommandContext<Op, OnInTxReturn> = {}
+  ctx: CommandContext<Op, OnInTxReturn, any> = {}
 ): Promise<OperationOutput<Op>> {
   try {
     const raw = plainRecord(rawInput);
@@ -202,6 +251,17 @@ export async function executeOperation<
     const receiptStore = command.receipt
       ? (command.receipt.store?.(ports) ?? (ports as P & Pick<AppPorts, 'receipt'>).receipt)
       : undefined;
+    const shouldProject =
+      command.project !== undefined && (!ctx.skipProject || command.op.outputPolicy === 'always');
+    const finalizeOutput = (tx: Tx | null, applied: A) => {
+      if (shouldProject) {
+        const projected = command.project!(tx, ports, applied, head);
+        assertSyncReturn(projected, 'project');
+        return enforceOutput(command.op, projected, ctx.checkOutputs);
+      }
+      if (command.project !== undefined) return applied;
+      return enforceOutput(command.op, applied as unknown as OperationOutput<Op>, ctx.checkOutputs);
+    };
 
     const fastReplay = !ctx.aroundTx && !ctx.onInTx;
     let prior =
@@ -220,26 +280,23 @@ export async function executeOperation<
         preparationFailure = { error };
       }
     }
-    if (prior !== undefined && command.receipt && fastReplay)
-      return enforceOutput(
-        command.op,
-        command.receipt.onReplay(null, ports, prior, head),
-        ctx.checkOutputs
-      );
+    if (prior !== undefined && command.receipt && fastReplay) {
+      const applied = command.receipt.onReplay(null, ports, prior, head);
+      assertSyncReturn(applied, 'onReplay');
+      return finalizeOutput(null, applied) as OperationOutput<Op>;
+    }
 
     const runInTx = () =>
       ports.tx.transaction((tx) => {
         if (command.receipt && receiptLookup && receiptStore) {
           const prior = receiptStore.read(tx, receiptLookup);
           if (prior !== undefined) {
-            const output = enforceOutput(
-              command.op,
-              command.receipt.onReplay(tx, ports, prior, head),
-              ctx.checkOutputs
-            );
+            const applied = command.receipt.onReplay(tx, ports, prior, head);
+            assertSyncReturn(applied, 'onReplay');
+            const output = finalizeOutput(tx, applied);
             const outcome = { replayed: true as const, output };
             assertSyncReturn(ctx.onInTx?.(tx, outcome), 'onInTx');
-            return outcome;
+            return { ...outcome, applied };
           }
         }
         if (preparationFailure) throw preparationFailure.error;
@@ -250,20 +307,20 @@ export async function executeOperation<
           ? ctx.aroundApply(tx, input, () => command.apply(tx, ports, input, guarded, prepared))
           : command.apply(tx, ports, input, guarded, prepared);
         assertSyncReturn(applied, ctx.aroundApply ? 'aroundApply' : 'apply');
-        const output = enforceOutput(command.op, applied, ctx.checkOutputs);
+        const output = finalizeOutput(tx, applied);
         if (command.receipt && receiptLookup && receiptStore)
-          receiptStore.save(tx, receiptLookup, command.receipt.serialize(output, input));
+          receiptStore.save(tx, receiptLookup, command.receipt.serialize(applied, input));
         const outcome = { replayed: false as const, output, input, guarded };
         assertSyncReturn(ctx.onInTx?.(tx, outcome), 'onInTx');
-        return outcome;
+        return { ...outcome, applied };
       });
 
     const outcome = ctx.aroundTx ? ctx.aroundTx(runInTx) : runInTx();
     if (outcome === EXTERNAL_REPLAY) return undefined as OperationOutput<Op>;
 
     if (!outcome.replayed && command.afterCommit)
-      await command.afterCommit(ports, outcome.output, outcome.input, outcome.guarded, prepared);
-    return outcome.output;
+      await command.afterCommit(ports, outcome.applied, outcome.input, outcome.guarded, prepared);
+    return outcome.output as OperationOutput<Op>;
   } catch (error) {
     throw asAppError(error);
   }

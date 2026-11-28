@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, vi } from 'vitest';
+import type { HelperScope } from '../../core/helper.js';
 import * as transport from '../../core/transport.js';
 import {
   HelperRuntime,
@@ -55,9 +56,9 @@ export function selectFixtureModels(store: Store) {
   return model;
 }
 
-export async function runScriptedChatHelper(
+export async function runScriptedHelper(
   store: Store,
-  chatId: string,
+  scope: HelperScope,
   steps: transport.ProviderResult[],
   services: HelperServices = {},
   options: HelperRequestOptions & { request?: string } = {}
@@ -90,7 +91,7 @@ export async function runScriptedChatHelper(
     streams: new ResponseStreamStore(store),
     services,
   });
-  const conversation = runtime.workspace.open({ kind: 'chat', chatId });
+  const conversation = runtime.workspace.open(scope);
   const { request = 'Scripted helper request', ...requestOptions } = options;
   const task = runtime.enqueue(
     conversation.id,
@@ -121,4 +122,14 @@ export async function runScriptedChatHelper(
     runtime,
     task: runtime.workspace.task(task.id),
   };
+}
+
+export function runScriptedChatHelper(
+  store: Store,
+  chatId: string,
+  steps: transport.ProviderResult[],
+  services: HelperServices = {},
+  options: HelperRequestOptions & { request?: string } = {}
+) {
+  return runScriptedHelper(store, { kind: 'chat', chatId }, steps, services, options);
 }

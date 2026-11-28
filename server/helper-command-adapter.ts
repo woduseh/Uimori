@@ -42,9 +42,10 @@ export type HelperCommandFormatContext = {
 export type HelperCommandTool<
   Op extends AnySplitOperation = AnySplitOperation,
   P extends Pick<AppPorts, 'tx'> = AppPorts,
+  A = any,
 > = {
   readonly tool: ProviderTool;
-  readonly command: Command<Op, P>;
+  readonly command: Command<Op, P, A>;
   readonly schemaBody: z.ZodType<OperationBody<Op>>;
   readonly omitHeadKeys: readonly string[];
   readonly injectIdempotencyKey?: boolean;
@@ -53,7 +54,7 @@ export type HelperCommandTool<
     context: { readonly chatId: string }
   ) => HelperChangeTarget | undefined;
   readonly formatResult: (
-    outcome: CommandInTxOutcome<Op>,
+    outcome: CommandInTxOutcome<Op, A>,
     context: HelperCommandFormatContext
   ) => {
     readonly toolOutput: Record<string, unknown>;
@@ -64,17 +65,18 @@ export type HelperCommandTool<
 export function defineHelperCommandTool<
   Op extends AnySplitOperation,
   P extends Pick<AppPorts, 'tx'>,
+  A,
   B extends z.ZodObject<z.ZodRawShape> & z.ZodType<OperationBody<Op>>,
 >(spec: {
   readonly name: string;
   readonly description: string;
-  readonly command: Command<Op, P>;
+  readonly command: Command<Op, P, A>;
   readonly schemaBody: B;
   readonly omitHeadKeys: readonly (keyof Op['head']['shape'] & string)[];
   readonly injectIdempotencyKey?: boolean;
-  readonly changeTarget?: HelperCommandTool<Op, P>['changeTarget'];
-  readonly formatResult: HelperCommandTool<Op, P>['formatResult'];
-}): HelperCommandTool<Op, P> {
+  readonly changeTarget?: HelperCommandTool<Op, P, A>['changeTarget'];
+  readonly formatResult: HelperCommandTool<Op, P, A>['formatResult'];
+}): HelperCommandTool<Op, P, A> {
   return {
     tool: {
       name: spec.name,
@@ -156,6 +158,7 @@ export async function executeHelperCommand(
   let resultOutput: Record<string, unknown> | undefined;
   await executeOperation(entry.command, ports, rawInput, {
     signal,
+    skipProject: true,
     bodySchema: entry.schemaBody,
     aroundTx: (run) => {
       let ran = false;
