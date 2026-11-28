@@ -1,7 +1,12 @@
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import type { NativeLuaWorkerLimits, NativeLuaWorkerMessage } from './risu-lua-protocol.js';
+import type {
+  NativeLuaHostReply,
+  NativeLuaWorkerInput,
+  NativeLuaWorkerLimits,
+  NativeLuaWorkerMessage,
+} from './risu-lua-protocol.js';
 
 export const NATIVE_LUA_LIMITS: NativeLuaWorkerLimits = {
   cpuMs: 1_000,
@@ -148,7 +153,7 @@ class Session {
             id: value.id,
             ok: true,
             json: json(result, value.method === 'cbs'),
-          });
+          } satisfies NativeLuaHostReply);
       } catch (error) {
         current.hostFailure = error;
         if (!this.closed)
@@ -157,7 +162,7 @@ class Session {
             id: value.id,
             ok: false,
             code: 'RISU_NATIVE_HOST_UNAVAILABLE',
-          });
+          } satisfies NativeLuaHostReply);
       } finally {
         this.pending = false;
         if (!this.closed) this.watch(60_000);
@@ -205,7 +210,7 @@ class Session {
               historyJSON: json(history, true),
               limits: NATIVE_LUA_LIMITS,
               hostErrorCodes: ['RISU_NATIVE_HOST_UNAVAILABLE'],
-            },
+            } satisfies NativeLuaWorkerInput,
             resourceLimits: {
               maxOldGenerationSizeMb: 256,
               maxYoungGenerationSizeMb: 32,
@@ -225,7 +230,7 @@ class Session {
             json: json(input, true),
             historyJSON: json(history, true),
             resetBudget: true,
-          });
+          } satisfies NativeLuaHostReply);
           this.waitingId = undefined;
         }
       } catch (error) {
