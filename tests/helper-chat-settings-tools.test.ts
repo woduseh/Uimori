@@ -613,6 +613,12 @@ test('scene.context.update hides a scene, replaces its request and reports the n
     sceneEnabled: false,
   });
   expect(run.finished('stale')).toMatchObject({ denied: true });
+  expect(run.results).toMatchObject([
+    {
+      operation: 'scene.context.update',
+      targets: [{ kind: 'scene', id: sourceId, setting: 'scene.context' }],
+    },
+  ]);
   expect(sceneUpdated).toHaveBeenCalledWith(sourceId);
   expect((output(run, 'read') as { messages: unknown[] }).messages).toEqual([
     expect.objectContaining({
@@ -661,6 +667,10 @@ test('chat.bookmark adds, renames and deletes bookmarks of the selected chat onl
     helperDone,
   ]);
   expect(second.finished('rename')).toMatchObject({ denied: false });
+  expect(second.results.map((result) => result.targets[0]?.setting)).toEqual([
+    'chat.bookmark',
+    'chat.bookmark',
+  ]);
   expect(second.finished('missing')).toMatchObject({
     denied: true,
     errorCode: 'BOOKMARK_NOT_FOUND',

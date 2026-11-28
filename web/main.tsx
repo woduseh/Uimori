@@ -1082,15 +1082,15 @@ function App() {
     } else if (target.kind === 'translation' && target.chatId) {
       s.openTarget({ chatId: target.chatId, sourceId: target.id, representation: 'translation' });
       setPanel('');
-    } else if (target.kind === 'chat') {
+    } else if (target.kind === 'chat' || target.kind === 'chat-lore') {
       if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
       setPanel('');
     } else if (target.kind === 'outline') {
       if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
       openOutlineWorkspace();
-    } else if (target.kind === 'notes' || target.kind === 'chat-lore') {
+    } else if (target.kind === 'notes') {
       if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
-      setSettingsSection(target.kind === 'notes' ? 'story' : 'packages');
+      setSettingsSection('story');
       setPanel('story');
     } else if (
       target.kind === 'settings' &&

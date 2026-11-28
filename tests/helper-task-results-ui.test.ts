@@ -1,8 +1,9 @@
-import { createElement } from 'react';
+import { createElement, type ContextType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import type { HelperTaskAttemptUsage, HelperTaskResultsView } from '../core/helper.js';
-import { HelperTaskUsageRecord } from '../web/HelperTaskResults.js';
+import { HelperTaskResultItems, HelperTaskUsageRecord } from '../web/HelperTaskResults.js';
+import { ThemeContext } from '../web/ThemeContext.js';
 import { traceUsageTotals as helperTaskUsageTotals } from '../web/TaskTrace.js';
 
 const attempt = (overrides: Partial<HelperTaskAttemptUsage>): HelperTaskAttemptUsage => ({
@@ -75,4 +76,37 @@ test('the summary prices a call by its reported cost before its estimate and kee
   expect(html).toContain('<dt>비용</dt>');
   expect(html).toContain('$0.0128');
   expect(html).not.toContain('이상');
+});
+
+test('a theme saved twice in one task shows its Story UI preview once', () => {
+  const theme = (operation: string, eventSeq: number) => ({
+    eventSeq,
+    receiptId: `receipt-${eventSeq}`,
+    operation,
+    requestedTargets: 1,
+    changedTargets: 1,
+    targets: [{ kind: 'theme' as const, id: 'harbor-theme', title: 'Harbor', revision: eventSeq }],
+  });
+  const data: HelperTaskResultsView = {
+    taskId: 'task',
+    status: 'completed',
+    results: [theme('resource.save', 1), theme('resource.patch', 2)],
+    confirmations: [],
+    unrecordedOperations: 0,
+    usage: { attempts: [], toolExecutions: 2, latestInputEstimate: null },
+  };
+  const html = renderToStaticMarkup(
+    createElement(
+      ThemeContext.Provider,
+      {
+        value: {
+          catalog: {
+            themes: [{ id: 'harbor-theme', storyUi: { baseStyle: 'classic', css: '.story-ui{}' } }],
+          },
+        } as unknown as ContextType<typeof ThemeContext>,
+      },
+      createElement(HelperTaskResultItems, { data })
+    )
+  );
+  expect(html.match(/helper-story-ui-preview/gu)).toHaveLength(1);
 });
