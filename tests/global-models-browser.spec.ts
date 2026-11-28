@@ -74,6 +74,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
             mainJudgmentEnabled: true,
             mainJudgmentThreshold: 0.9,
             helperConfirmPaidGeneration: false,
+            mcpAllowDelete: false,
             translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
           },
         })
@@ -169,6 +170,7 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
     await selectSettingsSection(page, '역할별 모델');
     await expect(helperTimeout).toHaveValue('90');
     await expect(paidConfirmation).toBeChecked();
+    await expect(mcpDeletion).toBeChecked();
     if (visualReview) {
       for (const reviewWidth of [width, MOBILE_WIDTH]) {
         await page.setViewportSize({ width: reviewWidth, height: 900 });
