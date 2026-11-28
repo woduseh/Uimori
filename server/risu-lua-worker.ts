@@ -8,29 +8,6 @@ import type {
   NativeLuaWorkerResultCode,
 } from './risu-lua-protocol.js';
 
-const LIMIT_KEYS: (keyof NativeLuaWorkerLimits)[] = [
-  'cpuMs',
-  'guestJsonBytes',
-  'snapshotJsonBytes',
-  'sourceBytes',
-  'hostMethodChars',
-  'hostCalls',
-  'hostPending',
-  'hostResultBytes',
-  'valueDepth',
-  'valueNodes',
-  'valueEntries',
-  'luaMemoryBytes',
-];
-function validLimits(value: unknown): value is NativeLuaWorkerLimits {
-  if (!value || typeof value !== 'object') return false;
-  const limits = value as Record<string, unknown>;
-  return LIMIT_KEYS.every((key) => {
-    const limit = limits[key];
-    return typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0;
-  });
-}
-
 // wasmoon 1.16.0 does not expose Emscripten instantiate options, and its shipped memory
 // section declares 256 initial / 32768 maximum pages.
 function fixedMemoryBinary(source: BufferSource, maximumBytes: number): Uint8Array<ArrayBuffer> {
@@ -375,21 +352,6 @@ async function run() {
   if (!port) return;
   const fail = (code: NativeLuaWorkerResultCode) =>
     port.postMessage({ type: 'result', ok: false, code });
-  if (
-    !input ||
-    typeof input !== 'object' ||
-    !validLimits(input.limits) ||
-    typeof input.source !== 'string' ||
-    typeof input.inputJSON !== 'string' ||
-    typeof input.historyJSON !== 'string' ||
-    Buffer.byteLength(input.source) > input.limits.sourceBytes ||
-    Buffer.byteLength(input.inputJSON) > input.limits.snapshotJsonBytes ||
-    Buffer.byteLength(input.historyJSON) > input.limits.snapshotJsonBytes ||
-    !Array.isArray(input.hostErrorCodes)
-  ) {
-    fail('RISU_LUA_PROGRAM_INPUT_SIZE');
-    return;
-  }
   const limits = input.limits;
   const engine = await createEngine(limits.luaMemoryBytes + 64 * 1024 * 1024);
   const global = engine.global;
@@ -486,29 +448,13 @@ async function run() {
     const argsJson = stringAt(-1, maximum);
     thread.pop(2);
     const id = ++hostId;
-    const response = new Promise<NativeLuaHostReply>((resolve, reject) => {
-      port.once('message', (value: NativeLuaHostReply) => {
-        if (
-          !value ||
-          value.type !== 'host-result' ||
-          value.id !== id ||
-          typeof value.ok !== 'boolean'
-        )
-          reject(new Error('LUA_PROTOCOL'));
-        else resolve(value);
-      });
+    const response = new Promise<NativeLuaHostReply>((resolve) => {
+      port.once('message', resolve);
     });
     port.postMessage({ type: 'host-call', id, method, argsJson });
     phase('host-wait', [id]);
     const result = await response;
     if (result.ok && result.resetBudget === true) {
-      if (
-        typeof result.json !== 'string' ||
-        typeof result.historyJSON !== 'string' ||
-        Buffer.byteLength(result.json) > limits.snapshotJsonBytes ||
-        Buffer.byteLength(result.historyJSON) > limits.snapshotJsonBytes
-      )
-        throw new Error('LUA_PROTOCOL');
       cpuRemaining = invocationBudget(
         Buffer.byteLength(result.json) + Buffer.byteLength(result.historyJSON)
       );
@@ -517,7 +463,6 @@ async function run() {
       invocationCalls = 0;
     }
     if (result.ok) {
-      if (typeof result.json !== 'string') throw new Error('LUA_PROTOCOL');
       if (!snapshot) hostResultBytes += Buffer.byteLength(result.json);
       if (Buffer.byteLength(result.json) > maximum || hostResultBytes > limits.hostResultBytes) {
         thread.pushValue(false);

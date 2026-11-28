@@ -10,7 +10,6 @@ import {
   openSync,
   readSync,
   realpathSync,
-  statSync,
   unlinkSync,
 } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -1074,9 +1073,6 @@ export class CodexRuntime implements CodexRuntimeService {
       const before = fstatSync(descriptor);
       if (!before.isFile() || before.size < 1 || before.size > ILLUSTRATION_MAX_IMAGE_BYTES)
         return undefined;
-      const opened = statSync(path);
-      if (realpathSync(path) !== path || opened.dev !== before.dev || opened.ino !== before.ino)
-        return undefined;
       const bytes = Buffer.alloc(before.size);
       let offset = 0;
       while (offset < bytes.length) {
@@ -1084,22 +1080,12 @@ export class CodexRuntime implements CodexRuntimeService {
         if (!count) return undefined;
         offset += count;
       }
-      const after = fstatSync(descriptor);
-      if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) return undefined;
       const mime = detectImageMime(bytes);
       if (!isValidIllustrationImage(bytes, mime)) return undefined;
       closeSync(descriptor);
       descriptor = undefined;
       try {
-        const current = statSync(path);
-        if (
-          realpathSync(path) === path &&
-          current.dev === before.dev &&
-          current.ino === before.ino &&
-          current.size === before.size &&
-          current.mtimeMs === before.mtimeMs
-        )
-          unlinkSync(path);
+        unlinkSync(path);
       } catch {}
       return { mime, bytes };
     } catch {

@@ -39,11 +39,7 @@ import type { NativeTransferReceipt } from '../core/native-transfer.js';
 import { processImage } from './image-processing.js';
 import { remapTranscriptRequestImages } from './chat-media.js';
 import { checkedPortableIllustrationReferences } from './illustration-reference-copy.js';
-import {
-  acquireImportPreparation,
-  checkImportPreparation,
-  ownedImportStagingRoot,
-} from './import-preparation.js';
+import { acquireImportPreparation, checkImportPreparation } from './import-preparation.js';
 import { deleteUpload, uploadDirectory, UPLOAD_MAX_AGE_MS } from './uploads.js';
 import {
   NATIVE_ARCHIVE_MAX_BYTES,
@@ -93,12 +89,9 @@ function preparedPath(store: Store, id: string) {
 
 export function deletePreparedArchive(store: Store, id: string): void {
   const directory = preparedPath(store, id);
-  if (activeArchives.has(directory) || !ownedImportStagingRoot(store.path, archiveDirectory(store)))
-    return;
+  if (activeArchives.has(directory)) return;
   try {
-    const info = lstatSync(directory);
-    if (info.isDirectory() && !info.isSymbolicLink())
-      rmSync(directory, { recursive: true, force: true });
+    if (lstatSync(directory).isDirectory()) rmSync(directory, { recursive: true, force: true });
   } catch {}
 }
 
@@ -187,17 +180,13 @@ export function exportNativeArchive(
 
 export function prunePreparedArchives(store: Store) {
   const directory = archiveDirectory(store);
-  if (!ownedImportStagingRoot(store.path, directory)) return;
+  if (!existsSync(directory)) return;
   for (const name of readdirSync(directory)) {
     if (!/^[a-f0-9]{32}$/u.test(name) || activeArchives.has(join(directory, name))) continue;
     const path = join(directory, name);
     try {
       const info = lstatSync(path);
-      if (
-        info.isDirectory() &&
-        !info.isSymbolicLink() &&
-        info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS
-      )
+      if (info.isDirectory() && info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS)
         rmSync(path, { recursive: true, force: true });
     } catch {}
   }

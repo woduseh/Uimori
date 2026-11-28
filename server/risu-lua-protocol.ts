@@ -1,7 +1,6 @@
 export type NativeLuaWorkerPhase = 'active' | 'host-wait';
 
 export type NativeLuaWorkerResultCode =
-  | 'RISU_LUA_PROGRAM_INPUT_SIZE'
   | 'RISU_LUA_PROGRAM_RUNTIME_FAILED'
   | 'RISU_LUA_PROGRAM_FAILED'
   | 'RISU_LUA_PROGRAM_TIMEOUT'
@@ -51,12 +50,13 @@ export type NativeLuaWorkerMessage =
   | NativeLuaWorkerHostCall
   | NativeLuaWorkerPhaseReport;
 export type NativeLuaHostReply =
+  | { type: 'host-result'; id: number; ok: true; json: string; resetBudget?: undefined }
   | {
       type: 'host-result';
       id: number;
       ok: true;
       json: string;
-      resetBudget?: boolean;
-      historyJSON?: string;
+      resetBudget: true;
+      historyJSON: string;
     }
   | { type: 'host-result'; id: number; ok: false; code: string };

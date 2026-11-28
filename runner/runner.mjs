@@ -57,18 +57,7 @@ function readOutput(path, max) {
 
 function run(args, signal) {
   return new Promise((done) => {
-    const taskId = args?.taskId;
-    if (
-      typeof taskId !== 'string' ||
-      !/^[a-f0-9-]{36}$/u.test(taskId) ||
-      typeof args.command !== 'string' ||
-      args.command.length > maxCommandLength ||
-      typeof args.toolId !== 'string' ||
-      args.toolId.length > maxToolIdLength
-    ) {
-      done({ error: 'INVALID_EXEC_REQUEST' });
-      return;
-    }
+    const { taskId } = args;
     if (signal.aborted) {
       done({ error: 'EXEC_CANCELLED' });
       return;
