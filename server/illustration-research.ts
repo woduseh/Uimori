@@ -1,3 +1,4 @@
+import type { HelperReadFit } from './helper-read-fit.js';
 import type { IllustrationJobInput } from '../core/illustration.js';
 import type { Content } from '../core/product.js';
 import type { Json, ProviderTool } from '../core/transport.js';
@@ -64,7 +65,11 @@ export const ILLUSTRATION_RESEARCH_TOOLS: ProviderTool[] = [
   },
 ];
 
-export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJobInput) {
+export function illustrationResearch(
+  snapshot: RunSnapshot,
+  input: IllustrationJobInput,
+  fits?: HelperReadFit
+) {
   const attachments = input.research?.attachments ?? snapshot.profile?.packageAttachments ?? [];
   const documents = (input.research?.packages ?? snapshot.profile?.packages ?? [])
     .filter((item) =>
@@ -160,7 +165,8 @@ export function illustrationResearch(snapshot: RunSnapshot, input: IllustrationJ
         document.title,
         document.model as Parameters<typeof readHelperModel>[4],
         args,
-        'frozen-illustration-source'
+        'frozen-illustration-source',
+        fits
       ) as Json;
     }
     if (name !== 'illustration.sources.search')

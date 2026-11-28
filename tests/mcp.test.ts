@@ -5,8 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, type App } from '../server/app.js';
 import { setMaintenance } from '../server/maintenance.js';
+import { MCP_READ_TOKEN_BUDGET } from '../server/mcp-tools.js';
 import { mcpToken as checkedMcpToken } from '../server/network-policy.js';
 import type { Content } from '../core/product.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
 const host = 'story.example.test';
@@ -338,4 +340,58 @@ test('the 2026-07-28 revision is discovered, checks its headers and serves skill
 
   setMaintenance(target.store, { closed: true });
   expect((await modern(target, 'tools/list')).statusCode).toBe(503);
+});
+
+test('MCP read tools advertise and enforce the dedicated MCP page token budget', async () => {
+  const target = await app({ mcpToken });
+  const tools = (await post(target, 'tools/list')).json().result.tools as {
+    name: string;
+    description: string;
+  }[];
+  for (const name of [
+    'resource_read',
+    'resource_readMany',
+    'preset_validate',
+    'code_cbs',
+    'code_references',
+    'code_diagnose',
+    'code_regex',
+    'chat_preview',
+    'chat_variables_read',
+    'scene_lore',
+  ]) {
+    const tool = tools.find((item) => item.name === name);
+    expect(tool?.description, name).toContain(String(MCP_READ_TOKEN_BUDGET));
+  }
+  const dense = '\u0001'.repeat(5_000);
+  const input = fixtureBotInput('Dense card', dense);
+  input.package.nativeRisu.card.character_book = {
+    entries: [
+      { comment: 'A', keys: ['a'], content: dense, enabled: true },
+      { comment: 'B', keys: ['b'], content: dense, enabled: true },
+      { comment: 'C', keys: ['c'], content: dense, enabled: true },
+    ],
+  };
+  const bot = target.store.product.content(input) as Content;
+  const single = await call(target, 'resource_read', {
+    kind: 'content',
+    id: bot.id,
+    path: '/package/nativeRisu/card/character_book/entries/0/content',
+    textLimit: 10_000,
+  });
+  expect(single.isError).toBe(false);
+  expect(countTextTokens(JSON.stringify(single.value))).toBeGreaterThan(12_000);
+  expect(single.value).toMatchObject({ text: dense, nextOffset: null });
+
+  const many = await call(target, 'resource_readMany', {
+    items: [0, 1, 2].map((index) => ({
+      kind: 'content',
+      id: bot.id,
+      path: `/package/nativeRisu/card/character_book/entries/${index}/content`,
+      textLimit: 10_000,
+    })),
+  });
+  expect(many.isError).toBe(false);
+  expect(countTextTokens(JSON.stringify(many.value))).toBeLessThanOrEqual(MCP_READ_TOKEN_BUDGET);
+  expect(many.value.nextIndex).not.toBeNull();
 });

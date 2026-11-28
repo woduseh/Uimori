@@ -97,7 +97,7 @@
   - **단위와 한도**: 모든 모드는 `offset/limit`을 사용해요. `intent` 조회 시 `limit` 생략 시 로컬 추정 3,000토큰을 반환하고, 명시된 `limit`은 최대 10,000 UTF-16 단위 수로 해석해요. 본문 offset과 반환 좌표는 항상 UTF-16 단위예요. 개요의 `intentCodePoints`는 SQLite Unicode 코드 포인트 수예요.
   - **일관성 검증**: 모든 페이지는 조회 범위의 `version`, 정확한 반환 범위, 재호출용 `nextRead`를 제공해요. 이어 읽기는 `expectedVersion`을 전달하며 플롯이 변경되면 `OUTLINE_CHANGED`와 재조회 경로를 돌려줘요.
   - **적용 범위 지표**: `coverage.wholeField`는 이번 한 응답이 필드 전체를 포함하는지 여부만 나타내요 (예: 전체 841자 중 마지막 600–841 구간은 `wholeField: false`, `nextOffset: null`). `coverage.excludedByDepth`로 깊이 제한에 따라 제외된 항목을 표시해요.
-  - **응답 크기 상한**: JSON 메타데이터를 포함해 로컬 추정 12,000토큰 이내로 조립해요.
+  - **응답 크기 상한**: JSON 메타데이터를 포함해 실행 중인 모델의 입력 토큰 예산 이내로 조립해요.
 - **`outline.write`**:
   - 단일 호출에서 `create`, `update`, `move`, `remove`를 최대 200개까지 원자적으로 적용해요. `update`는 `level`도 바꿀 수 있어요. 새 항목의 `ref`/`parentRef`로 계층 구조를 한 번에 생성할 수 있어요.
   - 모델 반환값: 전체 detail 대신 `operationId`, `applied`, `atomic`, `created`, `changes`, `revisionAfterOperation`을 반환해요.

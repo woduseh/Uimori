@@ -1,8 +1,10 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { afterEach, expect, test } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { chatOverrideHash, type ChatLoreSelector } from '../core/chat-overrides.js';
 import type { Content } from '../core/product.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { readHelperChatLore } from '../server/helper-lore-read.js';
 import { Store } from '../server/store.js';
@@ -124,4 +126,41 @@ test('lore pages discover live overrides only on their attachment and retain con
     'remove-discovered-override'
   );
   expect(list()).toMatchObject({ total: 0, items: [], nextOffset: null });
+});
+
+test('chat.lore reads follow the passed model token budget instead of a fixed 12000-token cap', () => {
+  const temporary = createTestDirectory('uimori-helper-lore-read-');
+  const store = new Store(join(temporary.directory, 'test.sqlite'));
+  owned.push({ ...temporary, store });
+  const content = '\u0001'.repeat(5_000);
+  const input = fixtureBotInput('Large lore owner', 'Body');
+  input.package.nativeRisu.card.character_book = {
+    entries: [{ comment: 'Dense', keys: ['dense'], content }],
+  };
+  const bot = store.product.content(input) as Content;
+  const chat = store.createChat('Large lore budget', { botId: bot.id });
+  const selector: ChatLoreSelector = {
+    id: bot.id,
+    role: 'bot',
+    modulePath: [],
+    loreId: 'lore-0',
+    field: 'text',
+  };
+  const wide = readHelperChatLore(
+    store,
+    chat.id,
+    { selector, textLimit: 10_000 },
+    tokenFit(64_000)
+  ) as any;
+  expect(countTextTokens(JSON.stringify(wide))).toBeGreaterThan(12_000);
+  expect(wide.original).toMatchObject({ text: content, nextOffset: null });
+  const narrow = readHelperChatLore(
+    store,
+    chat.id,
+    { selector, textLimit: 10_000 },
+    tokenFit(12_000)
+  ) as any;
+  expect(countTextTokens(JSON.stringify(narrow))).toBeLessThanOrEqual(12_000);
+  expect(narrow.original.nextOffset).toBeGreaterThan(0);
+  expect(narrow.original.nextOffset).toBeLessThan(content.length);
 });

@@ -7,6 +7,7 @@ import type { DataOperation } from './helper-data-worker.js';
 import { HELPER_GUIDE_TOOLS, invokeHelperGuideTool } from './helper-guide-tools.js';
 import { HELPER_IMAGE_TOOLS, listHelperImages } from './helper-image-tools.js';
 import { invokeResourceTool, RESOURCE_TOOLS } from './helper-resource-tools.js';
+import { tokenFit } from './helper-read-fit.js';
 import { helperToolError } from './helper-tool-error.js';
 import { text } from './request-validation.js';
 import type { Store } from './store.js';
@@ -15,6 +16,9 @@ export type McpPorts = { store: Store; signal: AbortSignal };
 
 type Run = (name: string, args: Record<string, unknown>, ports: McpPorts) => unknown;
 type Family = { tools: ProviderTool[]; run: Run; chat?: true };
+
+export const MCP_READ_TOKEN_BUDGET = 32_000;
+const mcpReadFit = tokenFit(MCP_READ_TOKEN_BUDGET);
 
 const data: Family = {
   tools: HELPER_DATA_TOOLS,
@@ -26,17 +30,18 @@ const data: Family = {
 };
 const resources: Family = {
   tools: RESOURCE_TOOLS,
-  run: (name, args, { store }) => invokeResourceTool(store, name, args),
+  run: (name, args, { store }) => invokeResourceTool(store, name, args, mcpReadFit),
 };
 const code: Family = {
   tools: HELPER_CODE_TOOLS,
-  run: (name, args, { store, signal }) => invokeHelperCodeTool(store, name, args, signal),
+  run: (name, args, { store, signal }) =>
+    invokeHelperCodeTool(store, name, args, signal, mcpReadFit),
 };
 const chat: Family = {
   tools: HELPER_CHAT_STATE_TOOLS,
   chat: true,
   run: (name, { chatId, ...args }, { store }) =>
-    readHelperChatState(store, text(chatId, 'chat ID', 100), name, args),
+    readHelperChatState(store, text(chatId, 'chat ID', 100), name, args, mcpReadFit),
 };
 
 type Adapt = (description: string) => string;
@@ -47,6 +52,14 @@ function without(...parts: string[]): Adapt {
       return text.replace(part, '');
     }, description);
 }
+function replacePhrase(from: string, to: string): Adapt {
+  return (description) => {
+    if (!description.includes(from)) throw new Error(`MCP description drifted: ${from}`);
+    return description.replace(from, to);
+  };
+}
+const mcpPageBudgetNote: Adapt = (description) =>
+  `${description} Over MCP each response page is capped at about ${MCP_READ_TOKEN_BUDGET} tokens.`;
 const undoNote: Adapt = (description) =>
   `${description} Over MCP undo keeps one step per resource: put related edits in one changes[] batch so that one resource_undo takes them all back.`;
 const EXPOSED: [string, Family, boolean, Adapt?][] = [
@@ -68,8 +81,24 @@ const EXPOSED: [string, Family, boolean, Adapt?][] = [
     { tools: HELPER_GUIDE_TOOLS, run: (_name, args) => invokeHelperGuideTool(args) },
     true,
   ],
-  ['resource.read', resources, true],
-  ['resource.readMany', resources, true],
+  [
+    'resource.read',
+    resources,
+    true,
+    replacePhrase(
+      "stays within the model's input budget",
+      `stays within about ${MCP_READ_TOKEN_BUDGET} tokens over MCP`
+    ),
+  ],
+  [
+    'resource.readMany',
+    resources,
+    true,
+    replacePhrase(
+      "share the model's input budget",
+      `share a budget of about ${MCP_READ_TOKEN_BUDGET} tokens over MCP`
+    ),
+  ],
   ['resource.patch', resources, false, undoNote],
   [
     'resource.patchMany',
@@ -80,15 +109,15 @@ const EXPOSED: [string, Family, boolean, Adapt?][] = [
   ],
   ['resource.clone', resources, false],
   ['resource.undo', resources, false, undoNote],
-  ['preset.validate', resources, true],
-  ['code.cbs', code, true],
-  ['code.references', code, true],
-  ['code.diagnose', code, true],
-  ['code.regex', code, true],
+  ['preset.validate', resources, true, mcpPageBudgetNote],
+  ['code.cbs', code, true, mcpPageBudgetNote],
+  ['code.references', code, true, mcpPageBudgetNote],
+  ['code.diagnose', code, true, mcpPageBudgetNote],
+  ['code.regex', code, true, mcpPageBudgetNote],
   ['code.preview', code, true],
-  ['chat.preview', chat, true],
-  ['chat.variables.read', chat, true],
-  ['scene.lore', chat, true],
+  ['chat.preview', chat, true, mcpPageBudgetNote],
+  ['chat.variables.read', chat, true, mcpPageBudgetNote],
+  ['scene.lore', chat, true, mcpPageBudgetNote],
   [
     'image.list',
     { tools: HELPER_IMAGE_TOOLS, run: (_name, args, { store }) => listHelperImages(store, args) },

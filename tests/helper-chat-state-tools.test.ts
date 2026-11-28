@@ -1,9 +1,11 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content } from '../core/product.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { readHelperChatState } from '../server/helper-chat-state-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -148,4 +150,39 @@ test('chat.preview lists, searches and pages the assembled next request without 
     readHelperChatState(store, chat.id, 'chat.preview', { textLimit: 10 })
   ).rejects.toMatchObject({ statusCode: 400 });
   expect(changes(store)).toBe(before);
+});
+
+test('chat.preview message pages follow the passed model token budget instead of 12000 tokens', async () => {
+  const { store, chat } = fixture();
+  const payload = '\u0001'.repeat(5_000);
+  const found = (await readHelperChatState(store, chat.id, 'chat.preview', {
+    request: payload,
+    contains: '\u0001\u0001\u0001',
+  })) as Record<string, any>;
+  const hit = found.messages[0];
+  const args = {
+    request: payload,
+    message: hit.index,
+    textOffset: hit.matchOffset,
+    textLimit: 10_000,
+  };
+  const wide = (await readHelperChatState(
+    store,
+    chat.id,
+    'chat.preview',
+    args,
+    tokenFit(64_000)
+  )) as Record<string, any>;
+  expect(countTextTokens(JSON.stringify(wide))).toBeGreaterThan(12_000);
+  expect(wide.text).toContain(payload);
+  expect(wide.nextOffset).toBeNull();
+  const narrow = (await readHelperChatState(
+    store,
+    chat.id,
+    'chat.preview',
+    args,
+    tokenFit(12_000)
+  )) as Record<string, any>;
+  expect(countTextTokens(JSON.stringify(narrow))).toBeLessThanOrEqual(12_000);
+  expect(narrow.nextOffset).toBeGreaterThan(0);
 });

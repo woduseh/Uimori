@@ -1,3 +1,4 @@
+import type { HelperReadFit } from './helper-read-fit.js';
 import {
   appearanceOperations,
   deletionOperations,
@@ -186,7 +187,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.read',
     effect: 'read',
     description:
-      "Read a saved library resource in typed, bounded pieces: a bot, persona or module (kind=content, the character card with its description, first message, lorebook and other fields), a prompt preset (prompt template blocks, toggles, variables and saved values), the global prompt workspace, a theme or an illustration preset. Call it with kind and id alone for a compact overview with source, regions and readyPaths (for content, the card or module region lists each field with its text length or item count), then follow a returned JSON Pointer path into the field, array or text you need. Use it when you need exact typed values, array structure or the current revision before resource.patch. To find text by its content use data.search, and for the same question across several resources use resource.readMany. Long strings page with textOffset/textLimit and nextOffset, and arrays and objects page with offset/limit. Use path for one read or paths for 1-16 reads of the same resource, with nextIndex marking paths that were not returned. Editable array entries carry a target anchor for resource.patch at this revision. Prompt template pages list each block's id, name, type, roles and text lengths without the bodies unless includeBodies is set. Nothing is evaluated: CBS and scripts are returned as authored. The whole response stays within about 12000 tokens, and a page never means the omitted part was read. Small values keep their JSON types and a missing optional field is reported with exists:false. The shared illustration appearance defaults of a bot or persona are at source.appearanceProfilesPath.",
+      "Read a saved library resource in typed, bounded pieces: a bot, persona or module (kind=content, the character card with its description, first message, lorebook and other fields), a prompt preset (prompt template blocks, toggles, variables and saved values), the global prompt workspace, a theme or an illustration preset. Call it with kind and id alone for a compact overview with source, regions and readyPaths (for content, the card or module region lists each field with its text length or item count), then follow a returned JSON Pointer path into the field, array or text you need. Use it when you need exact typed values, array structure or the current revision before resource.patch. To find text by its content use data.search, and for the same question across several resources use resource.readMany. Long strings page with textOffset/textLimit and nextOffset, and arrays and objects page with offset/limit. Use path for one read or paths for 1-16 reads of the same resource, with nextIndex marking paths that were not returned. Editable array entries carry a target anchor for resource.patch at this revision. Prompt template pages list each block's id, name, type, roles and text lengths without the bodies unless includeBodies is set. Nothing is evaluated: CBS and scripts are returned as authored. The whole response stays within the model's input budget, and a page never means the omitted part was read. Small values keep their JSON types and a missing optional field is reported with exists:false. The shared illustration appearance defaults of a bot or persona are at source.appearanceProfilesPath.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -208,7 +209,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.readMany',
     effect: 'read',
     description:
-      'Read 1-16 selections across different library resources in one call, with typed values, when comparing or collecting the same fields from several bots, personas, modules or presets. Each selection takes the resource.read arguments except paths, and returns its own result or error. The selections share one response budget of about 12000 tokens: when nextIndex is not null, call again with items.slice(nextIndex), and follow the nextOffset of a result for the rest of its text or array. For text that data.search already located, data.read with those refs is shorter.',
+      "Read 1-16 selections across different library resources in one call, with typed values, when comparing or collecting the same fields from several bots, personas, modules or presets. Each selection takes the resource.read arguments except paths, and returns its own result or error. The selections share the model's input budget: when nextIndex is not null, call again with items.slice(nextIndex), and follow the nextOffset of a result for the rest of its text or array. For text that data.search already located, data.read with those refs is shorter.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -457,11 +458,12 @@ const summary = (result: ReturnType<typeof saveResource>) => ({
 export function invokeResourceTool(
   store: Store,
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  fits?: HelperReadFit
 ): unknown {
-  if (name === 'resource.readMany') return readHelperResources(store, args.items);
+  if (name === 'resource.readMany') return readHelperResources(store, args.items, fits);
   if (name === 'resource.patchMany') return patchHelperResources(store, args.items);
-  if (name === 'preset.validate') return validateHelperPreset(store, args);
+  if (name === 'preset.validate') return validateHelperPreset(store, args, fits);
   if (name === 'illustration-preset.list') {
     const catalog = illustrationPresetCatalog(store);
     return {
@@ -596,7 +598,7 @@ export function invokeResourceTool(
     return deleteLibraryItem(store, kind, id, { expectedRevision });
   }
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
-  if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
+  if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args, fits);
   if (name === 'resource.patch') {
     if (!id) throw new HelperToolError(400, 'INVALID_ARGUMENTS', 'id is required');
     return patchHelperResource(

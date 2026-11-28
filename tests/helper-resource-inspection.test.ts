@@ -1,3 +1,4 @@
+import { tokenFit } from '../server/helper-read-fit.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,8 +29,18 @@ function fixture() {
   owned.push({ store, path });
   return store;
 }
-const call = (store: Store, name: string, args: Record<string, unknown>) =>
-  invokeResourceTool(store, name, args) as Record<string, any>;
+const call = (
+  store: Store,
+  name: string,
+  args: Record<string, unknown>,
+  maxResultTokens?: number
+) =>
+  invokeResourceTool(
+    store,
+    name,
+    args,
+    maxResultTokens === undefined ? undefined : tokenFit(maxResultTokens)
+  ) as Record<string, any>;
 const preset = (store: Store, title: string, text = 'Original {{getglobalvar::toggle_mode}}') =>
   store.product.promptPreset({
     title,
@@ -83,16 +94,23 @@ test('multi-resource text pages share a bounded envelope and continue unread sel
     path: '/program/nativeRisuPreset/preset/promptTemplate/0/text',
     textLimit: 10000,
   }));
-  const first = call(store, 'resource.readMany', { items });
+  const first = call(store, 'resource.readMany', { items }, 12_000);
   expect(countTextTokens(JSON.stringify(first))).toBeLessThanOrEqual(12_000);
   expect(first.nextIndex).toBe(1);
   expect(first.items[0].result).toMatchObject({ id: a.id, textOffset: 0 });
   expect(first.items[0].result.nextOffset).toBeGreaterThan(0);
   expect(first.items[0].result.text).toBe(body.slice(0, first.items[0].result.nextOffset));
-  const second = call(store, 'resource.readMany', { items: items.slice(first.nextIndex) });
+  const second = call(store, 'resource.readMany', { items: items.slice(first.nextIndex) }, 12_000);
   expect(second.nextIndex).toBeNull();
   expect(second.items[0].result.id).toBe(b.id);
   expect(countTextTokens(JSON.stringify(second))).toBeLessThanOrEqual(12_000);
+  const spacious = call(store, 'resource.readMany', { items }, 64_000);
+  expect(countTextTokens(JSON.stringify(spacious))).toBeGreaterThan(12_000);
+  expect(spacious.nextIndex).toBeNull();
+  expect(spacious.items.map((item: { result: { id: string } }) => item.result.id)).toEqual([
+    a.id,
+    b.id,
+  ]);
 });
 
 test('preset inspection compares retained option meaning without evaluating CBS or creating another revision', () => {

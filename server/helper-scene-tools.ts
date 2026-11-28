@@ -1,5 +1,6 @@
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
 import { splitsSurrogatePair, textPageEnd } from '../core/text-pages.js';
-import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -131,7 +132,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
     description:
-      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML. Find the sourceId with chat.read, scene.search or data.search; a reader selection in source.selection and the latest scene in source.writing.chat.latestScene already carry it with the editTarget guards, so a scene.patch of that text needs no read first. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within about 9000 tokens: copy nextRead for the next page, or pass any offset directly, and read every relevant page before replacing a whole scene. The guards are optional on a read: when they are passed, a scene that changed between pages is reported so it can be read again from the start; without them compare textHash across pages. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
+      'Read the saved text of one scene in a chat as it can be edited: the original, or the completed translation the reader currently shows. This is the live stored text, not rendered HTML. Find the sourceId with chat.read, scene.search or data.search; a reader selection in source.selection and the latest scene in source.writing.chat.latestScene already carry it with the editTarget guards, so a scene.patch of that text needs no read first. The result includes editTarget with the guards (expectedRevision, expectedSourceHash, expectedTextHash) that scene.patch needs. Long scenes come in pages within the model input budget: copy nextRead for the next page, or pass any offset directly, and read every relevant page before replacing a whole scene. The guards are optional on a read: when they are passed, a scene that changed between pages is reported so it can be read again from the start; without them compare textHash across pages. While a new translation is being generated, displayedTranslation identifies the earlier completed translation that is still shown. Asking for a translation that does not exist is an error.',
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
@@ -330,7 +331,8 @@ function page(
   editTarget: ReturnType<typeof snapshot>['editTarget'],
   readArgs: Record<string, unknown>,
   chatId: string,
-  name: string
+  name: string,
+  fits: HelperReadFit
 ) {
   const offset =
     args.offset === undefined ? 0 : number(args.offset, 'text offset', 0, SOURCE_TEXT_MAX_CHARS);
@@ -346,35 +348,38 @@ function page(
   if (splitsSurrogatePair(content, offset))
     throw new HttpError(400, 'Text offset splits a Unicode character');
   let end = textPageEnd(content, offset, limit);
-  while (countTextTokens(JSON.stringify(content.slice(offset, end))) > 9_000) {
-    end = offset + Math.floor((end - offset) / 2);
-    if (splitsSurrogatePair(content, end)) end--;
-  }
-  const nextOffset = end < content.length ? end : null;
-  return {
-    text: content.slice(offset, end),
-    offset,
-    totalLength: content.length,
-    textHash,
-    nextOffset,
-    nextRead:
-      nextOffset === null
-        ? null
-        : {
-            name: 'app.call',
-            arguments: {
-              name,
+  const build = (to: number) => {
+    const nextOffset = to < content.length ? to : null;
+    return {
+      text: content.slice(offset, to),
+      offset,
+      totalLength: content.length,
+      textHash,
+      nextOffset,
+      nextRead:
+        nextOffset === null
+          ? null
+          : {
+              name: 'app.call',
               arguments: {
-                ...readArgs,
-                ...editTarget,
-                chatId,
-                offset: nextOffset,
-                ...(args.limit === undefined ? {} : { limit }),
-                expectedTextHash: textHash,
+                name,
+                arguments: {
+                  ...readArgs,
+                  ...editTarget,
+                  chatId,
+                  offset: nextOffset,
+                  ...(args.limit === undefined ? {} : { limit }),
+                  expectedTextHash: textHash,
+                },
               },
             },
-          },
+    };
   };
+  while (end - offset > 2 && !fits(build(end))) {
+    end = offset + Math.max(2, Math.floor((end - offset) / 2));
+    if (splitsSurrogatePair(content, end)) end--;
+  }
+  return build(end);
 }
 function sceneSearch(current: ReturnType<typeof snapshot>, args: Record<string, unknown>) {
   const raw = args.patterns;
@@ -611,7 +616,8 @@ export function invokeHelperSceneTool(
   chatId: string,
   name: string,
   args: Record<string, unknown>,
-  task?: Pick<HelperTask, 'id' | 'conversationId'>
+  task?: Pick<HelperTask, 'id' | 'conversationId'>,
+  fits: HelperReadFit = DEFAULT_READ_FIT
 ): unknown {
   return store.transaction(() => {
     const original = name === 'scene.versions' || name === 'scene.restore';
@@ -692,8 +698,8 @@ export function invokeHelperSceneTool(
       throw new HttpError(400, 'Chat-wide search parameters require omitted sourceId');
     const current = snapshot(store, chatId, args, original);
     const { source, editTarget } = current;
-    if (name === 'scene.read')
-      return {
+    if (name === 'scene.read') {
+      const head = {
         chatId,
         editTarget,
         representation: 'editable-stored-text',
@@ -707,15 +713,20 @@ export function invokeHelperSceneTool(
               },
             }
           : {}),
+      };
+      return {
+        ...head,
         ...page(
           current.content,
           args,
           editTarget,
           { sourceId: source.id, target: current.target },
           chatId,
-          name
+          name,
+          (paged) => fits({ ...head, ...(paged as object) })
         ),
       };
+    }
     if (name === 'scene.search') return sceneSearch(current, args);
     if (name === 'scene.versions') {
       checkGuards(args, editTarget);
@@ -744,7 +755,9 @@ export function invokeHelperSceneTool(
           versionRevision: version.revision,
         },
         chatId,
-        name
+        name,
+        (result) =>
+          fits({ chatId, editTarget, versionRevision: version.revision, ...(result as object) })
       );
       if (paged.nextRead)
         delete (paged.nextRead.arguments.arguments as Record<string, unknown>).target;

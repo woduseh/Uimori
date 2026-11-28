@@ -1,4 +1,5 @@
 import { indexCbsReferences } from '../core/cbs-references.js';
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Content, PromptPreset } from '../core/product.js';
 import {
@@ -9,7 +10,6 @@ import {
 import { declaredToggleVariables } from '../core/risu-effective-controls.js';
 import { nativeRisuVariableDefaults } from './risu-native-cbs.js';
 import { clipText, splitsSurrogatePair, textPageEnd } from '../core/text-pages.js';
-import { countTextTokens } from '../core/text-tokens.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { HelperToolError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
@@ -30,7 +30,6 @@ import { NATIVE_RISU_REGEX_MODES, processNativeRisuText } from './risu-native-re
 import { nativeRisuDraftPreview, nativeRisuStartPreview } from './risu-native-preview.js';
 import type { Store } from './store.js';
 
-const MAX_RESULT_TOKENS = 12_000;
 const MAX_CBS_TEXT = 200_000;
 const MAX_TRACE_TEXT = 20_000;
 const LIST_CAP = 100;
@@ -294,9 +293,9 @@ function excerpt(source: string, line: number) {
   return value.length > EXCERPT_CHARS ? `${value.slice(0, EXCERPT_CHARS - 1)}…` : value;
 }
 
-function bounded<T>(build: () => T, shrink: () => boolean): T {
+function bounded<T>(build: () => T, shrink: () => boolean, fits: HelperReadFit): T {
   let result = build();
-  while (countTextTokens(JSON.stringify(result)) > MAX_RESULT_TOKENS) {
+  while (!fits(result)) {
     if (!shrink()) throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'narrow the request');
     result = build();
   }
@@ -315,7 +314,7 @@ function stringRecord(value: unknown, name: string): Record<string, string> {
   return result;
 }
 
-function checkCbs(store: Store, args: Record<string, unknown>) {
+function checkCbs(store: Store, args: Record<string, unknown>, fits: HelperReadFit) {
   fields(args, ['text', 'kind', 'id', 'path']);
   let source: Record<string, unknown>;
   let value: string;
@@ -409,11 +408,12 @@ function checkCbs(store: Store, args: Record<string, unknown>) {
       })),
       dynamicReferences: dynamic,
     }),
-    () => (cap > 5 ? ((cap = Math.floor(cap / 2)), true) : false)
+    () => (cap > 5 ? ((cap = Math.floor(cap / 2)), true) : false),
+    fits
   );
 }
 
-function references(store: Store, args: Record<string, unknown>) {
+function references(store: Store, args: Record<string, unknown>, fits: HelperReadFit) {
   fields(args, ['kind', 'id', 'name', 'scope', 'offset', 'limit']);
   const loaded = loadTarget(store, args);
   const filter = args.name === undefined ? '' : text(args.name, 'name', 200).toLocaleLowerCase();
@@ -470,11 +470,17 @@ function references(store: Store, args: Record<string, unknown>) {
       else if (usesCap > 1) usesCap = Math.ceil(usesCap / 2);
       else return false;
       return true;
-    }
+    },
+    fits
   );
 }
 
-async function diagnose(store: Store, args: Record<string, unknown>, signal?: AbortSignal) {
+async function diagnose(
+  store: Store,
+  args: Record<string, unknown>,
+  fits: HelperReadFit,
+  signal?: AbortSignal
+) {
   fields(args, ['kind', 'id', 'sections', 'severity', 'offset', 'limit']);
   const loaded = loadTarget(store, args);
   const applicable: readonly CodeDiagnosisSection[] =
@@ -519,7 +525,8 @@ async function diagnose(store: Store, args: Record<string, unknown>, signal?: Ab
         nextOffset: start + page.length < shown.length ? start + page.length : null,
       };
     },
-    () => (limit > 1 ? ((limit = Math.ceil(limit / 2)), true) : false)
+    () => (limit > 1 ? ((limit = Math.ceil(limit / 2)), true) : false),
+    fits
   );
 }
 
@@ -547,7 +554,12 @@ function change(before: string, after: string) {
   };
 }
 
-async function traceRegex(store: Store, args: Record<string, unknown>, signal?: AbortSignal) {
+async function traceRegex(
+  store: Store,
+  args: Record<string, unknown>,
+  fits: HelperReadFit,
+  signal?: AbortSignal
+) {
   fields(args, ['kind', 'id', 'stage', 'text', 'variables', 'toggles', 'userName', 'offset']);
   const loaded = loadTarget(store, args);
   const modes: readonly string[] = NATIVE_RISU_REGEX_MODES;
@@ -657,7 +669,8 @@ async function traceRegex(store: Store, args: Record<string, unknown>, signal?: 
       else if (listCap > 0) listCap = 0;
       else return false;
       return true;
-    }
+    },
+    fits
   );
 }
 
@@ -767,12 +780,13 @@ export async function invokeHelperCodeTool(
   store: Store,
   name: string,
   args: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  fits: HelperReadFit = DEFAULT_READ_FIT
 ): Promise<unknown> {
-  if (name === 'code.cbs') return checkCbs(store, args);
-  if (name === 'code.references') return references(store, args);
-  if (name === 'code.diagnose') return diagnose(store, args, signal);
-  if (name === 'code.regex') return traceRegex(store, args, signal);
+  if (name === 'code.cbs') return checkCbs(store, args, fits);
+  if (name === 'code.references') return references(store, args, fits);
+  if (name === 'code.diagnose') return diagnose(store, args, fits, signal);
+  if (name === 'code.regex') return traceRegex(store, args, fits, signal);
   if (name === 'code.preview') return preview(store, args, signal);
   throw new HttpError(400, `UNKNOWN_APP_TOOL:${name}`);
 }

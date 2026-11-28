@@ -31,6 +31,7 @@ import {
 } from '../core/transport.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+import { fitsModelInput } from './helper-read-fit.js';
 import { modelTimeoutMs, type Connection, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
@@ -297,7 +298,10 @@ export async function runIllustrationJob(
     authorized?: Connection
   ) => {
     const connection = authorized ?? (await authorizedConnection(hooks, model));
-    const research = illustrationResearch(snapshot, input);
+    const researchBudget = contextBudgetForModel(model);
+    const research = illustrationResearch(snapshot, input, (result) =>
+      fitsModelInput(result, researchBudget)
+    );
     const maxCalls = store.chat(source.chatId).settings.maxCalls;
     const researched = request.input.controls.purpose !== 'illustration-placement';
     const enabled = researched && research.readable && maxCalls > 1;

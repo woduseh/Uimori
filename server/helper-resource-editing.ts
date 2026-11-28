@@ -1,5 +1,5 @@
 import { validateIllustrationAppearanceProfiles } from '../core/illustration-profiles.js';
-import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   editableResource,
@@ -27,10 +27,10 @@ import {
   HelperResourcePatchError,
   type HelperResourcePatchReason,
 } from './helper-resource-patch-error.js';
+import { DEFAULT_READ_FIT, type HelperReadFit } from './helper-read-fit.js';
 import pathPolicy from './helper-resource-path-policy.json' with { type: 'json' };
 import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 
-const MAX_RESULT_TOKENS = 12_000;
 const MAX_PATH = pathPolicy.maxLength;
 const MAX_TEXT = 10_000;
 const FORBIDDEN = new Set(protectedFields);
@@ -102,8 +102,8 @@ function locate(
   }
   return { exists: true, value, parent };
 }
-function bounded(result: unknown, maximum = MAX_RESULT_TOKENS): unknown {
-  if (countTextTokens(JSON.stringify(result)) > maximum)
+function bounded(result: unknown, fits: HelperReadFit = DEFAULT_READ_FIT): unknown {
+  if (!fits(result))
     throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a smaller range');
   return result;
 }
@@ -217,7 +217,7 @@ export function readHelperResource(
   kind: ResourceKind,
   id: string,
   args: JsonObject,
-  maximum = MAX_RESULT_TOKENS
+  fits: HelperReadFit = DEFAULT_READ_FIT
 ) {
   const paths = args.paths;
   if (args.includeBodies !== undefined && typeof args.includeBodies !== 'boolean')
@@ -257,7 +257,7 @@ export function readHelperResource(
       );
     model = row.model;
   }
-  const read = (selection: JsonObject, limit = maximum) =>
+  const read = (selection: JsonObject, limit = fits) =>
     readHelperModel(
       kind,
       id,
@@ -271,11 +271,11 @@ export function readHelperResource(
     );
   if (paths === undefined) return read(args);
   const items: unknown[] = [];
-  const pageMaximum = maximum - countTextTokens(JSON.stringify({ items: [], nextIndex: null }));
+  const pageFits: HelperReadFit = (result) => fits({ items: [result], nextIndex: paths.length });
   for (const path of paths) {
     let item: unknown;
     try {
-      item = read({ ...args, path }, pageMaximum);
+      item = read({ ...args, path }, pageFits);
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
       item = { path, error: error.message };
@@ -284,13 +284,21 @@ export function readHelperResource(
       items: [...items, item],
       nextIndex: items.length + 1 < paths.length ? items.length + 1 : null,
     };
-    if (countTextTokens(JSON.stringify(candidate)) > maximum) break;
+    if (!fits(candidate)) {
+      if (!items.length)
+        throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a smaller range');
+      break;
+    }
     items.push(item);
   }
-  return bounded({ items, nextIndex: items.length < paths.length ? items.length : null }, maximum);
+  return bounded({ items, nextIndex: items.length < paths.length ? items.length : null }, fits);
 }
 
-export function readHelperEditor(editor: HelperEditor | undefined, args: JsonObject) {
+export function readHelperEditor(
+  editor: HelperEditor | undefined,
+  args: JsonObject,
+  fits: HelperReadFit = DEFAULT_READ_FIT
+) {
   if (!editor?.model) return null;
   return readHelperModel(
     editor.kind,
@@ -299,7 +307,8 @@ export function readHelperEditor(editor: HelperEditor | undefined, args: JsonObj
     editor.title,
     editor.model,
     args,
-    editor.source === 'saved' ? 'saved-editor-reservation' : 'unsaved-device-editor'
+    editor.source === 'saved' ? 'saved-editor-reservation' : 'unsaved-device-editor',
+    fits
   );
 }
 
@@ -311,7 +320,7 @@ export function readHelperModel(
   model: ResourceModel,
   args: JsonObject,
   inputOrigin?: string,
-  maximum = MAX_RESULT_TOKENS,
+  fits: HelperReadFit = DEFAULT_READ_FIT,
   previousCurrentRevision?: number
 ) {
   const base = {
@@ -380,12 +389,12 @@ export function readHelperModel(
         regions,
         readyPaths,
       },
-      maximum
+      fits
     );
   }
   const segments = parts(path);
   const found = locate(model, segments);
-  if (!found.exists) return bounded({ ...base, path, exists: false }, maximum);
+  if (!found.exists) return bounded({ ...base, path, exists: false }, fits);
   const value = found.value;
   const head = { ...base, path, exists: true, type: type(value) };
   if (typeof value === 'string') {
@@ -408,7 +417,7 @@ export function readHelperModel(
       textOffset: start,
       nextOffset: end < value.length ? end : null,
     });
-    if (start === value.length) return bounded(page(start), maximum);
+    if (start === value.length) return bounded(page(start), fits);
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
       const end =
@@ -417,7 +426,7 @@ export function readHelperModel(
         low = middle + 1;
         continue;
       }
-      if (countTextTokens(JSON.stringify(page(end))) <= maximum) {
+      if (fits(page(end))) {
         best = end;
         low = middle + 1;
       } else high = middle - 1;
@@ -426,9 +435,9 @@ export function readHelperModel(
       best = start + 2;
     if (best === start)
       throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower path');
-    return bounded(page(best), maximum);
+    return bounded(page(best), fits);
   }
-  if (!object(value) && !Array.isArray(value)) return bounded({ ...head, value }, maximum);
+  if (!object(value) && !Array.isArray(value)) return bounded({ ...head, value }, fits);
   const fields = args.fields;
   if (
     fields !== undefined &&
@@ -477,7 +486,7 @@ export function readHelperModel(
       [Array.isArray(value) ? 'items' : 'fields']: [...entries, next],
       nextOffset: index + 1 < keys.length ? index + 1 : null,
     };
-    if (countTextTokens(JSON.stringify(candidate)) > maximum) {
+    if (!fits(candidate)) {
       if (!withBodies || entries.length) {
         if (entries.length) break;
         throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower path');
@@ -493,7 +502,7 @@ export function readHelperModel(
         ...next,
         block: { ...promptBlock(item.value, joined(path, key)), omittedBodyPaths },
       };
-      if (countTextTokens(JSON.stringify({ ...candidate, items: [next] })) > maximum)
+      if (!fits({ ...candidate, items: [next] }))
         throw new HelperToolError(413, 'HELPER_READ_TOO_LARGE', 'Read a narrower path');
     }
     entries.push(next);
@@ -505,7 +514,7 @@ export function readHelperModel(
       [Array.isArray(value) ? 'items' : 'fields']: entries,
       nextOffset: index < keys.length ? index : null,
     },
-    maximum
+    fits
   );
 }
 
