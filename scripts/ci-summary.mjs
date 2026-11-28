@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -127,6 +129,26 @@ export function summarizeBrowser(reports, expectedSha) {
   };
 }
 
+export function testsLineDelta(numstat, lineCounts) {
+  let added = 0;
+  let removed = 0;
+  for (const line of numstat.split('\n')) {
+    const match = /^(\d+)\t(\d+)\t/.exec(line);
+    if (match) {
+      added += +match[1];
+      removed += +match[2];
+    }
+  }
+  let total = 0;
+  for (const line of lineCounts.split('\n')) total += +(/:(\d+)$/.exec(line)?.[1] ?? 0);
+  return { added, removed, total };
+}
+
+export function formatTestsDelta({ added, removed, total }) {
+  const net = added - removed;
+  return `### Test lines\n\n\`tests/\`: +${added} / -${removed} (net ${net > 0 ? '+' : ''}${net}), ${total} lines in total\n`;
+}
+
 export function vitestShardCount(event) {
   return event === 'pull_request' ? 1 : vitestShards;
 }
@@ -224,6 +246,21 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           })
         )
       );
+    } else if (mode === 'tests-delta') {
+      const base = process.env.UIMORI_DIFF_BASE;
+      if (process.env.GITHUB_EVENT_NAME === 'pull_request' && /^[a-f0-9]{40}$/.test(base ?? '')) {
+        const git = (...args) =>
+          execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+        const markdown = formatTestsDelta(
+          testsLineDelta(
+            git('diff', '--no-renames', '--numstat', base, 'HEAD', '--', 'tests'),
+            git('grep', '-c', '', 'HEAD', '--', 'tests')
+          )
+        );
+        if (process.env.GITHUB_STEP_SUMMARY)
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
+        process.stdout.write(markdown);
+      }
     } else if (mode === 'vitest') {
       const directory = process.argv[3] ?? 'output/ci';
       const event = process.env.GITHUB_EVENT_NAME;
@@ -265,7 +302,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
           2
         )
       );
-    } else throw new Error('Use ci-summary.mjs jobs | vitest | browser [report-directory]');
+    } else
+      throw new Error(
+        'Use ci-summary.mjs jobs | vitest | browser [report-directory] | tests-delta'
+      );
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
