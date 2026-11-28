@@ -4,6 +4,7 @@ import { appearanceEndpoints } from './domains/appearance/endpoints.js';
 import { chatEndpoints } from './domains/chat/endpoints.js';
 import { chatSettingsEndpoints } from './domains/chat-settings/endpoints.js';
 import { deletionEndpoints } from './domains/deletion/endpoints.js';
+import { helperEndpoints } from './domains/helper/endpoints.js';
 import { libraryEndpoints } from './domains/library/endpoints.js';
 import { outlineEndpoints } from './domains/outline/endpoints.js';
 import { personalWorkspaceEndpoints } from './domains/personal-workspace/endpoints.js';
@@ -22,6 +23,7 @@ export const allEndpoints = {
   chat: chatEndpoints,
   'chat-settings': chatSettingsEndpoints,
   deletion: deletionEndpoints,
+  helper: helperEndpoints,
   library: libraryEndpoints,
   outline: outlineEndpoints,
   'personal-workspace': personalWorkspaceEndpoints,

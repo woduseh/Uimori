@@ -58,9 +58,8 @@
     "web/DeleteButton.tsx": 1,
     "web/HelperActivity.tsx": 1,
     "web/HelperArtifactCard.tsx": 2,
-    "web/HelperPanel.tsx": 10,
-    "web/HelperSessionBar.tsx": 14,
-    "web/HelperSummaryDialog.tsx": 3,
+    "web/HelperPanel.tsx": 4,
+    "web/HelperSessionBar.tsx": 2,
     "web/HelperTaskResults.tsx": 1,
     "web/HelperTaskRollback.tsx": 3,
     "web/IllustrationActivity.tsx": 1,
@@ -101,7 +100,6 @@
     "web/useActivityFeed.ts": 3,
     "web/useApiRecord.ts": 1,
     "web/useHelperConversation.ts": 5,
-    "web/useHelperSessions.ts": 4,
     "web/useStory.ts": 11,
     "web/useTestMode.ts": 1
   }

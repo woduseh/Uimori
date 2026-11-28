@@ -13,11 +13,10 @@ import { readHelperTaskResults } from './helper-task-results.js';
 import { markHelperConversationRead } from './helper-read-state.js';
 import { AppError } from './app-errors.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
-import {
-  HELPER_PERSONA_MAX_CHARS,
-  REQUEST_TEXT_MAX_CHARS,
-  SOURCE_TEXT_MAX_CHARS,
-} from '../core/content-limits.js';
+import { helperEndpoints } from '#contracts';
+import { helperOperations } from '#contracts/operations';
+import { registerEndpoint } from './endpoint.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { requestImageUploads } from './request-images.js';
 import { requestFileUploads } from './request-files.js';
 import { parseEditorFocus } from '../core/editor-focus.js';
@@ -37,102 +36,71 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     return { ...view, modelTitle: snapshot.model.title };
   };
   const publicArtifact = (artifact: ReturnType<typeof store.artifact>) => artifact;
-  app.get('/api/helper/projects', () => store.groups());
-  app.post('/api/helper/projects', (request) => {
-    const body = record(request.body);
-    fields(body, ['title', 'requestKey']);
-    return store.createGroup(
-      text(body.title, 'group title', 200).trim(),
-      text(body.requestKey, 'request key', 100)
-    );
-  });
-  app.patch<{ Params: { id: string } }>('/api/helper/projects/:id', (request) => {
-    const body = record(request.body);
-    fields(body, ['title', 'expectedRevision']);
-    return store.renameGroup(
-      request.params.id,
-      number(body.expectedRevision, 'group revision'),
-      text(body.title, 'group title', 200).trim()
-    );
-  });
-  app.delete<{ Params: { id: string } }>('/api/helper/projects/:id', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision']);
-    return store.deleteGroup(request.params.id, number(body.expectedRevision, 'group revision'));
-  });
-  app.get<{ Querystring: { kind?: string; chatId?: string } }>(
-    '/api/helper/conversations',
-    (request) => {
-      const { kind, chatId } = request.query;
-      if (kind !== 'library' && kind !== 'chat' && kind !== 'all')
-        throw new HttpError(400, 'Helper scope kind required');
-      return store.list(
-        kind === 'library' || kind === 'all'
-          ? { kind }
-          : {
-              kind,
-              chatId: text(chatId, 'chat ID', 100),
-            }
-      );
-    }
+  registerEndpoint(app, helperEndpoints.listProjects, helperOperations.listProjects, () =>
+    store.groups()
   );
-  const readScope = (value: unknown): HelperScope => {
-    const input = record(value);
-    let scope: HelperScope;
-    if (input.kind === 'chat') {
-      fields(input, ['kind', 'chatId']);
-      const chatId = text(input.chatId, 'chat ID', 100);
-      runtime.store.chat(chatId);
-      scope = {
-        kind: 'chat',
-        chatId,
-      };
-    } else {
-      fields(input, ['kind', 'workId']);
-      if (input.kind !== 'library') throw new HttpError(400, 'Invalid helper scope');
-      scope = { kind: 'library', workId: text(input.workId, 'library work ID', 100) };
-    }
+  registerEndpoint(
+    app,
+    helperEndpoints.createProject,
+    helperOperations.createProject,
+    ({ title, requestKey }) => store.createGroup(title.trim(), requestKey)
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.renameProject,
+    helperOperations.renameProject,
+    ({ id, expectedRevision, title }) => store.renameGroup(id, expectedRevision, title.trim())
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.deleteProject,
+    helperOperations.deleteProject,
+    ({ id, expectedRevision }) => store.deleteGroup(id, expectedRevision)
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.listConversations,
+    helperOperations.listConversations,
+    (input) =>
+      store.list(
+        input.kind === 'chat' ? { kind: 'chat', chatId: input.chatId } : { kind: input.kind }
+      )
+  );
+  const readScope = (scope: HelperScope): HelperScope => {
+    if (scope.kind === 'chat') runtime.store.chat(scope.chatId);
     return scope;
   };
-  app.post('/api/helper/conversations', (request) => {
-    const body = record(request.body);
-    fields(body, ['scope']);
-    return store.open(readScope(body.scope));
-  });
-  app.post('/api/helper/conversations/new', (request) => {
-    const body = record(request.body);
-    fields(body, ['scope', 'requestKey', 'title', 'projectId']);
-    return store.create(
-      readScope(body.scope),
-      `request:${text(body.requestKey, 'request key', 100)}`,
-      body.title === undefined ? undefined : text(body.title, 'conversation title', 200),
-      body.projectId == null ? body.projectId : text(body.projectId, 'project ID', 100)
-    );
-  });
-  app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id/project', (request) => {
-    const body = record(request.body);
-    fields(body, ['projectId', 'expectedRevision']);
-    return store.moveGroup(
-      request.params.id,
-      number(body.expectedRevision, 'conversation revision'),
-      body.projectId === null ? null : text(body.projectId, 'project ID', 100)
-    );
-  });
-  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/copy', (request) => {
-    const body = record(request.body);
-    fields(body, ['requestKey', 'expectedRevision', 'expectedEventSequence']);
-    return store.copy(request.params.id, text(body.requestKey, 'request key', 100), {
-      expectedRevision: number(body.expectedRevision, 'conversation revision'),
-      expectedEventSequence: number(
-        body.expectedEventSequence,
-        'event sequence',
-        0,
-        Number.MAX_SAFE_INTEGER
-      ),
-    });
-  });
-  app.get<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) =>
-    store.conversation(request.params.id)
+  registerEndpoint(
+    app,
+    helperEndpoints.openConversation,
+    helperOperations.openConversation,
+    ({ scope }) => store.open(readScope(scope))
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.createConversation,
+    helperOperations.createConversation,
+    ({ scope, requestKey, title, projectId }) =>
+      store.create(readScope(scope), `request:${requestKey}`, title, projectId)
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.moveConversation,
+    helperOperations.moveConversation,
+    ({ id, expectedRevision, projectId }) => store.moveGroup(id, expectedRevision, projectId)
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.copyConversation,
+    helperOperations.copyConversation,
+    ({ id, requestKey, expectedRevision, expectedEventSequence }) =>
+      store.copy(id, requestKey, { expectedRevision, expectedEventSequence })
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.readConversation,
+    helperOperations.readConversation,
+    ({ id }) => store.conversation(id)
   );
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/view', (request) => {
     const id = request.params.id;
@@ -153,76 +121,59 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     if (request.body !== undefined && request.body !== null) fields(record(request.body), []);
     return runtime.cancelCompaction(request.params.id);
   });
-  app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/context', (request) =>
-    runtime.contextSummary(request.params.id)
+  registerEndpoint(
+    app,
+    helperEndpoints.readContextSummary,
+    helperOperations.readContextSummary,
+    ({ id }) => runtime.contextSummary(id)
   );
-  app.put<{ Params: { id: string } }>(
-    '/api/helper/conversations/:id/context/summary',
-    { bodyLimit: 16 * 1024 * 1024 },
-    (request) => {
-      const body = record(request.body);
-      fields(body, ['expectedRevision', 'summary']);
-      const summary = text(body.summary, 'summary', SOURCE_TEXT_MAX_CHARS, true);
+  registerEndpoint(
+    app,
+    helperEndpoints.editContextSummary,
+    helperOperations.editContextSummary,
+    ({ id, expectedRevision, summary }) => {
       if (!summary.trim()) throw new AppError(400, 'HELPER_SUMMARY_EMPTY');
-      return runtime.editContextSummary(
-        request.params.id,
-        number(body.expectedRevision, 'context revision'),
-        summary
-      );
+      return runtime.editContextSummary(id, expectedRevision, summary);
     }
   );
-  app.delete<{ Params: { id: string } }>(
-    '/api/helper/conversations/:id/context/summary',
-    (request) => {
-      const body = record(request.body);
-      fields(body, ['expectedRevision']);
-      return runtime.resetContextSummary(
-        request.params.id,
-        number(body.expectedRevision, 'context revision')
-      );
+  registerEndpoint(
+    app,
+    helperEndpoints.resetContextSummary,
+    helperOperations.resetContextSummary,
+    ({ id, expectedRevision }) => runtime.resetContextSummary(id, expectedRevision)
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.updateConversation,
+    helperOperations.updateConversation,
+    ({ id, expectedRevision, title, persona }) => {
+      if (title === undefined && persona === undefined)
+        throw new HttpError(400, 'Pass title or persona');
+      return store.update(id, expectedRevision, {
+        ...(title === undefined ? {} : { title }),
+        ...(persona === undefined ? {} : { persona }),
+      });
     }
   );
-  app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision', 'title', 'persona']);
-    if (body.title === undefined && body.persona === undefined)
-      throw new HttpError(400, 'Pass title or persona');
-    return store.update(
-      request.params.id,
-      number(body.expectedRevision, 'helper settings revision'),
-      {
-        ...(body.title === undefined ? {} : { title: text(body.title, 'conversation title', 200) }),
-        ...(body.persona === undefined
-          ? {}
-          : { persona: text(body.persona, 'helper persona', HELPER_PERSONA_MAX_CHARS, true) }),
-      }
-    );
-  });
-  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/read', (request) => {
-    const body = record(request.body);
-    fields(body, ['activityEventSeq']);
-    return markHelperConversationRead(
-      runtime.store,
-      request.params.id,
-      number(body.activityEventSeq, 'activity event sequence', 0, Number.MAX_SAFE_INTEGER)
-    );
-  });
-  app.get<{ Params: { id: string } }>('/api/helper/conversations/:id/deletion', (request) =>
-    runtime.deletionImpact(request.params.id)
+  registerEndpoint(
+    app,
+    helperEndpoints.markConversationRead,
+    helperOperations.markConversationRead,
+    ({ id, activityEventSeq }) => markHelperConversationRead(runtime.store, id, activityEventSeq)
   );
-  app.delete<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision', 'expectedEventSequence']);
-    return runtime.deleteConversation(request.params.id, {
-      expectedRevision: number(body.expectedRevision, 'conversation revision'),
-      expectedEventSequence: number(
-        body.expectedEventSequence,
-        'event sequence',
-        0,
-        Number.MAX_SAFE_INTEGER
-      ),
-    });
-  });
+  registerEndpoint(
+    app,
+    helperEndpoints.readConversationDeletion,
+    helperOperations.readConversationDeletion,
+    ({ id }) => runtime.deletionImpact(id)
+  );
+  registerEndpoint(
+    app,
+    helperEndpoints.deleteConversation,
+    helperOperations.deleteConversation,
+    ({ id, expectedRevision, expectedEventSequence }) =>
+      runtime.deleteConversation(id, { expectedRevision, expectedEventSequence })
+  );
   app.get<{ Params: { id: string }; Querystring: { q?: string } }>(
     '/api/helper/conversations/:id/references',
     (request) => {
@@ -239,34 +190,19 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     '/api/helper/conversations/:id/tasks',
     (request) => store.taskSummaries(request.params.id, request.query.before)
   );
-  app.patch<{ Params: { id: string; messageId: string } }>(
-    '/api/helper/conversations/:id/messages/:messageId',
-    { bodyLimit: 16 * 1024 * 1024 },
-    (request) => {
-      const body = record(request.body);
-      fields(body, ['expectedRevision', 'text']);
-      return runtime.editMessage(
-        request.params.id,
-        request.params.messageId,
-        number(body.expectedRevision, 'conversation revision'),
-        text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS, true)
-      );
-    }
+  registerEndpoint(
+    app,
+    helperEndpoints.editMessage,
+    helperOperations.editMessage,
+    ({ id, messageId, expectedRevision, text }) =>
+      runtime.editMessage(id, messageId, expectedRevision, text)
   );
-  app.delete<{ Params: { id: string; messageId: string } }>(
-    '/api/helper/conversations/:id/messages/:messageId',
-    (request) => {
-      const body = record(request.body);
-      fields(body, ['expectedRevision', 'scope']);
-      if (body.scope !== 'pair' && body.scope !== 'following')
-        throw new HttpError(400, 'Invalid helper message deletion scope');
-      return runtime.deleteMessages(
-        request.params.id,
-        request.params.messageId,
-        number(body.expectedRevision, 'conversation revision'),
-        body.scope
-      );
-    }
+  registerEndpoint(
+    app,
+    helperEndpoints.deleteMessages,
+    helperOperations.deleteMessages,
+    ({ id, messageId, expectedRevision, scope }) =>
+      runtime.deleteMessages(id, messageId, expectedRevision, scope)
   );
   app.post<{ Params: { id: string } }>(
     '/api/helper/conversations/:id/messages',

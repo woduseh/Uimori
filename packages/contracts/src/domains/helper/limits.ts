@@ -1,0 +1,1 @@
+export const HELPER_PERSONA_MAX_CHARS = 5_000;
