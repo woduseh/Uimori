@@ -6,7 +6,7 @@ import { allEndpoints, type Endpoint, isAppErrorCode } from '#contracts';
 import * as contracts from '#contracts';
 import { allOperations } from '#contracts/operations';
 import * as operations from '#contracts/operations';
-import { allCommands } from '../server/commands/index.js';
+import { commandsByName } from './fixtures/command-registry.js';
 import { appearanceCases } from './stale-tab/appearance.js';
 import { chatCases } from './stale-tab/chat.js';
 import { chatSettingsCases } from './stale-tab/chat-settings.js';
@@ -69,9 +69,7 @@ const endpointEntries = Object.entries(allEndpoints).flatMap(([domain, endpoints
     endpoint: endpoint as Endpoint,
   }))
 );
-const commandOperations = new Map(
-  Object.entries(allCommands).map(([name, command]) => [name, command.op])
-);
+const commandOperations = new Map([...commandsByName].map(([name, command]) => [name, command.op]));
 const httpEntries = endpointEntries.filter(
   ({ endpoint }) => !commandOperations.has(endpoint.operation)
 );
@@ -101,7 +99,7 @@ test('every endpoint names an operation of its own domain and every operation is
     if (operation && 'kind' in operation && operation.kind === 'command')
       expect(
         commandOperations.get(operation.name),
-        `${name}: register the command in allCommands`
+        `${name}: export the command from a module under server/commands/`
       ).toBe(operation);
   }
   const served = new Set(endpointEntries.map(({ endpoint }) => endpoint.operation));

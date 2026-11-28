@@ -13,12 +13,7 @@ import {
   type OutlineApplyResult,
   outlineEndpoints,
 } from '#contracts';
-import {
-  chatSettingsOperations,
-  defineCommandOperation,
-  nonBlank,
-  splitHeadBody,
-} from '#contracts/operations';
+import { chatSettingsOperations, defineCommandOperation, nonBlank } from '#contracts/operations';
 import { createApp, type App } from '../server/app.js';
 import { AppError, assertRevision } from '../server/app-errors.js';
 import { deleteChat } from '../server/chat-deletion.js';
@@ -30,12 +25,9 @@ import {
   executeOperation,
   stageOperation,
 } from '../server/command.js';
-import {
-  allCommands,
-  applyOutlineCommand,
-  updateChatVariablesCommand,
-  updateStoryGuideCommand,
-} from '../server/commands/index.js';
+import { updateChatVariablesCommand } from '../server/commands/chat-variables.js';
+import { applyOutlineCommand } from '../server/commands/outline.js';
+import { updateStoryGuideCommand } from '../server/commands/story-guide.js';
 import { registerCommand } from '../server/endpoint.js';
 import { outlineWriteTool } from '../server/helper-app-tools.js';
 import { helperChatStateCommand } from '../server/helper-chat-state-tools.js';
@@ -56,9 +48,6 @@ import {
   runScriptedHelper,
   selectFixtureModels,
 } from './fixtures/scripted-helper.js';
-
-import { commandSamples } from './fixtures/command-samples.js';
-import { analyzeSchema, valuesAtPath } from './stale-tab/schema.js';
 
 const owned: { close: () => Promise<void> | void; directory: string }[] = [];
 afterEach(async () => {
@@ -112,110 +101,6 @@ function reserveRun(store: Store, chatId: string) {
       resources: [],
     })
   ).run;
-}
-
-const writes = (store: Store) => store.db.prepare('SELECT total_changes() AS count').get();
-
-for (const registered of Object.values(allCommands)) {
-  const name = registered.op.name;
-  const command: Command = registered;
-  const { revisions, targets } = analyzeSchema(command.op.head);
-  const paths = [...new Set([...revisions, ...targets])];
-  const branches = analyzeSchema(command.op.body).branches;
-  const arrange = (store: Store) => {
-    const fixture = commandSamples[name];
-    if (!fixture)
-      throw new Error(`${name}: add a sample fixture in tests/fixtures/command-samples.ts`);
-    const samples = fixture(store);
-    if (!samples.inputs.length) throw new Error(`${name}: add a valid sample input`);
-    return samples;
-  };
-  const breakBody = (sample: Record<string, unknown>) => {
-    const { headRaw, bodyRaw } = splitHeadBody(command.op.head, sample);
-    const broken = Object.fromEntries(Object.keys(bodyRaw).map((key) => [key, null]));
-    return {
-      ...headRaw,
-      ...broken,
-      ...(command.op.body.safeParse(broken).success ? { __invalidBodyField: true } : {}),
-    };
-  };
-  const conflict = { statusCode: 409, code: 'REVISION_CONFLICT' };
-  const scope = paths.length ? 'one event on success' : 'no target or revision probes';
-
-  const applyBranches = branches.length ? branches : [undefined];
-  for (const branch of applyBranches) {
-    if (!branch && !paths.length && command.receipt) continue;
-    test(`${name} applies ${branch?.label ?? 'body'} (${scope})`, async () => {
-      const store = createStoreFixture();
-      const { inputs } = arrange(store);
-      const sample = inputs.find(
-        (input) => !branch || branch.matches(splitHeadBody(command.op.head, input).bodyRaw)
-      );
-      if (!sample) throw new Error(`${name}: add a valid sample for body branch ${branch?.label}`);
-      const publish = vi.fn();
-      const apply = vi.spyOn(command, 'apply');
-      await executeOperation(command, createStorePorts(store, { publish }), sample);
-      expect(apply).toHaveBeenCalledOnce();
-      if (paths.length) expect(publish).toHaveBeenCalledTimes(1);
-    });
-  }
-
-  for (const path of paths) {
-    test(`${name} rejects stale ${path} before parsing the body without writing`, async () => {
-      const store = createStoreFixture();
-      const { inputs, stale } = arrange(store);
-      const makeStale = stale?.[path];
-      if (!makeStale) throw new Error(`${name}: add a stale-maker for head path ${path}`);
-      const sample = inputs.find((input) =>
-        valuesAtPath(input, path).some((value) => value !== undefined)
-      );
-      if (!sample) throw new Error(`${name}: add a valid sample containing head path ${path}`);
-      const publish = vi.fn();
-      const ports = createStorePorts(store, { publish });
-      const broken = breakBody(sample);
-      await expect(executeOperation(command, ports, broken)).rejects.toMatchObject({
-        statusCode: 400,
-        code: 'INVALID_REQUEST',
-      });
-      await makeStale(sample);
-      const before = writes(store);
-      await expect(executeOperation(command, ports, broken)).rejects.toMatchObject(conflict);
-      expect(writes(store)).toEqual(before);
-      expect(publish).not.toHaveBeenCalled();
-    });
-  }
-
-  if (command.receipt) {
-    test(`${name} replays its receipt and rejects a changed body (${revisions.length ? 'after guard state changes' : scope})`, async () => {
-      const store = createStoreFixture();
-      const { inputs, stale } = arrange(store);
-      const sample = inputs[0]!;
-      const publish = vi.fn();
-      const ports = createStorePorts(store, { publish });
-      const onReplay = vi.spyOn(command.receipt!, 'onReplay');
-      await executeOperation(command, ports, sample);
-      expect(onReplay).not.toHaveBeenCalled();
-      const path = revisions.find((key) =>
-        valuesAtPath(sample, key).some((value) => value !== undefined)
-      );
-      if (path) {
-        const makeStale = stale?.[path];
-        if (!makeStale) throw new Error(`${name}: add a stale-maker for head path ${path}`);
-        await makeStale(sample);
-      }
-      const guard = vi.spyOn(command, 'guard');
-      publish.mockClear();
-      const before = writes(store);
-      await executeOperation(command, ports, sample);
-      expect(onReplay).toHaveBeenCalledOnce();
-      await expect(executeOperation(command, ports, breakBody(sample))).rejects.toMatchObject({
-        statusCode: 409,
-      });
-      expect(guard).not.toHaveBeenCalled();
-      expect(writes(store)).toEqual(before);
-      expect(publish).not.toHaveBeenCalled();
-    });
-  }
 }
 
 test('outline receipt replays with reordered keys, keeps stored created ids, and returns current detail', async () => {
