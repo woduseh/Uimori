@@ -29,7 +29,11 @@ export type Entry =
       exemptTargets?: Record<string, string>;
       exemptBranches?: Record<string, string>;
     }
-  | { exempt: string };
+  | {
+      exempt: string;
+      exemptTargets?: Record<string, string>;
+      exemptBranches?: Record<string, string>;
+    };
 export type DomainCases<D extends Domain = Domain> = {
   domain: D;
   entries: Partial<Record<keyof (typeof allEndpoints)[D] & string, Entry>>;
