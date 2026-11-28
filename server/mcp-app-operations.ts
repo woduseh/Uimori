@@ -68,9 +68,7 @@ const resource = (name: string, readOnly = true): McpAppOperation => ({
   run: (args, { store, fit }) => invokeResourceTool(store, name, args, fit),
 });
 const sceneRead = (name: string) =>
-  chatRead((store, chatId, args, fit) =>
-    invokeHelperSceneTool(store, chatId, name, args, undefined, fit)
-  );
+  chatRead((store, chatId, args, fit) => invokeHelperSceneTool(store, chatId, name, args, fit));
 const chatState = (name: string): McpAppOperation =>
   chatRead((store, chatId, args, fit) => readHelperChatState(store, chatId, name, args, fit));
 
@@ -111,7 +109,7 @@ export const MCP_APP_OPERATIONS: Record<string, McpAppOperation> = {
     (args, { store, chatId, signal, fit }) =>
       args.regex === true
         ? invokeSceneRegexSearch(store, chatId!, args, signal)
-        : invokeHelperSceneTool(store, chatId!, 'scene.search', args, undefined, fit),
+        : invokeHelperSceneTool(store, chatId!, 'scene.search', args, fit),
     'required'
   ),
   'chat.profile.read': chatState('chat.profile.read'),
