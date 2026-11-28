@@ -125,7 +125,9 @@ export const updateVariablesToolInput = z
       .regex(/^[a-f0-9]{64}$/u, 'pass sourceHash from chat.variables.read')
       .nullable(),
     set: keyedValues(variableName, z.string()).optional(),
-    unset: z.array(variableName).optional(),
+    unset: z
+      .array(variableName.refine((name) => !unsafeKeys.has(name), 'Reserved variable name'))
+      .optional(),
   })
   .refine(
     (input) => Object.keys(input.set ?? {}).length > 0 || (input.unset?.length ?? 0) > 0,

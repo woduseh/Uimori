@@ -399,6 +399,10 @@ export function invokeHelperOptions(
   let values = saved.values;
   if (set !== undefined || unset !== undefined) {
     if (values !== undefined) throw new HttpError(400, 'Give either values or set/unset, not both');
+    if (!Object.keys(set ?? {}).length && !unset?.length)
+      throw new HttpError(400, 'Pass set or unset with at least one option');
+    if (current.conflicts.includes('fixed_definition_changed'))
+      throw new AppError(409, 'REVISION_CONFLICT');
     const controls = new Set(current.controls?.map((control) => control.id));
     for (const id of unset ?? []) {
       if (!controls.has(id)) throw new HttpError(400, 'Unknown option to unset');
