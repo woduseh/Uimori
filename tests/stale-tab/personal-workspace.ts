@@ -2,16 +2,36 @@ import { createECDH, randomBytes, randomUUID } from 'node:crypto';
 import { allEndpoints } from '#contracts';
 import { DEFAULT_PUSH_PREFERENCES } from '../../core/push.js';
 import { addBookmark } from '../../server/reading-state.js';
+import { deleteScenes, sceneDeletionImpact } from '../../server/scene-deletion.js';
+import { completedSource } from '../fixtures/illustration.js';
 import {
+  bot,
   conflict,
   deleted,
   deletedChat,
   domainCases,
+  purged,
   read,
   scene,
   singletonExemption,
   store,
 } from './harness.js';
+
+const targetChatIdExemption =
+  'resolveReaderTarget ignores target.chatId and always binds the route :chatId, which the chatId case probes.';
+const readingSceneReason =
+  'A scene another tab removed from a live chat answers the catalogued READING_SCENE_NOT_FOUND after checking the chat and revision.';
+
+function chatWithRemovedScene(title: string) {
+  const { chat, source: kept } = scene(title);
+  const gone = completedSource(store(), chat.id, 'Second scene later removed.');
+  deleteScenes(store(), chat.id, gone.id, {
+    ...sceneDeletionImpact(store(), chat.id, gone.id).request,
+    scope: 'only',
+    idempotencyKey: randomUUID(),
+  });
+  return { chatId: chat.id, keptId: kept.id, goneId: gone.id };
+}
 
 async function removedBookmark() {
   const { chat, source } = scene('Stale tab bookmark');
@@ -79,8 +99,25 @@ export const personalWorkspaceCases = domainCases('personal-workspace', {
           };
         },
         answer: conflict,
+        target: 'chatId',
+      },
+      {
+        when: 'a scene another tab deleted from a live chat',
+        arrange: () => {
+          const { chatId, keptId, goneId } = chatWithRemovedScene('Stale tab reading scene');
+          const position = { chatId, clientId: randomUUID(), expectedRevision: 0 };
+          const target = (sourceId: string) => ({ sourceId, representation: 'original' });
+          return {
+            input: { ...position, target: target(goneId) },
+            control: { ...position, target: target(keptId) },
+          };
+        },
+        answer: { status: 404, code: 'READING_SCENE_NOT_FOUND' },
+        reason: readingSceneReason,
+        target: 'target.sourceId',
       },
     ],
+    exemptTargets: { 'target.chatId': targetChatIdExemption },
   },
   listBookmarks: {
     cases: [
@@ -107,8 +144,29 @@ export const personalWorkspaceCases = domainCases('personal-workspace', {
           };
         },
         answer: conflict,
+        target: 'chatId',
+      },
+      {
+        when: 'a scene another tab deleted from a live chat',
+        arrange: () => {
+          const { chatId, keptId, goneId } = chatWithRemovedScene('Stale tab bookmark scene');
+          const mark = (sourceId: string) => ({
+            chatId,
+            id: randomUUID(),
+            target: { sourceId, representation: 'original' },
+            title: 'Mark',
+          });
+          return { input: mark(goneId), control: mark(keptId) };
+        },
+        answer: { status: 404, code: 'READING_SCENE_NOT_FOUND' },
+        reason: readingSceneReason,
+        target: 'target.sourceId',
       },
     ],
+    exemptTargets: {
+      id: 'id is the client-generated identifier and idempotency key for the new bookmark, not an existing stored resource.',
+      'target.chatId': targetChatIdExemption,
+    },
   },
   updateBookmark: {
     cases: [
@@ -137,14 +195,6 @@ export const personalWorkspaceCases = domainCases('personal-workspace', {
         targetRevision: true,
       },
     ],
-  },
-  readPush: {
-    exempt:
-      'The client id is this browser’s own; reading a device another tab removed answers the push state without a device.',
-  },
-  preparePush: {
-    exempt:
-      'The client id is this browser’s own and preparing creates the server keys only; there is no device to have been removed.',
   },
   subscribePush: {
     cases: [
@@ -205,6 +255,24 @@ export const personalWorkspaceCases = domainCases('personal-workspace', {
           },
         }),
         answer: deleted,
+        target: 'chatId',
+      },
+      {
+        when: 'a bot another tab purged',
+        arrange: () => {
+          const gone = bot();
+          purged('content', gone);
+          return {
+            input: {
+              query: 'lantern',
+              kinds: ['original'],
+              scope: 'bot',
+              botId: gone.id,
+            },
+          };
+        },
+        answer: deleted,
+        target: 'botId',
       },
     ],
   },

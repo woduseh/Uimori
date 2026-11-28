@@ -19,6 +19,46 @@ async function modelWorkspace() {
   );
 }
 
+const deletedModelAnswer = { status: 400, code: 'MODEL_SELECTION_UNAVAILABLE' as const };
+const deletedModelReason =
+  'A model another tab deleted shares MODEL_SELECTION_UNAVAILABLE with a disabled model or connection: its text names both causes and asks for another model.';
+
+async function deletedWorkspaceModel(
+  withModel: (
+    modelId: string,
+    current: Awaited<ReturnType<typeof modelWorkspace>>
+  ) => Record<string, unknown>
+) {
+  const live = model();
+  const gone = model();
+  removed('model', gone);
+  const current = await modelWorkspace();
+  const workspace = {
+    expectedRevision: current.revision,
+    routes: current.routes,
+    translationPolicy: current.translationPolicy,
+  };
+  return {
+    input: { ...workspace, ...withModel(gone.id, current) },
+    control: { ...workspace, ...withModel(live.id, current) },
+  };
+}
+
+const modelRoleCase = (
+  label: string,
+  target: string,
+  withModel: (
+    modelId: string,
+    current: Awaited<ReturnType<typeof modelWorkspace>>
+  ) => Record<string, unknown>
+) => ({
+  when: `a ${label} another tab deleted`,
+  arrange: () => deletedWorkspaceModel(withModel),
+  answer: deletedModelAnswer,
+  reason: deletedModelReason,
+  target,
+});
+
 export const promptsCases = domainCases('prompts', {
   readTemplate: {
     exempt:
@@ -122,26 +162,16 @@ export const promptsCases = domainCases('prompts', {
   },
   updateModelWorkspace: {
     cases: [
-      {
-        when: 'a model another tab deleted',
-        arrange: async () => {
-          const live = model();
-          const gone = model();
-          removed('model', gone);
-          const current = await modelWorkspace();
-          const workspace = {
-            expectedRevision: current.revision,
-            translationPolicy: current.translationPolicy,
-          };
-          return {
-            input: { ...workspace, routes: { main: { id: gone.id }, translation: null } },
-            control: { ...workspace, routes: { main: { id: live.id }, translation: null } },
-          };
-        },
-        answer: { status: 400, code: 'MODEL_SELECTION_UNAVAILABLE' },
-        reason:
-          'A model another tab deleted shares MODEL_SELECTION_UNAVAILABLE with a disabled model or connection: its text names both causes and asks for another model.',
-      },
+      modelRoleCase('main route model', 'routes.main.id', (id) => ({
+        routes: { main: { id }, translation: null },
+      })),
+      modelRoleCase('translation route model', 'routes.translation.id', (id) => ({
+        routes: { main: null, translation: { id } },
+      })),
+      modelRoleCase('title model', 'titleModel.id', (id) => ({ titleModel: { id } })),
+      modelRoleCase('helper model', 'helperModel.id', (id) => ({ helperModel: { id } })),
+      modelRoleCase('context model', 'contextModel.id', (id) => ({ contextModel: { id } })),
+      modelRoleCase('script model', 'scriptModel.id', (id) => ({ scriptModel: { id } })),
       {
         when: 'a judgment connection another tab deleted',
         arrange: async () => {

@@ -39,7 +39,7 @@ export const appearanceCases = domainCases('appearance', {
   selectFonts: {
     cases: [
       {
-        when: 'a font another tab removed',
+        when: 'an app font another tab removed',
         arrange: async () => {
           const live = font(1);
           const gone = font(2);
@@ -55,6 +55,26 @@ export const appearanceCases = domainCases('appearance', {
         },
         answer: { status: 404, code: 'FONT_NOT_FOUND' },
         reason: fontReason,
+        target: 'appFontId',
+      },
+      {
+        when: 'a reader font another tab removed',
+        arrange: async () => {
+          const live = font(4);
+          const gone = font(5);
+          deleteFont(store(), gone.id);
+          const { revision } = await read<{ revision: number }>(
+            allEndpoints.appearance.readFontPreferences
+          );
+          const choice = { expectedRevision: revision, appFontId: null };
+          return {
+            input: { ...choice, readerFontId: gone.id },
+            control: { ...choice, readerFontId: live.id },
+          };
+        },
+        answer: { status: 404, code: 'FONT_NOT_FOUND' },
+        reason: fontReason,
+        target: 'readerFontId',
       },
     ],
   },
@@ -88,6 +108,7 @@ export const appearanceCases = domainCases('appearance', {
           };
         },
         answer: deleted,
+        target: 'themeId',
       },
       {
         when: 'a palette another tab deleted',
@@ -103,6 +124,7 @@ export const appearanceCases = domainCases('appearance', {
           };
         },
         answer: deleted,
+        target: 'paletteId',
       },
       {
         when: 'a bot scope another tab deleted',
@@ -118,6 +140,7 @@ export const appearanceCases = domainCases('appearance', {
           };
         },
         answer: conflict,
+        target: 'targetId',
       },
       {
         when: 'a chat scope another tab deleted',
@@ -131,11 +154,78 @@ export const appearanceCases = domainCases('appearance', {
           };
         },
         answer: conflict,
+        target: 'targetId',
+      },
+      {
+        when: 'a bot palette scope another tab deleted',
+        arrange: async () => {
+          const live = bot();
+          const gone = bot();
+          removed('content', gone);
+          const choice = { dimension: 'palette', scope: 'bot', paletteId: null };
+          const expectedRevision = await themeRevision();
+          return {
+            input: { ...choice, targetId: gone.id, expectedRevision },
+            control: { ...choice, targetId: live.id, expectedRevision },
+          };
+        },
+        answer: conflict,
+        target: 'targetId',
+      },
+      {
+        when: 'a chat palette scope another tab deleted',
+        arrange: async () => {
+          const live = scene('Stale tab appearance palette chat');
+          const choice = { dimension: 'palette', scope: 'chat', paletteId: null };
+          const expectedRevision = await themeRevision();
+          return {
+            input: { ...choice, targetId: deletedChat().chatId, expectedRevision },
+            control: { ...choice, targetId: live.chat.id, expectedRevision },
+          };
+        },
+        answer: conflict,
+        target: 'targetId',
+      },
+      {
+        when: 'a bot Story UI scope another tab deleted',
+        arrange: async () => {
+          const live = bot();
+          const gone = bot();
+          removed('content', gone);
+          const choice = { dimension: 'storyUi', scope: 'bot', themeId: null };
+          const expectedRevision = await themeRevision();
+          return {
+            input: { ...choice, targetId: gone.id, expectedRevision },
+            control: { ...choice, targetId: live.id, expectedRevision },
+          };
+        },
+        answer: conflict,
+        target: 'targetId',
       },
     ],
   },
   selectThemeBackground: {
     cases: [
+      {
+        when: 'a stale global background revision with a missing image hash',
+        arrange: async () => {
+          const expectedRevision = (await themeRevision()) + 1;
+          return {
+            input: {
+              scope: 'global',
+              expectedRevision,
+              background: {
+                imageHash: '0'.repeat(64),
+                blur: 0,
+                lightOverlay: 0,
+                darkOverlay: 0,
+              },
+            },
+          };
+        },
+        answer: conflict,
+        targetRevision: true,
+      },
       {
         when: 'a bot scope another tab deleted',
         arrange: async () => {
