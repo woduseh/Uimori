@@ -95,8 +95,7 @@ export const outlineWriteTool = defineHelperCommandTool({
   schemaBody: applyOutlineBody,
   omitHeadKeys: ['chatId', 'idempotencyKey'],
   injectIdempotencyKey: true,
-  changeTarget: (_input, { chatId }) => ({ domain: 'outline', chatId }),
-  formatResult(outcome, { receiptId }) {
+  formatResult(outcome, { receiptId, chatId, chatTitle }) {
     let createdIndex = 0;
     const operations = outcome.replayed ? [] : outcome.input.operations;
     const changes = operations.map((operation) =>
@@ -126,7 +125,9 @@ export const outlineWriteTool = defineHelperCommandTool({
         receiptId,
         operation: 'outline.write',
         requestedTargets: operations.length,
-        targets: [],
+        targets: operations.length
+          ? [{ kind: 'outline', id: chatId, chatId, title: chatTitle, revision: 0 }]
+          : [],
       },
     };
   },

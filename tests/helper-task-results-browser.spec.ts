@@ -11,7 +11,7 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { openHelper, expectEditorSection, selectEditorSection } from './ui-navigation.js';
+import { openHelper, selectEditorSection } from './ui-navigation.js';
 
 test.setTimeout(60000);
 
@@ -188,7 +188,7 @@ test('an appearance result opens both saved characters in the chat image setting
   );
 });
 
-test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps the helper beside it', async ({
+test('HRESULT03 opening a scene or resource result keeps the helper beside it and an unsaved editor draft', async ({
   page,
   request,
 }) => {
@@ -212,15 +212,7 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
     .toBe('completed');
   const generated = ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail)
     .sources[0]!;
-  const paragraphs = Array.from(
-    { length: 40 },
-    (_, index) => `문단 ${index + 1}: 등대지기는 젖은 계단을 하나씩 올라 불을 살폈다.`
-  );
-  const edited = await request.put(`/api/sources/${generated.id}/text`, {
-    data: { text: paragraphs.join('\n\n'), expectedRevision: generated.editRevision ?? 0 },
-  });
-  expect(edited.ok(), await edited.text()).toBe(true);
-  const source = (await edited.json()) as ChatDetail['sources'][number];
+  const source = generated;
   const bot = fixtureBotInput('로어 이동 봇', '설명');
   bot.package = nativeContent({
     name: '로어 이동 봇',
@@ -239,75 +231,24 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   const projection: HelperTaskResultsView = {
     taskId: task.id,
     status: 'completed',
-    results: [],
-    changes: [
+    results: [
       {
-        domain: 'scene',
-        targetId: `${source.id}:original`,
-        title: chat.title,
-        location: { kind: 'scene', scene: 1, field: 'original' },
-        action: 'update',
-        diff: {
-          mode: 'prose',
-          unit: 'word',
-          added: 1,
-          removed: 1,
-          hunks: [
-            {
-              beforeOffset: 0,
-              afterOffset: 0,
-              segments: [
-                { op: 'equal', text: '문단 31: ' },
-                { op: 'delete', text: '마른' },
-                { op: 'insert', text: '젖은' },
-              ],
-            },
-          ],
-        },
-        anchor: {
-          domain: 'scene',
-          chatId: chat.id,
-          sourceId: source.id,
-          field: 'original',
-          paragraph: 60,
-        },
+        eventSeq: 1,
+        receiptId: `${task.id}:scene`,
+        operation: 'scene.patch',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [
+          { kind: 'scene', id: source.id, chatId: chat.id, title: chat.title, revision: 1 },
+        ],
       },
       {
-        domain: 'resource',
-        targetId: content.id,
-        title: content.title,
-        location: {
-          kind: 'resource-list',
-          path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
-          section: 'lore',
-          item: { name: '폭풍', index: 0 },
-          field: ['content'],
-        },
-        action: 'update',
-        diff: {
-          mode: 'prose',
-          unit: 'word',
-          added: 1,
-          removed: 0,
-          hunks: [
-            {
-              beforeOffset: 0,
-              afterOffset: 0,
-              segments: [
-                { op: 'equal', text: '폭풍에 관한 ' },
-                { op: 'insert', text: '설명' },
-              ],
-            },
-          ],
-        },
-        anchor: {
-          domain: 'resource',
-          kind: 'content',
-          id: content.id,
-          path: '/package/nativeRisu/card/character_book/entries/2/content',
-          section: 'lore',
-          index: 2,
-        },
+        eventSeq: 2,
+        receiptId: `${task.id}:lore`,
+        operation: 'resource.patch',
+        requestedTargets: 1,
+        changedTargets: 1,
+        targets: [{ kind: 'content', id: content.id, title: content.title, revision: 2 }],
       },
     ],
     confirmations: [],
@@ -322,46 +263,24 @@ test('HCHANGE03 opening a change lands on its paragraph or lore entry and keeps 
   await openHelper(page);
   const helper = page.locator('#helper-panel');
   const results = helper.getByTestId('helper-task-results');
-  await results
-    .getByRole('button', { name: `${chat.title}, 장면 1, 원문 열기`, exact: true })
-    .click();
+  await results.getByRole('button', { name: `${chat.title} 열기`, exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('source')).toBe(source.id);
-  const marked = page.locator(`[data-source-id="${source.id}"] .arrival-mark`);
-  await expect(marked).toHaveCount(1);
-  const target = page
-    .locator(`[data-source-id="${source.id}"]`)
-    .getByText('문단 31: 등대지기는', { exact: false });
-  await expect(target).toBeInViewport();
   await expect(helper).toBeVisible();
   await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
 
   await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
-  await results
-    .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
-    .click();
+  await results.getByRole('button', { name: `${content.title} 열기`, exact: true }).click();
   const library = page.getByTestId('library-panel');
-  await expectEditorSection(library, '로어북');
-  await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
-    'aria-current',
-    'true'
-  );
-  await expect(library.locator('.nl-detail.arrival-mark')).toBeVisible();
-  await expect(helper).toBeVisible();
-  await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
-
   await selectEditorSection(library, '기본 정보');
   const name = library.getByRole('textbox', { name: /^(봇|페르소나|모듈) 이름$/u });
+  await expect(name).toHaveValue(content.title);
+  await expect(helper).toBeVisible();
+  await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
+
   await name.fill('저장하지 않은 이름');
   await helper.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
-  await results
-    .getByRole('button', { name: `${content.title}, 로어북, 폭풍, 로어 본문 열기`, exact: true })
-    .click();
-  await expect(library.getByRole('button', { name: '폭풍', exact: true })).toHaveAttribute(
-    'aria-current',
-    'true'
-  );
+  await results.getByRole('button', { name: `${content.title} 열기`, exact: true }).click();
   await expect(helper.getByRole('button', { name: '도우미 크게 보기', exact: true })).toBeVisible();
-  await selectEditorSection(library, '기본 정보');
   await expect(name).toHaveValue('저장하지 않은 이름');
 });
 
@@ -451,7 +370,6 @@ test('HUSAGE02 HUSAGE03 the usage popover compacts manually, then the summary di
           taskId: task.id,
           status: 'completed',
           results: [],
-          changes: [],
           confirmations: [],
           unrecordedOperations: 0,
           usage,

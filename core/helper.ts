@@ -159,16 +159,7 @@ export type HelperConfirmedCall = {
   chatId: string | null;
   arguments?: Record<string, unknown>;
 };
-export const HELPER_REVERTED_CHANGES_LIMIT = 20;
 export const HELPER_DECLINED_CALLS_LIMIT = 16;
-export type HelperRevertedChange = {
-  taskId: string;
-  request: string;
-  domain: HelperChangeDomain;
-  kind?: import('./resource-editing.js').ResourceKind;
-  targetId: string;
-  title: string;
-};
 export type HelperDeclinedCall = {
   id: string;
   operation: string;
@@ -180,7 +171,6 @@ export type HelperDeclinedCall = {
 export type HelperTaskSnapshot = {
   mode?: 'plan';
   confirmations?: HelperConfirmedCall[];
-  revertedChanges?: { changes: HelperRevertedChange[]; omitted: number };
   declinedCalls?: HelperDeclinedCall[];
   confirmPaidGeneration?: true;
   images?: import('./request-images.js').RequestImage[];
@@ -279,7 +269,10 @@ export type HelperTaskResultTarget = {
     | 'illustration'
     | 'chat'
     | 'translation'
-    | 'scene';
+    | 'scene'
+    | 'outline'
+    | 'notes'
+    | 'chat-lore';
   id: string;
   chatId?: string;
   title: string;
@@ -302,101 +295,6 @@ export type HelperTaskResult = {
   changedTargets: number;
   targets: HelperTaskResultTarget[];
 };
-export type HelperChangeDomain =
-  | 'resource'
-  | 'scene'
-  | 'outline'
-  | 'notes'
-  | 'settings'
-  | 'chat-lore';
-export type HelperChangeAnchor =
-  | {
-      domain: 'resource';
-      kind: import('./resource-editing.js').ResourceKind;
-      id: string;
-      path: string | null;
-      section: 'lore' | 'prompt' | 'terms' | 'field' | null;
-      index: number | null;
-    }
-  | {
-      domain: 'scene';
-      chatId: string;
-      sourceId: string;
-      field: 'original' | 'translation' | 'title';
-      paragraph: number | null;
-    }
-  | { domain: 'outline'; chatId: string; nodeId: string; field: 'title' | 'intent' | null }
-  | { domain: 'notes'; chatId: string; noteId: string }
-  | { domain: 'settings'; id: string; chatId: string | null; setting: string }
-  | { domain: 'chat-lore'; chatId: string; overrideId: string };
-export type HelperChangeListSection = 'lore' | 'prompt' | 'terms';
-export type HelperChangeLocation =
-  | { kind: 'scene'; scene: number | null; field: 'original' | 'translation' | 'title' }
-  | { kind: 'resource-field'; path: string[] }
-  | {
-      kind: 'resource-list';
-      path: string[];
-      section: HelperChangeListSection;
-      item: { name: string | null; type?: string; index: number } | null;
-      field: string[];
-    }
-  | { kind: 'resource-more'; count: number }
-  | { kind: 'outline'; level: string; title: string; field: 'title' | 'intent' | null }
-  | { kind: 'note'; noteKind: string; text: string }
-  | { kind: 'setting'; setting: string }
-  | { kind: 'chat-lore' };
-export type HelperChange = {
-  domain: HelperChangeDomain;
-  targetId: string;
-  title: string;
-  location: HelperChangeLocation | string | null;
-  action: 'create' | 'update' | 'delete' | 'reorder';
-  diff: import('./text-diff.js').TextDiff | null;
-  anchor: HelperChangeAnchor | null;
-  textRemoved?: 'deleted' | 'expired';
-};
-export type HelperRollbackTouch =
-  | { domain: 'resource'; kind: import('./resource-editing.js').ResourceKind; id: string }
-  | {
-      domain: 'scene';
-      chatId: string;
-      sourceId: string;
-      fields: ('original' | 'translation')[];
-    }
-  | { domain: 'outline'; chatId: string }
-  | { domain: 'notes'; chatId: string };
-export type HelperRollbackStatus =
-  | 'restorable'
-  | 'restored'
-  | 'changed-since'
-  | 'not-covered'
-  | 'text-removed'
-  | 'failed';
-export type HelperRollbackReason =
-  | 'changed-after-task'
-  | 'changed-during-task'
-  | 'created'
-  | 'deleted'
-  | 'expired'
-  | 'other-domain'
-  | 'recorded-before-rollback';
-export type HelperRollbackUnit = {
-  unit: string;
-  domain: HelperChangeDomain;
-  title: string;
-  changeTargetIds: string[];
-  status: HelperRollbackStatus;
-  reason?: HelperRollbackReason;
-  touches: HelperRollbackTouch | null;
-  notices?: 'translation-images-not-restored'[];
-  error?: string;
-  errorParams?: Record<string, string | number | boolean>;
-};
-export type HelperRollbackView = {
-  taskId: string;
-  blocked: 'task-active' | null;
-  units: HelperRollbackUnit[];
-};
 export type HelperTaskAttemptUsage = import('./task-trace.js').TraceCall;
 export type HelperQuestionOption = {
   label: string;
@@ -412,7 +310,6 @@ export type HelperTaskResultsView = {
   taskId: string;
   status: HelperStatus;
   results: HelperTaskResult[];
-  changes: HelperChange[];
   confirmations: HelperConfirmation[];
   question?: HelperQuestion | null;
   unrecordedOperations: number;

@@ -68,7 +68,6 @@ function fixture(content = 'First paragraph.\nSecond paragraph.') {
       chatId,
       name,
       toolArgs,
-      undefined,
       maxResultTokens === undefined ? undefined : tokenFit(maxResultTokens)
     ) as Record<string, any>;
   };

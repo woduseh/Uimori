@@ -9,7 +9,6 @@ import type { HelperWorkspace } from './helper-workspace.js';
 import { helperTraceCalls } from './task-trace.js';
 import { AppError } from './app-errors.js';
 import type { Store } from './store.js';
-import { readHelperChanges, recordHelperAction } from './helper-changes.js';
 import { readHelperConfirmations } from './helper-confirmations.js';
 
 export function recordHelperTaskResult(
@@ -21,22 +20,6 @@ export function recordHelperTaskResult(
     ...result,
     changedTargets: result.targets.length,
   });
-  for (const target of result.targets) {
-    if (target.kind !== 'settings' || !target.setting) continue;
-    const chatId = target.setting.startsWith('chat.') ? target.id : null;
-    recordHelperAction(workspace.store, task, {
-      domain: 'settings',
-      targetId: `${target.setting}:${target.id}`,
-      chatId,
-      title: target.title,
-      location: { kind: 'setting', setting: target.setting },
-      action: 'update',
-      anchor: { domain: 'settings', id: target.id, chatId, setting: target.setting },
-      ...(target.before !== undefined && target.after !== undefined
-        ? { value: { before: target.before, after: target.after } }
-        : {}),
-    });
-  }
 }
 
 const numeric = (value: unknown): number | null =>
@@ -102,7 +85,6 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     taskId,
     status: task.status as HelperStatus,
     results,
-    changes: readHelperChanges(store.db, taskId),
     confirmations: readHelperConfirmations(store, taskId),
     ...(question ? { question } : {}),
     unrecordedOperations: Number(unknown?.n ?? 0),

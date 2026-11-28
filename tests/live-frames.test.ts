@@ -46,7 +46,6 @@ test('helper data readers wake on finished tasks and saved settings or resources
   for (const kind of [
     'task.completed',
     'task.interrupted',
-    'task.rolled-back',
     'artifact.saved',
     'settings.updated',
     'resource.updated',

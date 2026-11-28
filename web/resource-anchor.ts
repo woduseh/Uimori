@@ -1,9 +1,14 @@
 import { createContext, useContext, useEffect, useRef } from 'react';
-import type { HelperChangeAnchor } from '../core/helper.js';
 import type { ResourceKind } from '../core/resource-editing.js';
 import { markArrivalWhenShown } from './arrival-mark.js';
 
-export type ResourceAnchor = Extract<HelperChangeAnchor, { domain: 'resource' }> & {
+export type ResourceAnchor = {
+  domain: 'resource';
+  kind: ResourceKind;
+  id: string;
+  path: string | null;
+  section: 'lore' | 'prompt' | 'terms' | 'field' | null;
+  index: number | null;
   epoch: number;
 };
 

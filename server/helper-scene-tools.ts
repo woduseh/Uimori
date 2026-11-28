@@ -10,9 +10,9 @@ import { HelperToolError } from './app-errors.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { matchHelperText, type HelperTextNormalization } from './helper-resource-editing.js';
-import { withHelperChange } from './helper-changes.js';
 import { compileEditedSourceText } from './story-ui-assets.js';
-import type { HelperTask } from '../core/helper.js';
+import type { HelperTaskResultTarget } from '../core/helper.js';
+import { sceneTitle } from './scene-titles.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -611,12 +611,45 @@ function replacement(content: string, args: Record<string, unknown>) {
   return { content: text(result, 'scene text', SOURCE_TEXT_MAX_CHARS), normalizations };
 }
 
+type SceneReceipt = {
+  changed?: boolean;
+  target?: 'original' | 'translation';
+  sourceId?: string;
+  revision?: number;
+  items?: SceneReceipt[];
+};
+
+export function helperSceneResultTargets(
+  store: Store,
+  chatId: string,
+  result: unknown
+): { requested: number; targets: HelperTaskResultTarget[] } {
+  const receipt = result as SceneReceipt;
+  const items = receipt.items ?? [receipt];
+  const chatTitle = store.chat(chatId).title;
+  return {
+    requested: items.length,
+    targets: items.flatMap((item) =>
+      item.changed && item.sourceId
+        ? [
+            {
+              kind: item.target === 'translation' ? 'translation' : 'scene',
+              id: item.sourceId,
+              chatId,
+              title: sceneTitle(store, item.sourceId) || chatTitle,
+              revision: item.revision ?? 0,
+            },
+          ]
+        : []
+    ),
+  };
+}
+
 export function invokeHelperSceneTool(
   store: Store,
   chatId: string,
   name: string,
   args: Record<string, unknown>,
-  task?: Pick<HelperTask, 'id' | 'conversationId'>,
   fits: HelperReadFit = DEFAULT_READ_FIT
 ): unknown {
   return store.transaction(() => {
@@ -665,7 +698,7 @@ export function invokeHelperSceneTool(
       const results = items.map((item, index) => {
         try {
           const { chatId: _itemChatId, ...patch } = item;
-          return invokeHelperSceneTool(store, chatId, 'scene.patch', patch, task);
+          return invokeHelperSceneTool(store, chatId, 'scene.patch', patch);
         } catch (error) {
           throw new HttpError(
             error instanceof HttpError ? error.statusCode : 500,
@@ -808,42 +841,34 @@ export function invokeHelperSceneTool(
     const changed = content !== current.content;
     let savedRevision = editTarget.expectedRevision;
     let sourceHash = source.hash;
-    const tracked = <T>(field: 'original' | 'translation', save: () => T) =>
-      withHelperChange(store, task, { domain: 'scene', chatId, sourceId: source.id, field }, save);
     let savedText = content;
     let storyUiFailures: string[] = [];
     if (changed && current.target === 'original') {
       const compiled = compileEditedSourceText(store, source.id, content);
       storyUiFailures = compiled.failures;
-      const saved = tracked('original', () =>
-        store.editSource(source.id, {
-          text: compiled.text,
-          expectedRevision: editTarget.expectedRevision,
-        })
-      );
+      const saved = store.editSource(source.id, {
+        text: compiled.text,
+        expectedRevision: editTarget.expectedRevision,
+      });
       savedRevision = saved.editRevision ?? 0;
       sourceHash = saved.hash;
       savedText = saved.text;
     } else if (changed && !translationEdit) {
       savedRevision =
-        tracked('translation', () =>
-          store.editTranslation(source.id, {
-            text: content,
-            expectedRevision: editTarget.expectedRevision,
-            expectedSourceHash: source.hash,
-          })
-        ).revision ?? 0;
+        store.editTranslation(source.id, {
+          text: content,
+          expectedRevision: editTarget.expectedRevision,
+          expectedSourceHash: source.hash,
+        }).revision ?? 0;
     }
     let translationRevision: number | undefined;
     if (translationEdit && (changed || translationEdit.changed)) {
       translationRevision =
-        tracked('translation', () =>
-          store.editTranslation(source.id, {
-            text: translationEdit.content,
-            expectedRevision: translationEdit.revision,
-            expectedSourceHash: sourceHash,
-          })
-        ).revision ?? 0;
+        store.editTranslation(source.id, {
+          text: translationEdit.content,
+          expectedRevision: translationEdit.revision,
+          expectedSourceHash: sourceHash,
+        }).revision ?? 0;
     }
     return {
       changed: changed || translationEdit?.changed === true,

@@ -8,7 +8,6 @@ import { registerEndpoint } from './endpoint.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
-import { forgetHelperResourceChanges } from './helper-changes.js';
 import { forgetHelperConfirmationTargets } from './helper-argument-retention.js';
 import { recordPromptWorkspaceUpdate } from './prompt-workspace-events.js';
 
@@ -93,8 +92,6 @@ export function deleteLibraryItem(
       removeThemeScope(store, 'bot', id);
       store.db.prepare('DELETE FROM app_metadata WHERE key=?').run(`bot-defaults:${id}`);
     }
-    if (kind === 'content' || kind === 'prompt-preset')
-      forgetHelperResourceChanges(store.db, kind, id);
     forgetHelperConfirmationTargets(store.db, [{ kind, id }]);
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);

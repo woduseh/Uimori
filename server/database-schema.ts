@@ -10,9 +10,9 @@ import { initLoreContextDefaults } from './lore-context-defaults.js';
 import { initStoryGuide } from './story-guide-store.js';
 import { initRequestFilesSchema } from './request-file-storage.js';
 import { initExecutionDiagnostics } from './execution-diagnostics.js';
-import { initThemeAssets, pruneThemeAssets } from './theme-assets.js';
+import { initThemeAssets, pruneThemeAssets, themeAssetHashes } from './theme-assets.js';
 import { initLibraryFolderCovers } from './library-organization.js';
-import { initHelperChanges, pruneHelperChanges } from './helper-changes.js';
+import { imageDataHashes, queueImageCleanup } from './unused-data.js';
 
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
@@ -36,6 +36,31 @@ function initHelperSeeds(db: DatabaseSync) {
     conversation_id TEXT PRIMARY KEY REFERENCES helper_conversations(id) ON DELETE CASCADE,
     group_id TEXT NOT NULL REFERENCES helper_conversation_groups(id) ON DELETE CASCADE
   );`);
+}
+
+function dropHelperChanges(db: DatabaseSync) {
+  if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='helper_changes'").get())
+    return;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const baselines = db
+      .prepare('SELECT target_id,baseline FROM helper_changes WHERE baseline IS NOT NULL')
+      .all()
+      .map((row) => ({ target: String(row.target_id), baseline: String(row.baseline) }));
+    db.exec('DROP TABLE helper_changes');
+    queueImageCleanup(
+      db,
+      baselines.flatMap((row) => imageDataHashes(row.baseline))
+    );
+    const themeAssets = baselines.flatMap((row) =>
+      row.target.startsWith('theme:') ? themeAssetHashes(JSON.parse(row.baseline)) : []
+    );
+    if (themeAssets.length) pruneThemeAssets(db, themeAssets);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 export class DatabaseSchemaError extends Error {
@@ -82,8 +107,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initThemeAssets(db);
     initLibraryFolderCovers(db);
     initOutlineFocus(db);
-    initHelperChanges(db);
-    pruneHelperChanges(db);
+    dropHelperChanges(db);
     pruneThemeAssets(db, 'abandoned');
     return;
   }
@@ -91,7 +115,6 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     db.exec('BEGIN IMMEDIATE');
     initializeFresh();
     initHelperSeeds(db);
-    initHelperChanges(db);
     initRequestFilesSchema(db);
     initStoryGuide(db);
     initSceneContext(db);

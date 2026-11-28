@@ -7,7 +7,6 @@ import {
   type Locator,
   type Page,
 } from './fixtures/browser-test.js';
-import type { HelperChange } from '../core/helper.js';
 import type { Content } from '../core/product.js';
 import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
 import { expectCodeFieldValue } from './code-field.js';
@@ -186,50 +185,6 @@ test('EHELP09 a helper save shows in the open editor with no phantom change, and
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   const task = state.current().tasks[0]!;
-  state.results.set(task.id, {
-    changes: [
-      {
-        domain: 'resource',
-        targetId: bot.id,
-        title,
-        location: {
-          kind: 'resource-list',
-          path: ['package', 'nativeRisu', 'card', 'character_book', 'entries'],
-          section: 'lore',
-          item: { name: '항구', index: 1 },
-          field: ['content'],
-        },
-        action: 'update',
-        diff: {
-          mode: 'prose',
-          unit: 'word',
-          added: 2,
-          removed: 1,
-          hunks: [
-            {
-              beforeOffset: 0,
-              afterOffset: 0,
-              segments: [
-                { op: 'equal', text: '항구에는 ' },
-                { op: 'insert', text: '새벽마다 ' },
-                { op: 'equal', text: '작은 어선이 ' },
-                { op: 'delete', text: '모여요.' },
-                { op: 'insert', text: '돌아와요.' },
-              ],
-            },
-          ],
-        },
-        anchor: {
-          domain: 'resource',
-          kind: 'content',
-          id: bot.id,
-          path: '/package/nativeRisu/card/character_book/entries/1/content',
-          section: 'lore',
-          index: 1,
-        },
-      } as HelperChange,
-    ],
-  });
   state.emit('resource.updated');
   state.complete(task);
   const body = editor.getByRole('textbox', { name: '로어 본문', exact: true });
@@ -237,16 +192,6 @@ test('EHELP09 a helper save shows in the open editor with no phantom change, and
   await expect(editorChanges(page)).toHaveCount(0);
   await expect(editor.locator('.section-navigation-changed')).toHaveCount(0);
   await expect(panel.locator('.helper-editor-unsaved')).toHaveCount(0);
-  await openLore(editor, '등대');
-  await panel
-    .getByTestId('helper-task-results')
-    .getByRole('button', { name: `${title}, 로어북, 항구, 로어 본문 열기`, exact: true })
-    .click();
-  await expect(
-    editor
-      .getByRole('complementary', { name: '로어 목록', exact: true })
-      .getByRole('button', { name: '항구', exact: true })
-  ).toHaveAttribute('aria-current', 'true');
 
   await body.fill('항구는 사용자가 아직 저장하지 않은 글이에요.');
   const chips = panel.locator('.helper-context-chips');

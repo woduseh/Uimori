@@ -61,7 +61,6 @@
     "web/HelperPanel.tsx": 4,
     "web/HelperSessionBar.tsx": 2,
     "web/HelperTaskResults.tsx": 1,
-    "web/HelperTaskRollback.tsx": 3,
     "web/IllustrationActivity.tsx": 1,
     "web/IllustrationPresetSettings.tsx": 4,
     "web/IllustrationReferences.tsx": 3,

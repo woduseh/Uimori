@@ -27,7 +27,6 @@ import { messages as helperattachments } from './helperattachments.js';
 import { messages as storyUi } from './story-ui.js';
 import { messages as themeAssets } from './theme-assets.js';
 import { messages as shortcuts } from './shortcuts.js';
-import { messages as helperRollback } from './helper-rollback.js';
 import { messages as helperPlan } from './helper-plan.js';
 import { messages as helperConfirmations } from './helper-confirmations.js';
 import { messages as readerSelection } from './reader-selection.js';
@@ -66,7 +65,6 @@ const entries = {
   ...storyUi,
   ...themeAssets,
   ...shortcuts,
-  ...helperRollback,
   ...helperPlan,
   ...helperConfirmations,
   ...readerSelection,

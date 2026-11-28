@@ -749,12 +749,6 @@ export const messages = {
     ja: '参照した場面、構成項目、または資料が削除されています。その参照を外して送り直してください。',
     zh: '引用的场景、大纲条目或资料已被删除。请移除该引用后重新发送。',
   },
-  'errors.HELPER_ROLLBACK_UNIT_NOT_FOUND': {
-    ko: '되돌릴 변경을 찾을 수 없어요. 대상이 다른 곳에서 삭제됐을 수 있으니 최신 기록을 확인해 주세요.',
-    en: 'The change to undo was not found. Its target may have been deleted elsewhere; review the latest history.',
-    ja: '元に戻す変更が見つかりません。対象が別の場所で削除された可能性があります。最新の記録を確認してください。',
-    zh: '找不到要撤销的更改。其对象可能已在其他地方被删除，请查看最新记录。',
-  },
   'errors.HELPER_ARTIFACT_NOT_FOUND': {
     ko: '가정 장면을 찾을 수 없어요. 대화가 다른 곳에서 삭제됐을 수 있어요.',
     en: 'The draft scene was not found. Its conversation may have been deleted elsewhere.',

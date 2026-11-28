@@ -245,30 +245,6 @@ export const messages = {
     ja: '削除された行',
     zh: '删除的行',
   },
-  'helperChanges.excludedScene': {
-    ko: '제외된 장면',
-    en: 'Excluded scene',
-    ja: '除外したシーン',
-    zh: '已排除的场景',
-  },
-  'helperChanges.moreChanges': {
-    ko: '그 밖의 변경 {count, number}곳',
-    en: '{count, plural, one {# more change} other {# more changes}}',
-    ja: 'その他の変更 {count, number}か所',
-    zh: '其他 {count, number} 处更改',
-  },
-  'helperChanges.chatLore': {
-    ko: '채팅 전용 로어',
-    en: 'Chat-only lore',
-    ja: 'チャット専用ロア',
-    zh: '聊天专用设定',
-  },
-  'helperChanges.created': {
-    ko: '새로 만듦',
-    en: 'Created',
-    ja: '新規作成',
-    zh: '已新建',
-  },
   'helperChanges.reordered': {
     ko: '순서 바뀜',
     en: 'Reordered',
@@ -286,18 +262,6 @@ export const messages = {
     en: 'Comparing took too long, so it was skipped.',
     ja: '比較に時間がかかりすぎたため、省略しました。',
     zh: '对比耗时过长，已省略。',
-  },
-  'helperChanges.textDeleted': {
-    ko: '대상이 삭제되어 바뀐 내용을 지웠어요.',
-    en: 'The target was deleted, so the changed text was removed.',
-    ja: '対象が削除されたため、変更内容を消去しました。',
-    zh: '目标已删除，更改内容已清除。',
-  },
-  'helperChanges.textExpired': {
-    ko: '보관 기간이 지나 바뀐 내용을 지웠어요.',
-    en: 'The changed text was removed after its retention period.',
-    ja: '保存期間が過ぎたため、変更内容を消去しました。',
-    zh: '已超过保留期限，更改内容已清除。',
   },
   'helperChanges.moreHunks': {
     ko: '생략된 부분',
@@ -892,6 +856,42 @@ export const messages = {
     en: 'Scene name saved',
     ja: 'シーン名を保存済み',
     zh: '场景名称已保存',
+  },
+  'helperResults.sceneSaved': {
+    ko: '원문 저장됨',
+    en: 'Original saved',
+    ja: '原文を保存済み',
+    zh: '原文已保存',
+  },
+  'helperResults.sceneRestored': {
+    ko: '이전 원문으로 복원됨',
+    en: 'Earlier original restored',
+    ja: '以前の原文に復元済み',
+    zh: '已恢复为早先的原文',
+  },
+  'helperResults.translationSaved': {
+    ko: '번역 저장됨',
+    en: 'Translation saved',
+    ja: '翻訳を保存済み',
+    zh: '译文已保存',
+  },
+  'helperResults.outlineSaved': {
+    ko: '플롯 저장됨',
+    en: 'Outline saved',
+    ja: 'プロットを保存済み',
+    zh: '大纲已保存',
+  },
+  'helperResults.notesSaved': {
+    ko: '작가 노트 저장됨',
+    en: 'Author note saved',
+    ja: '作者ノートを保存済み',
+    zh: '作者笔记已保存',
+  },
+  'helperResults.chatLoreSaved': {
+    ko: '채팅 로어 저장됨',
+    en: 'Chat lore saved',
+    ja: 'チャットのロアを保存済み',
+    zh: '聊天设定已保存',
   },
   'helperResults.promptCombinationSaved': {
     ko: '옵션 프리셋 저장',

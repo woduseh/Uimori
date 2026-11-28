@@ -1,14 +1,12 @@
 import { DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from './fixtures/browser-test.js';
-import type { HelperChange, HelperRollbackUnit } from '../core/helper.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import {
   createHelperChat,
   openHelperPanel,
   routeSyntheticHelper,
 } from './fixtures/helper-browser.js';
-import { navigationAction } from './ui-navigation.js';
 
 test.setTimeout(60000);
 
@@ -117,115 +115,4 @@ test('HCONFIRM01 held operations are confirmed with an editable request, decline
   expect(state.posts[0].confirmations).toEqual(['delete-bot']);
   expect(state.posts[0].text).toBe(`${confirmedText} 끝나면 서재 목록도 정리해 주세요.`);
   await expect(panel.locator('.helper-confirmation-chip')).toHaveCount(0);
-});
-
-const resourceChange = (id: string, title: string): HelperChange => ({
-  domain: 'resource',
-  targetId: id,
-  title,
-  location: { kind: 'resource-field', path: ['description'] },
-  action: 'update',
-  diff: null,
-  anchor: null,
-});
-const resourceUnit = (
-  id: string,
-  title: string,
-  status: HelperRollbackUnit['status'] = 'restorable',
-  reason?: HelperRollbackUnit['reason']
-): HelperRollbackUnit => ({
-  unit: `resource:content:${id}`,
-  domain: 'resource',
-  title,
-  changeTargetIds: [id],
-  status,
-  ...(reason ? { reason } : {}),
-  touches: { domain: 'resource', kind: 'content', id },
-});
-
-test('HROLLBACK03 undoing a resource under an unsaved editor draft keeps the draft and reports the changed saved version', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  const original = `되돌릴 봇 ${randomUUID()}`;
-  const created = await request.post('/api/content', {
-    data: fixtureBotInput(original, 'Original source.'),
-  });
-  expect(created.ok()).toBe(true);
-  const bot = await created.json();
-  const changedTitle = `${original} 도우미 수정`;
-  const changed = await request.put(`/api/content/${bot.id}`, {
-    data: { ...fixtureBotInput(changedTitle, 'Original source.'), expectedRevision: bot.revision },
-  });
-  expect(changed.ok(), await changed.text()).toBe(true);
-  const saved = await changed.json();
-  const state = await routeSyntheticHelper(page, 1);
-  const openEditor = async () => {
-    if (page.url().startsWith('http'))
-      await page.evaluate(() => localStorage.removeItem('uimori:workspace-panel'));
-    await page.goto('/');
-    await navigationAction(page, '서재');
-    await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(changedTitle);
-    await page.getByRole('button', { name: `${changedTitle} 편집`, exact: true }).click();
-    await expect(page.getByLabel(/^(봇|페르소나|모듈) 이름$/u)).toBeVisible();
-  };
-  const openEditorHelper = async () => {
-    await page
-      .getByRole('region', { name: '자료 상세', exact: true })
-      .getByRole('button', { name: '도우미 열기', exact: true })
-      .click();
-    const panel = page.locator('#helper-panel');
-    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-    return panel;
-  };
-  await openEditor();
-  await openEditorHelper();
-  const task = state.current().tasks[0];
-  state.results.set(task.id, {
-    changes: [resourceChange(bot.id, changedTitle), resourceChange('bot-other', '다른 자료')],
-  });
-  state.rollbacks.set(task.id, {
-    taskId: task.id,
-    blocked: null,
-    units: [resourceUnit(bot.id, changedTitle), resourceUnit('bot-other', '다른 자료')],
-  });
-  state.onRollback(async (units) => {
-    if (!units.some((unit) => unit.changeTargetIds.includes(bot.id))) return;
-    const restored = await request.put(`/api/content/${bot.id}`, {
-      data: {
-        ...fixtureBotInput(original, 'Original source.'),
-        expectedRevision: saved.revision,
-      },
-    });
-    expect(restored.ok(), await restored.text()).toBe(true);
-  });
-  await openEditor();
-  const draft = page.getByLabel(/^(봇|페르소나|모듈) 이름$/u);
-  await draft.fill('지키려는 미저장 입력');
-  const panel = await openEditorHelper();
-  const results = panel.getByTestId('helper-task-results');
-  const card = results.locator('.helper-change', { hasText: changedTitle });
-  await expect(card.locator('.helper-rollback-status')).toHaveCount(0);
-  await results.getByRole('button', { name: '모두 되돌리기', exact: true }).click();
-  const dialog = page.getByRole('alertdialog', { name: '도우미 변경 되돌리기', exact: true });
-  await expect(
-    dialog.getByRole('region', { name: '되돌릴 대상' }).getByRole('listitem')
-  ).toHaveText([changedTitle, '다른 자료']);
-  await expect(dialog.getByRole('region', { name: '그대로 둘 대상' })).toHaveCount(0);
-  await dialog.getByRole('button', { name: '변경 2개 되돌리기', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(state.rollbackPosts).toEqual([{}]);
-  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(original);
-  await expect(card.locator('.helper-rollback-status')).toHaveText('되돌렸어요');
-  await expect(draft).toHaveValue('지키려는 미저장 입력');
-  const status = page.getByRole('alert').filter({ hasText: '저장된 자료가 변경됐어요.' });
-  await expect(status).toContainText('현재 입력은 유지돼요.');
-  await status.getByRole('button', { name: '저장본 확인', exact: true }).click();
-  const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
-  await expect(review.getByRole('region', { name: '현재 저장본' })).toContainText(original);
-  await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-  await expect(review).toBeHidden();
-  await expect(draft).toHaveValue('지키려는 미저장 입력');
-  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(original);
 });
