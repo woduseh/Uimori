@@ -216,6 +216,7 @@ export async function executeOperation<
       try {
         prepared = await command.prepare(ports, head, raw, ctx.signal);
       } catch (error) {
+        if (ctx.signal?.aborted) throw error;
         prior = receiptLookup && receiptPort.read(null, receiptLookup);
         if (!prior) throw error;
         preparationFailure = { error };

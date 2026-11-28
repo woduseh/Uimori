@@ -264,6 +264,46 @@ test.each(['same', 'different', 'absent'] as const)(
   }
 );
 
+test('aborting in-flight preparation propagates the abort even after a duplicate commits', async () => {
+  const store = createStoreFixture();
+  const chat = createFixtureChat(store, 'Cancelled preparation');
+  const ports = createStorePorts(store);
+  const input = {
+    chatId: chat.id,
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: randomUUID(),
+    values: { mood: 'steady' },
+  };
+  const controller = new AbortController();
+  const prepare = () =>
+    new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), {
+        once: true,
+      });
+    });
+  const receipt = updateChatVariablesCommand.receipt!;
+  const onReplay = vi.fn(receipt.onReplay);
+  const aroundTx = vi.fn((run) => run());
+  const onInTx = vi.fn();
+  const result = executeOperation(
+    { ...updateChatVariablesCommand, prepare, receipt: { ...receipt, onReplay } },
+    ports,
+    input,
+    {
+      signal: controller.signal,
+      aroundTx,
+      onInTx,
+    }
+  );
+  await executeOperation(updateChatVariablesCommand, ports, input);
+  controller.abort();
+  await expect(result).rejects.toBe(controller.signal.reason);
+  expect(aroundTx).not.toHaveBeenCalled();
+  expect(onInTx).not.toHaveBeenCalled();
+  expect(onReplay).not.toHaveBeenCalled();
+});
+
 test('prepare-bearing receipt commands run prepare once and preserve helper results on replay', async () => {
   const store = createStoreFixture();
   const model = selectFixtureModels(store);

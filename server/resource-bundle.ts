@@ -16,7 +16,7 @@ import {
   type ValidatedPreparedNativeTransfer,
 } from '../core/native-transfer-validation.js';
 import { readFileSync } from 'node:fs';
-import { storeImage, type StoredImage } from './image-storage.js';
+import { storeImage } from './image-storage.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
 import { HttpError } from './request-validation.js';
 import { normalizeTransferImages } from './transfer-images.js';
@@ -256,6 +256,14 @@ export type PreparedBundleImage = {
   bytes: number;
 };
 
+function persistStagedImages(store: Store, images: PreparedBundleImage[]) {
+  const exists = store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?');
+  for (const image of images) {
+    if (exists.get(image.hash)) continue;
+    storeImage(store.db, { hash: image.hash, mime: image.mime, bytes: readFileSync(image.path) });
+  }
+}
+
 export function importPreparedResourceBundle(
   store: Store,
   file: PreparedNativeTransferFile,
@@ -268,16 +276,7 @@ export function importPreparedResourceBundle(
     command,
     bundleReceipt(command, bundle.preview.digest),
     bundle,
-    () => {
-      for (const image of images) {
-        if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
-        storeImage(store.db, {
-          hash: image.hash,
-          mime: image.mime,
-          bytes: readFileSync(image.path),
-        });
-      }
-    }
+    () => persistStagedImages(store, images)
   );
 }
 
@@ -310,37 +309,18 @@ export function persistRisuBundle(
   store: Store,
   tx: Tx,
   bundle: CheckedBundle,
-  images?: StoredImage[]
+  images?: PreparedBundleImage[]
 ) {
   assertTx(tx, store.db);
-  return persistBundle(
-    store,
-    [],
-    bundle,
-    images &&
-      (() => {
-        for (const image of images) storeImage(store.db, image);
-      })
-  );
+  return persistBundle(store, [], bundle, images && (() => persistStagedImages(store, images)));
 }
 
 export function prepareRisuBundle(
-  store: Store,
   file: PreparedNativeTransferFile,
   stagedImages?: PreparedBundleImage[]
 ) {
-  if (!stagedImages) return { bundle: prepareBundle(file), images: undefined };
-  const bundle = prepareStagedBundle(file, stagedImages);
-  const stored = store.db.prepare('SELECT bytes FROM image_blobs WHERE hash=?');
-  const images = stagedImages.map(({ hash, mime, path }) => {
-    const existing = stored.get(hash)?.bytes as Uint8Array | undefined;
-    return {
-      hash,
-      mime,
-      bytes: existing
-        ? Buffer.from(existing.buffer, existing.byteOffset, existing.byteLength)
-        : readFileSync(path),
-    };
-  });
-  return { bundle, images };
+  return {
+    bundle: stagedImages ? prepareStagedBundle(file, stagedImages) : prepareBundle(file),
+    images: stagedImages,
+  };
 }

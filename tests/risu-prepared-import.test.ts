@@ -24,7 +24,7 @@ import {
   prunePreparedRisuImports,
 } from '../server/risu-import-prepared.js';
 import { applyRisuImport, discardRisuImport, risuImportRoutes } from '../server/risu-import.js';
-import { readImage } from '../server/image-storage.js';
+import { readImage, storeImage } from '../server/image-storage.js';
 import { writeRisuZip } from '../server/risu-export-codec.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
 import { storeUpload, uploadDirectory } from '../server/uploads.js';
@@ -158,6 +158,39 @@ test('prepared review reuses final transformed bytes and response-loss receipt a
   expect(retry.receipt.created).toBe(false);
   expect(store.product.all('content')).toHaveLength(savedCount);
   expect(retry.receipt.id).toBe(first.receipt.id);
+});
+
+test('staged preparation passes image metadata and persistence skips a hash stored before commit', async () => {
+  const store = fixture();
+  const ports = createStorePorts(store);
+  const input = await source();
+  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const staged = readPreparedRisuImport(store.path, preview.preparedId!);
+  const image = staged.images[0];
+  const bytes = readFileSync(image.path);
+  rmSync(image.path);
+  const persist = vi.spyOn(ports.risuImport, 'persistCard');
+  const result = await executeOperation(
+    applyRisuCommand,
+    ports,
+    {
+      source: input,
+      preparedId: staged.id,
+      digest: preview.digest,
+      allowPartial: false,
+      createChat: false,
+      idempotencyKey: 'stored-during-prepare',
+    },
+    {
+      aroundTx(run) {
+        storeImage(store.db, { hash: image.hash, mime: image.mime, bytes });
+        return run();
+      },
+    }
+  );
+  expect(result.receipt.created).toBe(true);
+  expect(persist.mock.calls[0][1].images).toEqual(staged.images);
+  expect(readImage(store.db, image.hash).bytes).toEqual(bytes);
 });
 
 test('a refused receipt write rolls back the library and preserves staging for a retry', async () => {
