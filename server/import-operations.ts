@@ -1,6 +1,5 @@
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
-import { AppError } from './app-errors.js';
 
 export function readImportReceipt<T>(
   store: Store,
@@ -14,12 +13,6 @@ export function readImportReceipt<T>(
   if (!prior) return undefined;
   if (prior.digest !== digest) throw new HttpError(409, conflictMessage);
   return JSON.parse(String(prior.result)) as T;
-}
-
-export function savedOrDraftChanged<T>(saved: () => T | undefined): T {
-  const prior = saved();
-  if (prior !== undefined) return prior;
-  throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
 }
 
 export function saveImportReceipt(store: Store, key: string, digest: string, result: unknown) {

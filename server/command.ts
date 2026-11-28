@@ -52,6 +52,7 @@ function plainRecord(value: unknown): Record<string, unknown> {
 }
 
 export type ReceiptSpec<Op extends AnySplitOperation, P> = {
+  readonly adapter?: 'import';
   readonly scope: (head: OperationHead<Op>) => string;
   readonly key: (head: OperationHead<Op>) => string;
   readonly digest?: (head: OperationHead<Op>, raw: Record<string, unknown>) => string;
@@ -85,7 +86,8 @@ export type CommandSpec<Op extends AnySplitOperation, P extends Pick<AppPorts, '
     ports: P,
     output: OperationOutput<Op>,
     input: OperationParsedInput<Op>,
-    guarded: G
+    guarded: G,
+    prepared: Prep
   ) => void | Promise<void>;
 };
 
@@ -113,7 +115,8 @@ export type Command<
     ports: P,
     output: OperationOutput<Op>,
     input: OperationParsedInput<Op>,
-    guarded: any
+    guarded: any,
+    prepared: any
   ) => void | Promise<void>;
 };
 
@@ -175,6 +178,7 @@ function buildReceiptLookup<Op extends AnySplitOperation, P>(
   raw: Record<string, unknown>
 ): ReceiptLookup {
   return {
+    adapter: receipt.adapter,
     scope: receipt.scope(head),
     key: receipt.key(head),
     digest: receipt.digest ? receipt.digest(head, raw) : canonicalPayloadHash(raw),
@@ -200,36 +204,34 @@ export async function executeOperation<
       ? buildReceiptLookup(command.receipt, head, raw)
       : undefined;
 
-    let skipPrepare = false;
-    if (
-      command.receipt &&
-      receiptLookup &&
-      (command.prepare !== undefined || (!ctx.aroundTx && !ctx.onInTx))
-    ) {
-      const receiptPorts = ports as P & Pick<AppPorts, 'receipt'>;
-      const prior = receiptPorts.receipt.read(null, receiptLookup);
-      if (prior !== undefined) {
-        if (!ctx.aroundTx && !ctx.onInTx) {
-          return enforceOutput(
-            command.op,
-            command.receipt.onReplay(null, ports, prior, head),
-            ctx.checkOutputs
-          );
-        }
-        skipPrepare = true;
+    const receiptPort = (ports as P & Pick<AppPorts, 'receipt'>).receipt;
+    const fastReplay = !ctx.aroundTx && !ctx.onInTx;
+    let prior =
+      receiptLookup && (command.prepare || fastReplay)
+        ? receiptPort.read(null, receiptLookup)
+        : undefined;
+    let prepared: unknown;
+    let preparationFailure: { error: unknown } | undefined;
+    if (!prior && command.prepare) {
+      try {
+        prepared = await command.prepare(ports, head, raw, ctx.signal);
+      } catch (error) {
+        prior = receiptLookup && receiptPort.read(null, receiptLookup);
+        if (!prior) throw error;
+        preparationFailure = { error };
       }
     }
-
-    const prepared =
-      !skipPrepare && command.prepare
-        ? await command.prepare(ports, head, raw, ctx.signal)
-        : undefined;
+    if (prior && command.receipt && fastReplay)
+      return enforceOutput(
+        command.op,
+        command.receipt.onReplay(null, ports, prior, head),
+        ctx.checkOutputs
+      );
 
     const runInTx = () =>
       ports.tx.transaction((tx) => {
         if (command.receipt && receiptLookup) {
-          const receiptPorts = ports as P & Pick<AppPorts, 'receipt'>;
-          const prior = receiptPorts.receipt.read(tx, receiptLookup);
+          const prior = receiptPort.read(tx, receiptLookup);
           if (prior !== undefined) {
             const output = enforceOutput(
               command.op,
@@ -241,6 +243,7 @@ export async function executeOperation<
             return outcome;
           }
         }
+        if (preparationFailure) throw preparationFailure.error;
         const guarded = command.guard(tx, ports, head);
         const body = parseInput(ctx.bodySchema ?? command.op.body, bodyRaw);
         const input = { ...head, ...body } as OperationParsedInput<Op>;
@@ -250,8 +253,7 @@ export async function executeOperation<
           ctx.checkOutputs
         );
         if (command.receipt && receiptLookup) {
-          const receiptPorts = ports as P & Pick<AppPorts, 'receipt'>;
-          receiptPorts.receipt.save(tx, receiptLookup, command.receipt.serialize(output));
+          receiptPort.save(tx, receiptLookup, command.receipt.serialize(output));
         }
         const outcome = { replayed: false as const, output, input, guarded };
         assertSyncReturn(ctx.onInTx?.(tx, outcome), 'onInTx');
@@ -262,7 +264,7 @@ export async function executeOperation<
     if (outcome === EXTERNAL_REPLAY) return undefined as OperationOutput<Op>;
 
     if (!outcome.replayed && command.afterCommit)
-      await command.afterCommit(ports, outcome.output, outcome.input, outcome.guarded);
+      await command.afterCommit(ports, outcome.output, outcome.input, outcome.guarded, prepared);
     return outcome.output;
   } catch (error) {
     throw asAppError(error);

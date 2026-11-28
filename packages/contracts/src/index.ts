@@ -39,3 +39,6 @@ export * from './endpoint-registry.js';
 export * from './domains/chat-settings/limits.js';
 export * from './domains/chat-settings/endpoints.js';
 export type * from './domains/chat-settings/operations.js';
+export * from './domains/risu/endpoints.js';
+export * from './domains/risuPreset/endpoints.js';
+export type { NativeTransferReceipt } from './domains/import-receipt.js';

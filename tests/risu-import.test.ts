@@ -68,18 +68,29 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('a replayed bot import returns its original receipt and chat', async () => {
+test('a different card with the saved key and preview digest returns 409', async () => {
   const store = database();
-  const source = sourceOf(card());
-  const preview = prepareRisuImport({ source });
-  const body = { source, digest: preview.digest, allowPartial: false, idempotencyKey: 'old-risu' };
-  const first = await applyRisuImport(store, body);
-  expect(first.chat).not.toBeNull();
-  const replay = await applyRisuImport(store, body);
-  expect(replay.receipt).toMatchObject({ id: first.receipt.id, created: false });
-  expect(replay.chat?.id).toBe(first.chat?.id);
-  expect(store.chats()).toHaveLength(1);
-  expect(store.product.all('content')).toHaveLength(1);
+  const app = Fastify();
+  risuImportRoutes(app, store);
+  try {
+    const source = sourceOf(card());
+    const other = sourceOf({ ...card(), data: { ...card().data, name: 'Other card' } });
+    const { digest } = prepareRisuImport({ source });
+    expect(prepareRisuImport({ source: other }).digest).not.toBe(digest);
+    const payload = { source, digest, allowPartial: false, idempotencyKey: 'same-key' };
+    const apply = (source: typeof other) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/risu-imports/apply',
+        payload: { ...payload, source },
+      });
+    expect((await apply(source)).statusCode).toBe(201);
+    expect((await apply(other)).statusCode).toBe(409);
+    expect(store.product.all('content')).toHaveLength(1);
+    expect(store.chats()).toHaveLength(1);
+  } finally {
+    await app.close();
+  }
 });
 
 test('a library-only bot import preserves its opening without creating a chat, including retries', async () => {
@@ -339,7 +350,7 @@ test('card imports preserve all lore, trimmed like the Risu decorator reader, an
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
     const selectedBody = { ...body, idempotencyKey: 'with-memory', memoryIds: ['lore-1'] };
-    await expect(applyRisuImport(store, selectedBody)).rejects.toThrow('Unknown request field');
+    await expect(applyRisuImport(store, selectedBody)).rejects.toMatchObject({ statusCode: 400 });
     expect(
       (
         bot.package!.nativeRisu.card.character_book as { entries: { enabled: boolean }[] }

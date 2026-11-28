@@ -1,3 +1,6 @@
+import type { NativeTransferReceipt } from '../core/native-transfer.js';
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
+import { createRisuImportPort, type RisuImportPort } from './risu-import-port.js';
 import type { ChatVariableView } from '#contracts';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import { HttpError } from './app-errors.js';
@@ -12,15 +15,21 @@ import type { StoryGuideStore } from './story-guide-store.js';
 import { assertTx, createTxPort, type Tx, type TxPort } from './tx.js';
 
 export type ReceiptLookup = {
+  readonly adapter?: 'import';
   readonly scope: string;
   readonly key: string;
   readonly digest: string;
   readonly conflictMessage?: string;
 };
 
-export type ReceiptRecord = { readonly revision: number };
+export type ImportReceiptRecord = {
+  readonly receipt: NativeTransferReceipt;
+  readonly chatId?: string;
+};
+export type ReceiptRecord = { readonly revision: number } | ImportReceiptRecord;
 
 export type AppPorts = {
+  readonly risuImport: RisuImportPort;
   readonly tx: TxPort;
   readonly receipt: {
     readonly read: (tx: Tx | null, lookup: ReceiptLookup) => ReceiptRecord | undefined;
@@ -44,13 +53,23 @@ export type AppPorts = {
 
 export function createStorePorts(
   store: Store,
-  options: { readonly publish?: (chatId: string) => void } = {}
+  options: {
+    readonly readStaged?: (id: string) => Buffer;
+    readonly publish?: (chatId: string) => void;
+  } = {}
 ): AppPorts {
   return {
+    risuImport: createRisuImportPort(store, options.readStaged),
     tx: createTxPort(store.db, (fn) => store.transaction(fn)),
     receipt: {
       read(tx, lookup) {
         if (tx !== null) assertTx(tx, store.db);
+        if (lookup.adapter === 'import')
+          return readImportReceipt<ImportReceiptRecord>(
+            store,
+            lookup.scope + lookup.key,
+            lookup.digest
+          );
         const row = store.db
           .prepare(
             'SELECT payload_hash,revision FROM chat_variable_journal WHERE chat_id=? AND request_key=?'
@@ -63,6 +82,11 @@ export function createStorePorts(
       },
       save(tx, lookup, value) {
         assertTx(tx, store.db);
+        if (lookup.adapter === 'import') {
+          saveImportReceipt(store, lookup.scope + lookup.key, lookup.digest, value);
+          return;
+        }
+        if (!('revision' in value)) throw new Error('Expected a chat variable revision');
         store.db
           .prepare(
             'INSERT INTO chat_variable_journal(chat_id,request_key,payload_hash,revision,created_at) VALUES(?,?,?,?,?)'

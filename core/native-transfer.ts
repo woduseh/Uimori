@@ -1,11 +1,5 @@
-import type {
-  Content,
-  ContentKind,
-  ContentRef,
-  PromptPreset,
-  PromptRole,
-  SavedPromptCombination,
-} from './product.js';
+import type { NativeTransferReceipt } from '#contracts';
+import type { Content, PromptPreset, SavedPromptCombination } from './product.js';
 import type { PackageImage } from './package-images.js';
 
 export const NATIVE_TRANSFER_FORMAT = 'uimori-native-transfer';
@@ -47,18 +41,8 @@ export type NativeTransferFile = {
   prompts: NativeTransferPrompt[];
   images: NativeTransferImage[];
 };
-export type NativeTransferSummary = {
-  contents: number;
-  prompts: number;
-  combinations: number;
-  images: number;
-  imageBytes: number;
-};
-export type NativeTransferEntry = NativeTransferRef & {
-  title: string;
-  category: ContentKind | PromptRole;
-  root: boolean;
-};
+export type NativeTransferSummary = NativeTransferReceipt['summary'];
+export type NativeTransferEntry = Omit<NativeTransferReceipt['items'][number], 'id' | 'revision'>;
 export type NativeTransferModelRequirement = {
   key: string;
   promptKey: string;
@@ -74,11 +58,4 @@ export type NativeTransferPrepare = {
   modelRequirements: NativeTransferModelRequirement[];
   warnings: { code: string; key: string; message: string }[];
 };
-export type NativeTransferReceipt = {
-  id: string;
-  created: boolean;
-  digest: string;
-  importedAt: string;
-  summary: NativeTransferSummary;
-  items: (NativeTransferEntry & ContentRef)[];
-};
+export type { NativeTransferReceipt } from '#contracts';

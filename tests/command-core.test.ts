@@ -231,6 +231,39 @@ test('variable receipt returns the current view after the variables, source and 
   });
 });
 
+test.each(['same', 'different', 'absent'] as const)(
+  'failed prepare rechecks a %s receipt',
+  async (race) => {
+    const store = createStoreFixture();
+    const chat = createFixtureChat(store, 'Receipt race');
+    const ports = createStorePorts(store);
+    const input = {
+      chatId: chat.id,
+      expectedRevision: 0,
+      expectedSourceHash: null,
+      idempotencyKey: randomUUID(),
+      values: { a: 'first' },
+    };
+    const failure = new Error('Draft consumed');
+    const command = {
+      ...updateChatVariablesCommand,
+      async prepare() {
+        if (race !== 'absent')
+          await executeOperation(
+            updateChatVariablesCommand,
+            ports,
+            race === 'same' ? input : { ...input, values: { a: 'other' } }
+          );
+        throw failure;
+      },
+    };
+    const result = executeOperation(command, ports, input);
+    if (race === 'absent') await expect(result).rejects.toBe(failure);
+    else if (race === 'different') await expect(result).rejects.toMatchObject({ statusCode: 409 });
+    else await expect(result).resolves.toMatchObject({ revision: 1, values: input.values });
+  }
+);
+
 test('prepare-bearing receipt commands run prepare once and preserve helper results on replay', async () => {
   const store = createStoreFixture();
   const model = selectFixtureModels(store);

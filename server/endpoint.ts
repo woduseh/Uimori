@@ -7,6 +7,7 @@ import {
   endpointInput,
   type HttpMethod,
   type Operation,
+  type OperationOutput,
   type PathCheck,
 } from '#contracts';
 import { type Command, executeOperation, parseInput } from './command.js';
@@ -89,7 +90,8 @@ export function registerCommand<Op extends AnySplitOperation, P extends Pick<App
   app: FastifyInstance,
   endpoint: Endpoint<Op>,
   command: Command<Op, P>,
-  ports: P
+  ports: P,
+  statusFor?: (output: OperationOutput<Op>) => number
 ): void {
   const checked = app.hasDecorator(checkOutputs);
   app.route({
@@ -111,7 +113,8 @@ export function registerCommand<Op extends AnySplitOperation, P extends Pick<App
           checkOutputs:
             checked && (!endpoint.preferMinimal || prefersMinimal(request.headers.prefer)),
         });
-        if (endpoint.status !== undefined) reply.code(endpoint.status);
+        const status = statusFor?.(output) ?? endpoint.status;
+        if (status !== undefined) reply.code(status);
         return output;
       } finally {
         reply.raw.off('close', abort);

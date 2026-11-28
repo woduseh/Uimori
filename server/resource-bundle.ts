@@ -16,10 +16,11 @@ import {
   type ValidatedPreparedNativeTransfer,
 } from '../core/native-transfer-validation.js';
 import { readFileSync } from 'node:fs';
-import { storeImage } from './image-storage.js';
+import { storeImage, type StoredImage } from './image-storage.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
 import { HttpError } from './request-validation.js';
 import { normalizeTransferImages } from './transfer-images.js';
+import { assertTx, type Tx } from './tx.js';
 import { AppError } from './app-errors.js';
 import type { ApplyNativeTransfer, NativeTransferModelBinding } from '#contracts/operations';
 
@@ -28,7 +29,7 @@ type BundleCommand = Pick<ApplyNativeTransfer, 'idempotencyKey' | 'modelBindings
 export const bundleDigest = (value: unknown) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-function prepareBundle(value: unknown) {
+export function prepareBundle(value: unknown) {
   const checked = validateNativeTransfer(value);
   for (const image of checked.file.images) validateImageBlob(image);
   const preview: NativeTransferPrepare = {
@@ -164,10 +165,13 @@ export const sortedBindings = (bindings: readonly NativeTransferModelBinding[]) 
     a.requirementKey < b.requirementKey ? -1 : a.requirementKey > b.requirementKey ? 1 : 0
   );
 
-function bundleBindings(input: BundleCommand, checked: ValidatedPreparedNativeTransfer) {
+function bundleBindings(
+  bindings: NativeTransferModelBinding[],
+  checked: ValidatedPreparedNativeTransfer
+) {
   const requirements = new Set(checked.modelRequirements.map((item) => item.key));
   const mapped = new Map<string, NativeTransferModelBinding>();
-  for (const binding of input.modelBindings) {
+  for (const binding of bindings) {
     if (!requirements.has(binding.requirementKey) || mapped.has(binding.requirementKey))
       throw new HttpError(400, 'Unknown or duplicate model binding');
     mapped.set(binding.requirementKey, binding);
@@ -179,62 +183,70 @@ function applyPreparedBundle(
   store: Store,
   input: BundleCommand,
   { key, digest: commandDigest }: BundleReceipt,
-  {
-    checked,
-    preview: prepared,
-  }: { checked: ValidatedPreparedNativeTransfer; preview: NativeTransferPrepare },
+  bundle: CheckedBundle,
   putImages?: () => void
 ): NativeTransferReceipt {
-  const mapped = bundleBindings(input, checked);
   return store.transaction(() => {
     const prior = readImportReceipt<NativeTransferReceipt>(store, key, commandDigest);
     if (prior) return { ...prior, created: false };
-    const ids = new Map(checked.entries.map((entry) => [entry.key, randomUUID()]));
-    const contentIds = new Map(
-      checked.file.contents.map((entry) => [entry.source.id, ids.get(entry.key)!])
-    );
-    if (putImages) putImages();
-    else
-      for (const image of checked.file.images) {
-        if (!('base64' in image) || typeof image.base64 !== 'string')
-          throw new Error('Unprepared transfer image without payload');
-        putValidatedImageBlob(store.product, { ...image, base64: image.base64 });
-      }
-    for (const key of checked.persistOrder) {
-      const entry = checked.file.contents.find((item) => item.key === key)!;
-      const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
-      source.relatedIds = source.relatedIds.flatMap((id) =>
-        contentIds.has(id) ? [contentIds.get(id)!] : []
-      );
-      source.package.modules = entry.modules.map((key) => ({ id: ids.get(key)!, revision: 1 }));
-      store.product.content(source, undefined, true, ids.get(key)!);
-    }
-    for (const entry of checked.file.prompts) {
-      const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
-      for (const agent of source.program.collaboration?.agents ?? []) {
-        const binding = mapped.get(`${entry.key}/${agent.id}`);
-        agent.model = binding?.mode === 'local' ? binding.model : null;
-      }
-      const saved = store.product.promptPreset(source, undefined, true, ids.get(entry.key)!);
-      for (const combination of entry.combinations) {
-        const { id: _old, revision: _oldRevision, ...data } = combination;
-        store.product.saveInTransaction('prompt-combination', {
-          ...data,
-          owner: { kind: 'preset', id: saved.id },
-        });
-      }
-    }
-    const receipt: NativeTransferReceipt = {
-      id: randomUUID(),
-      created: true,
-      digest: prepared.digest,
-      importedAt: new Date().toISOString(),
-      summary: prepared.summary,
-      items: checked.entries.map((entry) => ({ ...entry, id: ids.get(entry.key)!, revision: 1 })),
-    };
+    const receipt = persistBundle(store, input.modelBindings, bundle, putImages);
     saveImportReceipt(store, key, commandDigest, receipt);
     return receipt;
   });
+}
+
+type CheckedBundle = { checked: ValidatedPreparedNativeTransfer; preview: NativeTransferPrepare };
+
+function persistBundle(
+  store: Store,
+  bindings: NativeTransferModelBinding[],
+  { checked, preview: prepared }: CheckedBundle,
+  putImages?: () => void
+): NativeTransferReceipt {
+  const mapped = bundleBindings(bindings, checked);
+  const ids = new Map(checked.entries.map((entry) => [entry.key, randomUUID()]));
+  const contentIds = new Map(
+    checked.file.contents.map((entry) => [entry.source.id, ids.get(entry.key)!])
+  );
+  if (putImages) putImages();
+  else
+    for (const image of checked.file.images) {
+      if (!('base64' in image) || typeof image.base64 !== 'string')
+        throw new Error('Unprepared transfer image without payload');
+      putValidatedImageBlob(store.product, { ...image, base64: image.base64 });
+    }
+  for (const key of checked.persistOrder) {
+    const entry = checked.file.contents.find((item) => item.key === key)!;
+    const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
+    source.relatedIds = source.relatedIds.flatMap((id) =>
+      contentIds.has(id) ? [contentIds.get(id)!] : []
+    );
+    source.package.modules = entry.modules.map((key) => ({ id: ids.get(key)!, revision: 1 }));
+    store.product.content(source, undefined, true, ids.get(key)!);
+  }
+  for (const entry of checked.file.prompts) {
+    const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
+    for (const agent of source.program.collaboration?.agents ?? []) {
+      const binding = mapped.get(`${entry.key}/${agent.id}`);
+      agent.model = binding?.mode === 'local' ? binding.model : null;
+    }
+    const saved = store.product.promptPreset(source, undefined, true, ids.get(entry.key)!);
+    for (const combination of entry.combinations) {
+      const { id: _old, revision: _oldRevision, ...data } = combination;
+      store.product.saveInTransaction('prompt-combination', {
+        ...data,
+        owner: { kind: 'preset', id: saved.id },
+      });
+    }
+  }
+  return {
+    id: randomUUID(),
+    created: true,
+    digest: prepared.digest,
+    importedAt: new Date().toISOString(),
+    summary: prepared.summary,
+    items: checked.entries.map((entry) => ({ ...entry, id: ids.get(entry.key)!, revision: 1 })),
+  };
 }
 
 export type PreparedBundleImage = {
@@ -250,6 +262,26 @@ export function importPreparedResourceBundle(
   images: PreparedBundleImage[],
   command: BundleCommand
 ): NativeTransferReceipt {
+  const bundle = prepareStagedBundle(file, images);
+  return applyPreparedBundle(
+    store,
+    command,
+    bundleReceipt(command, bundle.preview.digest),
+    bundle,
+    () => {
+      for (const image of images) {
+        if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
+        storeImage(store.db, {
+          hash: image.hash,
+          mime: image.mime,
+          bytes: readFileSync(image.path),
+        });
+      }
+    }
+  );
+}
+
+function prepareStagedBundle(file: PreparedNativeTransferFile, images: PreparedBundleImage[]) {
   const checked = validatePreparedNativeTransfer(file);
   const supplied = new Map(images.map((image) => [image.hash, image]));
   if (
@@ -271,20 +303,37 @@ export function importPreparedResourceBundle(
       imageBytes: images.reduce((sum, item) => sum + item.bytes, 0),
     },
   };
-  return applyPreparedBundle(
+  return { checked, preview };
+}
+
+export function persistRisuBundle(
+  store: Store,
+  tx: Tx,
+  bundle: CheckedBundle,
+  images?: StoredImage[]
+) {
+  assertTx(tx, store.db);
+  return persistBundle(
     store,
-    command,
-    bundleReceipt(command, preview.digest),
-    { checked, preview },
-    () => {
-      for (const image of images) {
-        if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
-        storeImage(store.db, {
-          hash: image.hash,
-          mime: image.mime,
-          bytes: readFileSync(image.path),
-        });
-      }
-    }
+    [],
+    bundle,
+    images &&
+      (() => {
+        for (const image of images) storeImage(store.db, image);
+      })
   );
+}
+
+export function prepareRisuBundle(
+  file: PreparedNativeTransferFile,
+  stagedImages?: PreparedBundleImage[]
+) {
+  if (!stagedImages) return { bundle: prepareBundle(file), images: undefined };
+  const bundle = prepareStagedBundle(file, stagedImages);
+  const images = stagedImages.map((image) => ({
+    hash: image.hash,
+    mime: image.mime,
+    bytes: readFileSync(image.path),
+  }));
+  return { bundle, images };
 }

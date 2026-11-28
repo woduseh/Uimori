@@ -2,7 +2,7 @@ import type { NativeTransferReceipt } from './native-transfer.js';
 import type { Chat } from './types.js';
 import { RISU_ASSET_MAX, RISU_ZIP_MEMBERS_MAX } from './risu-limits.js';
 
-export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
+export { RISU_IMPORT_MAX_BYTES } from '#contracts';
 export const RISU_IMPORT_MAX_ASSETS = RISU_ASSET_MAX;
 export const RISU_IMPORT_MAX_LORE_ENTRIES = 2000;
 export const RISU_IMPORT_MAX_CONTAINER_BYTES = 64 * 1024 * 1024;

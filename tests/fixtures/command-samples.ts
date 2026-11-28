@@ -1,3 +1,5 @@
+import { prepareRisuImport } from '../../server/risu-import.js';
+import { prepareRisuPresetImport } from '../../server/risu-preset-import.js';
 import { randomUUID } from 'node:crypto';
 import { deleteChat } from '../../server/chat-deletion.js';
 import type { allCommands } from '../../server/commands/index.js';
@@ -12,8 +14,38 @@ type Samples = {
   stale?: Record<string, (input: Input) => void>;
 };
 
+function importSample(document: unknown, preview: (value: unknown) => { digest: string }) {
+  const source = {
+    name: 'sample.json',
+    base64: Buffer.from(JSON.stringify(document)).toString('base64'),
+  };
+  return {
+    inputs: [
+      {
+        source,
+        digest: preview({ source }).digest,
+        allowPartial: true,
+        idempotencyKey: randomUUID(),
+      },
+    ],
+  };
+}
+
 export const commandSamples: Partial<Record<keyof typeof allCommands, (store: Store) => Samples>> =
   {
+    'risu.import.apply': () =>
+      importSample(
+        { spec: 'chara_card_v3', data: { name: 'Probe', description: 'Receipt probe' } },
+        prepareRisuImport
+      ),
+    'risuPreset.import.apply': () =>
+      importSample(
+        {
+          name: 'Probe',
+          promptTemplate: [{ type: 'plain', type2: 'normal', role: 'system', text: 'Probe' }],
+        },
+        prepareRisuPresetImport
+      ),
     'chat-settings.writeVariables'(store) {
       const { id: chatId } = createFixtureChat(store, 'Variables command probe');
       const head = {

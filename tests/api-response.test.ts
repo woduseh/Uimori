@@ -143,7 +143,7 @@ test('a legacy write tells other tabs only for the library and provider writes s
   vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{}'));
   await api('/content/c1/risu-preview', { revision: 1 });
   expect(b.setItem).not.toHaveBeenCalled();
-  for (const path of ['/prompt-presets', '/prompt-combinations', '/risu-imports/apply']) {
+  for (const path of ['/prompt-presets', '/prompt-combinations']) {
     b.setItem.mockClear();
     await api(path, {});
     expect(b.setItem, path).toHaveBeenCalledWith(libraryChangedKey, expect.any(String));

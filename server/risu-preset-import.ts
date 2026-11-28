@@ -1,105 +1,30 @@
-import { createHash } from 'node:crypto';
-import { promptControls } from '../core/risu-prompt.js';
 import type { FastifyInstance } from 'fastify';
-import {
-  NATIVE_TRANSFER_FORMAT,
-  NATIVE_TRANSFER_VERSION,
-  type NativeTransferFile,
-  type NativeTransferReceipt,
-} from '../core/native-transfer.js';
-import type { PromptPreset } from '../core/product.js';
-import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
-import type { RisuPresetImportPreview, RisuPresetImportResult } from '../core/risu-preset.js';
-import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
-import { fields, record, text } from './request-validation.js';
-import { readRisuPresetFile } from './risu-preset-file.js';
-import { importRisuPresetProgram } from './risu-preset-program.js';
+import { risuPresetEndpoints, RISU_IMPORT_BODY_LIMIT } from '#contracts';
+import { applyRisuPresetCommand } from './commands/risu-preset-import.js';
+import { executeOperation } from './command.js';
+import { registerCommand } from './endpoint.js';
+import { analyzeRisuPreset } from './risu-preset-analysis.js';
+import { fields, record } from './request-validation.js';
 import type { Store } from './store.js';
-import { AppError } from './app-errors.js';
-import { readImportReceipt, saveImportReceipt } from './import-operations.js';
-import { bundleDigest } from './resource-bundle.js';
+import { createStorePorts } from './store-ports.js';
 
-function analyze(value: unknown) {
-  const input = readRisuPresetFile(value);
-  const converted = importRisuPresetProgram(input.preset);
-  const regex = input.preset.regex ?? input.preset.presetRegex;
-  const findings = converted.findings;
-  const preset: PromptPreset = {
-    id: `risu-preset-${input.hash.slice(0, 24)}`,
-    revision: 1,
-    title: converted.title,
-    role: 'main',
-    program: converted.program,
-    values: converted.values,
-  };
-  const file: NativeTransferFile = {
-    format: NATIVE_TRANSFER_FORMAT,
-    version: NATIVE_TRANSFER_VERSION,
-    roots: [{ kind: 'prompt-preset', key: 'prompt' }],
-    contents: [],
-    prompts: [{ key: 'prompt', source: preset, combinations: [] }],
-    images: [],
-  };
-  const transfer = prepareNativeTransfer({ file });
-  const preview: RisuPresetImportPreview = {
-    digest: createHash('sha256')
-      .update(JSON.stringify({ digest: transfer.digest, findings }))
-      .digest('hex'),
-    title: converted.title,
-    format: input.format,
-    summary: {
-      blocks: (converted.program.nativeRisuPreset.preset.promptTemplate as unknown[]).length,
-      controls: promptControls(converted.program).length,
-      regex: Array.isArray(regex) ? regex.length : 0,
-    },
-    findings,
-  };
-  return { file, transfer, preview };
-}
-
-export function prepareRisuPresetImport(value: unknown): RisuPresetImportPreview {
+export function prepareRisuPresetImport(value: unknown) {
   const body = record(value);
   fields(body, ['source']);
-  return analyze(body.source).preview;
+  return analyzeRisuPreset(body.source).preview;
 }
 
-export function applyRisuPresetImport(store: Store, value: unknown): RisuPresetImportResult {
-  const body = record(value);
-  fields(body, ['source', 'digest', 'allowPartial', 'idempotencyKey']);
-  const receiptKey = `risu-preset:${text(body.idempotencyKey, 'request key', 100)}`;
-  const digest = text(body.digest, 'import digest', 100);
-  if (typeof body.allowPartial !== 'boolean') throw new AppError(400, 'RISU_PRESET_INVALID_FILE');
-  const commandDigest = bundleDigest({ source: body.source, allowPartial: body.allowPartial });
-  const result = (receipt: NativeTransferReceipt): RisuPresetImportResult => {
-    const saved = receipt.items.find(
-      (item) => item.kind === 'prompt-preset' && item.key === 'prompt'
-    )!;
-    return { receipt, preset: store.product.stored<PromptPreset>('prompt-preset', saved.id) };
-  };
-  const prior = readImportReceipt<NativeTransferReceipt>(store, receiptKey, commandDigest);
-  if (prior) return result({ ...prior, created: false });
-  const { file, transfer, preview } = analyze(body.source);
-  if (digest !== preview.digest) throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
-  if (!body.allowPartial && preview.findings.some((finding) => finding.level === 'unsupported'))
-    throw new AppError(400, 'RISU_IMPORT_PARTIAL_REQUIRED');
-  return store.transaction(() => {
-    const receipt = applyNativeTransfer(store, {
-      file,
-      digest: transfer.digest,
-      modelBindings: [],
-      idempotencyKey: `resources:${receiptKey}`,
-    });
-    saveImportReceipt(store, receiptKey, commandDigest, receipt);
-    return result(receipt);
-  });
+export function applyRisuPresetImport(store: Store, value: unknown) {
+  return executeOperation(applyRisuPresetCommand, createStorePorts(store), value) as Promise<
+    import('../core/risu-preset.js').RisuPresetImportResult
+  >;
 }
 
 export function risuPresetImportRoutes(app: FastifyInstance, store: Store) {
-  const bodyLimit = Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4 + 1024 * 1024;
-  app.post('/api/risu-preset-imports/prepare', { bodyLimit }, async (request) =>
-    prepareRisuPresetImport(request.body)
+  app.post(
+    '/api/risu-preset-imports/prepare',
+    { bodyLimit: RISU_IMPORT_BODY_LIMIT },
+    async (request) => prepareRisuPresetImport(request.body)
   );
-  app.post('/api/risu-preset-imports/apply', { bodyLimit }, async (request) =>
-    applyRisuPresetImport(store, request.body)
-  );
+  registerCommand(app, risuPresetEndpoints.apply, applyRisuPresetCommand, createStorePorts(store));
 }

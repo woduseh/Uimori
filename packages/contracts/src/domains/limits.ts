@@ -1,1 +1,3 @@
 export const PROMPT_HTTP_BODY_MAX_BYTES = 64 * 1024 * 1024;
+export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
+export const RISU_IMPORT_BODY_LIMIT = Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4 + 1024 * 1024;

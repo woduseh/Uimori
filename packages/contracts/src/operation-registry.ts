@@ -1,3 +1,5 @@
+import { risuPresetOperations } from './domains/risuPreset/operations.js';
+import { risuOperations } from './domains/risu/operations.js';
 import { appearanceOperations } from './domains/appearance/operations.js';
 import { chatOperations } from './domains/chat/operations.js';
 import { chatSettingsOperations } from './domains/chat-settings/operations.js';
@@ -13,6 +15,8 @@ import { transferOperations } from './domains/transfer/operations.js';
 import { translationOperations } from './domains/translation/operations.js';
 
 export const allOperations = {
+  risuPreset: risuPresetOperations,
+  risu: risuOperations,
   appearance: appearanceOperations,
   chat: chatOperations,
   'chat-settings': chatSettingsOperations,
