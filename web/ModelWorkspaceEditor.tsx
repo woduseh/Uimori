@@ -396,36 +396,6 @@ export function ModelWorkspaceEditor({
                 />
               </div>
             </div>
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <label htmlFor={`${id}-helper-paid-confirmation`}>
-                  {t('settings.helperConfirmPaidGeneration')}
-                </label>
-                <small>{t('settings.helperConfirmPaidGenerationHint')}</small>
-              </div>
-              <div className="settings-row-control">
-                <Switch
-                  id={`${id}-helper-paid-confirmation`}
-                  checked={draft.helperConfirmPaidGeneration === true}
-                  onChange={(event) =>
-                    change({ ...draft, helperConfirmPaidGeneration: event.target.checked })
-                  }
-                />
-              </div>
-            </div>
-            <div className="settings-row">
-              <div className="settings-row-copy">
-                <label htmlFor={`${id}-mcp-allow-delete`}>{t('settings.mcpAllowDelete')}</label>
-                <small>{t('settings.mcpAllowDeleteHint')}</small>
-              </div>
-              <div className="settings-row-control">
-                <Switch
-                  id={`${id}-mcp-allow-delete`}
-                  checked={draft.mcpAllowDelete === true}
-                  onChange={(event) => change({ ...draft, mcpAllowDelete: event.target.checked })}
-                />
-              </div>
-            </div>
             {selector('context', t('settings.m22'), draft.contextModel ?? null, (ref) =>
               change({ ...draft, contextModel: ref })
             )}
@@ -474,6 +444,41 @@ export function ModelWorkspaceEditor({
             {selector('script', t('settings.m34'), draft.scriptModel ?? null, (ref) =>
               change({ ...draft, scriptModel: ref })
             )}
+          </div>
+        </fieldset>
+        <fieldset className="settings-group full model-primary-settings">
+          <legend>{t('settings.agentPermissions')}</legend>
+          <div className="settings-group-body">
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-helper-paid-confirmation`}>
+                  {t('settings.helperConfirmPaidGeneration')}
+                </label>
+                <small>{t('settings.helperConfirmPaidGenerationHint')}</small>
+              </div>
+              <div className="settings-row-control">
+                <Switch
+                  id={`${id}-helper-paid-confirmation`}
+                  checked={draft.helperConfirmPaidGeneration === true}
+                  onChange={(event) =>
+                    change({ ...draft, helperConfirmPaidGeneration: event.target.checked })
+                  }
+                />
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-copy">
+                <label htmlFor={`${id}-mcp-allow-delete`}>{t('settings.mcpAllowDelete')}</label>
+                <small>{t('settings.mcpAllowDeleteHint')}</small>
+              </div>
+              <div className="settings-row-control">
+                <Switch
+                  id={`${id}-mcp-allow-delete`}
+                  checked={draft.mcpAllowDelete === true}
+                  onChange={(event) => change({ ...draft, mcpAllowDelete: event.target.checked })}
+                />
+              </div>
+            </div>
           </div>
         </fieldset>
         <details className="settings-group full model-secondary-settings task-behavior-settings">

@@ -176,6 +176,8 @@ async function detail(request: APIRequestContext, id: string): Promise<ChatDetai
         await page.setViewportSize({ width: reviewWidth, height: 900 });
         await helperTimeout.scrollIntoViewIfNeeded();
         await page.screenshot({ path: info.outputPath(`helper-timeout-${reviewWidth}.png`) });
+        await mcpDeletion.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: info.outputPath(`agent-permissions-${reviewWidth}.png`) });
       }
       await page.setViewportSize({ width, height: 900 });
     }
