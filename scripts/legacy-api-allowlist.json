@@ -1,0 +1,108 @@
+{
+  "permanent": {
+    "web/ArchivePanel.tsx": {
+      "count": 1,
+      "kind": "fetch",
+      "reason": "Direct fetch() downloads the raw SQLite backup binary stream from GET /api/backup."
+    },
+    "web/BackupFileImport.tsx": {
+      "count": 1,
+      "kind": "apiBinary",
+      "reason": "Streams raw archive bytes to POST /api/uploads."
+    },
+    "web/PackagePresentation.tsx": {
+      "count": 1,
+      "kind": "fetch",
+      "reason": "Pinned legacy direct fetch() for GET /api/chats/:id/sources/:sourceId/presentation (pre-serialized JSON with custom ETag/AbortSignal)."
+    },
+    "web/RisuExportButton.tsx": {
+      "count": 1,
+      "kind": "fetch",
+      "reason": "Direct fetch() downloads binary CHARX/PNG/.risup bytes and reads Content-Disposition from GET /api/{content|prompt-presets}/:id/risu-export."
+    },
+    "web/archive-download.ts": {
+      "count": 1,
+      "kind": "fetch",
+      "reason": "Direct fetch() downloads binary .uimori ZIP archives from GET /api/chats/:id/backup-archive and POST /api/native-transfers/export-archive."
+    },
+    "web/helper-attachment-draft.ts": {
+      "count": 1,
+      "kind": "apiBinary",
+      "reason": "Streams raw helper attachment bytes to POST /api/uploads."
+    },
+    "web/import-source.ts": {
+      "count": 1,
+      "kind": "apiBinary",
+      "reason": "Streams raw import file bytes to POST /api/uploads."
+    },
+    "web/theme-assets.ts": {
+      "count": 1,
+      "kind": "fetch",
+      "reason": "Direct fetch() reads binary theme asset blobs from GET /api/theme-assets/:hash during theme export."
+    },
+    "web/useStory.ts": {
+      "count": 1,
+      "kind": "apiBinary",
+      "reason": "Streams raw request image bytes to POST /api/uploads."
+    }
+  },
+  "debt": {
+    "web/ActivityNotifications.tsx": 2,
+    "web/ActivityStatus.tsx": 3,
+    "web/AppAbout.tsx": 1,
+    "web/BotNavigation.tsx": 2,
+    "web/ChatActionMenu.tsx": 1,
+    "web/CodeMirrorField.tsx": 1,
+    "web/ContentAttachments.tsx": 2,
+    "web/ContextPanel.tsx": 3,
+    "web/DeleteButton.tsx": 1,
+    "web/HelperActivity.tsx": 1,
+    "web/HelperArtifactCard.tsx": 2,
+    "web/HelperPanel.tsx": 10,
+    "web/HelperSessionBar.tsx": 14,
+    "web/HelperSummaryDialog.tsx": 3,
+    "web/HelperTaskResults.tsx": 1,
+    "web/HelperTaskRollback.tsx": 3,
+    "web/IllustrationActivity.tsx": 1,
+    "web/IllustrationPresetSettings.tsx": 4,
+    "web/IllustrationReferences.tsx": 3,
+    "web/IllustrationSettingsEditor.tsx": 6,
+    "web/IllustrationStrip.tsx": 2,
+    "web/InvalidStoryUi.tsx": 1,
+    "web/LibraryPanel.tsx": 1,
+    "web/NewStory.tsx": 2,
+    "web/NextRequestStatus.tsx": 2,
+    "web/OutlinePanel.tsx": 6,
+    "web/PackageFeaturesEditor.tsx": 3,
+    "web/PackageStartPicker.tsx": 2,
+    "web/PromptLibrary.tsx": 2,
+    "web/PromptWorkspaceEditor.tsx": 1,
+    "web/ProviderManagement.tsx": 10,
+    "web/RisuDraftStartPreview.tsx": 1,
+    "web/RisuImport.tsx": 4,
+    "web/RisuInteractionDialog.tsx": 2,
+    "web/RisuPresetImport.tsx": 2,
+    "web/RisuStartPreview.tsx": 1,
+    "web/RunTaskDetails.tsx": 1,
+    "web/RuntimeSettings.tsx": 1,
+    "web/SceneTitleEditor.tsx": 1,
+    "web/SessionGate.tsx": 3,
+    "web/SourceReader.tsx": 10,
+    "web/SourceVersions.tsx": 1,
+    "web/StoryBoardPanel.tsx": 1,
+    "web/StoryPanel.tsx": 1,
+    "web/StoryUi.tsx": 1,
+    "web/StoryUiPreviewBlock.tsx": 1,
+    "web/StreamingResponse.tsx": 1,
+    "web/WorkspacePanels.tsx": 2,
+    "web/connection-catalog.ts": 1,
+    "web/main.tsx": 1,
+    "web/pendingStory.ts": 2,
+    "web/useActivityFeed.ts": 3,
+    "web/useApiRecord.ts": 1,
+    "web/useHelperConversation.ts": 5,
+    "web/useHelperSessions.ts": 4,
+    "web/useStory.ts": 11,
+    "web/useTestMode.ts": 1
+  }
+}

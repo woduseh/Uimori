@@ -257,9 +257,13 @@ test('comments check only the changed files, and i18n runs for the runtime sourc
   assert.equal(checks.uiMessage, true);
   assert.equal(checks.endpointCalls, true);
   assert.equal(
+    checkChanged.selectChecks(['scripts/legacy-api-allowlist.json'], {}).endpointCalls,
+    true
+  );
+  assert.equal(
     checkChanged.selectChecks(['packages/contracts/src/domains/library/endpoints.ts'], {})
       .endpointCalls,
-    true
+    false
   );
   assert.equal(checkChanged.selectChecks(['server/app.ts'], {}).endpointCalls, false);
   assert.equal(checkChanged.selectChecks(['server/app.ts'], {}).uiMessage, false);

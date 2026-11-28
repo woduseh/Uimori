@@ -1,17 +1,19 @@
 import { parse } from '@babel/parser';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-export const domainsPath = 'packages/contracts/src/domains';
-export const remedyFor = (endpoint, path) =>
-  `${path} is the typed route ${endpoint.method} /api${endpoint.path} (${endpoint.operation}); call it with callEndpoint and the endpoint named by that operation in ${endpoint.file} instead of api()`;
-
-const wildcard = '\u0000';
-const placeholder = '$' + '{…}';
+export const allowlistPath = 'scripts/legacy-api-allowlist.json';
+export const apiModuleFile = 'web/api.ts';
+const apiModuleStem = 'web/api';
+const shrinkCommand = 'node scripts/check-endpoint-calls.mjs --shrink';
 const sourceExtension = /\.(?:ts|tsx|mts|cts|js|mjs)$/u;
+const legacyBindings = new Set(['api', 'apiBinary']);
+const globalFetchReceivers = new Set(['window', 'self', 'globalThis']);
+const callHelpers = new Set(['call', 'apply', 'bind']);
+const permanentKinds = new Set(['fetch', 'apiBinary']);
 const ignored = new Set([
   'loc',
   'extra',
@@ -19,17 +21,26 @@ const ignored = new Set([
   'tokens',
   'leadingComments',
   'trailingComments',
+  'typeAnnotation',
+  'typeParameters',
+  'returnType',
+]);
+const typeNodeTypes = new Set([
+  'TSTypeAnnotation',
+  'TSTypeParameterInstantiation',
+  'TSTypeParameterDeclaration',
+  'TSTypeAliasDeclaration',
+  'TSInterfaceDeclaration',
+  'TSDeclareFunction',
+  'TSQualifiedName',
+  'TSTypeQuery',
 ]);
 
-function walk(node, visit) {
-  if (!node || typeof node !== 'object') return;
-  if (typeof node.type === 'string') visit(node);
-  for (const [key, value] of Object.entries(node)) {
-    if (ignored.has(key)) continue;
-    if (Array.isArray(value)) for (const child of value) walk(child, visit);
-    else if (value && typeof value === 'object') walk(value, visit);
-  }
-}
+export const remedy = [
+  'Call typed contract routes through callEndpoint(...) from web/api.ts instead of api() or direct fetch().',
+  `When a file drops legacy api() calls, shrink its debt count with \`${shrinkCommand}\`.`,
+  `A permanent binary or stream call (apiBinary() or direct fetch() outside web/api.ts) goes under "permanent" in ${allowlistPath} with its count, kind, and reason.`,
+].join('\n');
 
 function parseSource(source, file) {
   return parse(source, {
@@ -42,153 +53,323 @@ function parseSource(source, file) {
   });
 }
 
-const propertyName = (property) =>
-  property.key?.type === 'Identifier' ? property.key.name : property.key?.value;
+const propertyName = (node) =>
+  node?.type === 'Identifier' ? node.name : node?.type === 'StringLiteral' ? node.value : undefined;
 
-export function contractEndpoints(source, file = `${domainsPath}/domain/endpoints.ts`) {
-  const tree = parseSource(source, file);
-  const initial = declarations(tree);
-  const found = [];
-  const problems = [];
-  let declared = 0;
-  walk(tree, (node) => {
-    if (node.type !== 'ObjectExpression') return;
-    const values = Object.fromEntries(
-      node.properties
-        .filter((property) => property.type === 'ObjectProperty')
-        .map((property) => [propertyName(property), property.value])
-    );
-    const operation = values.operation?.type === 'StringLiteral' && values.operation.value;
-    if (!operation) return;
-    declared++;
-    const method = values.method?.type === 'StringLiteral' ? values.method.value : undefined;
-    const path = resolvePath(values.path, initial);
-    if (method && path !== undefined && !path.includes(wildcard))
-      found.push({ operation, method, path, file });
-    else
-      problems.push(
-        `${file}: ${operation} has a method or path this check cannot resolve; write the path as a string, a same-file const or a template of same-file consts`
-      );
-  });
-  const listed = (source.match(/^\s*operation:/gmu) ?? []).length;
-  if (listed !== declared)
-    problems.push(
-      `${file}: ${listed} operation: entries but ${declared} endpoint objects were read; every endpoint is written as an object with an operation, a method and a path`
-    );
-  return { found, problems };
+const memberProperty = (node) =>
+  node.computed
+    ? node.property?.type === 'StringLiteral'
+      ? node.property.value
+      : undefined
+    : node.property?.type === 'Identifier'
+      ? node.property.name
+      : undefined;
+
+const unwrap = (node) =>
+  node &&
+  [
+    'TSAsExpression',
+    'TSSatisfiesExpression',
+    'TSNonNullExpression',
+    'ParenthesizedExpression',
+  ].includes(node.type)
+    ? unwrap(node.expression)
+    : node;
+
+function resolvesToApiModule(file, specifier) {
+  if (typeof specifier !== 'string' || !specifier.startsWith('.')) return false;
+  const resolved = posix
+    .normalize(posix.join(posix.dirname(file), specifier))
+    .replace(/\.(?:[cm]?[jt]sx?)$/u, '');
+  return resolved === apiModuleStem;
 }
 
-function allEndpoints(directory) {
-  const domains = resolve(directory, domainsPath);
-  const result = { endpoints: [], problems: [] };
-  if (!existsSync(domains)) return result;
-  for (const entry of readdirSync(domains, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const file = `${domainsPath}/${entry.name}/endpoints.ts`;
-    const path = resolve(directory, file);
-    if (!existsSync(path)) continue;
-    const { found, problems } = contractEndpoints(readFileSync(path, 'utf8'), file);
-    result.endpoints.push(...found);
-    result.problems.push(...problems);
-  }
-  return result;
-}
-
-function declarations(tree) {
-  const initial = new Map();
-  walk(tree, (node) => {
-    if (node.type !== 'VariableDeclarator' || node.id.type !== 'Identifier' || !node.init) return;
-    initial.set(node.id.name, initial.has(node.id.name) ? null : node.init);
-  });
-  return initial;
-}
-
-function resolvePath(node, initial, depth = 0) {
-  if (!node || depth > 6) return undefined;
-  const inner = (child) => resolvePath(child, initial, depth + 1);
-  switch (node.type) {
-    case 'StringLiteral':
-      return node.value;
-    case 'TemplateLiteral': {
-      let text = '';
-      for (const [index, quasi] of node.quasis.entries()) {
-        text += quasi.value.cooked;
-        if (index < node.expressions.length) text += inner(node.expressions[index]) ?? wildcard;
-      }
-      return text;
-    }
-    case 'BinaryExpression': {
-      if (node.operator !== '+') return undefined;
-      return `${inner(node.left) ?? wildcard}${inner(node.right) ?? wildcard}`;
-    }
-    case 'Identifier': {
-      const value = initial.get(node.name);
-      return value ? inner(value) : undefined;
-    }
-    case 'TSAsExpression':
-    case 'TSNonNullExpression':
-    case 'ParenthesizedExpression':
-      return inner(node.expression);
-    default:
-      return undefined;
-  }
-}
-
-function methodOf(callee, args) {
-  if (callee === 'apiBinary') return 'POST';
-  const method = args[2];
-  if (method?.type === 'StringLiteral') return method.value.toUpperCase();
-  if (method) return undefined;
-  const body = args[1];
-  return !body || (body.type === 'Identifier' && body.name === 'undefined') ? 'GET' : 'POST';
-}
-
-export function apiCalls(source, file = 'web/input.tsx') {
-  const tree = parseSource(source, file);
-  const initial = declarations(tree);
-  const calls = [];
-  walk(tree, (node) => {
-    if (
-      node.type !== 'CallExpression' ||
-      node.callee.type !== 'Identifier' ||
-      (node.callee.name !== 'api' && node.callee.name !== 'apiBinary')
-    )
+function collectPatternNames(pattern, names) {
+  if (!pattern || typeof pattern !== 'object') return;
+  switch (pattern.type) {
+    case 'Identifier':
+      names.add(pattern.name);
       return;
-    const path = resolvePath(node.arguments[0], initial);
-    if (path !== undefined)
-      calls.push({
-        path,
-        method: methodOf(node.callee.name, node.arguments),
-        line: node.loc.start.line,
-      });
-  });
-  return calls;
+    case 'RestElement':
+      collectPatternNames(pattern.argument, names);
+      return;
+    case 'AssignmentPattern':
+      collectPatternNames(pattern.left, names);
+      return;
+    case 'ArrayPattern':
+      for (const item of pattern.elements) collectPatternNames(item, names);
+      return;
+    case 'ObjectPattern':
+      for (const property of pattern.properties) {
+        if (property.type === 'RestElement') collectPatternNames(property.argument, names);
+        else collectPatternNames(property.value, names);
+      }
+      return;
+    case 'TSParameterProperty':
+      collectPatternNames(pattern.parameter, names);
+      return;
+  }
 }
 
-const segmentMatches = (candidate, endpoint) => {
-  if (endpoint.startsWith(':') || candidate === wildcard) return true;
-  if (!candidate.includes(wildcard)) return candidate === endpoint;
-  const pattern = candidate
-    .split(wildcard)
-    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
-    .join('.+');
-  return new RegExp(`^${pattern}$`, 'u').test(endpoint);
-};
+function collectBlockDecls(statements, names, includeVar = false) {
+  for (const statement of statements ?? []) {
+    if (!statement) continue;
+    if (statement.type === 'VariableDeclaration') {
+      if (includeVar || statement.kind !== 'var')
+        for (const decl of statement.declarations) collectPatternNames(decl.id, names);
+    } else if (
+      (statement.type === 'FunctionDeclaration' || statement.type === 'ClassDeclaration') &&
+      statement.id
+    ) {
+      names.add(statement.id.name);
+    } else if (statement.type === 'ExportNamedDeclaration' && statement.declaration) {
+      collectBlockDecls([statement.declaration], names, includeVar);
+    } else if (statement.type === 'ExportDefaultDeclaration' && statement.declaration?.id) {
+      if (
+        statement.declaration.type === 'FunctionDeclaration' ||
+        statement.declaration.type === 'ClassDeclaration'
+      )
+        names.add(statement.declaration.id.name);
+    }
+  }
+}
 
-export function callsEndpoint(call, endpoint) {
-  if (call.method !== undefined && call.method !== endpoint.method) return false;
-  const text = call.path.split(/[?#]/u)[0];
-  const candidate = text.split('/').filter((part, index) => index > 0 || part !== '');
-  const open = !text.startsWith('/') && candidate[0]?.startsWith(wildcard);
-  const fixed = open ? candidate.slice(1) : candidate;
-  if (!fixed.some((part) => !part.includes(wildcard))) return false;
-  const target = endpoint.path.split('/').filter(Boolean);
-  if (open ? fixed.length >= target.length : fixed.length !== target.length) return false;
-  const tail = open ? target.slice(target.length - fixed.length) : target;
-  return (
-    fixed.every((part, index) => segmentMatches(part, tail[index])) &&
-    fixed.some((part, index) => part === tail[index])
-  );
+function collectVarDecls(node, names) {
+  if (!node || typeof node !== 'object') return;
+  if (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'ArrowFunctionExpression' ||
+    node.type === 'ClassMethod' ||
+    node.type === 'ObjectMethod'
+  )
+    return;
+  if (node.type === 'VariableDeclaration' && node.kind === 'var') {
+    for (const decl of node.declarations) collectPatternNames(decl.id, names);
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (ignored.has(key) || typeNodeTypes.has(node.type)) continue;
+    if (Array.isArray(value)) for (const child of value) collectVarDecls(child, names);
+    else if (value && typeof value === 'object') collectVarDecls(value, names);
+  }
+}
+
+function scopeBindingsFor(node) {
+  switch (node.type) {
+    case 'BlockStatement': {
+      const names = new Set();
+      collectBlockDecls(node.body, names, false);
+      return names;
+    }
+    case 'FunctionDeclaration':
+    case 'FunctionExpression':
+    case 'ArrowFunctionExpression':
+    case 'ClassMethod':
+    case 'ObjectMethod': {
+      const names = new Set();
+      if (node.id?.type === 'Identifier' && node.type !== 'FunctionDeclaration')
+        names.add(node.id.name);
+      for (const param of node.params ?? []) collectPatternNames(param, names);
+      if (node.body?.type === 'BlockStatement') {
+        collectBlockDecls(node.body.body, names, true);
+        collectVarDecls(node.body, names);
+      }
+      return names;
+    }
+    case 'CatchClause': {
+      const names = new Set();
+      collectPatternNames(node.param, names);
+      return names;
+    }
+    case 'ForStatement':
+    case 'ForInStatement':
+    case 'ForOfStatement': {
+      const names = new Set();
+      const decl = node.init ?? node.left;
+      if (decl?.type === 'VariableDeclaration' && decl.kind !== 'var')
+        for (const item of decl.declarations) collectPatternNames(item.id, names);
+      return names;
+    }
+    default:
+      return null;
+  }
+}
+
+export function scanLegacyApiSource(source, file = 'web/input.tsx') {
+  const tree = parseSource(source, file);
+  const importedDirect = new Map();
+  const importedNamespaces = new Set();
+  const issues = [];
+  const topLevelDecls = new Set();
+
+  collectBlockDecls(tree.program.body, topLevelDecls, true);
+
+  for (const statement of tree.program.body) {
+    if (statement.type === 'ImportDeclaration') {
+      if (statement.importKind === 'type') continue;
+      if (!resolvesToApiModule(file, statement.source.value)) continue;
+      for (const specifier of statement.specifiers) {
+        if (specifier.importKind === 'type') continue;
+        if (specifier.type === 'ImportSpecifier') {
+          const imported = propertyName(specifier.imported);
+          if (legacyBindings.has(imported)) importedDirect.set(specifier.local.name, imported);
+        } else if (specifier.type === 'ImportNamespaceSpecifier') {
+          importedNamespaces.add(specifier.local.name);
+        }
+      }
+    } else if (statement.type === 'ExportAllDeclaration' && statement.exportKind !== 'type') {
+      if (resolvesToApiModule(file, statement.source.value))
+        issues.push(
+          `${file}:${statement.loc.start.line}: do not re-export web/api.ts; import callEndpoint directly`
+        );
+    } else if (
+      statement.type === 'ExportNamedDeclaration' &&
+      statement.exportKind !== 'type' &&
+      statement.source &&
+      resolvesToApiModule(file, statement.source.value)
+    ) {
+      for (const specifier of statement.specifiers) {
+        if (specifier.exportKind === 'type') continue;
+        const name = propertyName(specifier.local);
+        if (legacyBindings.has(name))
+          issues.push(
+            `${file}:${statement.loc.start.line}: do not re-export ${name} from web/api.ts; import callEndpoint directly`
+          );
+      }
+    }
+  }
+
+  const calls = { api: [], apiBinary: [], fetch: [] };
+  const scopes = [];
+  const countedRefNodes = new Set();
+
+  const isShadowed = (name, includeTopLevel = false) =>
+    (includeTopLevel && topLevelDecls.has(name)) || scopes.some((scope) => scope.has(name));
+
+  const directKind = (node) => {
+    const inner = unwrap(node);
+    if (!inner) return null;
+    if (inner.type === 'Identifier' && importedDirect.has(inner.name) && !isShadowed(inner.name)) {
+      return { kind: importedDirect.get(inner.name), refs: [inner] };
+    }
+    if (
+      (inner.type === 'MemberExpression' || inner.type === 'OptionalMemberExpression') &&
+      unwrap(inner.object)?.type === 'Identifier'
+    ) {
+      const receiver = unwrap(inner.object);
+      if (importedNamespaces.has(receiver.name) && !isShadowed(receiver.name)) {
+        const name = memberProperty(inner);
+        if (legacyBindings.has(name)) return { kind: name, refs: [inner, receiver] };
+      }
+    }
+    return null;
+  };
+
+  const fetchTarget = (node) => {
+    const inner = unwrap(node);
+    if (!inner) return false;
+    if (inner.type === 'Identifier' && inner.name === 'fetch' && !isShadowed('fetch', true))
+      return true;
+    if (
+      (inner.type === 'MemberExpression' || inner.type === 'OptionalMemberExpression') &&
+      unwrap(inner.object)?.type === 'Identifier'
+    ) {
+      const receiver = unwrap(inner.object);
+      if (
+        globalFetchReceivers.has(receiver.name) &&
+        !isShadowed(receiver.name, true) &&
+        memberProperty(inner) === 'fetch'
+      )
+        return true;
+    }
+    return false;
+  };
+
+  function visit(node, parent, parentKey) {
+    if (!node || typeof node !== 'object' || typeNodeTypes.has(node.type)) return;
+
+    if (node.type === 'ImportExpression') {
+      const specifier =
+        node.source?.type === 'StringLiteral'
+          ? node.source.value
+          : node.source?.type === 'TemplateLiteral' && !node.source.expressions.length
+            ? node.source.quasis[0].value.cooked
+            : undefined;
+      if (resolvesToApiModule(file, specifier))
+        issues.push(
+          `${file}:${node.loc.start.line}: do not dynamically import web/api.ts; use static imports with callEndpoint`
+        );
+    }
+
+    if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
+      const callee = unwrap(node.callee);
+      const direct = directKind(callee);
+      if (direct) {
+        calls[direct.kind].push(node.loc.start.line);
+        for (const ref of direct.refs) countedRefNodes.add(ref);
+      } else if (
+        (callee?.type === 'MemberExpression' || callee?.type === 'OptionalMemberExpression') &&
+        callHelpers.has(memberProperty(callee))
+      ) {
+        const helperTarget = directKind(callee.object);
+        if (helperTarget) {
+          calls[helperTarget.kind].push(node.loc.start.line);
+          for (const ref of helperTarget.refs) countedRefNodes.add(ref);
+        } else if (file !== apiModuleFile && fetchTarget(callee.object)) {
+          calls.fetch.push(node.loc.start.line);
+        }
+      } else if (file !== apiModuleFile && fetchTarget(callee)) {
+        calls.fetch.push(node.loc.start.line);
+      }
+    }
+
+    if (
+      (node.type === 'MemberExpression' || node.type === 'OptionalMemberExpression') &&
+      !countedRefNodes.has(node)
+    ) {
+      const target = directKind(node);
+      if (target) {
+        for (const ref of target.refs) countedRefNodes.add(ref);
+        issues.push(
+          `${file}:${node.loc.start.line}: do not alias or pass imported ${target.kind}() as a value; call callEndpoint(...) directly`
+        );
+      }
+    }
+
+    if (
+      node.type === 'Identifier' &&
+      (importedDirect.has(node.name) || importedNamespaces.has(node.name)) &&
+      !isShadowed(node.name) &&
+      !countedRefNodes.has(node)
+    ) {
+      const nonReference =
+        parent?.type === 'ImportSpecifier' ||
+        parent?.type === 'ImportNamespaceSpecifier' ||
+        ((parent?.type === 'MemberExpression' || parent?.type === 'OptionalMemberExpression') &&
+          ((parentKey === 'property' && !parent.computed) ||
+            (importedNamespaces.has(node.name) && parentKey === 'object'))) ||
+        (parent?.type === 'ObjectProperty' && parentKey === 'key' && !parent.computed) ||
+        (parent?.type === 'JSXAttribute' && parentKey === 'name') ||
+        (parent?.type === 'ClassProperty' && parentKey === 'key' && !parent.computed);
+      if (!nonReference)
+        issues.push(
+          `${file}:${node.loc.start.line}: do not alias, pass, or re-export imported ${importedDirect.get(node.name) ?? 'web/api namespace'} as a value; call callEndpoint(...) directly`
+        );
+    }
+
+    const pushed = scopeBindingsFor(node);
+    if (pushed) scopes.push(pushed);
+    for (const [key, value] of Object.entries(node)) {
+      if (ignored.has(key)) continue;
+      if (Array.isArray(value)) for (const child of value) visit(child, node, key);
+      else if (value && typeof value === 'object') visit(value, node, key);
+    }
+    if (pushed) scopes.pop();
+  }
+
+  visit(tree.program, null, null);
+  for (const list of Object.values(calls)) list.sort((left, right) => left - right);
+  return { calls, issues };
 }
 
 function sourceFiles(directory) {
@@ -202,29 +383,130 @@ function sourceFiles(directory) {
     });
 }
 
-export const limits =
-  "Checked: api() and apiBinary() calls in web/ whose path is a literal, a template or a same-file const. Not checked: a path passed through a parameter, prop, lookup table, conditional or another file's helper. A local function named api is scanned too.";
+export function readAllowlist(directory = root) {
+  const path = resolve(directory, allowlistPath);
+  if (!existsSync(path)) return { permanent: {}, debt: {} };
+  const { permanent = {}, debt = {}, ...rest } = JSON.parse(readFileSync(path, 'utf8'));
+  if (Object.keys(rest).length)
+    throw new Error(`${allowlistPath}: only "permanent" and "debt" sections are allowed`);
+  for (const [file, entry] of Object.entries(permanent)) {
+    if (
+      !Number.isInteger(entry?.count) ||
+      entry.count < 1 ||
+      !permanentKinds.has(entry?.kind) ||
+      !entry?.reason?.trim() ||
+      Object.keys(entry).some((key) => !['count', 'kind', 'reason'].includes(key))
+    )
+      throw new Error(
+        `${allowlistPath}: permanent "${file}" needs only a positive count, kind ("fetch" or "apiBinary"), and reason`
+      );
+  }
+  for (const [file, count] of Object.entries(debt)) {
+    if (!Number.isInteger(count) || count < 1)
+      throw new Error(`${allowlistPath}: debt "${file}" needs a positive whole count`);
+  }
+  return { permanent, debt };
+}
 
-export function endpointCallErrors(directory = root) {
-  const { endpoints, problems } = allEndpoints(directory);
-  const errors = [...problems];
+export function scanWebLegacyApi(directory = root) {
+  const found = new Map();
+  const issues = [];
   for (const path of sourceFiles(resolve(directory, 'web'))) {
     const file = relative(directory, path).replaceAll('\\', '/');
-    for (const call of apiCalls(readFileSync(path, 'utf8'), file)) {
-      const endpoint = endpoints.find((item) => callsEndpoint(call, item));
-      if (endpoint)
-        errors.push(
-          `${file}:${call.line}: ${remedyFor(endpoint, call.path.replaceAll(wildcard, placeholder))}`
-        );
+    const result = scanLegacyApiSource(readFileSync(path, 'utf8'), file);
+    issues.push(...result.issues);
+    const { api, apiBinary, fetch } = result.calls;
+    if (api.length || apiBinary.length || fetch.length) found.set(file, result.calls);
+  }
+  return { found, issues };
+}
+
+export function endpointCallErrors(directory = root, allowlist = readAllowlist(directory)) {
+  const { permanent, debt } = allowlist;
+  const { found, issues } = scanWebLegacyApi(directory);
+  const errors = [...issues];
+
+  const allFiles = [
+    ...new Set([...found.keys(), ...Object.keys(permanent), ...Object.keys(debt)]),
+  ].sort((left, right) => (left < right ? -1 : 1));
+
+  for (const file of allFiles) {
+    const calls = found.get(file) ?? { api: [], apiBinary: [], fetch: [] };
+    const perm = permanent[file];
+    const permFetch = perm?.kind === 'fetch' ? perm.count : 0;
+    const permBinary = perm?.kind === 'apiBinary' ? perm.count : 0;
+    const owed = debt[file] ?? 0;
+
+    if (calls.fetch.length > permFetch)
+      errors.push(
+        `${file}: ${calls.fetch.length} direct fetch() call(s) (lines ${calls.fetch.join(', ')}), ${permFetch ? `${allowlistPath} permanent allows ${permFetch}` : 'none allowed'}; use callEndpoint(...) or pin binary/stream downloads under "permanent" in ${allowlistPath}`
+      );
+    else if (calls.fetch.length < permFetch)
+      errors.push(
+        `${allowlistPath}: ${file} has ${calls.fetch.length} direct fetch() call(s) but its permanent entry keeps ${permFetch}; correct the entry and its reason by hand`
+      );
+
+    if (calls.apiBinary.length < permBinary)
+      errors.push(
+        `${allowlistPath}: ${file} has ${calls.apiBinary.length} apiBinary() call(s) but its permanent entry keeps ${permBinary}; correct the entry and its reason by hand`
+      );
+
+    const apiTotalLines = [...calls.api, ...calls.apiBinary].sort((left, right) => left - right);
+    const allowedApi = permBinary + owed;
+    if (apiTotalLines.length > allowedApi)
+      errors.push(
+        `${file}: ${apiTotalLines.length} api() call(s) (lines ${apiTotalLines.join(', ')}), ${allowedApi ? `${allowlistPath} allows ${allowedApi}` : 'none allowed'}; use callEndpoint(...) instead of api()`
+      );
+    else if (apiTotalLines.length < allowedApi && calls.apiBinary.length >= permBinary) {
+      const nextDebt = Math.max(0, apiTotalLines.length - permBinary);
+      errors.push(
+        nextDebt > 0
+          ? `${allowlistPath}: ${file} now owes ${nextDebt} api() call(s); lower its debt from ${owed} to ${nextDebt} (${shrinkCommand})`
+          : `${allowlistPath}: ${file} owes no api() calls; remove its debt entry (${shrinkCommand})`
+      );
     }
   }
+
   return errors;
 }
 
+export function shrinkLegacyApiAllowlist(directory = root, allowlist = readAllowlist(directory)) {
+  const { permanent, debt } = allowlist;
+  const { found } = scanWebLegacyApi(directory);
+  const sortedPermanent = Object.fromEntries(
+    Object.entries(permanent).sort(([left], [right]) => (left < right ? -1 : 1))
+  );
+  const nextDebt = Object.fromEntries(
+    Object.entries(debt)
+      .map(([file, owed]) => {
+        const calls = found.get(file);
+        const totalApi = (calls?.api.length ?? 0) + (calls?.apiBinary.length ?? 0);
+        const permBinary = permanent[file]?.kind === 'apiBinary' ? permanent[file].count : 0;
+        return [file, Math.min(owed, Math.max(0, totalApi - permBinary))];
+      })
+      .filter(([, owed]) => owed > 0)
+      .sort(([left], [right]) => (left < right ? -1 : 1))
+  );
+  const next = { permanent: sortedPermanent, debt: nextDebt };
+  writeFileSync(resolve(directory, allowlistPath), `${JSON.stringify(next, null, 2)}\n`);
+  return next;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const errors = endpointCallErrors();
+  if (process.argv.includes('--shrink')) shrinkLegacyApiAllowlist(root);
+  const allowlist = readAllowlist(root);
+  const errors = endpointCallErrors(root, allowlist);
   if (errors.length) {
-    console.error([...errors, '', limits].join('\n'));
+    console.error(`${errors.join('\n')}\n\n${remedy}`);
     process.exitCode = 1;
-  } else console.log(`Endpoint calls PASS (${allEndpoints(root).endpoints.length} typed routes)`);
+  } else {
+    const debtCalls = Object.values(allowlist.debt).reduce((sum, count) => sum + count, 0);
+    const permanentCalls = Object.values(allowlist.permanent).reduce(
+      (sum, entry) => sum + entry.count,
+      0
+    );
+    console.log(
+      `Endpoint calls PASS (${debtCalls} legacy api() calls in ${Object.keys(allowlist.debt).length} debt files; ${permanentCalls} permanent calls in ${Object.keys(allowlist.permanent).length} files)`
+    );
+  }
 }

@@ -1,0 +1,1 @@
+export const PROMPT_HTTP_BODY_MAX_BYTES = 64 * 1024 * 1024;

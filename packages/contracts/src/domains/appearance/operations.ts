@@ -3,7 +3,8 @@ import { defineOperation } from '../../endpoint.js';
 import { revision } from '../revision.js';
 import { nonBlank } from '../text.js';
 import { MAX_THEME_ASSET_BYTES } from './endpoints.js';
-import { storyUiStyles, THEME_COLOR_KEYS } from './theme-vocabulary.js';
+import { storyUiStyles } from '../story-ui-styles.js';
+import { THEME_COLOR_KEYS } from './theme-vocabulary.js';
 
 export const fontId = nonBlank(64);
 export const fontTitle = z.string().trim().min(1).max(200);

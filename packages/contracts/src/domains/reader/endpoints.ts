@@ -1,5 +1,5 @@
 import { defineEndpoint } from '../../endpoint.js';
-import { PROMPT_HTTP_BODY_MAX_BYTES } from '../prompts/endpoints.js';
+import { PROMPT_HTTP_BODY_MAX_BYTES } from '../limits.js';
 import type { readerOperations as operations } from './operations.js';
 
 export const readerEndpoints = {
