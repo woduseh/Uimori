@@ -4,9 +4,9 @@ import { splitHeadBody } from '#contracts/operations';
 import { executeOperation } from '../server/command.js';
 import { applyRisuCommand } from '../server/commands/risu-import.js';
 import { updateStoryGuideCommand } from '../server/commands/story-guide.js';
-import { createStorePorts } from '../server/store-ports.js';
 import { Store } from '../server/store.js';
 import {
+  buildPorts,
   type CommandException,
   type CommandInput,
   type CommandModule,
@@ -42,6 +42,19 @@ const writes = (store: Store) => store.db.prepare('SELECT total_changes() AS cou
 test('every command module under server/commands has samples in tests/fixtures/command-samples', () => {
   expect(registryProblems(discoveredModules, discoveredSampleFiles)).toEqual([]);
   expect(registeredCommands().length).toBeGreaterThan(0);
+});
+
+test('a sample file cannot cut the probe off from the events port', () => {
+  const publish = vi.fn();
+  const store = createStoreFixture();
+  const ports = buildPorts(
+    { ports: () => ({ events: { publish: () => undefined }, extra: 1 }) },
+    store,
+    publish
+  ) as unknown as { events: { publish: (chatId: string) => void }; extra: number };
+  ports.events.publish('chat-1');
+  expect(publish).toHaveBeenCalledWith('chat-1');
+  expect(ports.extra).toBe(1);
 });
 
 test('a command that is not picked up, has no samples, or carries an unjustified exception is reported with what to add', () => {
@@ -97,14 +110,40 @@ test('a command that is not picked up, has no samples, or carries an unjustified
           code: 'REVISION_CONFLICT',
           reason: 'The default answer, repeated for no reason.',
         },
-        missing: { statusCode: 410, code: 'GONE', reason: 'A path the command does not have.' },
-        expectedRevision: { statusCode: 410, code: 'GONE', reason: 'short' },
+        missing: {
+          statusCode: 410,
+          code: 'LIBRARY_ITEM_DELETED',
+          reason: 'A path the command does not have.',
+        },
+        expectedRevision: { statusCode: 410, code: 'LIBRARY_ITEM_DELETED', reason: 'short' },
       },
     })
   ).toEqual([
     expect.stringContaining('staleAnswers.chatId repeats the default'),
     expect.stringContaining('staleAnswers.missing names no head path'),
     expect.stringContaining('staleAnswers.expectedRevision needs a reason'),
+  ]);
+  expect(exceptions({ staleAnswers: {}, noChatEvent: undefined })).toEqual([
+    expect.stringContaining('no staleAnswers or noChatEvent'),
+  ]);
+  expect(
+    exceptions({
+      staleAnswers: {
+        chatId: {
+          statusCode: 400,
+          code: 'INVALID_REQUEST',
+          reason: 'The broken body already does this.',
+        },
+        expectedRevision: {
+          statusCode: 410,
+          code: 'MADE_UP',
+          reason: 'A code the app does not define.',
+        },
+      },
+    })
+  ).toEqual([
+    expect.stringContaining('staleAnswers.chatId answers 400 INVALID_REQUEST'),
+    expect.stringContaining('staleAnswers.expectedRevision names MADE_UP'),
   ]);
   expect(exceptions({ noChatEvent: 'short' })).toEqual([
     expect.stringContaining('noChatEvent needs a reason'),
@@ -127,7 +166,7 @@ for (const registered of registeredCommands()) {
   const publishesNoEvent = exception.noChatEvent !== undefined;
   const staleAnswerOf = (path: string) => exception.staleAnswers?.[path] ?? defaultStaleAnswer;
   const makePorts = (store: Store, publish: (chatId: string) => void) =>
-    (registered.ports?.(store, { publish }) ?? createStorePorts(store, { publish })) as never;
+    buildPorts(registered, store, publish);
   const arrange = (store: Store) => {
     if (!registered.samples) throw new Error(missingSamples(name));
     const samples = registered.samples(store);
@@ -143,6 +182,7 @@ for (const registered of registeredCommands()) {
       ...(command.op.body.safeParse(broken).success ? { __invalidBodyField: true } : {}),
     };
   };
+  const numericRevisions = revisions.filter((revision) => !revision.includes('.'));
   const scope = !paths.length
     ? 'no target or revision probes'
     : publishesNoEvent
@@ -198,6 +238,37 @@ for (const registered of registeredCommands()) {
       expect(writes(store)).toEqual(before);
       expect(publish).not.toHaveBeenCalled();
     });
+
+    if (exception.staleAnswers?.[path] && !revisions.includes(path) && numericRevisions.length)
+      test(`${name} answers a revision one ahead with 409 before a stale ${path}`, async () => {
+        const store = createStoreFixture();
+        const { inputs, stale } = arrange(store);
+        const sample = inputs.find(
+          (input) =>
+            valuesAtPath(input, path).some((value) => value !== undefined) &&
+            numericRevisions.some((revision) => typeof input[revision] === 'number')
+        );
+        if (!sample)
+          throw new Error(
+            `${name}: add a valid sample containing head path ${path} and a numeric ${numericRevisions.join(' or ')}`
+          );
+        const publish = vi.fn();
+        const ports = makePorts(store, publish);
+        const makeStale = stale?.[path];
+        if (!makeStale) throw new Error(`${name}: add a stale-maker for head path ${path}`);
+        await makeStale(sample);
+        const ahead = Object.fromEntries(
+          numericRevisions
+            .filter((revision) => typeof sample[revision] === 'number')
+            .map((revision) => [revision, Number(sample[revision]) + 1])
+        );
+        const before = writes(store);
+        await expect(
+          executeOperation(command, ports, { ...breakBody(sample), ...ahead })
+        ).rejects.toMatchObject(defaultStaleAnswer);
+        expect(writes(store)).toEqual(before);
+        expect(publish).not.toHaveBeenCalled();
+      });
   }
 
   if (command.receipt) {
