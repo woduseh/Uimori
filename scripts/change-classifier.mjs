@@ -24,7 +24,7 @@ const patterns = {
     'u'
   ),
   buildContextInput:
-    /^(?:\.dockerignore|Dockerfile|scripts\/(?:lib|check-build-context)\.mjs|package(?:-lock)?\.json|docs\/(?:[^/]+\.md|skills\/.+))$/u,
+    /^(?:\.dockerignore|Dockerfile|scripts\/(?:lib|check-build-context)\.mjs|docs\/(?:[^/]+\.md|skills\/.+))$/u,
   fullSuiteInput:
     /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u,
   biomeConfigInput: /^(?:biome\.json|scripts\/(?:biome-config|generate-biome-config)\.mjs)$/u,
