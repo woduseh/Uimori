@@ -40,14 +40,18 @@ const worktrees = git('worktree', 'list', '--porcelain', '-z')
   .map((line) => line.slice(9))
   .filter(existsSync)
   .map((p) => realpathSync(p));
-function outside(input) {
-  if (!input) throw new Error('Pass --snapshot <downloaded SQLite backup>');
-  const file = realpathSync(input);
+function requireExternalPath(input) {
+  const file = path.resolve(input);
   for (const tree of worktrees) {
     const rel = path.relative(tree, file);
     if (!rel || (!rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel)))
-      throw new Error('Input must be outside repository worktrees');
+      throw new Error('Replay input and temporary storage must be outside repository worktrees');
   }
+  return file;
+}
+function outside(input) {
+  if (!input) throw new Error('Pass --snapshot <downloaded SQLite backup>');
+  const file = requireExternalPath(realpathSync(requireExternalPath(input)));
   if (!statSync(file).isFile()) throw new Error('Expected a regular file');
   return file;
 }
@@ -58,7 +62,8 @@ if (
   allowed.some((v) => typeof v !== 'string' || !/^[0-9a-f]{64}$/.test(v))
 )
   throw new Error('--expect requires a JSON array of exact difference fingerprints');
-const tmp = mkdtempSync(path.join(os.tmpdir(), 'uimori-compat-'));
+const temporaryRoot = requireExternalPath(realpathSync(requireExternalPath(os.tmpdir())));
+const tmp = mkdtempSync(path.join(temporaryRoot, 'uimori-compat-'));
 const old = path.join(tmp, 'old');
 const output = path.join(root, 'output', 'snapshot-compat', randomUUID() + '.json');
 const children = [];
