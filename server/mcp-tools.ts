@@ -294,7 +294,7 @@ const [helperAppTools, helperAppCall] = HELPER_GATEWAY_TOOLS;
 const GATEWAY_DEFINITIONS = [
   {
     name: 'app_tools',
-    description: `Look up the Uimori app operations that have no tool of their own here: what each one does and its exact argument schema. Run them with app_call. Pass names for the schemas of operations listed below, for example ["chat.read","scene.read"]. Pass query, an English purpose such as "find a scene by its text" or an exact operation name, for ranked candidates with complete schemas (3 by default; limit and offset page them). Pass neither to page through a compact catalog without schemas. The descriptions were written for the in-app helper: over MCP there is no current chat, task, editor or helper conversation, so chat operations take chatId, and a phrase about the current chat or the frozen data of a task does not apply. Paid generation, permanent deletion and saves that need the in-app change review are not available here. Operations by area, written as area.operation: ${operationIndex(GATEWAY_TOOLS, false)}.`,
+    description: `Look up the Uimori app operations that have no tool of their own here: what each one does and its exact argument schema. Run them with app_call. Pass names for the schemas of operations listed below, for example ["chat.read","scene.read"]. Pass query, an English purpose such as "find a scene by its text" or an exact operation name, for ranked candidates with complete schemas (3 by default; limit and offset page them). Pass neither to page through a compact catalog without schemas. The descriptions were written for the in-app helper: over MCP there is no current chat, task, editor or helper conversation, so chat operations take chatId, and a phrase about the current chat or the frozen data of a task does not apply. Paid generation, delete operations and saves that still run inside an in-app helper task are not available here. Operations by area, written as area.operation: ${operationIndex(GATEWAY_TOOLS, false)}.`,
     inputSchema: renamedSchema(helperAppTools!.inputSchema),
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
@@ -379,7 +379,7 @@ function unavailable(name: string): never {
       ? `${name} starts paid generation, which is not available over MCP yet; the user can start it in the app`
       : trait === 'delete'
         ? `${name} deletes permanently, which is not available over MCP; the user can do it in the app`
-        : `${name} runs only inside an in-app helper task, which keeps its change review, receipt or frozen task data`
+        : `${name} runs only inside an in-app helper task, which keeps its receipt or frozen task data`
   );
 }
 

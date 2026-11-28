@@ -526,7 +526,7 @@ test('MCP explains a failed run and reaches app operations, but never starts pai
   expect(renamed.isError, JSON.stringify(renamed.value)).toBe(false);
   expect(store.chat(chat.id).title).toBe('Harbor dawn');
 
-  for (const table of ['helper_tasks', 'helper_events', 'helper_changes'])
+  for (const table of ['helper_tasks', 'helper_events'])
     expect(store.db.prepare(`SELECT count(*) AS n FROM ${table}`).get()!.n).toBe(0);
 });
 
