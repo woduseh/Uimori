@@ -325,15 +325,22 @@ export function persistRisuBundle(
 }
 
 export function prepareRisuBundle(
+  store: Store,
   file: PreparedNativeTransferFile,
   stagedImages?: PreparedBundleImage[]
 ) {
   if (!stagedImages) return { bundle: prepareBundle(file), images: undefined };
   const bundle = prepareStagedBundle(file, stagedImages);
-  const images = stagedImages.map((image) => ({
-    hash: image.hash,
-    mime: image.mime,
-    bytes: readFileSync(image.path),
-  }));
+  const stored = store.db.prepare('SELECT bytes FROM image_blobs WHERE hash=?');
+  const images = stagedImages.map(({ hash, mime, path }) => {
+    const existing = stored.get(hash)?.bytes as Uint8Array | undefined;
+    return {
+      hash,
+      mime,
+      bytes: existing
+        ? Buffer.from(existing.buffer, existing.byteOffset, existing.byteLength)
+        : readFileSync(path),
+    };
+  });
   return { bundle, images };
 }

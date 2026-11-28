@@ -350,7 +350,7 @@ test('card imports preserve all lore, trimmed like the Risu decorator reader, an
     expect(store.story.notes.revision(result.chat.id)).toBe(0);
     expect(JSON.stringify(bot)).not.toContain(source.base64);
     const selectedBody = { ...body, idempotencyKey: 'with-memory', memoryIds: ['lore-1'] };
-    await expect(applyRisuImport(store, selectedBody)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(applyRisuImport(store, selectedBody)).rejects.toThrow('Unknown request field');
     expect(
       (
         bot.package!.nativeRisu.card.character_book as { entries: { enabled: boolean }[] }
