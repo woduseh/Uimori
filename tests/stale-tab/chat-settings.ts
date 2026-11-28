@@ -62,15 +62,6 @@ async function optionWrite(values: Record<string, unknown>, controlValues = valu
   };
 }
 
-const guide = {
-  enabled: true,
-  work: 'Stale tab work',
-  reference: '',
-  position: '',
-  followCanon: false,
-  webSearch: false,
-};
-
 function orphanNote(id: string) {
   const note = randomUUID();
   store()
@@ -163,48 +154,7 @@ export const chatSettingsCases = domainCases('chat-settings', {
     exemptTargets: { operationId: operationIdExemption },
   },
   readVariables: { cases: [readDeleted] },
-  writeVariables: {
-    cases: [
-      {
-        when: 'a chat another tab deleted and a schema-invalid body',
-        arrange: () => {
-          const request = { expectedRevision: 0, expectedSourceHash: null };
-          return {
-            input: {
-              ...request,
-              chatId: goneChatId(),
-              idempotencyKey: randomUUID(),
-              values: 'not-an-object',
-            },
-            control: {
-              ...request,
-              chatId: chatId('Stale tab variables'),
-              idempotencyKey: randomUUID(),
-              values: { mood: 'calm' },
-            },
-          };
-        },
-        answer: conflict,
-      },
-    ],
-  },
   readStoryGuide: { cases: [readDeleted] },
-  updateStoryGuide: {
-    cases: [
-      {
-        when: 'a chat another tab deleted and a schema-invalid body',
-        arrange: () => ({
-          input: {
-            chatId: goneChatId(),
-            expectedRevision: 0,
-            config: { enabled: 'not-a-boolean' },
-          },
-          control: { chatId: chatId('Stale tab guide'), expectedRevision: 0, config: guide },
-        }),
-        answer: conflict,
-      },
-    ],
-  },
   readOrphanMemory: { cases: [readDeleted] },
   applyOrphanMemory: {
     cases: [

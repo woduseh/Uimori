@@ -6,6 +6,7 @@ import { allEndpoints, type Endpoint, isAppErrorCode } from '#contracts';
 import * as contracts from '#contracts';
 import { allOperations } from '#contracts/operations';
 import * as operations from '#contracts/operations';
+import { allCommands } from '../server/commands/index.js';
 import { appearanceCases } from './stale-tab/appearance.js';
 import { chatCases } from './stale-tab/chat.js';
 import { chatSettingsCases } from './stale-tab/chat-settings.js';
@@ -46,7 +47,7 @@ const domainFiles: DomainCases[] = [
   transferCases,
   translationCases,
 ];
-const matrix: Record<string, Entry> = Object.fromEntries(
+const caseEntries: Record<string, Entry> = Object.fromEntries(
   domainFiles.flatMap(({ domain, entries }) =>
     Object.entries(entries as Record<string, Entry>).map(([key, entry]) => [
       `${domain}.${key}`,
@@ -68,14 +69,22 @@ const endpointEntries = Object.entries(allEndpoints).flatMap(([domain, endpoints
     endpoint: endpoint as Endpoint,
   }))
 );
+const commandOperations = new Map(
+  Object.entries(allCommands).map(([name, command]) => [name, command.op])
+);
+const httpEntries = endpointEntries.filter(
+  ({ endpoint }) => !commandOperations.has(endpoint.operation)
+);
 const operationFor = (domain: Domain, name: string) =>
   Object.values(allOperations[domain]).find((operation) => operation.name === name);
-const inputOf = (name: string) => {
-  const { domain, endpoint } = endpointEntries.find((item) => item.name === name)!;
-  return operationFor(domain, endpoint.operation)!.input;
-};
+const matrix: Record<string, Entry> = Object.fromEntries(
+  httpEntries.flatMap(({ name }) => (caseEntries[name] ? [[name, caseEntries[name]]] : []))
+);
 const analysisByName = new Map(
-  endpointEntries.map(({ name }) => [name, analyzeSchema(inputOf(name))])
+  httpEntries.map(({ domain, name, endpoint }) => [
+    name,
+    analyzeSchema(operationFor(domain, endpoint.operation)!.input),
+  ])
 );
 const analysisOf = (name: string) => analysisByName.get(name)!;
 const requiredBranchesOf = (name: string) =>
@@ -87,10 +96,13 @@ test('every endpoint names an operation of its own domain and every operation is
   expect(Object.keys(allOperations).sort()).toEqual(Object.keys(allEndpoints).sort());
   for (const { domain, name, endpoint } of endpointEntries) {
     expect(endpoint.operation.startsWith(`${domain}.`), name).toBe(true);
-    expect(
-      operationFor(domain, endpoint.operation),
-      `${name} → ${endpoint.operation}`
-    ).toBeDefined();
+    const operation = operationFor(domain, endpoint.operation);
+    expect(operation, `${name} → ${endpoint.operation}`).toBeDefined();
+    if (operation && 'kind' in operation && operation.kind === 'command')
+      expect(
+        commandOperations.get(operation.name),
+        `${name}: register the command in allCommands`
+      ).toBe(operation);
   }
   const served = new Set(endpointEntries.map(({ endpoint }) => endpoint.operation));
   for (const operations of Object.values(allOperations))
@@ -337,7 +349,7 @@ async function findMissingBranches(
 }
 
 test('every endpoint that carries a revision or names a target has a stale-tab matrix entry and target coverage', () => {
-  const missing = endpointEntries
+  const missing = httpEntries
     .filter(({ name }) => {
       const { revisions, targets } = analysisOf(name);
       return revisions.length > 0 || targets.length > 0;
@@ -351,7 +363,7 @@ test('every endpoint that carries a revision or names a target has a stale-tab m
   const domains = domainFiles.map(({ domain }) => domain);
   expect(domains, 'one case file per domain').toEqual([...new Set(domains)]);
   const known = new Set(endpointEntries.map(({ name }) => name));
-  expect(Object.keys(matrix).filter((name) => !known.has(name))).toEqual([]);
+  expect(Object.keys(caseEntries).filter((name) => !known.has(name))).toEqual([]);
 
   expect(
     findMissingTargets(matrix),
