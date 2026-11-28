@@ -15,6 +15,44 @@ import { AppError } from './app-errors.js';
 
 const AUTOMATIC_REFUSAL_RETRY_KEY = 'auto-refusal-retry:';
 
+function withoutEvaluationTools<T extends object>(value: T): T {
+  if (!('evaluationTools' in value)) return value;
+  const { evaluationTools: _removed, ...rest } = value as T & { evaluationTools?: unknown };
+  return rest as T;
+}
+
+function judgmentRecoverySnapshot(snapshot: RunSnapshot): RunSnapshot {
+  const profile = snapshot.profile;
+  if (!profile) return { ...snapshot, judgmentRecovery: true };
+  const models = Object.fromEntries(
+    Object.entries(profile.models).map(([role, model]) => [
+      role,
+      model ? withoutEvaluationTools(model) : model,
+    ])
+  ) as typeof profile.models;
+  const collaborationModels = profile.collaborationModels
+    ? Object.fromEntries(
+        Object.entries(profile.collaborationModels).map(([id, model]) => [
+          id,
+          withoutEvaluationTools(model),
+        ])
+      )
+    : undefined;
+  return {
+    ...snapshot,
+    profile: {
+      ...profile,
+      models,
+      ...(profile.contextModel
+        ? { contextModel: withoutEvaluationTools(profile.contextModel) }
+        : {}),
+      ...(profile.scriptModel ? { scriptModel: withoutEvaluationTools(profile.scriptModel) } : {}),
+      ...(collaborationModels ? { collaborationModels } : {}),
+    },
+    judgmentRecovery: true,
+  };
+}
+
 export function automaticRefusalRetryDepth(store: Store, runId: string): number {
   const read = store.db.prepare(
     "SELECT request_key AS requestKey,json_extract(command,'$.retryOf') AS retryOf FROM runs WHERE id=?"
@@ -184,7 +222,7 @@ export function retryRun(
         throw new HttpError(409, 'Idempotency key reused with different command');
       const id = randomUUID(),
         at = new Date().toISOString();
-      const snapshot = { ...original.snapshot, judgmentRecovery: true };
+      const snapshot = judgmentRecoverySnapshot(original.snapshot);
       store.db
         .prepare(`INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,created_at,updated_at)
         VALUES(?,?,?,'queued',?,?,?,?,?,?)`)

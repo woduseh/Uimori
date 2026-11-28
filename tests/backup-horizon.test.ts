@@ -20,6 +20,7 @@ import { transferRoutes } from '../server/transfer-routes.js';
 import { importChatBackupArchiveRequest } from '../server/chat-backup.js';
 import { buildMainProviderRequest, encodeMainPreview } from '../server/main-request.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
+import { retryRun } from '../server/run-retry.js';
 import {
   validateModelSnapshot,
   validateProviderSettingVersion,
@@ -316,6 +317,75 @@ test('stored presets, provider archives and model snapshots carrying legacy eval
     JSON.stringify(encodeMainPreview(plainBuilt.request, plainSnapshot).body)
   );
 
+  const candidateText = 'Candidate prose from legacy run.';
+  const legacyRunId = 'run-legacy-rejudge';
+  const legacyRunSnapshot = {
+    ...baseRunSnapshot,
+    profile: {
+      ...baseRunSnapshot.profile,
+      models: {
+        ...baseRunSnapshot.profile.models,
+        main: { ...legacySnapshot, evaluationTools: legacyModelBody.evaluationTools },
+      },
+    },
+    mainJudgmentEnabled: true,
+    mainJudgment: {
+      response: candidateText,
+      kind: 'refusal',
+      sourceHash: 'legacy-source-hash',
+    },
+  };
+  const now = new Date().toISOString();
+  store.db
+    .prepare(
+      `INSERT INTO runs(id,chat_id,parent_revision,status,request,snapshot,request_key,command,partial_text,error,created_at,updated_at)
+       VALUES(?,?,?,'failed',?,?,?,?,?,?,?,?)`
+    )
+    .run(
+      legacyRunId,
+      chat.id,
+      chat.headRevision,
+      'Continue from the pier.',
+      JSON.stringify(legacyRunSnapshot),
+      'legacy-request-key',
+      '{}',
+      candidateText,
+      'JEV_UNAVAILABLE',
+      now,
+      now
+    );
+  const rejudged = retryRun(store, legacyRunId, 'horizon-rejudge', { judgmentOnly: true });
+  expect(rejudged.created).toBe(true);
+  const rawRecoveredRun = store.db
+    .prepare('SELECT snapshot FROM runs WHERE id=?')
+    .get(rejudged.run.id) as { snapshot: string };
+  const recoveredSnapshot = JSON.parse(rawRecoveredRun.snapshot);
+  expect(recoveredSnapshot.judgmentRecovery).toBe(true);
+  expect(recoveredSnapshot.mainJudgment.response).toBe(candidateText);
+  expect(recoveredSnapshot.profile.models.main).not.toHaveProperty('evaluationTools');
+
+  const readRawModel = (id: string) =>
+    JSON.parse(
+      (
+        store.db
+          .prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?")
+          .get(id) as { body: string }
+      ).body
+    );
+  expect(readRawModel('model-legacy-eval')).toHaveProperty('evaluationTools');
+  expect(readRawModel('model-obsolete-eval')).toHaveProperty('evaluationTools');
+  expect(
+    store.product.moveModel('model-legacy-eval', {
+      targetId: 'model-obsolete-eval',
+      position: 'after',
+      expectedOrder: ['model-legacy-eval', 'model-obsolete-eval', 'model-plain'],
+    })
+  ).toEqual({ moved: true });
+  expect(readRawModel('model-legacy-eval')).toMatchObject({ displayOrder: 1 });
+  expect(readRawModel('model-legacy-eval')).not.toHaveProperty('evaluationTools');
+  expect(readRawModel('model-obsolete-eval')).toMatchObject({ displayOrder: 0 });
+  expect(readRawModel('model-obsolete-eval')).not.toHaveProperty('evaluationTools');
+
   const resaved = store.product.model(
     {
       title: 'Horizon model resaved',
@@ -330,8 +400,5 @@ test('stored presets, provider archives and model snapshots carrying legacy eval
   ) as ModelPreset;
   expect(resaved.revision).toBe(2);
   expect(resaved).not.toHaveProperty('evaluationTools');
-  const rawRow = store.db
-    .prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?")
-    .get('model-legacy-eval') as { body: string };
-  expect(JSON.parse(rawRow.body)).not.toHaveProperty('evaluationTools');
+  expect(readRawModel('model-legacy-eval')).not.toHaveProperty('evaluationTools');
 });
