@@ -314,6 +314,32 @@ test('late refreshes cannot replace a newer save, and external revisions preserv
   expect(await shownRejection(session.save())).toContain('저장된 자료가 바뀌었어요');
 });
 
+test('a save made elsewhere during discard still clears the discarded recovery copy', async () => {
+  const session = editor();
+  await session.open();
+  session.setModel({ ...model, title: 'Discard me' });
+  await session.flush();
+  expect(disk.get('content:one')).toMatchObject({ model: { title: 'Discard me' } });
+  const discardRead = deferred<ReturnType<typeof saved>>();
+  vi.mocked(api).mockImplementationOnce(() => discardRead.promise as ReturnType<typeof api>);
+  const discarding = session.discard();
+  await vi.waitFor(() => expect(api).toHaveBeenCalledTimes(2));
+  const external = { ...model, title: 'External' };
+  vi.mocked(api).mockResolvedValueOnce(saved(external, 2));
+  await session.refresh();
+  discardRead.resolve(saved(external, 2));
+  await discarding;
+  expect(disk.has('content:one')).toBe(false);
+  expect(session.snapshot()).toMatchObject({
+    dirty: false,
+    conflict: false,
+    local: { model: external },
+  });
+  const reopened = editor();
+  await reopened.open();
+  expect(reopened.snapshot()).toMatchObject({ dirty: false, recovery: 'none' });
+});
+
 test('save conflicts preserve local input and clean reload restores the latest baseline', async () => {
   const session = editor();
   await session.open();

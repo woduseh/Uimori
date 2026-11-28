@@ -50,8 +50,19 @@ test(`DECISION resource conflict appears live, and review and failed recovery pr
   const editor = page.getByTestId('prompt-editor');
   const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
   await expectCodeFieldValue(body, 'Original instructions');
+  const read = `**/api/resources/prompt-preset/${preset.id}`;
+  let failingUntil = Number.POSITIVE_INFINITY;
+  let failedReads = 0;
+  await page.route(read, (route) => {
+    if (route.request().method() !== 'GET' || Date.now() >= failingUntil) return route.fallback();
+    failedReads++;
+    return route.fulfill({ status: 503, json: { error: 'Synthetic read failure' } });
+  });
   await saveElsewhere(preset.revision, 'Saved while clean');
+  failingUntil = Date.now() + 500;
   await expectCodeFieldValue(body, 'Saved while clean');
+  expect(failedReads).toBeGreaterThan(0);
+  await page.unroute(read);
   await page.evaluate(() => {
     const original = IDBDatabase.prototype.transaction;
     IDBDatabase.prototype.transaction = function (...args) {

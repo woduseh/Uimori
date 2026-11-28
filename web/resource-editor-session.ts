@@ -324,7 +324,7 @@ export class ResourceEditorSession {
       this.refreshAfterSave = true;
       return;
     }
-    const load = ++this.loadVersion;
+    const load = this.loadVersion;
     const saved = await this.readTarget();
     if (this.disposed) return;
     if (load !== this.loadVersion || this.state.saving) {
