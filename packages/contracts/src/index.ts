@@ -42,3 +42,6 @@ export type * from './domains/chat-settings/operations.js';
 export * from './domains/risu/endpoints.js';
 export * from './domains/risuPreset/endpoints.js';
 export type { NativeTransferReceipt } from './domains/import-receipt.js';
+export * from './domains/outline/limits.js';
+export * from './domains/outline/endpoints.js';
+export type * from './domains/outline/operations.js';

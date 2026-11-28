@@ -109,7 +109,7 @@ Semantics `HelperRollbackView` and `HelperRollbackUnit` leave out:
 
 Constraints on changing this behavior:
 
-- Restores must go through `saveResource`, `editSource`, `editTranslation`, `outline.applyReceipt`, and `notes.write` so revision checks, job invalidation, and events stay identical to normal saves; never write target tables directly.
+- Restores must go through `saveResource`, `editSource`, `editTranslation`, `outline.applyBatch`, and `notes.write` so revision checks, job invalidation, and events stay identical to normal saves; never write target tables directly.
 - All selected units run in one transaction with per-unit savepoints (a failed unit reports `failed` cleanly while other units commit), and rollback fails with `HELPER_TASK_ACTIVE` while any task in the conversation is queued or running.
 - Rollback is synchronous, short, and non-cancellable; a client that lost the response retries the same request safely.
 

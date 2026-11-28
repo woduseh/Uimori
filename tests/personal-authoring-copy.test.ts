@@ -9,6 +9,7 @@ import { fixtureBotInput } from './fixtures/chat.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { OutlineStore } from '../server/outline-store.js';
+import { seedOutline } from './fixtures/outline.js';
 import { forkChat } from '../server/chat-fork.js';
 import { importChatBackup } from '../server/chat-backup.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
@@ -55,32 +56,18 @@ test('independent chat copies and portable restores keep authored plans and scop
     'library'
   ).chat;
   const outline = new OutlineStore(store);
-  outline.apply(
-    chat.id,
-    {
-      idempotencyKey: randomUUID(),
-      operations: [
-        { op: 'create', level: 'theme', title: 'Reconciliation', intent: 'Reunite the siblings' },
-      ],
-    },
-    'user'
-  );
+  seedOutline(store, chat.id, [
+    { op: 'create', level: 'theme', title: 'Reconciliation', intent: 'Reunite the siblings' },
+  ]);
   const createdPlan = outline.detail(chat.id).nodes[0];
   store.db
     .prepare('INSERT INTO outline_writings(id,node_id,source_id,created_at) VALUES(?,?,?,?)')
     .run(randomUUID(), createdPlan.id, chat.headRevision, new Date().toISOString());
   expect(readerDetail(store, chat.id, {}).reader.navigation[0].label).toBe('Reconciliation');
   setSceneTitle(store, chat.headRevision!, { expectedTitle: '', title: 'Winter reunion' });
-  outline.apply(
-    chat.id,
-    {
-      idempotencyKey: randomUUID(),
-      operations: [
-        { op: 'update', id: createdPlan.id, expectedRevision: createdPlan.revision, fixed: true },
-      ],
-    },
-    'user'
-  );
+  seedOutline(store, chat.id, [
+    { op: 'update', id: createdPlan.id, expectedRevision: createdPlan.revision, fixed: true },
+  ]);
   const service = new ChatOverridesStore(store),
     state = service.get(chat.id);
   const attachment = state.attachments[0],

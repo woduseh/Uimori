@@ -1,3 +1,6 @@
+import { applyOutlineBody } from '#contracts/operations';
+import { applyOutlineCommand } from './commands/outline.js';
+import { defineHelperCommandTool, type HelperCommandTool } from './helper-command-adapter.js';
 import { HELPER_PRESENTATION_TOOLS, presentationReadOnly } from './helper-presentation-tools.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -12,7 +15,7 @@ import {
 import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
 import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
-import { HELPER_CHAT_STATE_TOOLS } from './helper-chat-state-tools.js';
+import { HELPER_CHAT_STATE_TOOLS, helperChatStateCommand } from './helper-chat-state-tools.js';
 import { HELPER_CHAT_ORGANIZATION_TOOLS } from './helper-chat-organization-tools.js';
 import { HELPER_CHAT_LIFECYCLE_TOOLS } from './helper-chat-lifecycle-tools.js';
 import { HELPER_PROMPT_COMBINATION_TOOLS } from './helper-prompt-combination-tools.js';
@@ -84,6 +87,56 @@ export const HELPER_WRITING_READ_TOOLS: ProviderTool[] = MAIN_READ_TOOLS.map((to
     throw new Error(`HELPER_READ_WORDING_STALE: ${tool.name}`);
   return { ...tool, description: tool.description.replace(wording[0], wording[1]) };
 });
+export const outlineWriteTool = defineHelperCommandTool({
+  name: 'outline.write',
+  description:
+    'Create, update, move or remove items of the plot outline of a chat, as one atomic batch. A whole tree can be built in one call: give each new item a ref and name its parent with parentRef, listing a parent before its children. update, move and remove need the current revision of the item as expectedRevision. relatedIds link other plans of the same chat; read the ids before linking them. fixed marks an item the author wants kept when the outline is elaborated; it does not lock the item against edits the user asks for. An item whose text is being generated right now cannot be edited until that finishes. This changes the outline only: it writes no story prose and never marks anything as written. The result is a short receipt of what was applied, with the revision each operation produced, not the whole tree. If a call ends without a clear result, read the outline before trying again, because repeating a create would add the items twice.',
+  command: applyOutlineCommand,
+  schemaBody: applyOutlineBody,
+  omitHeadKeys: ['chatId', 'idempotencyKey'],
+  injectIdempotencyKey: true,
+  changeTarget: (_input, { chatId }) => ({ domain: 'outline', chatId }),
+  formatResult(outcome, { receiptId }) {
+    let createdIndex = 0;
+    const operations = outcome.replayed ? [] : outcome.input.operations;
+    const changes = operations.map((operation) =>
+      operation.op === 'create'
+        ? {
+            op: operation.op,
+            id: outcome.output.created[createdIndex++]!.id,
+            revisionAfterOperation: 1,
+          }
+        : {
+            op: operation.op,
+            id: operation.id,
+            ...(operation.op === 'remove'
+              ? {}
+              : { revisionAfterOperation: operation.expectedRevision + 1 }),
+          }
+    );
+    return {
+      toolOutput: {
+        operationId: receiptId,
+        applied: true,
+        atomic: true,
+        created: outcome.output.created,
+        changes,
+      },
+      taskResult: {
+        receiptId,
+        operation: 'outline.write',
+        requestedTargets: operations.length,
+        targets: [],
+      },
+    };
+  },
+});
+
+export function helperCommandTool(name: string): HelperCommandTool | undefined {
+  if (name === outlineWriteTool.tool.name) return outlineWriteTool;
+  return helperChatStateCommand(name);
+}
+
 const STORY_READ_NAMES = new Set(STORY_READ_TOOLS.map((tool) => tool.name));
 const loreSelector = described(
   schema(
@@ -497,74 +550,7 @@ const TOOLS: ProviderTool[] = [
       },
     }),
   },
-  {
-    name: 'outline.write',
-    description:
-      'Create, update, move or remove items of the plot outline of a chat, as one atomic batch. A whole tree can be built in one call: give each new item a ref and name its parent with parentRef, listing a parent before its children. update, move and remove need the current revision of the item as expectedRevision. relatedIds link other plans of the same chat; read the ids before linking them. fixed marks an item the author wants kept when the outline is elaborated; it does not lock the item against edits the user asks for. An item whose text is being generated right now cannot be edited until that finishes. This changes the outline only: it writes no story prose and never marks anything as written. The result is a short receipt of what was applied, with the revision each operation produced, not the whole tree. If a call ends without a clear result, read the outline before trying again, because repeating a create would add the items twice.',
-    inputSchema: schema(
-      {
-        operations: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 200,
-          description: 'Operations applied in order; all of them save or none does.',
-          items: {
-            type: 'object',
-            properties: {
-              op: {
-                type: 'string',
-                enum: ['create', 'update', 'move', 'remove'],
-                description: 'What to do with the item.',
-              },
-              ref: described(
-                str,
-                'create: a temporary name for the new item, so later operations in this call can use it as parentRef.'
-              ),
-              parentRef: described(str, 'Parent created earlier in this call, by its ref.'),
-              parentId: {
-                type: ['string', 'null'],
-                description: 'Id of an existing parent item, or null for the top level.',
-              },
-              level: {
-                type: 'string',
-                enum: ['theme', 'mainStory', 'arc', 'episode', 'beat'],
-                description:
-                  'create: kind of the new item. update: change the kind; it must stay smaller than its parent and larger than its children.',
-              },
-              title: described(str, 'Title of the item.'),
-              intent: described(str, 'The writing brief of the item: what it should achieve.'),
-              position: {
-                type: 'integer',
-                minimum: 0,
-                description: 'Index among the siblings under the parent.',
-              },
-              id: described(str, 'update, move, remove: id of the existing item.'),
-              expectedRevision: {
-                type: 'integer',
-                minimum: 1,
-                description:
-                  'update, move, remove: current revision of the item, from outline.read.',
-              },
-              fixed: {
-                type: 'boolean',
-                description:
-                  'create, update: mark the item as one the author wants kept during elaboration.',
-              },
-              relatedIds: {
-                type: 'array',
-                maxItems: 40,
-                items: str,
-                description: 'Ids of other plans in the same chat that this item relates to.',
-              },
-            },
-            required: ['op'],
-            additionalProperties: false,
-          },
-        },
-      },
-      ['operations']
-    ),
-  },
+  outlineWriteTool.tool,
   {
     name: 'notes.write',
     description:

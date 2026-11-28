@@ -2,6 +2,7 @@ import { countTextTokens } from '../core/text-tokens.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { illustrationDatabases } from './fixtures/illustration.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { seedOutline } from './fixtures/outline.js';
 import { readHelperOutline } from '../server/outline-read.js';
 
 const dbs = illustrationDatabases('uimori-outline-reads-');
@@ -13,26 +14,19 @@ afterEach(() => {
 function fixture() {
   const store = dbs.create(),
     chat = createFixtureChat(store, '구성 부분 조회');
-  const created = store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'large-plan',
-      operations: [
-        { op: 'create', ref: 'root', level: 'arc', title: '1부', intent: '루트 전문'.repeat(9000) },
-        ...Array.from({ length: 73 }, (_, i) => ({
-          op: 'create',
-          parentRef: 'root',
-          level: 'episode',
-          title: `회차 ${i}`,
-          intent: '한글😀\r\n"'.repeat(5000),
-        })),
-      ],
-    },
-    'user'
-  ).created;
+  const created = seedOutline(store, chat.id, [
+    { op: 'create', ref: 'root', level: 'arc', title: '1부', intent: '루트 전문'.repeat(9000) },
+    ...Array.from({ length: 73 }, (_, i) => ({
+      op: 'create' as const,
+      parentRef: 'root',
+      level: 'episode' as const,
+      title: `회차 ${i}`,
+      intent: '한글😀\r\n"'.repeat(5000),
+    })),
+  ]);
   const read = (args: Record<string, unknown> = {}) =>
     readHelperOutline(store, chat.id, args) as any;
-  return { store, chat, root: created[0].id, leaf: created[1].id, read };
+  return { store, chat, root: created[0]!.id, leaf: created[1]!.id, read };
 }
 
 test('large outline pages contain exact tree coverage, not full prose, without full detail hydration', () => {
@@ -102,84 +96,27 @@ test('continuations detect changes to their scope without blocking unrelated det
   const { store, chat, leaf, read } = fixture();
   const detail = read({ mode: 'detail', nodeId: leaf, offset: 0, limit: 20 });
   const detailNext = detail.nextRead.arguments.arguments;
-  store.outline.applyReceipt(
-    chat.id,
-    {
-      idempotencyKey: 'unrelated',
-      operations: [{ op: 'create', level: 'arc', title: '별개의 부', intent: '' }],
-    },
-    'user'
-  );
+  seedOutline(store, chat.id, [{ op: 'create', level: 'arc', title: '별개의 부', intent: '' }]);
   expect(read(detailNext).error).toBeUndefined();
   expect(read(detailNext).range.start).toBe(detail.range.end);
   const overviewNext = read({ limit: 1 }).nextRead.arguments.arguments;
 
   const other = createFixtureChat(store, '다른 구성');
-  store.outline.apply(
-    other.id,
-    {
-      idempotencyKey: 'other',
-      operations: [{ op: 'create', level: 'beat', title: '별개', intent: '' }],
-    },
-    'user'
-  );
+  seedOutline(store, other.id, [{ op: 'create', level: 'beat', title: '별개', intent: '' }]);
   expect(read(overviewNext).error).toBeUndefined();
-  store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'change',
-      operations: [{ op: 'update', id: leaf, expectedRevision: 1, intent: '바뀐 방향' }],
-    },
-    'user'
-  );
+  seedOutline(store, chat.id, [
+    { op: 'update', id: leaf, expectedRevision: 1, intent: '바뀐 방향' },
+  ]);
   expect(read(detailNext).error).toBe('OUTLINE_CHANGED');
   const changed = read(overviewNext);
   expect(changed).toMatchObject({ error: 'OUTLINE_CHANGED', returned: false });
   expect(changed.nodes).toBeUndefined();
   expect(changed.nextRead.arguments.arguments.offset).toBe(0);
   const version = read().version;
-  store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: 'move',
-      operations: [{ op: 'move', id: leaf, expectedRevision: 2, parentId: null, position: 0 }],
-    },
-    'user'
-  );
+  seedOutline(store, chat.id, [
+    { op: 'move', id: leaf, expectedRevision: 2, parentId: null, position: 0 },
+  ]);
   expect(read({ expectedVersion: version }).error).toBe('OUTLINE_CHANGED');
-});
-
-test('compact write receipts stay atomic and replayable without generating a full detail response', () => {
-  const { store, chat, leaf } = fixture();
-  vi.spyOn(store.outline, 'detail').mockImplementation(() => {
-    throw new Error('full detail not allowed');
-  });
-  const input = {
-    idempotencyKey: 'receipt',
-    operations: [
-      { op: 'update', id: leaf, expectedRevision: 1, intent: '변경 완료' },
-      { op: 'create', ref: 'new', level: 'beat', title: '새 항목', intent: '큰 내용'.repeat(9000) },
-    ],
-  };
-  const receipt = store.outline.applyReceipt(chat.id, input, 'user');
-  expect(receipt).toMatchObject({ operationId: 'receipt', applied: true, atomic: true });
-  expect(receipt.created).toHaveLength(1);
-  expect(JSON.stringify(receipt).length).toBeLessThan(2000);
-  expect(store.outline.applyReceipt(chat.id, input, 'user')).toEqual(receipt);
-  expect(() =>
-    store.outline.applyReceipt(
-      chat.id,
-      {
-        idempotencyKey: 'rollback',
-        operations: [
-          { op: 'update', id: leaf, expectedRevision: 2, intent: '저장되면 안 됨' },
-          { op: 'move', id: leaf, expectedRevision: 999, parentId: null, position: 0 },
-        ],
-      },
-      'user'
-    )
-  ).toThrow();
-  expect(store.outline.node(leaf).intent).toBe('변경 완료');
 });
 
 test('empty outline is readable and invalid foreign targets are not silently treated as empty', () => {
@@ -188,14 +125,9 @@ test('empty outline is readable and invalid foreign targets are not silently tre
     other = createFixtureChat(store, '다른 구성');
   const page = readHelperOutline(store, chat.id, {}) as any;
   expect(page).toMatchObject({ nodes: [], nextOffset: null, coverage: { total: 0, returned: 0 } });
-  const id = store.outline.apply(
-    other.id,
-    {
-      idempotencyKey: 'other',
-      operations: [{ op: 'create', level: 'beat', title: '범위 밖', intent: '' }],
-    },
-    'user'
-  ).created[0].id;
+  const id = seedOutline(store, other.id, [
+    { op: 'create', level: 'beat', title: '범위 밖', intent: '' },
+  ])[0]!.id;
   expect(() => readHelperOutline(store, chat.id, { mode: 'subtree', nodeId: id })).toThrow(
     'OUTLINE_NODE_UNAVAILABLE'
   );

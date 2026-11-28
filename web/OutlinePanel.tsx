@@ -27,7 +27,8 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
-import { api, ApiError } from './api.js';
+import { outlineEndpoints, type OutlineOperation } from '#contracts';
+import { api, ApiError, callEndpoint } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { CloseIcon, EditIcon } from './ui-icons.js';
@@ -67,7 +68,7 @@ type Draft = {
 };
 type Brief = { expectedRevision: number; planHash: string; outline: OutlineSnapshot };
 type Pending =
-  | { kind: 'apply'; body: { idempotencyKey: string; operations: unknown[] } }
+  | { kind: 'apply'; body: { idempotencyKey: string; operations: OutlineOperation[] } }
   | {
       kind: 'write';
       nodeId: string;
@@ -313,10 +314,10 @@ export function OutlinePanel({
       }
       if (!remember(operation, operation.body.idempotencyKey, true)) return;
       if (operation.kind === 'apply') {
-        const result = await api<{ detail: OutlineDetail; created: { id: string }[] }>(
-          `/chats/${chatId}/outline`,
-          operation.body
-        );
+        const result = await callEndpoint(outlineEndpoints.apply, {
+          chatId,
+          ...operation.body,
+        });
         if (
           stored<Pending | null>(pendingKey, null)?.body.idempotencyKey !==
           operation.body.idempotencyKey
@@ -325,16 +326,10 @@ export function OutlinePanel({
         if (mounted.current) {
           ++loadGeneration.current;
           setOutline(result.detail);
-          const edits = operation.body.operations as {
-            op: string;
-            id?: string;
-            title?: string;
-            intent?: string;
-          }[];
-          for (const item of edits)
+          for (const item of operation.body.operations)
             if (
-              item.id &&
-              (item.title !== undefined || item.intent !== undefined || item.op === 'remove')
+              item.op === 'remove' ||
+              (item.op === 'update' && (item.title !== undefined || item.intent !== undefined))
             )
               retain(`${prefix}:draft:${item.id}`, null);
           if (result.created.length) {
@@ -381,7 +376,7 @@ export function OutlinePanel({
       if (mounted.current) setBusy(false);
     }
   }
-  const apply = (operations: unknown[]) => {
+  const apply = (operations: OutlineOperation[]) => {
     if (disabled) return;
     void send({
       kind: 'apply',
@@ -450,7 +445,7 @@ export function OutlinePanel({
     setBusy(true);
     setError(null);
     try {
-      await api(`/chats/${chatId}/outline/focus`, { nodeId }, 'PUT');
+      await callEndpoint(outlineEndpoints.setFocus, { chatId, nodeId });
       dispatchEvent(new Event(OUTLINE_REFRESH_EVENT));
     } catch (cause) {
       if (mounted.current) setError(toUiMessage(cause));
@@ -472,10 +467,11 @@ export function OutlinePanel({
       ]);
       return;
     }
-    const update = {
+    const expectedRevision = current.revision ?? selected.revision;
+    const update: Extract<OutlineOperation, { op: 'update' }> = {
       op: 'update',
       id: selected.id,
-      expectedRevision: current.revision,
+      expectedRevision,
       title: current.title,
       intent: current.intent,
       relatedIds: current.relatedIds,
@@ -491,15 +487,15 @@ export function OutlinePanel({
         -1,
         ...nodes.filter((node) => node.parentId === current.parentId).map((node) => node.position)
       ) + 1;
-    const move = { op: 'move', id: selected.id, parentId: current.parentId, position };
+    const move = { op: 'move' as const, id: selected.id, parentId: current.parentId, position };
     const moveFirst = outlineLevelIndex(current.level) < outlineLevelIndex(selected.level);
     apply(
       moveFirst
         ? [
-            { ...move, expectedRevision: current.revision },
-            { ...update, expectedRevision: (current.revision ?? 0) + 1 },
+            { ...move, expectedRevision },
+            { ...update, expectedRevision: expectedRevision + 1 },
           ]
-        : [update, { ...move, expectedRevision: (current.revision ?? 0) + 1 }]
+        : [update, { ...move, expectedRevision: expectedRevision + 1 }]
     );
   }
   function help(purpose: 'compose' | 'review', node: OutlineNode | null = selected) {

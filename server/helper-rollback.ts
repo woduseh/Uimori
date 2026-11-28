@@ -1,3 +1,5 @@
+import type { OutlineLevel, OutlineOperation } from '#contracts';
+import { createTxPort } from './tx.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   HELPER_REVERTED_CHANGES_LIMIT,
@@ -294,11 +296,12 @@ function restoreResource(store: Store, row: Row) {
   });
 }
 
-function restoreOutline(store: Store, row: Row, key: string) {
+function restoreOutline(store: Store, row: Row) {
   const chatId = row.chat_id!;
   const baseline = parsed(row) as OutlineState;
   const wanted = new Map(baseline.map((node) => [node.id, node]));
-  const apply = (step: string, operations: (revision: (id: string) => number) => unknown[]) => {
+  const txPort = createTxPort(store.db, (fn) => store.transaction(fn));
+  const apply = (operations: (revision: (id: string) => number) => OutlineOperation[]) => {
     const revisions = new Map(store.outline.nodes(chatId).map((node) => [node.id, node.revision]));
     const list = operations((id) => {
       const value = revisions.get(id)!;
@@ -306,11 +309,7 @@ function restoreOutline(store: Store, row: Row, key: string) {
       return value;
     });
     return list.length
-      ? store.outline.applyReceipt(
-          chatId,
-          { idempotencyKey: `${key}:${step}`, operations: list },
-          'user'
-        ).created
+      ? txPort.transaction((tx) => store.outline.applyBatch(tx, chatId, list))
       : [];
   };
   const current = store.outline.nodes(chatId);
@@ -319,11 +318,11 @@ function restoreOutline(store: Store, row: Row, key: string) {
     const old = wanted.get(node.id);
     return old && (old.parentId !== node.parentId || old.level !== node.level);
   });
-  apply('detach', (revision) => [
+  apply((revision) => [
     ...reshaped
       .filter((node) => node.parentId !== null)
       .map((node) => ({
-        op: 'move',
+        op: 'move' as const,
         id: node.id,
         expectedRevision: revision(node.id),
         parentId: null,
@@ -333,29 +332,29 @@ function restoreOutline(store: Store, row: Row, key: string) {
       .filter(
         (node) => !wanted.has(node.id) && (node.parentId === null || wanted.has(node.parentId))
       )
-      .map((node) => ({ op: 'remove', id: node.id, expectedRevision: revision(node.id) })),
+      .map((node) => ({ op: 'remove' as const, id: node.id, expectedRevision: revision(node.id) })),
     ...reshaped
       .filter((node) => node.level !== wanted.get(node.id)!.level)
       .map((node) => ({
-        op: 'update',
+        op: 'update' as const,
         id: node.id,
         expectedRevision: revision(node.id),
-        level: wanted.get(node.id)!.level,
+        level: wanted.get(node.id)!.level as OutlineLevel,
       })),
   ]);
   const ids = new Map<string, string>(baseline.map((node) => [node.id, node.id]));
-  const created = apply('create', () =>
+  const created = apply(() =>
     baseline
       .filter((node) => !live.has(node.id))
       .map((node) => ({
-        op: 'create',
+        op: 'create' as const,
         ref: node.id,
         ...(node.parentId === null
           ? {}
           : live.has(node.parentId)
             ? { parentId: node.parentId }
             : { parentRef: node.parentId }),
-        level: node.level,
+        level: node.level as OutlineLevel,
         title: node.title,
         intent: node.intent,
         position: node.position,
@@ -363,12 +362,12 @@ function restoreOutline(store: Store, row: Row, key: string) {
   );
   for (const node of created) ids.set(node.ref!, node.id);
   const restored = new Map(store.outline.nodes(chatId).map((node) => [node.id, node]));
-  apply('edit', (revision) =>
+  apply((revision) =>
     baseline.flatMap((node) => {
       const id = ids.get(node.id)!;
       const now = restored.get(id)!;
       const parentId = node.parentId === null ? null : ids.get(node.parentId)!;
-      const operations: Record<string, unknown>[] = [];
+      const operations: OutlineOperation[] = [];
       if (now.parentId !== parentId || now.position !== node.position)
         operations.push({
           op: 'move',
@@ -378,7 +377,7 @@ function restoreOutline(store: Store, row: Row, key: string) {
           position: node.position,
         });
       const relatedIds = node.relatedIds?.map((related) => ids.get(related) ?? related);
-      const update: Record<string, unknown> = {};
+      const update: Partial<Extract<OutlineOperation, { op: 'update' }>> = {};
       if (now.title !== node.title) update.title = node.title;
       if (now.intent !== node.intent) update.intent = node.intent;
       if (now.fixed !== node.fixed) update.fixed = node.fixed;
@@ -548,7 +547,7 @@ export function rollBackHelperTask(
         store.transaction(() => {
           const key = `rollback:${taskId}:${unit.unit}`;
           if (unit.domain === 'resource') restoreResource(store, unit.rows[0]!);
-          else if (unit.domain === 'outline') restoreOutline(store, unit.rows[0]!, key);
+          else if (unit.domain === 'outline') restoreOutline(store, unit.rows[0]!);
           else if (unit.domain === 'notes') restoreNotes(store, unit.rows[0]!, key);
           else if (unit.domain === 'chat-lore') restoreChatLore(store, unit.rows[0]!, key, taskId);
           else restoreScene(store, unit, notices);

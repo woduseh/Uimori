@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod/v4';
-import type { AnySplitOperation, OperationBody } from '#contracts';
+import type { AnySplitOperation, OperationBody, OperationParsedInput } from '#contracts';
 import { combineStrictObject } from '#contracts/operations';
 import type { HelperTask, HelperTaskResult } from '../core/helper.js';
 import type { Json, ProviderTool } from '../core/transport.js';
@@ -10,6 +10,7 @@ import {
   EXTERNAL_REPLAY,
   executeOperation,
 } from './command.js';
+import { type HelperChangeTarget, withHelperChange } from './helper-changes.js';
 import { recordHelperTaskResult } from './helper-task-results.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { type AppPorts, createStorePorts } from './store-ports.js';
@@ -47,6 +48,10 @@ export type HelperCommandTool<
   readonly schemaBody: z.ZodType<OperationBody<Op>>;
   readonly omitHeadKeys: readonly string[];
   readonly injectIdempotencyKey?: boolean;
+  readonly changeTarget?: (
+    input: OperationParsedInput<Op>,
+    context: { readonly chatId: string }
+  ) => HelperChangeTarget | undefined;
   readonly formatResult: (
     outcome: CommandInTxOutcome<Op>,
     context: HelperCommandFormatContext
@@ -67,6 +72,7 @@ export function defineHelperCommandTool<
   readonly schemaBody: B;
   readonly omitHeadKeys: readonly (keyof Op['head']['shape'] & string)[];
   readonly injectIdempotencyKey?: boolean;
+  readonly changeTarget?: HelperCommandTool<Op, P>['changeTarget'];
   readonly formatResult: HelperCommandTool<Op, P>['formatResult'];
 }): HelperCommandTool<Op, P> {
   return {
@@ -79,6 +85,7 @@ export function defineHelperCommandTool<
     schemaBody: spec.schemaBody,
     omitHeadKeys: spec.omitHeadKeys,
     ...(spec.injectIdempotencyKey ? { injectIdempotencyKey: true } : {}),
+    ...(spec.changeTarget ? { changeTarget: spec.changeTarget } : {}),
     formatResult: spec.formatResult,
   };
 }
@@ -160,6 +167,14 @@ export async function executeHelperCommand(
       });
       return ran ? executed! : EXTERNAL_REPLAY;
     },
+    ...(entry.changeTarget
+      ? {
+          aroundApply: (_tx, input, run) => {
+            const target = entry.changeTarget!(input, { chatId });
+            return target ? withHelperChange(deps.store, task, target, run) : run();
+          },
+        }
+      : {}),
     onInTx: (_tx, outcome) => {
       toolOutput = formatInTx(outcome);
     },

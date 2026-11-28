@@ -8,6 +8,7 @@ import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace
 import { resolveHelperReferences, searchHelperReferences } from '../server/helper-references.js';
 import { setSceneTitle } from '../server/scene-titles.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { seedOutline } from './fixtures/outline.js';
 import { completedSource } from './fixtures/illustration.js';
 import { applyMentionReplacement, findMentionTrigger } from '../web/helper-mentions.js';
 import type { HelperMessage } from '../core/helper.js';
@@ -59,16 +60,10 @@ async function fixture() {
   const chat = createFixtureChat(store, '항구 이야기', { botId: bot.id });
   const scene = completedSource(store, chat.id, '첫 번째 장면의 본문이에요.');
   setSceneTitle(store, scene.id, { title: '등대의 밤', expectedTitle: '' });
-  const outlineNode = store.outline.apply(
-    chat.id,
-    {
-      idempotencyKey: randomUUID(),
-      operations: [
-        { op: 'create', level: 'arc', title: '폭풍 전야', intent: '항구에 안개가 깔린다.' },
-      ],
-    },
-    'user'
-  ).detail.nodes[0]!;
+  seedOutline(store, chat.id, [
+    { op: 'create', level: 'arc', title: '폭풍 전야', intent: '항구에 안개가 깔린다.' },
+  ]);
+  const outlineNode = store.outline.detail(chat.id).nodes[0]!;
   const chatConversation = await (
     await app.inject({
       method: 'POST',

@@ -1,23 +1,22 @@
+import { OUTLINE_RELATED_LIMIT, type OutlineCreatedNode, type OutlineOperation } from '#contracts';
 import { readHelperOutline, outlineNextRead } from './outline-read.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { AppError, HelperToolError } from './app-errors.js';
 import { textTokenExcerpt } from '../core/text-tokens.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { deleteSceneCommand } from './chat-deletion.js';
+import { assertTx, type Tx } from './tx.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
 import {
-  OUTLINE_INTENT_MAX,
-  OUTLINE_LEVELS,
   OUTLINE_LEVEL_LABELS,
-  OUTLINE_NEIGHBOR_INTENT_MAX,
-  OUTLINE_TITLE_MAX,
   outlineParentAllowed,
   outlineSnapshotNode,
   outlineTree,
   outlineWritable,
+  OUTLINE_NEIGHBOR_INTENT_MAX,
   type OutlineDetail,
   type OutlineFocus,
   type OutlineLevel,
@@ -53,8 +52,6 @@ const HEAD_ANCESTRY = `WITH RECURSIVE history(id) AS (
     SELECT s.parent_revision FROM sources s JOIN history h ON s.id=h.id WHERE s.parent_revision IS NOT NULL
   ) SELECT id FROM history`;
 const WRITTEN_LIMIT = 40;
-const BATCH_LIMIT = 200;
-const RELATED_LIMIT = 40;
 const REVIEW_SEED_SOURCES = 3;
 const TARGET_INTENT_TOKENS = 3000;
 type OutlineSelection = {
@@ -181,166 +178,7 @@ export function initOutlineFocus(db: DatabaseSync) {
 }
 
 export type OutlineAuthority = 'user' | 'model';
-export type OutlineOperation =
-  | {
-      op: 'create';
-      ref?: string;
-      parentRef?: string;
-      parentId?: string | null;
-      level: OutlineLevel;
-      title: string;
-      intent: string;
-      position?: number;
-      relatedIds?: string[];
-      fixed?: boolean;
-    }
-  | {
-      op: 'update';
-      id: string;
-      expectedRevision: number;
-      level?: OutlineLevel;
-      title?: string;
-      intent?: string;
-      fixed?: boolean;
-      relatedIds?: string[];
-    }
-  | {
-      op: 'move';
-      id: string;
-      expectedRevision: number;
-      parentId?: string | null;
-      position: number;
-    }
-  | { op: 'remove'; id: string; expectedRevision: number };
-
-const level = (value: unknown): OutlineLevel => {
-  if (typeof value !== 'string' || !(OUTLINE_LEVELS as readonly string[]).includes(value))
-    throw new HttpError(400, 'Invalid outline level');
-  return value as OutlineLevel;
-};
-const boolean = (value: unknown, name: string): boolean => {
-  if (typeof value !== 'boolean') throw new HttpError(400, `Invalid ${name}`);
-  return value;
-};
-const optionalId = (value: unknown, name: string): string | null =>
-  value === null ? null : text(value, name, 100);
-
-function parseRelatedIds(value: unknown): string[] {
-  if (!Array.isArray(value))
-    throw new HttpError(400, 'Invalid related outlines: expected an array');
-  if (value.length > RELATED_LIMIT)
-    throw new AppError(400, 'OUTLINE_RELATED_TOO_MANY', { limit: RELATED_LIMIT });
-  const ids = value.map((id) => text(id, 'related outline', 100));
-  if (new Set(ids).size !== ids.length)
-    throw new HttpError(400, 'Invalid related outlines: duplicate IDs');
-  return ids;
-}
-
-export function parseOutlineOperations(value: unknown): OutlineOperation[] {
-  if (!Array.isArray(value) || !value.length || value.length > BATCH_LIMIT)
-    throw new HttpError(
-      400,
-      `Invalid outline operations: expected an array of 1 to ${BATCH_LIMIT} items`
-    );
-  const refs = new Set<string>();
-  return value.map((item) => {
-    const body = record(item);
-    if (body.op === 'create') {
-      fields(body, [
-        'op',
-        'ref',
-        'parentRef',
-        'parentId',
-        'level',
-        'title',
-        'intent',
-        'position',
-        'relatedIds',
-        'fixed',
-      ]);
-      if (body.parentRef !== undefined && body.parentId !== undefined)
-        throw new HttpError(400, 'Invalid outline parent: send parentRef or parentId, not both');
-      if (body.ref !== undefined) {
-        const ref = text(body.ref, 'outline ref', 100);
-        if (refs.has(ref)) throw new HttpError(400, `Invalid outline ref: '${ref}' is repeated`);
-        refs.add(ref);
-      }
-      return {
-        op: 'create' as const,
-        ...(body.ref === undefined ? {} : { ref: text(body.ref, 'outline ref', 100) }),
-        ...(body.parentRef === undefined
-          ? {}
-          : { parentRef: text(body.parentRef, 'outline parent ref', 100) }),
-        ...(body.parentId === undefined
-          ? {}
-          : { parentId: optionalId(body.parentId, 'outline parent') }),
-        level: level(body.level),
-        title: text(body.title, 'outline title', OUTLINE_TITLE_MAX),
-        intent: text(body.intent, 'outline intent', OUTLINE_INTENT_MAX, true),
-        ...(body.relatedIds === undefined ? {} : { relatedIds: parseRelatedIds(body.relatedIds) }),
-        ...(body.position === undefined
-          ? {}
-          : { position: number(body.position, 'outline position', 0, 1e6) }),
-        ...(body.fixed === undefined ? {} : { fixed: boolean(body.fixed, 'outline pin') }),
-      };
-    }
-    if (body.op === 'update') {
-      fields(body, [
-        'op',
-        'id',
-        'expectedRevision',
-        'level',
-        'title',
-        'intent',
-        'fixed',
-        'relatedIds',
-      ]);
-      if (
-        body.level === undefined &&
-        body.title === undefined &&
-        body.intent === undefined &&
-        body.fixed === undefined &&
-        body.relatedIds === undefined
-      )
-        throw new HttpError(400, 'Invalid outline update: expected at least one field');
-      return {
-        op: 'update' as const,
-        id: text(body.id, 'outline node', 100),
-        expectedRevision: number(body.expectedRevision, 'outline revision'),
-        ...(body.level === undefined ? {} : { level: level(body.level) }),
-        ...(body.title === undefined
-          ? {}
-          : { title: text(body.title, 'outline title', OUTLINE_TITLE_MAX) }),
-        ...(body.intent === undefined
-          ? {}
-          : { intent: text(body.intent, 'outline intent', OUTLINE_INTENT_MAX, true) }),
-        ...(body.fixed === undefined ? {} : { fixed: boolean(body.fixed, 'outline pin') }),
-        ...(body.relatedIds === undefined ? {} : { relatedIds: parseRelatedIds(body.relatedIds) }),
-      };
-    }
-    if (body.op === 'move') {
-      fields(body, ['op', 'id', 'expectedRevision', 'parentId', 'position']);
-      return {
-        op: 'move' as const,
-        id: text(body.id, 'outline node', 100),
-        expectedRevision: number(body.expectedRevision, 'outline revision'),
-        ...(body.parentId === undefined
-          ? {}
-          : { parentId: optionalId(body.parentId, 'outline parent') }),
-        position: number(body.position, 'outline position', 0, 1e6),
-      };
-    }
-    if (body.op === 'remove') {
-      fields(body, ['op', 'id', 'expectedRevision']);
-      return {
-        op: 'remove' as const,
-        id: text(body.id, 'outline node', 100),
-        expectedRevision: number(body.expectedRevision, 'outline revision'),
-      };
-    }
-    throw new HttpError(400, 'Invalid outline operation');
-  });
-}
+export type { OutlineOperation };
 
 export class OutlineStore {
   readonly store: Store;
@@ -471,17 +309,12 @@ export class OutlineStore {
       ? { nodeId: String(row.id), level: row.level as OutlineLevel, title: String(row.title) }
       : null;
   }
-  setFocus(chatId: string, value: unknown): OutlineFocus {
-    const body = record(value);
-    fields(body, ['nodeId']);
-    const nodeId = optionalId(body.nodeId, 'outline node');
-    return this.store.transaction(() => {
-      this.store.chat(chatId);
-      if (nodeId === null) this.db.prepare('DELETE FROM outline_focus WHERE chat_id=?').run(chatId);
-      else this.placeFocus(chatId, nodeId);
-      this.store.event(chatId, 'outline.updated', chatId);
-      return this.focus(chatId);
-    });
+  setFocus(tx: Tx, chatId: string, nodeId: string | null): OutlineFocus {
+    assertTx(tx, this.db);
+    if (nodeId === null) this.db.prepare('DELETE FROM outline_focus WHERE chat_id=?').run(chatId);
+    else this.placeFocus(chatId, nodeId);
+    this.store.event(chatId, 'outline.updated', chatId);
+    return this.focus(chatId);
   }
   private placeFocus(chatId: string, nodeId: string) {
     const node = this.db.prepare('SELECT chat_id FROM outline_nodes WHERE id=?').get(nodeId);
@@ -494,7 +327,9 @@ export class OutlineStore {
       )
       .run(chatId, nodeId, now());
   }
-  private setRelated(id: string, ids: string[]) {
+  private setRelated(id: string, ids: readonly string[]) {
+    if (ids.length > OUTLINE_RELATED_LIMIT)
+      throw new AppError(400, 'OUTLINE_RELATED_TOO_MANY', { limit: OUTLINE_RELATED_LIMIT });
     const node = this.node(id);
     for (const relatedId of ids) {
       const related = this.node(relatedId);
@@ -645,194 +480,137 @@ export class OutlineStore {
       .get(...([chatId, ...(parentId === null ? [] : [parentId])] as string[])) as Row;
     return Number(row.position) + 1;
   }
-  apply(
+  applyBatch(
+    tx: Tx,
     chatId: string,
-    value: unknown,
-    authority: OutlineAuthority
-  ): { detail: OutlineDetail; created: { ref?: string; id: string }[] } {
-    return this.store.transaction(() => {
-      const created = this.applyBatch(chatId, value, authority);
-      return { detail: this.detail(chatId), created };
-    });
-  }
-  applyReceipt(chatId: string, value: unknown, authority: OutlineAuthority) {
-    return this.store.transaction(() => {
-      const body = record(value);
-      const operations = parseOutlineOperations(body.operations);
-      const created = this.applyBatch(chatId, value, authority);
-      let createdIndex = 0;
-      const changes = operations.map((operation) =>
-        operation.op === 'create'
-          ? { op: operation.op, id: created[createdIndex++].id, revisionAfterOperation: 1 }
-          : {
-              op: operation.op,
-              id: operation.id,
-              ...(operation.op === 'remove'
-                ? {}
-                : { revisionAfterOperation: operation.expectedRevision + 1 }),
-            }
-      );
-      return {
-        operationId: String(body.idempotencyKey),
-        applied: true,
-        atomic: true,
-        created,
-        changes,
-      };
-    });
-  }
-  private applyBatch(
-    chatId: string,
-    value: unknown,
-    authority: OutlineAuthority
-  ): { ref?: string; id: string }[] {
-    const body = record(value);
-    fields(body, ['operations', 'idempotencyKey']);
-    const key = text(body.idempotencyKey, 'outline key', 120);
-    const operations = parseOutlineOperations(body.operations);
-
-    return this.store.transaction(() => {
-      this.store.chat(chatId);
-      const canonical = JSON.stringify(operations);
-      const prior = this.db
-        .prepare('SELECT * FROM outline_batches WHERE chat_id=? AND request_key=?')
-        .get(chatId, key) as Row | undefined;
-      if (prior) {
-        if (prior.authority !== authority || prior.operations !== canonical)
-          throw new HttpError(409, 'Outline idempotency key was used for a different batch');
-        return JSON.parse(prior.created) as { ref?: string; id: string }[];
-      }
-      const pending = this.db
-        .prepare(
-          "SELECT n.id,n.command_id FROM outline_nodes n JOIN scene_commands c ON c.id=n.command_id WHERE n.chat_id=? AND c.status='pending' AND c.run_id IS NULL"
-        )
-        .all(chatId) as { id: string; command_id: string }[];
-      const before = pending.length ? outlineIndex(this.nodes(chatId)) : null;
-      const created: { ref?: string; id: string }[] = [];
-      const refs = new Map<string, string>();
-      const time = now();
-      for (const operation of operations) {
-        const live = () => this.nodes(chatId);
-        if (operation.op === 'create') {
-          const parentId =
-            operation.parentRef !== undefined
-              ? (refs.get(operation.parentRef) ??
-                (() => {
-                  throw new HelperToolError(
-                    400,
-                    'OUTLINE_REF_UNKNOWN',
-                    `Define '${operation.parentRef}' in an earlier create of this batch.`
-                  );
-                })())
-              : (operation.parentId ?? null);
-          if (parentId !== null) {
-            const parent = this.node(parentId);
-            if (parent.chatId !== chatId)
-              throw new HelperToolError(400, 'OUTLINE_PARENT_INVALID', 'Use a node of this chat.');
-            if (!outlineParentAllowed(parent.level, operation.level))
-              throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
-            this.assertIdle(parent);
-          }
-          const id = randomUUID();
-          this.db
-            .prepare(
-              'INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,NULL,?,?,?)'
-            )
-            .run(
-              id,
-              chatId,
-              parentId,
-              operation.level,
-              operation.position ?? this.siblingPosition(chatId, parentId),
-              operation.title,
-              operation.intent,
-              operation.fixed ? 1 : 0,
-              null,
-              time,
-              time
-            );
-          if (operation.relatedIds) this.setRelated(id, operation.relatedIds);
-          if (operation.ref) refs.set(operation.ref, id);
-          created.push({ ...(operation.ref ? { ref: operation.ref } : {}), id });
-          continue;
+    operations: readonly OutlineOperation[]
+  ): OutlineCreatedNode[] {
+    assertTx(tx, this.db);
+    const pending = this.db
+      .prepare(
+        "SELECT n.id,n.command_id FROM outline_nodes n JOIN scene_commands c ON c.id=n.command_id WHERE n.chat_id=? AND c.status='pending' AND c.run_id IS NULL"
+      )
+      .all(chatId) as { id: string; command_id: string }[];
+    const before = pending.length ? outlineIndex(this.nodes(chatId)) : null;
+    const created: OutlineCreatedNode[] = [];
+    const refs = new Map<string, string>();
+    const time = now();
+    for (const operation of operations) {
+      const live = () => this.nodes(chatId);
+      if (operation.op === 'create') {
+        const parentId =
+          operation.parentRef !== undefined
+            ? (refs.get(operation.parentRef) ??
+              (() => {
+                throw new HelperToolError(
+                  400,
+                  'OUTLINE_REF_UNKNOWN',
+                  `Define '${operation.parentRef}' in an earlier create of this batch.`
+                );
+              })())
+            : (operation.parentId ?? null);
+        if (parentId !== null) {
+          const parent = this.node(parentId);
+          if (parent.chatId !== chatId)
+            throw new HelperToolError(400, 'OUTLINE_PARENT_INVALID', 'Use a node of this chat.');
+          if (!outlineParentAllowed(parent.level, operation.level))
+            throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
+          this.assertIdle(parent);
         }
-        const node = this.node(operation.id);
-        if (node.chatId !== chatId)
-          throw new HelperToolError(400, 'OUTLINE_NODE_OUTSIDE_CHAT', 'Use a node of this chat.');
-        if (node.revision !== operation.expectedRevision)
-          throw new AppError(409, 'REVISION_CONFLICT');
-        if (operation.op === 'update') {
-          this.assertIdle(node);
-          if (operation.level !== undefined && operation.level !== node.level)
-            this.assertLevelChange(chatId, node, operation.level);
-          this.db
-            .prepare(
-              'UPDATE outline_nodes SET level=?,title=?,intent=?,fixed=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?'
-            )
-            .run(
-              operation.level ?? node.level,
-              operation.title ?? node.title,
-              operation.intent ?? node.intent,
-              (operation.fixed ?? node.fixed) ? 1 : 0,
-              time,
-              node.id,
-              operation.expectedRevision
-            );
-          if (operation.relatedIds) this.setRelated(node.id, operation.relatedIds);
-        } else if (operation.op === 'move') {
-          const siblings = live();
-          const descendants = outlineIndex(siblings).descendants(node.id);
-          for (const item of [node, ...descendants]) this.assertIdle(item);
-          const parentId = operation.parentId === undefined ? node.parentId : operation.parentId;
-          if (parentId !== null) {
-            const parent = siblings.find((item) => item.id === parentId);
-            if (!parent) throw new AppError(404, 'OUTLINE_NODE_NOT_FOUND');
-            if (!outlineParentAllowed(parent.level, node.level))
-              throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
-            this.assertIdle(parent);
-          }
-          this.db
-            .prepare(
-              'UPDATE outline_nodes SET parent_id=?,position=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?'
-            )
-            .run(parentId, operation.position, time, node.id, operation.expectedRevision);
-        } else {
-          const subtree = [node, ...outlineIndex(live()).descendants(node.id)];
-          for (const item of subtree) {
-            if (item.writings?.length)
-              throw new AppError(409, 'OUTLINE_NODE_WRITTEN', { title: item.title });
-            this.assertIdle(item);
-          }
-          for (const item of [...subtree].reverse()) {
-            this.db.prepare('DELETE FROM outline_writings WHERE node_id=?').run(item.id);
-            if (item.progress.commandId) {
-              this.db.prepare('UPDATE outline_nodes SET command_id=NULL WHERE id=?').run(item.id);
-              if (item.progress.runId) this.store.story.cancelCommand(item.progress.commandId);
-              else deleteSceneCommand(this.store, item.progress.commandId, {});
-            }
-            this.db.prepare('DELETE FROM outline_nodes WHERE id=?').run(item.id);
-          }
-        }
-      }
-      if (before) {
-        const after = outlineIndex(this.nodes(chatId));
-        for (const item of pending) {
-          const current = after.selection(item.id);
-          if (
-            current.path.length &&
-            plannedContent(before.selection(item.id)) !== plannedContent(current)
+        const id = randomUUID();
+        this.db
+          .prepare(
+            'INSERT INTO outline_nodes(id,chat_id,parent_id,level,position,title,intent,fixed,revision,command_id,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,1,NULL,?,?,?)'
           )
-            this.store.story.cancelCommand(item.command_id);
+          .run(
+            id,
+            chatId,
+            parentId,
+            operation.level,
+            operation.position ?? this.siblingPosition(chatId, parentId),
+            operation.title,
+            operation.intent,
+            operation.fixed ? 1 : 0,
+            null,
+            time,
+            time
+          );
+        if (operation.relatedIds) this.setRelated(id, operation.relatedIds);
+        if (operation.ref) refs.set(operation.ref, id);
+        created.push({ ...(operation.ref ? { ref: operation.ref } : {}), id });
+        continue;
+      }
+      const node = this.node(operation.id);
+      if (node.chatId !== chatId)
+        throw new HelperToolError(400, 'OUTLINE_NODE_OUTSIDE_CHAT', 'Use a node of this chat.');
+      if (node.revision !== operation.expectedRevision)
+        throw new AppError(409, 'REVISION_CONFLICT');
+      if (operation.op === 'update') {
+        this.assertIdle(node);
+        if (operation.level !== undefined && operation.level !== node.level)
+          this.assertLevelChange(chatId, node, operation.level);
+        this.db
+          .prepare(
+            'UPDATE outline_nodes SET level=?,title=?,intent=?,fixed=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?'
+          )
+          .run(
+            operation.level ?? node.level,
+            operation.title ?? node.title,
+            operation.intent ?? node.intent,
+            (operation.fixed ?? node.fixed) ? 1 : 0,
+            time,
+            node.id,
+            operation.expectedRevision
+          );
+        if (operation.relatedIds) this.setRelated(node.id, operation.relatedIds);
+      } else if (operation.op === 'move') {
+        const siblings = live();
+        const descendants = outlineIndex(siblings).descendants(node.id);
+        for (const item of [node, ...descendants]) this.assertIdle(item);
+        const parentId = operation.parentId === undefined ? node.parentId : operation.parentId;
+        if (parentId !== null) {
+          const parent = siblings.find((item) => item.id === parentId);
+          if (!parent) throw new AppError(404, 'OUTLINE_NODE_NOT_FOUND');
+          if (!outlineParentAllowed(parent.level, node.level))
+            throw new AppError(400, 'OUTLINE_HIERARCHY_INVALID');
+          this.assertIdle(parent);
+        }
+        this.db
+          .prepare(
+            'UPDATE outline_nodes SET parent_id=?,position=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?'
+          )
+          .run(parentId, operation.position, time, node.id, operation.expectedRevision);
+      } else {
+        const subtree = [node, ...outlineIndex(live()).descendants(node.id)];
+        for (const item of subtree) {
+          if (item.writings?.length)
+            throw new AppError(409, 'OUTLINE_NODE_WRITTEN', { title: item.title });
+          this.assertIdle(item);
+        }
+        for (const item of [...subtree].reverse()) {
+          this.db.prepare('DELETE FROM outline_writings WHERE node_id=?').run(item.id);
+          if (item.progress.commandId) {
+            this.db.prepare('UPDATE outline_nodes SET command_id=NULL WHERE id=?').run(item.id);
+            if (item.progress.runId) this.store.story.cancelCommand(item.progress.commandId);
+            else deleteSceneCommand(this.store, item.progress.commandId, {});
+          }
+          this.db.prepare('DELETE FROM outline_nodes WHERE id=?').run(item.id);
         }
       }
-      this.db
-        .prepare(
-          'INSERT INTO outline_batches(chat_id,request_key,authority,operations,created,created_at) VALUES(?,?,?,?,?,?)'
+    }
+    if (before) {
+      const after = outlineIndex(this.nodes(chatId));
+      for (const item of pending) {
+        const current = after.selection(item.id);
+        if (
+          current.path.length &&
+          plannedContent(before.selection(item.id)) !== plannedContent(current)
         )
-        .run(chatId, key, authority, canonical, JSON.stringify(created), time);
-      this.store.event(chatId, 'outline.updated', chatId);
-      return created;
-    });
+          this.store.story.cancelCommand(item.command_id);
+      }
+    }
+    this.store.event(chatId, 'outline.updated', chatId);
+    return created;
   }
 
   sceneCommand(id: string, value: unknown) {

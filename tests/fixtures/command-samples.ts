@@ -7,6 +7,7 @@ import type { Store } from '../../server/store.js';
 import { createStorePorts } from '../../server/store-ports.js';
 import { createFixtureChat } from './chat.js';
 import { completedSource } from './illustration.js';
+import { seedOutline } from './outline.js';
 
 type Input = Record<string, unknown>;
 type Samples = {
@@ -88,6 +89,33 @@ export const commandSamples: Partial<Record<keyof typeof allCommands, (store: St
             ports.tx.transaction((tx) => {
               store.storyGuide.save(tx, chatId, current.revision + 1, current.config);
             }),
+        },
+      };
+    },
+    'outline.setFocus'(store) {
+      const { id: chatId } = createFixtureChat(store, 'Outline focus command probe');
+      const [arc] = seedOutline(store, chatId, [
+        { op: 'create', level: 'arc', title: '1부', intent: '시작' },
+      ]);
+      return {
+        inputs: [{ chatId, nodeId: arc!.id }],
+        stale: {
+          chatId: () => deleteChat(store, chatId),
+        },
+      };
+    },
+    'outline.apply'(store) {
+      const { id: chatId } = createFixtureChat(store, 'Outline apply command probe');
+      return {
+        inputs: [
+          {
+            chatId,
+            idempotencyKey: randomUUID(),
+            operations: [{ op: 'create', ref: 'arc1', level: 'arc', title: '1부', intent: '시작' }],
+          },
+        ],
+        stale: {
+          chatId: () => deleteChat(store, chatId),
         },
       };
     },

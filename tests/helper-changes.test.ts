@@ -28,6 +28,7 @@ import { deleteScenes, sceneDeletionImpact } from '../server/scene-deletion.js';
 import { Store } from '../server/store.js';
 import { flushPendingImageCleanup, pruneUnusedData } from '../server/unused-data.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
+import { seedOutline } from './fixtures/outline.js';
 import { completedSource } from './fixtures/illustration.js';
 
 const owned: { dir: string; store: Store }[] = [];
@@ -397,14 +398,9 @@ test('changes older than the retained turns or days lose their text but stay lis
 test('outline and author notes record node and note changes, and a deleted target has no anchor', () => {
   const f = fixture();
   const bot = f.store.product.content(fixtureBotInput('지울 봇', '설명'));
-  f.store.outline.applyReceipt(
-    f.chat.id,
-    {
-      operations: [{ op: 'create', level: 'arc', title: '1부', intent: '마을을 떠난다' }],
-      idempotencyKey: 'outline-seed',
-    },
-    'user'
-  );
+  seedOutline(f.store, f.chat.id, [
+    { op: 'create', level: 'arc', title: '1부', intent: '마을을 떠난다' },
+  ]);
   const node = f.store.outline.nodes(f.chat.id)[0]!;
   const note = f.store.story.notes.write(f.chat.id, {
     text: '그는 다리를 두려워한다.',
@@ -419,17 +415,10 @@ test('outline and author notes record node and note changes, and a deleted targe
       withHelperChange(f.store, task, target, mutate)
     );
   write({ domain: 'outline', chatId: f.chat.id }, () =>
-    f.store.outline.applyReceipt(
-      f.chat.id,
-      {
-        operations: [
-          { op: 'update', id: node.id, expectedRevision: node.revision, intent: '마을로 돌아온다' },
-          { op: 'create', level: 'arc', title: '2부', intent: '강을 건넌다' },
-        ],
-        idempotencyKey: 'outline-edit',
-      },
-      'user'
-    )
+    seedOutline(f.store, f.chat.id, [
+      { op: 'update', id: node.id, expectedRevision: node.revision, intent: '마을로 돌아온다' },
+      { op: 'create', level: 'arc', title: '2부', intent: '강을 건넌다' },
+    ])
   );
   write({ domain: 'notes', chatId: f.chat.id }, () =>
     f.store.story.notes.write(f.chat.id, {
