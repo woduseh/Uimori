@@ -11,12 +11,8 @@ type Row = Record<string, unknown> & { status: MaintenanceState['status'] };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const ALWAYS_ADMITTED = new Set([
   '/api/session',
-  '/api/diagnostics/report',
   '/api/test/control',
   '/api/runs/:id/cancel',
-  '/api/runs/:id/skip-state-wait',
-  '/api/runs/:id/skip-package-preparation',
-  '/api/runs/:id/skip-package-after-response',
   '/api/jobs/:id/cancel',
   '/api/illustrations/:id/cancel',
   '/api/helper/tasks/:id/cancel',
