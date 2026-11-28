@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -196,6 +196,7 @@ test('a client edits a saved card through MCP without creating helper tasks', as
       newText: 'at the harbor light',
     },
   ];
+  const changed = vi.spyOn(target.store, 'changed');
   const patched = await call(target, 'resource_patch', {
     kind: 'content',
     id: bot.id,
@@ -203,6 +204,7 @@ test('a client edits a saved card through MCP without creating helper tasks', as
     changes,
   });
   expect(patched.isError, JSON.stringify(patched.value)).toBe(false);
+  expect(changed).toHaveBeenCalledWith(null);
   expect(
     (target.store.product.available('content', bot.id) as Content).package.nativeRisu
   ).toMatchObject({
@@ -248,7 +250,10 @@ test('a client edits a saved card through MCP without creating helper tasks', as
   expect(searched.isError, JSON.stringify(searched.value)).toBe(false);
   expect(JSON.stringify(searched.value)).toContain(bot.id);
   const helperScope = await call(target, 'data_search', { scope: 'editor', patterns: ['x'] });
-  expect(helperScope.isError).toBe(true);
+  expect(helperScope).toMatchObject({
+    isError: true,
+    value: { code: 'DATA_SCOPE_INVALID', retryMode: 'correct_arguments' },
+  });
 
   const queried = await call(target, 'db_query', {
     sql: 'SELECT id, title FROM agent_resources WHERE id=?',

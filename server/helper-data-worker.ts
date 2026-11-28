@@ -1216,7 +1216,7 @@ function runDataOperation(input: DataOperation): unknown {
       scopes.some((scope) => scope === 'current' || scope === 'editor' || scope === 'conversation')
     )
       throw new Error(
-        'DATA_SCOPE_UNAVAILABLE: only the library and chats scopes exist outside a helper task'
+        'DATA_SCOPE_INVALID: only the library and chats scopes exist outside a helper task'
       );
     if (scopes.includes('current')) {
       const writing = db
