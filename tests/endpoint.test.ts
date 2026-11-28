@@ -428,6 +428,7 @@ test('invalid input answers one INVALID_REQUEST code on the app error wire and r
       },
     },
     { method: 'PATCH', url: '/api/library/folders/f1', payload: { expectedRevision: 1 } },
+    { method: 'PATCH', url: '/api/helper/conversations/c1', payload: { expectedRevision: 1 } },
     {
       method: 'POST',
       url: '/api/resources/clone',

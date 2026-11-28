@@ -102,12 +102,14 @@ export const copyHelperConversationInput = z.strictObject({
   expectedRevision: revision,
   expectedEventSequence: eventSequence,
 });
-export const updateHelperConversationInput = z.strictObject({
-  ...conversationTarget,
-  expectedRevision: revision,
-  title: nonBlank(200).optional(),
-  persona: z.string().max(HELPER_PERSONA_MAX_CHARS).optional(),
-});
+export const updateHelperConversationInput = z
+  .strictObject({
+    ...conversationTarget,
+    expectedRevision: revision,
+    title: nonBlank(200).optional(),
+    persona: z.string().max(HELPER_PERSONA_MAX_CHARS).optional(),
+  })
+  .refine((input) => input.title !== undefined || input.persona !== undefined);
 export const markHelperConversationReadInput = z.strictObject({
   ...conversationTarget,
   activityEventSeq: eventSequence,
