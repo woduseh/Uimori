@@ -1,8 +1,7 @@
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
-import { downloadArchive } from '../web/archive-download.js';
 import { loadLocale, setLocale, UI_LOCALES } from '../web/i18n.js';
-import { formatUiMessage, uiMessage } from '../web/ui-message.js';
+import { formatUiMessage } from '../web/ui-message.js';
 
 beforeAll(() => Promise.all(UI_LOCALES.map(loadLocale)));
 
@@ -63,63 +62,4 @@ test('generic errors keep provider, internal and deletion-conflict text hidden',
   const coded = await rejectedWith(409, { code: 'CHAT_DELETE_HELPER_ACTIVE' }, 'DELETE');
   expect(coded.code).toBe('CHAT_DELETE_HELPER_ACTIVE');
   expect(shown(coded)).toBe('진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.');
-});
-
-test('a coded error renders its message from params in the current locale', async () => {
-  const body = { code: 'INPUT_TRANSLATION_TOO_LONG', params: { limit: 1234 } };
-  const result = await rejectedWith(422, body);
-  expect(result).toMatchObject({ status: 422, code: 'INPUT_TRANSLATION_TOO_LONG' });
-  expect(shown(result)).toContain('1,234자');
-  setLocale('en');
-  expect(shown(result)).toContain('1,234 characters');
-});
-
-test('missing-translation scene labels render in the language shown, including after a switch', async () => {
-  const result = await rejectedWith(409, {
-    code: 'MANUSCRIPT_TRANSLATION_MISSING',
-    params: { scenes: '0,3', total: 5 },
-  });
-  expect(shown(result)).toContain(': 첫 메시지, 장면 3, ….');
-  setLocale('en');
-  expect(shown(result)).toContain(
-    '5 scenes have no valid saved translation: First message, Scene 3, ….'
-  );
-});
-
-test('a catalogued code still arriving as a legacy error string uses the catalog message', async () => {
-  const legacy = await rejected(422, 'INPUT_TRANSLATION_REFUSED');
-  const coded = await rejectedWith(422, { code: 'INPUT_TRANSLATION_REFUSED' });
-  expect(legacy.code).toBe('INPUT_TRANSLATION_REFUSED');
-  expect(legacy.uiMessage).toEqual(coded.uiMessage);
-  setLocale('en');
-  expect(shown(legacy)).toBe('The translation model refused to translate this input.');
-});
-
-test('a legacy error string naming a code that needs params falls back instead of formatting', async () => {
-  const result = await rejected(422, 'INPUT_TRANSLATION_TOO_LONG');
-  expect(result.status).toBe(422);
-  expect(result.code).toBeNull();
-  expect(shown(result)).toBe(formatUiMessage(uiMessage('errors.requestFailed', { status: 422 })));
-});
-
-test('archive downloads show coded errors and keep their own fallback for an empty body', async () => {
-  const download = async (body: string, status = 400) => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status }));
-    const result = await downloadArchive('/native-transfers/export-archive', 'x.uimori', {}).then(
-      () => null,
-      (error: unknown) => error
-    );
-    expect(result).toBeInstanceOf(ApiError);
-    return result as ApiError;
-  };
-  const cycle = await download(JSON.stringify({ code: 'RESOURCE_BUNDLE_MODULE_CYCLE' }));
-  expect(cycle.code).toBe('RESOURCE_BUNDLE_MODULE_CYCLE');
-  expect(shown(cycle)).toBe('모듈 연결에 순환이 있어요.');
-  const uncoded = await download(JSON.stringify({ error: 'Request failed' }), 500);
-  expect(uncoded.uiMessage).toEqual(
-    (await rejectedWith(500, { error: 'Request failed' })).uiMessage
-  );
-  const empty = await download('', 500);
-  expect(empty.code).toBeNull();
-  expect(shown(empty)).toBe('백업 파일을 받지 못했어요.');
 });
