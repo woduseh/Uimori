@@ -95,6 +95,7 @@ export function deleteLibraryItem(
     forgetHelperConfirmationTargets(store.db, [{ kind, id }]);
     store.libraryOrganization.remove(kind, id);
     pruneUnusedData(store.db);
+    store.invalidated('resources');
     return { deleted: true as const, id };
   });
 }

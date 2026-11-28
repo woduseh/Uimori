@@ -176,7 +176,7 @@ export function deleteHelperChat(
 }
 
 export function deleteListedChat(store: Store, chatId: string) {
-  const chat = store.chat(chatId);
+  const chat = store.writableChat(chatId);
   assertChatIdleForDeletion(store, chatId);
   const conversations = Number(
     store.db.prepare('SELECT COUNT(*) AS n FROM helper_conversations WHERE chat_id=?').get(chatId)

@@ -137,12 +137,20 @@ export function changeIllustrationHero(
     return value;
   });
 }
-export function forgetIllustrationTarget(store: Store, sourceId: string, targetId: string): void {
+export function forgetIllustrationTarget(
+  store: Store,
+  sourceId: string,
+  targetId: string,
+  remainingSetHash?: string
+): void {
   const value = illustrationPresentation(store, sourceId);
   if (!value || (!value.targets[targetId] && !value.detached?.[targetId])) return;
   delete value.targets[targetId];
   if (value.detached) delete value.detached[targetId];
   if (value.heroTargetId === targetId) value.heroTargetId = null;
-  if (value.translation) delete value.translation.afterByTarget[targetId];
+  if (value.translation) {
+    delete value.translation.afterByTarget[targetId];
+    if (remainingSetHash !== undefined) value.translation.targetSetHash = remainingSetHash;
+  }
   saveIllustrationPresentation(store, sourceId, value);
 }

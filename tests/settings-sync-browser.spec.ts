@@ -1,6 +1,8 @@
 import { expect, test, type Page } from './fixtures/browser-test.js';
 import { emptyTheme } from '../core/themes.js';
 import type { ThemeCatalog } from '../core/themes.js';
+import type { Chat } from '../core/types.js';
+import { postFixtureChat } from './fixtures/chat.js';
 import { restoreGlobalThemeSelection } from './fixtures/theme-selection.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
@@ -149,4 +151,30 @@ test('SETSYNC02 theme and font changes reach another open tab through the live s
     await other.close();
     await restoreGlobalThemeSelection(request, baseline);
   }
+});
+
+test('SETSYNC03 a chat deleted outside this tab leaves its chat list through the live stream', async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  const kept = (await (
+    await postFixtureChat(request, { data: { title: `남는 채팅 ${stamp}` } })
+  ).json()) as Chat;
+  const doomed = (await (
+    await request.post('/api/chats', {
+      data: { title: `바깥에서 지운 채팅 ${stamp}`, botId: kept.botId },
+    })
+  ).json()) as Chat;
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/?chat=${kept.id}`);
+  await expect(page.getByText(doomed.title, { exact: true }).first()).toBeVisible();
+
+  const listRead = page.waitForRequest(
+    (entry) => entry.method() === 'GET' && new URL(entry.url()).pathname === '/api/chats'
+  );
+  expect((await request.delete(`/api/chats/${doomed.id}`)).ok()).toBe(true);
+  await listRead;
+  await expect(page.getByText(doomed.title, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(kept.title, { exact: true }).first()).toBeVisible();
 });

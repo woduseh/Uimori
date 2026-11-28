@@ -252,8 +252,9 @@ test('activity acknowledgements and chat deletion invalidate once per real chang
     ['activity', 1],
     ['activity', 2],
     ['helper-list', 3],
+    ['chats', 4],
   ]);
   const late = live.client();
   live.hub.connect(late.response, () => true);
-  expect(late.frames()[0].data).toMatchObject({ invalidations: 3 });
+  expect(late.frames()[0].data).toMatchObject({ invalidations: 4 });
 });

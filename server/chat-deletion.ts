@@ -156,6 +156,7 @@ export function deleteChat(store: Store, chatId: string) {
   });
   store.invalidated('activity');
   store.invalidated('helper-list');
+  store.invalidated('chats');
   return result;
 }
 

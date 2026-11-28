@@ -25,6 +25,7 @@ import type { Content, ModelPreset } from '../core/product.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { createFixtureChat, fixtureBotInput, injectWithFixtureBot } from './fixtures/chat.js';
 import { chatWithSource, fixtureSettings } from './fixtures/illustration.js';
+import { messages as settingsMessages } from '../web/locales/settings.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 
 const host = 'story.example.test';
@@ -657,16 +658,21 @@ test('MCP deletes only while the owner allows it in the settings, and cannot all
     model: editable,
   });
   expect(saved.isError, JSON.stringify(saved.value)).toBe(false);
-  await gateway('resource.save', {
+  expect(
+    await gateway('resource.save', {
+      kind: 'prompt-workspace',
+      expectedRevision: promptWorkspace(store).revision,
+      model: { ...editable, mcpAllowDelete: true },
+    })
+  ).toMatchObject({ isError: true, value: { code: 'INVALID_REQUEST' } });
+  const patched = await call(target, 'resource_patch', {
     kind: 'prompt-workspace',
+    id: 'current',
     expectedRevision: promptWorkspace(store).revision,
-    model: { ...editable, mcpAllowDelete: true },
+    changes: [{ op: 'set', path: '/mcpAllowDelete', value: true }],
   });
-  await call(target, 'resource_patch', {
-    kind: 'prompt-workspace',
-    expectedRevision: promptWorkspace(store).revision,
-    changes: [{ op: 'add', path: '/mcpAllowDelete', value: true }],
-  });
+  expect(patched).toMatchObject({ isError: true, value: { code: 'INVALID_ARGUMENTS' } });
+  expect(patched.value.error).toContain('kind must be content, prompt-preset or theme');
   expect(modelWorkspace(store).mcpAllowDelete).toBe(false);
   expect(await gateway('chat.delete', { chatId: doomed.id })).toMatchObject({
     isError: true,
@@ -681,10 +687,21 @@ test('MCP deletes only while the owner allows it in the settings, and cannot all
     expectedRevision: bot.revision + 1,
   });
   expect(stale).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+  const invalidated = vi.spyOn(store, 'invalidated');
+  const signalled: Record<string, string[]> = {};
   for (const [name, args] of deletions) {
+    invalidated.mockClear();
     const deleted = await gateway(name, args());
     expect(deleted.isError, `${name} ${JSON.stringify(deleted.value)}`).toBe(false);
+    signalled[name] = invalidated.mock.calls.map(([change]) => change);
   }
+  for (const name of ['resource.delete', 'model.delete', 'prompt.combination.delete'])
+    expect(signalled[name], name).toContain('resources');
+  expect(signalled['chat.delete']).toContain('chats');
+  expect(await gateway('chat.delete', { chatId: doomed.id })).toMatchObject({
+    isError: true,
+    value: { code: 'REVISION_CONFLICT' },
+  });
   expect(() => store.chat(doomed.id)).toThrow();
   expect(() => store.product.available('content', bot.id)).toThrow();
   expect(() => store.product.available('model', model.id)).toThrow();
@@ -721,6 +738,39 @@ test('a delete operation added to the MCP gateway without its marker stops the m
     vi.doUnmock('../server/helper-confirmation-traits.js');
     vi.resetModules();
   }
+});
+
+test('a mixed operation opened on MCP with every action stops the module from loading while one of them deletes', async () => {
+  const operations = '../server/mcp-app-operations.js';
+  vi.resetModules();
+  vi.doMock(operations, async () => {
+    const actual =
+      await vi.importActual<typeof import('../server/mcp-app-operations.js')>(operations);
+    const {
+      actions: _actions,
+      fields: _fields,
+      ...bookmark
+    } = actual.MCP_APP_OPERATIONS['chat.bookmark']!;
+    return {
+      ...actual,
+      MCP_APP_OPERATIONS: {
+        ...actual.MCP_APP_OPERATIONS,
+        'chat.bookmark': { ...bookmark, readOnly: false },
+      },
+    };
+  });
+  try {
+    await expect(import('../server/mcp-tools.js')).rejects.toThrow(
+      /MCP delete action must be listed under deletes: chat\.bookmark .*delete/u
+    );
+  } finally {
+    vi.doUnmock(operations);
+    vi.resetModules();
+  }
+});
+
+test('the refusal names the delete setting as the settings screen labels it', () => {
+  expect(MCP_DELETE_SETTING).toBe(settingsMessages['settings.mcpAllowDelete'].en);
 });
 
 test('MCP saves answer a stale or deleted target with REVISION_CONFLICT before other checks', async () => {

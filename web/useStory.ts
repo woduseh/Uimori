@@ -37,7 +37,7 @@ import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import { liveStream, watchLive } from './live-stream.js';
-import { resourceFrame, promptWorkspaceFrame } from './live-frames.js';
+import { chatListFrame, resourceFrame, promptWorkspaceFrame } from './live-frames.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 import { type ReaderResponse, restoreReaderBlockText } from './reader-blocks.js';
 import {
@@ -584,6 +584,13 @@ export function useStory() {
       libraryRequest.current++;
     };
   }, [loadLibrary, setLibraryFailure]);
+  useEffect(() => {
+    const live = watchLive({
+      match: chatListFrame,
+      refresh: () => loadChats().catch(setError),
+    });
+    return () => live.dispose();
+  }, [loadChats, setError]);
   useEffect(() => {
     void loadChats().catch(setError);
     void loadLibrary().catch(setLibraryFailure);

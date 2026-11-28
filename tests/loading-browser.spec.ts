@@ -86,7 +86,7 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
     const chat = page.locator(`.bot-chat-item[data-chat-id="${seeded.chat.id}"]`);
     await expect(chat).toBeVisible();
     await expect(article(page, seeded.sources[0].id)).toBeVisible();
-    expect(listRequests).toBe(2);
+    expect(listRequests).toBeGreaterThanOrEqual(2);
     const finished = page.waitForResponse(
       (response) => new URL(response.url()).pathname === '/api/chats' && response.ok()
     );

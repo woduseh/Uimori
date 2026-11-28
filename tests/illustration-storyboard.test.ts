@@ -27,7 +27,9 @@ import {
 import {
   illustrationPresentation,
   changeIllustrationHero,
+  saveIllustrationPresentation,
 } from '../server/illustration-presentation.js';
+import { MCP_APP_OPERATIONS } from '../server/mcp-app-operations.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
 import { placeIllustrationCuts } from '../server/helper-illustration-placement.js';
 import {
@@ -514,6 +516,80 @@ test('translation completion schedules once, keeps old mapping from overwriting 
   const saved = illustrationPresentation(store, restoredSource.id)?.translation;
   expect(saved?.target.textHash).toBe(mapping.target.textHash);
   expect(queuedIllustrations(store)).toEqual([]);
+});
+
+async function twoPlacedCuts() {
+  const store = databases.create();
+  const { source, chat } = chatWithSource(store);
+  settings(store);
+  const plan = reserveIllustrationPlan(store, source, 'manual', { testMode: true, maxTargets: 2 });
+  await runIllustrationJob(store, plan.id, 'worker', hooks(store));
+  const finish = async () => {
+    for (const id of queuedIllustrations(store))
+      await runIllustrationJob(store, id, 'worker', hooks(store));
+  };
+  await finish();
+  store.editTranslation(source.id, {
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+    text: '강 위에 등불.\n\n부두에 미라.',
+  });
+  await finish();
+  const [gone, kept] = illustrationsForSources(store, [source.id]).filter(
+    (job) => job.task === 'render'
+  );
+  const forgetPlacedSet = () => {
+    const presentation = illustrationPresentation(store, source.id)!;
+    presentation.translation!.targetSetHash = 'a set that was never placed';
+    saveIllustrationPresentation(store, source.id, presentation);
+  };
+  return { store, chat, source, gone: gone!, kept: kept!, forgetPlacedSet };
+}
+
+test('removing one placed cut keeps the positions of the rest without a new placement request', async () => {
+  const { store, source, gone, kept } = await twoPlacedCuts();
+  const before = illustrationPresentation(store, source.id)!.translation!;
+  expect(Object.keys(before.afterByTarget).sort()).toEqual(
+    [gone.target!.id, kept.target!.id].sort()
+  );
+  removeIllustration(store, gone.id);
+  expect(queuedIllustrations(store)).toEqual([]);
+  expect(illustrationPresentation(store, source.id)!.translation!.afterByTarget).toEqual({
+    [kept.target!.id]: before.afterByTarget[kept.target!.id],
+  });
+  expect(scheduleIllustrationPlacement(store, source.id)).toBeNull();
+});
+
+test('a cut deleted over MCP never queues a placement request, even when the app would', async () => {
+  const app = await twoPlacedCuts();
+  app.forgetPlacedSet();
+  removeIllustration(app.store, app.gone.id);
+  expect(queuedIllustrations(app.store)).toHaveLength(1);
+
+  const mcp = await twoPlacedCuts();
+  mcp.forgetPlacedSet();
+  const cut = listIllustrationCuts(mcp.store, mcp.chat.id, { sourceId: mcp.source.id }).cuts.find(
+    (item) => item.latestJobId === mcp.gone.id
+  )!;
+  await MCP_APP_OPERATIONS['illustration.cut.delete']!.run(
+    {
+      expectedLatestJobId: mcp.gone.id,
+      expectedSourceHash: mcp.source.hash,
+      expectedPresentationRevision: cut.presentationRevision,
+    },
+    {
+      store: mcp.store,
+      signal: new AbortController().signal,
+      chatId: mcp.chat.id,
+      fit: () => true,
+      chatChanged: () => {},
+      chatDeleted: () => {},
+    }
+  );
+  expect(
+    listIllustrationCuts(mcp.store, mcp.chat.id, { sourceId: mcp.source.id }).cuts
+  ).toHaveLength(1);
+  expect(queuedIllustrations(mcp.store)).toEqual([]);
 });
 
 for (const flow of ['illustration-first', 'translation-edit']) {
