@@ -484,7 +484,7 @@ test('raw byte routes answer refusals with no-store and keep an immutable blob s
     [{ method: 'GET', url: '/api/content/missing/risu-export' }, 404],
     [{ method: 'GET', url: '/api/theme-assets/not-a-hash' }, 400],
     [{ method: 'GET', url: `/api/theme-assets/${missing}` }, 404],
-    [{ method: 'GET', url: '/api/chats/missing-chat/events' }, 404],
+    [{ method: 'GET', url: '/api/events?chat=missing-chat' }, 404],
   ] as const) {
     const response = await app.inject(request);
     expect(response.statusCode, `${request.method} ${request.url}`).toBe(status);

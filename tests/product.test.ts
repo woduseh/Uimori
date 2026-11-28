@@ -346,7 +346,7 @@ async function terminalState<T extends { status: string }>(
   signal: AbortSignal,
   read: () => Promise<T | undefined>
 ): Promise<T> {
-  const events = await fetch(`${url}/api/chats/${chatId}/events`, { signal });
+  const events = await fetch(`${url}/api/events?chat=${encodeURIComponent(chatId)}`, { signal });
   expect(events.status).toBe(200);
   const reader = events.body!.getReader();
   try {
@@ -763,7 +763,7 @@ describe('M1 real HTTP application boundaries', () => {
     const chat = createFixtureChat(app.store, 'private synthetic chat');
     const asset = app.store.product.createAsset(chat.id, assetBody);
     expect(await api(url, '/api/session')).toMatchObject({ required: true, authenticated: false });
-    for (const path of ['/api/chats', `/api/chats/${chat.id}/events`, `/api/assets/${asset.id}`]) {
+    for (const path of ['/api/chats', '/api/events', `/api/assets/${asset.id}`]) {
       const response = await fetch(`${url}${path}`);
       expect(response.status, path).toBe(401);
       await response.body?.cancel();
@@ -794,7 +794,9 @@ describe('M1 real HTTP application boundaries', () => {
     const assetResponse = await fetch(`${url}/api/assets/${asset.id}`, { headers: { cookie } });
     expect(assetResponse.status).toBe(200);
     expect(Buffer.from(await assetResponse.arrayBuffer())).toEqual(Buffer.from(pixel, 'base64'));
-    const events = await fetch(`${url}/api/chats/${chat.id}/events`, { headers: { cookie } });
+    const events = await fetch(`${url}/api/events?chat=${encodeURIComponent(chat.id)}`, {
+      headers: { cookie },
+    });
     expect(events.status).toBe(200);
     expect(events.headers.get('content-type')).toContain('text/event-stream');
     await events.body?.cancel();

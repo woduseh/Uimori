@@ -89,7 +89,7 @@ describe('durable public response batches', () => {
       );
     const writer = state.create();
     const notices: number[] = [];
-    state.streams.subscribe({ taskKind: 'helper', taskId: 'task-1' }, () => {
+    state.streams.subscribeChat('chat-1', () => {
       notices.push(persisted());
     });
     for (let offset = 1; offset <= 1000; offset++)
@@ -135,7 +135,7 @@ describe('durable public response batches', () => {
     const state = fixture();
     const writer = state.create();
     let notices = 0;
-    state.streams.subscribe({ taskKind: 'helper', taskId: 'task-1' }, () => notices++);
+    state.streams.subscribeChat('chat-1', () => notices++);
     writer.thought('자료를 ');
     writer.thought('확인하는 중');
     expect(state.streams.read('helper', 'task-1')).toMatchObject({
@@ -386,7 +386,7 @@ describe('durable public response batches', () => {
     vi.advanceTimersByTime(750);
     vi.useRealTimers();
     const app = Fastify();
-    responseStreamRoutes(app, state.streams, { authenticated: () => true });
+    responseStreamRoutes(app, state.streams);
     expect((await app.inject('/api/response-streams/translation/job-1')).json()).toMatchObject({
       taskKind: 'translation',
       status: 'running',
@@ -423,9 +423,8 @@ describe('durable public response batches', () => {
       );
     });
     const app = Fastify();
-    responseStreamRoutes(app, state.streams, { authenticated: () => true });
+    responseStreamRoutes(app, state.streams);
     try {
-      const appOrigin = await app.listen({ port: 0, host: '127.0.0.1' });
       let done = false;
       const resultPromise = executeProvider(
         { id: 'synthetic', protocol: 'fixture-sse-v1', endpoint: provider.endpoint },
@@ -448,23 +447,16 @@ describe('durable public response batches', () => {
       expect(done).toBe(false);
       const first = (await app.inject('/api/response-streams/helper/task-1')).json();
       expect(first.chunks[0].text).toBe('먼저 받은 부분');
-      const live = await fetch(`${appOrigin}/api/response-streams/helper/task-1/events`);
-      const reader = live.body!.getReader();
-      expect((await reader.read()).done).toBe(false);
-      await reader.cancel();
-      expect(state.signal.signal.aborted).toBe(false);
-      expect(done).toBe(false);
       release();
       expect((await resultPromise).status).toBe('completed');
       writer.finish('completed');
       const reconnected = await app.inject({
-        url: '/api/response-streams/helper/task-1/events',
-        headers: { 'last-event-id': String(first.cursor) },
+        url: `/api/response-streams/helper/task-1?after=${first.cursor}`,
       });
+      expect(reconnected.json()).toMatchObject({ status: 'completed', chunks: [] });
       expect(reconnected.body).not.toContain(' 그리고 끝');
       expect(reconnected.body).not.toContain('먼저 받은 부분');
       expect(reconnected.body).not.toContain('PRIVATE_OPAQUE');
-      expect(reconnected.body).toContain('"status":"completed"');
     } finally {
       release();
       writer.finish('failed');

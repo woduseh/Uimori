@@ -40,7 +40,6 @@ type Connection = {
 };
 
 export const MAX_LISTED_STREAMS = 16;
-const KEEPALIVE_MS = 15_000;
 const taskKinds: ReadonlySet<string> = new Set(RESPONSE_TASK_KINDS);
 const keyOf = (identity: ResponseTaskIdentity) => `${identity.taskKind}:${identity.taskId}`;
 
@@ -175,8 +174,7 @@ export function createChatEventStreams(sources: ChatEventSources) {
       chatId: string | null,
       resume: ChatEventResume,
       response: ServerResponse,
-      authorized: () => boolean,
-      options: { keepalive?: boolean } = {}
+      authorized: () => boolean
     ) {
       const connection: Connection = {
         chatId,
@@ -214,18 +212,8 @@ export function createChatEventStreams(sources: ChatEventSources) {
         connection.blocked = false;
         pump(connection);
       };
-      const heartbeat =
-        options.keepalive === false
-          ? undefined
-          : setInterval(() => {
-              if (!authorized()) response.end();
-              else if (!connection.blocked && !response.destroyed && !response.writableEnded)
-                connection.blocked = !response.write(': keepalive\n\n');
-            }, KEEPALIVE_MS);
-      heartbeat?.unref();
       response.on('drain', drain);
       response.on('close', () => {
-        clearInterval(heartbeat);
         for (const unsubscribe of unsubscribes) unsubscribe();
         response.off('drain', drain);
         listeners.delete(connection);

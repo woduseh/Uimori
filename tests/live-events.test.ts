@@ -98,10 +98,7 @@ test('global frames carry no id, so the chat cursor on the same connection stays
     live.chat.id,
     chatEventResume(undefined, undefined),
     reader.response,
-    () => true,
-    {
-      keepalive: false,
-    }
+    () => true
   );
   live.store.event(live.chat.id, 'run.progress', 'run-1');
   live.workspace.event(live.conversation.id, null, 'artifact.saved');

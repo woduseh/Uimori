@@ -155,7 +155,7 @@ describe('self-host network policy', () => {
       '/api/chats',
       '/api/library',
       '/api/export',
-      '/api/chats/unknown/events',
+      '/api/events',
       '/api/assets/unknown',
       '/api/health',
     ]) {

@@ -15,9 +15,6 @@
     "GET /api/chats/:id/backup-archive": {
       "reason": "Serves a chat backup .uimori ZIP archive as binary bytes."
     },
-    "GET /api/chats/:id/events": {
-      "reason": "Hijacks the HTTP response for per-chat Server-Sent Events (text/event-stream)."
-    },
     "GET /api/content/:id/risu-export": {
       "reason": "Serves binary CHARX/PNG export bytes with response compression disabled."
     },
@@ -41,9 +38,6 @@
     },
     "GET /api/request-files/:hash": {
       "reason": "Serves content-addressed attachment file bytes as a binary download."
-    },
-    "GET /api/response-streams/:taskKind/:taskId/events": {
-      "reason": "Hijacks the HTTP response for response-stream Server-Sent Events (text/event-stream)."
     },
     "GET /api/theme-assets/:hash": {
       "reason": "Serves immutable theme font or image binary bytes."
