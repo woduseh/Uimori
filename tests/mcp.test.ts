@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp, type App } from '../server/app.js';
 import { setMaintenance } from '../server/maintenance.js';
+import { mcpToken as checkedMcpToken } from '../server/network-policy.js';
 import type { Content } from '../core/product.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
@@ -80,6 +81,7 @@ test('only the dedicated bearer token opens the MCP endpoint, and it opens nothi
   expect((await post(local, 'tools/list', {}, { host: '127.0.0.1' })).statusCode).toBe(404);
 
   const target = await app({ mcpToken });
+  expect(() => checkedMcpToken('가'.repeat(32))).toThrow();
   expect((await post(target, 'tools/list', {}, { host })).statusCode).toBe(401);
   const login = await target.inject({
     method: 'POST',
@@ -150,6 +152,7 @@ test('a client edits a saved card through MCP without creating helper tasks', as
   ).toBe(202);
 
   const tools = (await post(target, 'tools/list')).json().result.tools;
+  expect(JSON.stringify(tools)).not.toMatch(/captured editor|helper screen|current scope/u);
   expect(tools.map((tool: { name: string }) => tool.name)).toEqual([
     'db_query',
     'data_search',
@@ -213,6 +216,20 @@ test('a client edits a saved card through MCP without creating helper tasks', as
     changes,
   });
   expect(stale).toMatchObject({ isError: true, value: { code: 'REVISION_CONFLICT' } });
+
+  const unsupported = await post(
+    target,
+    'tools/call',
+    {
+      name: 'resource_patch',
+      arguments: { kind: 'content', id: bot.id, expectedRevision: revision + 1, changes },
+    },
+    { ...bearer, 'mcp-protocol-version': '2099-01-01' }
+  );
+  expect(unsupported.statusCode).toBe(400);
+  expect((target.store.product.available('content', bot.id) as Content).revision).toBe(
+    revision + 1
+  );
 
   const unknown = await call(target, 'resource_read', { kind: 'content', id: bot.id, extra: 1 });
   expect(unknown).toMatchObject({ isError: true, value: { code: 'INVALID_ARGUMENTS' } });
