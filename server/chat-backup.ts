@@ -138,7 +138,6 @@ export function importPreparedChatBackup(
     }
     const receipt = importPreparedResourceBundle(store, file, prepared.images, {
       idempotencyKey: `resources:${key}`,
-      modelBindings: [],
     });
     const imported = new Map(receipt.items.map((item) => [item.key, item.id]));
     const chats = original.chats.map((originalCopy, index) => {
@@ -262,7 +261,6 @@ export async function importChatBackup(
       file,
       digest: bundleDigest(file),
       idempotencyKey: `resources:${key}`,
-      modelBindings: [],
     });
     const imported = new Map(receipt.items.map((item) => [item.key, item.id]));
     const chats = copies.map((copy, index) => {

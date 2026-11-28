@@ -153,7 +153,6 @@ test('.uimori and .chat.uimori archives exported by v0.18.0 import as new copies
       preparedId: resources.preparedId,
       digest: resources.digest,
       idempotencyKey: 'horizon-resources',
-      modelBindings: [],
     },
   });
   await app.close();

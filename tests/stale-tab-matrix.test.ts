@@ -161,10 +161,20 @@ test('the schema walker collects nested targets, reused schemas and union branch
     'scriptModel.id',
     'titleModel.id',
   ]);
-  expect(targetPaths(transfer.applyArchive.input)).toEqual([
-    'modelBindings[].model.id',
-    'preparedId',
-  ]);
+  expect(targetPaths(transfer.applyArchive.input)).toEqual(['preparedId']);
+  const arrayUnion = z.strictObject({
+    bindings: z.array(
+      z.discriminatedUnion('mode', [
+        z.strictObject({ key: z.string(), mode: z.literal('inherit') }),
+        z.strictObject({
+          key: z.string(),
+          mode: z.literal('local'),
+          model: z.strictObject({ id: z.string() }),
+        }),
+      ])
+    ),
+  });
+  expect(targetPaths(arrayUnion)).toEqual(['bindings[].model.id']);
   expect(analyzeSchema(appearance.selectTheme.input).branches.map((b) => b.label)).toEqual([
     'dimension=theme, scope=global',
     'dimension=theme, scope=bot',
@@ -186,18 +196,18 @@ test('the schema walker collects nested targets, reused schemas and union branch
       .map((branch) => branch.label)
   ).toEqual(['scope=chat', 'scope=bot']);
   expect(
-    analyzeSchema(transfer.applyFile.input)
+    analyzeSchema(arrayUnion)
       .branches.filter((branch) => branch.revisions.length > 0 || branch.targets.length > 0)
       .map((branch) => branch.label)
-  ).toEqual(['modelBindings[].mode=local']);
+  ).toEqual(['bindings[].mode=local']);
   const recursive: z.ZodType = z.lazy(() =>
     z.strictObject({ id: z.string(), child: recursive.optional() })
   );
   expect(targetPaths(recursive)).toEqual(['id']);
   expect(
     valuesAtPath(
-      { modelBindings: [{ model: { id: 'a' } }, { model: { id: 'b' } }] },
-      'modelBindings[].model.id'
+      { bindings: [{ model: { id: 'a' } }, { model: { id: 'b' } }] },
+      'bindings[].model.id'
     )
   ).toEqual(['a', 'b']);
 
@@ -373,16 +383,23 @@ test('every endpoint that carries a revision or names a target has a stale-tab m
 
 test('a blanket endpoint exemption does not skip missing targets or union branches', async () => {
   const blanket: Record<string, Entry> = {
-    'transfer.applyArchive': {
+    'appearance.selectTheme': {
       exempt: 'Blanket exemption without per-target or per-branch reasons.',
     },
   };
   expect(findMissingTargets(blanket)).toEqual([
-    'transfer.applyArchive target modelBindings[].model.id',
-    'transfer.applyArchive target preparedId',
+    'appearance.selectTheme target paletteId',
+    'appearance.selectTheme target targetId',
+    'appearance.selectTheme target themeId',
   ]);
   expect(await findMissingBranches(blanket, new Map())).toEqual([
-    'transfer.applyArchive branch modelBindings[].mode=local',
+    'appearance.selectTheme branch dimension=theme, scope=global',
+    'appearance.selectTheme branch dimension=theme, scope=bot',
+    'appearance.selectTheme branch dimension=theme, scope=chat',
+    'appearance.selectTheme branch dimension=palette, scope=global',
+    'appearance.selectTheme branch dimension=palette, scope=bot',
+    'appearance.selectTheme branch dimension=palette, scope=chat',
+    'appearance.selectTheme branch dimension=storyUi',
   ]);
 });
 

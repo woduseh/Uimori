@@ -3,24 +3,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { allEndpoints } from '#contracts';
 import type { NativeArchiveExport } from '#contracts/operations';
-import { createAgentCollaboration, createAgentDefinition } from '../../core/agent-collaboration.js';
 import { exportChatBackupArchive } from '../../server/chat-backup.js';
 import { captureTransferResources } from '../../server/native-transfer.js';
 import { exportNativeArchive } from '../../server/native-transfer-archive.js';
 import { uploadDirectory } from '../../server/uploads.js';
-import { legacyResourceBundleFixture } from '../fixtures/legacy-backup.js';
-import { nativePrompt } from '../fixtures/native-prompt.js';
-import {
-  bot,
-  deleted,
-  deletedChat,
-  domainCases,
-  model,
-  read,
-  removed,
-  scene,
-  store,
-} from './harness.js';
+import { bot, deleted, deletedChat, domainCases, read, scene, store } from './harness.js';
 
 const endpoints = allEndpoints.transfer;
 type Kind = 'resources' | 'chat';
@@ -45,54 +32,15 @@ const archiveOf = (kind: Kind) =>
 const prepareEndpoint = (kind: Kind) =>
   kind === 'chat' ? endpoints.prepareChatArchive : endpoints.prepareArchive;
 const prepared = async (kind: Kind, archive: Buffer) =>
-  read<{ preparedId: string; digest: string; modelRequirements: { key: string }[] }>(
-    prepareEndpoint(kind),
-    { uploadId: staged(archive) }
-  );
+  read<{ preparedId: string; digest: string }>(prepareEndpoint(kind), {
+    uploadId: staged(archive),
+  });
 async function consumedUpload(kind: Kind) {
   const uploadId = staged(await archiveOf(kind));
   await read(prepareEndpoint(kind), { uploadId });
   return { input: { uploadId } };
 }
 
-function agentPreset() {
-  const program = {
-    ...nativePrompt('Stale tab agent prompt'),
-    collaboration: {
-      ...createAgentCollaboration(),
-      enabled: true,
-      agents: [{ ...createAgentDefinition('custom', 'reviewer'), model: { id: model().id } }],
-    },
-  };
-  return store().product.promptPreset({
-    title: 'Stale tab agent preset',
-    role: 'main',
-    program,
-  }) as { id: string };
-}
-const localBinding = (requirementKey: string, modelId: string) => [
-  { requirementKey, mode: 'local', model: { id: modelId } },
-];
-
-async function agentBundle() {
-  const file = legacyResourceBundleFixture(store(), [
-    { kind: 'prompt-preset', id: agentPreset().id },
-  ]);
-  const preview = await read<{ digest: string; modelRequirements: { key: string }[] }>(
-    endpoints.prepareFile,
-    { file }
-  );
-  return (modelId: string) => ({
-    file,
-    digest: preview.digest,
-    idempotencyKey: randomUUID(),
-    modelBindings: localBinding(preview.modelRequirements[0].key, modelId),
-  });
-}
-
-const deletedModel = { status: 400, code: 'MODEL_SELECTION_UNAVAILABLE' as const };
-const modelReason =
-  'An agent bound to a model another tab deleted meets the same MODEL_SELECTION_UNAVAILABLE as the model workspace, and the import writes nothing.';
 const consumed = (kind: Kind) => ({
   when: 'an upload another tab already prepared',
   arrange: () => consumedUpload(kind),
@@ -105,21 +53,6 @@ const expiredReason =
   'A prepared archive lives on disk until it is applied or expires; a second tab applying it later, or after expiry, gets the same definite 410 the restore screen words as "choose the file again".';
 
 export const transferCases = domainCases('transfer', {
-  applyFile: {
-    cases: [
-      {
-        when: 'a local model binding naming a model another tab deleted',
-        arrange: async () => {
-          const command = await agentBundle();
-          const gone = model();
-          removed('model', gone);
-          return { input: command(gone.id), control: command(model().id) };
-        },
-        answer: deletedModel,
-        reason: modelReason,
-      },
-    ],
-  },
   prepareArchive: { cases: [consumed('resources')] },
   applyArchive: {
     cases: [
@@ -130,35 +63,12 @@ export const transferCases = domainCases('transfer', {
           const command = {
             preparedId: archive.preparedId,
             digest: archive.digest,
-            modelBindings: [],
           };
           await read(endpoints.applyArchive, { ...command, idempotencyKey: randomUUID() });
           return { input: { ...command, idempotencyKey: randomUUID() } };
         },
         answer: expired,
         reason: expiredReason,
-        target: 'preparedId',
-      },
-      {
-        when: 'a local model binding naming a model another tab deleted',
-        arrange: async () => {
-          const archive = await prepared(
-            'resources',
-            await resourceArchive([{ kind: 'prompt-preset', id: agentPreset().id }])
-          );
-          const gone = model();
-          removed('model', gone);
-          const command = (modelId: string) => ({
-            preparedId: archive.preparedId,
-            digest: archive.digest,
-            idempotencyKey: randomUUID(),
-            modelBindings: localBinding(archive.modelRequirements[0].key, modelId),
-          });
-          return { input: command(gone.id), control: command(model().id) };
-        },
-        answer: deletedModel,
-        reason: modelReason,
-        target: 'modelBindings[].model.id',
       },
     ],
   },
