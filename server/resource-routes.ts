@@ -12,19 +12,25 @@ import {
   undoResource,
 } from './resource-service.js';
 
-export function resourceRoutes(app: FastifyInstance, store: Store) {
+export function resourceRoutes(app: FastifyInstance, store: Store, publishAll: () => void) {
+  const published = <T>(result: T) => {
+    publishAll();
+    return result;
+  };
   registerEndpoint(app, endpoints.readResource, operations.readResource, ({ kind, id }) =>
     readResource(store, kind, id)
   );
   registerEndpoint(app, endpoints.cloneResource, operations.cloneResource, (input) =>
-    cloneResource(store, input)
+    published(cloneResource(store, input))
   );
   registerEndpoint(app, endpoints.saveResource, operations.saveResource, (input) =>
-    saveResource(store, {
-      ...input,
-      id: input.id ?? null,
-      model: input.model as ResourceModel,
-    })
+    published(
+      saveResource(store, {
+        ...input,
+        id: input.id ?? null,
+        model: input.model as ResourceModel,
+      })
+    )
   );
   registerEndpoint(
     app,
@@ -39,6 +45,6 @@ export function resourceRoutes(app: FastifyInstance, store: Store) {
     app,
     endpoints.undoResource,
     operations.undoResource,
-    ({ kind, id, expectedRevision }) => undoResource(store, kind, id, expectedRevision)
+    ({ kind, id, expectedRevision }) => published(undoResource(store, kind, id, expectedRevision))
   );
 }

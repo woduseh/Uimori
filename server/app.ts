@@ -1058,7 +1058,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       return prepared.snapshot;
     },
   });
-  resourceRoutes(app, store);
+  resourceRoutes(app, store, publishAll);
   themeRoutes(app, store);
   themeAssetRoutes(app, store);
   fontRoutes(app, store);

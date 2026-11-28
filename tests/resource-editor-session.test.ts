@@ -340,6 +340,50 @@ test('a save made elsewhere during discard still clears the discarded recovery c
   expect(reopened.snapshot()).toMatchObject({ dirty: false, recovery: 'none' });
 });
 
+test('a refresh during undo waits for it, so the restored revision is kept and later edits raise no conflict', async () => {
+  const session = editor();
+  await session.open();
+  const restored = { ...model, title: 'Restored' };
+  const response = deferred<ResourceSaveResult>();
+  vi.mocked(api).mockImplementationOnce(() => response.promise as ReturnType<typeof api>);
+  const undoing = session.undo();
+  vi.mocked(api).mockResolvedValueOnce(saved(restored, 2));
+  const refreshing = session.refresh();
+  response.resolve({ saved: saved(restored, 2), created: false } as ResourceSaveResult);
+  expect(await undoing).toBe(2);
+  await refreshing;
+  expect(session.snapshot()).toMatchObject({
+    dirty: false,
+    local: { model: restored },
+    document: { baseRevision: 2 },
+  });
+  session.setModel({ ...restored, text: 'Typed after restore' });
+  vi.mocked(api).mockResolvedValueOnce(saved(restored, 2));
+  await session.refresh();
+  expect(session.snapshot()).toMatchObject({ dirty: true, conflict: false });
+});
+
+test('a save made elsewhere while this editor saves is read once the save settles', async () => {
+  const session = editor();
+  await session.open();
+  const local = { ...model, title: 'Mine' };
+  session.setModel(local);
+  const response = deferred<ResourceSaveResult>();
+  vi.mocked(api).mockImplementationOnce(() => response.promise as ReturnType<typeof api>);
+  const saving = session.save();
+  const external = { ...model, title: 'Elsewhere' };
+  vi.mocked(api).mockResolvedValueOnce(saved(external, 3));
+  const refreshing = session.refresh();
+  response.resolve({ saved: saved(local, 2), created: false } as ResourceSaveResult);
+  await saving;
+  await refreshing;
+  expect(session.snapshot()).toMatchObject({
+    dirty: false,
+    local: { model: external },
+    document: { baseRevision: 3 },
+  });
+});
+
 test('save conflicts preserve local input and clean reload restores the latest baseline', async () => {
   const session = editor();
   await session.open();

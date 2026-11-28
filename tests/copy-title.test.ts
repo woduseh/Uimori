@@ -43,7 +43,7 @@ test('a maximum-length title copied in English is accepted where the copy is sav
   const store = new Store(join(path, 'test.sqlite'));
   const app = Fastify();
   try {
-    resourceRoutes(app, store);
+    resourceRoutes(app, store, () => {});
     const source = store.product.promptPreset({
       title: 'p'.repeat(200),
       role: 'main',
