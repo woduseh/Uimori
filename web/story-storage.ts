@@ -52,12 +52,7 @@ function validReadingPosition(value: Record<string, unknown> | null): ReadingPos
 }
 
 export function readReadingPosition(key: string): ReadingPosition | null {
-  const inSession = validReadingPosition(optionalCache(key));
-  const persistent = validReadingPosition(optionalCache(key, true));
-  if (!inSession) return persistent;
-  if (!persistent && writeOptionalStorage('local', key, JSON.stringify(inSession)))
-    removeOptionalStorage('session', key);
-  return inSession;
+  return validReadingPosition(optionalCache(key)) ?? validReadingPosition(optionalCache(key, true));
 }
 
 export function readDraftCursor(key: string): { start: number; end: number } | null {

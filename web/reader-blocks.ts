@@ -1,6 +1,6 @@
 import type { Job, ReaderDetail, Source, TranslationLayout } from '../core/types.js';
 
-type BlockRange = { anchor: string; index: number; start: number; end: number; text?: string };
+type BlockRange = { anchor: string; index: number; start: number; end: number };
 type WireLayout = Omit<TranslationLayout, 'blocks'> & { blocks: BlockRange[] };
 type WireJob = Omit<Job, 'translationLayout' | 'previousResult'> & {
   translationLayout?: WireLayout;
@@ -14,11 +14,8 @@ export type ReaderResponse = Omit<ReaderDetail, 'sources' | 'jobs'> & {
 };
 
 function restoreBlocks(blocks: BlockRange[], fullText: string | undefined) {
-  return blocks.map((block) =>
-    typeof block.text === 'string'
-      ? { ...block, text: block.text }
-      : { ...block, text: (fullText ?? '').slice(block.start, block.end) }
-  );
+  const text = fullText ?? '';
+  return blocks.map((block) => ({ ...block, text: text.slice(block.start, block.end) }));
 }
 function restoreLayout(
   layout: WireLayout | undefined,

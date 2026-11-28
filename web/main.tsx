@@ -174,7 +174,7 @@ import {
   type SidePanelTab,
 } from './side-panel.js';
 import { modelLabel } from './storyLabels.js';
-import { forgetChatStorage, storageKeys, sweepUnregisteredStorage } from './storage-keys.js';
+import { forgetChatStorage, storageKeys } from './storage-keys.js';
 import './style.css';
 import './product.css';
 import './sidebar.css';
@@ -3694,7 +3694,6 @@ function App() {
     </ReadingPreferencesContext>
   );
 }
-sweepUnregisteredStorage();
 startPwa();
 void loadInitialLocale().then(() =>
   createRoot(document.getElementById('root')!).render(

@@ -193,16 +193,6 @@ export function storageFamily(area: BrowserStorageArea, key: string): StorageFam
   );
 }
 
-export function localStorageNamespaces(): string[] {
-  return [
-    ...new Set(
-      families
-        .filter((family) => family.areas.includes('local'))
-        .map((family) => /^[^:.-]*[:.-]/u.exec(family.key)?.[0] ?? family.key)
-    ),
-  ];
-}
-
 function localKeys(): string[] {
   try {
     return Array.from({ length: localStorage.length }, (_, index) =>
@@ -215,13 +205,6 @@ function localKeys(): string[] {
 
 export function localKeysStartingWith(prefix: string): string[] {
   return localKeys().filter((key) => key.startsWith(prefix));
-}
-
-export function sweepUnregisteredStorage() {
-  const namespaces = localStorageNamespaces();
-  for (const key of localKeys())
-    if (namespaces.some((namespace) => key.startsWith(namespace)) && !storageFamily('local', key))
-      removeOptionalStorage('local', key);
 }
 
 function cappedFamily(key: string) {
