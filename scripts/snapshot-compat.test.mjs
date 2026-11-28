@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Agent } from 'undici';
 import { compare, compareRead, portable, read } from './snapshot-compat/compare.mjs';
+import { tableDigests } from './snapshot-compat/probes.mjs';
 import { sendWithRetry } from './snapshot-compat/requests.mjs';
 import { rulesForCommit } from './snapshot-compat/reviewed-changes.mjs';
 import { commit } from './snapshot-compat/rules/v0.18.1.mjs';
@@ -427,12 +428,22 @@ function openingDatabase(directory, name, firstSnapshot, secondRoot = false) {
 }
 const restoredSnapshot = { nativeRisuAuthored: { greeting: true } };
 
-async function reviewedPaths(route, before, after, file) {
+async function reviewedPaths(route, before, after, file, oldBackup) {
   const url = route.replace(':', 'chat');
   const report = { rules: rulesForCommit(commit), comparisons: 0, differences: [] };
   const left = { status: 200, headers: {}, body: before };
   const right = { status: 200, headers: {}, body: after };
-  await compareRead('old-new', url, left, right, report, report.differences, route, file);
+  await compareRead(
+    'old-new',
+    url,
+    left,
+    right,
+    report,
+    report.differences,
+    route,
+    file,
+    oldBackup
+  );
   return {
     paths: report.differences.map((d) => d.path),
     absorbed: Object.fromEntries(
@@ -657,6 +668,99 @@ test('restored authored opening rules need the restored shape and absorb nothing
       [message(1, 'authored'), message(1, 'opening')]
     );
     assert.equal((await reviewedPaths(archiveRoute, original, opened, withStart)).paths.length, 2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a rule that accepts any value of a type names the condition that bounds it', () => {
+  const wildcard = (value) => value !== null && typeof value === 'object' && 'type' in value;
+  const unbounded = rulesForCommit(commit)
+    .filter((rule) => rule.fields.some((f) => wildcard(f.after)) && !rule.when)
+    .map((rule) => rule.id);
+  assert.deepEqual(unbounded, []);
+});
+
+test('the helper change table drop absorbs only the queue computed from its baselines', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'helper-baseline-queue-'));
+  try {
+    const [kept, second, queued, unrelated, absent] = ['1', '2', '3', '4', '5'].map((c) =>
+      c.repeat(64)
+    );
+    const oldFile = join(directory, 'old.sqlite');
+    const old = new DatabaseSync(oldFile);
+    old.exec(`CREATE TABLE helper_changes(task_id TEXT PRIMARY KEY, baseline TEXT);
+      CREATE TABLE image_cleanup_candidates(hash TEXT PRIMARY KEY);
+      CREATE TABLE image_blobs(hash TEXT PRIMARY KEY, mime TEXT NOT NULL, bytes BLOB NOT NULL)`);
+    for (const hash of [kept, second, queued, unrelated])
+      old
+        .prepare('INSERT INTO image_blobs VALUES (?,?,?)')
+        .run(hash, 'image/png', Buffer.from(hash));
+    old.prepare('INSERT INTO image_cleanup_candidates VALUES (?)').run(kept);
+    const baseline = old.prepare('INSERT INTO helper_changes VALUES (?,?)');
+    baseline.run('t1', JSON.stringify({ image: second, nested: { again: kept, ghost: absent } }));
+    baseline.run('t2', JSON.stringify({ image: queued }));
+    baseline.run('t3', null);
+    old.close();
+
+    const variant = (name, edit) => {
+      const file = join(directory, name + '.sqlite');
+      copyFileSync(oldFile, file);
+      const db = new DatabaseSync(file);
+      edit(db);
+      db.close();
+      return tableDigests(file);
+    };
+    const migrated = (name, edit = () => {}) =>
+      variant(name, (db) => {
+        db.exec('DROP TABLE helper_changes');
+        for (const hash of [second, queued])
+          db.prepare('INSERT INTO image_cleanup_candidates VALUES (?)').run(hash);
+        edit(db);
+      });
+    const queue = '$["body"]["image_cleanup_candidates"]';
+    const dropped = '$["body"]["helper_changes"]';
+    const before = tableDigests(oldFile);
+    const review = (after, backup = oldFile) =>
+      reviewedPaths('/api/backup', before, after, undefined, backup);
+
+    assert.deepEqual(await review(migrated('exact')), {
+      paths: [],
+      absorbed: { 'backup-helper-changes': 3 },
+    });
+
+    const insert = (hash) => (db) =>
+      db.prepare('INSERT INTO image_cleanup_candidates VALUES (?)').run(hash);
+    const refusals = {
+      emptied: migrated('emptied', (db) => db.exec('DELETE FROM image_cleanup_candidates')),
+      unrelatedAdded: migrated('unrelated', insert(unrelated)),
+      absentAdded: migrated('absent', insert(absent)),
+      baselineMissing: migrated('missing', (db) =>
+        db.prepare('DELETE FROM image_cleanup_candidates WHERE hash=?').run(queued)
+      ),
+      swapped: migrated('swapped', (db) => {
+        db.prepare('DELETE FROM image_cleanup_candidates WHERE hash=?').run(queued);
+        insert(unrelated)(db);
+      }),
+    };
+    for (const [name, after] of Object.entries(refusals)) {
+      const result = await review(after);
+      assert.deepEqual(result.absorbed, {}, name);
+      assert.ok(result.paths.includes(dropped), name);
+      assert.ok(
+        result.paths.some((path) => path.startsWith(queue)),
+        name
+      );
+    }
+    assert.deepEqual((await review(migrated('exact-again'), null)).absorbed, {});
+
+    for (const [name, edit] of Object.entries({
+      emptied: (db) => db.exec('DELETE FROM image_cleanup_candidates'),
+      added: insert(second),
+    })) {
+      const result = await review(variant('retained-' + name, edit));
+      assert.deepEqual(result, { paths: [queue + '["rows"]', queue + '["sha256"]'], absorbed: {} });
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

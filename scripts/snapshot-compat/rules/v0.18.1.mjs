@@ -185,16 +185,19 @@ export const rules = [
     [removed('body.changes', list)],
     'Helper change cards and turn rollback were removed, so task results no longer carry change records.'
   ),
-  read(
-    'backup-helper-changes',
-    ['/api/backup'],
-    [
+  {
+    id: 'backup-helper-changes',
+    routes: ['/api/backup'],
+    status: [200, 200],
+    when: 'helper-baseline-queue',
+    fields: [
       removed('body.helper_changes', object),
       field('body.image_cleanup_candidates.rows', number, number),
       field('body.image_cleanup_candidates.sha256', string, string),
     ],
-    'Opening the database drops the helper change table and queues the images that only its rollback baselines held for cleanup.'
-  ),
+    reason:
+      'Opening the database drops the helper change table and queues every existing image hash named in one of its rollback baselines as a cleanup candidate; the cleanup scan, not the migration, decides which of them are unreferenced.',
+  },
   restored(
     'restored-opening-manuscript',
     '/api/chats/:/manuscript',

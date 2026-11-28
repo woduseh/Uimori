@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { database } from './probes.mjs';
+import { database, expectedQueueAfterHelperChangesDrop } from './probes.mjs';
 import { restoredOpening, restoredOpeningConditions } from './restored-opening.mjs';
 import * as v0181 from './rules/v0.18.1.mjs';
 
@@ -41,8 +41,18 @@ function matchesPath(path, segments) {
     )
   );
 }
-function eligible(rule, a, b, url, file) {
+function eligible(rule, a, b, url, file, oldBackup) {
   if (!rule.when) return true;
+  if (rule.when === 'helper-baseline-queue')
+    return (
+      Boolean(oldBackup) &&
+      Boolean(a.body?.helper_changes) &&
+      b.body?.helper_changes === undefined &&
+      isDeepStrictEqual(
+        b.body.image_cleanup_candidates,
+        expectedQueueAfterHelperChangesDrop(oldBackup)
+      )
+    );
   if (rule.when === 'scene-detail-refusal')
     return (
       isDeepStrictEqual(a.body, { error: 'Scene invocation not found' }) &&
@@ -87,12 +97,12 @@ function eligible(rule, a, b, url, file) {
   }
   throw new Error('Unknown review condition ' + rule.when);
 }
-export function classify(rules, template, url, a, b, diffs, file, lengths) {
+export function classify(rules, template, url, a, b, diffs, file, lengths, oldBackup) {
   const applicable = rules.filter(
     (rule) =>
       isDeepStrictEqual(rule.status, [a.status, b.status]) &&
       rule.routes.some((route) => matchesRoute(route, template, url)) &&
-      eligible(rule, a, b, url, file)
+      eligible(rule, a, b, url, file, oldBackup)
   );
   const remaining = [];
   let acceptedBody = false;

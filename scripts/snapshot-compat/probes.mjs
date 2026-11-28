@@ -155,6 +155,20 @@ function rowDigest(stmt, params = []) {
   }
   return { rows, sha256: hash.digest('hex') };
 }
+export function expectedQueueAfterHelperChangesDrop(file) {
+  return database(file, (db) => {
+    const hashes = db
+      .prepare('SELECT baseline FROM helper_changes WHERE baseline IS NOT NULL')
+      .all()
+      .flatMap(({ baseline }) => String(baseline).match(/[a-f0-9]{64}/gu) ?? []);
+    return rowDigest(
+      db.prepare(`SELECT hash FROM image_cleanup_candidates
+        UNION SELECT hash FROM image_blobs WHERE hash IN (SELECT value FROM json_each(?))
+        ORDER BY hash`),
+      [JSON.stringify(hashes)]
+    );
+  });
+}
 export function expectedReplayOutbox(file) {
   const authority = createHash('sha256').update('').digest('hex');
   return database(file, (db) =>
