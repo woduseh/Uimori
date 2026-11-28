@@ -95,6 +95,7 @@ export async function fingerprint(sourceRoot = root, { buildOnly = false } = {})
   const files = [
     ...(await Promise.all(dirs.map((dir) => filesBelow(path.join(root, dir))))).flat(),
     ...(await guideFiles(root)),
+    ...(await filesBelow(path.join(root, 'docs', 'skills'))),
     ...config.map((name) => path.join(root, name)),
     ...(buildOnly
       ? [

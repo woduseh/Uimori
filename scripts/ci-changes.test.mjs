@@ -43,6 +43,7 @@ test('no build input counts as an inert documentation change', async () => {
   const { files } = await buildFingerprint();
   assert.ok(files.includes('package.json'));
   assert.ok(files.some((file) => /^docs\/[^/]+\.md$/u.test(file)));
+  assert.ok(files.some((file) => /^docs\/skills\/[^/]+\/SKILL\.md$/u.test(file)));
   assert.deepEqual(
     files.filter((file) => docsOnly([file])),
     []

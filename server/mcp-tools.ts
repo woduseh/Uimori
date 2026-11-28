@@ -112,7 +112,7 @@ const DATA_SCOPE: Json = {
   type: 'string',
   enum: ['library', 'chats'],
   description:
-    'Where to search: library (default) for saved bots, personas, modules and prompt presets, chats for saved chat scenes and notes.',
+    'Where to search: library (default) for saved bots, personas, modules and prompt presets, chats for saved chat scenes.',
 };
 const CHAT_ID: Json = {
   type: 'string',
@@ -121,7 +121,11 @@ const CHAT_ID: Json = {
 
 type Schema = { properties?: Record<string, Json>; required?: string[] } & Record<string, Json>;
 function schemaFor(source: ProviderTool, family: Family): Schema {
-  const schema = structuredClone(source.inputSchema) as Schema;
+  const schema = JSON.parse(
+    JSON.stringify(source.inputSchema, (key, value) =>
+      key === 'description' && typeof value === 'string' ? renamed(value) : value
+    )
+  ) as Schema;
   if (source.name === 'data.search')
     schema.properties = { ...schema.properties, scope: DATA_SCOPE };
   if (family.chat) {
@@ -199,6 +203,7 @@ export async function executeMcpTool(name: string, rawInput: unknown, ports: Mcp
   if (!tool) throw new McpUnknownToolError(name);
   try {
     const result = await tool.family.run(tool.source, entryArguments(tool, rawInput), ports);
+    if (!tool.readOnly) ports.store.changed(null);
     return { content: content(callNames(result)) };
   } catch (error) {
     ports.signal.throwIfAborted();
