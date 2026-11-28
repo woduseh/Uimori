@@ -288,6 +288,51 @@ test('option tools refuse what their schema does not name and write nothing', as
   expect(run.results).toEqual([]);
 });
 
+test('options.fix refuses a values object whose key the parser would drop and keeps the fixed options', async () => {
+  const { store, chat } = fixture();
+  const options = new ChatOptionsStore(store);
+  const state = options.get(chat.id);
+  const control = state.controls!.find(
+    (item) => item.type === 'boolean' || (item.options?.length ?? 0) > 1
+  )!;
+  const value =
+    control.type === 'boolean'
+      ? !control.default
+      : control.options!.find((option) => option.value !== control.default)!.value;
+  await runScriptedChatHelper(store, chat.id, [
+    helperCall('fix', 'options.fix', {
+      expectedRevision: state.revision,
+      binding: state.binding as unknown as Json,
+      values: { [control.id]: value } as Json,
+    }),
+    helperDone,
+  ]);
+  const fixed = options.get(chat.id);
+  expect(fixed.fixedValues).toEqual({ [control.id]: value });
+  const unsafe = (key: string) => JSON.parse(`{"${key}":"x"}`) as Json;
+  const run = await runScriptedChatHelper(store, chat.id, [
+    ...['__proto__', 'constructor', 'prototype'].map((key) =>
+      helperCall(`values-${key}`, 'options.fix', {
+        expectedRevision: fixed.revision,
+        binding: fixed.binding as unknown as Json,
+        values: unsafe(key),
+      })
+    ),
+    helperCall('set', 'options.fix', {
+      expectedRevision: fixed.revision,
+      binding: fixed.binding as unknown as Json,
+      set: unsafe('__proto__'),
+    }),
+    helperDone,
+  ]);
+  for (const call of ['values-__proto__', 'values-constructor', 'values-prototype', 'set'])
+    expect(run.finished(call), call).toMatchObject({ denied: true });
+  expect(options.get(chat.id)).toMatchObject({
+    revision: fixed.revision,
+    fixedValues: { [control.id]: value },
+  });
+});
+
 test('options.read refuses input that is not an empty object', () => {
   const { store, chat } = fixture();
   const task = { id: 'task', snapshot: { scope: { kind: 'chat', chatId: chat.id } } } as HelperTask;
