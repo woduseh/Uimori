@@ -72,7 +72,10 @@ export function transferRoutes(
       .send(exportNativeArchive(store, captureTransferResources(store, input)));
   });
   app.get('/api/chats/:id/backup-archive', { onSend: noStore }, (request, reply) => {
-    const { id } = parseInput(transferRawInputs.chatDownload, request.params);
+    const { id } = parseInput(transferRawInputs.chatDownload, {
+      ...(request.query as object),
+      ...(request.params as object),
+    });
     return reply
       .type('application/zip')
       .header('Content-Disposition', 'attachment; filename="chat-backup.uimori"')

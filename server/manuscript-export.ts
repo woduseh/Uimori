@@ -49,7 +49,7 @@ export function exportManuscript(
   chatId: string,
   { mode, fromScene, toScene, expectedHeadRevision }: Omit<ExportManuscript, 'id'>
 ): ManuscriptExportResult {
-  const chat = store.writableChat(chatId);
+  const chat = store.chat(chatId);
   if (expectedHeadRevision !== chat.headRevision)
     throw new AppError(409, 'MANUSCRIPT_RANGE_CHANGED');
   const scenes = manuscriptScenes(store, chatId, chat.headRevision);

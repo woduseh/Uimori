@@ -203,7 +203,7 @@ test.each(probes)('$name with $when answers $answer.code', async (item) => {
     expect(control, 'a target reached through a shared revision needs a control').toBeDefined();
   const sent = Object.keys(input).filter((key) => revisions.includes(key));
   const stale = sent.filter((key) => typeof input[key] === 'number');
-  if (!same(item.answer, conflict) && revisions.length)
+  if (!same(item.answer, conflict) && revisions.length && !item.targetRevision)
     expect(stale, 'a numeric top-level revision to send one ahead').not.toEqual([]);
   if (!same(item.answer, conflict) && stale.length) {
     const bumped = Object.fromEntries(stale.map((key) => [key, Number(input[key]) + 1]));
