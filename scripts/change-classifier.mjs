@@ -25,6 +25,7 @@ const patterns = {
   ),
   fullSuiteInput:
     /^(?:package(?:-lock)?\.json|vitest\.config\.ts|tsconfig[^/]*\.json|biome\.json|scripts\/build[^/]*\.mjs)$/u,
+  biomeConfigInput: /^(?:biome\.json|scripts\/(?:biome-config|generate-biome-config)\.mjs)$/u,
   fullCommentScan: /^scripts\/(?:check-comments\.mjs|comment-allowlist\.json)$/u,
   i18nInput:
     /^(?:(?:web|server|core|packages)\/|scripts\/(?:check-i18n\.mjs|korean-literal-allowlist\.json)$)/u,

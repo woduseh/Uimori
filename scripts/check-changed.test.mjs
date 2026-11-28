@@ -166,6 +166,16 @@ test('global configuration changes are reported as needing the full suite', () =
   assert.deepEqual(checkChanged.selectChecks(['core/provider.ts'], {}).fullRequired, []);
 });
 
+test('biome.json and its generator select the generation check', () => {
+  for (const file of [
+    'biome.json',
+    'scripts/biome-config.mjs',
+    'scripts/generate-biome-config.mjs',
+  ])
+    assert.equal(checkChanged.selectChecks([file], {}).biomeConfig, true, file);
+  assert.equal(checkChanged.selectChecks(['core/provider.ts'], {}).biomeConfig, false);
+});
+
 test('a hub change runs direct matches and 1-hop importers first, up to a stated limit', () => {
   const sources = {
     'tests/hub.test.ts': "import { other } from '../core/other.js';",

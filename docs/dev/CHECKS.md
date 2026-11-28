@@ -9,6 +9,7 @@ Choose checks that can expose failures caused by the change. Completing a featur
 | Code behavior | Focused tests, such as `npm test -- tests/<file>.test.ts`; use `npm run quality` for lint and type checks when relevant |
 | UI behavior | `npm run verify -- <domain>` for the [feature map](../../tests/feature-map.json) domain that owns the change, or `npm run verify -- --changed`, against a matching build; `browser-smoke` covers basic chat and global prompt settings. The [verify skill](../../.agents/skills/uimori-verify/SKILL.md) is the standard loop |
 | Stylesheets under `web/` | `npm test -- tests/style-spacing.test.ts tests/themes.test.ts`; the spacing scale and the startup palette are Vitest checks that the browser runs do not cover |
+| An import boundary or lint rule in `biome.json` | Edit `scripts/biome-config.mjs`, run `npm run biome:generate`, then `npm run lint:architecture` and `node --test scripts/biome-boundaries.test.mjs`; `check:changed` reports `scope: full-required` for `biome.json`, so finish with `npm run quality` |
 | Verification tooling | Tests for the affected runner; `npm run test:tooling` covers the full tooling suite, and `npm run test:tooling:fast` runs it without rebuilding when `dist/` already matches the source |
 | Cross-cutting changes beyond focused coverage | Consider `npm run quality:full` and broader browser coverage for the interactions at risk |
 | Documentation only | Run `node scripts/check-documentation.mjs` and `git diff --check`; review accuracy, commands and consistency |

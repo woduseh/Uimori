@@ -106,6 +106,7 @@ export function selectChecks(
     docsOnly: docsOnly(files),
     documentation: files.some(is.markdownFile),
     biome: files.filter((file) => is.biomeFile(file) && exists(file)),
+    biomeConfig: files.some(is.biomeConfigInput),
     typeScript: files.some(is.typeScriptInput),
     comments: files.some(is.fullCommentScan) ? 'all' : files.filter(is.commentSource),
     i18n: files.some(is.i18nInput),
@@ -329,6 +330,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   statics.push(run('diff', 'git', ['diff', '--check', base ?? 'HEAD']));
   let listing;
   if (!checks.docsOnly) {
+    if (checks.biomeConfig)
+      statics.push(run('biome-config', node, ['scripts/generate-biome-config.mjs', '--check']));
     if (checks.biome.length)
       statics.push(
         run('biome', node, [
