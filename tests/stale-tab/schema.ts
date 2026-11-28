@@ -388,8 +388,9 @@ function collectBranches(rootSchema: z.ZodType): SchemaBranch[] {
   const walk = (
     current: unknown,
     path: string,
+    relativePath: string,
     outerLabels: string[],
-    outerMatch: (root: Record<string, unknown>) => boolean
+    selectScope: (root: Record<string, unknown>) => unknown[]
   ) => {
     if (!current || typeof current !== 'object' || ancestors.has(current)) return;
     const unwrapped = unwrapTransparent(current as z.ZodType, ancestors);
@@ -405,10 +406,12 @@ function collectBranches(rootSchema: z.ZodType): SchemaBranch[] {
         for (const option of expanded) {
           const prefixedParts = option.labelParts.map((part) => (path ? `${path}.${part}` : part));
           const label = [...outerLabels, ...prefixedParts].join(', ');
-          const matchesAtPath = (root: Record<string, unknown>) => {
-            if (!outerMatch(root)) return false;
-            const candidates = path ? valuesAtPath(root, path) : [root];
-            return candidates.some(
+          const selectMatched = (root: Record<string, unknown>) => {
+            const scopes = selectScope(root);
+            const candidates = relativePath
+              ? scopes.flatMap((scope) => valuesAtPath(scope, relativePath))
+              : scopes;
+            return candidates.filter(
               (candidate) =>
                 option.schema.safeParse(candidate).success &&
                 option.checks.every((check) => check(candidate))
@@ -417,7 +420,7 @@ function collectBranches(rootSchema: z.ZodType): SchemaBranch[] {
           const fields = collectFieldPaths(option.schema, path);
           branches.push({
             label,
-            matches: matchesAtPath,
+            matches: (root) => selectMatched(root).length > 0,
             revisions: fields.filter(isRevisionPath),
             targets: fields.filter(isTargetPath),
           });
@@ -426,8 +429,9 @@ function collectBranches(rootSchema: z.ZodType): SchemaBranch[] {
             walk(
               child,
               path ? `${path}.${key}` : key,
+              key,
               [...outerLabels, ...prefixedParts],
-              matchesAtPath
+              selectMatched
             );
         }
       } finally {
@@ -443,25 +447,49 @@ function collectBranches(rootSchema: z.ZodType): SchemaBranch[] {
       switch (def.type) {
         case 'object':
           for (const [key, child] of Object.entries(def.shape ?? {}))
-            walk(child, path ? `${path}.${key}` : key, outerLabels, outerMatch);
+            walk(
+              child,
+              path ? `${path}.${key}` : key,
+              relativePath ? `${relativePath}.${key}` : key,
+              outerLabels,
+              selectScope
+            );
           break;
         case 'array':
-          walk(def.element, path ? `${path}[]` : '[]', outerLabels, outerMatch);
+          walk(
+            def.element,
+            path ? `${path}[]` : '[]',
+            relativePath ? `${relativePath}[]` : '[]',
+            outerLabels,
+            selectScope
+          );
           break;
         case 'tuple':
           for (const [index, item] of (def.items ?? []).entries())
-            walk(item, `${path}[${index}]`, outerLabels, outerMatch);
+            walk(item, `${path}[${index}]`, `${relativePath}[${index}]`, outerLabels, selectScope);
           break;
         case 'intersection':
-          walk(def.left, path, outerLabels, outerMatch);
-          walk(def.right, path, outerLabels, outerMatch);
+          walk(def.left, path, relativePath, outerLabels, selectScope);
+          walk(def.right, path, relativePath, outerLabels, selectScope);
           break;
         case 'record':
         case 'map':
-          walk(def.valueType, path ? `${path}.*` : '*', outerLabels, outerMatch);
+          walk(
+            def.valueType,
+            path ? `${path}.*` : '*',
+            relativePath ? `${relativePath}.*` : '*',
+            outerLabels,
+            selectScope
+          );
           break;
         case 'set':
-          walk(def.valueType, path ? `${path}[]` : '[]', outerLabels, outerMatch);
+          walk(
+            def.valueType,
+            path ? `${path}[]` : '[]',
+            relativePath ? `${relativePath}[]` : '[]',
+            outerLabels,
+            selectScope
+          );
           break;
         default:
           break;
@@ -472,7 +500,7 @@ function collectBranches(rootSchema: z.ZodType): SchemaBranch[] {
     }
   };
 
-  walk(rootSchema, '', [], () => true);
+  walk(rootSchema, '', '', [], (root) => [root]);
   return branches;
 }
 

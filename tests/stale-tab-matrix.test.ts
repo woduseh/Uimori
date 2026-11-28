@@ -188,27 +188,48 @@ test('the schema walker collects nested targets, reused schemas and union branch
       'modelBindings[].model.id'
     )
   ).toEqual(['a', 'b']);
+
+  const nestedArrayUnion = z.strictObject({
+    items: z.array(
+      z.discriminatedUnion('mode', [
+        z.strictObject({
+          mode: z.literal('a'),
+          child: z.discriminatedUnion('kind', [
+            z.strictObject({ kind: z.literal('x'), id: z.string() }),
+            z.strictObject({ kind: z.literal('y'), id: z.string() }),
+          ]),
+        }),
+        z.strictObject({
+          mode: z.literal('b'),
+          child: z.discriminatedUnion('kind', [
+            z.strictObject({ kind: z.literal('x'), id: z.string() }),
+            z.strictObject({ kind: z.literal('y'), id: z.string() }),
+          ]),
+        }),
+      ])
+    ),
+  });
+  const pairedInput = {
+    items: [
+      { mode: 'a', child: { kind: 'x', id: '1' } },
+      { mode: 'b', child: { kind: 'y', id: '2' } },
+    ],
+  };
+  expect(
+    analyzeSchema(nestedArrayUnion)
+      .branches.filter((branch) => branch.matches(pairedInput))
+      .map((branch) => branch.label)
+  ).toEqual([
+    'items[].mode=a',
+    'items[].mode=a, items[].child.kind=x',
+    'items[].mode=b',
+    'items[].mode=b, items[].child.kind=y',
+  ]);
 });
 
-test('every endpoint that carries a revision or names a target has a stale-tab matrix entry and target coverage', () => {
-  const missing = endpointEntries
-    .filter(({ name }) => {
-      const { revisions, targets } = analysisOf(name);
-      return revisions.length > 0 || targets.length > 0;
-    })
-    .map(({ name }) => name)
-    .filter((name) => !Object.hasOwn(matrix, name));
-  expect(
-    missing,
-    'Add an entry to the domain case file in tests/stale-tab/ for each endpoint listed (a new domain gets its own file, listed in domainFiles in tests/stale-tab-matrix.test.ts): a case that deletes or hides the target and expects 409 REVISION_CONFLICT for a write or 404 LIBRARY_ITEM_DELETED for a read or selection, or { exempt: reason } when nothing can be deleted underneath it.'
-  ).toEqual([]);
-  const domains = domainFiles.map(({ domain }) => domain);
-  expect(domains, 'one case file per domain').toEqual([...new Set(domains)]);
-  const known = new Set(endpointEntries.map(({ name }) => name));
-  expect(Object.keys(matrix).filter((name) => !known.has(name))).toEqual([]);
-
+function findMissingTargets(entries: Record<string, Entry>): string[] {
   const missingTargets: string[] = [];
-  for (const [name, entry] of Object.entries(matrix)) {
+  for (const [name, entry] of Object.entries(entries)) {
     const { endpoint } = endpointEntries.find((item) => item.name === name)!;
     const { revisions, targets } = analysisOf(name);
     if ('exempt' in entry) {
@@ -217,26 +238,26 @@ test('every endpoint that carries a revision or names a target has a stale-tab m
         `${name} has no revision or target field; remove the stale exemption`
       ).toBe(true);
       expect(entry.exempt.trim().length, name).toBeGreaterThan(20);
-      continue;
-    }
-    expect(entry.cases.length, `${name} needs at least one case`).toBeGreaterThan(0);
-    for (const item of entry.cases) {
-      const label = `${name} with ${item.when}`;
-      expect(isAppErrorCode(item.answer.code), `${label}: ${item.answer.code}`).toBe(true);
-      const defaultAnswer =
-        endpoint.method === 'GET'
-          ? same(item.answer, deleted)
-          : same(item.answer, conflict) || same(item.answer, deleted);
-      if (!defaultAnswer)
-        expect(
-          item.reason?.trim().length ?? 0,
-          `${label} (${endpoint.method}) answers ${item.answer.code} and needs a reason of 20+ characters`
-        ).toBeGreaterThanOrEqual(20);
-      if (item.target !== undefined)
-        expect(
-          targets.includes(item.target),
-          `${label} names unknown target ${item.target} (known: ${targets.join(', ') || 'none'})`
-        ).toBe(true);
+    } else {
+      expect(entry.cases.length, `${name} needs at least one case`).toBeGreaterThan(0);
+      for (const item of entry.cases) {
+        const label = `${name} with ${item.when}`;
+        expect(isAppErrorCode(item.answer.code), `${label}: ${item.answer.code}`).toBe(true);
+        const defaultAnswer =
+          endpoint.method === 'GET'
+            ? same(item.answer, deleted)
+            : same(item.answer, conflict) || same(item.answer, deleted);
+        if (!defaultAnswer)
+          expect(
+            item.reason?.trim().length ?? 0,
+            `${label} (${endpoint.method}) answers ${item.answer.code} and needs a reason of 20+ characters`
+          ).toBeGreaterThanOrEqual(20);
+        if (item.target !== undefined)
+          expect(
+            targets.includes(item.target),
+            `${label} names unknown target ${item.target} (known: ${targets.join(', ') || 'none'})`
+          ).toBe(true);
+      }
     }
 
     const exemptTargets = entry.exemptTargets ?? {};
@@ -264,7 +285,10 @@ test('every endpoint that carries a revision or names a target has a stale-tab m
     }
 
     if (targets.length >= 2) {
-      const covered = new Set(entry.cases.flatMap((item) => (item.target ? [item.target] : [])));
+      const covered =
+        'cases' in entry
+          ? new Set(entry.cases.flatMap((item) => (item.target ? [item.target] : [])))
+          : new Set<string>();
       for (const target of targets) {
         if (covered.has(target) && Object.hasOwn(exemptTargets, target))
           expect.fail(
@@ -275,10 +299,79 @@ test('every endpoint that carries a revision or names a target has a stale-tab m
       }
     }
   }
+  return missingTargets;
+}
+
+async function findMissingBranches(
+  entries: Record<string, Entry>,
+  inputsByName: Map<string, Input[]>
+): Promise<string[]> {
+  const missingBranches: string[] = [];
+  for (const [name, entry] of Object.entries(entries)) {
+    const branches = requiredBranchesOf(name);
+    if (!branches.length) continue;
+    const exemptBranches = entry.exemptBranches ?? {};
+    let inputs: Input[];
+    if ('exempt' in entry) {
+      inputs = [];
+    } else {
+      const cached = inputsByName.get(name);
+      if (cached) {
+        inputs = cached;
+      } else {
+        inputs = [];
+        for (const item of entry.cases) inputs.push((await item.arrange()).input);
+      }
+    }
+    for (const branch of branches) {
+      const covered = inputs.some((input) => branch.matches(input));
+      if (covered && Object.hasOwn(exemptBranches, branch.label))
+        expect.fail(
+          `${name} branch ${branch.label} is both covered by a case and listed in exemptBranches`
+        );
+      if (!covered && !Object.hasOwn(exemptBranches, branch.label))
+        missingBranches.push(`${name} branch ${branch.label}`);
+    }
+  }
+  return missingBranches;
+}
+
+test('every endpoint that carries a revision or names a target has a stale-tab matrix entry and target coverage', () => {
+  const missing = endpointEntries
+    .filter(({ name }) => {
+      const { revisions, targets } = analysisOf(name);
+      return revisions.length > 0 || targets.length > 0;
+    })
+    .map(({ name }) => name)
+    .filter((name) => !Object.hasOwn(matrix, name));
   expect(
-    missingTargets,
+    missing,
+    'Add an entry to the domain case file in tests/stale-tab/ for each endpoint listed (a new domain gets its own file, listed in domainFiles in tests/stale-tab-matrix.test.ts): a case that deletes or hides the target and expects 409 REVISION_CONFLICT for a write or 404 LIBRARY_ITEM_DELETED for a read or selection, or { exempt: reason } when nothing can be deleted underneath it.'
+  ).toEqual([]);
+  const domains = domainFiles.map(({ domain }) => domain);
+  expect(domains, 'one case file per domain').toEqual([...new Set(domains)]);
+  const known = new Set(endpointEntries.map(({ name }) => name));
+  expect(Object.keys(matrix).filter((name) => !known.has(name))).toEqual([]);
+
+  expect(
+    findMissingTargets(matrix),
     'Add a case with target: "<path>" or an exemptTargets entry (20+ chars) for each missing target listed'
   ).toEqual([]);
+});
+
+test('a blanket endpoint exemption does not skip missing targets or union branches', async () => {
+  const blanket: Record<string, Entry> = {
+    'transfer.applyArchive': {
+      exempt: 'Blanket exemption without per-target or per-branch reasons.',
+    },
+  };
+  expect(findMissingTargets(blanket)).toEqual([
+    'transfer.applyArchive target modelBindings[].model.id',
+    'transfer.applyArchive target preparedId',
+  ]);
+  expect(await findMissingBranches(blanket, new Map())).toEqual([
+    'transfer.applyArchive branch modelBindings[].mode=local',
+  ]);
 });
 
 const probes = Object.entries(matrix).flatMap(([name, entry]) =>
@@ -341,29 +434,8 @@ test.each(probes)('$name with $when answers $answer.code', async (item) => {
 });
 
 test('every endpoint covers every union branch carrying a revision or target', async () => {
-  const missingBranches: string[] = [];
-  for (const [name, entry] of Object.entries(matrix)) {
-    if ('exempt' in entry) continue;
-    const branches = requiredBranchesOf(name);
-    if (!branches.length) continue;
-    const exemptBranches = entry.exemptBranches ?? {};
-    let inputs = observedInputs.get(name);
-    if (!inputs) {
-      inputs = [];
-      for (const item of entry.cases) inputs.push((await item.arrange()).input);
-    }
-    for (const branch of branches) {
-      const covered = inputs.some((input) => branch.matches(input));
-      if (covered && Object.hasOwn(exemptBranches, branch.label))
-        expect.fail(
-          `${name} branch ${branch.label} is both covered by a case and listed in exemptBranches`
-        );
-      if (!covered && !Object.hasOwn(exemptBranches, branch.label))
-        missingBranches.push(`${name} branch ${branch.label}`);
-    }
-  }
   expect(
-    missingBranches,
+    await findMissingBranches(matrix, observedInputs),
     'Add a case whose input matches each branch listed, or list it in exemptBranches with a reason of 20+ characters'
   ).toEqual([]);
 });
