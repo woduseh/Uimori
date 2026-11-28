@@ -219,7 +219,7 @@ export function retryRun(
         action &&
         (!parentRevision || store.sourceMetadata(parentRevision).hash !== action.sourceHash)
       )
-        throw new HttpError(409, 'STORY_UI_STALE_SOURCE');
+        throw new AppError(409, 'STORY_UI_STALE_SOURCE');
       const profile = store.product.snapshot(chat.id, 'main', parentRevision);
       const request =
         options.request === undefined

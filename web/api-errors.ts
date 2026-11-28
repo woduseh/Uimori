@@ -1,9 +1,4 @@
-import {
-  type AppErrorCode,
-  appErrorTakesParams,
-  isAppErrorCode,
-  type ReceivedErrorWire,
-} from '#contracts';
+import { type AppErrorCode, isAppErrorCode, type ReceivedErrorWire } from '#contracts';
 import { AgentCollaborationError } from '../core/agent-collaboration.js';
 import { ValidationError } from '../core/validation-error.js';
 import { RisuPromptError, risuPromptAppErrorCode } from '../core/risu-prompt.js';
@@ -16,10 +11,6 @@ import {
   type UiMessage,
   type UiMessageValue,
 } from './ui-message.js';
-
-const storyUiErrors: Record<string, MessageKey> = {
-  OUTPUT_STORY_UI_INVALID: 'storyUi.errorTranslation.details',
-};
 
 export const appErrorMessages = {
   MAINTENANCE_CLOSED: 'errors.MAINTENANCE_CLOSED',
@@ -358,11 +349,6 @@ export function toUiMessage(
   return typeof fallback === 'string' ? uiMessage(fallback) : fallback;
 }
 
-function appErrorCode(wire: ReceivedErrorWire): AppErrorCode | null {
-  if (isAppErrorCode(wire.code)) return wire.code;
-  return isAppErrorCode(wire.error) && !appErrorTakesParams(wire.error) ? wire.error : null;
-}
-
 function genericErrorKey(status: number): MessageKey {
   return status >= 500
     ? 'errors.serverFailed'
@@ -375,15 +361,8 @@ export function apiErrorMessage(
   wire: ReceivedErrorWire,
   status: number
 ): { code: string | null; uiMessage: UiMessage } {
-  const code = appErrorCode(wire);
-  if (code)
-    return {
-      code,
-      uiMessage: appErrorUiMessage(code, code === wire.code ? wire.params : undefined),
-    };
-  const { error } = wire;
-  if (typeof error === 'string' && Object.hasOwn(storyUiErrors, error))
-    return { code: error, uiMessage: uiMessage(storyUiErrors[error]) };
+  if (isAppErrorCode(wire.code))
+    return { code: wire.code, uiMessage: appErrorUiMessage(wire.code, wire.params) };
   return { code: null, uiMessage: uiMessage(genericErrorKey(status), { status }) };
 }
 

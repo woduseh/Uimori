@@ -7,9 +7,17 @@ type AuxiliaryErrorDiagnostic = {
   action: UiMessage;
 };
 
-const diagnostics = new Map<string, { summaryKey: MessageKey; actionKey: MessageKey }>();
-const define = (codes: string[], summaryKey: MessageKey, actionKey: MessageKey) => {
-  for (const code of codes) diagnostics.set(code, { summaryKey, actionKey });
+const diagnostics = new Map<
+  string,
+  { summaryKey: MessageKey; actionKey: MessageKey; detailsKey?: MessageKey }
+>();
+const define = (
+  codes: string[],
+  summaryKey: MessageKey,
+  actionKey: MessageKey,
+  detailsKey?: MessageKey
+) => {
+  for (const code of codes) diagnostics.set(code, { summaryKey, actionKey, detailsKey });
 };
 
 define(
@@ -159,7 +167,8 @@ define(
 define(
   ['OUTPUT_STORY_UI_INVALID'],
   'storyUi.errorTranslation.message',
-  'storyUi.errorTranslation.action'
+  'storyUi.errorTranslation.action',
+  'storyUi.errorTranslation.details'
 );
 define(
   ['EVALUATION_SUBMISSION_REQUIRED'],
@@ -232,7 +241,7 @@ export function auxiliaryErrorMessage(error: unknown): string {
   const diagnostic = typeof error === 'string' ? diagnostics.get(error) : undefined;
   return t(
     diagnostic
-      ? diagnostic.summaryKey.replace(/\.message$/u, '.details')
+      ? (diagnostic.detailsKey ?? diagnostic.summaryKey.replace(/\.message$/u, '.details'))
       : 'errors.auxiliary.AUXILIARY_INCOMPLETE.details'
   );
 }

@@ -1,6 +1,7 @@
 import { MAINTENANCE_CLOSED, type MaintenanceStatus, selfHostEndpoints } from '#contracts';
 import { selfHostOperations } from '#contracts/operations';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { AppError } from './app-errors.js';
 import { registerEndpoint } from './endpoint.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
@@ -86,7 +87,7 @@ export function maintenanceRoutes(
       ALWAYS_ADMITTED.has(request.routeOptions.url ?? '')
     )
       return;
-    if (!admissionOpen(store, options.forcedClosed)) throw new HttpError(503, MAINTENANCE_CLOSED);
+    if (!admissionOpen(store, options.forcedClosed)) throw new AppError(503, MAINTENANCE_CLOSED);
     writes.add(request);
   });
   app.addHook('onResponse', async (request) => {

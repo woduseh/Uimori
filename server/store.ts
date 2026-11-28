@@ -752,7 +752,7 @@ export class Store {
         parent.chatId !== chat.id ||
         parent.hash !== action.sourceHash
       )
-        throw new HttpError(409, 'STORY_UI_STALE_SOURCE');
+        throw new AppError(409, 'STORY_UI_STALE_SOURCE');
     }
     const source: Source = {
       id: randomUUID(),
