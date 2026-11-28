@@ -22,6 +22,7 @@ import {
   differences,
   digest,
   normalization,
+  portable,
   read,
 } from './snapshot-compat/compare.mjs';
 
@@ -101,21 +102,6 @@ async function post(app, url, body, binary = false) {
 async function archive(app, id) {
   const url = '/api/chats/' + encodeURIComponent(id) + '/backup-archive';
   return (await read(app, '/api/chats/:id/backup-archive', url, report)).body;
-}
-function portable(body) {
-  const aliases = new Map();
-  for (const entry of [...body.manifest.resources.contents, ...body.manifest.resources.prompts])
-    aliases.set(entry.source.id, 'resource:' + entry.key);
-  for (const chat of body.manifest.backup.chats)
-    for (const [index, message] of chat.state.messages.entries())
-      aliases.set(message.sourceId, 'scene:' + index);
-  return JSON.parse(
-    JSON.stringify(body, (key, value) =>
-      ['id', 'sourceId', 'mainPromptPresetId'].includes(key) && aliases.has(value)
-        ? aliases.get(value)
-        : value
-    )
-  );
 }
 async function chats(app) {
   const dest = await start(root, 'chat-import', 'import');
