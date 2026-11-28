@@ -116,11 +116,7 @@ function announceChanges(invalidates: readonly Invalidation[]) {
     announceLocalChange(promptWorkspaceChange, { echoed: !providerSettings });
 }
 
-const legacyLibraryWrites = new Set([
-  '/risu-imports/apply',
-  '/prompt-presets',
-  '/prompt-combinations',
-]);
+const legacyLibraryWrites = new Set(['/prompt-presets', '/prompt-combinations']);
 
 function legacyInvalidation(path: string): Invalidation[] {
   if (/^\/(?:model-presets|connections)(?:\/[^/]+(?:\/move)?)?$/u.test(path))

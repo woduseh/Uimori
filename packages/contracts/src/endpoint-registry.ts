@@ -1,3 +1,5 @@
+import { risuPresetEndpoints } from './domains/risuPreset/endpoints.js';
+import { risuEndpoints } from './domains/risu/endpoints.js';
 import { appearanceEndpoints } from './domains/appearance/endpoints.js';
 import { chatEndpoints } from './domains/chat/endpoints.js';
 import { chatSettingsEndpoints } from './domains/chat-settings/endpoints.js';
@@ -13,6 +15,8 @@ import { transferEndpoints } from './domains/transfer/endpoints.js';
 import { translationEndpoints } from './domains/translation/endpoints.js';
 
 export const allEndpoints = {
+  risuPreset: risuPresetEndpoints,
+  risu: risuEndpoints,
   appearance: appearanceEndpoints,
   chat: chatEndpoints,
   'chat-settings': chatSettingsEndpoints,

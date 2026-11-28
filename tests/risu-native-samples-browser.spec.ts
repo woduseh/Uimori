@@ -139,7 +139,7 @@ test.describe('actual local native Risu cards', () => {
           .filter((finding) => finding.level === 'unsupported')
           .map((finding) => finding.code)
       ).toEqual([]);
-      const { preset } = applyRisuPresetImport(app.store, {
+      const { preset } = await applyRisuPresetImport(app.store, {
         source,
         digest: preview.digest,
         allowPartial: false,

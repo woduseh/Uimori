@@ -1,3 +1,4 @@
+import { applyRisuCommand } from '../server/commands/risu-import.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import Fastify from 'fastify';
 import {
@@ -67,6 +68,7 @@ function fixture() {
   return store;
 }
 afterEach(() => {
+  vi.restoreAllMocks();
   filesystemFailure.cleanup = '';
   filesystemFailure.publish = '';
   receiptLookups.misses = 0;
@@ -136,17 +138,49 @@ test('prepared review reuses final transformed bytes and response-loss receipt a
     createChat: false,
     idempotencyKey: 'prepared-apply',
   };
+  const prepare = vi.spyOn(applyRisuCommand, 'prepare');
   const first = await applyRisuImport(store, command);
   expect(first.receipt.created).toBe(true);
   expect(readImage(store.db, prepared.images[0].hash).bytes).toEqual(bytes);
   expect(() => readPreparedRisuImport(store.path, preview.preparedId!)).toThrow(
     'RISU_IMPORT_DRAFT_CHANGED'
   );
+  expect(store.db.prepare('SELECT key FROM import_operations').all()).toEqual([
+    { key: 'risu-result:prepared-apply' },
+  ]);
+  const savedCount = store.product.all('content').length;
   for (let index = 0; index < 260; index++)
     saveImportReceipt(store, `unrelated-import-${index}`, 'digest', { index });
   const retry = await applyRisuImport(store, command);
+  expect(prepare).toHaveBeenCalledTimes(1);
   expect(retry.receipt.created).toBe(false);
+  expect(store.product.all('content')).toHaveLength(savedCount);
   expect(retry.receipt.id).toBe(first.receipt.id);
+});
+
+test('a refused receipt write rolls back the library and preserves staging for a retry', async () => {
+  const store = fixture();
+  const input = await source();
+  const preview = await prepareStoredRisuImport(store.path, { source: input });
+  const command = {
+    source: input,
+    preparedId: preview.preparedId,
+    digest: preview.digest,
+    allowPartial: false,
+    idempotencyKey: 'rollback',
+  };
+  store.db.exec(
+    "CREATE TRIGGER refuse_import BEFORE INSERT ON import_operations BEGIN SELECT RAISE(ABORT, 'refused receipt'); END"
+  );
+  await expect(applyRisuImport(store, command)).rejects.toThrow('refused receipt');
+  expect(store.product.all('content')).toHaveLength(0);
+  expect(store.chats()).toHaveLength(0);
+  expect(store.db.prepare('SELECT * FROM import_operations').all()).toEqual([]);
+  expect(readPreparedRisuImport(store.path, preview.preparedId!).preview.digest).toBe(
+    preview.digest
+  );
+  store.db.exec('DROP TRIGGER refuse_import');
+  expect((await applyRisuImport(store, command)).receipt.created).toBe(true);
 });
 
 test('committed import and retry succeed when staging cleanup is locked, then expiry retries cleanup', async () => {

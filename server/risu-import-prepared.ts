@@ -52,6 +52,14 @@ function pathFor(dbPath: string, id: string) {
   if (!ID.test(id)) throw new AppError(404, 'RISU_IMPORT_DRAFT_CHANGED');
   return join(directory(dbPath), id);
 }
+export function preparedManifestIdentity(dbPath: string, id: string) {
+  const stat = statSync(join(pathFor(dbPath, id), 'manifest.json'), {
+    bigint: true,
+    throwIfNoEntry: false,
+  });
+  if (!stat) throw new AppError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+  return [stat.ino, stat.mtimeNs, stat.size].join('/');
+}
 export function deletePreparedRisuImport(dbPath: string, id: string) {
   const path = pathFor(dbPath, id);
   if (active.has(path) || !ownedImportStagingRoot(dbPath, directory(dbPath))) return;

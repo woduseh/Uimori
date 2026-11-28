@@ -73,7 +73,7 @@ const sourceOf = (value: unknown) => ({
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
 });
 
-test('supported preset text stages and regex import without partial consent and preserve original bytes', () => {
+test('supported preset text stages and regex import without partial consent and preserve original bytes', async () => {
   const { store } = fixture();
   const source = sourceOf({
     ...document(),
@@ -88,7 +88,7 @@ test('supported preset text stages and regex import without partial consent and 
   });
   const preview = prepareRisuPresetImport({ source });
   expect(preview.findings.filter((finding) => finding.level === 'unsupported')).toEqual([]);
-  const imported = applyRisuPresetImport(store, {
+  const imported = await applyRisuPresetImport(store, {
     source,
     digest: preview.digest,
     allowPartial: false,
@@ -153,7 +153,7 @@ test('imported options apply through existing workspace and actual chat preview 
   expect(store.db.prepare('SELECT count(*) AS n FROM attempts').get()!.n).toBe(0);
 });
 
-test('a saved import whose response was lost answers its receipt even when the preview digest changed since', () => {
+test('a saved import whose response was lost answers its receipt even when the preview digest changed since', async () => {
   const { store } = fixture();
   const source = sourceOf({
     ...document(),
@@ -167,26 +167,28 @@ test('a saved import whose response was lost answers its receipt even when the p
     idempotencyKey: 'lost-response',
   };
   const before = store.product.all('prompt-preset').length;
-  const first = applyRisuPresetImport(store, command);
-  const retry = applyRisuPresetImport(store, { ...command, digest: 'digest-before-upgrade' });
+  const first = await applyRisuPresetImport(store, command);
+  const retry = await applyRisuPresetImport(store, { ...command, digest: 'digest-before-upgrade' });
   expect(retry.receipt).toEqual({ ...first.receipt, created: false });
   expect(retry.preset.id).toBe(first.preset.id);
   expect(store.product.all('prompt-preset')).toHaveLength(before + 1);
-  expect(() =>
+  await expect(
     applyRisuPresetImport(store, { ...command, digest: 'stale', idempotencyKey: 'never-saved' })
-  ).toThrow(expect.objectContaining({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' }));
+  ).rejects.toThrow(
+    expect.objectContaining({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' })
+  );
   const { allowPartial: _allowPartial, ...withoutAllowPartial } = command;
   const { digest: _digest, ...withoutDigest } = command;
   for (const invalid of [
     { ...withoutAllowPartial, digest: 'digest-before-upgrade' },
     withoutDigest,
   ])
-    expect(() => applyRisuPresetImport(store, invalid)).toThrow(
+    await expect(applyRisuPresetImport(store, invalid)).rejects.toThrow(
       expect.objectContaining({ statusCode: 400 })
     );
 });
 
-test('a lost-response retry answers its receipt before the source is analyzed again', () => {
+test('a lost-response retry answers its receipt before the source is analyzed again', async () => {
   const { store } = fixture();
   const source = sourceOf(document());
   const command = {
@@ -195,9 +197,9 @@ test('a lost-response retry answers its receipt before the source is analyzed ag
     allowPartial: false,
     idempotencyKey: 'outlived',
   };
-  const first = applyRisuPresetImport(store, command);
+  const first = await applyRisuPresetImport(store, command);
   analysis.broken = true;
-  const retry = applyRisuPresetImport(store, command);
+  const retry = await applyRisuPresetImport(store, command);
   expect(retry.receipt).toEqual({ ...first.receipt, created: false });
   expect(retry.preset.id).toBe(first.preset.id);
 });

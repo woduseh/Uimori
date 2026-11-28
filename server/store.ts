@@ -342,15 +342,24 @@ export class Store {
     } = {},
     internalId?: string
   ): Chat {
+    return this.transaction(() => this.createChatInTransaction(title, organization, internalId));
+  }
+  createChatInTransaction(
+    title: string,
+    organization: {
+      botId?: string;
+      folderId?: string | null;
+      persona?: import('../core/product.js').ContentRef | null;
+    } = {},
+    internalId?: string
+  ): Chat {
     const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);
     if (!IDENTITY_PATTERN.test(id)) throw new HttpError(400, 'Invalid internal chat ID');
-    this.transaction(() => {
-      const { maxCalls, storyUi, storyUiStyle } = chatGenerationDefaults(this.db);
-      this.db
-        .prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)')
-        .run(id, title, json({ maxCalls, storyUi, storyUiStyle }), now());
-      this.organization.create(id, organization);
-    });
+    const { maxCalls, storyUi, storyUiStyle } = chatGenerationDefaults(this.db);
+    this.db
+      .prepare('INSERT INTO chats VALUES(?,?,NULL,1,?,?)')
+      .run(id, title, json({ maxCalls, storyUi, storyUiStyle }), now());
+    this.organization.create(id, organization);
     return this.chat(id);
   }
   renameChat(id: string, title: string, expectedTitleRevision: number): Chat {

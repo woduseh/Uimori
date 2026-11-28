@@ -1,3 +1,4 @@
+import { risuPresetEndpoints } from '#contracts';
 import { t, useI18n, formatNumber } from './i18n.js';
 import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { presetFindingMessage } from './risu-finding-messages.js';
@@ -13,7 +14,7 @@ import type {
   RisuPresetImportPreview,
   RisuPresetImportResult,
 } from '../core/risu-preset.js';
-import { api, definiteImportFailure } from './api.js';
+import { api, callEndpoint, definiteImportFailure } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -90,7 +91,10 @@ export function RisuPresetImport({
     setError(null);
     setNotice(null);
     try {
-      const imported = await api<RisuPresetImportResult>('/risu-preset-imports/apply', payload);
+      const imported = (await callEndpoint(
+        risuPresetEndpoints.apply,
+        payload
+      )) as RisuPresetImportResult;
       setResult(imported);
       setUncertain(false);
       try {

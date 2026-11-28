@@ -1,3 +1,4 @@
+import { risuEndpoints } from '#contracts';
 import { t, useI18n, formatNumber } from './i18n.js';
 import { UiError, formatUiMessage, uiMessage, type UiMessage } from './ui-message.js';
 import { importFindingMessage } from './risu-finding-messages.js';
@@ -16,7 +17,7 @@ import type {
   RisuImportSource,
   RisuImportStagedSource,
 } from '../core/risu-import.js';
-import { api, definiteImportFailure } from './api.js';
+import { api, callEndpoint, definiteImportFailure } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -199,7 +200,7 @@ export function RisuImport({
     setError(null);
     setNotice(null);
     try {
-      const imported = await api<RisuImportResult>('/risu-imports/apply', payload);
+      const imported = (await callEndpoint(risuEndpoints.apply, payload)) as RisuImportResult;
       setResult(imported);
       setUncertain(false);
       await refreshAndOpen(imported);

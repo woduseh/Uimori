@@ -156,110 +156,116 @@ export function createPackageStart(
 ): { run: Run | null; created: boolean } {
   const command = validatePackageStartCommand(value);
   if (command.startId === null) return clearPackageStart(store, chatId, command);
+  const start = { ...command, startId: command.startId };
+  return store.transaction(() => createPackageStartInTransaction(store, chatId, start));
+}
+
+export function createPackageStartInTransaction(
+  store: Store,
+  chatId: string,
+  command: PackageStartCommand & { startId: string }
+) {
   const ref: PackageStartRef = {
     packageId: command.packageId,
     packageRevision: command.packageRevision,
     startId: command.startId,
   };
-  return store.transaction(() => {
-    if (
-      store.db
-        .prepare('SELECT 1 FROM import_operations WHERE key=?')
-        .get(`transcript:package-start:${chatId}:${command.idempotencyKey}`)
-    )
-      throw new HttpError(409, 'Idempotency key reused with different command');
-    const prior = store.db
-      .prepare('SELECT command FROM runs WHERE chat_id=? AND request_key=?')
-      .get(chatId, command.idempotencyKey) as { command: string } | undefined;
-    let prepared:
-      | {
-          profile: ProfileSnapshot;
-          selected: PackageStartSnapshot;
-        }
-      | undefined;
-    let request: string;
-    if (prior) {
-      request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
-    } else {
-      const content = store.product.stored<Content>(
-        'content',
-        command.packageId,
-        command.packageRevision
-      );
-      if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
-      const start = validatePackageStarts(content.package.starts ?? []).find(
-        (item) => item.id === command.startId
-      );
-      if (!start) throw new AppError(400, 'PACKAGE_START_NOT_FOUND');
-      const chat = store.chat(chatId);
-      const profile = chatVariableProfile(store, chatId);
-      const attachment = profile?.packageAttachments?.find(
-        (item) =>
-          item.role === 'bot' &&
-          item.id === command.packageId &&
-          item.revision === command.packageRevision
-      );
-      if (!profile || !attachment || chat.botId !== command.packageId)
-        throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
-      const selected = resolvePackageStart(content.package!, ref.startId);
-      prepared = { profile, selected };
-      request = `[작성된 도입문] ${selected.title}`;
-    }
-    const result = store.createRunInTransaction(
-      chatId,
-      {
-        request,
-        expectedRevision: command.expectedRevision ?? null,
-        ...(command.expectedSourceHash ? { expectedSourceHash: command.expectedSourceHash } : {}),
-        expectedSettingsRevision: command.expectedSettingsRevision,
-        expectedProfileRevision: command.expectedProfileRevision,
-        idempotencyKey: command.idempotencyKey,
-        packageStart: ref,
-      },
-      (chat) => {
-        if (command.expectedRevision) {
-          if (!canChangePackageStart(store, chatId))
-            throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
-        } else if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
-          throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
-        if (!prepared) throw new HttpError(409, 'PACKAGE_START_REPLAY_MISSING');
-        const { profile, selected } = prepared;
-        if (chat.botId !== command.packageId)
-          throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
-        const iso = new Date().toISOString();
-        const snapshot: RunSnapshot = {
-          chatId,
-          parentRevision: null,
-          ...(command.expectedRevision
-            ? {
-                replacement: {
-                  sourceRevision: command.expectedRevision,
-                  sourceHash: command.expectedSourceHash!,
-                },
-              }
-            : {}),
-          settingsRevision: chat.settingsRevision,
-          settings: chat.settings,
-          request,
-          resources: store.product.resources(chatId, profile),
-          history: [],
-          profile,
-          packageStart: selected,
-          executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
-        };
-        return snapshot;
-      }
-    );
-    if (!result.created || result.run.snapshot.packageStart?.mode !== 'authored') return result;
+  if (
     store.db
-      .prepare("UPDATE runs SET status='running' WHERE id=? AND status='queued'")
-      .run(result.run.id);
-    store.completeRunInTransaction(result.run.id, result.run.snapshot.packageStart.text, {
-      modelCalls: 0,
-      inputTokens: null,
-      outputTokens: null,
-      costUsd: null,
-    });
-    return { run: store.run(result.run.id), created: true };
+      .prepare('SELECT 1 FROM import_operations WHERE key=?')
+      .get(`transcript:package-start:${chatId}:${command.idempotencyKey}`)
+  )
+    throw new HttpError(409, 'Idempotency key reused with different command');
+  const prior = store.db
+    .prepare('SELECT command FROM runs WHERE chat_id=? AND request_key=?')
+    .get(chatId, command.idempotencyKey) as { command: string } | undefined;
+  let prepared:
+    | {
+        profile: ProfileSnapshot;
+        selected: PackageStartSnapshot;
+      }
+    | undefined;
+  let request: string;
+  if (prior) {
+    request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
+  } else {
+    const content = store.product.stored<Content>(
+      'content',
+      command.packageId,
+      command.packageRevision
+    );
+    if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
+    const start = validatePackageStarts(content.package.starts ?? []).find(
+      (item) => item.id === command.startId
+    );
+    if (!start) throw new AppError(400, 'PACKAGE_START_NOT_FOUND');
+    const chat = store.chat(chatId);
+    const profile = chatVariableProfile(store, chatId);
+    const attachment = profile?.packageAttachments?.find(
+      (item) =>
+        item.role === 'bot' &&
+        item.id === command.packageId &&
+        item.revision === command.packageRevision
+    );
+    if (!profile || !attachment || chat.botId !== command.packageId)
+      throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
+    const selected = resolvePackageStart(content.package!, ref.startId);
+    prepared = { profile, selected };
+    request = `[작성된 도입문] ${selected.title}`;
+  }
+  const result = store.createRunInTransaction(
+    chatId,
+    {
+      request,
+      expectedRevision: command.expectedRevision ?? null,
+      ...(command.expectedSourceHash ? { expectedSourceHash: command.expectedSourceHash } : {}),
+      expectedSettingsRevision: command.expectedSettingsRevision,
+      expectedProfileRevision: command.expectedProfileRevision,
+      idempotencyKey: command.idempotencyKey,
+      packageStart: ref,
+    },
+    (chat) => {
+      if (command.expectedRevision) {
+        if (!canChangePackageStart(store, chatId))
+          throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
+      } else if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
+        throw new AppError(409, 'PACKAGE_START_CONVERSATION_STARTED');
+      if (!prepared) throw new HttpError(409, 'PACKAGE_START_REPLAY_MISSING');
+      const { profile, selected } = prepared;
+      if (chat.botId !== command.packageId) throw new AppError(409, 'PACKAGE_START_OWNER_CHANGED');
+      const iso = new Date().toISOString();
+      const snapshot: RunSnapshot = {
+        chatId,
+        parentRevision: null,
+        ...(command.expectedRevision
+          ? {
+              replacement: {
+                sourceRevision: command.expectedRevision,
+                sourceHash: command.expectedSourceHash!,
+              },
+            }
+          : {}),
+        settingsRevision: chat.settingsRevision,
+        settings: chat.settings,
+        request,
+        resources: store.product.resources(chatId, profile),
+        history: [],
+        profile,
+        packageStart: selected,
+        executionClock: { iso, unix: Math.floor(Date.parse(iso) / 1000) },
+      };
+      return snapshot;
+    }
+  );
+  if (!result.created || result.run.snapshot.packageStart?.mode !== 'authored') return result;
+  store.db
+    .prepare("UPDATE runs SET status='running' WHERE id=? AND status='queued'")
+    .run(result.run.id);
+  store.completeRunInTransaction(result.run.id, result.run.snapshot.packageStart.text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
   });
+  return { run: store.run(result.run.id), created: true };
 }
