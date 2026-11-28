@@ -2,7 +2,13 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { waitForNativeLayout } from './fixtures/native-message.js';
-import { test, expect, type APIRequestContext, type Page } from './fixtures/browser-test.js';
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+  type Request,
+} from './fixtures/browser-test.js';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 
 test.setTimeout(120000);
@@ -70,8 +76,10 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let late: Request | undefined;
   await page.route('**/api/chats', async (route) => {
     if (route.request().method() !== 'GET' || ++listRequests !== 1) return route.continue();
+    late = route.request();
     await held;
     await route.fulfill({ json: [] });
   });
@@ -87,11 +95,8 @@ test('LOADUI09 newer chat list wins over a late empty response without clearing 
     await expect(chat).toBeVisible();
     await expect(article(page, seeded.sources[0].id)).toBeVisible();
     expect(listRequests).toBeGreaterThanOrEqual(2);
-    const finished = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === '/api/chats' && response.ok()
-    );
     release();
-    await finished;
+    await (await late!.response())!.finished();
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     );
