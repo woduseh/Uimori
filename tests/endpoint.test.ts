@@ -12,6 +12,7 @@ import {
   NOT_MODIFIED,
   prefersMinimal,
   registerEndpoint,
+  registerRawRoute,
 } from '../server/endpoint.js';
 import { matchesEntityTag, revalidatePrivateJson } from '../server/private-etag.js';
 
@@ -255,6 +256,29 @@ test('an endpoint path parameter must name a required string or number input key
   defineEndpoint<typeof echo>()({ operation: 'test.echo', method: 'GET', path: '/fonts/:fontId' });
   // @ts-expect-error an optional key would request /items/undefined
   defineEndpoint<typeof optional>()({ operation: 'test.optional', method: 'GET', path: '/x/:id' });
+  const app = Fastify();
+  cleanup.push(() => app.close());
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/blobs/:size',
+      cache: 'no-store-refusals',
+      input: z.strictObject({ size: z.int() }),
+    },
+    () => ''
+  );
+  registerRawRoute(
+    app,
+    // @ts-expect-error the input key is id, not fontId
+    {
+      method: 'GET',
+      url: '/api/fonts/:fontId/file',
+      cache: 'no-store-refusals',
+      input: z.strictObject({ id: z.string() }),
+    },
+    () => ''
+  );
 });
 
 function strippingObjects(root: unknown, name: string): string[] {
