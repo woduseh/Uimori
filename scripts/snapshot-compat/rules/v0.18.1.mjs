@@ -167,6 +167,34 @@ export const rules = [
     [removed('body.models.*.evaluationTools', object)],
     'The evaluation tools feature was removed, so a library model no longer carries its setting.'
   ),
+  read(
+    'helper-workspace-cache',
+    [
+      '/api/helper/projects',
+      '/api/helper/conversations',
+      '/api/helper/conversations/:',
+      '/api/helper/conversations/:/context',
+      '/api/helper/conversations/:/deletion',
+    ],
+    [added('headers.cache-control', 'no-store')],
+    'The helper workspace routes became typed endpoints, which disable caching on every reply.'
+  ),
+  read(
+    'helper-task-results-changes',
+    ['/api/helper/tasks/:/results'],
+    [removed('body.changes', list)],
+    'Helper change cards and turn rollback were removed, so task results no longer carry change records.'
+  ),
+  read(
+    'backup-helper-changes',
+    ['/api/backup'],
+    [
+      removed('body.helper_changes', object),
+      field('body.image_cleanup_candidates.rows', number, number),
+      field('body.image_cleanup_candidates.sha256', string, string),
+    ],
+    'Opening the database drops the helper change table and queues the images that only its rollback baselines held for cleanup.'
+  ),
   restored(
     'restored-opening-manuscript',
     '/api/chats/:/manuscript',
