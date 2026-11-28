@@ -142,6 +142,21 @@ Use the direct Node command for machine-readable JSON without npm's command bann
 
 `node --test scripts/risu-lua-diff.test.mjs` checks the detector with disposable Git fixtures. The standard tooling suite discovers these tests automatically. This verifies change detection and reporting, not actual card execution or complete Risu compatibility.
 
+## Replay a saved workspace before release
+
+Download the full SQLite backup from Data Management or copy the completed automatic backup's `uimori.sqlite` to a private directory outside every Uimori worktree. The SQLite payload of `uimori-snapshot-v1` is sufficient. Use the downloaded file or a completed snapshot so committed data in a live WAL is included.
+
+```powershell
+npm run build
+npm run verify:snapshot -- --snapshot "D:\private\uimori.sqlite" --old v0.18.1
+```
+
+Run this before release or when reviewing a schema change. The old revision gets its own checkout, install and build. Each replay opens a disposable copy with maintenance forced closed. The report in `output/snapshot-compat` contains private response differences, route coverage and before/after work-table hashes. Read it locally. Each shared GET uses the union of the first 12 sorted parameter tuples from each side. A zero count identifies a route without matching data. Streaming comparisons cover the opening event.
+
+The runner downloads both full exports through `/api/backup`, opens each in a fresh current-build process, and compares the reads with the current copy. It also re-exports up to three imported chat archives to compare their contents and image bytes. Add `--self-check` to exercise changed text and a deleted row on the disposable databases. For the bundled stand-in, decompress `tests/fixtures/backup-horizon-0.18.0/snapshot.db.gz` outside the repository first.
+
+Review each difference before putting its `fingerprint` in an external JSON array next to the snapshot and rerunning with `--expect <file>`. A fingerprint includes the comparison, URL, JSON path and both values. Boot mutations, blocked calls and incomplete probes fail the run.
+
 ## Release checks
 
 `npm run release:check -- --area <name>` runs `quality`, a matching `build`, and `npm run verify -- <name>` for one [feature map](#feature-map) domain or preset. The default is `browser-smoke`; `--full` selects `quality:full` and replaces that default with `npm run verify -- all`. An explicit area remains selected alongside the full suite. `--area` rejects `all` and the engines such as `gallery`; use `--full` for the complete regression. Deployment-tooling changes normally select `self-host`. Passing checks are reused while the release fingerprint taken at start is unchanged; the report is a local convenience that no deployment step reads. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
