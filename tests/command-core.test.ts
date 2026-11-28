@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { z } from 'zod/v4';
-import { chatSettingsEndpoints, defineEndpoint, type Endpoint, endpointRequest } from '#contracts';
+import { chatSettingsEndpoints, type Endpoint, endpointRequest } from '#contracts';
 import { chatSettingsOperations, defineCommandOperation, nonBlank } from '#contracts/operations';
 import { createApp, type App } from '../server/app.js';
 import { AppError, assertRevision } from '../server/app-errors.js';
@@ -17,7 +17,7 @@ import {
   updateStoryGuideCommand,
 } from '../server/commands/index.js';
 import { helperChatStateCommand } from '../server/helper-chat-state-tools.js';
-import { executeHelperCommand } from '../server/helper-command-adapter.js';
+import { defineHelperCommandTool, executeHelperCommand } from '../server/helper-command-adapter.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { type AppPorts, createStorePorts } from '../server/store-ports.js';
 import { Store } from '../server/store.js';
@@ -257,65 +257,196 @@ test.each(Object.entries(commandProbes).filter(([, probe]) => probe.command.rece
   }
 );
 
-test('import-adapter receipt replays before async prepare and guard after state changes, and refuses different bodies', async () => {
+test('prepare-bearing receipt commands run prepare once and preserve helper results on replay', async () => {
   const store = createStoreFixture();
+  const model = selectFixtureModels(store);
+  const chat = createFixtureChat(store, 'Prepare receipt chat');
+  const workspace = new HelperWorkspace(store);
+  const conversation = workspace.open({ kind: 'chat', chatId: chat.id });
+  const task = workspace.enqueue(conversation.id, randomUUID(), 'Prepare update', {
+    scope: { kind: 'chat', chatId: chat.id },
+    model: store.product.modelSnapshot(model.id),
+    history: [],
+    persona: '',
+    limits: { totalCalls: 4, helperCalls: 4 },
+  });
+  workspace.start(task.id, 'owner-1');
   const ports = createStorePorts(store);
-  const op = defineCommandOperation<{ saved: string; revision: number }>()({
-    name: 'test.importReceipt',
+
+  const bodySchema = z.strictObject({ label: nonBlank(50) });
+  const op = defineCommandOperation<{ revision: number; values: Record<string, string> }>()({
+    name: 'test.prepareReceipt',
     head: z.strictObject({
-      idempotencyKey: nonBlank(100),
+      chatId: nonBlank(120),
+      idempotencyKey: nonBlank(120),
       expectedRevision: z.int().nonnegative(),
     }),
-    body: z.strictObject({ label: nonBlank(50) }),
+    body: bodySchema,
   });
-  let currentRevision = 0;
   const prepare = vi.fn(async (_ports, _head, raw: Record<string, unknown>) => ({
     preparedLabel: String(raw.label).toUpperCase(),
   }));
   const afterCommit = vi.fn();
-  const command = defineCommand<Pick<AppPorts, 'tx' | 'receipt'>>()(op, {
-    receipt: { key: (head) => head.idempotencyKey },
-    prepare,
-    guard(_tx, _ports, head) {
-      assertRevision(currentRevision, head.expectedRevision);
-      return { before: currentRevision };
-    },
-    apply(_tx, _ports, _input, guarded, prepared) {
-      currentRevision = guarded.before + 1;
-      return { saved: prepared.preparedLabel, revision: currentRevision };
-    },
-    afterCommit,
-  });
+  const command = defineCommand<Pick<AppPorts, 'tx' | 'receipt' | 'chatGuard' | 'chatVariables'>>()(
+    op,
+    {
+      receipt: {
+        scope: (head) => head.chatId,
+        key: (head) => head.idempotencyKey,
+        serialize: (output) => ({ revision: output.revision }),
+        onReplay: (_tx, replayPorts, _record, head) => {
+          const state = replayPorts.chatVariables.read(head.chatId);
+          return { revision: state.revision, values: state.values };
+        },
+      },
+      prepare,
+      guard(tx, guardPorts, head) {
+        guardPorts.chatGuard.writableChat(tx, head.chatId);
+        const current = guardPorts.chatVariables.read(head.chatId);
+        assertRevision(current.revision, head.expectedRevision);
+        return { current };
+      },
+      apply(tx, applyPorts, input, guarded, prepared) {
+        const saved = applyPorts.chatVariables.save(tx, input.chatId, {
+          revision: guarded.current.revision + 1,
+          values: { ...guarded.current.values, prepared: prepared.preparedLabel },
+        });
+        return { revision: saved.revision, values: saved.values };
+      },
+      afterCommit,
+    }
+  );
 
-  const key = `receipt:${randomUUID()}`;
-  const first = await executeOperation(command, ports, {
-    idempotencyKey: key,
-    expectedRevision: 0,
-    label: 'alpha',
-  });
-  expect(first).toEqual({ saved: 'ALPHA', revision: 1 });
+  const makeTool = (injectIdempotencyKey: boolean) =>
+    defineHelperCommandTool({
+      name: 'test.prepare.update',
+      description: 'Test prepare command',
+      command,
+      schemaBody: bodySchema,
+      omitHeadKeys: injectIdempotencyKey ? ['chatId', 'idempotencyKey'] : ['chatId'],
+      injectIdempotencyKey,
+      formatResult(outcome, { chatId, receiptId, chatTitle }) {
+        return {
+          toolOutput: {
+            changed: !outcome.replayed,
+            revision: outcome.output.revision,
+            value: outcome.output.values.prepared ?? null,
+          },
+          taskResult: {
+            receiptId,
+            operation: 'test.prepare.update',
+            requestedTargets: 1,
+            targets: !outcome.replayed
+              ? [
+                  {
+                    kind: 'settings',
+                    id: chatId,
+                    title: chatTitle,
+                    revision: outcome.output.revision,
+                    setting: 'chat.variables',
+                  },
+                ]
+              : [],
+          },
+        };
+      },
+    });
+
+  const injectedTool = makeTool(true);
+  const receiptId = `${task.id}:prepare-1`;
+  const first = await executeHelperCommand(
+    injectedTool,
+    { store, workspace },
+    task,
+    receiptId,
+    chat.id,
+    { expectedRevision: 0, label: 'alpha' }
+  );
+  expect(first).toEqual({ changed: true, revision: 1, value: 'ALPHA' });
   expect(prepare).toHaveBeenCalledTimes(1);
   expect(afterCommit).toHaveBeenCalledTimes(1);
 
-  currentRevision = 5;
-
-  const replayed = await executeOperation(command, ports, {
-    label: 'alpha',
-    expectedRevision: 0,
-    idempotencyKey: key,
+  ports.tx.transaction((tx) => {
+    ports.chatVariables.save(tx, chat.id, { revision: 2, values: { prepared: 'LATER' } });
   });
-  expect(replayed).toEqual(first);
+
+  const replayedHelper = await executeHelperCommand(
+    injectedTool,
+    { store, workspace },
+    task,
+    receiptId,
+    chat.id,
+    { expectedRevision: 0, label: 'alpha' }
+  );
+  expect(replayedHelper).toEqual(first);
   expect(prepare).toHaveBeenCalledTimes(1);
   expect(afterCommit).toHaveBeenCalledTimes(1);
+
+  const explicitTool = makeTool(false);
+  const sharedKey = `explicit:${randomUUID()}`;
+  const firstExplicit = await executeHelperCommand(
+    explicitTool,
+    { store, workspace },
+    task,
+    `${task.id}:prepare-explicit-1`,
+    chat.id,
+    { idempotencyKey: sharedKey, expectedRevision: 2, label: 'beta' }
+  );
+  expect(firstExplicit).toEqual({ changed: true, revision: 3, value: 'BETA' });
+  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(afterCommit).toHaveBeenCalledTimes(2);
+
+  const replayedAcrossReceiptId = await executeHelperCommand(
+    explicitTool,
+    { store, workspace },
+    task,
+    `${task.id}:prepare-explicit-2`,
+    chat.id,
+    { idempotencyKey: sharedKey, expectedRevision: 2, label: 'beta' }
+  );
+  expect(replayedAcrossReceiptId).toEqual({ changed: false, revision: 3, value: 'BETA' });
+  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(afterCommit).toHaveBeenCalledTimes(2);
+
+  const aroundTxSpy = vi.fn();
+  const onInTx = vi.fn();
+  const replayedDirect = await executeOperation(
+    command,
+    ports,
+    { chatId: chat.id, idempotencyKey: sharedKey, expectedRevision: 2, label: 'beta' },
+    {
+      aroundTx: (run) => {
+        aroundTxSpy();
+        return run();
+      },
+      onInTx,
+    }
+  );
+  expect(replayedDirect).toEqual({ revision: 3, values: { prepared: 'BETA' } });
+  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(aroundTxSpy).toHaveBeenCalledTimes(1);
+  expect(onInTx).toHaveBeenCalledTimes(1);
+  expect(onInTx).toHaveBeenCalledWith(expect.anything(), {
+    replayed: true,
+    output: { revision: 3, values: { prepared: 'BETA' } },
+  });
+  expect(afterCommit).toHaveBeenCalledTimes(2);
 
   await expect(
-    executeOperation(command, ports, {
-      idempotencyKey: key,
-      expectedRevision: 0,
-      label: 'beta',
-    })
+    executeOperation(
+      command,
+      ports,
+      { chatId: chat.id, idempotencyKey: sharedKey, expectedRevision: 2, label: 'gamma' },
+      {
+        aroundTx: (run) => {
+          aroundTxSpy();
+          return run();
+        },
+        onInTx,
+      }
+    )
   ).rejects.toMatchObject({ statusCode: 409 });
-  expect(prepare).toHaveBeenCalledTimes(1);
+  expect(prepare).toHaveBeenCalledTimes(2);
 });
 
 test('HTTP and helper produce the same stored state and error codes for chat.variables.update', async () => {
@@ -604,6 +735,87 @@ test('HTTP and helper produce the same stored state and error codes for chat.gui
   expect(app.store.storyGuide.get(httpChat.id)).toEqual(app.store.storyGuide.get(helperChat.id));
 });
 
+test('helper tools refuse full-replacement inputs while preserving stored state and 409-before-400 order', async () => {
+  const app = await createAppFixture();
+  const chat = createFixtureChat(app.store, 'Helper narrowed body chat');
+  const source = completedSource(app.store, chat.id, 'Opening scene');
+  const ports = createStorePorts(app.store);
+
+  await executeOperation(updateChatVariablesCommand, ports, {
+    chatId: chat.id,
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+    idempotencyKey: randomUUID(),
+    set: { authored: 'keep' },
+  });
+  await executeOperation(updateStoryGuideCommand, ports, {
+    chatId: chat.id,
+    expectedRevision: 0,
+    changes: { enabled: true, work: 'Keep Chronicle' },
+  });
+
+  const helperRun = await runScriptedChatHelper(app.store, chat.id, [
+    helperCall('replace-vars', 'chat.variables.update', {
+      expectedRevision: 1,
+      expectedSourceHash: source.hash,
+      values: {},
+    }),
+    helperCall('stale-replace-vars', 'chat.variables.update', {
+      expectedRevision: 0,
+      expectedSourceHash: source.hash,
+      values: {},
+    }),
+    helperCall('replace-guide', 'chat.guide.update', {
+      expectedRevision: 1,
+      config: {
+        enabled: false,
+        work: '',
+        reference: '',
+        position: '',
+        followCanon: false,
+        webSearch: false,
+      },
+    }),
+    helperCall('stale-replace-guide', 'chat.guide.update', {
+      expectedRevision: 0,
+      config: {
+        enabled: false,
+        work: '',
+        reference: '',
+        position: '',
+        followCanon: false,
+        webSearch: false,
+      },
+    }),
+    helperDone,
+  ]);
+
+  expect(helperRun.finished('replace-vars')).toMatchObject({
+    denied: true,
+    errorCode: 'INVALID_REQUEST',
+  });
+  expect(helperRun.finished('stale-replace-vars')).toMatchObject({
+    denied: true,
+    errorCode: 'REVISION_CONFLICT',
+  });
+  expect(helperRun.finished('replace-guide')).toMatchObject({
+    denied: true,
+    errorCode: 'INVALID_REQUEST',
+  });
+  expect(helperRun.finished('stale-replace-guide')).toMatchObject({
+    denied: true,
+    errorCode: 'REVISION_CONFLICT',
+  });
+  expect(readChatVariables(app.store, chat.id)).toEqual({
+    revision: 1,
+    values: { authored: 'keep' },
+  });
+  expect(app.store.storyGuide.get(chat.id)).toMatchObject({
+    revision: 1,
+    config: { enabled: true, work: 'Keep Chronicle' },
+  });
+});
+
 test('helper command writes domain state, change card and receipt in one transaction and rolls all back on failure', async () => {
   const store = createStoreFixture();
   const model = selectFixtureModels(store);
@@ -726,7 +938,7 @@ test('Tx tokens cannot be forged or reused after a transaction closes', () => {
     store.storyGuide.save(forged, chat.id, 1, store.storyGuide.get(chat.id).config)
   ).toThrow('TRANSACTION_REQUIRED');
   expect(() =>
-    ports.receipt.save(forged, { adapter: 'import', key: 'k', digest: 'd' }, { result: {} })
+    ports.receipt.save(forged, { scope: chat.id, key: 'k', digest: 'd' }, { revision: 1 })
   ).toThrow('TRANSACTION_REQUIRED');
 
   let leaked!: Tx;
@@ -741,26 +953,56 @@ test('Tx tokens cannot be forged or reused after a transaction closes', () => {
   ).toThrow('TRANSACTION_REQUIRED');
 });
 
-test('outputPolicy always parses output even when checkOutputs is false, while type-only commands skip runtime output parsing', async () => {
+test('outputPolicy always rolls back domain writes and receipt on invalid output while type-only commands skip runtime parsing', async () => {
   const store = createStoreFixture();
+  const chat = createFixtureChat(store, 'Output rollback chat');
   const ports = createStorePorts(store);
-  const strictSecretOp = defineCommandOperation<{ ok: boolean }>()({
-    name: 'test.secret',
-    head: z.strictObject({ id: nonBlank(20) }),
+  const strictOp = defineCommandOperation<{ ok: boolean; revision: number }>()({
+    name: 'test.strictOutput',
+    head: z.strictObject({ chatId: nonBlank(120), idempotencyKey: nonBlank(120) }),
     body: z.strictObject({}),
-    output: z.strictObject({ ok: z.boolean() }),
+    output: z.strictObject({ ok: z.boolean(), revision: z.int().nonnegative() }),
     outputPolicy: 'always',
-    sensitive: true,
   });
-  const leakingCommand = defineCommand<Pick<AppPorts, 'tx'>>()(strictSecretOp, {
-    guard() {},
-    apply() {
-      return { ok: true, apiKey: 'secret-value' } as unknown as { ok: boolean };
-    },
-  });
+  const afterCommit = vi.fn();
+  const leakingCommand = defineCommand<Pick<AppPorts, 'tx' | 'receipt' | 'storyGuide'>>()(
+    strictOp,
+    {
+      receipt: {
+        scope: (head) => head.chatId,
+        key: (head) => head.idempotencyKey,
+        serialize: (output) => ({ revision: output.revision }),
+        onReplay: () => ({ ok: true, revision: 1 }),
+      },
+      guard() {},
+      apply(tx, applyPorts, input) {
+        const current = applyPorts.storyGuide.get(input.chatId);
+        applyPorts.storyGuide.save(tx, input.chatId, current.revision + 1, {
+          ...current.config,
+          enabled: true,
+          work: 'Must roll back',
+        });
+        return { ok: true, revision: 1, apiKey: 'secret-value' } as unknown as {
+          ok: boolean;
+          revision: number;
+        };
+      },
+      afterCommit,
+    }
+  );
   await expect(
-    executeOperation(leakingCommand, ports, { id: 'a' }, { checkOutputs: false })
-  ).rejects.toThrow();
+    executeOperation(
+      leakingCommand,
+      ports,
+      { chatId: chat.id, idempotencyKey: randomUUID() },
+      { checkOutputs: false }
+    )
+  ).rejects.toBeInstanceOf(z.ZodError);
+  expect(store.storyGuide.get(chat.id).revision).toBe(0);
+  expect(
+    store.db.prepare('SELECT COUNT(*) AS n FROM chat_variable_journal WHERE chat_id=?').get(chat.id)
+  ).toEqual({ n: 0 });
+  expect(afterCommit).not.toHaveBeenCalled();
 
   const typeOnlyOp = defineCommandOperation<{ ok: boolean }>()({
     name: 'test.typeOnly',
@@ -778,7 +1020,7 @@ test('outputPolicy always parses output even when checkOutputs is false, while t
   ).resolves.toEqual({ ok: true, extra: 'passed-through' });
 });
 
-test('type-level invariants reject body access in guard, async tx callbacks, and missing no-store or output schemas', () => {
+test('type-level invariants reject body access in guard, async tx callbacks, invalid helper schemaBody, and missing outputPolicy always schemas', () => {
   const op = chatSettingsOperations.writeVariables;
   const _checkGuardCannotReadBody = defineCommand<Pick<AppPorts, 'tx'>>()(op, {
     guard(_tx, _ports, head) {
@@ -810,25 +1052,17 @@ test('type-level invariants reject body access in guard, async tx callbacks, and
     },
   });
 
-  const sensitiveOp = defineCommandOperation<{ ok: boolean }>()({
-    name: 'test.sensitive',
-    head: z.strictObject({ id: nonBlank(20) }),
-    body: z.strictObject({}),
-    output: z.strictObject({ ok: z.boolean() }),
-    outputPolicy: 'always',
-    sensitive: true,
-  });
-  defineEndpoint<typeof sensitiveOp>()({
-    operation: 'test.sensitive',
-    method: 'POST',
-    path: '/sensitive/:id',
-    cache: 'no-store',
-  });
-  // @ts-expect-error sensitive operations require cache: 'no-store' on their endpoint
-  defineEndpoint<typeof sensitiveOp>()({
-    operation: 'test.sensitive',
-    method: 'POST',
-    path: '/sensitive-bad/:id',
+  defineHelperCommandTool({
+    name: 'test.badBody',
+    description: 'Mismatched schemaBody',
+    command: updateStoryGuideCommand,
+    // @ts-expect-error helper schemaBody must produce a valid body of the target command
+    schemaBody: z.strictObject({ unrelated: z.string() }),
+    omitHeadKeys: ['chatId'],
+    formatResult: () => ({
+      toolOutput: {},
+      taskResult: { receiptId: 'r', operation: 'test.badBody', requestedTargets: 0, targets: [] },
+    }),
   });
 
   // @ts-expect-error outputPolicy: 'always' requires an explicit Zod output schema

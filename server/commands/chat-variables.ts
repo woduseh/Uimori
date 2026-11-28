@@ -21,7 +21,6 @@ export const updateChatVariablesCommand = defineCommand<Ports>()(
   chatSettingsOperations.writeVariables,
   {
     receipt: {
-      adapter: 'chat-variables',
       scope: (head) => head.chatId,
       key: (head) => head.idempotencyKey,
       digest: (_head, raw) => {

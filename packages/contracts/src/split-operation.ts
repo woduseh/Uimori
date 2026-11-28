@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { OperationEffect, OutputPolicy, SplitOperation } from './endpoint.js';
+import type { OutputPolicy, SplitOperation } from './endpoint.js';
 
 function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
   Object.defineProperty(target, key, {
@@ -77,109 +77,16 @@ type OutputSpec<Out> =
   | { readonly outputPolicy?: 'test'; readonly output?: z.ZodType<Out> }
   | { readonly outputPolicy: 'always'; readonly output: z.ZodType<Out> };
 
-type SplitOperationFields<
-  N extends string,
-  H extends z.ZodObject<z.ZodRawShape>,
-  B extends z.ZodType,
-  S extends boolean,
-> = {
-  readonly name: N;
-  readonly head: H;
-  readonly body: B;
-  readonly sensitive?: S;
-  readonly effects?: readonly OperationEffect[];
-};
-
-export type SplitOperationSpec<
-  N extends string,
-  H extends z.ZodObject<z.ZodRawShape>,
-  B extends z.ZodType,
-  Out,
-  S extends boolean,
-> = SplitOperationFields<N, H, B, S> & {
-  readonly kind: 'command' | 'query';
-} & OutputSpec<Out>;
-
-function buildSplitOperation<
-  N extends string,
-  H extends z.ZodObject<z.ZodRawShape>,
-  B extends z.ZodType,
-  Out,
-  S extends boolean,
->(
-  kind: 'command' | 'query',
-  spec: SplitOperationFields<N, H, B, S> & OutputSpec<Out>
-): SplitOperation<N, H, B, Out, z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>, S> {
-  return {
-    kind,
+export function defineCommandOperation<Out>() {
+  return <const N extends string, H extends z.ZodObject<z.ZodRawShape>, B extends z.ZodType>(
+    spec: { readonly name: N; readonly head: H; readonly body: B } & OutputSpec<Out>
+  ): SplitOperation<N, H, B, Out> => ({
+    kind: 'command',
     name: spec.name,
     head: spec.head,
     body: spec.body,
     input: combineInput(spec.head, spec.body),
     ...(spec.output ? { output: spec.output } : {}),
     ...(spec.outputPolicy ? { outputPolicy: spec.outputPolicy as OutputPolicy } : {}),
-    ...(spec.sensitive ? { sensitive: true } : {}),
-    ...(spec.effects ? { effects: spec.effects } : {}),
-  } as SplitOperation<
-    N,
-    H,
-    B,
-    Out,
-    z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>,
-    S
-  >;
-}
-
-export function defineSplitOperation<Out>() {
-  return <
-    const N extends string,
-    H extends z.ZodObject<z.ZodRawShape>,
-    B extends z.ZodType,
-    const S extends boolean = false,
-  >(
-    spec: SplitOperationSpec<N, H, B, Out, S>
-  ): SplitOperation<
-    N,
-    H,
-    B,
-    Out,
-    z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>,
-    S
-  > => buildSplitOperation(spec.kind, spec);
-}
-
-export function defineCommandOperation<Out>() {
-  return <
-    const N extends string,
-    H extends z.ZodObject<z.ZodRawShape>,
-    B extends z.ZodType,
-    const S extends boolean = false,
-  >(
-    spec: SplitOperationFields<N, H, B, S> & OutputSpec<Out>
-  ): SplitOperation<
-    N,
-    H,
-    B,
-    Out,
-    z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>,
-    S
-  > => buildSplitOperation('command', spec);
-}
-
-export function defineQueryOperation<Out>() {
-  return <
-    const N extends string,
-    H extends z.ZodObject<z.ZodRawShape>,
-    B extends z.ZodType,
-    const S extends boolean = false,
-  >(
-    spec: SplitOperationFields<N, H, B, S> & OutputSpec<Out>
-  ): SplitOperation<
-    N,
-    H,
-    B,
-    Out,
-    z.ZodType<z.output<H> & z.output<B>, z.input<H> & z.input<B>>,
-    S
-  > => buildSplitOperation('query', spec);
+  });
 }
