@@ -219,7 +219,7 @@ const classTable = {
   'package-lock.json': ['biomeFile', 'fullSuiteInput'],
   'tsconfig.json': ['biomeFile', 'typeScriptInput', 'fullSuiteInput'],
   'tsconfig.web.json': ['biomeFile', 'typeScriptInput', 'fullSuiteInput'],
-  'biome.json': ['biomeFile', 'fullSuiteInput'],
+  'biome.json': ['biomeFile', 'fullSuiteInput', 'biomeConfigInput'],
   'vitest.config.ts': [
     'biomeFile',
     'typeScriptInput',

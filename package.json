@@ -18,12 +18,13 @@
     "reset:dev": "node scripts/reset-dev-data.mjs",
     "check": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "check:risu-lua": "node scripts/risu-lua-diff.mjs",
+    "biome:generate": "node scripts/generate-biome-config.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint . --error-on-warnings",
     "lint:fix": "biome lint --write . --error-on-warnings",
     "lint:architecture": "biome lint core packages runner server web --only=style/noRestrictedImports --error-on-warnings",
-    "quality": "biome check . --error-on-warnings && tsc --noEmit && tsc -p tsconfig.server.json --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs && node scripts/check-ui-message.mjs && node scripts/check-endpoint-calls.mjs && node scripts/check-script-imports.mjs",
+    "quality": "node scripts/generate-biome-config.mjs --check && biome check . --error-on-warnings && tsc --noEmit && tsc -p tsconfig.server.json --noEmit && node scripts/check-comments.mjs && node scripts/check-i18n.mjs && node scripts/check-ui-message.mjs && node scripts/check-endpoint-calls.mjs && node scripts/check-script-imports.mjs",
     "quality:full": "npm run quality && npm run test:tooling && npm test",
     "check:changed": "node scripts/check-changed.mjs",
     "check:unit-diff": "node scripts/check-unit-diff.mjs",
@@ -45,6 +46,7 @@
     "check:ui-message": "node scripts/check-ui-message.mjs",
     "check:endpoint-calls": "node scripts/check-endpoint-calls.mjs",
     "check:script-imports": "node scripts/check-script-imports.mjs",
+    "check:biome-config": "node scripts/generate-biome-config.mjs --check",
     "verify:snapshot": "node scripts/verify-snapshot-compat.mjs"
   },
   "dependencies": {
