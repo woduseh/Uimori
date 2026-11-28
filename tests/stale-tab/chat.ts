@@ -10,6 +10,8 @@ import {
   deleted,
   deletedChat,
   domainCases,
+  model,
+  preset,
   purged,
   removed,
   scene,
@@ -120,6 +122,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'botId',
       },
       {
         when: 'a persona another tab deleted',
@@ -132,6 +135,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: deleted,
+        target: 'persona.persona.id',
       },
     ],
   },
@@ -153,6 +157,7 @@ export const chatCases = domainCases('chat', {
           control: { botId: bot().id, title: 'New' },
         }),
         answer: conflict,
+        target: 'botId',
       },
       {
         when: 'a persona another tab deleted',
@@ -160,6 +165,7 @@ export const chatCases = domainCases('chat', {
           input: { botId: bot().id, title: 'New', defaultPersona: { id: removedPersona() } },
         }),
         answer: deleted,
+        target: 'defaultPersona.id',
       },
     ],
   },
@@ -176,6 +182,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'folderId',
       },
       {
         when: 'a bot another tab purged',
@@ -188,6 +195,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'botId',
       },
       {
         when: 'a persona another tab deleted',
@@ -201,6 +209,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: deleted,
+        target: 'defaultPersona.id',
       },
     ],
   },
@@ -216,6 +225,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'folderId',
       },
       {
         when: 'a bot another tab purged',
@@ -227,6 +237,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'botId',
       },
     ],
   },
@@ -248,6 +259,7 @@ export const chatCases = domainCases('chat', {
           control: { chatId: scene('Stale tab move').chat.id, expectedRevision: 1, folderId: null },
         }),
         answer: conflict,
+        target: 'chatId',
       },
       {
         when: 'a destination folder another tab deleted',
@@ -261,6 +273,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'folderId',
       },
       {
         when: 'an order anchor another tab deleted',
@@ -276,6 +289,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'beforeChatId',
       },
     ],
   },
@@ -328,6 +342,7 @@ export const chatCases = domainCases('chat', {
           },
         }),
         answer: conflict,
+        target: 'chatId',
         targetRevision: true,
       },
       {
@@ -367,6 +382,47 @@ export const chatCases = domainCases('chat', {
           return { input: save(gone), control: save(live) };
         },
         answer: deleted,
+        target: 'packageAttachments[].id',
+      },
+      {
+        when: 'a pinned main prompt preset another tab deleted',
+        arrange: () => {
+          const { chat } = scene('Stale tab pinned prompt');
+          const profile = profileOf(chat.id);
+          const gone = preset();
+          removed('prompt-preset', gone);
+          const live = preset();
+          const save = (mainPromptPresetId: string) => ({
+            chatId: chat.id,
+            expectedRevision: profile.revision,
+            image: profile.image,
+            pinned: { mainPromptPresetId },
+          });
+          return { input: save(gone.id), control: save(live.id) };
+        },
+        answer: deleted,
+        target: 'pinned.mainPromptPresetId',
+      },
+      {
+        when: 'a pinned main model another tab deleted',
+        arrange: () => {
+          const { chat } = scene('Stale tab pinned model');
+          const profile = profileOf(chat.id);
+          const gone = model();
+          removed('model', gone);
+          const live = model();
+          const save = (id: string) => ({
+            chatId: chat.id,
+            expectedRevision: profile.revision,
+            image: profile.image,
+            pinned: { mainModel: { id } },
+          });
+          return { input: save(gone.id), control: save(live.id) };
+        },
+        answer: { status: 400, code: 'MODEL_SELECTION_UNAVAILABLE' },
+        reason:
+          'Pinning a model another tab deleted shares MODEL_SELECTION_UNAVAILABLE with a disabled model or connection, matching the model workspace.',
+        target: 'pinned.mainModel.id',
       },
     ],
   },
@@ -399,6 +455,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'assetId',
       },
       {
         when: 'a chat another tab deleted',
@@ -411,6 +468,7 @@ export const chatCases = domainCases('chat', {
           };
         },
         answer: conflict,
+        target: 'chatId',
       },
     ],
   },
@@ -423,11 +481,13 @@ export const chatCases = domainCases('chat', {
           return { input: { chatId, assetId: gone.id } };
         },
         answer: conflict,
+        target: 'assetId',
       },
       {
         when: 'a chat another tab deleted',
         arrange: () => ({ input: assetOfDeletedChat() }),
         answer: conflict,
+        target: 'chatId',
       },
     ],
   },

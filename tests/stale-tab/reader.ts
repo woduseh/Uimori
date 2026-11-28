@@ -87,6 +87,7 @@ export const readerCases = domainCases('reader', {
           return { input: { chatId: gone.chatId, sourceId: gone.sourceId } };
         },
         answer: deleted,
+        target: 'chatId',
       },
       {
         when: 'a scene another tab deleted',
@@ -95,6 +96,7 @@ export const readerCases = domainCases('reader', {
           return { input: { chatId, sourceId } };
         },
         answer: deleted,
+        target: 'sourceId',
       },
     ],
   },
@@ -115,6 +117,7 @@ export const readerCases = domainCases('reader', {
           };
         },
         answer: conflict,
+        target: 'chatId',
         targetRevision: true,
       },
       {
@@ -132,6 +135,7 @@ export const readerCases = domainCases('reader', {
           };
         },
         answer: conflict,
+        target: 'sourceId',
         targetRevision: true,
       },
     ],
@@ -178,7 +182,12 @@ export const readerCases = domainCases('reader', {
   translateInput: { cases: [chatGone({ text: 'Hello.', targetLanguage: 'ko' })] },
   preflightChatContent: {
     cases: [
-      chatGone({ role: 'translation', text: 'Hello.' }),
+      { ...chatGone({ role: 'translation', text: 'Hello.' }), target: 'chatId' },
+      {
+        ...chatGone({ role: 'selection-revision', text: 'Hello.', selection: 'Hello.' }),
+        when: 'a chat another tab deleted during selection-revision preflight',
+        target: 'chatId',
+      },
       {
         when: 'a run another tab deleted with its scene',
         arrange: () => {
@@ -186,11 +195,20 @@ export const readerCases = domainCases('reader', {
           return { input: { chatId, role: 'main', text: 'Hello.', retryRunId: runId } };
         },
         answer: deleted,
+        target: 'retryRunId',
       },
     ],
   },
   preflightSourceContent: { cases: [sourceGone({})] },
-  previewPrompt: { cases: [chatGone({ role: 'main', request: 'Continue.' })] },
+  previewPrompt: {
+    cases: [
+      chatGone({ role: 'main', request: 'Continue.' }),
+      {
+        ...chatGone({ role: 'translation', request: 'Continue.' }),
+        when: 'a chat another tab deleted during translation prompt preview',
+      },
+    ],
+  },
   previewRequest: { cases: [chatGone({ request: 'Continue.' })] },
   readResponseStream: {
     cases: [
@@ -216,6 +234,48 @@ export const readerCases = domainCases('reader', {
           },
         }),
         answer: conflict,
+        target: 'sourceId',
+        targetRevision: true,
+      },
+      {
+        when: 'a translation job another tab replaced',
+        arrange: () => {
+          const { chat, source } = scene('Stale tab translation images');
+          const currentJobId = randomUUID();
+          const now = new Date().toISOString();
+          store()
+            .db.prepare(
+              `INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,created_at,updated_at)
+              VALUES(?,?,?,?,'translation','completed',1,?,?,?)`
+            )
+            .run(currentJobId, chat.id, source.id, source.hash, '{}', now, now);
+          store()
+            .db.prepare(
+              'INSERT INTO job_results(job_id,generation,result,created_at) VALUES(?,1,?,?)'
+            )
+            .run(
+              currentJobId,
+              JSON.stringify({
+                mock: false,
+                text: 'Translated scene.',
+                sourceRevision: source.id,
+                sourceHash: source.hash,
+              }),
+              now
+            );
+          return {
+            input: {
+              sourceId: source.id,
+              target: 'translation',
+              expectedSourceHash: source.hash,
+              expectedRevision: 0,
+              expectedTranslationJobId: randomUUID(),
+              expectedTranslationRevision: 1,
+            },
+          };
+        },
+        answer: conflict,
+        target: 'expectedTranslationJobId',
         targetRevision: true,
       },
     ],

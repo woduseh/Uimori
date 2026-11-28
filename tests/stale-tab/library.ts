@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { allEndpoints } from '#contracts';
-import { bot, conflict, domainCases, read, removed, singletonExemption } from './harness.js';
+import {
+  bot,
+  conflict,
+  domainCases,
+  preset,
+  read,
+  removed,
+  singletonExemption,
+} from './harness.js';
 
 const organization = () =>
   read<{ revision: number; folders: { id: string; title: string }[] }>(
@@ -34,6 +42,7 @@ export const libraryCases = domainCases('library', {
           return { input: { ...rename, id: gone }, control: { ...rename, id: kept[0] } };
         },
         answer: conflict,
+        target: 'id',
       },
       {
         when: 'an order anchor another tab deleted',
@@ -46,6 +55,7 @@ export const libraryCases = domainCases('library', {
           };
         },
         answer: conflict,
+        target: 'beforeFolderId',
       },
     ],
   },
@@ -79,6 +89,7 @@ export const libraryCases = domainCases('library', {
           return { input: { ...move, folderId: gone }, control: { ...move, folderId: kept[0] } };
         },
         answer: conflict,
+        target: 'folderId',
       },
       {
         when: 'an item another tab deleted',
@@ -97,6 +108,26 @@ export const libraryCases = domainCases('library', {
           };
         },
         answer: conflict,
+        target: 'items[].id',
+      },
+      {
+        when: 'a prompt preset another tab deleted',
+        arrange: async () => {
+          const live = preset();
+          const gone = preset();
+          removed('prompt-preset', gone);
+          const move = {
+            expectedRevision: (await organization()).revision,
+            category: 'prompts',
+            folderId: null,
+          };
+          return {
+            input: { ...move, items: [{ kind: 'prompt-preset', id: gone.id }] },
+            control: { ...move, items: [{ kind: 'prompt-preset', id: live.id }] },
+          };
+        },
+        answer: conflict,
+        target: 'items[].id',
       },
     ],
   },

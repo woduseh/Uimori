@@ -137,6 +137,7 @@ export const transferCases = domainCases('transfer', {
         },
         answer: expired,
         reason: expiredReason,
+        target: 'preparedId',
       },
       {
         when: 'a local model binding naming a model another tab deleted',
@@ -157,6 +158,7 @@ export const transferCases = domainCases('transfer', {
         },
         answer: deletedModel,
         reason: modelReason,
+        target: 'modelBindings[].model.id',
       },
     ],
   },

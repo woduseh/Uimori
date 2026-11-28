@@ -20,9 +20,16 @@ export type Case = {
   arrange: () => Probe | Promise<Probe>;
   answer: Answer;
   reason?: string;
+  target?: string;
   targetRevision?: true;
 };
-export type Entry = { cases: Case[] } | { exempt: string };
+export type Entry =
+  | {
+      cases: Case[];
+      exemptTargets?: Record<string, string>;
+      exemptBranches?: Record<string, string>;
+    }
+  | { exempt: string };
 export type DomainCases<D extends Domain = Domain> = {
   domain: D;
   entries: Partial<Record<keyof (typeof allEndpoints)[D] & string, Entry>>;

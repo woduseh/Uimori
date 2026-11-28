@@ -1,6 +1,6 @@
 import { saveResource } from '../../server/resource-service.js';
 import { fixtureBotInput } from '../fixtures/chat.js';
-import { bot, conflict, deleted, domainCases, purged, removed, store } from './harness.js';
+import { bot, conflict, deleted, domainCases, preset, purged, removed, store } from './harness.js';
 
 const savedBot = () => {
   const item = bot();
@@ -63,7 +63,7 @@ export const resourceEditorsCases = domainCases('resourceEditors', {
   cloneResource: {
     cases: [
       {
-        when: 'a source another tab deleted',
+        when: 'a content source another tab deleted',
         arrange: () => {
           const item = bot();
           return {
@@ -72,6 +72,23 @@ export const resourceEditorsCases = domainCases('resourceEditors', {
               sourceId: item.id,
               expectedSourceRevision: removed('content', item),
               title: 'Copy',
+            },
+          };
+        },
+        answer: conflict,
+        targetRevision: true,
+      },
+      {
+        when: 'a prompt preset source another tab deleted',
+        arrange: () => {
+          const item = preset();
+          return {
+            input: {
+              kind: 'prompt-preset',
+              sourceId: item.id,
+              expectedSourceRevision: removed('prompt-preset', item),
+              title: 'Copy',
+              syncNativeName: true,
             },
           };
         },

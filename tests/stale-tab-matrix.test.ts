@@ -18,6 +18,7 @@ import {
   type Domain,
   type DomainCases,
   type Entry,
+  type Input,
   startStaleTabApp,
   stopStaleTabApp,
 } from './stale-tab/harness.js';
@@ -27,6 +28,7 @@ import { promptsCases } from './stale-tab/prompts.js';
 import { providersCases } from './stale-tab/providers.js';
 import { readerCases } from './stale-tab/reader.js';
 import { resourceEditorsCases } from './stale-tab/resource-editors.js';
+import { analyzeSchema, revisionFields, targetPaths, valuesAtPath } from './stale-tab/schema.js';
 import { transferCases } from './stale-tab/transfer.js';
 import { translationCases } from './stale-tab/translation.js';
 
@@ -53,46 +55,11 @@ const matrix: Record<string, Entry> = Object.fromEntries(
   )
 );
 
-const revisionField = /^expected[A-Z]\w*$|^\w+Revision$/u;
-const targetField = /^(?:id|\w+Id)$/u;
 const same = (left: Answer, right: Answer) =>
   left.status === right.status && left.code === right.code;
 
 beforeAll(startStaleTabApp);
 afterAll(stopStaleTabApp);
-
-function fieldNames(schema: z.ZodType): string[] {
-  const found = new Set<string>();
-  const seen = new Set<unknown>();
-  const visit = (value: unknown) => {
-    if (!value || typeof value !== 'object' || seen.has(value)) return;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    const internals = (value as { _zod?: { def?: Record<string, unknown>; innerType?: unknown } })
-      ._zod;
-    const def = internals?.def;
-    if (!def) {
-      for (const child of Object.values(value)) visit(child);
-      return;
-    }
-    if (def.type === 'lazy') visit(internals.innerType);
-    if (def.type === 'object')
-      for (const [key, child] of Object.entries(def.shape as object)) {
-        found.add(key);
-        visit(child);
-      }
-    for (const [key, child] of Object.entries(def)) if (key !== 'shape') visit(child);
-  };
-  visit(schema);
-  return [...found].sort();
-}
-const revisionFields = (schema: z.ZodType) =>
-  fieldNames(schema).filter((name) => revisionField.test(name));
-const targetFields = (schema: z.ZodType) =>
-  fieldNames(schema).filter((name) => targetField.test(name));
 
 const endpointEntries = Object.entries(allEndpoints).flatMap(([domain, endpoints]) =>
   Object.entries(endpoints).map(([key, endpoint]) => ({
@@ -107,6 +74,14 @@ const inputOf = (name: string) => {
   const { domain, endpoint } = endpointEntries.find((item) => item.name === name)!;
   return operationFor(domain, endpoint.operation)!.input;
 };
+const analysisByName = new Map(
+  endpointEntries.map(({ name }) => [name, analyzeSchema(inputOf(name))])
+);
+const analysisOf = (name: string) => analysisByName.get(name)!;
+const requiredBranchesOf = (name: string) =>
+  analysisOf(name).branches.filter(
+    (branch) => branch.revisions.length > 0 || branch.targets.length > 0
+  );
 
 test('every endpoint names an operation of its own domain and every operation is served', () => {
   expect(Object.keys(allOperations).sort()).toEqual(Object.keys(allEndpoints).sort());
@@ -138,8 +113,9 @@ test('every endpoint and operation set the contracts export is in the registries
   expect(Object.keys(allEndpoints)).toHaveLength(domains.length);
 });
 
-test('the field walker reads through unions, refinements and nested objects', () => {
-  const { appearance, library, resourceEditors, prompts } = allOperations;
+test('the schema walker collects nested targets, reused schemas and union branches', () => {
+  const { appearance, chat, library, prompts, reader, resourceEditors, transfer } = allOperations;
+  const personal = allOperations['personal-workspace'];
   expect(revisionFields(appearance.selectTheme.input)).toEqual(['expectedRevision']);
   expect(revisionFields(library.moveItems.input)).toEqual(['expectedRevision']);
   expect(revisionFields(library.updateFolder.input)).toEqual(['expectedRevision']);
@@ -157,19 +133,68 @@ test('the field walker reads through unions, refinements and nested objects', ()
         expectation: z.string(),
       })
     )
-  ).toEqual(['expectedOrder', 'workspaceRevision']);
-  expect(targetFields(allOperations['personal-workspace'].addBookmark.input)).toEqual([
+  ).toEqual(['expectedOrder', 'nested.workspaceRevision']);
+  expect(targetPaths(personal.addBookmark.input)).toEqual([
     'chatId',
     'id',
-    'sourceId',
+    'target.chatId',
+    'target.sourceId',
   ]);
+  expect(targetPaths(personal.readReadingPositions.input)).toEqual(['chatId']);
+  expect(targetPaths(prompts.updateModelWorkspace.input)).toEqual([
+    'contextModel.id',
+    'helperModel.id',
+    'routes.main.id',
+    'routes.translation.id',
+    'scriptModel.id',
+    'titleModel.id',
+  ]);
+  expect(targetPaths(transfer.applyArchive.input)).toEqual([
+    'modelBindings[].model.id',
+    'preparedId',
+  ]);
+  expect(analyzeSchema(appearance.selectTheme.input).branches.map((b) => b.label)).toEqual([
+    'dimension=theme, scope=global',
+    'dimension=theme, scope=bot',
+    'dimension=theme, scope=chat',
+    'dimension=palette, scope=global',
+    'dimension=palette, scope=bot',
+    'dimension=palette, scope=chat',
+    'dimension=storyUi',
+  ]);
+  expect(analyzeSchema(library.moveItems.input).branches.map((b) => b.label)).toEqual([
+    'category=bot|persona|module',
+    'category=prompts',
+  ]);
+  expect(analyzeSchema(reader.readResponseStream.input).branches).toEqual([]);
+  expect(analyzeSchema(chat.updateGenerationDefaults.input).branches).toEqual([]);
+  expect(
+    analyzeSchema(personal.searchManuscripts.input)
+      .branches.filter((branch) => branch.revisions.length > 0 || branch.targets.length > 0)
+      .map((branch) => branch.label)
+  ).toEqual(['scope=chat', 'scope=bot']);
+  expect(
+    analyzeSchema(transfer.applyFile.input)
+      .branches.filter((branch) => branch.revisions.length > 0 || branch.targets.length > 0)
+      .map((branch) => branch.label)
+  ).toEqual(['modelBindings[].mode=local']);
+  const recursive: z.ZodType = z.lazy(() =>
+    z.strictObject({ id: z.string(), child: recursive.optional() })
+  );
+  expect(targetPaths(recursive)).toEqual(['id']);
+  expect(
+    valuesAtPath(
+      { modelBindings: [{ model: { id: 'a' } }, { model: { id: 'b' } }] },
+      'modelBindings[].model.id'
+    )
+  ).toEqual(['a', 'b']);
 });
 
-test('every endpoint that carries a revision or names a target has a stale-tab matrix entry', () => {
+test('every endpoint that carries a revision or names a target has a stale-tab matrix entry and target coverage', () => {
   const missing = endpointEntries
     .filter(({ name }) => {
-      const input = inputOf(name);
-      return revisionFields(input).length > 0 || targetFields(input).length > 0;
+      const { revisions, targets } = analysisOf(name);
+      return revisions.length > 0 || targets.length > 0;
     })
     .map(({ name }) => name)
     .filter((name) => !Object.hasOwn(matrix, name));
@@ -181,28 +206,111 @@ test('every endpoint that carries a revision or names a target has a stale-tab m
   expect(domains, 'one case file per domain').toEqual([...new Set(domains)]);
   const known = new Set(endpointEntries.map(({ name }) => name));
   expect(Object.keys(matrix).filter((name) => !known.has(name))).toEqual([]);
+
+  const missingTargets: string[] = [];
   for (const [name, entry] of Object.entries(matrix)) {
+    const { endpoint } = endpointEntries.find((item) => item.name === name)!;
+    const { revisions, targets } = analysisOf(name);
     if ('exempt' in entry) {
-      expect(entry.exempt.length, name).toBeGreaterThan(20);
+      expect(
+        revisions.length > 0 || targets.length > 0,
+        `${name} has no revision or target field; remove the stale exemption`
+      ).toBe(true);
+      expect(entry.exempt.trim().length, name).toBeGreaterThan(20);
       continue;
     }
+    expect(entry.cases.length, `${name} needs at least one case`).toBeGreaterThan(0);
     for (const item of entry.cases) {
       const label = `${name} with ${item.when}`;
       expect(isAppErrorCode(item.answer.code), `${label}: ${item.answer.code}`).toBe(true);
-      if (!same(item.answer, conflict) && !same(item.answer, deleted))
-        expect(item.reason, `${label} answers ${item.answer.code} and needs a reason`).toBeTruthy();
+      const defaultAnswer =
+        endpoint.method === 'GET'
+          ? same(item.answer, deleted)
+          : same(item.answer, conflict) || same(item.answer, deleted);
+      if (!defaultAnswer)
+        expect(
+          item.reason?.trim().length ?? 0,
+          `${label} (${endpoint.method}) answers ${item.answer.code} and needs a reason of 20+ characters`
+        ).toBeGreaterThanOrEqual(20);
+      if (item.target !== undefined)
+        expect(
+          targets.includes(item.target),
+          `${label} names unknown target ${item.target} (known: ${targets.join(', ') || 'none'})`
+        ).toBe(true);
+    }
+
+    const exemptTargets = entry.exemptTargets ?? {};
+    for (const [target, reason] of Object.entries(exemptTargets)) {
+      expect(
+        targets.length >= 2 && targets.includes(target),
+        `${name} exemptTargets names unknown or unneeded target ${target}`
+      ).toBe(true);
+      expect(
+        reason.trim().length,
+        `${name} exemptTargets.${target} needs a reason of 20+ characters`
+      ).toBeGreaterThanOrEqual(20);
+    }
+
+    const requiredBranchLabels = new Set(requiredBranchesOf(name).map((branch) => branch.label));
+    for (const [branch, reason] of Object.entries(entry.exemptBranches ?? {})) {
+      expect(
+        requiredBranchLabels.has(branch),
+        `${name} exemptBranches names unknown or non-target branch ${branch}`
+      ).toBe(true);
+      expect(
+        reason.trim().length,
+        `${name} exemptBranches[${branch}] needs a reason of 20+ characters`
+      ).toBeGreaterThanOrEqual(20);
+    }
+
+    if (targets.length >= 2) {
+      const covered = new Set(entry.cases.flatMap((item) => (item.target ? [item.target] : [])));
+      for (const target of targets) {
+        if (covered.has(target) && Object.hasOwn(exemptTargets, target))
+          expect.fail(
+            `${name} target ${target} is both covered by a case and listed in exemptTargets`
+          );
+        if (!covered.has(target) && !Object.hasOwn(exemptTargets, target))
+          missingTargets.push(`${name} target ${target}`);
+      }
     }
   }
+  expect(
+    missingTargets,
+    'Add a case with target: "<path>" or an exemptTargets entry (20+ chars) for each missing target listed'
+  ).toEqual([]);
 });
 
 const probes = Object.entries(matrix).flatMap(([name, entry]) =>
   'exempt' in entry ? [] : entry.cases.map((item) => ({ name, ...item }))
 );
+const observedInputs = new Map<string, Input[]>();
 
 test.each(probes)('$name with $when answers $answer.code', async (item) => {
   const { endpoint } = endpointEntries.find((entry) => entry.name === item.name)!;
-  const revisions = revisionFields(inputOf(item.name));
+  const revisions = analysisOf(item.name).revisions;
   const { input, control } = await item.arrange();
+  const list = observedInputs.get(item.name) ?? [];
+  list.push(input);
+  observedInputs.set(item.name, list);
+  if (item.target) {
+    const probed = valuesAtPath(input, item.target);
+    expect(
+      probed.some((value) => value !== undefined && value !== null),
+      `${item.name} target ${item.target} must be populated in input`
+    ).toBe(true);
+    if (control) {
+      const live = valuesAtPath(control, item.target);
+      expect(
+        live.some((value) => value !== undefined && value !== null),
+        `${item.name} target ${item.target} must be populated in control`
+      ).toBe(true);
+      expect(
+        probed,
+        `${item.name} target ${item.target} must differ between input and control`
+      ).not.toEqual(live);
+    }
+  }
   if (revisions.length && !item.targetRevision)
     expect(control, 'a target reached through a shared revision needs a control').toBeDefined();
   const sent = Object.keys(input).filter((key) => revisions.includes(key));
@@ -230,4 +338,32 @@ test.each(probes)('$name with $when answers $answer.code', async (item) => {
       200
     );
   }
+});
+
+test('every endpoint covers every union branch carrying a revision or target', async () => {
+  const missingBranches: string[] = [];
+  for (const [name, entry] of Object.entries(matrix)) {
+    if ('exempt' in entry) continue;
+    const branches = requiredBranchesOf(name);
+    if (!branches.length) continue;
+    const exemptBranches = entry.exemptBranches ?? {};
+    let inputs = observedInputs.get(name);
+    if (!inputs) {
+      inputs = [];
+      for (const item of entry.cases) inputs.push((await item.arrange()).input);
+    }
+    for (const branch of branches) {
+      const covered = inputs.some((input) => branch.matches(input));
+      if (covered && Object.hasOwn(exemptBranches, branch.label))
+        expect.fail(
+          `${name} branch ${branch.label} is both covered by a case and listed in exemptBranches`
+        );
+      if (!covered && !Object.hasOwn(exemptBranches, branch.label))
+        missingBranches.push(`${name} branch ${branch.label}`);
+    }
+  }
+  expect(
+    missingBranches,
+    'Add a case whose input matches each branch listed, or list it in exemptBranches with a reason of 20+ characters'
+  ).toEqual([]);
 });

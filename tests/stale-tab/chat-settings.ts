@@ -91,6 +91,9 @@ function orphanNote(id: string) {
   return note;
 }
 
+const operationIdExemption =
+  'operationId is a client-generated idempotency key for chat option writes, like idempotencyKey, not a stored resource target.';
+
 export const chatSettingsCases = domainCases('chat-settings', {
   readOptions: { cases: [readDeleted] },
   fixOptions: {
@@ -99,8 +102,10 @@ export const chatSettingsCases = domainCases('chat-settings', {
         when: 'a chat another tab deleted and values no option defines',
         arrange: () => optionWrite({ undefinedOption: 'x' }, {}),
         answer: conflict,
+        target: 'chatId',
       },
     ],
+    exemptTargets: { operationId: operationIdExemption },
   },
   stageOptions: {
     cases: [
@@ -108,8 +113,10 @@ export const chatSettingsCases = domainCases('chat-settings', {
         when: 'a chat another tab deleted and values no option defines',
         arrange: () => optionWrite({ undefinedOption: 'x' }, { tone: 'warm' }),
         answer: conflict,
+        target: 'chatId',
       },
     ],
+    exemptTargets: { operationId: operationIdExemption },
   },
   cancelStagedOptions: {
     cases: [
@@ -127,8 +134,33 @@ export const chatSettingsCases = domainCases('chat-settings', {
           };
         },
         answer: conflict,
+        target: 'chatId',
+      },
+      {
+        when: 'a staged option another tab replaced',
+        arrange: async () => {
+          withOptionControl();
+          const live = chatId('Stale tab replaced pending option');
+          const { binding } = await optionState(live);
+          const first = await staged(live, binding);
+          const replaced = await read<OptionState>(endpoints.stageOptions, {
+            chatId: live,
+            expectedRevision: first.revision,
+            operationId: randomUUID(),
+            binding,
+            values: { tone: 'sharp' },
+          });
+          const request = { chatId: live, expectedRevision: replaced.revision };
+          return {
+            input: { ...request, pendingId: first.pending[0]!.id, operationId: randomUUID() },
+            control: { ...request, pendingId: replaced.pending[0]!.id, operationId: randomUUID() },
+          };
+        },
+        answer: conflict,
+        target: 'pendingId',
       },
     ],
+    exemptTargets: { operationId: operationIdExemption },
   },
   readVariables: { cases: [readDeleted] },
   writeVariables: {
@@ -200,6 +232,47 @@ export const chatSettingsCases = domainCases('chat-settings', {
           };
         },
         answer: conflict,
+        target: 'chatId',
+      },
+      {
+        when: 'an orphan note another tab already retired',
+        arrange: async () => {
+          const live = chatId('Stale tab retired orphan memory');
+          const gone = orphanNote(live);
+          const kept = orphanNote(live);
+          await read(endpoints.applyOrphanMemory, {
+            chatId: live,
+            kind: 'note',
+            action: 'retire',
+            entryId: gone,
+            expectedRevision: 0,
+            expectedLoreRevision: 0,
+            expectedHeadRevision: null,
+            expectedHeadHash: null,
+            idempotencyKey: randomUUID(),
+          });
+          const current = await read<{
+            revision: number;
+            loreRevision: number;
+            headRevision: string | null;
+            headHash: string | null;
+          }>(endpoints.readOrphanMemory, { chatId: live });
+          const request = {
+            chatId: live,
+            kind: 'note',
+            action: 'retire',
+            expectedRevision: current.revision,
+            expectedLoreRevision: current.loreRevision,
+            expectedHeadRevision: current.headRevision,
+            expectedHeadHash: current.headHash,
+          };
+          return {
+            input: { ...request, entryId: gone, idempotencyKey: randomUUID() },
+            control: { ...request, entryId: kept, idempotencyKey: randomUUID() },
+          };
+        },
+        answer: conflict,
+        target: 'entryId',
       },
     ],
   },
