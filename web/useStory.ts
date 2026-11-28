@@ -37,7 +37,7 @@ import { markArrivalWhenShown } from './arrival-mark.js';
 import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import { liveStream, watchLive } from './live-stream.js';
-import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { resourceFrame, promptWorkspaceFrame } from './live-frames.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 import { type ReaderResponse, restoreReaderBlockText } from './reader-blocks.js';
 import {
@@ -573,7 +573,7 @@ export function useStory() {
     addEventListener('storage', onStorage);
     addEventListener('focus', refreshLibrary);
     const live = watchLive({
-      match: (frame) => helperDataFrame(frame) || promptWorkspaceFrame(frame),
+      match: (frame) => resourceFrame(frame) || promptWorkspaceFrame(frame),
       refresh: () => loadLibrary().catch(setLibraryFailure),
       minIntervalMs: helperRefreshSpacing,
     });

@@ -102,7 +102,8 @@ export type VolatileChange =
   | 'activity'
   | 'themes'
   | 'fonts'
-  | 'illustration-presets';
+  | 'illustration-presets'
+  | 'resources';
 type Row = Record<string, any>;
 const CHAT_SELECT = `SELECT c.*,
   COALESCE((SELECT MAX(seq) FROM events WHERE chat_id=c.id AND kind IN ('chat.title.manual','chat.title.generated')),0) AS title_revision,
@@ -127,6 +128,7 @@ export class Store {
   private readonly ownership: DatabaseSync;
   private changeListener?: (chatId: string | null) => void;
   private invalidationListener?: (name: VolatileChange) => void;
+  private pendingInvalidations: Set<VolatileChange> | null = null;
   readonly path: string;
   constructor(path: string) {
     this.path = path;
@@ -207,6 +209,8 @@ export class Store {
   transaction<T>(fn: () => SynchronousResult<T>): SynchronousResult<T> {
     if (this.db.isTransaction) {
       const savepoint = `nested_${randomUUID().replaceAll('-', '')}`;
+      const pending = this.pendingInvalidations;
+      const before = pending ? new Set(pending) : null;
       this.db.exec(`SAVEPOINT ${savepoint}`);
       try {
         const value = fn();
@@ -214,18 +218,28 @@ export class Store {
         return value;
       } catch (error) {
         this.db.exec(`ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`);
+        if (pending && before) {
+          pending.clear();
+          for (const name of before) pending.add(name);
+        }
         throw error;
       }
     }
     this.db.exec('BEGIN IMMEDIATE');
+    const pending = new Set<VolatileChange>();
+    this.pendingInvalidations = pending;
+    let value: SynchronousResult<T>;
     try {
-      const value = fn();
+      value = fn();
       this.db.exec('COMMIT');
-      return value;
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
+    } finally {
+      this.pendingInvalidations = null;
     }
+    for (const name of pending) this.invalidationListener?.(name);
+    return value;
   }
   observeChanges(listener: (chatId: string | null) => void) {
     this.changeListener = listener;
@@ -237,7 +251,8 @@ export class Store {
     this.invalidationListener = listener;
   }
   invalidated(name: VolatileChange) {
-    this.invalidationListener?.(name);
+    if (this.pendingInvalidations) this.pendingInvalidations.add(name);
+    else this.invalidationListener?.(name);
   }
   event(chatId: string, kind: string, entityId: string, options: { notify?: boolean } = {}) {
     const write = () => {

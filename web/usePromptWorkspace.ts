@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { PromptWorkspace } from '../core/product.js';
 import { promptEndpoints } from '#contracts';
 import { callEndpoint, libraryChangedKey } from './api.js';
-import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { resourceFrame, promptWorkspaceFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 import { createPromptWorkspaceStore } from './prompt-workspace-store.js';
@@ -15,7 +15,7 @@ const store = createPromptWorkspaceStore({
       if (event.key === libraryChangedKey) reload();
     };
     const live = watchLive({
-      match: (frame) => promptWorkspaceFrame(frame) || helperDataFrame(frame),
+      match: (frame) => promptWorkspaceFrame(frame) || resourceFrame(frame),
       refresh: async () => reload(),
       minIntervalMs: helperRefreshSpacing,
     });

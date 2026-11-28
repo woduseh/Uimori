@@ -270,8 +270,10 @@ export class ProductStore {
         latest: true,
       });
     if (!prior) this.store.libraryOrganization.register(kind, result.id, result.kind);
-    if (kind === 'content' || kind === 'prompt-preset')
+    if (kind === 'content' || kind === 'prompt-preset') {
       recordContentProfileEvents(this.db, kind, result.id);
+      this.store.invalidated('resources');
+    }
     return result;
   }
   content(value: unknown, id?: string, inTransaction = false, createId?: string) {

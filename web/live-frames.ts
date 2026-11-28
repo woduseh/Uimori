@@ -34,6 +34,9 @@ export const helperSessionsFrame = (
 export const helperDataFrame = (frame: LiveFrame) =>
   frame.event === 'helper' && (finishedTask.test(frame.kind) || helperDataKinds.has(frame.kind));
 
+export const resourceFrame = (frame: LiveFrame) =>
+  helperDataFrame(frame) || (frame.event === 'invalidate' && frame.name === 'resources');
+
 export const presentationFrame =
   (catalog: 'themes' | 'illustration-presets' | 'fonts') => (frame: LiveFrame) =>
     frame.event === 'invalidate' && frame.name === catalog;

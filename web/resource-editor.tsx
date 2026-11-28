@@ -32,7 +32,7 @@ import type { ResourceEditorSession, EditorState } from './resource-editor-sessi
 import { libraryChangedKey } from './api.js';
 import { useShortcut } from './shortcuts.js';
 import './resource-editor.css';
-import { helperDataFrame, promptWorkspaceFrame } from './live-frames.js';
+import { promptWorkspaceFrame, resourceFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 
@@ -211,15 +211,13 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
         if (reopening) return session.refresh();
       })
       .catch(() => {});
-    const refresh = () => {
-      if (!session.snapshot().saving) void session.refresh().catch(() => {});
-    };
+    const refresh = () => void session.refresh().catch(() => {});
     const storage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) refresh();
     };
     const workspace = session.options.kind === 'prompt-workspace';
     const live = watchLive({
-      match: (frame) => helperDataFrame(frame) || (workspace && promptWorkspaceFrame(frame)),
+      match: (frame) => resourceFrame(frame) || (workspace && promptWorkspaceFrame(frame)),
       refresh: async () => refresh(),
       minIntervalMs: helperRefreshSpacing,
     });

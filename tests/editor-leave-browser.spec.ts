@@ -21,7 +21,7 @@ const flows = [
   { flow: 'global-navigation', viewport: { width: 2560, height: 1440 } },
 ] as const;
 
-test(`DECISION resource conflict review and failed recovery preserve input at ${compact.width}px`, async ({
+test(`DECISION resource conflict appears live, and review and failed recovery preserve input at ${compact.width}px`, async ({
   page,
   request,
 }) => {
@@ -32,11 +32,26 @@ test(`DECISION resource conflict review and failed recovery preserve input at ${
   });
   expect(response.ok(), await response.text()).toBe(true);
   const preset = (await response.json()) as PromptPreset;
+  const saveElsewhere = async (expectedRevision: number, text: string) => {
+    const saved = await request.post('/api/resources/save', {
+      data: {
+        kind: 'prompt-preset',
+        id: preset.id,
+        expectedRevision,
+        model: { title, role: 'main', program: nativePrompt(text), values: {} },
+      },
+    });
+    expect(saved.ok(), await saved.text()).toBe(true);
+  };
   await page.goto('/');
   await navigationAction(page, '프롬프트');
   await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
   const editor = page.getByTestId('prompt-editor');
+  const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
+  await expectCodeFieldValue(body, 'Original instructions');
+  await saveElsewhere(preset.revision, 'Saved while clean');
+  await expectCodeFieldValue(body, 'Saved while clean');
   await page.evaluate(() => {
     const original = IDBDatabase.prototype.transaction;
     IDBDatabase.prototype.transaction = function (...args) {
@@ -45,20 +60,15 @@ test(`DECISION resource conflict review and failed recovery preserve input at ${
       return original.apply(this, args);
     };
   });
-  const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
   await body.fill('Keep my unsaved instructions');
   await expect(
     editor.getByRole('alert').filter({ hasText: '복구용 입력을 보관하지 못했어요' })
   ).toBeVisible();
-  const updated = await request.post('/api/resources/save', {
-    data: {
-      kind: 'prompt-preset',
-      id: preset.id,
-      expectedRevision: preset.revision,
-      model: { title, role: 'main', program: nativePrompt('Changed elsewhere'), values: {} },
-    },
-  });
-  expect(updated.ok(), await updated.text()).toBe(true);
+  await saveElsewhere(preset.revision + 1, 'Changed elsewhere');
+  await expect(
+    editor.getByRole('alert').filter({ hasText: '저장된 자료가 변경됐어요' })
+  ).toBeVisible();
+  await expectCodeFieldValue(body, 'Keep my unsaved instructions');
   const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
   await expect(review).toBeHidden();
   let saves = 0;
@@ -70,7 +80,7 @@ test(`DECISION resource conflict review and failed recovery preserve input at ${
   await expect(review).toContainText('Changed elsewhere');
   await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expectCodeFieldValue(body, 'Keep my unsaved instructions');
-  expect(saves).toBe(1);
+  expect(saves).toBe(0);
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   const leave = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
   await expect(leave.getByRole('alert')).toContainText('현재 입력을 복구할 수 없어요');

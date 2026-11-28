@@ -13,7 +13,7 @@ import { api, libraryChangedKey } from './api.js';
 import { toUiMessage } from './api-errors.js';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
-import { helperDataFrame } from './live-frames.js';
+import { resourceFrame } from './live-frames.js';
 import { watchLive } from './live-stream.js';
 import { helperRefreshSpacing } from './poll-delays.js';
 
@@ -65,7 +65,7 @@ export function PackageFeaturesEditor({
       if (event.key === libraryChangedKey) refresh();
     };
     const live = watchLive({
-      match: helperDataFrame,
+      match: resourceFrame,
       refresh: async () => refresh(),
       minIntervalMs: helperRefreshSpacing,
     });

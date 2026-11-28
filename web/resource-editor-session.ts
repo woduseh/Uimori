@@ -77,6 +77,7 @@ export class ResourceEditorSession {
   private loadVersion = 0;
   private readonly preparations = new Map<string, (model: ResourceModel) => ResourceModel>();
   private disposed = false;
+  private refreshAfterSave = false;
   readonly options: {
     editorKey: string;
     kind: ResourceKind;
@@ -318,10 +319,18 @@ export class ResourceEditorSession {
   async refresh() {
     if (this.disposed) return;
     await this.open();
-    if (!this.state.document.targetId || this.state.saving) return;
+    if (!this.state.document.targetId) return;
+    if (this.state.saving) {
+      this.refreshAfterSave = true;
+      return;
+    }
     const load = ++this.loadVersion;
     const saved = await this.readTarget();
-    if (this.disposed || load !== this.loadVersion || this.state.saving) return;
+    if (this.disposed) return;
+    if (load !== this.loadVersion || this.state.saving) {
+      if (this.state.saving) this.refreshAfterSave = true;
+      return;
+    }
     if (saved.revision <= (this.state.document.baseRevision ?? 0)) return;
     if (this.state.dirty) this.emit({ conflict: true });
     else
@@ -468,6 +477,10 @@ export class ResourceEditorSession {
       throw error;
     } finally {
       this.emit({ saving: false });
+      if (this.refreshAfterSave) {
+        this.refreshAfterSave = false;
+        void this.refresh().catch(() => {});
+      }
     }
   }
   async undo() {
