@@ -30,8 +30,10 @@ import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
 import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
+import { z } from 'zod/v4';
+import { nonBlank } from '#contracts/operations';
 import { AppError, asAppError, errorWire, storedModelRequired } from './app-errors.js';
-import { checkEndpointOutputs } from './endpoint.js';
+import { checkEndpointOutputs, registerRawRoute } from './endpoint.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, {
@@ -1498,22 +1500,38 @@ export async function createApp(options: AppOptions): Promise<App> {
     });
     return () => session.authenticated(request.headers.cookie);
   };
-  app.get<{ Params: { id: string }; Querystring: { streamAfter?: string } }>(
-    '/api/chats/:id/events',
-    async (request, reply) => {
-      store.chat(request.params.id);
-      const resume = chatEventResume(request.headers['last-event-id'], request.query.streamAfter);
-      chatEvents.connect(request.params.id, resume, reply.raw, openEventStream(request, reply));
+  const chatEventsInput = z.strictObject({
+    id: nonBlank(120),
+    streamAfter: z.string().optional(),
+  });
+  const liveEventsInput = z.strictObject({
+    chat: nonBlank(120).optional(),
+    streamAfter: z.string().optional(),
+  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/chats/:id/events',
+      cache: 'no-store-refusals',
+      input: chatEventsInput,
+    },
+    ({ id, streamAfter }, request, reply) => {
+      store.chat(id);
+      const resume = chatEventResume(request.headers['last-event-id'], streamAfter);
+      chatEvents.connect(id, resume, reply.raw, openEventStream(request, reply));
     }
   );
-  app.get<{ Querystring: { chat?: string; streamAfter?: string } }>(
-    '/api/events',
-    async (request, reply) => {
-      const { chat: chatId, streamAfter } = request.query;
-      if (chatId !== undefined) {
-        if (typeof chatId !== 'string') throw new HttpError(400, 'Invalid chat');
-        store.chat(chatId);
-      }
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/events',
+      cache: 'no-store-refusals',
+      input: liveEventsInput,
+    },
+    ({ chat: chatId, streamAfter }, request, reply) => {
+      if (chatId !== undefined) store.chat(chatId);
       const resume = chatEventResume(request.headers['last-event-id'], streamAfter);
       const authorized = openEventStream(request, reply);
       live.connect(reply.raw, authorized);

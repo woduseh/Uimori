@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { libraryEndpoints, readerEndpoints, type RequestImagesInput } from '#contracts';
 import { libraryOperations, readerOperations, transferRawInputs } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
-import { noStoreRefusals, parseInput, registerEndpoint } from './endpoint.js';
+import { registerEndpoint, registerRawRoute } from './endpoint.js';
 import {
   packageImages,
   PACKAGE_IMAGE_MIMES,
@@ -450,23 +450,28 @@ export function packageImageRoutes(
       return { hash: blob.hash, mime: blob.mime, url: `/api/package-image-blobs/${blob.hash}` };
     }
   );
-  app.get('/api/package-image-blobs/:hash', { onSend: noStoreRefusals }, async (request, reply) => {
-    const { hash, w: width } = parseInput(transferRawInputs.packageImageBlob, {
-      ...(request.query as object),
-      ...(request.params as object),
-    });
-    if (width !== undefined && width !== String(PACKAGE_IMAGE_THUMBNAIL_WIDTH))
-      throw new HttpError(400, 'Unsupported image width');
-    const image =
-      width === undefined
-        ? readImage(store.db, hash)
-        : { mime: 'image/webp', bytes: await packageImageThumbnail(store, hash) };
-    return reply
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=31536000, immutable')
-      .type(image.mime)
-      .send(image.bytes);
-  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/package-image-blobs/:hash',
+      cache: 'no-store-refusals',
+      input: transferRawInputs.packageImageBlob,
+    },
+    async ({ hash, w: width }, _request, reply) => {
+      if (width !== undefined && width !== String(PACKAGE_IMAGE_THUMBNAIL_WIDTH))
+        throw new HttpError(400, 'Unsupported image width');
+      const image =
+        width === undefined
+          ? readImage(store.db, hash)
+          : { mime: 'image/webp', bytes: await packageImageThumbnail(store, hash) };
+      return reply
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'private, max-age=31536000, immutable')
+        .type(image.mime)
+        .send(image.bytes);
+    }
+  );
   registerEndpoint(
     app,
     readerEndpoints.requestImages,

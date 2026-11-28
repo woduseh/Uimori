@@ -19,6 +19,7 @@ type RouteGroup = 'contract' | 'raw';
 const routeKindGroup: Record<RouteKind, RouteGroup> = {
   endpoint: 'contract',
   command: 'contract',
+  raw: 'raw',
 };
 
 type CapturedRoute = {
@@ -207,6 +208,10 @@ function routeGuardErrors(
       errors.push(
         `${allowlistPath}: permanent "${key}" is no longer registered as a raw route; update or remove its entry by hand`
       );
+    else if (prodByKey.get(key)?.routeKind !== 'raw')
+      errors.push(
+        `${key}: listed under "permanent" in ${allowlistPath} but registered without registerRawRoute; register it with registerRawRoute`
+      );
   }
   for (const key of allowlist.debt) {
     if (contracts.has(key))
@@ -217,6 +222,10 @@ function routeGuardErrors(
       errors.push(
         `${allowlistPath}: debt "${key}" is no longer registered as a raw route; shrink the list with ${shrinkCommand}`
       );
+    else if (prodByKey.get(key)?.routeKind === 'raw')
+      errors.push(
+        `${key}: registered with registerRawRoute but listed under "debt" in ${allowlistPath}; move it to "permanent" with its reason or register it with registerEndpoint`
+      );
   }
   const sortedDebt = [...allowlist.debt].sort((left, right) => (left < right ? -1 : 1));
   if (allowlist.debt.some((key, index) => key !== sortedDebt[index]))
@@ -226,7 +235,9 @@ function routeGuardErrors(
     if (contracts.has(key)) continue;
     if (!Object.hasOwn(allowlist.permanent, key) && !debtSet.has(key))
       errors.push(
-        `${key}: unregistered raw API route; add an endpoint/operation in packages/contracts/src/domains/ and register it with registerEndpoint, or if it must stay raw (binary, stream, or SSE), add it under "permanent" in ${allowlistPath} with its reason`
+        prodByKey.get(key)?.routeKind === 'raw'
+          ? `${key}: registered with registerRawRoute but missing from "permanent" in ${allowlistPath}; add it under "permanent" with its reason, or register it with registerEndpoint`
+          : `${key}: unregistered raw API route; add an endpoint/operation in packages/contracts/src/domains/ and register it with registerEndpoint, or if it must stay raw (binary, stream, or SSE), register it with registerRawRoute and add it under "permanent" in ${allowlistPath} with its reason`
       );
   }
 
@@ -263,11 +274,7 @@ test('every production /api route matches allEndpoints or tests/raw-route-allowl
   if (process.env.UIMORI_SHRINK_ROUTES === '1') {
     const rawKeys = new Set(
       prodRoutes
-        .filter(
-          (route) =>
-            isApiUrl(route.url) &&
-            (route.routeKind === undefined || routeKindGroup[route.routeKind] === 'raw')
-        )
+        .filter((route) => isApiUrl(route.url) && route.routeKind === undefined)
         .map((route) => route.key)
     );
     allowlist = shrinkAllowlist(allowlist, rawKeys);
@@ -277,11 +284,13 @@ test('every production /api route matches allEndpoints or tests/raw-route-allowl
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('route guard catches unregistered raw routes, stale debt, missing contracts and misplaced testMode routes, and shrink only removes gone debt', () => {
+test('route guard catches unregistered raw routes, plain permanent routes, stale debt, missing contracts and misplaced testMode routes, and shrink only removes gone debt', () => {
   const contracts = new Map([['GET /api/known', 'demo.known']]);
   const prod: CapturedRoute[] = [
     { method: 'GET', url: '/api/known', key: 'GET /api/known', routeKind: 'endpoint' },
-    { method: 'GET', url: '/api/blob', key: 'GET /api/blob' },
+    { method: 'GET', url: '/api/blob', key: 'GET /api/blob', routeKind: 'raw' },
+    { method: 'GET', url: '/api/plain-permanent', key: 'GET /api/plain-permanent' },
+    { method: 'POST', url: '/api/raw-debt', key: 'POST /api/raw-debt', routeKind: 'raw' },
     { method: 'POST', url: '/api/new-raw', key: 'POST /api/new-raw' },
   ];
   const testOnly: CapturedRoute[] = [
@@ -292,13 +301,22 @@ test('route guard catches unregistered raw routes, stale debt, missing contracts
   const allowlist: RawRouteAllowlist = {
     permanent: {
       'GET /api/blob': { reason: 'Binary download' },
+      'GET /api/plain-permanent': { reason: 'Registered without registerRawRoute' },
       'GET /api/gone-permanent': { reason: 'No longer exists' },
     },
-    debt: ['POST /api/gone-debt'],
+    debt: ['POST /api/gone-debt', 'POST /api/raw-debt'],
   };
   const errors = routeGuardErrors(prod, testOnly, contracts, allowlist);
   expect(
     errors.some((line) => line.includes('POST /api/new-raw') && line.includes('registerEndpoint'))
+  ).toBe(true);
+  expect(
+    errors.some(
+      (line) => line.includes('GET /api/plain-permanent') && line.includes('registerRawRoute')
+    )
+  ).toBe(true);
+  expect(
+    errors.some((line) => line.includes('POST /api/raw-debt') && line.includes('registerRawRoute'))
   ).toBe(true);
   expect(
     errors.some(
@@ -311,11 +329,16 @@ test('route guard catches unregistered raw routes, stale debt, missing contracts
   expect(
     errors.some((line) => line.includes('POST /api/sneaky') && line.includes('/api/test/*'))
   ).toBe(true);
+  expect(errors.some((line) => line.includes('GET /api/blob'))).toBe(false);
   expect(errors.some((line) => line.includes('/api/test/ok'))).toBe(false);
 
   const shrunk = shrinkAllowlist(allowlist, new Set(['GET /api/blob', 'POST /api/new-raw']));
   expect(shrunk.debt).toEqual([]);
-  expect(Object.keys(shrunk.permanent)).toEqual(['GET /api/blob', 'GET /api/gone-permanent']);
+  expect(Object.keys(shrunk.permanent)).toEqual([
+    'GET /api/blob',
+    'GET /api/plain-permanent',
+    'GET /api/gone-permanent',
+  ]);
 });
 
 test('standalone or custom HEAD routes fail while Fastify auto-generated HEAD for GET passes', async () => {
@@ -338,8 +361,8 @@ test('standalone or custom HEAD routes fail while Fastify auto-generated HEAD fo
     await app.close();
   }
   const errors = routeGuardErrors(captured, captured, new Map([['GET /api/known', 'demo.known']]), {
-    permanent: { 'GET /api/custom': { reason: 'Custom GET fixture.' } },
-    debt: [],
+    permanent: {},
+    debt: ['GET /api/custom'],
   });
   expect(
     errors.some((line) => line.includes('HEAD /api/explicit: unregistered raw API route'))

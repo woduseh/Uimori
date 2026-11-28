@@ -9,7 +9,7 @@ import {
 } from '#contracts/operations';
 import type { UiLocale } from '../core/ui-locale.js';
 import type { Store } from './store.js';
-import { parseInput, registerEndpoint } from './endpoint.js';
+import { registerEndpoint, registerRawRoute } from './endpoint.js';
 
 const aggregates = `COUNT(*) AS calls,
   COALESCE(SUM(CASE WHEN input_tokens>=0 THEN input_tokens END),0) AS inputTokens,
@@ -205,15 +205,21 @@ export function usageRoutes(app: FastifyInstance, store: Store) {
     personalWorkspaceOperations.readUsage,
     (range) => usageReport(store, range)
   );
-  app.get('/api/usage/export', (request, reply) => {
-    const { group, lang, ...range } = parseInput(usageExportQuery, request.query);
-    return reply
-      .type('text/csv; charset=utf-8')
-      .header('Cache-Control', 'no-store')
-      .header(
-        'Content-Disposition',
-        `attachment; filename="uimori-usage-${range.from}-${range.to}.csv"`
-      )
-      .send(usageCsv(usageReport(store, range), group, lang));
-  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/usage/export',
+      cache: 'no-store',
+      input: usageExportQuery,
+    },
+    ({ group, lang, ...range }, _request, reply) =>
+      reply
+        .type('text/csv; charset=utf-8')
+        .header(
+          'Content-Disposition',
+          `attachment; filename="uimori-usage-${range.from}-${range.to}.csv"`
+        )
+        .send(usageCsv(usageReport(store, range), group, lang))
+  );
 }

@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { ServerResponse } from 'node:http';
 import type { DatabaseSync } from 'node:sqlite';
 import { readerEndpoints } from '#contracts';
-import { readerOperations } from '#contracts/operations';
+import { nonBlank, readerOperations } from '#contracts/operations';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod/v4';
 import type {
   ResponseChunk,
   ResponseProgress,
@@ -14,7 +15,7 @@ import type {
 } from '../core/response-stream.js';
 import { RESPONSE_TASK_KINDS } from '../core/response-stream.js';
 import { AppError } from './app-errors.js';
-import { registerEndpoint } from './endpoint.js';
+import { registerEndpoint, registerRawRoute } from './endpoint.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -486,11 +487,22 @@ export function responseStreamRoutes(
     readerOperations.readResponseStream,
     ({ taskKind, taskId, after }) => streams.read(taskKind, taskId, after ?? 0)
   );
-  app.get<{ Params: { taskKind: string; taskId: string }; Querystring: { after?: string } }>(
-    '/api/response-streams/:taskKind/:taskId/events',
-    async (request, reply) => {
-      const target = identity(request.params);
-      let after = cursor(request.headers['last-event-id'] ?? request.query.after);
+  const responseStreamEventsInput = z.strictObject({
+    taskKind: nonBlank(40),
+    taskId: nonBlank(100),
+    after: z.string().optional(),
+  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/response-streams/:taskKind/:taskId/events',
+      cache: 'no-store-refusals',
+      input: responseStreamEventsInput,
+    },
+    ({ taskKind, taskId, after: queryAfter }, request, reply) => {
+      const target = identity({ taskKind, taskId });
+      let after = cursor(request.headers['last-event-id'] ?? queryAfter);
       streams.read(target.taskKind, target.taskId, after);
       reply.hijack();
       reply.raw.writeHead(200, {

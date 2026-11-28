@@ -34,6 +34,9 @@ import { readImage, storeImage } from './image-storage.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod/v4';
+import { nonBlank } from '#contracts/operations';
+import { registerRawRoute } from './endpoint.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { AppError, isPlainAppErrorCode } from './app-errors.js';
 import type { Source, Store } from './store.js';
@@ -1844,17 +1847,26 @@ export function illustrationRoutes(
     hooks.pump();
     return { deleted: true };
   });
-  app.get<{ Params: { id: string } }>('/api/illustration-images/:id', async (request, reply) => {
-    const row = store.db
-      .prepare(
-        'SELECT b.mime,b.bytes FROM illustration_images i JOIN image_blobs b ON b.hash=i.hash WHERE i.id=?'
-      )
-      .get(request.params.id) as Row | undefined;
-    if (!row) throw new HttpError(404, 'Illustration image not found');
-    return reply
-      .header('X-Content-Type-Options', 'nosniff')
-      .header('Cache-Control', 'private, max-age=31536000, immutable')
-      .type(row.mime)
-      .send(Buffer.from(row.bytes));
-  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/illustration-images/:id',
+      cache: 'no-store-refusals',
+      input: z.strictObject({ id: nonBlank(100) }),
+    },
+    ({ id }, _request, reply) => {
+      const row = store.db
+        .prepare(
+          'SELECT b.mime,b.bytes FROM illustration_images i JOIN image_blobs b ON b.hash=i.hash WHERE i.id=?'
+        )
+        .get(id) as Row | undefined;
+      if (!row) throw new HttpError(404, 'Illustration image not found');
+      return reply
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'private, max-age=31536000, immutable')
+        .type(row.mime)
+        .send(Buffer.from(row.bytes));
+    }
+  );
 }

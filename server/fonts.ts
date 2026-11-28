@@ -3,8 +3,9 @@ import { lookup } from 'node:dns/promises';
 import { get } from 'node:https';
 import { isIP } from 'node:net';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod/v4';
 import { appearanceEndpoints } from '#contracts';
-import { appearanceOperations, fontTitle, type SelectFonts } from '#contracts/operations';
+import { appearanceOperations, fontId, fontTitle, type SelectFonts } from '#contracts/operations';
 import {
   MAX_FONT_BYTES,
   type FontAsset,
@@ -14,7 +15,7 @@ import {
 } from '../core/fonts.js';
 import type { Store } from './store.js';
 import { AppError, assertRevision, HelperToolError } from './app-errors.js';
-import { parseInput, registerEndpoint } from './endpoint.js';
+import { parseInput, registerEndpoint, registerRawRoute } from './endpoint.js';
 
 const key = 'font-preferences';
 const MAX_STORED_FONTS = 100;
@@ -250,6 +251,8 @@ export async function downloadFont(
     request.on('error', reject);
   });
 }
+const fontFileInput = z.strictObject({ id: fontId });
+
 export function fontRoutes(app: FastifyInstance, store: Store) {
   initFonts(store);
   registerEndpoint(app, appearanceEndpoints.listFonts, appearanceOperations.listFonts, () =>
@@ -276,12 +279,21 @@ export function fontRoutes(app: FastifyInstance, store: Store) {
   registerEndpoint(app, appearanceEndpoints.deleteFont, appearanceOperations.deleteFont, ({ id }) =>
     deleteFont(store, id)
   );
-  app.get<{ Params: { id: string } }>('/api/fonts/:id/file', (request, reply) => {
-    const { asset, bytes } = readFont(store, request.params.id);
-    return reply
-      .type(asset.mimeType)
-      .header('Cache-Control', 'private, max-age=31536000, immutable')
-      .header('X-Content-Type-Options', 'nosniff')
-      .send(bytes);
-  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/fonts/:id/file',
+      cache: 'no-store-refusals',
+      input: fontFileInput,
+    },
+    ({ id }, _request, reply) => {
+      const { asset, bytes } = readFont(store, id);
+      return reply
+        .type(asset.mimeType)
+        .header('Cache-Control', 'private, max-age=31536000, immutable')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(bytes);
+    }
+  );
 }

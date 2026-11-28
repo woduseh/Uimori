@@ -1,21 +1,24 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify';
 import type { z } from 'zod/v4';
 import {
   type AnyOperation,
   type AnySplitOperation,
   type Endpoint,
   endpointInput,
+  type HttpMethod,
   type Operation,
+  type PathCheck,
 } from '#contracts';
 import { type Command, executeOperation, parseInput } from './command.js';
 import type { AppPorts } from './store-ports.js';
 
-export type RouteKind = 'endpoint' | 'command';
+export type RouteKind = 'endpoint' | 'command' | 'raw';
+export type RawRouteCache = 'no-store' | 'no-store-refusals';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
     admission?: Endpoint['admission'];
-    cache?: Endpoint['cache'];
+    cache?: Endpoint['cache'] | RawRouteCache;
     routeKind?: RouteKind;
   }
 }
@@ -36,16 +39,12 @@ export function checkEndpointOutputs(app: FastifyInstance): void {
 export const prefersMinimal = (prefer: unknown): boolean =>
   /(?:^|[\s,;])return=minimal(?:$|[\s,;])/u.test(String(prefer ?? ''));
 
-export async function noStore(_request: FastifyRequest, reply: FastifyReply, payload: unknown) {
+async function noStore(_request: FastifyRequest, reply: FastifyReply, payload: unknown) {
   reply.header('Cache-Control', 'no-store');
   return payload;
 }
 
-export async function noStoreRefusals(
-  _request: FastifyRequest,
-  reply: FastifyReply,
-  payload: unknown
-) {
+async function noStoreRefusals(_request: FastifyRequest, reply: FastifyReply, payload: unknown) {
   if (reply.statusCode >= 400) reply.header('Cache-Control', 'no-store');
   return payload;
 }
@@ -118,5 +117,49 @@ export function registerCommand<Op extends AnySplitOperation, P extends Pick<App
         reply.raw.off('close', abort);
       }
     },
+  });
+}
+
+export type RawRouteOptions<U extends `/api/${string}` = `/api/${string}`> = {
+  readonly method: HttpMethod;
+  readonly url: U;
+  readonly cache: RawRouteCache;
+  readonly admission?: Endpoint['admission'];
+  readonly bodyLimit?: number;
+  readonly compress?: RouteOptions['compress'];
+};
+
+export function registerRawRoute<const U extends `/api/${string}`, S extends z.ZodType>(
+  app: FastifyInstance,
+  route: RawRouteOptions<U> & { readonly input: S } & PathCheck<U, z.input<S>>,
+  handler: (input: z.output<S>, request: FastifyRequest, reply: FastifyReply) => unknown
+): void;
+export function registerRawRoute(
+  app: FastifyInstance,
+  route: RawRouteOptions & { readonly input?: undefined },
+  handler: (input: undefined, request: FastifyRequest, reply: FastifyReply) => unknown
+): void;
+export function registerRawRoute(
+  app: FastifyInstance,
+  route: RawRouteOptions & { readonly input?: z.ZodType },
+  handler: (input: never, request: FastifyRequest, reply: FastifyReply) => unknown
+): void {
+  app.route({
+    method: route.method,
+    url: route.url,
+    config: {
+      ...(route.admission === undefined ? {} : { admission: route.admission }),
+      cache: route.cache,
+      routeKind: 'raw',
+    },
+    ...(route.bodyLimit === undefined ? {} : { bodyLimit: route.bodyLimit }),
+    ...(route.compress === undefined ? {} : { compress: route.compress }),
+    onSend: route.cache === 'no-store' ? noStore : noStoreRefusals,
+    handler: async (request, reply) =>
+      handler(
+        (route.input ? parseInput(route.input, endpointInput(route, request)) : undefined) as never,
+        request,
+        reply
+      ),
   });
 }

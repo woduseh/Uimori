@@ -438,6 +438,7 @@ test('raw byte routes answer refusals with no-store and keep an immutable blob s
   const directory = mkdtempSync(join(tmpdir(), 'uimori-endpoint-'));
   const { createApp } = await import('../server/app.js');
   const { putImageBlob } = await import('../server/package-images.js');
+  const { BUILTIN_THEME_ASSET_FILES } = await import('../core/builtin-theme-assets.js');
   const app = await createApp({
     dbPath: join(directory, 'app.sqlite'),
     buildId: 'endpoint-test',
@@ -454,6 +455,12 @@ test('raw byte routes answer refusals with no-store and keep an immutable blob s
     [{ method: 'GET', url: '/api/chats/missing-chat/backup-archive?extra=1' }, 400],
     [{ method: 'POST', url: '/api/native-transfers/export-archive', payload: {} }, 400],
     [{ method: 'POST', url: '/api/uploads', payload: { not: 'bytes' } }, 415],
+    [{ method: 'GET', url: '/api/usage/export?from=2026-03-01&to=2026-03-01&group=week' }, 400],
+    [{ method: 'GET', url: '/api/content/missing/risu-export?expectedRevision=0' }, 400],
+    [{ method: 'GET', url: '/api/content/missing/risu-export' }, 404],
+    [{ method: 'GET', url: '/api/theme-assets/not-a-hash' }, 400],
+    [{ method: 'GET', url: `/api/theme-assets/${missing}` }, 404],
+    [{ method: 'GET', url: '/api/chats/missing-chat/events' }, 404],
   ] as const) {
     const response = await app.inject(request);
     expect(response.statusCode, `${request.method} ${request.url}`).toBe(status);
@@ -467,4 +474,8 @@ test('raw byte routes answer refusals with no-store and keep an immutable blob s
   const image = await app.inject({ method: 'GET', url: `/api/package-image-blobs/${blob.hash}` });
   expect(image.statusCode).toBe(200);
   expect(image.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+  const builtin = BUILTIN_THEME_ASSET_FILES[0];
+  const themeAsset = await app.inject({ method: 'GET', url: `/api/theme-assets/${builtin.hash}` });
+  expect(themeAsset.statusCode).toBe(200);
+  expect(themeAsset.headers['cache-control']).toBe('private, max-age=31536000, immutable');
 });

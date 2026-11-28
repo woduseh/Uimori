@@ -73,7 +73,7 @@ type PathInputKeys<I> = {
 
 type UnboundPathParams<P extends string, I> = Exclude<PathParams<P>, PathInputKeys<I>>;
 
-type PathCheck<P extends string, I> = [UnboundPathParams<P, I>] extends [never]
+export type PathCheck<P extends string, I> = [UnboundPathParams<P, I>] extends [never]
   ? unknown
   : { 'path parameters need a required string or number input key': UnboundPathParams<P, I> };
 
@@ -112,7 +112,7 @@ export function endpointRequest(
 }
 
 export function endpointInput(
-  endpoint: Endpoint,
+  endpoint: Pick<Endpoint, 'method'>,
   request: { params: unknown; query: unknown; body: unknown }
 ): unknown {
   const source = endpoint.method === 'GET' ? request.query : request.body;
