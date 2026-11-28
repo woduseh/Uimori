@@ -1,5 +1,10 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { readDraftCursor, readReadingPosition, writeViewCache } from '../web/story-storage.js';
+import {
+  clearReadingPosition,
+  readDraftCursor,
+  readReadingPosition,
+  writeViewCache,
+} from '../web/story-storage.js';
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -40,15 +45,26 @@ test('reading position persists across tabs while draft cursor stays in the sess
   expect(readReadingPosition('reading:chat')).toEqual(position);
 });
 
-test('legacy tab-local reading position moves to persistent storage', () => {
+test('local write failure falls back to the current tab until cleared or overwritten locally', () => {
+  const older = { source: 's0', anchor: 'p0', offset: 0, top: 0 };
+  const newer = { source: 's', anchor: 'p', offset: 1, top: 10 };
   const local = memoryStorage();
   const session = memoryStorage();
-  session.setItem('reading:chat', JSON.stringify(position));
+  local.setItem('reading:chat', JSON.stringify(older));
+  local.setItem.mockImplementation(() => {
+    throw new Error('QuotaExceededError');
+  });
   vi.stubGlobal('localStorage', local);
   vi.stubGlobal('sessionStorage', session);
-  expect(readReadingPosition('reading:chat')).toEqual(position);
-  expect(JSON.parse(local.getItem('reading:chat')!)).toEqual(position);
+
+  writeViewCache('reading:chat', newer);
+  expect(readReadingPosition('reading:chat')).toEqual(newer);
+  expect(JSON.parse(local.getItem('reading:chat')!)).toEqual(older);
+
+  clearReadingPosition('reading:chat');
+  expect(readReadingPosition('reading:chat')).toBeNull();
   expect(session.getItem('reading:chat')).toBeNull();
+  expect(local.getItem('reading:chat')).toBeNull();
 });
 
 test('unavailable optional storage does not prevent rendering', () => {

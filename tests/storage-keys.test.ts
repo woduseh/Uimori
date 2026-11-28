@@ -7,12 +7,18 @@ import {
   forgetChatStorage,
   forgetMissingBots,
   forgetMissingChats,
-  localStorageNamespaces,
   storageFamilies,
   storageFamily,
   storageKeys,
-  sweepUnregisteredStorage,
 } from '../web/storage-keys.js';
+
+const localStorageNamespaces = () => [
+  ...new Set(
+    storageFamilies
+      .filter((family) => family.areas.includes('local'))
+      .map((family) => /^[^:.-]*[:.-]/u.exec(family.key)?.[0] ?? family.key)
+  ),
+];
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -123,35 +129,7 @@ test('builders keep the key names browsers already hold', () => {
   ]);
 });
 
-test('the startup sweep removes only unregistered keys in the app namespaces of localStorage', () => {
-  const kept = {
-    [storageKeys.theme]: 'dark',
-    [storageKeys.readingPosition('c1')]: '{}',
-    [storageKeys.chatFolders('b1')]: '{"b1:":true}',
-    [storageKeys.helperCreate('{"kind":"library"}')]: '{"requestKey":"k"}',
-    [storageKeys.helperCopy('h1')]: '{"requestKey":"k"}',
-    'other-app:setting': '1',
-    'test-helper-read-fails': '1',
-  };
-  for (const [key, value] of Object.entries(kept)) local.setItem(key, value);
-  for (const key of [
-    'uimori:editor-buffer:content:a',
-    'uimori:helper-outbox:retired',
-    'uimori:helper-input:retired',
-    'uimori:helper-artifact-draft:a:1',
-    'uimori:helper-sidebar-width',
-    'uimori:unknown-setting',
-    'uimori.provider-registration.request-key',
-    'uimori-retired-view',
-  ])
-    local.setItem(key, 'x');
-  session.setItem('uimori:unknown-session', 'x');
-  sweepUnregisteredStorage();
-  expect(Object.fromEntries(local.values)).toEqual(kept);
-  expect(session.getItem('uimori:unknown-session')).toBe('x');
-});
-
-test('unsent work and recovery receipts are registered and therefore never swept', () => {
+test('unsent work and recovery receipts are registered and uncapped', () => {
   const work = storageFamilies.filter((family) => family.work).map((family) => family.key);
   expect(work).toEqual(
     expect.arrayContaining([
@@ -186,7 +164,7 @@ test('deleting a chat or bot, or its absence from the server list, removes its b
     storageKeys.chatFolders('bot'),
   ];
   for (const key of [...ownedByGone, ...others]) local.setItem(key, '1');
-  session.setItem(storageKeys.readingPosition('gone'), '{}');
+  session.setItem(storageKeys.readingPosition('gone'), '1');
   forgetChatStorage('gone');
   expect([...local.values.keys()]).toEqual(others);
   expect(session.getItem(storageKeys.readingPosition('gone'))).toBeNull();
