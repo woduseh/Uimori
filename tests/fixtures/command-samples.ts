@@ -106,12 +106,27 @@ export const commandSamples: Partial<Record<keyof typeof allCommands, (store: St
     },
     'outline.apply'(store) {
       const { id: chatId } = createFixtureChat(store, 'Outline apply command probe');
+      const [arc] = seedOutline(store, chatId, [
+        { op: 'create', level: 'arc', title: '1부', intent: '기존 구성' },
+      ]);
+      const head = { chatId, idempotencyKey: randomUUID() };
       return {
         inputs: [
           {
-            chatId,
-            idempotencyKey: randomUUID(),
-            operations: [{ op: 'create', ref: 'arc1', level: 'arc', title: '1부', intent: '시작' }],
+            ...head,
+            operations: [{ op: 'create', ref: 'arc2', level: 'arc', title: '2부', intent: '시작' }],
+          },
+          {
+            ...head,
+            operations: [{ op: 'update', id: arc!.id, expectedRevision: 1, title: '1부 개정' }],
+          },
+          {
+            ...head,
+            operations: [{ op: 'move', id: arc!.id, expectedRevision: 1, position: 1 }],
+          },
+          {
+            ...head,
+            operations: [{ op: 'remove', id: arc!.id, expectedRevision: 1 }],
           },
         ],
         stale: {
