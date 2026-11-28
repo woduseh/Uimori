@@ -446,7 +446,6 @@ export type ToolAction = {
   callId: string;
   name: string;
   args: Record<string, unknown>;
-  recoveredFromTruncation?: boolean;
 };
 
 export type KnowledgeReadResult = {

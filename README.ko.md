@@ -89,7 +89,7 @@
 
 | 문서 | 내용 |
 | --- | --- |
-| [프로바이더](docs/PROVIDERS.md) | Vertex·Google AI Studio Gemini, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
+| [프로바이더](docs/PROVIDERS.md) | Vertex·Google AI Studio Gemini, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 합성 시험 |
 | [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
 | [자동 백업](docs/AUTOMATIC-BACKUPS.md) | 한국 시간 일일 스냅샷, 검증·보관·다운로드 |
 | [문제 확인과 실행 상세](docs/DIAGNOSTICS.md) | 작업 상태·오류·남아 있는 실행 입력과 복구 동작 확인 |

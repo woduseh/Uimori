@@ -815,12 +815,6 @@ export const messages = {
     ja: 'このモデルでの対応が確認されていない値です。',
     zh: '尚未确认此模型是否支持该值。',
   },
-  'providers.m183': {
-    ko: '중립',
-    en: 'Neutral',
-    ja: '中立',
-    zh: '中性',
-  },
   'providers.m184': {
     ko: '모델 기본값',
     en: 'Model default',
@@ -1133,66 +1127,6 @@ export const messages = {
     ja: '保持時間を指定するには、キャッシュ基準点または自動キャッシュを選んでください。現在の方式では、保持時間をプロバイダーの既定値に戻す必要があります。',
     zh: '要指定保留时长，请选择缓存断点或自动缓存。当前模式需要将保留时长恢复为提供商默认值。',
   },
-  'providers.m258': {
-    ko: '도구',
-    en: 'Tools',
-    ja: 'ツール',
-    zh: '工具',
-  },
-  'providers.m259': {
-    ko: '평가 도구',
-    en: 'Evaluation tools',
-    ja: '評価ツール',
-    zh: '评估工具',
-  },
-  'providers.m260': {
-    ko: '이 모델 프리셋에 평가 도구 사용',
-    en: 'Use evaluation tools with this model preset',
-    ja: 'このモデルプリセットで評価ツールを使用',
-    zh: '对此模型预设启用评估工具',
-  },
-  'providers.m261': {
-    ko: '평가 메타데이터',
-    en: 'Evaluation metadata',
-    ja: '評価メタデータ',
-    zh: '评估元数据',
-  },
-  'providers.m263': {
-    ko: '평가 컨텍스트 제공',
-    en: 'Provide evaluation context',
-    ja: '評価コンテキストの提供',
-    zh: '提供评估上下文',
-  },
-  'providers.m264': {
-    ko: '모델이 도구 선택',
-    en: 'Model selects tools',
-    ja: 'モデルがツールを選択',
-    zh: '由模型选择工具',
-  },
-  'providers.m267': {
-    ko: '이 모델은 컨텍스트와 검토자 결과를 먼저 제공하는 방식을 지원하지 않아요.',
-    en: 'This model cannot receive context and reviewer results first.',
-    ja: 'このモデルはコンテキストとレビュー結果を先に提供する方式に対応していません。',
-    zh: '此模型不支持先提供上下文和评审结果的方式。',
-  },
-  'providers.m269': {
-    ko: '첫 평가 단계의 추론 설정',
-    en: 'Reasoning settings for first evaluation stage',
-    ja: '最初の評価段階の推論設定',
-    zh: '首次评估阶段的推理设置',
-  },
-  'providers.m270': {
-    ko: '프리셋 설정 유지',
-    en: 'Keep preset settings',
-    ja: 'プリセット設定を維持',
-    zh: '保留预设设置',
-  },
-  'providers.m271': {
-    ko: '출력 및 추론 설정 낮추기',
-    en: 'Lower output and reasoning settings',
-    ja: '出力と推論の設定を下げる',
-    zh: '降低输出和推理设置',
-  },
   'providers.m275': {
     ko: '모델 편집 양식',
     en: 'Model editing form',
@@ -1438,12 +1372,6 @@ export const messages = {
     en: 'Enter the maximum output token count.',
     ja: '最大出力トークン数を入力してください。',
     zh: '请输入最大输出 token 数。',
-  },
-  'providers.m327': {
-    ko: '이 모델은 컨텍스트를 먼저 제공하는 평가 방식을 지원하지 않아요. 고급에서 평가 컨텍스트를 모델이 도구를 선택하는 방식으로 변경해 주세요.',
-    en: 'This model does not support context-first evaluation. In Advanced, change evaluation context to let the model select tools.',
-    ja: 'このモデルはコンテキストを先に提供する評価方式に対応していません。詳細設定で評価コンテキストをモデルがツールを選ぶ方式に変更してください。',
-    zh: '此模型不支持先提供上下文的评估方式。请在高级设置中将评估上下文改为由模型选择工具。',
   },
   'providers.m328': {
     ko: '모델이 지원하지 않는 옵션이에요.',
@@ -2603,12 +2531,6 @@ export const messages = {
     ja: '{value0}の安全フィルター',
     zh: '{value0} 安全过滤器',
   },
-  'providers.m571': {
-    ko: '{unsupported, select, true {컨텍스트와 검토자 결과를 먼저 제공, 이 모델 미지원} other {컨텍스트와 검토자 결과를 먼저 제공}}',
-    en: '{unsupported, select, true {Provide context and reviewer results first, unsupported by this model} other {Provide context and reviewer results first}}',
-    ja: '{unsupported, select, true {コンテキストとレビュー結果を先に提供、このモデルでは未対応} other {コンテキストとレビュー結果を先に提供}}',
-    zh: '{unsupported, select, true {先提供上下文和审阅结果，此模型不支持} other {先提供上下文和审阅结果}}',
-  },
   'providers.m572': {
     ko: '{value0} 응답 테스트 결과',
     en: 'Response test result for {value0}',
@@ -2776,12 +2698,6 @@ export const messages = {
     en: '{action, select, updated {Saved changes to model {name}} other {Registered model preset {name}}}',
     ja: '{action, select, updated {モデル「{name}」の変更を保存しました} other {モデルプリセット「{name}」を登録しました}}',
     zh: '{action, select, updated {已保存模型“{name}”的更改} other {已注册模型预设“{name}”}}',
-  },
-  'providers.m602': {
-    ko: '{value0}, 프로바이더 자동 선택',
-    en: '{value0}, selected automatically by provider',
-    ja: '{value0}、プロバイダーが自動選択',
-    zh: '{value0}，提供商自动选择',
   },
   'providers.m603': {
     ko: 'Codex, ChatGPT 구독',

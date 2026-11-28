@@ -36,7 +36,6 @@ import { combinationOwner } from '../core/prompt-combinations.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import type { Store } from './store.js';
 import type { ChatAssetDetails, UpdateChatProfile } from '#contracts';
 import {
@@ -95,6 +94,12 @@ import { ValidationError } from '../core/validation-error.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
+function parseProviderSetting<T>(kind: string, body: string): T {
+  const value = parse(body);
+  if (kind === 'model' && value && typeof value === 'object' && !Array.isArray(value))
+    delete (value as Row).evaluationTools;
+  return value as T;
+}
 export const modelRef = (v: unknown): ModelRef => {
   const b = record(v);
   fields(b, ['id']);
@@ -135,7 +140,7 @@ export class ProductStore {
             : 'SELECT v.body FROM versions v WHERE kind=? AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY id'
         )
         .all(kind) as Row[]
-    ).map((r) => parse(r.body));
+    ).map((r) => (isProviderSetting(kind) ? parseProviderSetting(kind, r.body) : parse(r.body)));
   }
   libraryMetadata(): {
     contents: Pick<Content, 'id' | 'revision' | 'title' | 'kind'>[];
@@ -206,7 +211,7 @@ export class ProductStore {
         .get(kind, id) as Row | undefined;
       if (!row || (revision !== undefined && revision !== row.revision))
         throw new HttpError(404, 'Setting not found');
-      return parse(row.body);
+      return parseProviderSetting<T>(kind, row.body);
     }
     const r = (
       revision === undefined
@@ -511,9 +516,6 @@ export class ProductStore {
       ...(gemini || b.timeoutMs !== undefined
         ? { timeoutMs: b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS }
         : {}),
-      ...(b.evaluationTools !== undefined
-        ? { evaluationTools: validateEvaluationToolOptions(b.evaluationTools) }
-        : {}),
       ...(b.providerOptions !== undefined
         ? { providerOptions: structuredClone(b.providerOptions) }
         : {}),
@@ -597,14 +599,6 @@ export class ProductStore {
       return structuredClone({
         ...model,
         tokenizer: resolveTokenizerProfile({ ...model, connection }),
-        ...(model.evaluationTools
-          ? {
-              evaluationTools: {
-                ...model.evaluationTools,
-                metadataProfile: model.evaluationTools.metadataProfile ?? 'neutral',
-              },
-            }
-          : {}),
         connection,
         ...(pricingSnapshot ? { pricingSnapshot } : {}),
       });

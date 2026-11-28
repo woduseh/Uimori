@@ -171,11 +171,6 @@ define(
   'storyUi.errorTranslation.details'
 );
 define(
-  ['EVALUATION_SUBMISSION_REQUIRED'],
-  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.message',
-  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.action'
-);
-define(
   ['SOURCE_DEPENDENCY_MISMATCH'],
   'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.message',
   'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.action'

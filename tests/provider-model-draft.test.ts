@@ -115,35 +115,6 @@ describe('model numeric drafts', () => {
     }
   );
 
-  test('keeps the manual evaluation profile across context modes and connection changes', () => {
-    const metadataProfile = 'deepmind' as const;
-    for (const contextMode of ['model-selected', 'preloaded'] as const) {
-      const draft = {
-        ...initialModel(),
-        evaluationToolsEnabled: true,
-        evaluationTools: {
-          contextMode,
-          approvalReasoningMode: 'economized' as const,
-          metadataProfile,
-        },
-      };
-      const changed = selectModelConnection(draft, anthropicConnection);
-      expect(modelDraftError(changed, anthropicConnection)).toBeNull();
-      const payload = modelPayload(changed, anthropicConnection);
-      expect(payload.evaluationTools).toEqual({
-        contextMode,
-        approvalReasoningMode: 'economized',
-        metadataProfile,
-      });
-      expect(payload.evaluationTools).not.toBe(changed.evaluationTools);
-      const restored = modelDraft({ ...payload, id: 'model', revision: 1 } as ModelPreset);
-      expect(restored.evaluationTools).toEqual(payload.evaluationTools);
-      expect(
-        modelPayload({ ...restored, evaluationToolsEnabled: false }, anthropicConnection)
-      ).not.toHaveProperty('evaluationTools');
-    }
-  });
-
   test('automatic defaults never overwrite an explicit family, including a choice matching the old prefix', () => {
     const direct = { ...connection, protocol: 'openai-responses-v1' as const };
     const draft = selectModelConnection(initialModel(), direct);

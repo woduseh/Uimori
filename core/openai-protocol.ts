@@ -149,7 +149,7 @@ function prepare(
         ...(request.webSearch ? { webSearch: true } : {}),
         modelId: request.modelId,
         stable: request.stable,
-        generation: request.generationBinding ?? generation ?? null,
+        generation: generation ?? null,
         contextBudget: request.contextBudget ?? null,
         input,
         prompt: request.prompt ?? null,
@@ -253,34 +253,6 @@ function argumentsObject(value: unknown): Record<string, Json> {
   }
   if (!object(parsed)) return reject('INVALID_TOOL_ARGUMENTS');
   return copy(parsed, 'INVALID_TOOL_ARGUMENTS') as Record<string, Json>;
-}
-function recoverTruncatedContent(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const match = /"content"\s*:\s*"/u.exec(value);
-  if (!match) return undefined;
-  const start = match.index + match[0].length - 1;
-  let escaped = false;
-  for (let index = start + 1; index < value.length; index++) {
-    const character = value[index];
-    if (!escaped && character === '"') {
-      try {
-        const parsed = JSON.parse(value.slice(start, index + 1));
-        return typeof parsed === 'string' && parsed.trim() ? parsed : undefined;
-      } catch {
-        return undefined;
-      }
-    }
-    if (character === '\\') escaped = !escaped;
-    else escaped = false;
-  }
-  let body = value.slice(start + 1);
-  for (let trim = 0; trim <= 6 && body.length - trim >= 0; trim++) {
-    try {
-      const parsed = JSON.parse('"' + body.slice(0, body.length - trim) + '"');
-      if (typeof parsed === 'string' && parsed.trim()) return parsed;
-    } catch {}
-  }
-  return undefined;
 }
 function toolCall(
   id: unknown,
@@ -701,27 +673,6 @@ export class ResponsesDecoder {
     this.result.refusal = refusal || null;
     this.result.toolCalls = calls;
   }
-  private recoveredTerminal(output: Json[]): ProviderToolCall | undefined {
-    const alias = this.context.aliases.find((item) => item.name === 'eval_submit_artifact');
-    if (!alias) return undefined;
-    const calls = output.filter((item) => object(item) && item.type === 'function_call');
-    if (calls.length !== 1) return undefined;
-    const item = calls[0] as Record<string, Json>;
-    if (item.name !== alias.providerName || !nonempty(item.call_id)) return undefined;
-    if (typeof item.arguments !== 'string') return undefined;
-    try {
-      JSON.parse(item.arguments);
-      return undefined;
-    } catch {}
-    const content = recoverTruncatedContent(item.arguments);
-    if (content === undefined) return undefined;
-    return {
-      id: item.call_id,
-      name: 'eval_submit_artifact',
-      arguments: { content },
-      recoveredFromTruncation: true,
-    };
-  }
   accept(value: unknown): ProviderTextUpdate {
     const event = copy(value);
     if (!object(event) || !nonempty(event.type)) reject('INVALID_OPENAI_EVENT');
@@ -873,21 +824,10 @@ export class ResponsesDecoder {
         this.result.status = this.result.text || this.result.toolCalls.length ? 'partial' : 'error';
         this.result.error = { code: 'PROVIDER_ERROR' };
       } else if (expected === 'incomplete') {
-        const recovered =
-          reason === 'max_output_tokens'
-            ? this.recoveredTerminal(response.output as Json[])
-            : undefined;
-        if (recovered) {
-          this.result.toolCalls = [recovered];
-          this.result.status = 'tool_calls';
-          this.result.error = null;
-        } else {
-          this.result.status =
-            this.result.text || this.result.toolCalls.length ? 'partial' : 'error';
-          this.result.error = {
-            code: reason === 'max_output_tokens' ? 'MAX_OUTPUT_TOKENS' : 'INCOMPLETE_RESPONSE',
-          };
-        }
+        this.result.status = this.result.text || this.result.toolCalls.length ? 'partial' : 'error';
+        this.result.error = {
+          code: reason === 'max_output_tokens' ? 'MAX_OUTPUT_TOKENS' : 'INCOMPLETE_RESPONSE',
+        };
       } else if (this.result.toolCalls.length) this.result.status = 'tool_calls';
       else if (this.result.text) this.result.status = 'completed';
       else {

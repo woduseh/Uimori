@@ -168,14 +168,8 @@ export async function inspectNextRequest(
       if (result.tokens.tokenizerInfo.fallback) result.caveats.push('TOKENIZER_FALLBACK');
       const built = buildMainProviderRequest(snapshot);
       compilation = built.snapshot.promptCompilation ?? null;
-      const evaluation = target.evaluationTools;
       const measured = measureProviderRequest(built.request, target, {
-        codexNative:
-          target.connection.protocol === 'codex-app-server-v1' &&
-          !(
-            evaluation?.contextMode === 'preloaded' &&
-            evaluation.approvalReasoningMode === 'economized'
-          ),
+        codexNative: target.connection.protocol === 'codex-app-server-v1',
       });
       const estimated = measured.estimatedInputTokens;
       const summary = requestReceipt(built.snapshot, measured).summary;

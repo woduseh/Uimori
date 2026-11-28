@@ -377,7 +377,7 @@ export async function executeAuxiliary(
     ) => ToolEvent;
     localTools?: {
       names: readonly string[];
-      execute: (action: ToolAction) => ToolEvent | { event: ToolEvent; terminalOutput: unknown };
+      execute: (action: ToolAction) => ToolEvent;
     };
   } = {}
 ): Promise<{
@@ -453,19 +453,7 @@ export async function executeAuxiliary(
           denied: true,
         };
       else if (hooks.localTools?.names.includes(action.name)) {
-        const local = hooks.localTools.execute(structuredClone(action));
-        if ('terminalOutput' in local) {
-          event = local.event;
-          toolEvents.push(structuredClone(event));
-          await hooks.onToolEvent?.(structuredClone(event), {
-            elapsedMs: performance.now() - started,
-            originalResultChars: toolResultChars(event.result),
-            diagnosticArgs: action.args,
-          });
-          check();
-          return { output: local.terminalOutput, modelCalls, inputs, toolEvents };
-        }
-        event = local;
+        event = hooks.localTools.execute(structuredClone(action));
         if (event.callId !== action.callId || event.name !== action.name)
           throw new Error('TOOL_CALL_INVALID');
       } else

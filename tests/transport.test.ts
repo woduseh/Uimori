@@ -509,18 +509,18 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     second.input.source = { revision: 'source-8', hash: 'different' };
     const translated = request('translation');
     translated.stable.tools = [];
-    const evaluated = request();
-    evaluated.bootstrap = [
+    const bootstrapped = request();
+    bootstrapped.bootstrap = [
       {
         callId: 'bootstrap-context',
-        name: 'eval_get_context',
+        name: 'bootstrap_context',
         args: {},
         result: { session: 'synthetic' },
         denied: false,
       },
     ];
-    evaluated.toolChoice = 'knowledge.search';
-    for (const input of [first, second, translated, evaluated]) {
+    bootstrapped.toolChoice = 'knowledge.search';
+    for (const input of [first, second, translated, bootstrapped]) {
       expect(
         (
           await executeProvider(
@@ -547,7 +547,7 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
     }
     expect(server.requests[2].body).not.toContain('main role contract');
     expect(JSON.parse(server.requests[3].body)).toMatchObject({
-      bootstrap: [{ callId: 'bootstrap-context', name: 'eval_get_context' }],
+      bootstrap: [{ callId: 'bootstrap-context', name: 'bootstrap_context' }],
       toolChoice: 'knowledge.search',
     });
     expect(server.requests[0].body.indexOf('stable')).toBeLessThan(

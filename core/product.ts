@@ -1,4 +1,3 @@
-import type { EvaluationToolOptions } from './evaluation-tool-config.js';
 import type { GeminiSafetySettings } from './gemini-safety.js';
 import type { ProviderOptions } from './provider-options.js';
 import { DEFAULT_LORE_CONTEXT } from './lore-context.js';
@@ -200,7 +199,6 @@ export type ModelPreset = ContentRef &
     timeoutMs?: number;
     enabled?: boolean;
     displayOrder?: number;
-    evaluationTools?: EvaluationToolOptions;
     providerOptions?: ProviderOptions;
     pricing?: import('./pricing-types.js').ModelPricing;
     source?: { kind: 'catalog' | 'manual'; catalogUpdatedAt: string | null };

@@ -1090,7 +1090,6 @@ export class HelperRuntime {
     const contextModel = workspaceModelRef(workspace, 'context');
     if (!helperModel) throw new AppError(409, 'MODEL_REQUIRED', { role: 'helper' });
     const model = this.store.product.modelSnapshot(helperModel.id, 'helper');
-    if (model.evaluationTools) throw new AppError(409, 'HELPER_MODEL_EVALUATION_TOOLS');
     const scope = conversation.scope;
     if (selection) {
       if (scope.kind !== 'chat') throw new HttpError(403, 'SELECTION_OUTSIDE_SCOPE');

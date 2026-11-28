@@ -23,11 +23,6 @@ import {
   protocolServiceTiers,
 } from '../core/model-capabilities.js';
 import { modelHints, type ModelHints } from '../core/model-hints.js';
-import {
-  automaticEvaluationMetadataProfile,
-  type EvaluationMetadataProfile,
-  type EvaluationToolOptions,
-} from '../core/evaluation-tool-config.js';
 import { PROVIDER_OPTIONS_MAX_CHARS } from '../core/provider-options.js';
 import {
   TOKENIZER_PROFILES,
@@ -135,14 +130,6 @@ const cacheTtlLabel = (ttl: string) =>
         ? t('providers.m252')
         : ttl;
 const UNDOCUMENTED = () => t('providers.m182');
-const evaluationMetadataLabels: Record<EvaluationMetadataProfile, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  deepmind: 'Google DeepMind',
-  get neutral() {
-    return t('providers.m183');
-  },
-};
 
 function ModelOptionSelect({
   label,
@@ -497,10 +484,7 @@ export function ProviderModelFields({
       text: t('providers.m560', { value0: value.stopSequences.length }),
       reset: () => update({ stopSequences: [] }),
     });
-  const evaluation = value.evaluationTools;
-  const automaticMetadata = protocol ? automaticEvaluationMetadataProfile(protocol) : undefined;
   const automaticTokenizer = resolveTokenizerProfile({ modelId: value.modelId, connection });
-  const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
   return (
     <>
       <div
@@ -914,88 +898,6 @@ export function ProviderModelFields({
             />
           </fieldset>
         )}
-        <h4 className="provider-field-heading full">{t('providers.m258')}</h4>
-        <fieldset className="editor-fields full">
-          <legend>{t('providers.m259')}</legend>
-          <ToggleRow
-            label={t('providers.m260')}
-            checked={value.evaluationToolsEnabled}
-            onChange={(evaluationToolsEnabled) => update({ evaluationToolsEnabled })}
-          />
-          {value.evaluationToolsEnabled && (
-            <>
-              <label className="full">
-                {t('providers.m261')}
-                {automaticMetadata ? (
-                  <input
-                    aria-label={t('providers.m261')}
-                    readOnly
-                    value={t('providers.m602', {
-                      value0: evaluationMetadataLabels[automaticMetadata],
-                    })}
-                  />
-                ) : (
-                  <select
-                    aria-label={t('providers.m261')}
-                    value={evaluation.metadataProfile ?? 'neutral'}
-                    onChange={(event) =>
-                      setEvaluation({
-                        ...evaluation,
-                        metadataProfile: event.target.value as EvaluationMetadataProfile,
-                      })
-                    }
-                  >
-                    {Object.entries(evaluationMetadataLabels).map(([profile, label]) => (
-                      <option key={profile} value={profile}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </label>
-              <label className="full">
-                {t('providers.m263')}
-                <select
-                  aria-label={t('providers.m263')}
-                  value={evaluation.contextMode}
-                  onChange={(event) =>
-                    setEvaluation({
-                      ...evaluation,
-                      contextMode: event.target.value as EvaluationToolOptions['contextMode'],
-                    })
-                  }
-                >
-                  <option value="model-selected">{t('providers.m264')}</option>
-                  <option value="preloaded" disabled={capability?.forcedTools === false}>
-                    {t('providers.m571', {
-                      unsupported: String(capability?.forcedTools === false),
-                    })}
-                  </option>
-                </select>
-                {capability?.forcedTools === false && <small>{t('providers.m267')}</small>}
-              </label>
-              {evaluation.contextMode === 'preloaded' && (
-                <label className="full">
-                  {t('providers.m269')}
-                  <select
-                    aria-label={t('providers.m269')}
-                    value={evaluation.approvalReasoningMode}
-                    onChange={(event) =>
-                      setEvaluation({
-                        ...evaluation,
-                        approvalReasoningMode: event.target
-                          .value as EvaluationToolOptions['approvalReasoningMode'],
-                      })
-                    }
-                  >
-                    <option value="configured">{t('providers.m270')}</option>
-                    <option value="economized">{t('providers.m271')}</option>
-                  </select>
-                </label>
-              )}
-            </>
-          )}
-        </fieldset>
         <ModelPricingEditor
           value={value}
           connection={connection}

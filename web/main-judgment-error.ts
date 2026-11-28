@@ -5,7 +5,6 @@ import { requestImageError } from './request-image-errors.js';
 export function mainJudgmentError(error: string | null | undefined): string | undefined {
   const image = requestImageError(error);
   if (image) return image;
-  if (error === 'EVALUATION_SUBMISSION_REQUIRED') return auxiliaryErrorMessage(error);
   if (error?.startsWith('JEV_') || error?.startsWith('JUDGMENT_')) {
     const diagnostic = auxiliaryErrorDiagnostic(error);
     return diagnostic.code ? auxiliaryErrorMessage(error) : t('errors.judgmentJev');

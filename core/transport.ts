@@ -68,7 +68,6 @@ export type ProviderRequest = {
   stable: { contract: string; tools: ProviderTool[] };
   generation?: ModelGeneration;
   contextBudget?: ContextBudget;
-  generationBinding?: ModelGeneration;
   providerOptions?: ProviderOptions;
   prompt?: ProviderPrompt;
   toolImages?: { callId: string; images: import('./request-images.js').RequestImage[] }[];
@@ -103,7 +102,6 @@ export type ProviderToolCall = {
   id: string;
   name: string;
   arguments: Record<string, Json>;
-  recoveredFromTruncation?: boolean;
 };
 export type ProviderToolArgumentDiagnostic = {
   kind: 'tool-arguments';
@@ -137,12 +135,6 @@ export type ProviderResult = {
   usage: ProviderUsage;
   opaqueState: Json;
   timing?: ProviderCallTiming;
-  delivery?: {
-    kind: 'evaluation-artifact';
-    noticeProvided: boolean;
-    noticeCharacters: number;
-    correctionCount: number;
-  };
 };
 export type WireRecord = {
   requestReceipt?: import('./scene-usage.js').ContextReceipt;

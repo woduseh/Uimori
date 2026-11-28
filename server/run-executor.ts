@@ -218,7 +218,6 @@ export function createRunExecutor({
                 timing
               ),
             replayToolEvents: run.toolEvents,
-            evaluationRunId: id,
             resolveCredential,
             resolveImage: (image) => readRequestImage(store, image),
             executeAnthropicBatch: (connection, request, execution) =>
