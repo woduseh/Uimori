@@ -340,8 +340,8 @@ test('Vertex generation, translation and independent rewrite survive SQLite rest
   const job = await api<Job>(state.app, `/api/sources/${originalSource.id}/translation`, {});
   await expect.poll(() => state.app.store.job(job.id).status, { timeout: 5000 }).toBe('completed');
   expect(state.app.store.job(job.id).result?.text).toBe('합성 번역 ' + sourceText);
-  const retryBody = { idempotencyKey: randomUUID(), title: 'Independent rewrite' };
-  const queued = await api<Run>(state.app, `/api/runs/${first.id}/candidate`, retryBody);
+  const retryBody = { idempotencyKey: randomUUID(), mode: 'copy' };
+  const queued = await api<Run>(state.app, `/api/runs/${first.id}/retry`, retryBody);
   const second = await runDone(state, queued.id);
   expect(second.chatId).not.toBe(first.chatId);
   expect(second.sourceRevision).not.toBe(first.sourceRevision);
@@ -351,9 +351,7 @@ test('Vertex generation, translation and independent rewrite survive SQLite rest
     ...originalSource,
     translationRevision: 1,
   });
-  expect((await api<Run>(state.app, `/api/runs/${first.id}/candidate`, retryBody)).id).toBe(
-    second.id
-  );
+  expect((await api<Run>(state.app, `/api/runs/${first.id}/retry`, retryBody)).id).toBe(second.id);
   expect(writes).toBe(2);
   expect(state.provider.requests).toHaveLength(3);
   expect(first.inputs).toEqual([]);
@@ -371,9 +369,7 @@ test('Vertex generation, translation and independent rewrite survive SQLite rest
   expect(readStoredRunSnapshot(reopened.store, first.id)).toEqual(before.first);
   expect(readStoredRunSnapshot(reopened.store, second.id)).toEqual(before.second);
   expect((await api<Run>(reopened, `/api/chats/${first.chatId}/runs`, input)).id).toBe(first.id);
-  expect((await api<Run>(reopened, `/api/runs/${first.id}/candidate`, retryBody)).id).toBe(
-    second.id
-  );
+  expect((await api<Run>(reopened, `/api/runs/${first.id}/retry`, retryBody)).id).toBe(second.id);
   expect(state.provider.requests).toHaveLength(3);
   expect(state.handlerErrors).toEqual([]);
 });

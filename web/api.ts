@@ -83,7 +83,7 @@ export async function throwApiError(
 }
 
 const runAdmission =
-  /^(?:\/runs\/[^/]+\/(?:retry|rejudge|candidate|cancel)|\/chats\/[^/]+\/(?:runs|story-ui\/actions)|\/scene-commands\/[^/]+\/run)$/u;
+  /^(?:\/runs\/[^/]+\/(?:retry|rejudge|cancel)|\/chats\/[^/]+\/(?:runs|story-ui\/actions)|\/scene-commands\/[^/]+\/run)$/u;
 
 const minimal = { Prefer: 'return=minimal' };
 

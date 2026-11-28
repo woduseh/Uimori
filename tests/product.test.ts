@@ -741,14 +741,14 @@ describe('M1 real HTTP application boundaries', () => {
       'PARTIAL_NOT_SOURCE'
     );
     const key = randomUUID();
-    const sibling = await api<Run>(url, `/api/runs/${created.id}/candidate`, {
+    const sibling = await api<Run>(url, `/api/runs/${created.id}/retry`, {
       idempotencyKey: key,
-      title: 'HTTP sibling',
+      mode: 'copy',
     });
     expect((await terminalRun(url, sibling, signal)).status).toBe('completed');
-    const duplicate = await api<Run>(url, `/api/runs/${created.id}/candidate`, {
+    const duplicate = await api<Run>(url, `/api/runs/${created.id}/retry`, {
       idempotencyKey: key,
-      title: 'HTTP sibling',
+      mode: 'copy',
     });
     expect(duplicate.id).toBe(sibling.id);
     expect(sibling.chatId).not.toBe(chat.id);

@@ -584,9 +584,9 @@ test('disabled main judgment accepts refusal text without a JEV key, receipt, or
     mainJudgmentEnabled: true,
   });
   f.output.text = 'A new copy uses the current judgment setting.';
-  const candidateRun = await api(f.app, `/api/runs/${f.run.id}/candidate`, {
+  const candidateRun = await api(f.app, `/api/runs/${f.run.id}/retry`, {
     idempotencyKey: randomUUID(),
-    title: 'Current setting on independent copy',
+    mode: 'copy',
   });
   await expect
     .poll(() => f.app.store.run(candidateRun.id).status)
