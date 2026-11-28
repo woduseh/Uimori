@@ -6,8 +6,13 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import { z } from 'zod/v4';
-import { chatSettingsEndpoints, defineEndpoint, type Endpoint, endpointRequest } from '#contracts';
-import { chatSettingsOperations, defineCommandOperation, nonBlank } from '#contracts/operations';
+import { chatSettingsEndpoints, defineEndpoint, endpointRequest } from '#contracts';
+import {
+  chatSettingsOperations,
+  defineCommandOperation,
+  nonBlank,
+  splitHeadBody,
+} from '#contracts/operations';
 import { createApp, type App } from '../server/app.js';
 import { AppError, assertRevision } from '../server/app-errors.js';
 import { deleteChat } from '../server/chat-deletion.js';
@@ -33,6 +38,9 @@ import {
   runScriptedChatHelper,
   selectFixtureModels,
 } from './fixtures/scripted-helper.js';
+
+import { commandSamples } from './fixtures/command-samples.js';
+import { analyzeSchema, valuesAtPath } from './stale-tab/schema.js';
 
 const owned: { close: () => Promise<void> | void; directory: string }[] = [];
 afterEach(async () => {
@@ -88,177 +96,140 @@ function reserveRun(store: Store, chatId: string) {
   ).run;
 }
 
-type CommandProbe = {
-  readonly command: Command<any, any>;
-  readonly endpoint: Endpoint<any>;
-  readonly arrange: (store: Store) => {
-    readonly deletedWithBrokenBody: Record<string, unknown>;
-    readonly staleWithBrokenBody: Record<string, unknown>;
-    readonly valid: Record<string, unknown>;
-    readonly receipt?: {
-      readonly first: Record<string, unknown>;
-      readonly reordered: Record<string, unknown>;
-      readonly conflicting: Record<string, unknown>;
-      readonly mutateGuardState: (store: Store) => void;
+const writes = (store: Store) => store.db.prepare('SELECT total_changes() AS count').get();
+
+for (const registered of Object.values(allCommands)) {
+  const name = registered.op.name;
+  const command: Command<any, any> = registered;
+  const { revisions, targets } = analyzeSchema(command.op.head);
+  const paths = [...new Set([...revisions, ...targets])];
+  const branches = analyzeSchema(command.op.body).branches;
+  const arrange = (store: Store) => {
+    const fixture = commandSamples[name];
+    if (!fixture)
+      throw new Error(`${name}: add a sample fixture in tests/fixtures/command-samples.ts`);
+    const samples = fixture(store);
+    if (!samples.inputs.length) throw new Error(`${name}: add a valid sample input`);
+    return samples;
+  };
+  const breakBody = (sample: Record<string, unknown>) => {
+    const { headRaw, bodyRaw } = splitHeadBody(command.op.head, sample);
+    const broken = Object.fromEntries(Object.keys(bodyRaw).map((key) => [key, null]));
+    return {
+      ...headRaw,
+      ...broken,
+      ...(command.op.body.safeParse(broken).success ? { __invalidBodyField: true } : {}),
     };
   };
-};
+  const conflict = { statusCode: 409, code: 'REVISION_CONFLICT' };
+  const scope = paths.length ? 'one event on success' : 'no target or revision probes';
 
-const commandProbes: Record<keyof typeof allCommands, CommandProbe> = {
-  'chat-settings.writeVariables': {
-    command: updateChatVariablesCommand,
-    endpoint: chatSettingsEndpoints.writeVariables,
-    arrange(store) {
-      const gone = createFixtureChat(store, 'Deleted variables chat');
-      deleteChat(store, gone.id);
-      const live = createFixtureChat(store, 'Live variables chat');
-      const source = completedSource(store, live.id, 'First scene');
-      const receiptChat = createFixtureChat(store, 'Receipt variables chat');
-      const receiptKey = randomUUID();
-      return {
-        deletedWithBrokenBody: {
-          chatId: gone.id,
-          expectedRevision: 0,
-          expectedSourceHash: null,
-          idempotencyKey: randomUUID(),
-          values: 'not-an-object',
-          unknownField: 123,
-        },
-        staleWithBrokenBody: {
-          chatId: live.id,
-          expectedRevision: 9,
-          expectedSourceHash: source.hash,
-          idempotencyKey: randomUUID(),
-          set: {},
-          unknownField: 123,
-        },
-        valid: {
-          chatId: live.id,
-          expectedRevision: 0,
-          expectedSourceHash: source.hash,
-          idempotencyKey: randomUUID(),
-          set: { mood: 'steady' },
-        },
-        receipt: {
-          first: {
-            chatId: receiptChat.id,
-            expectedRevision: 0,
-            expectedSourceHash: null,
-            idempotencyKey: receiptKey,
-            values: { z: 'last', a: 'first' },
-          },
-          reordered: {
-            chatId: receiptChat.id,
-            expectedRevision: 0,
-            expectedSourceHash: null,
-            idempotencyKey: receiptKey,
-            values: { a: 'first', z: 'last' },
-          },
-          conflicting: {
-            chatId: receiptChat.id,
-            expectedRevision: 0,
-            expectedSourceHash: null,
-            idempotencyKey: receiptKey,
-            values: 'different-and-broken',
-          },
-          mutateGuardState(currentStore) {
-            const ports = createStorePorts(currentStore);
-            ports.tx.transaction((tx) => {
-              ports.chatVariables.save(tx, receiptChat.id, {
-                revision: 2,
-                values: { a: 'updated-later' },
-              });
-            });
-            completedSource(currentStore, receiptChat.id, 'New scene after receipt');
-            reserveRun(currentStore, receiptChat.id);
-          },
-        },
-      };
-    },
-  },
-  'chat-settings.updateStoryGuide': {
-    command: updateStoryGuideCommand,
-    endpoint: chatSettingsEndpoints.updateStoryGuide,
-    arrange(store) {
-      const gone = createFixtureChat(store, 'Deleted guide chat');
-      deleteChat(store, gone.id);
-      const live = createFixtureChat(store, 'Live guide chat');
-      return {
-        deletedWithBrokenBody: {
-          chatId: gone.id,
-          expectedRevision: 0,
-          config: { enabled: 'not-a-boolean' },
-          unknownField: true,
-        },
-        staleWithBrokenBody: {
-          chatId: live.id,
-          expectedRevision: 4,
-          changes: {},
-          unknownField: true,
-        },
-        valid: {
-          chatId: live.id,
-          expectedRevision: 0,
-          changes: { enabled: true, work: 'Harbor Chronicle' },
-        },
-      };
-    },
-  },
-};
-
-test('every registered command in allCommands has a probe entry', () => {
-  expect(Object.keys(commandProbes).sort()).toEqual(Object.keys(allCommands).sort());
-});
-
-test.each(Object.entries(commandProbes))(
-  '%s answers 409 REVISION_CONFLICT on deleted or stale targets even with a broken body',
-  async (_name, probe) => {
-    const store = createStoreFixture();
-    const publish = vi.fn();
-    const ports = createStorePorts(store, { publish });
-    const cases = probe.arrange(store);
-    await expect(
-      executeOperation(probe.command, ports, cases.deletedWithBrokenBody)
-    ).rejects.toMatchObject({ statusCode: 409, code: 'REVISION_CONFLICT' });
-    await expect(
-      executeOperation(probe.command, ports, cases.staleWithBrokenBody)
-    ).rejects.toMatchObject({ statusCode: 409, code: 'REVISION_CONFLICT' });
-    expect(publish).not.toHaveBeenCalled();
-
-    const ok = await executeOperation(probe.command, ports, cases.valid);
-    expect(ok).toBeDefined();
-    expect(publish).toHaveBeenCalledTimes(1);
-  }
-);
-
-test.each(Object.entries(commandProbes).filter(([, probe]) => probe.command.receipt !== undefined))(
-  '%s replays an existing receipt after guard state changes and refuses a different body with 409',
-  async (_name, probe) => {
-    const store = createStoreFixture();
-    const publish = vi.fn();
-    const ports = createStorePorts(store, { publish });
-    const receipt = probe.arrange(store).receipt!;
-    const first = await executeOperation(probe.command, ports, receipt.first);
-    expect(publish).toHaveBeenCalledTimes(1);
-
-    receipt.mutateGuardState(store);
-
-    const replayed = await executeOperation(probe.command, ports, receipt.reordered);
-    expect(replayed).toMatchObject({
-      revision: 2,
-      values: { a: 'updated-later' },
-      pending: true,
+  const applyBranches = branches.length ? branches : [undefined];
+  for (const branch of applyBranches) {
+    if (!branch && !paths.length && command.receipt) continue;
+    test(`${name} applies ${branch?.label ?? 'body'} (${scope})`, async () => {
+      const store = createStoreFixture();
+      const { inputs } = arrange(store);
+      const sample = inputs.find(
+        (input) => !branch || branch.matches(splitHeadBody(command.op.head, input).bodyRaw)
+      );
+      if (!sample) throw new Error(`${name}: add a valid sample for body branch ${branch?.label}`);
+      const publish = vi.fn();
+      const onInTx = vi.fn();
+      await executeOperation(command, createStorePorts(store, { publish }), sample, { onInTx });
+      expect(onInTx.mock.calls[0]?.[1]).toMatchObject({ replayed: false });
+      if (paths.length) expect(publish).toHaveBeenCalledTimes(1);
     });
-    expect(replayed).not.toEqual(first);
-    expect(publish).toHaveBeenCalledTimes(1);
-
-    await expect(executeOperation(probe.command, ports, receipt.conflicting)).rejects.toMatchObject(
-      {
-        statusCode: 409,
-      }
-    );
   }
-);
+
+  for (const path of paths) {
+    test(`${name} rejects stale ${path} before parsing the body without writing`, async () => {
+      const store = createStoreFixture();
+      const { inputs, stale } = arrange(store);
+      const makeStale = stale?.[path];
+      if (!makeStale) throw new Error(`${name}: add a stale-maker for head path ${path}`);
+      const sample = inputs.find((input) =>
+        valuesAtPath(input, path).some((value) => value !== undefined)
+      );
+      if (!sample) throw new Error(`${name}: add a valid sample containing head path ${path}`);
+      const publish = vi.fn();
+      const ports = createStorePorts(store, { publish });
+      const broken = breakBody(sample);
+      await expect(executeOperation(command, ports, broken)).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'INVALID_REQUEST',
+      });
+      await makeStale(sample);
+      const before = writes(store);
+      await expect(executeOperation(command, ports, broken)).rejects.toMatchObject(conflict);
+      expect(writes(store)).toEqual(before);
+      expect(publish).not.toHaveBeenCalled();
+    });
+  }
+
+  if (command.receipt) {
+    test(`${name} replays its receipt and rejects a changed body (${paths.length ? 'after guard state changes' : scope})`, async () => {
+      const store = createStoreFixture();
+      const { inputs, stale } = arrange(store);
+      const sample = inputs[0]!;
+      const publish = vi.fn();
+      const ports = createStorePorts(store, { publish });
+      const onReplay = vi.spyOn(command.receipt!, 'onReplay');
+      await executeOperation(command, ports, sample);
+      expect(onReplay).not.toHaveBeenCalled();
+      const path = paths.find((key) =>
+        valuesAtPath(sample, key).some((value) => value !== undefined)
+      );
+      if (path) {
+        const makeStale = stale?.[path];
+        if (!makeStale) throw new Error(`${name}: add a stale-maker for head path ${path}`);
+        await makeStale(sample);
+      }
+      const guard = vi.spyOn(command, 'guard');
+      publish.mockClear();
+      const before = writes(store);
+      await executeOperation(command, ports, sample);
+      expect(onReplay).toHaveBeenCalledOnce();
+      await expect(executeOperation(command, ports, breakBody(sample))).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      expect(guard).not.toHaveBeenCalled();
+      expect(writes(store)).toEqual(before);
+      expect(publish).not.toHaveBeenCalled();
+    });
+  }
+}
+
+test('variable receipt returns the current view after the variables, source and busy state change', async () => {
+  const store = createStoreFixture();
+  const { id: chatId } = createFixtureChat(store, 'Receipt variables chat');
+  const ports = createStorePorts(store);
+  const head = {
+    chatId,
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: randomUUID(),
+  };
+  await executeOperation(updateChatVariablesCommand, ports, {
+    ...head,
+    values: { z: 'last', a: 'first' },
+  });
+  ports.tx.transaction((tx) => {
+    ports.chatVariables.save(tx, chatId, { revision: 2, values: { a: 'updated-later' } });
+  });
+  completedSource(store, chatId, 'New scene after receipt');
+  reserveRun(store, chatId);
+  await expect(
+    executeOperation(updateChatVariablesCommand, ports, {
+      ...head,
+      values: { a: 'first', z: 'last' },
+    })
+  ).resolves.toMatchObject({
+    revision: 2,
+    values: { a: 'updated-later' },
+    pending: true,
+  });
+});
 
 test('prepare-bearing receipt commands run prepare once and preserve helper results on replay', async () => {
   const store = createStoreFixture();

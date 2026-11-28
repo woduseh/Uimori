@@ -242,11 +242,19 @@ function expandUnionOptions(unionSchema: z.ZodType, ancestors: Set<unknown>): Ex
       return expanded;
     }
 
-    const groups = options.map((option) => {
+    const groups = options.map((option, index) => {
       const inner = unwrapTransparent(option, ancestors);
-      return isExpandableUnion(inner, ancestors)
+      const expanded = isExpandableUnion(inner, ancestors)
         ? expandUnionOptions(inner, ancestors)
         : [{ schema: option, labelParts: [], checks: [] }];
+      const earlier = options.slice(0, index);
+      return expanded.map((branch) => ({
+        ...branch,
+        checks: [
+          ...branch.checks,
+          (candidate: unknown) => !earlier.some((schema) => schema.safeParse(candidate).success),
+        ],
+      }));
     });
     const key = distinguishingKey(groups, ancestors);
     if (key) {
