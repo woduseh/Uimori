@@ -1,5 +1,8 @@
 {
   "permanent": {
+    "DELETE /api/mcp": {
+      "reason": "Answers 405 on the MCP endpoint, which serves no GET stream or session deletion."
+    },
     "GET /api/assets/:id": {
       "reason": "Serves stored chat asset image bytes with image MIME type and private cache headers."
     },
@@ -27,6 +30,9 @@
     "GET /api/illustration-images/:id": {
       "reason": "Serves immutable generated illustration image bytes."
     },
+    "GET /api/mcp": {
+      "reason": "Answers 405 on the MCP endpoint, which serves no GET stream or session deletion."
+    },
     "GET /api/package-image-blobs/:hash": {
       "reason": "Serves content-addressed package image or WebP thumbnail bytes."
     },
@@ -44,6 +50,9 @@
     },
     "GET /api/usage/export": {
       "reason": "Serves a UTF-8 BOM CSV attachment (text/csv)."
+    },
+    "POST /api/mcp": {
+      "reason": "Speaks MCP JSON-RPC 2.0 for outside agents, with its own bearer token and protocol errors; registered only when UIMORI_MCP_TOKEN is set."
     },
     "POST /api/native-transfers/export-archive": {
       "reason": "Serves a .uimori resource archive ZIP as binary bytes."
