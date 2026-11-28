@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod/v4';
 import { appearanceEndpoints, type StoredThemeAsset } from '#contracts';
 import { appearanceOperations } from '#contracts/operations';
 import { BUILTIN_THEME_ASSET_FILES } from '../core/builtin-theme-assets.js';
@@ -10,7 +11,7 @@ import type { ThemeAsset, ThemeAssetKind } from '../core/themes.js';
 import { fontFileFormat } from './fonts.js';
 import { processImage } from './image-processing.js';
 import { AppError, HelperToolError } from './app-errors.js';
-import { registerEndpoint } from './endpoint.js';
+import { registerEndpoint, registerRawRoute } from './endpoint.js';
 import type { Store } from './store.js';
 
 const MAX_STORED_BYTES = 200 * 1024 * 1024;
@@ -136,6 +137,8 @@ export function pruneThemeAssets(db: DatabaseSync, candidates: Iterable<string> 
   for (const hash of pending) if (!referenced.has(hash)) remove.run(hash);
 }
 
+const themeAssetInput = z.strictObject({ hash: z.string().regex(/^[a-f0-9]{64}$/u) });
+
 export function themeAssetRoutes(app: FastifyInstance, store: Store) {
   registerEndpoint(
     app,
@@ -143,12 +146,21 @@ export function themeAssetRoutes(app: FastifyInstance, store: Store) {
     appearanceOperations.uploadThemeAsset,
     ({ kind, data }) => storeThemeAsset(store.db, kind, Buffer.from(data, 'base64'))
   );
-  app.get<{ Params: { hash: string } }>('/api/theme-assets/:hash', (request, reply) => {
-    const asset = readThemeAsset(store.db, request.params.hash);
-    return reply
-      .type(asset.mime)
-      .header('Cache-Control', 'private, max-age=31536000, immutable')
-      .header('X-Content-Type-Options', 'nosniff')
-      .send(asset.bytes);
-  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/theme-assets/:hash',
+      cache: 'no-store-refusals',
+      input: themeAssetInput,
+    },
+    ({ hash }, _request, reply) => {
+      const asset = readThemeAsset(store.db, hash);
+      return reply
+        .type(asset.mime)
+        .header('Cache-Control', 'private, max-age=31536000, immutable')
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(asset.bytes);
+    }
+  );
 }

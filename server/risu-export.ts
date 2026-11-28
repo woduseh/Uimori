@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { createHash } from 'node:crypto';
+import { z } from 'zod/v4';
+import { nonBlank, queryInt } from '#contracts/operations';
 import type { Content, PromptPreset } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
 import { validateRisuContentSource } from '../core/risu-native.js';
@@ -17,7 +19,7 @@ import {
 import type { ProductStore } from './product-store.js';
 import type { Store } from './store.js';
 import { readImage } from './image-storage.js';
-import { HttpError } from './request-validation.js';
+import { registerRawRoute } from './endpoint.js';
 import {
   assertExportPath,
   exportJson,
@@ -228,29 +230,33 @@ export function exportRisuPrompt(preset: PromptPreset): RisuExport {
   };
 }
 
+const risuExportInput = z.strictObject({
+  id: nonBlank(100),
+  expectedRevision: queryInt(z.int().positive()).optional(),
+});
+
 export function risuExportRoutes(app: FastifyInstance, store: Store): void {
   for (const kind of ['content', 'prompt-preset'] as const) {
     const path = kind === 'content' ? 'content' : 'prompt-presets';
-    app.get<{ Params: { id: string }; Querystring: { expectedRevision?: string } }>(
-      `/api/${path}/:id/risu-export`,
-      { compress: false },
-      async (request, reply) => {
-        const expected =
-          request.query.expectedRevision === undefined
-            ? undefined
-            : Number(request.query.expectedRevision);
-        if (expected !== undefined && (!Number.isSafeInteger(expected) || expected < 1))
-          throw new HttpError(400, 'Invalid expected revision');
+    registerRawRoute(
+      app,
+      {
+        method: 'GET',
+        url: `/api/${path}/:id/risu-export`,
+        cache: 'no-store',
+        compress: false,
+        input: risuExportInput,
+      },
+      ({ id, expectedRevision }, _request, reply) => {
         const item =
-          expected === undefined
-            ? store.product.available<Content | PromptPreset>(kind, request.params.id)
-            : store.product.editable<Content | PromptPreset>(kind, request.params.id, expected);
+          expectedRevision === undefined
+            ? store.product.available<Content | PromptPreset>(kind, id)
+            : store.product.editable<Content | PromptPreset>(kind, id, expectedRevision);
         const exported =
           kind === 'content'
             ? exportRisuContent(store.product, item as Content)
             : exportRisuPrompt(item as PromptPreset);
         return reply
-          .header('Cache-Control', 'no-store')
           .header('X-Content-Type-Options', 'nosniff')
           .header('X-Uimori-Revision', exported.revision)
           .header(

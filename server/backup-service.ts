@@ -4,6 +4,7 @@ import { join, resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod/v4';
 import type {
   BackupManifest,
   BackupSettings,
@@ -14,10 +15,14 @@ import { APP_VERSION } from './app-version.js';
 import { DATABASE_SCHEMA_VERSION } from './database-schema.js';
 import { createDatabaseSnapshot } from './database-backup.js';
 import { personalWorkspaceEndpoints } from '#contracts';
-import { personalWorkspaceOperations, type UpdateBackupSettings } from '#contracts/operations';
+import {
+  nonBlank,
+  personalWorkspaceOperations,
+  type UpdateBackupSettings,
+} from '#contracts/operations';
 import { HttpError } from './request-validation.js';
 import { AppError, assertRevision } from './app-errors.js';
-import { registerEndpoint } from './endpoint.js';
+import { registerEndpoint, registerRawRoute } from './endpoint.js';
 import type { Store } from './store.js';
 
 const SETTINGS = 'scheduled-backup-settings';
@@ -328,6 +333,8 @@ export class BackupService {
     await this.settle();
   }
 }
+const backupDownloadInput = z.strictObject({ id: nonBlank(100) });
+
 export function backupRoutes(app: FastifyInstance, service: BackupService) {
   registerEndpoint(
     app,
@@ -350,12 +357,20 @@ export function backupRoutes(app: FastifyInstance, service: BackupService) {
       return { status: 'running' as const };
     }
   );
-  app.get<{ Params: { id: string } }>('/api/backups/:id/download', async (request, reply) => {
-    const stream = await service.download(request.params.id);
-    return reply
-      .type('application/vnd.sqlite3')
-      .header('Cache-Control', 'no-store')
-      .header('Content-Disposition', `attachment; filename="${request.params.id}.sqlite"`)
-      .send(stream);
-  });
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/backups/:id/download',
+      cache: 'no-store',
+      input: backupDownloadInput,
+    },
+    async ({ id }, _request, reply) => {
+      const stream = await service.download(id);
+      return reply
+        .type('application/vnd.sqlite3')
+        .header('Content-Disposition', `attachment; filename="${id}.sqlite"`)
+        .send(stream);
+    }
+  );
 }

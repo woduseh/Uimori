@@ -14,7 +14,7 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { HttpError } from './request-validation.js';
 import { AppError } from './app-errors.js';
-import { noStore } from './endpoint.js';
+import { registerRawRoute } from './endpoint.js';
 import { RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 import { ownedImportStagingRoot } from './import-preparation.js';
 
@@ -113,10 +113,14 @@ export function uploadRoutes(app: FastifyInstance, dbPath: string) {
   app.addContentTypeParser('application/octet-stream', (_request, payload, done) =>
     done(null, payload)
   );
-  app.post('/api/uploads', { bodyLimit: UPLOAD_MAX_BYTES, onSend: noStore }, async (request) => {
-    if (request.headers['content-type'] !== 'application/octet-stream')
-      throw new HttpError(415, 'Expected application/octet-stream');
-    pruneUploads(dbPath);
-    return storeUpload(dbPath, request.raw);
-  });
+  registerRawRoute(
+    app,
+    { method: 'POST', url: '/api/uploads', cache: 'no-store', bodyLimit: UPLOAD_MAX_BYTES },
+    async (_input, request) => {
+      if (request.headers['content-type'] !== 'application/octet-stream')
+        throw new HttpError(415, 'Expected application/octet-stream');
+      pruneUploads(dbPath);
+      return storeUpload(dbPath, request.raw);
+    }
+  );
 }

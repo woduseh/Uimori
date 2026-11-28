@@ -37,9 +37,8 @@ test('a stalled SSE subscriber pauses reads, resumes after its accepted cursor a
     {
       addHook() {},
       hasDecorator: () => false,
-      route() {},
-      get(path: string, handler: (request: Request, reply: Reply) => Promise<void>) {
-        routes.set(path, handler);
+      route(options: { url: string; handler: (request: Request, reply: Reply) => Promise<void> }) {
+        routes.set(options.url, options.handler);
       },
     } as unknown as FastifyInstance,
     streams,

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod/v4';
 import { transferEndpoints as endpoints } from '#contracts';
 import { transferOperations as operations, transferRawInputs } from '#contracts/operations';
 import type { ChatBackupImport } from '../core/chat-backup.js';
@@ -9,7 +10,7 @@ import {
 } from './chat-backup.js';
 import { importChatTranscript } from './chat-transcript.js';
 import { databaseBackupStream } from './database-backup.js';
-import { noStore, parseInput, registerEndpoint } from './endpoint.js';
+import { registerEndpoint, registerRawRoute } from './endpoint.js';
 import { exportManuscript, manuscriptExportMetadata } from './manuscript-export.js';
 import { captureTransferResources, prepareNativeTransfer } from './native-transfer.js';
 import {
@@ -64,27 +65,46 @@ export function transferRoutes(
     ({ id, ...rest }) => exportManuscript(store, id, rest)
   );
 
-  app.post('/api/native-transfers/export-archive', { onSend: noStore }, (request, reply) => {
-    const input = parseInput(transferRawInputs.exportArchive, request.body);
-    return reply
-      .type('application/zip')
-      .header('Content-Disposition', 'attachment; filename="resources.uimori"')
-      .send(exportNativeArchive(store, captureTransferResources(store, input)));
-  });
-  app.get('/api/chats/:id/backup-archive', { onSend: noStore }, (request, reply) => {
-    const { id } = parseInput(transferRawInputs.chatDownload, {
-      ...(request.query as object),
-      ...(request.params as object),
-    });
-    return reply
-      .type('application/zip')
-      .header('Content-Disposition', 'attachment; filename="chat-backup.uimori"')
-      .send(exportChatBackupArchive(store, id));
-  });
-  app.get('/api/backup', { onSend: noStore }, async (_request, reply) =>
-    reply
-      .header('Content-Disposition', 'attachment; filename="uimori-backup.sqlite"')
-      .type('application/vnd.sqlite3')
-      .send(await databaseBackupStream(store))
+  registerRawRoute(
+    app,
+    {
+      method: 'POST',
+      url: '/api/native-transfers/export-archive',
+      cache: 'no-store',
+      input: transferRawInputs.exportArchive,
+    },
+    (input, _request, reply) =>
+      reply
+        .type('application/zip')
+        .header('Content-Disposition', 'attachment; filename="resources.uimori"')
+        .send(exportNativeArchive(store, captureTransferResources(store, input)))
+  );
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/chats/:id/backup-archive',
+      cache: 'no-store',
+      input: transferRawInputs.chatDownload,
+    },
+    ({ id }, _request, reply) =>
+      reply
+        .type('application/zip')
+        .header('Content-Disposition', 'attachment; filename="chat-backup.uimori"')
+        .send(exportChatBackupArchive(store, id))
+  );
+  registerRawRoute(
+    app,
+    {
+      method: 'GET',
+      url: '/api/backup',
+      cache: 'no-store',
+      input: z.strictObject({}),
+    },
+    async (_input, _request, reply) =>
+      reply
+        .header('Content-Disposition', 'attachment; filename="uimori-backup.sqlite"')
+        .type('application/vnd.sqlite3')
+        .send(await databaseBackupStream(store))
   );
 }
