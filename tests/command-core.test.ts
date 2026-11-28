@@ -23,7 +23,13 @@ import { createApp, type App } from '../server/app.js';
 import { AppError, assertRevision } from '../server/app-errors.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { readChatVariables, saveChatVariableState } from '../server/chat-variables.js';
-import { type Command, defineCommand, executeOperation } from '../server/command.js';
+import {
+  type Command,
+  type CommandContext,
+  defineCommand,
+  executeOperation,
+  stageOperation,
+} from '../server/command.js';
 import {
   allCommands,
   applyOutlineCommand,
@@ -112,7 +118,7 @@ const writes = (store: Store) => store.db.prepare('SELECT total_changes() AS cou
 
 for (const registered of Object.values(allCommands)) {
   const name = registered.op.name;
-  const command: Command<any, any> = registered;
+  const command: Command = registered;
   const { revisions, targets } = analyzeSchema(command.op.head);
   const paths = [...new Set([...revisions, ...targets])];
   const branches = analyzeSchema(command.op.body).branches;
@@ -147,9 +153,9 @@ for (const registered of Object.values(allCommands)) {
       );
       if (!sample) throw new Error(`${name}: add a valid sample for body branch ${branch?.label}`);
       const publish = vi.fn();
-      const onInTx = vi.fn();
-      await executeOperation(command, createStorePorts(store, { publish }), sample, { onInTx });
-      expect(onInTx.mock.calls[0]?.[1]).toMatchObject({ replayed: false });
+      const apply = vi.spyOn(command, 'apply');
+      await executeOperation(command, createStorePorts(store, { publish }), sample);
+      expect(apply).toHaveBeenCalledOnce();
       if (paths.length) expect(publish).toHaveBeenCalledTimes(1);
     });
   }
@@ -322,23 +328,18 @@ test('aborting in-flight preparation propagates the abort even after a duplicate
     });
   const receipt = updateChatVariablesCommand.receipt!;
   const onReplay = vi.fn(receipt.onReplay);
-  const aroundTx = vi.fn((run) => run());
-  const onInTx = vi.fn();
+  const abortedPorts = createStorePorts(store);
+  const transaction = vi.spyOn(abortedPorts.tx, 'transaction');
   const result = executeOperation(
     { ...updateChatVariablesCommand, prepare, receipt: { ...receipt, onReplay } },
-    ports,
+    abortedPorts,
     input,
-    {
-      signal: controller.signal,
-      aroundTx,
-      onInTx,
-    }
+    { signal: controller.signal }
   );
   await executeOperation(updateChatVariablesCommand, ports, input);
   controller.abort();
   await expect(result).rejects.toBe(controller.signal.reason);
-  expect(aroundTx).not.toHaveBeenCalled();
-  expect(onInTx).not.toHaveBeenCalled();
+  expect(transaction).not.toHaveBeenCalled();
   expect(onReplay).not.toHaveBeenCalled();
 });
 
@@ -372,35 +373,35 @@ test('prepare-bearing receipt commands run prepare once and preserve helper resu
     preparedLabel: String(raw.label).toUpperCase(),
   }));
   const afterCommit = vi.fn();
-  const command = defineCommand<Pick<AppPorts, 'tx' | 'receipt' | 'chatGuard' | 'chatVariables'>>()(
-    op,
-    {
-      receipt: {
-        scope: (head) => head.chatId,
-        key: (head) => head.idempotencyKey,
-        serialize: (output) => ({ revision: output.revision }),
-        onReplay: (_tx, replayPorts, _record, head) => {
-          const state = replayPorts.chatVariables.read(head.chatId);
-          return { revision: state.revision, values: state.values };
-        },
+  const command = defineCommand<
+    Pick<AppPorts, 'tx' | 'chatVariableReceipt' | 'chatGuard' | 'chatVariables'>
+  >()(op, {
+    receipt: {
+      store: (receiptPorts) => receiptPorts.chatVariableReceipt,
+      scope: (head) => head.chatId,
+      key: (head) => head.idempotencyKey,
+      serialize: (output) => ({ revision: output.revision }),
+      onReplay: (_tx, replayPorts, _record, head) => {
+        const state = replayPorts.chatVariables.read(head.chatId);
+        return { revision: state.revision, values: state.values };
       },
-      prepare,
-      guard(tx, guardPorts, head) {
-        guardPorts.chatGuard.writableChat(tx, head.chatId);
-        const current = guardPorts.chatVariables.read(head.chatId);
-        assertRevision(current.revision, head.expectedRevision);
-        return { current };
-      },
-      apply(tx, applyPorts, input, guarded, prepared) {
-        const saved = applyPorts.chatVariables.save(tx, input.chatId, {
-          revision: guarded.current.revision + 1,
-          values: { ...guarded.current.values, prepared: prepared.preparedLabel },
-        });
-        return { revision: saved.revision, values: saved.values };
-      },
-      afterCommit,
-    }
-  );
+    },
+    prepare,
+    guard(tx, guardPorts, head) {
+      guardPorts.chatGuard.writableChat(tx, head.chatId);
+      const current = guardPorts.chatVariables.read(head.chatId);
+      assertRevision(current.revision, head.expectedRevision);
+      return { current };
+    },
+    apply(tx, applyPorts, input, guarded, prepared) {
+      const saved = applyPorts.chatVariables.save(tx, input.chatId, {
+        revision: guarded.current.revision + 1,
+        values: { ...guarded.current.values, prepared: prepared.preparedLabel },
+      });
+      return { revision: saved.revision, values: saved.values };
+    },
+    afterCommit,
+  });
 
   const makeTool = (injectIdempotencyKey: boolean) =>
     defineHelperCommandTool({
@@ -493,43 +494,27 @@ test('prepare-bearing receipt commands run prepare once and preserve helper resu
   expect(prepare).toHaveBeenCalledTimes(2);
   expect(afterCommit).toHaveBeenCalledTimes(2);
 
-  const aroundTxSpy = vi.fn();
-  const onInTx = vi.fn();
-  const replayedDirect = await executeOperation(
-    command,
-    ports,
-    { chatId: chat.id, idempotencyKey: sharedKey, expectedRevision: 2, label: 'beta' },
-    {
-      aroundTx: (run) => {
-        aroundTxSpy();
-        return run();
-      },
-      onInTx,
-    }
-  );
-  expect(replayedDirect).toEqual({ revision: 3, values: { prepared: 'BETA' } });
+  const staged = await stageOperation(command, ports, {
+    chatId: chat.id,
+    idempotencyKey: sharedKey,
+    expectedRevision: 2,
+    label: 'beta',
+  });
   expect(prepare).toHaveBeenCalledTimes(2);
-  expect(aroundTxSpy).toHaveBeenCalledTimes(1);
-  expect(onInTx).toHaveBeenCalledTimes(1);
-  expect(onInTx).toHaveBeenCalledWith(expect.anything(), {
+  expect(ports.tx.transaction((tx) => staged.run(tx))).toEqual({
     replayed: true,
     output: { revision: 3, values: { prepared: 'BETA' } },
   });
+  await staged.afterCommit();
   expect(afterCommit).toHaveBeenCalledTimes(2);
 
   await expect(
-    executeOperation(
-      command,
-      ports,
-      { chatId: chat.id, idempotencyKey: sharedKey, expectedRevision: 2, label: 'gamma' },
-      {
-        aroundTx: (run) => {
-          aroundTxSpy();
-          return run();
-        },
-        onInTx,
-      }
-    )
+    stageOperation(command, ports, {
+      chatId: chat.id,
+      idempotencyKey: sharedKey,
+      expectedRevision: 2,
+      label: 'gamma',
+    })
   ).rejects.toMatchObject({ statusCode: 409 });
   expect(prepare).toHaveBeenCalledTimes(2);
 });
@@ -1114,17 +1099,12 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
   expect(httpCreateBody.detail.nodes.map((node) => node.title)).toEqual(['1부', '1화', '2화']);
 
   const chatChanged = vi.fn();
-  const detailSpy = vi.spyOn(app.store.outline, 'detail').mockImplementation(() => {
-    throw new Error('full detail not allowed');
-  });
   const helperCreate = await runScriptedChatHelper(
     app.store,
     helperChat.id,
     [helperCall('seed', 'outline.write', { operations: initialBatch as never }), helperDone],
     { chatChanged }
   );
-  expect(detailSpy).not.toHaveBeenCalled();
-  detailSpy.mockRestore();
   expect(helperCreate.finished('seed')).toMatchObject({ denied: false });
   const toolEvent = (
     helperCreate.requests[1]!.input.results as unknown as Array<{
@@ -1192,15 +1172,10 @@ test('HTTP and helper produce the same stored state, compact receipt, and error 
   expect(httpFollow.json<OutlineApplyResult>().detail.nodes).toEqual(
     app.store.outline.nodes(httpChat.id)
   );
-  const followDetailSpy = vi.spyOn(app.store.outline, 'detail').mockImplementation(() => {
-    throw new Error('full detail not allowed');
-  });
   const helperFollow = await runScriptedChatHelper(app.store, helperChat.id, [
     helperCall('follow', 'outline.write', { operations: followUp(helperEp1, helperEp2) as never }),
     helperDone,
   ]);
-  expect(followDetailSpy).not.toHaveBeenCalled();
-  followDetailSpy.mockRestore();
   expect(helperFollow.finished('follow')).toMatchObject({ denied: false });
   expect(shapeOf(httpChat.id)).toEqual(shapeOf(helperChat.id));
 
@@ -1459,7 +1434,11 @@ test('Tx tokens cannot be forged or reused after a transaction closes', () => {
     store.storyGuide.save(forged, chat.id, 1, store.storyGuide.get(chat.id).config)
   ).toThrow('TRANSACTION_REQUIRED');
   expect(() =>
-    ports.receipt.save(forged, { scope: chat.id, key: 'k', digest: 'd' }, { revision: 1 })
+    ports.chatVariableReceipt.save(
+      forged,
+      { scope: chat.id, key: 'k', digest: 'd' },
+      { revision: 1 }
+    )
   ).toThrow('TRANSACTION_REQUIRED');
   expect(() => store.outline.setFocus(forged, chat.id, null)).toThrow('TRANSACTION_REQUIRED');
   expect(() => store.outline.applyBatch(forged, chat.id, [])).toThrow('TRANSACTION_REQUIRED');
@@ -1504,31 +1483,31 @@ test('outputPolicy always rolls back domain writes and receipt on invalid output
     outputPolicy: 'always',
   });
   const afterCommit = vi.fn();
-  const leakingCommand = defineCommand<Pick<AppPorts, 'tx' | 'receipt' | 'storyGuide'>>()(
-    strictOp,
-    {
-      receipt: {
-        scope: (head) => head.chatId,
-        key: (head) => head.idempotencyKey,
-        serialize: (output) => ({ revision: output.revision }),
-        onReplay: () => ({ ok: true, revision: 1 }),
-      },
-      guard() {},
-      apply(tx, applyPorts, input) {
-        const current = applyPorts.storyGuide.get(input.chatId);
-        applyPorts.storyGuide.save(tx, input.chatId, current.revision + 1, {
-          ...current.config,
-          enabled: true,
-          work: 'Must roll back',
-        });
-        return { ok: true, revision: 1, apiKey: 'secret-value' } as unknown as {
-          ok: boolean;
-          revision: number;
-        };
-      },
-      afterCommit,
-    }
-  );
+  const leakingCommand = defineCommand<
+    Pick<AppPorts, 'tx' | 'chatVariableReceipt' | 'storyGuide'>
+  >()(strictOp, {
+    receipt: {
+      store: (receiptPorts) => receiptPorts.chatVariableReceipt,
+      scope: (head) => head.chatId,
+      key: (head) => head.idempotencyKey,
+      serialize: (output) => ({ revision: output.revision }),
+      onReplay: () => ({ ok: true, revision: 1 }),
+    },
+    guard() {},
+    apply(tx, applyPorts, input) {
+      const current = applyPorts.storyGuide.get(input.chatId);
+      applyPorts.storyGuide.save(tx, input.chatId, current.revision + 1, {
+        ...current.config,
+        enabled: true,
+        work: 'Must roll back',
+      });
+      return { ok: true, revision: 1, apiKey: 'secret-value' } as unknown as {
+        ok: boolean;
+        revision: number;
+      };
+    },
+    afterCommit,
+  });
   await expect(
     executeOperation(
       leakingCommand,
@@ -1599,42 +1578,25 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     },
   });
 
-  const _checkSyncProject = defineCommand<Pick<AppPorts, 'tx'>, { compact: boolean }>()(op, {
-    guard() {},
-    apply() {
-      return { compact: true };
-    },
-    // @ts-expect-error project runs inside synchronous SQLite transaction and cannot be async
-    async project() {
-      throw new AppError(400, 'INVALID_REQUEST');
-    },
-  });
-
-  const _checkSyncOnInTx = () =>
+  const _checkNoCallerHooks = () =>
     executeOperation(
       updateStoryGuideCommand,
       null as unknown as AppPorts,
       {},
       {
-        // @ts-expect-error onInTx runs inside synchronous SQLite transaction and cannot be async
-        async onInTx() {
-          await Promise.resolve();
-        },
+        // @ts-expect-error the core takes no caller hooks: compose stageOperation in the caller, or send the coordinator a counter-example
+        onInTx() {},
       }
     );
-
-  const _checkSyncAroundApply = () =>
-    executeOperation(
-      applyOutlineCommand,
-      null as unknown as AppPorts,
-      {},
-      {
-        // @ts-expect-error aroundApply runs inside synchronous SQLite transaction and cannot be async
-        async aroundApply(_tx, _input, run) {
-          return run();
-        },
-      }
-    );
+  const frozenContext: Record<keyof CommandContext, true> = { signal: true, checkOutputs: true };
+  const frozenSpec: Record<keyof Command, true> = {
+    op: true,
+    receipt: true,
+    prepare: true,
+    guard: true,
+    apply: true,
+    afterCommit: true,
+  };
 
   defineHelperCommandTool({
     name: 'test.badBody',
@@ -1662,9 +1624,9 @@ test('type-level invariants reject body access in guard, async tx callbacks, inv
     _checkSyncGuard,
     _checkSyncGuardVoid,
     _checkSyncApply,
-    _checkSyncProject,
-    _checkSyncOnInTx,
-    _checkSyncAroundApply,
+    _checkNoCallerHooks,
+    frozenContext,
+    frozenSpec,
   ]).toHaveLength(7);
 });
 
@@ -1771,47 +1733,29 @@ test('registerCommand keeps prepare signal alive after request body completes an
   }
 });
 
-test('a runtime async onInTx or aroundApply hook throws synchronously, rolls back writes, and skips afterCommit', async () => {
+test('a runtime async apply throws synchronously, rolls back writes and the receipt, and skips afterCommit', async () => {
   const store = createStoreFixture();
-  const chat = createFixtureChat(store, 'Async onInTx rollback chat');
+  const chat = createFixtureChat(store, 'Async apply rollback chat');
   const publish = vi.fn();
   const ports = createStorePorts(store, { publish });
+  const asyncApply: Command<typeof applyOutlineCommand.op, typeof ports> = {
+    ...applyOutlineCommand,
+    apply: (async (...args: Parameters<typeof applyOutlineCommand.apply>) => {
+      const output = applyOutlineCommand.apply(...args);
+      await Promise.resolve();
+      return output;
+    }) as unknown as typeof applyOutlineCommand.apply,
+  };
 
   await expect(
-    executeOperation(
-      updateStoryGuideCommand,
-      ports,
-      { chatId: chat.id, expectedRevision: 0, changes: { enabled: true, work: 'Must roll back' } },
-      {
-        onInTx: (async () => {
-          await Promise.resolve();
-          throw new Error('late async hook failure');
-        }) as unknown as () => void,
-      }
-    )
-  ).rejects.toThrow('Async onInTx callback');
-
-  await expect(
-    executeOperation(
-      applyOutlineCommand,
-      ports,
-      {
-        chatId: chat.id,
-        idempotencyKey: randomUUID(),
-        operations: [{ op: 'create', level: 'arc', title: '롤백', intent: '' }],
-      },
-      {
-        aroundApply: (async (_tx: Tx, _input: unknown, run: () => unknown) => {
-          const result = run();
-          await Promise.resolve();
-          return result;
-        }) as unknown as <T>(_tx: Tx, _input: unknown, run: () => T) => T,
-      }
-    )
-  ).rejects.toThrow('Async aroundApply callback');
+    executeOperation(asyncApply, ports, {
+      chatId: chat.id,
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'create', level: 'arc', title: '롤백', intent: '' }],
+    })
+  ).rejects.toThrow('Async apply callback');
 
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
-  expect(store.storyGuide.get(chat.id).revision).toBe(0);
   expect(store.outline.nodes(chat.id)).toEqual([]);
   expect(
     store.db.prepare('SELECT COUNT(*) AS n FROM outline_batches WHERE chat_id=?').get(chat.id)

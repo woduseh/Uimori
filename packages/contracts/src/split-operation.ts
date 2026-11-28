@@ -97,6 +97,13 @@ type OutputSpec<Out> =
   | { readonly outputPolicy?: 'test'; readonly output?: z.ZodType<Out> }
   | { readonly outputPolicy: 'always'; readonly output: z.ZodType<Out> };
 
+export function narrowOperationBody<Op extends SplitOperation<any, any, any, any>>(
+  op: Op,
+  body: z.ZodType<z.output<Op['body']>>
+): Op {
+  return { ...op, body, input: combineInput(op.head, body) };
+}
+
 export function defineCommandOperation<Out>() {
   return <const N extends string, H extends z.ZodObject<z.ZodRawShape>, B extends z.ZodType>(
     spec: { readonly name: N; readonly head: H; readonly body: B } & OutputSpec<Out>

@@ -1,4 +1,4 @@
-import { executeOperation } from '../server/command.js';
+import { stageOperation } from '../server/command.js';
 import { createStorePorts } from '../server/store-ports.js';
 import { applyRisuCommand } from '../server/commands/risu-import.js';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -170,24 +170,16 @@ test('staged preparation passes image metadata and persistence skips a hash stor
   const bytes = readFileSync(image.path);
   rmSync(image.path);
   const persist = vi.spyOn(ports.risuImport, 'persistCard');
-  const result = await executeOperation(
-    applyRisuCommand,
-    ports,
-    {
-      source: input,
-      preparedId: staged.id,
-      digest: preview.digest,
-      allowPartial: false,
-      createChat: false,
-      idempotencyKey: 'stored-during-prepare',
-    },
-    {
-      aroundTx(run) {
-        storeImage(store.db, { hash: image.hash, mime: image.mime, bytes });
-        return run();
-      },
-    }
-  );
+  const operation = await stageOperation(applyRisuCommand, ports, {
+    source: input,
+    preparedId: staged.id,
+    digest: preview.digest,
+    allowPartial: false,
+    createChat: false,
+    idempotencyKey: 'stored-during-prepare',
+  });
+  storeImage(store.db, { hash: image.hash, mime: image.mime, bytes });
+  const result = ports.tx.transaction((tx) => operation.run(tx)).output;
   expect(result.receipt.created).toBe(true);
   expect(persist.mock.calls[0][1].images).toEqual(staged.images);
   expect(readImage(store.db, image.hash).bytes).toEqual(bytes);
@@ -230,14 +222,12 @@ test('discarding a draft between preparation and commit prevents the cached impo
     allowPartial: false,
     idempotencyKey: 'discarded',
   };
-  await expect(
-    executeOperation(applyRisuCommand, createStorePorts(store), command, {
-      aroundTx(run) {
-        discardRisuImport(store.path, { preparedId: preview.preparedId });
-        return run();
-      },
-    })
-  ).rejects.toMatchObject({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' });
+  const ports = createStorePorts(store);
+  const operation = await stageOperation(applyRisuCommand, ports, command);
+  discardRisuImport(store.path, { preparedId: preview.preparedId });
+  expect(() => ports.tx.transaction((tx) => operation.run(tx))).toThrow(
+    expect.objectContaining({ statusCode: 409, code: 'RISU_IMPORT_DRAFT_CHANGED' })
+  );
   expect(store.product.all('content')).toHaveLength(0);
   expect(store.db.prepare('SELECT key FROM import_operations').all()).toEqual([]);
 });

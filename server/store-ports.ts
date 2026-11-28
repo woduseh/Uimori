@@ -17,7 +17,6 @@ import type { StoryGuideStore } from './story-guide-store.js';
 import { assertTx, createTxPort, type Tx, type TxPort } from './tx.js';
 
 export type ReceiptLookup = {
-  readonly adapter?: 'import';
   readonly scope: string;
   readonly key: string;
   readonly digest: string;
@@ -33,7 +32,7 @@ export type ImportReceiptRecord = {
   readonly receipt: NativeTransferReceipt;
   readonly chatId?: string;
 };
-export type ReceiptRecord = { readonly revision: number } | ImportReceiptRecord;
+export type ChatVariableReceipt = { readonly revision: number };
 
 export type OutlineBatchReceipt = {
   readonly authority: OutlineAuthority;
@@ -46,7 +45,8 @@ export type OutlinePort = Pick<OutlineStore, 'detail' | 'focus' | 'setFocus' | '
 export type AppPorts = {
   readonly risuImport: RisuImportPort;
   readonly tx: TxPort;
-  readonly receipt: ReceiptPort<ReceiptRecord>;
+  readonly chatVariableReceipt: ReceiptPort<ChatVariableReceipt>;
+  readonly importReceipt: ReceiptPort<ImportReceiptRecord>;
   readonly outlineReceipt: ReceiptPort<OutlineBatchReceipt>;
   readonly events: {
     readonly publish: (chatId: string) => void;
@@ -75,15 +75,23 @@ export function createStorePorts(
   return {
     risuImport: createRisuImportPort(store, options.readStaged),
     tx: createTxPort(store.db, (fn) => store.transaction(fn)),
-    receipt: {
+    importReceipt: {
       read(tx, lookup) {
         if (tx !== null) assertTx(tx, store.db);
-        if (lookup.adapter === 'import')
-          return readImportReceipt<ImportReceiptRecord>(
-            store,
-            lookup.scope + lookup.key,
-            lookup.digest
-          );
+        return readImportReceipt<ImportReceiptRecord>(
+          store,
+          lookup.scope + lookup.key,
+          lookup.digest
+        );
+      },
+      save(tx, lookup, value) {
+        assertTx(tx, store.db);
+        saveImportReceipt(store, lookup.scope + lookup.key, lookup.digest, value);
+      },
+    },
+    chatVariableReceipt: {
+      read(tx, lookup) {
+        if (tx !== null) assertTx(tx, store.db);
         const row = store.db
           .prepare(
             'SELECT payload_hash,revision FROM chat_variable_journal WHERE chat_id=? AND request_key=?'
@@ -96,11 +104,6 @@ export function createStorePorts(
       },
       save(tx, lookup, value) {
         assertTx(tx, store.db);
-        if (lookup.adapter === 'import') {
-          saveImportReceipt(store, lookup.scope + lookup.key, lookup.digest, value);
-          return;
-        }
-        if (!('revision' in value)) throw new Error('Expected a chat variable revision');
         store.db
           .prepare(
             'INSERT INTO chat_variable_journal(chat_id,request_key,payload_hash,revision,created_at) VALUES(?,?,?,?,?)'

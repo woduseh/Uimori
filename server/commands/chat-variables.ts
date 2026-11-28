@@ -5,7 +5,10 @@ import { AppError, assertRevision, HttpError } from '../app-errors.js';
 import { canonicalPayloadHash, defineCommand } from '../command.js';
 import type { AppPorts } from '../store-ports.js';
 
-type Ports = Pick<AppPorts, 'tx' | 'receipt' | 'events' | 'chatGuard' | 'chatVariables'>;
+type Ports = Pick<
+  AppPorts,
+  'tx' | 'chatVariableReceipt' | 'events' | 'chatGuard' | 'chatVariables'
+>;
 
 function validateMergedVariables(values: Record<string, string>): Record<string, string> {
   try {
@@ -21,6 +24,7 @@ export const updateChatVariablesCommand = defineCommand<Ports>()(
   chatSettingsOperations.writeVariables,
   {
     receipt: {
+      store: (ports) => ports.chatVariableReceipt,
       scope: (head) => head.chatId,
       key: (head) => head.idempotencyKey,
       digest: (_head, raw) => {
