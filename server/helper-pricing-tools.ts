@@ -97,7 +97,7 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
   {
     name: 'model.pricing.update',
     description:
-      'Change the token prices saved for one model, or with judgment:true for the judgment provider. Read model.pricing.read for expectedRevision and the actual service and protocol, then take rates only from the user or from the official pricing page of that exact service that you actually read; never estimate or guess a price. A manual update requires sourceUrl and checkedAt. Rates are USD per million tokens: null means unknown and 0 means verified free, for example an output price the provider states is free. Record Flex, Batch, cache TTL and long-context rates separately where published, and leave unverified rates unchanged. A judgment target takes only the rates in rateFields, with no Flex, Batch or long-context rates; pricing null removes the price of that one target. This operation does not browse; use web search for the source. Changes apply to future requests and do not affect model options. Past calls keep the prices they were recorded with; backfill:true, or model.pricing.backfill later, fills in the ones that were recorded without any price, only when the user asks for it.',
+      'Change the token prices saved for one model, or with judgment:true for the judgment provider. Read model.pricing.read for expectedRevision and the actual service and protocol, then take rates only from the user or from the official pricing page of that exact service that you actually read; never estimate or guess a price. Include sourceUrl and checkedAt when taken from an official pricing page; omit them when the user gives the rates directly. Rates are USD per million tokens: null means unknown and 0 means verified free, for example an output price the provider states is free. Record Flex, Batch, cache TTL and long-context rates separately where published, and leave unverified rates unchanged. A judgment target takes only the rates in rateFields, with no Flex, Batch or long-context rates; pricing null removes the price of that one target. This operation does not browse; use web search for the source. Changes apply to future requests and do not affect model options. Past calls keep the prices they were recorded with; backfill:true, or model.pricing.backfill later, fills in the ones that were recorded without any price, only when the user asks for it.',
     inputSchema: schema(
       {
         modelId,
@@ -111,7 +111,7 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
         },
         pricing: {
           description:
-            'Either {mode:"manual", rates, sourceUrl, checkedAt, ...} with verified rates, {mode:"official"}, which only selects the pricing of the current connection catalog of a saved model, or null to remove the judgment provider price.',
+            'Either {mode:"manual", rates, ...} with verified rates (optional sourceUrl and checkedAt when taken from an official page), {mode:"official"}, which only selects the pricing of the current connection catalog of a saved model, or null to remove the judgment provider price.',
           anyOf: [
             { type: 'null' },
             schema({ mode: { const: 'official', type: 'string' } }, ['mode']),
@@ -141,7 +141,7 @@ export const HELPER_PRICING_TOOLS: ProviderTool[] = [
                     'When the page was checked: YYYY-MM-DD, or a UTC date-time ending in Z.',
                 },
               },
-              ['mode', 'rates', 'sourceUrl', 'checkedAt']
+              ['mode', 'rates']
             ),
           ],
         },
@@ -223,8 +223,6 @@ export function invokeHelperPricingTool(store: Store, name: string, value: unkno
     } catch {
       throw new HelperToolError(400, 'INVALID_MODEL_PRICING');
     }
-    if (pricing.mode === 'manual' && (!pricing.sourceUrl || !pricing.checkedAt))
-      throw new HelperToolError(400, 'PRICING_SOURCE_REQUIRED');
     model = store.product.save(
       'model',
       { ...model, pricing },
@@ -298,8 +296,6 @@ function judgmentPricingTool(store: Store, name: string, args: Record<string, un
       } catch {
         throw new HelperToolError(400, 'INVALID_MODEL_PRICING');
       }
-      if (!pricing.sourceUrl || !pricing.checkedAt)
-        throw new HelperToolError(400, 'PRICING_SOURCE_REQUIRED');
     }
     const others = (current.judgmentPricing ?? []).filter(
       (entry) => judgmentPriceKey(entry) !== key

@@ -98,10 +98,9 @@ test('helper pricing discovery and narrow revision update preserve model setting
   expect(store.product.modelSnapshot(model.id).pricingSnapshot?.rates.input).toBe(7);
 });
 
-test('helper rejects missing source, unsafe metadata and unrelated writable model/credential fields', () => {
+test('helper accepts user-provided manual rates without source metadata and rejects unsafe metadata or unrelated fields', () => {
   const { store, model } = fixture();
   for (const body of [
-    { pricing: { mode: 'manual', rates: pricing.rates } },
     { pricing: { ...pricing, sourceUrl: 'http://bad.example' } },
     { pricing: { ...pricing, checkedAt: '2026-02-30' } },
     { pricing, credentialRef: 'EVIL' },
@@ -116,6 +115,23 @@ test('helper rejects missing source, unsafe metadata and unrelated writable mode
       })
     ).toThrow();
   expect(store.product.stored<ModelPreset>('model', model.id)).toEqual(model);
+  const unsourced = { mode: 'manual', rates: pricing.rates };
+  expect(
+    call(store, 'model.pricing.update', {
+      modelId: model.id,
+      expectedRevision: model.revision,
+      pricing: unsourced,
+    })
+  ).toMatchObject({
+    revision: model.revision + 1,
+    pricing: unsourced,
+    effective: { source: 'manual', rates: pricing.rates },
+  });
+  expect(store.product.stored<ModelPreset>('model', model.id)).toEqual({
+    ...model,
+    revision: model.revision + 1,
+    pricing: unsourced,
+  });
 });
 
 test('backfill prices only the calls recorded without a price and marks them as priced afterwards', () => {
@@ -243,7 +259,6 @@ test('helper reads and updates judgment prices per target through the role setti
   });
   for (const body of [
     { pricing: jevPricing, judgmentTarget: { ...gatewayTarget, connectionId: unsuited.id } },
-    { pricing: { mode: 'manual', rates: jevPricing.rates } },
     { pricing: { ...jevPricing, rates: { ...jevPricing.rates, cacheRead: 0.01 } } },
     { pricing: { mode: 'official' } },
     { pricing: jevPricing, modelId: model.id },
@@ -254,14 +269,27 @@ test('helper reads and updates judgment prices per target through the role setti
     expect(() =>
       call(store, 'model.pricing.update', { judgment: true, expectedRevision: revision, ...body })
     ).toThrow();
+  const unsourcedJev = { mode: 'manual', rates: jevPricing.rates };
   expect(
     call(store, 'model.pricing.update', {
       judgment: true,
       expectedRevision: revision,
-      pricing: jevPricing,
+      pricing: unsourcedJev,
     })
   ).toMatchObject({
     revision: revision + 1,
+    current: true,
+    pricing: unsourcedJev,
+    effective: { source: 'manual', rates: jevPricing.rates, modelId: 'jev-latest' },
+  });
+  expect(
+    call(store, 'model.pricing.update', {
+      judgment: true,
+      expectedRevision: revision + 1,
+      pricing: jevPricing,
+    })
+  ).toMatchObject({
+    revision: revision + 2,
     current: true,
     pricing: jevPricing,
     effective: { source: 'manual', rates: jevPricing.rates, modelId: 'jev-latest' },
@@ -269,7 +297,7 @@ test('helper reads and updates judgment prices per target through the role setti
   const gateway = call(store, 'model.pricing.update', {
     judgment: true,
     judgmentTarget: gatewayTarget,
-    expectedRevision: revision + 1,
+    expectedRevision: revision + 2,
     pricing: gatewayPricing,
   });
   expect(gateway).toMatchObject({
@@ -298,7 +326,7 @@ test('helper reads and updates judgment prices per target through the role setti
   expect(store.product.stored<ModelPreset>('model', model.id)).toEqual(model);
   call(store, 'model.pricing.update', {
     judgment: true,
-    expectedRevision: revision + 2,
+    expectedRevision: revision + 3,
     pricing: null,
   });
   expect(modelWorkspace(store).judgmentPricing).toEqual([
