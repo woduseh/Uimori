@@ -129,23 +129,38 @@ export function tableDigests(file, workOnly) {
         .map((c) => '"' + c.name.replaceAll('"', '""') + '"')
         .join(',');
       const stmt = db.prepare('SELECT * FROM ' + id + ' ORDER BY ' + (pk || 'rowid'));
-      stmt.setReadBigInts(true);
-      const hash = createHash('sha256');
-      let rows = 0;
-      for (const row of stmt.iterate()) {
-        hash.update(
-          JSON.stringify(row, (_k, v) =>
-            typeof v === 'bigint'
-              ? { integer: String(v) }
-              : v instanceof Uint8Array
-                ? { blob: createHash('sha256').update(v).digest('hex') }
-                : v
-          ) + '\n'
-        );
-        rows++;
-      }
-      result[name] = { rows, sha256: hash.digest('hex') };
+      result[name] = rowDigest(stmt);
     }
     return result;
   });
+}
+
+function rowDigest(stmt, params = []) {
+  stmt.setReadBigInts(true);
+  const hash = createHash('sha256');
+  let rows = 0;
+  for (const row of stmt.iterate(...params)) {
+    hash.update(
+      JSON.stringify(row, (_k, v) =>
+        typeof v === 'bigint'
+          ? { integer: String(v) }
+          : v instanceof Uint8Array
+            ? { blob: createHash('sha256').update(v).digest('hex') }
+            : v
+      ) + '\n'
+    );
+    rows++;
+  }
+  return { rows, sha256: hash.digest('hex') };
+}
+export function expectedReplayOutbox(file) {
+  const authority = createHash('sha256').update('').digest('hex');
+  return database(file, (db) =>
+    rowDigest(
+      db.prepare(`SELECT o.* FROM push_outbox o
+    WHERE NOT EXISTS (SELECT 1 FROM push_subscriptions p JOIN access_sessions s ON s.token_hash=p.session_hash
+      WHERE p.id=o.subscription_id AND s.authority_hash!=?) ORDER BY o.id`),
+      [authority]
+    )
+  );
 }

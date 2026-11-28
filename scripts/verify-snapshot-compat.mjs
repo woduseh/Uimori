@@ -1,3 +1,4 @@
+import { rulesForCommit } from './snapshot-compat/reviewed-changes.mjs';
 import { parseArgs } from 'node:util';
 import path from 'node:path';
 import os from 'node:os';
@@ -7,7 +8,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   realpathSync,
   rmSync,
   statSync,
@@ -20,7 +20,6 @@ import {
   compare,
   compareRead,
   differences,
-  digest,
   normalization,
   portable,
   read,
@@ -30,7 +29,6 @@ const { values } = parseArgs({
   options: {
     snapshot: { type: 'string' },
     old: { type: 'string', default: 'v0.18.1' },
-    expect: { type: 'string' },
     'self-check': { type: 'boolean' },
   },
 });
@@ -56,12 +54,6 @@ function outside(input) {
   return file;
 }
 const snapshot = outside(values.snapshot);
-const allowed = values.expect ? JSON.parse(readFileSync(outside(values.expect), 'utf8')) : [];
-if (
-  !Array.isArray(allowed) ||
-  allowed.some((v) => typeof v !== 'string' || !/^[0-9a-f]{64}$/.test(v))
-)
-  throw new Error('--expect requires a JSON array of exact difference fingerprints');
 const temporaryRoot = requireExternalPath(realpathSync(requireExternalPath(os.tmpdir())));
 const tmp = mkdtempSync(path.join(temporaryRoot, 'uimori-compat-'));
 const old = path.join(tmp, 'old');
@@ -72,6 +64,9 @@ const report = {
   normalization,
   coverage: {},
   oneSided: [],
+  refusalOnly: [],
+  rules: [],
+  derivedContentLengths: 0,
   boot: {},
   blocked: [],
   differences: [],
@@ -113,7 +108,7 @@ async function chats(app) {
   for (const {
     ids: [id],
   } of (await targets(app, '/api/chats/:id')).slice(0, 3)) {
-    const expected = portable(await archive(app, id));
+    const expected = portable(await archive(app, id), true);
     const res = await app.request('/api/chats/' + encodeURIComponent(id) + '/backup-archive');
     if (!res.ok) throw new Error('Export failed ' + res.status);
     const upload = await post(dest, '/api/uploads', Buffer.from(await res.arrayBuffer()), true);
@@ -208,6 +203,7 @@ async function checkCanary(reference, subject, seed, label) {
 try {
   report.newBuild = (await assertBuild()).buildId;
   report.oldCommit = buildOld(old, values.old);
+  report.rules = rulesForCommit(report.oldCommit);
   const aFile = file('A');
   copyFileSync(snapshot, aFile);
   const seed = values['self-check'] ? addCanary(aFile) : null;
@@ -242,20 +238,19 @@ try {
     report.errors.push(String(error));
   }
   report.ids = report.ids.size;
-  const expected = new Set(allowed);
-  for (const diff of report.differences) {
-    diff.fingerprint = digest(JSON.stringify(diff));
-    diff.expected = expected.has(diff.fingerprint);
-  }
-  const unexpected = report.differences.filter((diff) => !diff.expected).length;
-  const endpoints = Object.values(report.coverage['old-new'] ?? {}).filter(Boolean).length;
+  const unexpected = report.differences.length;
+  const counts = Object.values(report.coverage['old-new'] ?? {});
+  const endpoints = counts.filter(Boolean).length;
+  const oneSided = report.oneSided.filter((item) => item.phase === 'old-new').length;
+  const refusalOnly = report.refusalOnly.filter((item) => item.phase === 'old-new').length;
   report.pass = Boolean(
     endpoints && !unexpected && !report.blocked.length && !report.errors.length
   );
   mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
   writeFileSync(output, JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
+  for (const rule of report.rules) console.log(`rule=${rule.id} absorbed=${rule.absorbed}`);
   console.log(
-    `${report.pass ? 'PASS' : 'FAIL'} endpoints=${endpoints} ids=${report.ids} comparisons=${report.comparisons} bytes=${report.bytes} chats=${report.chatRoundTrips} unexpected=${unexpected} blocked=${report.blocked.length} errors=${report.errors.length} selfChecks=${report.selfCheck.length}\nReport ${output}`
+    `${report.pass ? 'PASS' : 'FAIL'} endpoints=${endpoints} oneSided=${oneSided} zeroTarget=${counts.length - endpoints} refusalOnly=${refusalOnly} derivedLengths=${report.derivedContentLengths} ids=${report.ids} comparisons=${report.comparisons} bytes=${report.bytes} chats=${report.chatRoundTrips} unexpected=${unexpected} blocked=${report.blocked.length} errors=${report.errors.length} selfChecks=${report.selfCheck.length}\nReport ${output}`
   );
   if (!report.pass) process.exitCode = 1;
 }

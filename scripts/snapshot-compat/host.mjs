@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { root } from '../lib.mjs';
-import { tableDigests } from './probes.mjs';
+import { expectedReplayOutbox, tableDigests } from './probes.mjs';
 
 export const git = (...args) =>
   execFileSync('git', args, {
@@ -34,6 +34,8 @@ export async function boot(tree, dir, mode, report, children) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = path.join(dir, 'replay.sqlite');
   const before = mode === 'import' ? null : tableDigests(file, true);
+  const expected = before && { ...before };
+  if (before?.push_outbox) expected.push_outbox = expectedReplayOutbox(file);
   const script = path.join(root, 'scripts', 'snapshot-compat', 'instance.ts');
   const token = randomUUID();
   const env = {
@@ -89,7 +91,7 @@ export async function boot(tree, dir, mode, report, children) {
     if (before && report.boot[path.basename(dir)]) {
       const final = tableDigests(file, true);
       report.boot[path.basename(dir)].final = final;
-      if (JSON.stringify(final) !== JSON.stringify(before))
+      if (JSON.stringify(final) !== JSON.stringify(expected))
         report.errors.push('Work tables changed during replay ' + path.basename(dir));
     }
     if (existsSync(log))
@@ -108,8 +110,19 @@ export async function boot(tree, dir, mode, report, children) {
   const { port, routes } = JSON.parse(line);
   if (before) {
     const after = tableDigests(file, true);
-    report.boot[path.basename(dir)] = { before, after };
-    if (JSON.stringify(before) !== JSON.stringify(after))
+    if (
+      before.push_outbox &&
+      JSON.stringify(before.push_outbox) === JSON.stringify(after.push_outbox)
+    )
+      expected.push_outbox = before.push_outbox;
+    report.boot[path.basename(dir)] = {
+      before,
+      after,
+      expectedOutbox: expected.push_outbox,
+      outboxReason:
+        'AccessSessions removes sessions for a different access token. Foreign keys cascade to their subscriptions and outbox rows.',
+    };
+    if (JSON.stringify(expected) !== JSON.stringify(after))
       report.errors.push('Work tables changed on boot ' + path.basename(dir));
   }
   const instance = {
