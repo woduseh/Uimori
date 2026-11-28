@@ -164,6 +164,7 @@ export class ChatOrganizationStore {
     defaultPersona,
   }: UpdateChatFolder): ChatFolder {
     return this.store.transaction(() => {
+      this.bot(botId, 'write');
       const prior = this.folder(botId, folderId);
       if (prior.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       const persona =
@@ -176,6 +177,7 @@ export class ChatOrganizationStore {
   }
   deleteFolder({ botId, folderId, expectedRevision }: DeleteChatFolder) {
     return this.store.transaction(() => {
+      this.bot(botId, 'write');
       const folder = this.folder(botId, folderId);
       if (folder.revision !== expectedRevision) throw new AppError(409, 'REVISION_CONFLICT');
       const moved = this.orderedIds(botId, folderId);

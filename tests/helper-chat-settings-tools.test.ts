@@ -836,6 +836,51 @@ test('chat.organize checks the folder and defaults revisions before the persona 
   expect(run.finished('defaults')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
 });
 
+test('chat.organize checks revisions before the persona kind and treats a hidden persona as deleted', async () => {
+  const { store, chat } = fixture();
+  const hidden = libraryContent(store, 'persona', 'Hidden reader');
+  const module = libraryContent(store, 'module', 'Weather');
+  const botId = store.organization.metadata(chat.id)!.botId;
+  const folder = store.organization.createFolder({ botId, title: 'Harbor arc' });
+  const defaults = store.organization.defaults(botId);
+  softDeleteLibraryItem(store, 'content', hidden);
+  const run = await runScriptedChatHelper(store, chat.id, [
+    helperCall('stale-folder', 'chat.organize', {
+      action: 'update-folder',
+      botId,
+      folderId: folder.id,
+      expectedRevision: folder.revision + 1,
+      defaultPersona: module.id,
+    }),
+    helperCall('stale-defaults', 'chat.organize', {
+      action: 'set-default-persona',
+      botId,
+      expectedRevision: defaults.revision + 1,
+      persona: module.id,
+    }),
+    helperCall('hidden', 'chat.organize', {
+      action: 'create-folder',
+      botId,
+      title: 'Hidden default',
+      defaultPersona: hidden.id,
+    }),
+    helperCall('module', 'chat.organize', {
+      action: 'update-folder',
+      botId,
+      folderId: folder.id,
+      expectedRevision: folder.revision,
+      defaultPersona: module.id,
+    }),
+    helperDone,
+  ]);
+  expect(run.finished('stale-folder')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  expect(run.finished('stale-defaults')).toMatchObject({ errorCode: 'REVISION_CONFLICT' });
+  expect(run.finished('hidden')).toMatchObject({ errorCode: 'LIBRARY_ITEM_DELETED' });
+  expect(run.finished('module')).toMatchObject({ errorCode: 'NOT_A_PERSONA' });
+  expect(store.organization.folders(botId)).toEqual([folder]);
+  expect(store.organization.defaults(botId)).toEqual(defaults);
+});
+
 test('model.parameters.update tells a stale or deleted target to refresh before checking changes', () => {
   const { store, model } = fixture();
   const conflict = expect.objectContaining({ statusCode: 409, message: 'REVISION_CONFLICT' });

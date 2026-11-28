@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../../core/product.js';
 import { deleteChat } from '../../server/chat-deletion.js';
+import { deleteScenes, sceneDeletionImpact } from '../../server/scene-deletion.js';
 import { createFixtureChat, fixtureBotInput } from '../fixtures/chat.js';
 import { nativeContent } from '../fixtures/native-content.js';
 import {
@@ -58,6 +59,16 @@ function removedFolder() {
   });
   return { botId: owner, gone, kept: folder(owner, 'Kept') };
 }
+function folderOfPurgedBot() {
+  const gone = bot();
+  const orphan = folder(gone.id, 'Left behind');
+  purged('content', gone);
+  const owner = bot().id;
+  return {
+    gone: { botId: gone.id, folderId: orphan.id },
+    kept: { botId: owner, folderId: folder(owner, 'Kept').id },
+  };
+}
 function asset(chatId: string) {
   return store().product.createAsset(chatId, { ...assetDetails, mime: 'image/png', base64: pixel });
 }
@@ -73,6 +84,15 @@ function assetOfDeletedChat() {
   const image = asset(chat.id);
   deleteChat(store(), chat.id);
   return { chatId: chat.id, assetId: image.id };
+}
+function chatWithDeletedScene() {
+  const { chat, source } = scene('Stale tab copy');
+  deleteScenes(store(), chat.id, source.id, {
+    ...sceneDeletionImpact(store(), chat.id, source.id).request,
+    scope: 'only',
+    idempotencyKey: randomUUID(),
+  });
+  return { chatId: chat.id, fromRevision: source.id };
 }
 function profileOf(chatId: string) {
   return store().product.profile(chatId);
@@ -158,6 +178,15 @@ export const chatCases = domainCases('chat', {
         answer: conflict,
       },
       {
+        when: 'a bot another tab purged',
+        arrange: () => {
+          const { gone, kept } = folderOfPurgedBot();
+          const rename = { expectedRevision: 1, title: 'Renamed' };
+          return { input: { ...gone, ...rename }, control: { ...kept, ...rename } };
+        },
+        answer: conflict,
+      },
+      {
         when: 'a persona another tab deleted',
         arrange: () => {
           const owner = bot().id;
@@ -185,6 +214,17 @@ export const chatCases = domainCases('chat', {
           return {
             input: { botId, folderId: gone.id, expectedRevision: 1 },
             control: { botId, folderId: kept.id, expectedRevision: 1 },
+          };
+        },
+        answer: conflict,
+      },
+      {
+        when: 'a bot another tab purged',
+        arrange: () => {
+          const { gone, kept } = folderOfPurgedBot();
+          return {
+            input: { ...gone, expectedRevision: 1 },
+            control: { ...kept, expectedRevision: 1 },
           };
         },
         answer: conflict,
@@ -249,6 +289,12 @@ export const chatCases = domainCases('chat', {
         arrange: () => ({
           input: { chatId: deletedChat().chatId, fromRevision: null, idempotencyKey: randomUUID() },
         }),
+        answer: conflict,
+        targetRevision: true,
+      },
+      {
+        when: 'a scene another tab deleted',
+        arrange: () => ({ input: { ...chatWithDeletedScene(), idempotencyKey: randomUUID() } }),
         answer: conflict,
         targetRevision: true,
       },

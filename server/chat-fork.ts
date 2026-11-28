@@ -64,6 +64,7 @@ export function forkChat(
       return store.chat(saved.chatId);
     }
     const original = store.writableChat(chatId);
+    if (sourceId !== null) store.writableSource(sourceId);
     const title =
       requestedTitle ?? numberedCopyTitle(store, original.title, supportedLocale(titleLocale));
     const copy = captureChatCopy(store, chatId, sourceId);

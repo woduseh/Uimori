@@ -24,6 +24,9 @@ import { readChatVariables } from './chat-variables.js';
 import { HttpError } from './request-validation.js';
 import { sceneTitles, restoreSceneTitles } from './scene-titles.js';
 import { AppError } from './app-errors.js';
+import { z } from 'zod/v4';
+import { CHAT_AUTHOR_NOTE_MAX_CHARS } from '#contracts';
+import { pinnedProfile } from '#contracts/operations';
 
 export function captureChatCopy(
   store: Store,
@@ -82,6 +85,21 @@ export function captureChatCopy(
   };
 }
 
+const copiedProfile = z.strictObject({
+  image: z.boolean(),
+  imageTranslation: z.boolean().optional(),
+  loreContext: z.unknown().optional(),
+  pinned: pinnedProfile.optional(),
+  authorNote: z.string().max(CHAT_AUTHOR_NOTE_MAX_CHARS).optional(),
+});
+
+export function checkedCopyProfile(value: unknown) {
+  const parsed = copiedProfile.safeParse(value);
+  if (!parsed.success) throw new AppError(400, 'CHAT_BACKUP_INVALID');
+  const { imageTranslation: _retired, ...profile } = parsed.data;
+  return profile;
+}
+
 export function restoreChatCopy(
   store: Store,
   copy: ChatCopy,
@@ -89,6 +107,7 @@ export function restoreChatCopy(
   title = copy.transcript.title,
   readBinary?: (reference: string) => Buffer
 ): Chat {
+  const profile = checkedCopyProfile(copy.state.profile);
   return store.transaction(() => {
     const imported = importChatTranscript(
       store,
@@ -97,7 +116,7 @@ export function restoreChatCopy(
     );
     if (!imported.created) return imported.chat;
     try {
-      return restoreCopiedState(store, copy, imported.chat, readBinary);
+      return restoreCopiedState(store, copy, profile, imported.chat, readBinary);
     } catch (error) {
       if (error instanceof HttpError && !(error instanceof AppError) && error.statusCode === 400)
         throw new AppError(400, 'CHAT_BACKUP_INVALID');
@@ -109,6 +128,7 @@ export function restoreChatCopy(
 function restoreCopiedState(
   store: Store,
   copy: ChatCopy,
+  copied: ReturnType<typeof checkedCopyProfile>,
   chat: Chat,
   readBinary?: (reference: string) => Buffer
 ): Chat {
@@ -121,11 +141,11 @@ function restoreCopiedState(
   store.product.updateProfile(
     chatId,
     {
+      ...copied,
       expectedRevision: profile.revision,
       packageAttachments: profile.packageAttachments,
-      ...copy.state.profile,
     },
-    { packageAttachments: profile.packageAttachments, pinned: copy.state.profile.pinned }
+    { packageAttachments: profile.packageAttachments, pinned: copied.pinned }
   );
   store.settings(chatId, chat.settingsRevision, copy.state.settings);
   if (copy.state.storyGuide)
